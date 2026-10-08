@@ -1,6 +1,7 @@
 //! Local runtime chemical reaction accumulation.
 use crate::contact::ConnectionCompatibilityCache;
 use crate::resources::BaseResource;
+use crate::chemistry_library::{ChemistryKey, ChemistryLibrary};
 use crate::state::Organism;
 use crate::structure::Bond;
 
@@ -17,10 +18,20 @@ fn reaction_key(bond: &Bond, interface_signature: &str) -> String {
     format!("{:?}|{:?}|{}", bond.endpoint_a, bond.endpoint_b, interface_signature)
 }
 
+fn material_identity(unit: &crate::structure::StructuralUnit) -> String {
+    let mut parts = unit.material.parts.clone();
+    parts.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)));
+    parts.into_iter()
+        .map(|(name, amount)| format!("{}@{}", name, crate::chemistry_library::quantized_amount(amount)))
+        .collect::<Vec<_>>()
+        .join("+")
+}
+
 pub(crate) fn accumulate(
     organism: &Organism,
     catalog: &[BaseResource],
     accumulation: &mut std::collections::BTreeMap<String, f64>,
+    chemistry_library: &mut ChemistryLibrary,
 ) -> Vec<ChemicalBreakOperation> {
     if organism.structure.bonds.is_empty() {
         return Vec::new();
@@ -47,21 +58,36 @@ pub(crate) fn accumulate(
         });
         let Some(candidate) = candidate else { continue };
 
-        let material_a = organism.structure.units[unit_a].material.parts.first().map(|part| part.0.as_str()).unwrap_or("unknown");
-        let material_b = organism.structure.units[unit_b].material.parts.first().map(|part| part.0.as_str()).unwrap_or("unknown");
+        let geometry_material_a = organism.structure.units[unit_a].material.parts.first().map(|part| part.0.as_str()).unwrap_or("unknown");
+        let geometry_material_b = organism.structure.units[unit_b].material.parts.first().map(|part| part.0.as_str()).unwrap_or("unknown");
+        let material_a = material_identity(&organism.structure.units[unit_a]);
+        let material_b = material_identity(&organism.structure.units[unit_b]);
         let Some(interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
-            material_a,
+            geometry_material_a,
             &organism.structure.units[unit_a],
-            material_b,
+            geometry_material_b,
             &organism.structure.units[unit_b],
             candidate,
             catalog,
         ) else { continue };
         let key = format!("{}|rev:{}|{}", organism.id, organism.structure_revision, reaction_key(&bond, &interface.signature));
 
-        let Some(potential) = crate::chemistry::interaction_potential(
-            position_a, position_b, crate::chemistry::CHEMICAL_K, crate::chemistry::CHEMICAL_D_MAX,
-        ) else { continue };
+        let key_record = ChemistryKey::from_live_geometry(&material_a, &material_b, &interface);
+        let potential = match chemistry_library.get(&key_record) {
+            Some(record) => record.static_potential,
+            None => {
+                let Some(calculated) = crate::chemistry::interaction_potential(
+                    position_a, position_b, crate::chemistry::CHEMICAL_K, crate::chemistry::CHEMICAL_D_MAX,
+                ) else { continue };
+                match chemistry_library.insert(crate::chemistry_library::ChemistryRecord {
+                    key: key_record,
+                    static_potential: calculated,
+                }) {
+                    Ok(_) => calculated,
+                    Err(_) => calculated,
+                }
+            }
+        };
         let Some(contact) = crate::chemistry::contact_factor(
             candidate.distance, crate::chemistry::CHEMICAL_CONTACT_RADIUS,
         ) else { continue };
