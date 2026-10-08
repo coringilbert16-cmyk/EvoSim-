@@ -118,6 +118,10 @@ impl Genome {
     }
 }
 
+fn default_reproductive_energy_allocation() -> f64 {
+    1.0
+}
+
 fn gaussian_unit(rng: &mut ChaCha8Rng) -> f64 {
     let u1 = rng.gen_range(f64::MIN_POSITIVE..1.0);
     let u2 = rng.gen_range(0.0..1.0);
