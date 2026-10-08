@@ -785,7 +785,7 @@ impl GeometryLibrary {
         }
 
         let catalog_version = resource_catalog_signature(catalog);
-        let manifest = if manifest_path.exists() {
+        let mut manifest = if manifest_path.exists() {
             let bytes = fs::read(&manifest_path)?;
             serde_json::from_slice(&bytes)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
@@ -820,6 +820,7 @@ impl GeometryLibrary {
             ] {
                 archive_catalog_dependent_file(&root.join(name))?;
             }
+            manifest.resource_catalog_version = catalog_version.clone();
         }
 
         let mut contact_families = BTreeMap::new();
