@@ -797,16 +797,29 @@ impl GeometryLibrary {
             }
         };
 
-        if manifest.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
-            || manifest.resource_catalog_version != catalog_version
-        {
-            // A geometry/schema change must not silently reuse stale knowledge.
-            // Keep the old artifact intact; the caller can migrate or create a
-            // new versioned root explicitly.
+        if manifest.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                "geometry library version/catalog mismatch",
+                "geometry library schema mismatch",
             ));
+        }
+
+        if manifest.resource_catalog_version != catalog_version {
+            // Formation records are revalidated against the new catalog above.
+            // Derived contact families, negative results, and exhausted frontier
+            // states depend on the old geometry, so archive them and let Bob
+            // regenerate that knowledge instead of silently reusing stale data.
+            for name in [
+                "frontier.json",
+                "contact_families.jsonl",
+                "fluid_boundary_families.jsonl",
+                "rigid_contact_families.jsonl",
+                "rigid_point_contact_families.jsonl",
+                "rigid_vertex_contact_families.jsonl",
+                "rejected_formations.jsonl",
+            ] {
+                archive_catalog_dependent_file(&root.join(name))?;
+            }
         }
 
         let mut contact_families = BTreeMap::new();
@@ -1723,6 +1736,24 @@ fn formations_equivalent_within_tolerance(a: &GeometryFormation, b: &GeometryFor
 
 fn angular_difference(a: f64, b: f64) -> f64 {
     normalized_angle(a - b).abs()
+}
+
+fn archive_catalog_dependent_file(path: &Path) -> std::io::Result<()> {
+    if !path.exists() {
+        return Ok(());
+    }
+
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("geometry-data");
+    let mut backup = path.with_file_name(format!("{file_name}.pre-catalog-change"));
+    let mut suffix = 1_u32;
+    while backup.exists() {
+        backup = path.with_file_name(format!("{file_name}.pre-catalog-change-{suffix}"));
+        suffix += 1;
+    }
+    fs::rename(path, backup)
 }
 
 fn resource_catalog_signature(catalog: &[BaseResource]) -> String {
