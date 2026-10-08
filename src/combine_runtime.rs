@@ -261,13 +261,15 @@ fn form_bond_from_candidate(
     };
     crate::contact::try_add_bond(&mut trial_structure, bond, catalog).ok()?;
     let before = *energy;
-    let transaction = EnergyTransaction {
-        reason: EnergyReason::Combine,
-        potential_released: interaction.signed_value,
-        usable_delta: interaction.signed_value - investment - work,
-        structural_delta: investment,
-        heat_dissipated: work,
-    };
+    // COMBINE currently consumes energy; it must not manufacture potential
+    // energy merely because the legacy interaction model returned a value.
+    // Chemistry will later provide an explicit source transaction when a
+    // reaction actually releases energy.
+    let transaction = EnergyTransaction::expenditure(
+        EnergyReason::Combine,
+        investment,
+        work,
+    )?;
     if !ledger.settle_transaction(energy, transaction) {
         *energy = before;
         return None;
