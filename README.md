@@ -236,7 +236,7 @@ The first layer is **local constituent-pair interaction** at actual interfaces. 
 
 The system must not assume in advance that the weakest bond, strongest bond, or one interface bond is always the one that breaks. Whether rupture is localized or distributed is an experimental question; the affected region should follow the interaction pattern.
 
-**Natural BREAK is required.** The current code can explicitly split an internal bond when instructed, but chemistry must eventually identify when ordinary local interaction makes an existing structure unstable and rupture it without an organism Break command.
+**Natural BREAK is required.** The current code can explicitly split an internal bond when instructed, and the chemistry layer now has an energy-surplus BREAK path: a reaction must supply enough energy to meet the exact bond disruption requirement before that bond can rupture. Runtime reaction production and interface-driven selection remain to be integrated.
 
 COMBINE follows the same rule: physical contact and compatible geometry make a formation possible, but only the universal transition rules permit the new bond.
 
@@ -349,8 +349,8 @@ The chemistry migration is active. The following boundaries have now been audite
 | COMBINE energy boundary | **Migrated** | Formation work is mechanical; COMBINE no longer treats the retired interaction value as an energy source. Pure expenditure is represented explicitly in the energy ledger. |
 | BREAK energy boundary | **Migrated** | BREAK no longer uses retired reactivity to determine accessible energy. Intrinsic potential energy, cohesion, and processing efficiency remain explicit inputs. |
 | Energy conservation | **Boundary established** | The ledger remains authoritative. Chemical transitions still need an explicit source/transition transaction rather than implicit interaction energy. |
-| Geometry → chemistry interface | **Realized-contact resolver established; persistent-family lookup remains** | Bob now resolves a runtime contact using the already-realized endpoint geometry, including exact local edge/parameter identity where available. Distance and facing remain transient runtime state and are excluded from the canonical interface identity. No geometry search or angular sampling is performed. The remaining seam is matching this realized identity to the persisted family index without guessing when multiple families remain possible. |
-| Chemistry Library | **Storage + canonical key implemented; runtime not integrated** | The versioned persistent library now accepts material pairs plus canonical Bob interface identities for rigid surface, edge, point, vertex, and fluid-boundary families. Runtime lookup/miss calculation is still to be wired. |
+| Geometry → chemistry interface | **Realized-contact resolver + persistent-family lookup implemented** | Bob now resolves a runtime contact using the already-realized endpoint geometry, including exact local edge/parameter identity where available, and can match that identity against persisted families without generating geometry. Distance and facing remain transient runtime state and are excluded from the canonical interface identity. Point/vertex matching and runtime consumption remain under audit. |
+| Chemistry Library | **Storage + canonical key + lookup seam implemented; runtime not integrated** | The versioned persistent library accepts material pairs plus canonical Bob interface identities for rigid surface, edge, point, vertex, and fluid-boundary families. Persistent lookup is now available for realized rigid edge/point/vertex interfaces; runtime lookup/miss calculation and reaction execution are still to be wired. |
 | Natural chemistry-driven transitions | **Not yet integrated** | Ordinary runtime interactions do not yet accumulate chemistry and trigger material transitions without an explicit transformation path. |
 | Retired reactivity cleanup | **In progress** | Obsolete resource helpers and construction-selection use have been removed. Remaining uses are concentrated in harmonics/nonlinear spectral response and compatibility fixtures/data; those are being treated as separate physics/compatibility audits rather than mapped to chemical position. |
 
@@ -448,11 +448,11 @@ This does not require predicting every chemistry before simulation. Remaining cu
 
 ### Current status
 
-The chemistry model and audit plan are established and implementation migration is underway. Resource chemical positions, the core chemistry equations, COMBINE's energy boundary, and BREAK's energy boundary have been migrated away from the retired interaction semantics.
+The chemistry model and audit plan are established and implementation migration is underway. Resource chemical positions, the core chemistry equations, COMBINE's energy boundary, BREAK's energy boundary, and the chemistry-driven BREAK energy-surplus gate have been migrated away from the retired interaction semantics.
 
 The remaining `reactivity` uses are outside authoritative chemistry. The resource-helper, construction-selection, and obsolete math uses have been removed. Harmonic/nonlinear spectral response has been audited and deliberately retains `reactivity` as a separate material-response input; compatibility fixtures/data remain for separate cleanup. No remaining use may be mapped to chemical position without a subsystem-specific contract.
 
-The next engineering action is to connect runtime contact candidates to Bob's new live interface resolver, then add the persistent-family lookup using the realized edge/parameter geometry required for an unambiguous match. Chemistry must not implement geometry mapping itself. Chemistry is not yet runtime-complete: local reaction accumulation, Chemistry Library miss calculation, and chemistry-driven transitions are still to be integrated.
+The next engineering action is to connect runtime contact candidates to Bob's live-interface resolver and persistent Chemistry Library lookup, then integrate local reaction accumulation and chemistry-driven transitions. The chemistry-driven BREAK seam now exists: reaction energy can rupture an existing bond only when it meets that bond's supplied physical disruption requirement. Chemistry must not implement geometry mapping itself.
 
 ## Project direction
 
