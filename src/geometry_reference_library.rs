@@ -961,14 +961,20 @@ pub fn len(&self) -> usize {
                 }
             }
             Some(LiveGeometryQuery::RigidPoint {
-                line_material, line_point, edge, edge_parameter, ..
+                line_material, line_point, edge_material, edge, edge_parameter,
             }) => {
                 let key = contact_bucket_hash(line_material, *edge, *line_point);
                 if let Some(signatures) = self.rigid_point_contact_index.get(&key) {
                     for signature in signatures {
                         if let Some(family) = self.rigid_point_contact_families.get(signature) {
                             let parameter = *edge_parameter as f64 / 1e9;
+                            let anchor_material = self
+                                .entries
+                                .get(&family.formation_signature)
+                                .and_then(|formation| formation.constituents.get(family.anchor_constituent))
+                                .map(|constituent| constituent.resource.as_str());
                             if line_material == &family.candidate_resource
+                                && edge_material == &anchor_material.unwrap_or_default()
                                 && *line_point == family.candidate_endpoint
                                 && *edge == family.anchor_edge
                                 && parameter >= family.anchor_parameter_start - QUANTUM
@@ -981,14 +987,20 @@ pub fn len(&self) -> usize {
                 }
             }
             Some(LiveGeometryQuery::RigidVertex {
-                corner_material, corner_point, edge, edge_parameter, ..
+                corner_material, corner_point, edge_material, edge, edge_parameter,
             }) => {
                 let key = contact_bucket_hash(corner_material, *edge, *corner_point);
                 if let Some(signatures) = self.rigid_vertex_contact_index.get(&key) {
                     for signature in signatures {
                         if let Some(family) = self.rigid_vertex_contact_families.get(signature) {
                             let parameter = *edge_parameter as f64 / 1e9;
+                            let anchor_material = self
+                                .entries
+                                .get(&family.formation_signature)
+                                .and_then(|formation| formation.constituents.get(family.anchor_constituent))
+                                .map(|constituent| constituent.resource.as_str());
                             if corner_material == &family.candidate_resource
+                                && edge_material == &anchor_material.unwrap_or_default()
                                 && *corner_point == family.candidate_vertex
                                 && *edge == family.anchor_edge
                                 && parameter >= family.anchor_parameter_start - QUANTUM
@@ -1998,403 +2010,3 @@ fn exposed_line_intervals(
                     let d = world_point(vertices[(edge + 1) % vertices.len()], other.placement);
                     let cross_c = dx * (c.1 - anchor_start.1) - dy * (c.0 - anchor_start.0);
                     let cross_d = dx * (d.1 - anchor_start.1) - dy * (d.0 - anchor_start.0);
-                    if cross_c.abs() > 1e-9 * length_sq.sqrt()
-                        || cross_d.abs() > 1e-9 * length_sq.sqrt()
-                    {
-                        continue;
-                    }
-                    let t0 = ((c.0 - anchor_start.0) * dx + (c.1 - anchor_start.1) * dy) / length_sq;
-                    let t1 = ((d.0 - anchor_start.0) * dx + (d.1 - anchor_start.1) * dy) / length_sq;
-                    let lo = t0.min(t1).max(0.0);
-                    let hi = t0.max(t1).min(1.0);
-                    if hi - lo > 1e-10 {
-                        covered.push((lo, hi));
-                    }
-                }
-            }
-        }
-    }
-
-    covered.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-    let mut out = Vec::new();
-    let mut cursor = 0.0;
-    for (start, end) in covered {
-        if start > cursor + 1e-10 {
-            out.push(ExposedEdgeInterval { edge: 0, start: cursor, end: start.min(1.0) });
-        }
-        cursor = cursor.max(end);
-        if cursor >= 1.0 - 1e-10 {
-            return out;
-        }
-    }
-    if cursor < 1.0 - 1e-10 {
-        out.push(ExposedEdgeInterval { edge: 0, start: cursor, end: 1.0 });
-    }
-    out
-}
-
-fn rigid_boundary_segments(form: &Form) -> Vec<((f64, f64), (f64, f64))> {
-    match form {
-        Form::Line { length } => vec![((-length * 0.5, 0.0), (length * 0.5, 0.0))],
-        _ => form
-            .polygon_vertices()
-            .map(|vertices| {
-                (0..vertices.len())
-                    .map(|i| (vertices[i], vertices[(i + 1) % vertices.len()]))
-                    .collect()
-            })
-            .unwrap_or_default(),
-    }
-}
-
-pub fn instantiate_rigid_contact_family(
-    formation: &GeometryFormation,
-    family: &GeometryRigidContactFamily,
-    anchor_parameter: f64,
-    catalog: &[BaseResource],
-) -> Option<GeometryFormation> {
-    if anchor_parameter < family.anchor_parameter_start - QUANTUM
-        || anchor_parameter > family.anchor_parameter_end + QUANTUM
-        || family.anchor_constituent >= formation.constituents.len()
-    {
-        return None;
-    }
-    let anchor_resource = catalog
-        .iter()
-        .find(|resource| resource.name == formation.constituents[family.anchor_constituent].resource)?;
-    let anchor_segments = rigid_boundary_segments(&anchor_resource.shape.form);
-    let (a0, a1) = *anchor_segments.get(family.anchor_edge)?;
-    let candidate_resource = catalog
-        .iter()
-        .find(|resource| resource.name == family.candidate_resource)?;
-    let candidate_segments = rigid_boundary_segments(&candidate_resource.shape.form);
-    let (c0, _) = *candidate_segments.get(family.candidate_edge)?;
-    let anchor = formation.constituents[family.anchor_constituent].placement;
-    let world_a0 = world_point(a0, anchor);
-    let world_a1 = world_point(a1, anchor);
-    let contact_point = (
-        world_a0.0 + (world_a1.0 - world_a0.0) * anchor_parameter,
-        world_a0.1 + (world_a1.1 - world_a0.1) * anchor_parameter,
-    );
-    let rotated_c0 = rotated_point(c0, family.candidate_rotation_radians);
-    let placement = Placement {
-        x: contact_point.0 - rotated_c0.0,
-        y: contact_point.1 - rotated_c0.1,
-        rotation_radians: family.candidate_rotation_radians,
-    };
-
-    let mut result = formation.clone();
-    let candidate_index = result.constituents.len();
-    result.constituents.push(GeometryConstituent {
-        resource: family.candidate_resource.clone(),
-        placement,
-    });
-    result.bonds.push(GeometryBond {
-        constituent_a: family.anchor_constituent,
-        constituent_b: candidate_index,
-    });
-    result.canonicalized(catalog)
-}
-
-fn load_rigid_point_contact_families(
-    path: &Path,
-    entries: &BTreeMap<String, GeometryFormation>,
-    catalog: &[BaseResource],
-) -> BTreeMap<String, GeometryRigidPointContactFamily> {
-    let mut out = BTreeMap::new();
-    let Ok(file) = File::open(path) else { return out; };
-    let lines = BufReader::new(file).lines().collect::<Result<Vec<_>, _>>().unwrap_or_default();
-    for (index, line) in lines.iter().enumerate() {
-        if line.trim().is_empty() { continue; }
-        let Ok(family) = serde_json::from_str::<GeometryRigidPointContactFamily>(line) else {
-            if index + 1 == lines.len() { continue; }
-            continue;
-        };
-        if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
-            || !family.anchor_parameter_start.is_finite()
-            || !family.anchor_parameter_end.is_finite()
-            || !family.candidate_rotation_start_radians.is_finite()
-            || !family.candidate_rotation_end_radians.is_finite()
-            || family.anchor_parameter_start > family.anchor_parameter_end
-            || !entries.contains_key(&family.formation_signature)
-            || family.anchor_constituent >= entries.get(&family.formation_signature).map(|f| f.constituents.len()).unwrap_or(0)
-            || family.candidate_endpoint > 1
-            || catalog.iter().all(|r| r.name != family.candidate_resource)
-        { continue; }
-        out.insert(family.signature(), family);
-    }
-    out
-}
-
-fn load_rigid_vertex_contact_families(
-    path: &Path,
-    entries: &BTreeMap<String, GeometryFormation>,
-    catalog: &[BaseResource],
-) -> BTreeMap<String, GeometryRigidVertexContactFamily> {
-    let mut out = BTreeMap::new();
-    let Ok(file) = File::open(path) else { return out; };
-    let lines = BufReader::new(file).lines().collect::<Result<Vec<_>, _>>().unwrap_or_default();
-    for (index, line) in lines.iter().enumerate() {
-        if line.trim().is_empty() { continue; }
-        let Ok(family) = serde_json::from_str::<GeometryRigidVertexContactFamily>(line) else {
-            if index + 1 == lines.len() { continue; }
-            continue;
-        };
-        if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
-            || !family.anchor_parameter_start.is_finite()
-            || !family.anchor_parameter_end.is_finite()
-            || !family.candidate_rotation_start_radians.is_finite()
-            || !family.candidate_rotation_end_radians.is_finite()
-            || family.anchor_parameter_start > family.anchor_parameter_end
-            || !entries.contains_key(&family.formation_signature)
-            || family.anchor_constituent >= entries.get(&family.formation_signature).map(|f| f.constituents.len()).unwrap_or(0)
-            || catalog.iter().all(|r| r.name != family.candidate_resource)
-        { continue; }
-        let Some(anchor_resource) = catalog.iter().find(|r| r.name == entries[&family.formation_signature].constituents[family.anchor_constituent].resource) else { continue; };
-        let Some(anchor_vertices) = anchor_resource.shape.form.polygon_vertices() else { continue; };
-        let Some(candidate_resource) = catalog.iter().find(|r| r.name == family.candidate_resource) else { continue; };
-        let Some(candidate_vertices) = candidate_resource.shape.form.polygon_vertices() else { continue; };
-        if family.anchor_edge >= anchor_vertices.len() || family.candidate_vertex >= candidate_vertices.len() {
-            continue;
-        }
-        out.insert(family.signature(), family);
-    }
-    out
-}
-
-pub fn generate_rigid_point_contact_families(
-    formation: &GeometryFormation,
-    candidate_resource: &BaseResource,
-    catalog: &[BaseResource],
-) -> Vec<GeometryRigidPointContactFamily> {
-    let Form::Line { .. } = candidate_resource.shape.form else {
-        return Vec::new();
-    };
-    let mut unique = BTreeMap::new();
-
-    for anchor_index in 0..formation.constituents.len() {
-        let Some(anchor_resource) = catalog.iter().find(|r| r.name == formation.constituents[anchor_index].resource) else { continue; };
-
-        // A zero-thickness line can accept a candidate line endpoint at any
-        // exposed point along its segment. Unlike a polygon edge, there is no
-        // positive-area interior to avoid, so the candidate endpoint has the
-        // full exact 2*pi orientation family.
-        if matches!(anchor_resource.shape.form, Form::Line { .. }) {
-            let exposed = exposed_line_intervals(formation, anchor_index, catalog);
-            for interval in exposed {
-                for endpoint in 0..2 {
-                    let family = GeometryRigidPointContactFamily {
-                        schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
-                        formation_signature: formation.signature.clone(),
-                        candidate_resource: candidate_resource.name.clone(),
-                        anchor_constituent: anchor_index,
-                        anchor_edge: interval.edge,
-                        candidate_endpoint: endpoint,
-                        anchor_parameter_start: interval.start,
-                        anchor_parameter_end: interval.end,
-                        candidate_rotation_start_radians: 0.0,
-                        candidate_rotation_end_radians: std::f64::consts::TAU,
-                    };
-                    unique.insert(family.signature(), family);
-                }
-            }
-            continue;
-        }
-
-        let Some(vertices) = anchor_resource.shape.form.polygon_vertices() else { continue; };
-        let exposed = exposed_polygon_edge_intervals(formation, anchor_index, catalog);
-        let placement = formation.constituents[anchor_index].placement;
-        let signed_area = vertices.iter().enumerate().map(|(i, &(x0,y0))| {
-            let (x1,y1) = vertices[(i+1)%vertices.len()];
-            x0*y1-y0*x1
-        }).sum::<f64>();
-
-        for interval in exposed {
-            let Some(&a0) = vertices.get(interval.edge) else { continue; };
-            let a1 = vertices[(interval.edge + 1) % vertices.len()];
-            let dx = a1.0-a0.0;
-            let dy = a1.1-a0.1;
-            let length = dx.hypot(dy);
-            if length <= QUANTUM { continue; }
-
-            // For a CCW polygon the outward normal is the right-hand normal;
-            // for CW it is the left-hand normal.
-            let (nx, ny) = if signed_area >= 0.0 {
-                (dy / length, -dx / length)
-            } else {
-                (-dy / length, dx / length)
-            };
-            let world_n = (
-                nx * placement.rotation_radians.cos() - ny * placement.rotation_radians.sin(),
-                nx * placement.rotation_radians.sin() + ny * placement.rotation_radians.cos(),
-            );
-            let outward_angle = world_n.1.atan2(world_n.0);
-
-            for endpoint in 0..2 {
-                let local_interior_angle = if endpoint == 0 { 0.0 } else { std::f64::consts::PI };
-                let center = outward_angle - local_interior_angle;
-                let start = center - std::f64::consts::FRAC_PI_2;
-                let end = center + std::f64::consts::FRAC_PI_2;
-                let family = GeometryRigidPointContactFamily {
-                    schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
-                    formation_signature: formation.signature.clone(),
-                    candidate_resource: candidate_resource.name.clone(),
-                    anchor_constituent: anchor_index,
-                    anchor_edge: interval.edge,
-                    candidate_endpoint: endpoint,
-                    anchor_parameter_start: interval.start,
-                    anchor_parameter_end: interval.end,
-                    candidate_rotation_start_radians: start,
-                    candidate_rotation_end_radians: end,
-                };
-                unique.insert(family.signature(), family);
-            }
-        }
-    }
-    unique.into_values().collect()
-}
-
-#[cfg(test)]
-mod live_interface_tests {
-    use super::*;
-
-    #[test]
-    fn live_family_resolution_never_guesses_from_topology_alone() {
-        let interface = resolve_live_contact_interface(
-            "Carbon",
-            ConnectionEndpoint::Boundary { angle_radians: 0.0 },
-            "Hydrogen",
-            ConnectionEndpoint::LineEndpoint { point_index: 0 },
-        );
-        assert_eq!(
-            classify_live_family_resolution(&interface),
-            LiveFamilyResolution::Unresolved
-        );
-    }
-
-    #[test]
-    fn live_interface_is_independent_of_endpoint_order() {
-        let a = resolve_live_contact_interface(
-            "Carbon",
-            ConnectionEndpoint::Boundary { angle_radians: 0.0 },
-            "Hydrogen",
-            ConnectionEndpoint::LineEndpoint { point_index: 1 },
-        );
-        let b = resolve_live_contact_interface(
-            "Hydrogen",
-            ConnectionEndpoint::LineEndpoint { point_index: 1 },
-            "Carbon",
-            ConnectionEndpoint::Boundary { angle_radians: 0.0 },
-        );
-        assert_eq!(a, b);
-        assert_eq!(a.interface_class, "rigid_point");
-    }
-
-    #[test]
-    fn live_interface_distinguishes_endpoint_topology() {
-        let edge = resolve_live_contact_interface(
-            "Carbon",
-            ConnectionEndpoint::Boundary { angle_radians: 0.0 },
-            "Carbon",
-            ConnectionEndpoint::Boundary { angle_radians: std::f64::consts::PI },
-        );
-        let vertex = resolve_live_contact_interface(
-            "Carbon",
-            ConnectionEndpoint::Corner { point_index: 0 },
-            "Carbon",
-            ConnectionEndpoint::Boundary { angle_radians: 0.0 },
-        );
-        assert_eq!(edge.interface_class, "rigid_edge");
-        assert_eq!(vertex.interface_class, "rigid_vertex");
-        assert_ne!(edge.signature, vertex.signature);
-    }
-
-    #[test]
-    fn live_interface_does_not_search_or_generate_geometry() {
-        let interface = resolve_live_contact_interface(
-            "Carbon",
-            ConnectionEndpoint::Corner { point_index: 2 },
-            "Phosphorus",
-            ConnectionEndpoint::Corner { point_index: 1 },
-        );
-        assert!(interface.signature.contains("corner:2"));
-        assert!(interface.signature.contains("corner:1"));
-    }
-}
-
-#[cfg(test)]
-mod point_contact_family_tests {
-    use super::*;
-    use crate::resources::Shape;
-
-    #[test]
-    fn line_anchor_exposes_endpoint_to_interior_contact_family() {
-        let catalog = default_catalog();
-        let formation = GeometryFormation::single("Hydrogen");
-        let line = catalog.iter().find(|r| r.name == "Hydrogen").unwrap();
-        assert!(matches!(line.shape.form, Form::Rectangle { .. }));
-
-        let mut test_catalog = catalog.clone();
-        test_catalog.push(BaseResource {
-            name: "TestLine".to_string(),
-            physical_state: crate::resources::PhysicalState::Rigid,
-            shape: Shape { form: Form::Line { length: 2.0 } },
-            properties: line.properties.clone(),
-        });
-
-        let line_formation = GeometryFormation::single("TestLine");
-        let candidate = test_catalog.iter().find(|r| r.name == "TestLine").unwrap();
-        let families = generate_rigid_point_contact_families(&line_formation, candidate, &test_catalog);
-        assert!(families.iter().any(|family| {
-            family.candidate_resource == "TestLine"
-                && family.anchor_parameter_start == 0.0
-                && family.anchor_parameter_end == 1.0
-                && family.candidate_rotation_start_radians == 0.0
-                && (family.candidate_rotation_end_radians - std::f64::consts::TAU).abs() < 1e-12
-        }));
-    }
-}
-
-/// Record the continuous manifold where a rigid polygon vertex touches an
-/// exposed polygon edge. The contact point may translate over the exposed
-/// edge; the candidate polygon may rotate while its selected vertex remains
-/// on the supporting line and its interior stays in the outward half-plane.
-/// No angle or position sampling is used.
-pub fn generate_rigid_vertex_contact_families(
-    formation: &GeometryFormation,
-    candidate_resource: &BaseResource,
-    catalog: &[BaseResource],
-) -> Vec<GeometryRigidVertexContactFamily> {
-    let Some(candidate_vertices) = candidate_resource.shape.form.polygon_vertices() else {
-        return Vec::new();
-    };
-    if !is_convex_polygon(&candidate_vertices) {
-        return Vec::new();
-    }
-    let mut unique = BTreeMap::new();
-
-    for anchor_index in 0..formation.constituents.len() {
-        let Some(anchor_resource) = catalog.iter().find(|r| r.name == formation.constituents[anchor_index].resource) else { continue; };
-        let Some(anchor_vertices) = anchor_resource.shape.form.polygon_vertices() else { continue; };
-        let exposed = exposed_polygon_edge_intervals(formation, anchor_index, catalog);
-        let placement = formation.constituents[anchor_index].placement;
-        let signed_area = anchor_vertices.iter().enumerate().map(|(i, &(x0,y0))| {
-            let (x1,y1) = anchor_vertices[(i+1)%anchor_vertices.len()];
-            x0*y1-y0*x1
-        }).sum::<f64>();
-
-        for interval in exposed {
-            let a0 = anchor_vertices[interval.edge];
-            let a1 = anchor_vertices[(interval.edge + 1) % anchor_vertices.len()];
-            let dx = a1.0-a0.0;
-            let dy = a1.1-a0.1;
-            let length = dx.hypot(dy);
-            if length <= QUANTUM { continue; }
-
-            let (nx, ny) = if signed_area >= 0.0 {
-                (dy / length, -dx / length)
-            } else {
-                (-dy / length, dx / length)
-            };
-            let world_n = (
-                nx * placement.rotation_radians.cos() - ny * placement.rotation_radians.sin(),
