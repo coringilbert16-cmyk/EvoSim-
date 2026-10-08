@@ -929,6 +929,21 @@ pub(crate) fn construct_blueprint_bond_driven_with_materials(
     )
 }
 
+fn commit_reserved_storage_materials(
+    available_materials: Option<&mut crate::material_storage::MaterialStorage>,
+    reserved_storage_indices: &[usize],
+) {
+    let Some(storage) = available_materials else {
+        return;
+    };
+    let mut indices = reserved_storage_indices.to_vec();
+    indices.sort_unstable_by(|a, b| b.cmp(a));
+    indices.dedup();
+    for index in indices {
+        let _ = storage.take_physical_at(index);
+    }
+}
+
 fn construct_blueprint_bond_driven_internal(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
@@ -1210,6 +1225,10 @@ fn construct_blueprint_bond_driven_internal(
                     if stop_at_genome
                         && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_some()
                     {
+                        commit_reserved_storage_materials(
+                            available_materials.as_deref_mut(),
+                            &reserved_storage_indices,
+                        );
                         return Ok((structure, total_heat));
                     }
 
@@ -1351,6 +1370,12 @@ fn construct_blueprint_bond_driven_internal(
         }
     }
 
+    commit_reserved_storage_materials(
+        available_materials.as_deref_mut(),
+        &reserved_storage_indices,
+    );
+    *ledger = construction_ledger;
+    *energy = remaining_energy;
     Ok((structure, total_heat))
 }
 
