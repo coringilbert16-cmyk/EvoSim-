@@ -852,47 +852,7 @@ pub fn len(&self) -> usize {
         &self,
         interface: &LiveGeometryInterface,
     ) -> Option<String> {
-        let mut projections = BTreeMap::<String, ()>::new();
-        match interface.interface_class {
-            "rigid_edge" => {
-                if let Some((a, b)) = parse_edge_pair(&interface.signature) {
-                    let keys = [
-                        (a.material.clone(), b.edge, a.edge),
-                        (b.material.clone(), a.edge, b.edge),
-                    ];
-                    for key in keys {
-                        if let Some(signatures) = self.rigid_contact_index.get(&key) {
-                            for signature in signatures {
-                                if let Some(family) = self.rigid_contact_families.get(signature) {
-                                    if edge_pair_matches_family(&a, &b, family) {
-                                        projections.insert(rigid_family_projection(family), ());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            "rigid_point" => {
-                if let Some((a, b)) = parse_edge_pair(&interface.signature) {
-                    for family in self.rigid_point_contact_families.values() {
-                        if edge_point_pair_matches_family(&a, &b, family) {
-                            projections.insert(point_family_projection(family), ());
-                        }
-                    }
-                }
-            }
-            "rigid_vertex" => {
-                if let Some((a, b)) = parse_edge_pair(&interface.signature) {
-                    for family in self.rigid_vertex_contact_families.values() {
-                        if edge_vertex_pair_matches_family(&a, &b, family) {
-                            projections.insert(vertex_family_projection(family), ());
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
+        let projections = self.indexed_interface_projections(interface);
         (projections.len() == 1).then(|| projections.into_keys().next().unwrap())
     }
 
@@ -900,6 +860,17 @@ pub fn len(&self) -> usize {
         &self,
         interface: &LiveGeometryInterface,
     ) -> LiveFamilyResolution {
+        match self.indexed_interface_projections(interface).len() {
+            0 => LiveFamilyResolution::Unresolved,
+            1 => LiveFamilyResolution::Unique,
+            _ => LiveFamilyResolution::Ambiguous,
+        }
+    }
+
+    fn indexed_interface_projections(
+        &self,
+        interface: &LiveGeometryInterface,
+    ) -> BTreeMap<String, ()> {
         let mut projections = BTreeMap::<String, ()>::new();
         match interface.interface_class {
             "rigid_edge" => {
@@ -922,30 +893,36 @@ pub fn len(&self) -> usize {
                 }
             }
             "rigid_point" => {
-                if let Some((a, b)) = parse_edge_pair(&interface.signature) {
-                    for family in self.rigid_point_contact_families.values() {
-                        if edge_point_pair_matches_family(&a, &b, family) {
-                            projections.insert(point_family_projection(family), ());
+                if let Some((line, edge)) = parse_line_edge_pair(&interface.signature) {
+                    let key = (line.material.clone(), edge.edge, line.point_index);
+                    if let Some(signatures) = self.rigid_point_contact_index.get(&key) {
+                        for signature in signatures {
+                            if let Some(family) = self.rigid_point_contact_families.get(signature) {
+                                if line_edge_pair_matches_family(&line, &edge, family) {
+                                    projections.insert(point_family_projection(family), ());
+                                }
+                            }
                         }
                     }
                 }
             }
             "rigid_vertex" => {
-                if let Some((a, b)) = parse_edge_pair(&interface.signature) {
-                    for family in self.rigid_vertex_contact_families.values() {
-                        if edge_vertex_pair_matches_family(&a, &b, family) {
-                            projections.insert(vertex_family_projection(family), ());
+                if let Some((corner, edge)) = parse_corner_edge_pair(&interface.signature) {
+                    let key = (corner.material.clone(), edge.edge, corner.point_index);
+                    if let Some(signatures) = self.rigid_vertex_contact_index.get(&key) {
+                        for signature in signatures {
+                            if let Some(family) = self.rigid_vertex_contact_families.get(signature) {
+                                if corner_edge_pair_matches_family(&corner, &edge, family) {
+                                    projections.insert(vertex_family_projection(family), ());
+                                }
+                            }
                         }
                     }
                 }
             }
             _ => {}
         }
-        match projections.len() {
-            0 => LiveFamilyResolution::Unresolved,
-            1 => LiveFamilyResolution::Unique,
-            _ => LiveFamilyResolution::Ambiguous,
-        }
+        projections
     }
 
     pub fn insert_rigid_vertex_contact_families(
@@ -982,6 +959,12 @@ pub fn len(&self) -> usize {
         }
         file.sync_data()?;
         let added = unique.len();
+        for (signature, family) in &unique {
+            self.rigid_vertex_contact_index
+                .entry((family.candidate_resource.clone(), family.anchor_edge, family.candidate_vertex))
+                .or_default()
+                .push(signature.clone());
+        }
         self.rigid_vertex_contact_families.extend(unique);
         Ok(added)
     }
@@ -1015,6 +998,12 @@ pub fn len(&self) -> usize {
         }
         file.sync_data()?;
         let added = unique.len();
+        for (signature, family) in &unique {
+            self.rigid_point_contact_index
+                .entry((family.candidate_resource.clone(), family.anchor_edge, family.candidate_endpoint))
+                .or_default()
+                .push(signature.clone());
+        }
         self.rigid_point_contact_families.extend(unique);
         Ok(added)
     }
