@@ -831,18 +831,6 @@ pub(crate) fn resolve_transformation(
         }
     }
 }
-/// Physical work required to disrupt an existing bond.
-///
-/// The realized bond strength is already the authoritative structural barrier.
-/// Chemical BREAK must not reconstruct a different barrier from the current
-/// constituent material properties.
-pub(crate) fn break_work_cost(bond_strength: f64) -> Option<f64> {
-    if !bond_strength.is_finite() || bond_strength < 0.0 {
-        return None;
-    }
-    crate::chemistry::normalized_chemistry_to_energy(bond_strength.clamp(0.0, 1.0))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
