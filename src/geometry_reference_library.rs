@@ -87,7 +87,7 @@ pub fn resolve_live_contact_candidate(
     Some(LiveGeometryInterface {
         interface_class: class,
         signature: format!(
-            "live-v{}|{}:{}|{}:{}|d:{}|f:{}|w:{}:{}|{}:{}",
+            "live-v{}|{}:{}|{}:{}",
             GEOMETRY_LIBRARY_SCHEMA_VERSION,
             sides[0].0,
             sides[0].1,
