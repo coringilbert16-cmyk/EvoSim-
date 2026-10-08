@@ -21,6 +21,14 @@ pub const CHEMICAL_CONTACT_RADIUS: f64 = 1.0;
 
 /// Chemistry force unit. This is an attraction scale, not resource energy.
 pub const CHEMICAL_MAX_FORCE: f64 = 1.0;
+/// Characteristic distance used to convert the normalized chemistry force scale
+/// into the simulation's physical energy unit. Force × distance = energy.
+pub const CHEMICAL_ENERGY_DISTANCE: f64 = CHEMICAL_CONTACT_RADIUS;
+/// One full normalized chemistry unit therefore represents this much physical
+/// energy. With the approved scale this is 1.0 energy unit, but the conversion
+/// is explicit rather than relying on identical numerical values by accident.
+pub const CHEMICAL_ENERGY_PER_NORMALIZED_UNIT: f64 =
+    CHEMICAL_MAX_FORCE * CHEMICAL_ENERGY_DISTANCE;
 
 /// Fraction of accumulated reaction dissipated per tick when no new reaction
 /// energy replaces it.
@@ -105,7 +113,19 @@ pub fn activation_barrier_from_bond_strength(bond_strength: f64) -> Option<f64> 
     if !bond_strength.is_finite() || bond_strength < 0.0 {
         return None;
     }
-    Some(bond_strength.clamp(0.0, 1.0))
+    normalized_chemistry_to_energy(bond_strength.clamp(0.0, 1.0))
+}
+
+/// Convert the normalized accumulated chemistry quantity into physical energy.
+///
+/// The conversion is derived from the approved force and characteristic contact
+/// distance rather than introducing a second tuning constant.
+pub fn normalized_chemistry_to_energy(value: f64) -> Option<f64> {
+    if !value.is_finite() || value < 0.0 {
+        return None;
+    }
+    let energy = value * CHEMICAL_ENERGY_PER_NORMALIZED_UNIT;
+    energy.is_finite().then_some(energy)
 }
 
 /// One tick of bounded reaction accumulation.
@@ -242,6 +262,13 @@ mod tests {
         assert_eq!(interface_engagement(1.0), Some(1.0));
         assert_eq!(interface_engagement(0.5), Some(0.5));
         assert_eq!(interface_engagement(-1.0), Some(0.0));
+    }
+
+    #[test]
+    fn normalized_chemistry_has_explicit_energy_conversion() {
+        assert_eq!(CHEMICAL_ENERGY_DISTANCE, 1.0);
+        assert_eq!(CHEMICAL_ENERGY_PER_NORMALIZED_UNIT, 1.0);
+        assert_eq!(normalized_chemistry_to_energy(0.75), Some(0.75));
     }
 
     #[test]
