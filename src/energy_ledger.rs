@@ -23,6 +23,31 @@ pub(crate) struct EnergyTransaction {
 }
 
 impl EnergyTransaction {
+    /// A pure energy expenditure: usable energy is consumed, with the
+    /// structural allocation and dissipated work accounting for the same
+    /// amount. No potential energy is created by the expenditure itself.
+    pub(crate) fn expenditure(
+        reason: EnergyReason,
+        structural_delta: f64,
+        heat_dissipated: f64,
+    ) -> Option<Self> {
+        if !structural_delta.is_finite()
+            || structural_delta < 0.0
+            || !heat_dissipated.is_finite()
+            || heat_dissipated < 0.0
+        {
+            return None;
+        }
+        let cost = structural_delta + heat_dissipated;
+        cost.is_finite().then_some(Self {
+            reason,
+            potential_released: 0.0,
+            usable_delta: -cost,
+            structural_delta,
+            heat_dissipated,
+        })
+    }
+
     pub(crate) fn balanced(self) -> bool {
         self.potential_released.is_finite()
             && self.usable_delta.is_finite()
@@ -114,6 +139,16 @@ mod tests {
             };
             assert!(tx.balanced());
         }
+    }
+
+    #[test]
+    fn pure_expenditure_does_not_release_potential_energy() {
+        let tx = EnergyTransaction::expenditure(EnergyReason::Combine, 3.0, 2.0).unwrap();
+        assert!(tx.balanced());
+        assert_eq!(tx.potential_released, 0.0);
+        assert_eq!(tx.usable_delta, -5.0);
+        assert_eq!(tx.structural_delta, 3.0);
+        assert_eq!(tx.heat_dissipated, 2.0);
     }
 
     #[test]
