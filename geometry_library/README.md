@@ -7,7 +7,7 @@ This directory is the persistent home for generated geometry knowledge.
 - Tests must use isolated temporary roots.
 - The worker will eventually populate this directory continuously as new valid formations are discovered.
 
-The source-of-truth implementation is src/geometry_reference_library.rs.
+The source-of-truth implementation is src/bob/library.rs.
 
 The library uses a locked positional equivalence tolerance of **0.5 units**. If two otherwise-identical formations differ only by a positional displacement of **≤ 0.5 units**, Bob treats them as the same geometric record rather than storing another microscopic variation. This is a geometric knowledge equivalence rule, not permission for live construction to penetrate or skip physical validation.
 
