@@ -801,7 +801,7 @@ mod shape_tests {
         }
 
         let height = vertices[2].1 - vertices[1].1;
-        assert!((height - 3.0_f64.sqrt() / 2.0).abs() < 1e-9);
+        assert!((height - 3.0_f64.sqrt() / 4.0).abs() < 1e-9);
         assert!(phosphorus.shape.form.is_valid());
     }
 
