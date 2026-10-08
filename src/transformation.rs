@@ -861,7 +861,8 @@ pub(crate) fn break_work_cost(
     b: crate::resources::ResourceProperties,
     complexity: f64,
 ) -> f64 {
-    crate::combine::bond_strength(a, b) * complexity.max(0.0)
+    let normalized = crate::combine::bond_strength(a, b) * complexity.max(0.0);
+    crate::chemistry::normalized_chemistry_to_energy(normalized).unwrap_or(0.0)
 }
 
 #[cfg(test)]
