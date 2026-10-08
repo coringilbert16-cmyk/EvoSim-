@@ -8,7 +8,7 @@
 use crate::capillary_geometry::{solve_water_against_solid, CapillaryContactFamily, ContactTranslationInterval};
 use crate::material_geometry::{placed_forms_penetrate, placed_forms_rigid_contact, PlacedMaterialPart};
 use crate::resources::{default_catalog, BaseResource, Form};
-use crate::structure::Placement;
+use crate::structure::{ConnectionEndpoint, Placement, StructuralUnit};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
@@ -17,6 +17,80 @@ use std::path::{Path, PathBuf};
 
 pub const GEOMETRY_LIBRARY_SCHEMA_VERSION: u32 = 1;
 const QUANTUM: f64 = 1e-9;
+
+/// Canonical identity of a live physical interface.
+///
+/// This is deliberately derived from already-realized endpoint topology. It
+/// does not search geometry space, sample orientations, or invent a persistent
+/// family. A later family lookup may use this identity as its lookup boundary.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LiveGeometryInterface {
+    pub interface_class: &'static str,
+    pub signature: String,
+}
+
+fn endpoint_descriptor(endpoint: ConnectionEndpoint) -> String {
+    match endpoint {
+        ConnectionEndpoint::Corner { point_index } => format!("corner:{point_index}"),
+        ConnectionEndpoint::LineEndpoint { point_index } => format!("line:{point_index}"),
+        ConnectionEndpoint::Boundary { angle_radians } => {
+            format!("boundary:{}", quantize(normalized_angle(angle_radians)))
+        }
+        ConnectionEndpoint::Fluid { x, y } => {
+            format!("fluid:{},{}", quantize(x), quantize(y))
+        }
+    }
+}
+
+fn endpoint_class(endpoint: ConnectionEndpoint) -> &'static str {
+    match endpoint {
+        ConnectionEndpoint::Corner { .. } => "corner",
+        ConnectionEndpoint::LineEndpoint { .. } => "line",
+        ConnectionEndpoint::Boundary { .. } => "boundary",
+        ConnectionEndpoint::Fluid { .. } => "fluid",
+    }
+}
+
+/// Resolve a live contact into a canonical Bob-side interface identity.
+///
+/// This function is intentionally a resolver, not a geometry generator:
+/// callers provide the endpoints that contact detection has already realized.
+/// If the same physical interface is presented in the opposite endpoint order,
+/// the returned identity is unchanged.
+pub fn resolve_live_contact_interface(
+    material_a: &str,
+    endpoint_a: ConnectionEndpoint,
+    material_b: &str,
+    endpoint_b: ConnectionEndpoint,
+) -> LiveGeometryInterface {
+    let class = match (endpoint_class(endpoint_a), endpoint_class(endpoint_b)) {
+        ("fluid", _) | (_, "fluid") => "fluid_boundary",
+        ("boundary", "boundary") => "rigid_edge",
+        ("corner", "boundary") | ("boundary", "corner")
+        | ("corner", "corner") => "rigid_vertex",
+        ("line", _) | (_, "line") => "rigid_point",
+        _ => "rigid_surface",
+    };
+
+    let mut sides = [
+        (material_a, endpoint_descriptor(endpoint_a)),
+        (material_b, endpoint_descriptor(endpoint_b)),
+    ];
+    sides.sort_by(|a, b| a.cmp(b));
+
+    LiveGeometryInterface {
+        interface_class: class,
+        signature: format!(
+            "live-v{}|{}:{}|{}:{}",
+            GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            sides[0].0,
+            sides[0].1,
+            sides[1].0,
+            sides[1].1,
+        ),
+    }
+}
+
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct GeometryContactFamily {
@@ -1788,6 +1862,60 @@ pub fn generate_rigid_point_contact_families(
         }
     }
     unique.into_values().collect()
+}
+
+#[cfg(test)]
+mod live_interface_tests {
+    use super::*;
+
+    #[test]
+    fn live_interface_is_independent_of_endpoint_order() {
+        let a = resolve_live_contact_interface(
+            "Carbon",
+            ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            "Hydrogen",
+            ConnectionEndpoint::LineEndpoint { point_index: 1 },
+        );
+        let b = resolve_live_contact_interface(
+            "Hydrogen",
+            ConnectionEndpoint::LineEndpoint { point_index: 1 },
+            "Carbon",
+            ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+        );
+        assert_eq!(a, b);
+        assert_eq!(a.interface_class, "rigid_point");
+    }
+
+    #[test]
+    fn live_interface_distinguishes_endpoint_topology() {
+        let edge = resolve_live_contact_interface(
+            "Carbon",
+            ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            "Carbon",
+            ConnectionEndpoint::Boundary { angle_radians: std::f64::consts::PI },
+        );
+        let vertex = resolve_live_contact_interface(
+            "Carbon",
+            ConnectionEndpoint::Corner { point_index: 0 },
+            "Carbon",
+            ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+        );
+        assert_eq!(edge.interface_class, "rigid_edge");
+        assert_eq!(vertex.interface_class, "rigid_vertex");
+        assert_ne!(edge.signature, vertex.signature);
+    }
+
+    #[test]
+    fn live_interface_does_not_search_or_generate_geometry() {
+        let interface = resolve_live_contact_interface(
+            "Carbon",
+            ConnectionEndpoint::Corner { point_index: 2 },
+            "Phosphorus",
+            ConnectionEndpoint::Corner { point_index: 1 },
+        );
+        assert!(interface.signature.contains("corner:2"));
+        assert!(interface.signature.contains("corner:1"));
+    }
 }
 
 #[cfg(test)]
