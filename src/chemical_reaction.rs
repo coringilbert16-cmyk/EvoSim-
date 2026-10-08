@@ -105,9 +105,9 @@ pub(crate) fn resolve(
         processing_efficiency,
         ledger,
     );
-    if !success {
-        organism.chemical_reaction_accumulation.clear();
-    }
+    // A failed event is stale or physically invalid. Its accumulation was
+    // already removed when the event crossed the barrier, and the next
+    // structure revision will invalidate any remaining interface state.
     success
 }
 
