@@ -536,6 +536,7 @@ pub struct GeometryFrontier {
 pub struct GeometryLibrary {
     root: PathBuf,
     entries: BTreeMap<String, GeometryFormation>,
+    equivalence_index: BTreeMap<String, Vec<String>>,
     manifest: GeometryLibraryManifest,
     frontier: GeometryFrontier,
     contact_families: BTreeMap<String, GeometryContactFamily>,
@@ -736,9 +737,18 @@ impl GeometryLibrary {
                 .push(signature.clone());
         }
 
+        let mut equivalence_index = BTreeMap::<String, Vec<String>>::new();
+        for (signature, formation) in &entries {
+            equivalence_index
+                .entry(formation_equivalence_key(formation))
+                .or_default()
+                .push(signature.clone());
+        }
+
         let mut library = Self {
             root,
             entries,
+            equivalence_index,
             manifest,
             frontier,
             contact_families,
@@ -1178,15 +1188,23 @@ pub fn len(&self) -> usize {
         let mut unique = BTreeMap::new();
         for formation in formations {
             if let Some(canonical) = formation.canonicalized(catalog) {
-                if self.entries.contains_key(&canonical.signature)
-                    || self
-                        .entries
-                        .values()
-                        .any(|existing| formations_equivalent_within_tolerance(existing, &canonical))
-                    || unique
-                        .values()
-                        .any(|existing| formations_equivalent_within_tolerance(existing, &canonical))
-                {
+                let key = formation_equivalence_key(&canonical);
+                let existing_match = self
+                    .equivalence_index
+                    .get(&key)
+                    .into_iter()
+                    .flatten()
+                    .any(|signature| {
+                        self.entries
+                            .get(signature)
+                            .is_some_and(|existing| {
+                                formations_equivalent_within_tolerance(existing, &canonical)
+                            })
+                    });
+                let batch_match = unique
+                    .values()
+                    .any(|existing| formations_equivalent_within_tolerance(existing, &canonical));
+                if existing_match || batch_match {
                     continue;
                 }
                 unique.insert(canonical.signature.clone(), canonical);
@@ -1209,6 +1227,12 @@ pub fn len(&self) -> usize {
         file.sync_data()?;
 
         let added = unique.len();
+        for (signature, formation) in &unique {
+            self.equivalence_index
+                .entry(formation_equivalence_key(formation))
+                .or_default()
+                .push(signature.clone());
+        }
         self.entries.extend(unique);
         self.manifest.entries = self.entries.len() as u64;
         self.write_manifest()?;
@@ -1256,6 +1280,23 @@ fn canonical_pose_candidates(formation: &GeometryFormation, catalog: &[BaseResou
         candidates.push(candidate);
     }
     candidates
+}
+
+fn formation_equivalence_key(formation: &GeometryFormation) -> String {
+    let mut out = String::new();
+    for constituent in &formation.constituents {
+        out.push_str(&constituent.resource);
+        out.push('@');
+        out.push_str(
+            &quantize(normalized_angle(constituent.placement.rotation_radians)).to_string(),
+        );
+        out.push(';');
+    }
+    out.push('|');
+    for bond in &formation.bonds {
+        out.push_str(&format!("{}-{};", bond.constituent_a, bond.constituent_b));
+    }
+    out
 }
 
 fn formations_equivalent_within_tolerance(
