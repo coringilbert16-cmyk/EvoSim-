@@ -3351,8 +3351,6 @@ pub fn open_default_library() -> std::io::Result<GeometryLibrary> {
     let catalog = default_catalog();
     GeometryLibrary::open("geometry_library/data", &catalog)
 }
-
-
 #[cfg(test)]
 mod knowledge_state_tests {
     use super::*;
