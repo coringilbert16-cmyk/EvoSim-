@@ -365,14 +365,72 @@ mod tests {
     }
 
     #[test]
-    fn formation_work_cost_is_not_chemistry_driven() {
-        let a = ResourceProperties { mass: 1.0, potential_energy: 1.0, reactivity: 0.0, chemical_position: Some(1.5), cohesion: 0.5 };
-        let b = ResourceProperties { mass: 2.0, potential_energy: 99.0, reactivity: 999.0, chemical_position: Some(12.5), cohesion: 0.8 };
+    fn formation_work_is_remaining_chemical_approach_work() {
+        let a = ResourceProperties {
+            mass: 1.0,
+            potential_energy: 1.0,
+            reactivity: 0.0,
+            chemical_position: Some(1.5),
+            cohesion: 0.5,
+        };
+        let b = ResourceProperties {
+            mass: 2.0,
+            potential_energy: 99.0,
+            reactivity: 999.0,
+            chemical_position: Some(12.5),
+            cohesion: 0.8,
+        };
+        let at_contact = formation_work_cost(a, b, 0.0);
+        let separated = formation_work_cost(a, b, 0.5);
+        assert_eq!(at_contact, 0.0);
+        assert!(separated > 0.0);
+    }
+
+    #[test]
+    fn formation_work_is_independent_of_nonchemical_energy_properties() {
+        let a = ResourceProperties {
+            mass: 1.0,
+            potential_energy: 1.0,
+            reactivity: 0.0,
+            chemical_position: Some(1.5),
+            cohesion: 0.5,
+        };
+        let b = ResourceProperties {
+            mass: 2.0,
+            potential_energy: 99.0,
+            reactivity: 999.0,
+            chemical_position: Some(12.5),
+            cohesion: 0.8,
+        };
         let mut altered = b;
         altered.potential_energy = -500.0;
         altered.reactivity = 0.01;
-        altered.chemical_position = Some(4.0);
-        assert_eq!(formation_work_cost(a, b), formation_work_cost(a, altered));
+        assert_eq!(
+            formation_work_cost(a, b, 0.5),
+            formation_work_cost(a, altered, 0.5)
+        );
+    }
+
+    #[test]
+    fn intrinsic_bond_potential_is_separate_from_formation_work() {
+        let a = ResourceProperties {
+            mass: 1.0,
+            potential_energy: 1.0,
+            reactivity: 0.0,
+            chemical_position: Some(1.5),
+            cohesion: 0.5,
+        };
+        let b = ResourceProperties {
+            mass: 2.0,
+            potential_energy: 99.0,
+            reactivity: 999.0,
+            chemical_position: Some(12.5),
+            cohesion: 0.8,
+        };
+        let strength = bond_strength(a, b);
+        let potential = intrinsic_bond_potential(a, b, strength);
+        assert!(potential.is_finite());
+        assert!(potential >= 0.0);
     }
 
     #[test]
