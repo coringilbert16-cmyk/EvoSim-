@@ -559,8 +559,8 @@ mod tests {
         );
         let endpoint = ConnectionEndpoint::Boundary { angle_radians: 0.1 };
         let point = endpoint_world_point(endpoint, &unit, &catalog).unwrap();
-        assert!(point.normal_x > 0.99);
-        assert!(point.normal_y.abs() < 1e-12);
+        assert!((point.normal_x - 3.0_f64.sqrt() / 2.0).abs() < 1e-12);
+        assert!((point.normal_y - 0.5).abs() < 1e-12);
     }
 
     #[test]
