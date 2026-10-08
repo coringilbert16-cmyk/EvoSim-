@@ -39,8 +39,11 @@ mod surface_geometry;
 // Material transformation and bonding.
 mod combine;
 mod combine_runtime;
+#[path = "chemistry/chemistry.rs"]
 mod chemistry;
+#[path = "chemistry/chemical_reaction.rs"]
 mod chemical_reaction;
+#[path = "chemistry/chemistry_library.rs"]
 mod chemistry_library;
 mod decomposition;
 mod diagnostics;
