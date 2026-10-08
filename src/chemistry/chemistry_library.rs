@@ -196,9 +196,9 @@ impl ChemistryRecord {
             ChemistryEvaluationState::Valid => {
                 self.static_potential
                     .is_some_and(|value| value.is_finite() && value >= 0.0)
-                    && self
-                        .bond_strength
-                        .map_or(true, |value| value.is_finite() && (0.0..=1.0).contains(&value))
+                    && self.bond_strength.map_or(true, |value| {
+                        value.is_finite() && (0.0..=1.0).contains(&value)
+                    })
                     && self.rejection_reason.is_none()
             }
             ChemistryEvaluationState::Rejected => {
@@ -464,7 +464,9 @@ mod tests {
         );
         let reopened = ChemistryLibrary::open(&root).unwrap();
         assert_eq!(
-            reopened.get(&key).and_then(|record| record.static_potential),
+            reopened
+                .get(&key)
+                .and_then(|record| record.static_potential),
             Some(0.625)
         );
         let _ = fs::remove_dir_all(root);
