@@ -9,7 +9,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
-pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 1;
+pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 2;
 
 fn quantize(value: f64) -> i64 { (value * 1_000_000_000.0).round() as i64 }
 
@@ -112,7 +112,6 @@ impl ChemistryKey {
 pub struct ChemistryRecord {
     pub key: ChemistryKey,
     pub static_potential: f64,
-    pub activation_barrier: f64,
 }
 
 impl ChemistryRecord {
@@ -123,7 +122,6 @@ impl ChemistryRecord {
             && !self.key.interface_class.is_empty()
             && !self.key.interface_signature.is_empty()
             && self.static_potential.is_finite() && self.static_potential >= 0.0
-            && self.activation_barrier.is_finite() && self.activation_barrier >= 0.0
     }
 }
 
@@ -172,6 +170,21 @@ impl ChemistryLibrary {
     }
 
     pub fn get(&self, key: &ChemistryKey) -> Option<&ChemistryRecord> { self.entries.get(&key.signature()) }
+    pub fn get_or_insert_static_potential(
+        &mut self,
+        key: ChemistryKey,
+        static_potential: f64,
+    ) -> std::io::Result<Option<f64>> {
+        if !static_potential.is_finite() || static_potential < 0.0 {
+            return Ok(None);
+        }
+        if let Some(record) = self.get(&key) {
+            return Ok(Some(record.static_potential));
+        }
+        let record = ChemistryRecord { key, static_potential };
+        self.insert(record)?;
+        Ok(self.entries.values().last().map(|_| static_potential))
+    }
     pub fn len(&self) -> usize { self.entries.len() }
     pub fn is_empty(&self) -> bool { self.entries.is_empty() }
 
@@ -189,6 +202,10 @@ impl ChemistryLibrary {
         fs::write(self.root.join("manifest.json"), bytes)?;
         Ok(true)
     }
+}
+
+pub fn open_default_library() -> std::io::Result<ChemistryLibrary> {
+    ChemistryLibrary::open("chemistry_library/data")
 }
 
 #[cfg(test)]
@@ -269,7 +286,7 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
         let mut lib = ChemistryLibrary::open(&root).unwrap();
         let key = ChemistryKey::new("Carbon","Hydrogen","rigid_edge","g");
-        let record = ChemistryRecord { key: key.clone(), static_potential: 0.5, activation_barrier: 1.0 };
+        let record = ChemistryRecord { key: key.clone(), static_potential: 0.5 };
         assert!(lib.insert(record.clone()).unwrap());
         assert!(!lib.insert(record).unwrap());
         assert!(lib.get(&key).is_some());
