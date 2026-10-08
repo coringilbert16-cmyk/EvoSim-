@@ -1305,8 +1305,7 @@ fn construct_blueprint_bond_driven_internal(
                         // creates the qualifying cavity, that is the exact
                         // end of the genome-construction phase.
                         if stop_at_genome
-                            && crate::cavity::analyze_genome_cavity(&structure, catalog)?
-                                .is_some()
+                            && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_some()
                         {
                             return Ok((structure, total_heat));
                         }
