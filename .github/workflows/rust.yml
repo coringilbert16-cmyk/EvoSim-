@@ -11,6 +11,23 @@ permissions:
   contents: read
 
 jobs:
+  # Bob has to make progress before the transitional organism constructor can
+  # pass its full integration suite. Keep Bob's own readiness checks independently
+  # observable instead of hiding them behind unrelated constructor failures.
+  bob-readiness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+      - name: Test Bob geometry/Chemistry gate and persistence
+        run: cargo test geometry_library_worker::tests
+      - name: Test Bob base-resource chemistry identity
+        run: cargo test chemical_reaction::tests::base_resource_identity_matches_bob_catalogue_key
+
   test:
     runs-on: ubuntu-latest
     steps:
