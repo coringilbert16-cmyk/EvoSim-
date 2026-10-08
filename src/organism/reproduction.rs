@@ -12,7 +12,6 @@ use crate::combine_runtime::DevelopmentalContext;
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::material_storage::MaterialStorage;
 use crate::organism_viability::{validate_realized_organism, OrganismViabilityRequirements};
-use crate::physical_material::PhysicalMaterial;
 use crate::resources::Material;
 use crate::state::{EnergyLedger, Environment, Organism, Position, ReproductiveConstruction};
 use crate::structure::OrganismStructure;
