@@ -727,11 +727,8 @@ fn realize_next_bond_driven(
     let target = blueprint.elements[_index].placement;
     let (s, c) = genome_anchor.rotation_radians.sin_cos();
     let target_world = (
-        genome_anchor.x + (target.x - anchor_declared.x) * c
-            - (target.y - anchor_declared.y) * s,
-        genome_anchor.y
-            + (target.x - anchor_declared.x) * s
-            + (target.y - anchor_declared.y) * c,
+        genome_anchor.x + (target.x - anchor_declared.x) * c - (target.y - anchor_declared.y) * s,
+        genome_anchor.y + (target.x - anchor_declared.x) * s + (target.y - anchor_declared.y) * c,
     );
     let mut best: Option<(
         f64,
@@ -902,9 +899,18 @@ fn realize_next_bond_driven(
         }
     }
 
-    best.map(|(_, _, trial, indices, part_index, attempt, trial_ledger, trial_energy)| {
-        (trial, indices, part_index, attempt, trial_ledger, trial_energy)
-    })
+    best.map(
+        |(_, _, trial, indices, part_index, attempt, trial_ledger, trial_energy)| {
+            (
+                trial,
+                indices,
+                part_index,
+                attempt,
+                trial_ledger,
+                trial_energy,
+            )
+        },
+    )
 }
 
 /// Bond-driven construction is forward-only. Once a bond is formed it is
