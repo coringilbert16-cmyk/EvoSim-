@@ -183,9 +183,7 @@ fn publish_once() -> std::io::Result<bool> {
     let paths = data_paths(&repo);
 
     if !remote_is_ancestor(&repo, &branch) {
-        eprintln!(
-            "library sync: deferred because origin/{branch} is ahead of the local branch"
-        );
+        eprintln!("library sync: deferred because origin/{branch} is ahead of the local branch");
         return Ok(false);
     }
 
@@ -293,13 +291,11 @@ pub fn spawn_background() {
         return;
     }
 
-    thread::spawn(|| {
-        loop {
-            if let Err(error) = publish_once() {
-                eprintln!("library sync: {error}");
-            }
-            thread::sleep(interval());
+    thread::spawn(|| loop {
+        if let Err(error) = publish_once() {
+            eprintln!("library sync: {error}");
         }
+        thread::sleep(interval());
     });
 }
 
