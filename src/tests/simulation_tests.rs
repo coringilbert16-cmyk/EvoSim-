@@ -58,7 +58,6 @@ mod integration_tests {
             o.genome.preferred_mass(),
         );
         assert!(realization.overall < 0.90);
-        
     }
 
     #[test]
