@@ -144,7 +144,13 @@ pub(crate) fn accumulate(
 
         let key_record = ChemistryKey::from_live_geometry(&material_a, &material_b, &interface);
         let potential = match chemistry_library.get(&key_record) {
-            Some(record) => record.static_potential,
+            Some(record) if record.state == crate::chemistry_library::ChemistryEvaluationState::Valid => {
+                let Some(value) = record.static_potential else {
+                    continue;
+                };
+                value
+            }
+            Some(_) => continue,
             None => {
                 let Some(calculated) = crate::chemistry::interaction_potential(
                     position_a,
