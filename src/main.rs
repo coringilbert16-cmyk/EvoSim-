@@ -37,6 +37,7 @@ mod surface_geometry;
 // Material transformation and bonding.
 mod combine;
 mod combine_runtime;
+mod chemistry;
 mod decomposition;
 mod diagnostics;
 mod energy_ledger;
