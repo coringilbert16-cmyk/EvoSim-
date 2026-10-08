@@ -106,7 +106,11 @@ pub fn rigid_endpoint_world_point(
             transform_line_endpoint(shape, vertex, origin_x, origin_y, rotation_radians)
         }
         crate::resources::Form::Rectangle { width, .. } if vertex < 2 => {
-            let x = if vertex == 0 { -*width / 2.0 } else { *width / 2.0 };
+            let x = if vertex == 0 {
+                -*width / 2.0
+            } else {
+                *width / 2.0
+            };
             let normal_x = if vertex == 0 { -1.0 } else { 1.0 };
             Some(transform_derived_point(
                 x,
