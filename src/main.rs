@@ -63,16 +63,16 @@ mod rigid_boundary;
 mod surface_geometry;
 
 // Material transformation and bonding.
+#[path = "chemistry/chemical_reaction.rs"]
+mod chemical_reaction;
+#[path = "chemistry/chemistry.rs"]
+mod chemistry;
+#[path = "chemistry/chemistry_library.rs"]
+mod chemistry_library;
 #[path = "chemistry/combine.rs"]
 mod combine;
 #[path = "chemistry/combine_runtime.rs"]
 mod combine_runtime;
-#[path = "chemistry/chemistry.rs"]
-mod chemistry;
-#[path = "chemistry/chemical_reaction.rs"]
-mod chemical_reaction;
-#[path = "chemistry/chemistry_library.rs"]
-mod chemistry_library;
 #[path = "chemistry/decomposition.rs"]
 mod decomposition;
 #[path = "infrastructure/diagnostics.rs"]
