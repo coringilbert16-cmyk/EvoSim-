@@ -792,7 +792,7 @@ fn try_combine_environmental(
                         if !regions.iter().any(|region| region.contains_point(a.x, a.y)) {
                             continue;
                         }
-                        if let Some((evaluation, _, _, _, required)) = evaluate_candidate(
+                        if let Some((evaluation, _, _, required)) = evaluate_candidate(
                             &hypothetical,
                             ua,
                             ub,
