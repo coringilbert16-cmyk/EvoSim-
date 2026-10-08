@@ -339,19 +339,39 @@ fn process_one_frontier(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geometry_reference_library::generate_two_constituent_candidates;
     use crate::geometry_reference_library::GeometryFormation;
 
     #[test]
     fn chemistry_gate_accepts_a_realized_valid_contact() {
         let catalog = default_catalog();
-        let target = GeometryFormation::single("Carbon");
-        let hydrogen = catalog
-            .iter()
-            .find(|resource| resource.name == "Hydrogen")
-            .unwrap();
-        let candidates = generate_two_constituent_candidates(&target, hydrogen, &catalog);
-        assert!(!candidates.is_empty());
+        let formation = GeometryFormation {
+            schema_version: crate::geometry_reference_library::GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            constituents: vec![
+                crate::geometry_reference_library::GeometryConstituent {
+                    resource: "Hydrogen".to_string(),
+                    placement: crate::structure::Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                },
+                crate::geometry_reference_library::GeometryConstituent {
+                    resource: "Carbon".to_string(),
+                    placement: crate::structure::Placement {
+                        x: 0.5,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                },
+            ],
+            bonds: vec![crate::geometry_reference_library::GeometryBond {
+                constituent_a: 0,
+                constituent_b: 1,
+            }],
+            signature: String::new(),
+        }
+        .canonicalized(&catalog)
+        .unwrap();
 
         let root =
             std::env::temp_dir().join(format!("evosim-bob-chemistry-gate-{}", std::process::id()));
@@ -359,7 +379,7 @@ mod tests {
         let mut chemistry_library = ChemistryLibrary::open(&root).unwrap();
 
         let result =
-            evaluate_formation_chemistry(&candidates[0], &catalog, &mut chemistry_library).unwrap();
+            evaluate_formation_chemistry(&formation, &catalog, &mut chemistry_library).unwrap();
         assert!(result.is_ok());
         assert!(chemistry_library.len() >= 1);
         let _ = std::fs::remove_dir_all(root);
