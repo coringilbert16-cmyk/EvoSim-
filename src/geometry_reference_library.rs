@@ -542,11 +542,11 @@ pub struct GeometryLibrary {
     contact_families: BTreeMap<String, GeometryContactFamily>,
     fluid_boundary_families: BTreeMap<String, GeometryFluidBoundaryFamily>,
     rigid_contact_families: BTreeMap<String, GeometryRigidContactFamily>,
-    rigid_contact_index: HashMap<(String, usize, usize), Vec<String>>,
+    rigid_contact_index: HashMap<u64, Vec<String>>
     rigid_point_contact_families: BTreeMap<String, GeometryRigidPointContactFamily>,
-    rigid_point_contact_index: HashMap<(String, usize, usize), Vec<String>>,
+    rigid_point_contact_index: HashMap<u64, Vec<String>>
     rigid_vertex_contact_families: BTreeMap<String, GeometryRigidVertexContactFamily>,
-    rigid_vertex_contact_index: HashMap<(String, usize, usize), Vec<String>>,
+    rigid_vertex_contact_index: HashMap<u64, Vec<String>>
 }
 
 impl GeometryLibrary {
@@ -727,25 +727,21 @@ impl GeometryLibrary {
             catalog,
         );
 
-        let mut rigid_contact_index = HashMap::<(String, usize, usize), Vec<String>>::new();
+        let mut rigid_contact_index = HashMap::<u64, Vec<String>>::new();
         for (signature, family) in &rigid_contact_families {
             rigid_contact_index
-                .entry((
-                    family.candidate_resource.clone(),
-                    family.anchor_edge,
-                    family.candidate_edge,
-                ))
+                .entry(contact_bucket_hash(&family.candidate_resource, family.anchor_edge, family.candidate_edge))
                 .or_default()
                 .push(signature.clone());
         }
 
-        let mut rigid_point_contact_index = HashMap::<(String, usize, usize), Vec<String>>::new();
+        let mut rigid_point_contact_index = HashMap::<u64, Vec<String>>::new();
         for (signature, family) in &rigid_point_contact_families {
-            rigid_point_contact_index.entry((family.candidate_resource.clone(), family.anchor_edge, family.candidate_endpoint)).or_default().push(signature.clone());
+            rigid_point_contact_index.entry(contact_bucket_hash(&family.candidate_resource, family.anchor_edge, family.candidate_endpoint)).or_default().push(signature.clone());
         }
-        let mut rigid_vertex_contact_index = HashMap::<(String, usize, usize), Vec<String>>::new();
+        let mut rigid_vertex_contact_index = HashMap::<u64, Vec<String>>::new();
         for (signature, family) in &rigid_vertex_contact_families {
-            rigid_vertex_contact_index.entry((family.candidate_resource.clone(), family.anchor_edge, family.candidate_vertex)).or_default().push(signature.clone());
+            rigid_vertex_contact_index.entry(contact_bucket_hash(&family.candidate_resource, family.anchor_edge, family.candidate_vertex)).or_default().push(signature.clone());
         }
 
         let mut equivalence_index = BTreeMap::<String, Vec<String>>::new();
@@ -894,7 +890,7 @@ pub fn len(&self) -> usize {
             }
             "rigid_point" => {
                 if let Some((line, edge)) = parse_line_edge_pair(&interface.signature) {
-                    let key = (line.material.clone(), edge.edge, line.point_index);
+                    let key = contact_bucket_hash(&line.material, edge.edge, line.point_index);
                     if let Some(signatures) = self.rigid_point_contact_index.get(&key) {
                         for signature in signatures {
                             if let Some(family) = self.rigid_point_contact_families.get(signature) {
@@ -908,7 +904,7 @@ pub fn len(&self) -> usize {
             }
             "rigid_vertex" => {
                 if let Some((corner, edge)) = parse_corner_edge_pair(&interface.signature) {
-                    let key = (corner.material.clone(), edge.edge, corner.point_index);
+                    let key = contact_bucket_hash(&corner.material, edge.edge, corner.point_index);
                     if let Some(signatures) = self.rigid_vertex_contact_index.get(&key) {
                         for signature in signatures {
                             if let Some(family) = self.rigid_vertex_contact_families.get(signature) {
@@ -3486,6 +3482,23 @@ fn corner_edge_pair_matches_family(corner: &LivePointDescriptor, edge: &LiveEdge
         && edge.parameter <= family.anchor_parameter_end + QUANTUM
         && family.candidate_rotation_start_radians <= family.candidate_rotation_end_radians
 }
+fn contact_bucket_hash(material: &str, anchor_feature: usize, candidate_feature: usize) -> u64 {
+    // Small deterministic FNV-1a key. Exact family matching still verifies the
+    // material and feature numbers, so a hash collision cannot change physics.
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in material.as_bytes() {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    for value in [anchor_feature as u64, candidate_feature as u64] {
+        for byte in value.to_le_bytes() {
+            hash ^= byte as u64;
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+    }
+    hash
+}
+
 fn rigid_family_projection(family: &GeometryRigidContactFamily) -> String {
     format!("edge|{}|{}|{}|{}|{}", family.anchor_edge, family.candidate_edge, quantize(family.candidate_rotation_radians), quantize(family.anchor_parameter_start), quantize(family.anchor_parameter_end))
 }
