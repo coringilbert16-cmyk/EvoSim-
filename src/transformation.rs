@@ -33,6 +33,28 @@ pub(crate) fn break_energy_yield(
     (usable.is_finite() && heat.is_finite()).then_some((gross, usable, heat))
 }
 
+/// Release the intrinsic potential stored in an existing physical bond.
+///
+/// This is distinct from material decomposition: the constituent potential was
+/// already present before the bond formed, while bond potential was explicitly
+/// allocated during COMBINE. Breaking the physical bond therefore releases the
+/// bond potential exactly once.
+pub(crate) fn bond_break_energy_yield(
+    bond_energy: f64,
+    processing_efficiency: f64,
+) -> Option<(f64, f64, f64)> {
+    if !bond_energy.is_finite() || bond_energy < 0.0 {
+        return None;
+    }
+    let efficiency = processing_efficiency.clamp(0.0, 1.0);
+    let usable = bond_energy * efficiency;
+    let heat = (bond_energy - usable).max(0.0);
+    (usable.is_finite()
+        && heat.is_finite()
+        && (bond_energy - usable - heat).abs() <= 1e-9)
+        .then_some((bond_energy, usable, heat))
+}
+
 pub(crate) fn chemical_break_energy_yield(
     reaction_energy: f64,
     disruption_cost: f64,
@@ -185,8 +207,11 @@ pub(crate) fn resolve_stress_break(
     else {
         return false;
     };
+    // A physical bond stores its own intrinsic potential. Do not recreate
+    // constituent potential energy here: those material potentials were not
+    // consumed when the bond was formed.
     let Some((gross, usable, heat)) =
-        break_energy_yield(a, b, organism.genome.processing_efficiency())
+        bond_break_energy_yield(target.bond_energy, organism.genome.processing_efficiency())
     else {
         return false;
     };
@@ -868,6 +893,15 @@ pub(crate) fn break_work_cost(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bond_break_releases_only_stored_bond_potential() {
+        let (gross, usable, heat) = bond_break_energy_yield(4.0, 0.5).unwrap();
+        assert_eq!(gross, 4.0);
+        assert_eq!(usable, 2.0);
+        assert_eq!(heat, 2.0);
+        assert!((gross - usable - heat).abs() < 1e-12);
+    }
 
     #[test]
     fn chemical_break_requires_reaction_surplus() {
