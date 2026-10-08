@@ -398,20 +398,22 @@ mod tests {
             &catalog,
             &mut cache,
         );
-        let candidate = candidates.first().expect("test formation has a contact");
-        let interface = crate::geometry_reference_library::resolve_live_contact_candidate(
-            &formation.constituents[0].resource,
-            &structure.units[0],
-            &formation.constituents[1].resource,
-            &structure.units[1],
-            *candidate,
-            &catalog,
-        )
-        .expect("contact interface resolves");
-        let key = ChemistryKey::from_live_geometry("Hydrogen", "Carbon", &interface);
-        assert!(chemistry_library
-            .record_rejection(key, "test: known chemically invalid interface")
-            .unwrap());
+        assert!(!candidates.is_empty(), "test formation has a contact");
+        for candidate in candidates {
+            let interface = crate::geometry_reference_library::resolve_live_contact_candidate(
+                &formation.constituents[0].resource,
+                &structure.units[0],
+                &formation.constituents[1].resource,
+                &structure.units[1],
+                candidate,
+                &catalog,
+            )
+            .expect("contact interface resolves");
+            let key = ChemistryKey::from_live_geometry("Hydrogen", "Carbon", &interface);
+            chemistry_library
+                .record_rejection(key, "test: known chemically invalid interface")
+                .unwrap();
+        }
 
         let result =
             evaluate_formation_chemistry(&formation, &catalog, &mut chemistry_library).unwrap();
