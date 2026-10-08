@@ -450,9 +450,9 @@ This does not require predicting every chemistry before simulation. Remaining cu
 
 The chemistry model and audit plan are established and implementation migration is underway. Resource chemical positions, the core chemistry equations, COMBINE's energy boundary, and BREAK's energy boundary have been migrated away from the retired interaction semantics.
 
-The remaining `reactivity` uses are transitional subsystem code rather than authoritative chemistry. They are concentrated in legacy resource helpers, harmonic/nonlinear spectral response, construction material selection, compatibility fixtures, and supporting math. Each remaining use requires its own replacement contract before removal.
+The remaining `reactivity` uses are outside authoritative chemistry. The resource-helper, construction-selection, and obsolete math uses have been removed. Harmonic/nonlinear spectral response has been audited and deliberately retains `reactivity` as a separate material-response input; compatibility fixtures/data remain for separate cleanup. No remaining use may be mapped to chemical position without a subsystem-specific contract.
 
-The next engineering action is to continue the **repo-wide chemistry migration audit**, then establish the canonical Bob geometry/interface key and persistent Chemistry Library boundary. Chemistry is not yet runtime-complete: natural local reaction accumulation and chemistry-driven transitions are still to be integrated.
+The next engineering action is to establish the canonical Bob geometry/interface key and persistent Chemistry Library boundary, while continuing the remaining compatibility-fixture audit. Chemistry is not yet runtime-complete: natural local reaction accumulation and chemistry-driven transitions are still to be integrated.
 
 ## Project direction
 
