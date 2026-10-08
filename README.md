@@ -295,7 +295,8 @@ Bob's library provides reusable information about:
 - exposed surfaces/features;
 - valid physical contacts/interfaces;
 - contact geometry and scale;
-- equivalent rigid representations.
+- equivalent rigid representations;
+- positional equivalence for otherwise-identical geometry is **≤ 0.5 units**. Bob records one canonical relationship rather than separate records for microscopic positional variations within that tolerance. Meaningful changes to material, topology, contact feature, orientation, or other geometry remain distinct.
 
 The Chemistry Library will consume those canonical geometry/interface identities and combine them with material composition and chemical position to cache reusable chemical interaction information. Chemistry must not become a second geometry search engine.
 
