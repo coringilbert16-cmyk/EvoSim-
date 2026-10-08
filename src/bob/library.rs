@@ -2695,7 +2695,16 @@ fn load_rigid_point_contact_families(
                     .get(&family.formation_signature)
                     .map(|f| f.constituents.len())
                     .unwrap_or(0)
-            || catalog.iter().all(|r| r.name != famfn load_rigid_vertex_contact_families(
+            || catalog.iter().all(|r| r.name != family.candidate_resource)
+        {
+            continue;
+        }
+        out.insert(family.signature(), family);
+    }
+    out
+}
+
+fn load_rigid_vertex_contact_families(
     path: &Path,
     entries: &BTreeMap<String, GeometryFormation>,
     catalog: &[BaseResource],
