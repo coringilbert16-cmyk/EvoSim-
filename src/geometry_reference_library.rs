@@ -49,6 +49,95 @@ pub fn classify_live_family_resolution(interface: &LiveGeometryInterface) -> Liv
     }
 }
 
+/// Resolve a runtime contact using the geometry that was actually realized.
+///
+/// Unlike the topology-only resolver above, this includes the local contact
+/// point and the realized boundary parameter when one exists. It still does
+/// not search Bob's formation space or sample orientations. The result is a
+/// canonical live identity; persistent-family resolution remains a separate
+/// step until the library has enough metadata to match it uniquely.
+pub fn resolve_live_contact_candidate(
+    material_a: &str,
+    unit_a: &crate::structure::StructuralUnit,
+    material_b: &str,
+    unit_b: &crate::structure::StructuralUnit,
+    candidate: crate::contact::ConnectionPairCandidate,
+    catalog: &[BaseResource],
+) -> Option<LiveGeometryInterface> {
+    let point_a = crate::contact::endpoint_world_point(candidate.endpoint_a, unit_a, catalog)?;
+    let point_b = crate::contact::endpoint_world_point(candidate.endpoint_b, unit_b, catalog)?;
+
+    let local_a = local_contact_descriptor(candidate.endpoint_a, unit_a, catalog)?;
+    let local_b = local_contact_descriptor(candidate.endpoint_b, unit_b, catalog)?;
+
+    let class = match (endpoint_class(candidate.endpoint_a), endpoint_class(candidate.endpoint_b)) {
+        ("fluid", _) | (_, "fluid") => "fluid_boundary",
+        ("boundary", "boundary") => "rigid_edge",
+        ("corner", "boundary") | ("boundary", "corner") | ("corner", "corner") => "rigid_vertex",
+        ("line", _) | (_, "line") => "rigid_point",
+        _ => "rigid_surface",
+    };
+
+    let mut sides = [
+        (material_a, local_a),
+        (material_b, local_b),
+    ];
+    sides.sort_by(|a, b| a.cmp(b));
+
+    Some(LiveGeometryInterface {
+        interface_class: class,
+        signature: format!(
+            "live-v{}|{}:{}|{}:{}|d:{}|f:{}|w:{}:{}|{}:{}",
+            GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            sides[0].0,
+            sides[0].1,
+            sides[1].0,
+            sides[1].1,
+            quantize(candidate.distance),
+            quantize(candidate.facing),
+            quantize(point_a.x),
+            quantize(point_a.y),
+            quantize(point_b.x),
+            quantize(point_b.y),
+        ),
+    })
+}
+
+fn local_contact_descriptor(
+    endpoint: ConnectionEndpoint,
+    unit: &crate::structure::StructuralUnit,
+    catalog: &[BaseResource],
+) -> Option<String> {
+    match endpoint {
+        ConnectionEndpoint::Corner { point_index } => Some(format!("corner:{}", point_index)),
+        ConnectionEndpoint::LineEndpoint { point_index } => Some(format!("line:{}", point_index)),
+        ConnectionEndpoint::Fluid { x, y } => Some(format!("fluid:{},{}", quantize(x), quantize(y))),
+        ConnectionEndpoint::Boundary { angle_radians } => {
+            let shape = unit.shape(catalog)?;
+            let (s, c) = angle_radians.sin_cos();
+            let point = crate::surface_geometry::boundary_point_toward(shape, c, s)?;
+            let edge = shape.form.polygon_vertices().and_then(|vertices| {
+                (0..vertices.len()).find_map(|i| {
+                    let a = vertices[i];
+                    let b = vertices[(i + 1) % vertices.len()];
+                    let dx = b.0 - a.0;
+                    let dy = b.1 - a.1;
+                    let len2 = dx * dx + dy * dy;
+                    if len2 <= 1e-24 { return None; }
+                    let t = ((point.x - a.0) * dx + (point.y - a.1) * dy) / len2;
+                    if !(-1e-9..=1.000000001).contains(&t) { return None; }
+                    let px = a.0 + dx * t.clamp(0.0, 1.0);
+                    let py = a.1 + dy * t.clamp(0.0, 1.0);
+                    if (px - point.x).hypot(py - point.y) <= 1e-8 {
+                        Some(format!("edge:{}@{}", i, quantize(t.clamp(0.0, 1.0))))
+                    } else { None }
+                })
+            });
+            edge.or_else(|| Some(format!("boundary:{}", quantize(normalized_angle(angle_radians)))))
+        }
+    }
+}
+
 
 fn endpoint_descriptor(endpoint: ConnectionEndpoint) -> String {
     match endpoint {
