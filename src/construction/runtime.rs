@@ -159,9 +159,10 @@
                     let placed = trial.units[new_unit_index].placement;
                     let distance_to_target =
                         (placed.x - target_world.0).hypot(placed.y - target_world.1);
-                    let rotation_error =
-                        normalize_construction_angle(placed.rotation_radians - target.rotation_radians)
-                            .abs();
+                    let rotation_error = normalize_construction_angle(
+                        placed.rotation_radians - target.rotation_radians,
+                    )
+                    .abs();
                     let better = best.as_ref().is_none_or(|current| {
                         (distance_to_target, rotation_error) < (current.0, current.1)
                     });
