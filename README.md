@@ -461,7 +461,7 @@ The chemistry model and audit plan are established and implementation migration 
 
 The remaining `reactivity` uses are outside authoritative chemistry. The resource-helper, construction-selection, and obsolete math uses have been removed. Harmonic/nonlinear spectral response has been audited and deliberately retains `reactivity` as a separate material-response input; compatibility fixtures/data remain for separate cleanup. No remaining use may be mapped to chemical position without a subsystem-specific contract.
 
-The next engineering action is to connect the resolved Bob interface to persistent Chemistry Library lookup, then move reaction accumulation from direct equation evaluation to lookup → calculate-on-miss → persist without changing the physical transition contract. The chemistry-driven BREAK seam now exists: reaction energy can rupture an existing bond only when it meets that bond's supplied physical disruption requirement. Chemistry must not implement geometry mapping itself.
+The next engineering action is to extend the same chemistry transition framework through natural bond formation/COMBINE while preserving the distinction between reusable chemistry facts and structure-specific activation barriers. The chemistry-driven BREAK seam now exists: reaction energy can rupture an existing bond only when it meets that bond's supplied physical disruption requirement. Chemistry must not implement geometry mapping itself.
 
 ## Project direction
 
