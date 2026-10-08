@@ -10,8 +10,8 @@
 //! path with the inherited developmental fields guiding valid opportunities.
 use crate::combine_runtime::DevelopmentalContext;
 use crate::energy_ledger::EnergyLedgerAuthority;
-use crate::organism_viability::{validate_realized_organism, OrganismViabilityRequirements};
 use crate::material_storage::MaterialStorage;
+use crate::organism_viability::{validate_realized_organism, OrganismViabilityRequirements};
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::Material;
 use crate::state::{EnergyLedger, Environment, Organism, Position, ReproductiveConstruction};
@@ -158,7 +158,7 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         maintenance_debt: construction.developing_maintenance_debt,
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
         stored_material: construction.committed_material.clone(),
-                active_transformation_id: None,
+        active_transformation_id: None,
         active_movement: None,
         reproductive_construction: None,
         structure: construction.developing_structure.clone(),
@@ -545,8 +545,7 @@ pub(crate) fn begin_reproduction(
     catalog: &[crate::resources::BaseResource],
     _ledger: &mut EnergyLedger,
 ) -> bool {
-    if parent.reproductive_construction.is_some()
-    {
+    if parent.reproductive_construction.is_some() {
         return false;
     }
     let mut child_genome = parent.genome.clone();
@@ -814,7 +813,11 @@ mod tests {
             needs_space: false,
         };
         assert!(preferred > 0.0);
-        assert!(!budding_scale_reached_with_reference(&construction, &catalog, None));
+        assert!(!budding_scale_reached_with_reference(
+            &construction,
+            &catalog,
+            None
+        ));
     }
 
     #[test]
@@ -851,7 +854,7 @@ mod tests {
     fn developing_offspring_receives_persistent_energy_from_parent() {
         let mut simulation = Simulation::new(11, 20.0);
         let mut parent = simulation.organisms.remove(0);
-                let mut ledger = EnergyLedger::default();
+        let mut ledger = EnergyLedger::default();
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
             &mut parent,
@@ -882,7 +885,7 @@ mod tests {
     fn crossing_parent_boundary_does_not_detach_while_contact_remains() {
         let mut simulation = Simulation::new(17, 20.0);
         let mut parent = simulation.organisms.remove(0);
-                let mut ledger = EnergyLedger::default();
+        let mut ledger = EnergyLedger::default();
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
             &mut parent,
@@ -925,7 +928,7 @@ mod tests {
     fn fully_outside_parent_boundary_is_detached() {
         let mut simulation = Simulation::new(23, 20.0);
         let mut parent = simulation.organisms.remove(0);
-                let mut ledger = EnergyLedger::default();
+        let mut ledger = EnergyLedger::default();
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
             &mut parent,
@@ -952,7 +955,7 @@ mod tests {
     fn loss_of_parent_contact_is_detachment() {
         let mut simulation = Simulation::new(29, 20.0);
         let mut parent = simulation.organisms.remove(0);
-                let mut ledger = EnergyLedger::default();
+        let mut ledger = EnergyLedger::default();
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
             &mut parent,
@@ -978,7 +981,7 @@ mod tests {
     fn construction_waits_when_all_physical_inventory_is_exhausted() {
         let mut simulation = Simulation::new(31, 20.0);
         let mut parent = simulation.organisms.remove(0);
-                let mut ledger = EnergyLedger::default();
+        let mut ledger = EnergyLedger::default();
 
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
