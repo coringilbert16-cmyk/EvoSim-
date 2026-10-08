@@ -135,14 +135,14 @@ fn evaluate_formation_chemistry(
                 .ok_or_else(|| std::io::Error::other("missing resource properties"))?;
 
             let interface = crate::geometry_reference_library::resolve_live_contact_interface(
-                &unit_a.material.primary_resource_name().unwrap_or_default(),
+                &formation.constituents[bond.constituent_a].resource,
                 candidate.endpoint_a,
-                &unit_b.material.primary_resource_name().unwrap_or_default(),
+                &formation.constituents[bond.constituent_b].resource,
                 candidate.endpoint_b,
             );
             let key = ChemistryKey::from_live_geometry(
-                &unit_a.material.primary_resource_name().unwrap_or_default(),
-                &unit_b.material.primary_resource_name().unwrap_or_default(),
+                &formation.constituents[bond.constituent_a].resource,
+                &formation.constituents[bond.constituent_b].resource,
                 &interface,
             );
 
