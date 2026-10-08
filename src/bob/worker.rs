@@ -186,8 +186,9 @@ fn evaluate_formation_chemistry(
         }
 
         if !valid_interface {
-            return Ok(Err(last_rejection
-                .unwrap_or_else(|| "no chemically realizable contact interface".to_string())));
+            return Ok(Err(last_rejection.unwrap_or_else(|| {
+                "no chemically realizable contact interface".to_string()
+            })));
         }
     }
 
