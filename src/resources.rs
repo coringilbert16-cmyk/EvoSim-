@@ -19,9 +19,9 @@ pub struct ResourceProperties {
     pub mass: f64,
     pub potential_energy: f64,
     pub reactivity: f64,
-    /// Ordered chemical-spectrum position. `None` is retained during the
-    /// mapping migration until the seven catalog positions are explicitly
-    /// fixed; it must never be inferred from retired `reactivity` values.
+    /// Ordered chemical-spectrum position on the approved chemical spectrum.
+    /// This is explicit catalog data and must never be inferred from retired
+    /// `reactivity` values.
     #[serde(default)]
     pub chemical_position: Option<f64>,
     pub cohesion: f64,
@@ -240,7 +240,6 @@ impl ResourceBaselines {
                 mass: 0.0,
                 potential_energy: 0.0,
                 reactivity: 0.0,
-                chemical_position: None,
                 cohesion: 0.0,
             };
         }
