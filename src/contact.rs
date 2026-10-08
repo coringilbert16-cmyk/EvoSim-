@@ -152,14 +152,11 @@ fn segment_feature_contacts(
         }
         Some(add(start, scale(edge, t.clamp(0.0, 1.0))))
     }
-    fn push_unique(
-        out: &mut Vec<((f64, f64), (f64, f64))>,
-        pair: ((f64, f64), (f64, f64)),
-    ) {
+    fn push_unique(out: &mut Vec<((f64, f64), (f64, f64))>, pair: ((f64, f64), (f64, f64))) {
         if !out.iter().any(|&(a, b)| {
-            (a.0 - pair.0.0).hypot(a.1 - pair.0.1) <= 1e-10
-                && (a.1 - pair.0.1).abs() <= 1e-10
-                && (b.0 - pair.1.0).hypot(b.1 - pair.1.1) <= 1e-10
+            (a.0 - pair.0 .0).hypot(a.1 - pair.0 .1) <= 1e-10
+                && (a.1 - pair.0 .1).abs() <= 1e-10
+                && (b.0 - pair.1 .0).hypot(b.1 - pair.1 .1) <= 1e-10
         }) {
             out.push(pair);
         }
@@ -173,9 +170,7 @@ fn segment_feature_contacts(
         let delta = sub(b0, a0);
         let t = cross(delta, br) / denominator;
         let u = cross(delta, ar) / denominator;
-        if (-1e-10..=1.0000000001).contains(&t)
-            && (-1e-10..=1.0000000001).contains(&u)
-        {
+        if (-1e-10..=1.0000000001).contains(&t) && (-1e-10..=1.0000000001).contains(&u) {
             let point = add(a0, scale(ar, t.clamp(0.0, 1.0)));
             push_unique(&mut out, (point, point));
         }
@@ -500,25 +495,14 @@ mod tests {
         assert_eq!((right.x, right.y), (0.5, 0.0));
     }
 
-
     #[test]
     fn segment_feature_contacts_use_exact_intersections_and_projections() {
-        let crossing = segment_feature_contacts(
-            (-1.0, 0.0),
-            (1.0, 0.0),
-            (0.0, -1.0),
-            (0.0, 1.0),
-        );
-        assert!(crossing.iter().any(|(a, b)| {
-            (a.0.abs() + a.1.abs() + b.0.abs() + b.1.abs()) < 1e-12
-        }));
+        let crossing = segment_feature_contacts((-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0));
+        assert!(crossing
+            .iter()
+            .any(|(a, b)| { (a.0.abs() + a.1.abs() + b.0.abs() + b.1.abs()) < 1e-12 }));
 
-        let touching = segment_feature_contacts(
-            (-1.0, 0.0),
-            (1.0, 0.0),
-            (0.5, 1.0),
-            (0.5, 2.0),
-        );
+        let touching = segment_feature_contacts((-1.0, 0.0), (1.0, 0.0), (0.5, 1.0), (0.5, 2.0));
         assert!(touching.iter().any(|(a, b)| {
             (a.0 - 0.5).abs() < 1e-12
                 && a.1.abs() < 1e-12
@@ -526,7 +510,6 @@ mod tests {
                 && (b.1 - 1.0).abs() < 1e-12
         }));
     }
-
 
     #[test]
     fn boundary_endpoints_preserve_physical_surface_normals() {
