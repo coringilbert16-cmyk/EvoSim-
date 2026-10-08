@@ -70,18 +70,20 @@ pub(crate) fn growth_fraction_for_reference(
     seed_reference: (f64, f64),
 ) -> f64 {
     let (seed_mass, seed_length) = seed_reference;
-    let preferred_length = organism.genome.developmental_blueprint.preferred_developmental_length(
-        organism.genome.preferred_mass(),
-        seed_mass,
-        seed_length,
-    );
+    let preferred_length = organism
+        .genome
+        .developmental_blueprint
+        .preferred_developmental_length(organism.genome.preferred_mass(), seed_mass, seed_length);
     organism
         .genome
         .developmental_blueprint
         .realization_at_length(
             &organism.structure,
             &environment.catalog,
-            (organism.developmental_origin.x, organism.developmental_origin.y),
+            (
+                organism.developmental_origin.x,
+                organism.developmental_origin.y,
+            ),
             preferred_length,
         )
         .overall
