@@ -171,9 +171,7 @@ pub(crate) fn accumulate(
         ) else {
             continue;
         };
-        let Some(engagement) =
-            crate::chemistry::interface_engagement(candidate.facing)
-        else {
+        let Some(engagement) = crate::chemistry::interface_engagement(candidate.facing) else {
             continue;
         };
         let previous = accumulation.get(&key).copied().unwrap_or(0.0);
@@ -200,9 +198,7 @@ pub(crate) fn accumulate(
         // Accumulation remains normalized chemistry state. Only when the
         // activation threshold is crossed do we convert that state into the
         // physical energy quantity consumed by the BREAK ledger transaction.
-        let Some(reaction_energy) =
-            crate::chemistry::normalized_chemistry_to_energy(next)
-        else {
+        let Some(reaction_energy) = crate::chemistry::normalized_chemistry_to_energy(next) else {
             continue;
         };
         if crate::chemistry::activated(reaction_energy, barrier) {
