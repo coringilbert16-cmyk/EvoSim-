@@ -303,14 +303,35 @@ pub(crate) fn endpoint_world_point(
 ) -> Option<crate::connection_geometry::WorldConnectionPoint> {
     let shape = unit.shape(catalog)?;
     match endpoint {
-        ConnectionEndpoint::Corner { point_index }
-        | ConnectionEndpoint::LineEndpoint { point_index } => rigid_endpoint_world_point(
+        ConnectionEndpoint::Corner { point_index } => rigid_endpoint_world_point(
             shape,
             point_index,
             unit.placement.x,
             unit.placement.y,
             unit.placement.rotation_radians,
         ),
+        ConnectionEndpoint::LineEndpoint { point_index } => {
+            if unit.material.parts.len() == 1
+                && unit.material.parts[0].0 == "Hydrogen"
+                && matches!(shape.form, Form::Rectangle { .. })
+            {
+                crate::connection_geometry::transform_rectangle_end_face_center(
+                    shape,
+                    point_index,
+                    unit.placement.x,
+                    unit.placement.y,
+                    unit.placement.rotation_radians,
+                )
+            } else {
+                rigid_endpoint_world_point(
+                    shape,
+                    point_index,
+                    unit.placement.x,
+                    unit.placement.y,
+                    unit.placement.rotation_radians,
+                )
+            }
+        },
         ConnectionEndpoint::Boundary { angle_radians } => {
             let (s, c) = angle_radians.sin_cos();
             let point = boundary_point_toward(shape, c, s)?;
