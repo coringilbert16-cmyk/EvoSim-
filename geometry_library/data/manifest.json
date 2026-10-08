@@ -1,5 +1,5 @@
 {
   "schema_version": 1,
   "resource_catalog_version": "Carbon:{\"form\":{\"RegularPolygon\":{\"sides\":6,\"radius\":1.0}}};Methane:{\"form\":{\"RegularPolygon\":{\"sides\":3,\"radius\":0.5773502691896258}}};Hydrogen:{\"form\":{\"Rectangle\":{\"width\":1.0,\"height\":0.1}}};Sulfur:{\"form\":{\"RegularPolygon\":{\"sides\":5,\"radius\":0.8506508083520399}}};Nitrogen:{\"form\":{\"Rectangle\":{\"width\":1.0,\"height\":1.0}}};Phosphorus:{\"form\":{\"Polygon\":{\"vertices\":[[-0.75,-0.21650635094610965],[0.75,-0.21650635094610965],[0.5,0.21650635094610965],[-0.5,0.21650635094610965]]}}};Water:{\"form\":{\"Circle\":{\"radius\":0.3989422804014327}}};",
-  "entries": 328
+  "entries": 3560
 }
