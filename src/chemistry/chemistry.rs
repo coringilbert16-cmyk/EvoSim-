@@ -143,8 +143,7 @@ pub fn evaluate_static_chemical_interaction(
     if !cohesion_a.is_finite() || !cohesion_b.is_finite() {
         return None;
     }
-    let bond_strength =
-        (cohesion_a.clamp(0.0, 1.0) * cohesion_b.clamp(0.0, 1.0)).sqrt();
+    let bond_strength = (cohesion_a.clamp(0.0, 1.0) * cohesion_b.clamp(0.0, 1.0)).sqrt();
     if !bond_strength.is_finite() {
         return None;
     }
