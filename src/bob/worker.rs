@@ -378,8 +378,8 @@ mod tests {
         .canonicalized(&catalog)
         .unwrap();
 
-        let root =
-            std::env::temp_dir().join(format!("evosim-bob-chemistry-negative-{}", std::process::id()));
+        let root = std::env::temp_dir()
+            .join(format!("evosim-bob-chemistry-negative-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let mut chemistry_library = ChemistryLibrary::open(&root).unwrap();
 
@@ -415,11 +415,13 @@ mod tests {
                 .unwrap();
         }
 
+        let known_negative_count = chemistry_library.len();
         let result =
             evaluate_formation_chemistry(&formation, &catalog, &mut chemistry_library).unwrap();
         assert!(result.is_err());
+        assert_eq!(chemistry_library.len(), known_negative_count);
         let reopened = ChemistryLibrary::open(&root).unwrap();
-        assert_eq!(reopened.len(), 1);
+        assert_eq!(reopened.len(), known_negative_count);
         let _ = std::fs::remove_dir_all(root);
     }
 
