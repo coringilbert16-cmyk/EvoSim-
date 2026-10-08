@@ -19,6 +19,11 @@ pub struct ResourceProperties {
     pub mass: f64,
     pub potential_energy: f64,
     pub reactivity: f64,
+    /// Ordered chemical-spectrum position. `None` is retained during the
+    /// mapping migration until the seven catalog positions are explicitly
+    /// fixed; it must never be inferred from retired `reactivity` values.
+    #[serde(default)]
+    pub chemical_position: Option<f64>,
     pub cohesion: f64,
 }
 
@@ -235,6 +240,7 @@ impl ResourceBaselines {
                 mass: 0.0,
                 potential_energy: 0.0,
                 reactivity: 0.0,
+                chemical_position: None,
                 cohesion: 0.0,
             };
         }
@@ -379,6 +385,9 @@ impl Material {
             mass: mass / w,
             potential_energy: pe / w,
             reactivity: reac / w,
+            // Chemical position is intentionally not averaged across a
+            // formation. Mixed materials must retain constituent identities.
+            chemical_position: None,
             cohesion: coh / w,
         }
     }
@@ -488,6 +497,7 @@ pub fn property_ranges(catalog: &[BaseResource]) -> ResourceProperties {
             mass: 1.0,
             potential_energy: 1.0,
             reactivity: 1.0,
+            chemical_position: None,
             cohesion: 1.0,
         };
     }
