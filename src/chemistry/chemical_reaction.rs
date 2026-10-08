@@ -251,3 +251,23 @@ pub(crate) fn resolve(
     // structure revision will invalidate any remaining interface state.
     success
 }
+
+
+#[cfg(test)]
+mod material_identity_tests {
+    use super::*;
+    use crate::structure::{Placement, StructuralUnit};
+
+    #[test]
+    fn base_resource_identity_matches_bob_catalogue_key() {
+        let unit = StructuralUnit::new(
+            "Carbon".to_string(),
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert_eq!(material_identity(&unit), "Carbon");
+    }
+}
