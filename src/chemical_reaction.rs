@@ -24,10 +24,8 @@ fn reaction_key(bond: &Bond, interface_signature: &str) -> String {
 fn material_identity(unit: &crate::structure::StructuralUnit) -> String {
     let mut parts = unit.material.parts.clone();
     parts.sort_by(|a, b| {
-        a.0.cmp(&b.0).then_with(|| {
-            a.1.partial_cmp(&b.1)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
+        a.0.cmp(&b.0)
+            .then_with(|| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
     });
     parts
         .into_iter()
@@ -127,16 +125,14 @@ pub(crate) fn accumulate(
             .unwrap_or("unknown");
         let material_a = material_identity(&organism.structure.units[unit_a]);
         let material_b = material_identity(&organism.structure.units[unit_b]);
-        let Some(interface) =
-            crate::geometry_reference_library::resolve_live_contact_candidate(
-                geometry_material_a,
-                &organism.structure.units[unit_a],
-                geometry_material_b,
-                &organism.structure.units[unit_b],
-                candidate,
-                catalog,
-            )
-        else {
+        let Some(interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
+            geometry_material_a,
+            &organism.structure.units[unit_a],
+            geometry_material_b,
+            &organism.structure.units[unit_b],
+            candidate,
+            catalog,
+        ) else {
             continue;
         };
         let key = format!(
@@ -146,8 +142,7 @@ pub(crate) fn accumulate(
             reaction_key(&bond, &interface.signature)
         );
 
-        let key_record =
-            ChemistryKey::from_live_geometry(&material_a, &material_b, &interface);
+        let key_record = ChemistryKey::from_live_geometry(&material_a, &material_b, &interface);
         let potential = match chemistry_library.get(&key_record) {
             Some(record) => record.static_potential,
             None => {
@@ -189,8 +184,7 @@ pub(crate) fn accumulate(
             accumulation.remove(&key);
             continue;
         }
-        let Some(barrier) =
-            crate::chemistry::activation_barrier_from_bond_strength(bond.strength)
+        let Some(barrier) = crate::chemistry::activation_barrier_from_bond_strength(bond.strength)
         else {
             continue;
         };
