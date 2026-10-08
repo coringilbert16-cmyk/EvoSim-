@@ -27,6 +27,8 @@ pub(crate) fn accumulate(
     if organism.structure.bonds.is_empty() || organism.active_transformation_id.is_some() {
         return Vec::new();
     }
+    let current_prefix = format!("{}|rev:{}|", organism.id, organism.structure_revision);
+    accumulation.retain(|key, _| !key.starts_with(&format!("{}|rev:", organism.id)) || key.starts_with(&current_prefix));
     let mut cache = ConnectionCompatibilityCache::new();
     let bonds = organism.structure.bonds.clone();
     let mut operations = Vec::new();
