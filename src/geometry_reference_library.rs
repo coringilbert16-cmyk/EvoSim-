@@ -123,7 +123,7 @@ fn local_contact_descriptor(
                     let px = a.0 + dx * t.clamp(0.0, 1.0);
                     let py = a.1 + dy * t.clamp(0.0, 1.0);
                     if (px - point.x).hypot(py - point.y) <= 1e-8 {
-                        Some(format!("edge:{}@{}", i, quantize(t.clamp(0.0, 1.0))))
+                        Some(format!("edge:{}@{}@{}", i, quantize(t.clamp(0.0, 1.0)), quantize(normalized_angle(unit.placement.rotation_radians))))
                     } else { None }
                 })
             });
@@ -3159,7 +3159,7 @@ mod tests {
 
 }
 #[derive(Clone, Debug, PartialEq)]
-struct LiveEdgeDescriptor { material: String, edge: usize, parameter: f64 }
+struct LiveEdgeDescriptor { material: String, edge: usize, parameter: f64, rotation: f64 }
 
 fn parse_edge_pair(signature: &str) -> Option<(LiveEdgeDescriptor, LiveEdgeDescriptor)> {
     let mut parts = signature.split('|');
@@ -3171,11 +3171,15 @@ fn parse_edge_pair(signature: &str) -> Option<(LiveEdgeDescriptor, LiveEdgeDescr
 
 fn parse_edge_descriptor(material: &str, value: &str) -> Option<LiveEdgeDescriptor> {
     let value = value.strip_prefix("edge:")?;
-    let (edge, parameter) = value.split_once('@')?;
+    let mut fields = value.strip_prefix("edge:")?.split('@');
+    let edge = fields.next()?;
+    let parameter = fields.next()?;
+    let rotation = fields.next()?;
     Some(LiveEdgeDescriptor {
         material: material.to_owned(),
         edge: edge.parse().ok()?,
         parameter: parameter.parse::<i64>().ok()? as f64 / 1_000_000_000.0,
+        rotation: rotation.parse::<i64>().ok()? as f64 / 1_000_000_000.0,
     })
 }
 
@@ -3184,12 +3188,17 @@ fn edge_pair_matches_family(
     b: &LiveEdgeDescriptor,
     family: &GeometryRigidContactFamily,
 ) -> bool {
-    ((a.material == family.candidate_resource && b.edge == family.anchor_edge)
-        || (b.material == family.candidate_resource && a.edge == family.anchor_edge))
-        && ((a.parameter >= family.anchor_parameter_start - QUANTUM
-            && a.parameter <= family.anchor_parameter_end + QUANTUM)
-            || (b.parameter >= family.anchor_parameter_start - QUANTUM
-                && b.parameter <= family.anchor_parameter_end + QUANTUM))
+    let candidate_is_a = a.material == family.candidate_resource;
+    let (candidate, anchor) = if candidate_is_a { (a, b) } else { (b, a) };
+    if candidate.material != family.candidate_resource || anchor.edge != family.anchor_edge
+        || candidate.edge != family.candidate_edge
+        || anchor.parameter < family.anchor_parameter_start - QUANTUM
+        || anchor.parameter > family.anchor_parameter_end + QUANTUM
+    {
+        return false;
+    }
+    let relative = normalize_angle(candidate.rotation - anchor.rotation);
+    (normalize_angle(relative - family.candidate_rotation_radians)).abs() <= 1e-7
 }
 
 fn edge_point_pair_matches_family(
