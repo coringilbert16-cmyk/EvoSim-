@@ -29,6 +29,27 @@ pub struct LiveGeometryInterface {
     pub signature: String,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LiveFamilyResolution {
+    Unresolved,
+    Ambiguous,
+    Unique,
+}
+
+/// Classifies whether a live interface identity is sufficient by itself to
+/// select one persisted Bob family. Most live contacts are not: a family also
+/// carries continuous edge/rotation information that endpoint topology alone
+/// cannot recover.
+pub fn classify_live_family_resolution(interface: &LiveGeometryInterface) -> LiveFamilyResolution {
+    match interface.interface_class {
+        "rigid_edge" | "rigid_point" | "rigid_vertex" | "fluid_boundary" | "rigid_surface" => {
+            LiveFamilyResolution::Unresolved
+        }
+        _ => LiveFamilyResolution::Unresolved,
+    }
+}
+
+
 fn endpoint_descriptor(endpoint: ConnectionEndpoint) -> String {
     match endpoint {
         ConnectionEndpoint::Corner { point_index } => format!("corner:{point_index}"),
@@ -1867,6 +1888,20 @@ pub fn generate_rigid_point_contact_families(
 #[cfg(test)]
 mod live_interface_tests {
     use super::*;
+
+    #[test]
+    fn live_family_resolution_never_guesses_from_topology_alone() {
+        let interface = resolve_live_contact_interface(
+            "Carbon",
+            ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            "Hydrogen",
+            ConnectionEndpoint::LineEndpoint { point_index: 0 },
+        );
+        assert_eq!(
+            classify_live_family_resolution(&interface),
+            LiveFamilyResolution::Unresolved
+        );
+    }
 
     #[test]
     fn live_interface_is_independent_of_endpoint_order() {
