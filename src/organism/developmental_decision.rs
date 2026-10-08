@@ -22,7 +22,7 @@ pub(crate) struct DevelopmentalContext {
 }
 
 pub(crate) fn context(
-    organism: &Organism,
+    organism: &mut Organism,
     environment: &Environment,
     seed_reference: (f64, f64),
 ) -> Option<DevelopmentalContext> {
@@ -84,6 +84,7 @@ pub(crate) fn growth_fraction_for_reference(
                 organism.developmental_origin.x,
                 organism.developmental_origin.y,
             ),
+            organism.developmental_orientation_radians,
             preferred_length,
         )
         .overall
