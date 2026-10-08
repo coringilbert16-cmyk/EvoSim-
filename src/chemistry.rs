@@ -6,6 +6,26 @@
 //! the migration can be tested without reusing the retired `reactivity`
 //! semantics.
 
+
+/// Fixed normalization ceiling for the chemical-position coordinate system.
+/// The catalog currently spans 1.5..12.5, while the chemistry scale is defined
+/// with headroom to 13.0.
+pub const CHEMICAL_D_MAX: f64 = 13.0;
+
+/// Nonlinear curve constant. One inverse-scale unit makes the exponent reach 1
+/// at the top of the defined chemical domain.
+pub const CHEMICAL_K: f64 = 1.0 / CHEMICAL_D_MAX;
+
+/// Physical interaction radius in the shared unit geometry scale.
+pub const CHEMICAL_CONTACT_RADIUS: f64 = 1.0;
+
+/// Chemistry force unit. This is an attraction scale, not resource energy.
+pub const CHEMICAL_MAX_FORCE: f64 = 1.0;
+
+/// Fraction of accumulated reaction dissipated per tick when no new reaction
+/// energy replaces it.
+pub const CHEMICAL_DISSIPATION: f64 = 0.10;
+
 /// Approved bounded nonlinear interaction potential for a chemical-position
 /// separation.
 ///
@@ -144,9 +164,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn approved_parameters_define_one_fixed_chemistry_scale() {
+        assert_eq!(CHEMICAL_D_MAX, 13.0);
+        assert!((CHEMICAL_K * CHEMICAL_D_MAX - 1.0).abs() < 1e-12);
+        assert_eq!(CHEMICAL_CONTACT_RADIUS, 1.0);
+        assert_eq!(CHEMICAL_MAX_FORCE, 1.0);
+        assert_eq!(CHEMICAL_DISSIPATION, 0.10);
+    }
+
+    #[test]
     fn interaction_potential_is_bounded_and_symmetric() {
-        let a = interaction_potential(2.0, 12.0, 0.5, 13.0).unwrap();
-        let b = interaction_potential(12.0, 2.0, 0.5, 13.0).unwrap();
+        let a = interaction_potential(2.0, 12.0, CHEMICAL_K, CHEMICAL_D_MAX).unwrap();
+        let b = interaction_potential(12.0, 2.0, CHEMICAL_K, CHEMICAL_D_MAX).unwrap();
         assert!((a - b).abs() < 1e-12);
         assert!((0.0..=1.0).contains(&a));
     }
