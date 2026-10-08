@@ -14,18 +14,28 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 const IDLE_SLEEP: Duration = Duration::from_secs(1);
+const RESTART_SLEEP: Duration = Duration::from_secs(5);
 
 pub fn run() {
+    loop {
+        if let Err(error) = run_session() {
+            // The current frontier is durable. Reopen both stores so an I/O
+            // failure cannot leave this process running with stale in-memory
+            // state; InProgress frontiers are eligible for replay on restart.
+            eprintln!("geometry worker session failed; retrying after delay: {error}");
+            thread::sleep(RESTART_SLEEP);
+        }
+    }
+}
+
+fn run_session() -> std::io::Result<()> {
     let catalog = default_catalog();
-    let mut library = open_default_library().expect("geometry library must open");
-    let mut chemistry_library =
-        crate::chemistry_library::open_default_library().expect("chemistry library must open");
-    seed_base_catalogue(&mut library, &catalog).expect("geometry library seed must succeed");
+    let mut library = open_default_library()?;
+    let mut chemistry_library = crate::chemistry_library::open_default_library()?;
+    seed_base_catalogue(&mut library, &catalog)?;
 
     loop {
-        match process_one_frontier(&mut library, &mut chemistry_library, &catalog)
-            .expect("geometry worker failed")
-        {
+        match process_one_frontier(&mut library, &mut chemistry_library, &catalog)? {
             Some(metrics) => eprintln!("{metrics}"),
             None => thread::sleep(IDLE_SLEEP),
         }
