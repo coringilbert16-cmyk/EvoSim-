@@ -16,7 +16,7 @@ use crate::state::{EnergyLedger, Environment, Organism};
 use crate::structure::{BondEndpoint, ConnectionEndpoint, Placement};
 
 const EPSILON: f64 = 1e-12;
-pub(crate) const COMBINE_CONTACT_TOLERANCE: f64 = 1.0;
+/// Physical contact tolerance. Touch is permitted; penetration is not.\npub(crate) const COMBINE_CONTACT_TOLERANCE: f64 = 0.1;
 
 /// Developmental context is solver intent only. Physical validity is still
 /// established by the normal COMBINE candidate and formation checks.
