@@ -3359,10 +3359,8 @@ mod knowledge_state_tests {
 
     #[test]
     fn bob_distinguishes_unknown_positive_and_negative_knowledge() {
-        let root = std::env::temp_dir().join(format!(
-            "evosim-bob-knowledge-state-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("evosim-bob-knowledge-state-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         let catalog = default_catalog();
         let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
