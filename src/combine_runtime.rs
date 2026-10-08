@@ -29,7 +29,7 @@ pub(crate) struct CombineAttempt {
     pub endpoint_b: ConnectionEndpoint,
     pub work_cost: f64,
     pub energy_invested: f64,
-        pub formation_threshold: f64,
+    pub formation_threshold: f64,
     pub net_energy_change: f64,
     pub bond_strength: f64,
     pub bond_energy: f64,
@@ -82,7 +82,7 @@ pub(crate) fn selected_candidate_evaluation(
     unit_b: usize,
     candidate: crate::contact::ConnectionPairCandidate,
     catalog: &[BaseResource],
-) -> Option<(FormationEvaluation, ExperimentalInteraction, f64, f64, f64)> {
+) -> Option<(FormationEvaluation, f64, f64, f64)> {
     evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)
 }
 
