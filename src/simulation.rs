@@ -801,22 +801,43 @@ impl Simulation {
                                         .map(|realization| realization.overall)
                                         .unwrap_or(0.0)
                                 });
-                            if let Some(mut transformation) =
-                                crate::combine_runtime::try_start_combine(
+                            let mut cache =
+                                crate::contact::ConnectionCompatibilityCache::default();
+                            let mut ledger = self.energy_ledger;
+                            let attempt = crate::combine_runtime::try_combine(
+                                &mut organisms[index],
+                                environment,
+                                &mut cache,
+                                &mut ledger,
+                                None,
+                            );
+                            if let Some(attempt) = attempt {
+                                self.energy_ledger = ledger;
+                                let consequence = Self::action_consequence(
+                                    before_energy,
+                                    before_stress,
+                                    before_realization,
                                     &mut organisms[index],
-                                    &mut self.next_transformation_id,
-                                )
-                            {
-                                transformation.pending_experience =
-                                    Some(crate::memory::PendingTransformationExperience {
-                                        perceptions,
-                                        needs,
-                                        before_energy,
-                                        before_stress,
-                                        before_developmental_realization: before_realization,
-                                        material_transformed: 0.0,
-                                    });
-                                self.active_transformations.push(transformation);
+                                    environment,
+                                );
+                                crate::decision_runtime::record_consequence(
+                                    &mut organisms[index].decision_history,
+                                    &selected,
+                                    consequence,
+                                );
+                                Self::record_action_experience(
+                                    &mut organisms[index],
+                                    environment,
+                                    &perceptions,
+                                    ActionKind::Combine,
+                                    consequence,
+                                    needs,
+                                    attempt
+                                        .environmental_source
+                                        .as_ref()
+                                        .map(|(_, source)| source.material.total_amount())
+                                        .unwrap_or(0.0),
+                                );
                             }
                         }
                         ActionKind::Break => {
