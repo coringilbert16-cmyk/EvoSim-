@@ -3107,8 +3107,7 @@ pub fn generate_two_constituent_candidates(
             let tn = (te + 1) % tv.len();
             for ce in 0..cv.len() {
                 let cn = (ce + 1) % cv.len();
-                let Some(ta) =
-                    edge_angle_world(tv[te], tv[tn], target_placement.rotation_radians)
+                let Some(ta) = edge_angle_world(tv[te], tv[tn], target_placement.rotation_radians)
                 else {
                     continue;
                 };
