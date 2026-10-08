@@ -69,9 +69,22 @@ pub(crate) fn growth_fraction_for_reference(
     environment: &Environment,
     seed_reference: (f64, f64),
 ) -> f64 {
-    context(organism, environment, seed_reference)
-        .map(|developmental| developmental.current_growth_fraction)
-        .unwrap_or(0.0)
+    let (seed_mass, seed_length) = seed_reference;
+    let preferred_length = organism.genome.developmental_blueprint.preferred_developmental_length(
+        organism.genome.preferred_mass(),
+        seed_mass,
+        seed_length,
+    );
+    organism
+        .genome
+        .developmental_blueprint
+        .realization_at_length(
+            &organism.structure,
+            &environment.catalog,
+            (organism.developmental_origin.x, organism.developmental_origin.y),
+            preferred_length,
+        )
+        .overall
 }
 
 pub(crate) fn growth_fraction_for_context(
