@@ -2388,6 +2388,7 @@ mod tests {
                 mass: 1.0,
                 potential_energy: 1.0,
                 reactivity: 0.0,
+            chemical_position: None,
                 cohesion: 0.5,
             },
             physical_state: crate::resources::PhysicalState::Rigid,
