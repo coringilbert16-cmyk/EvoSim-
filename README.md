@@ -129,7 +129,7 @@ For each change:
 
 Do not redesign the constructor in response to a downstream failure until the underlying construction contract has been verified.
 
-## Experimental chemistry
+## Chemistry
 
 This section records the current chemistry model and design decisions. Chemistry is intentionally **primitive-driven and emergent**: acidity, toxicity, corrosion, catalysis, digestion, and selective chemical behavior are not dedicated fields or hard-coded organism abilities. They should arise from physical material, local chemical interaction, geometry, topology, bond stability, and the transitions those primitives permit.
 
@@ -193,7 +193,28 @@ Strong interactions may cross a threshold quickly; weak interactions may require
 
 Existing bonds have their own stability/energy. Chemical opposition must accumulate enough effective interaction to overcome relevant structural stability before rupture or rearrangement can occur. Strong chemistry cannot teleport through a strong structure.
 
-The exact coupling among chemical separation, cohesion, bond energy, and accumulated interaction is a remaining fine-detail decision; they must not be collapsed into one generic reactivity value.
+The approved attraction model separates static chemical potential from distance:
+
+    D = |position_A - position_B|
+
+    I_AB = (exp(kD) - 1) / (exp(kD_max) - 1)
+
+    C(r) = (1 - r/R)^2       for 0 <= r <= R
+    C(r) = 0                  for r > R
+
+    F_AB = I_AB * F_max * C(r)
+
+I_AB is a **static pairwise chemical interaction potential**. It does not increase or decrease as the materials move. Distance changes the amount of that potential expressed as physical attraction. Attraction therefore increases as the materials approach and reaches its maximum at contact; it does not decay toward contact.
+
+The approved reaction-accumulation direction is a bounded accumulation model with a calculated activation barrier:
+
+    R_(t+1) = R_t + I_AB * C(r) * G - lambda * R_t
+
+    R >= B  -> transition
+
+where G represents the actual interface/geometry engagement, lambda represents dissipation, and B is a calculated activation barrier derived from the physical situation rather than a universal arbitrary reaction threshold.
+
+The exact values and parameterization of k, R, F_max, lambda, G, and the activation-barrier function remain implementation decisions to be established by focused experiments and conservation/invariant tests.
 
 ### Multiple constituents and rupture
 
@@ -242,24 +263,134 @@ Acidity, toxicity, corrosion, catalysis, digestion, and similar effects are expe
 
 If an expected phenomenon cannot emerge, first identify which physical/chemical primitive is insufficient rather than adding a dedicated organelle or property.
 
-### Reusable chemistry information and scaling
+### Geometry–chemistry division
 
-Canonical formations may carry or reference compact reusable interaction signatures derived from composition, topology, exposed geometry, bond structure, and constituent chemical positions.
+The Geometry Reference Library is the geometry knowledge layer. Chemistry must use it rather than independently rediscovering or canonicalizing geometry.
 
-Runtime should approach:
+Bob's library provides reusable information about:
 
-    lookup reusable information
-        -> evaluate local interface
-        -> accumulate/apply transition
-        -> realize physical result
+- canonical formations;
+- bonded topology;
+- exposed surfaces/features;
+- valid physical contacts/interfaces;
+- contact geometry and scale;
+- equivalent rigid representations.
 
-The system must **not** precompute every formation × formation reaction. The Geometry Reference Library can cache reusable formation/interface information, but that information must remain compositional and reusable rather than becoming an exhaustive reaction table.
+The Chemistry Library will consume those canonical geometry/interface identities and combine them with material composition and chemical position to cache reusable chemical interaction information. Chemistry must not become a second geometry search engine.
 
-### Harmonics and constructor separation
+The intended division is:
 
-Chemical position is temporarily **decoupled from harmonics**. Resonance must not automatically use distance from Water; any future chemistry/resonance relationship must be demonstrated rather than assumed.
+    Geometry Library
+        -> "What physical formations and interfaces are possible?"
 
-Chemical position is also **not a constructor structural-similarity metric**. Constructor matching should use physical properties relevant to structure and geometry, allowing chemically different material to produce later chemical consequences.
+    Chemistry Library
+        -> "Given this canonical physical interface and these materials,
+           what chemical interaction/transition does it permit?"
+
+    Runtime
+        -> "Are these formations actually near/contacting each other now?"
+
+### Chemistry Library and scaling
+
+The Chemistry Library is a persistent, demand-driven knowledge layer rather than an exhaustive formation × formation reaction table.
+
+A runtime encounter should approach:
+
+    physical locality
+        -> cheap candidate filter
+        -> Bob geometry/interface identity
+        -> canonical chemistry key
+        -> chemistry-library lookup
+        -> calculate only on cache miss
+        -> persist reusable result
+        -> runtime accumulates/executes the interaction
+
+Absolute world coordinates, organism identity, tick number, unrelated nearby objects, and current distance should not be part of the intrinsic chemistry signature. Distance belongs to runtime. Equivalent physical representations should resolve to the same canonical chemistry interaction.
+
+The library should become richer through actual environmental encounters rather than by inventing a predefined catalogue of reactions.
+
+### Chemistry maturation before organisms
+
+Once the Geometry Library and Chemistry Library are ready, the environment should be allowed to run **without organisms** for repeated cycles.
+
+The same environmental material movement and physical encounter rules should generate chemistry naturally. New geometry and chemistry knowledge is persisted across cycles.
+
+Each cycle should measure:
+
+- new geometry discoveries;
+- new chemistry discoveries;
+- repeated/common interactions;
+- newly observed transitions;
+- library growth;
+- computation cost.
+
+The run should continue until discovery substantially saturates rather than stopping at an arbitrary fixed number of ticks. Only after the environment has established a useful baseline of common interactions should the viable initial organism be introduced.
+
+### Chemistry audit plan
+
+Before changing implementation, chemistry will be audited in the following gated sequence. Findings are recorded before fixes are made; audits do not become an excuse for opportunistic redesign.
+
+1. **Chemistry implementation inventory**
+   - Find every current use of `reactivity`, `potential_energy`, `cohesion`, interaction calculations, break/combine energy, reaction thresholds, and chemistry-related tests.
+   - Classify each use as keep, replace, move, delete, or unknown.
+   - Produce the dependency map from resource properties through interaction, transformation, runtime, environment, formations, and organisms.
+
+2. **Resource-property semantics audit**
+   - Verify mass, potential energy, cohesion, and chemical position for every base resource.
+   - Establish the exact decimal chemical-position mapping.
+   - Find every place chemical position is incorrectly averaged or treated as a reactivity/energy magnitude.
+
+3. **Mathematical chemistry audit**
+   - Translate the approved equations into exact implementation contracts.
+   - Identify every remaining parameter requiring definition.
+   - Verify monotonicity, boundedness, contact behavior, and limiting cases before implementation.
+
+4. **Energy-conservation audit**
+   - Trace potential energy, bond energy, work, formation, rupture, transformation, kinetic transfer, and environmental transfer.
+   - Identify every current path that creates, destroys, or silently transfers energy.
+   - Establish conservation invariants for each transition class.
+
+5. **Formation/interface audit**
+   - Determine how formations, bonds, exposed features, contact, contact area/coverage, and geometry are currently represented.
+   - Identify where chemistry currently reconstructs geometry independently or receives incomplete geometry.
+
+6. **Bob/Geometry Library audit**
+   - Establish what the Geometry Reference Library actually provides, what remains incomplete, how canonicalization works, and what Chemistry can query.
+   - Identify direct contradictions only; do not redesign working geometry infrastructure without evidence.
+
+7. **Chemistry Library feasibility audit**
+   - Define the minimum canonical chemistry key.
+   - Verify that composition + Bob's canonical geometry/interface identity is sufficient.
+   - Estimate combinatorial growth and ensure demand-driven caching remains bounded.
+
+8. **Runtime locality/performance audit**
+   - Trace candidate generation, spatial partitioning, neighbor lookup, formation-level checks, constituent-level checks, and chemistry invocation frequency.
+   - Prove there is no hidden global pair scan.
+   - Estimate worst-case chemistry work under dense local conditions.
+
+9. **Existing test-contract audit**
+   - Classify chemistry tests as authoritative, expectation-to-update, obsolete, broader physical invariants, or missing.
+   - Preserve tests that enforce genuine physical contracts even when old chemistry semantics are removed.
+
+Only after these audits are complete should implementation begin.
+
+### Chemistry implementation order
+
+After the audits, the implementation sequence is:
+
+1. establish exact chemistry/resource semantics;
+2. migrate the existing system from obsolete reactivity equations to the approved chemistry model;
+3. finish Bob the Builder and the Geometry Reference Library to the required chemistry interface;
+4. build the persistent Chemistry Library on top of Bob;
+5. run the organism-free environment in cycles until geometry/chemistry discovery substantially saturates;
+6. build and verify a viable initial cell;
+7. place the organism into the matured environment and troubleshoot biological behavior from there.
+
+The guiding boundary is:
+
+    Geometry -> Chemistry -> Environment -> Organism
+
+This order is intended to make failures diagnosable: after the organism is introduced, a failure should be traceable either to the established physical/chemical world or to the organism's behavior, rather than both systems being unfinished simultaneously.
 
 ### Completion criteria
 
@@ -267,28 +398,35 @@ Chemistry is sufficiently complete for integration when:
 
 1. local interaction derives from spectrum position rather than obsolete reactivity magnitude;
 2. chemical separation, bond stability, and potential/bond energy remain distinct;
-3. interaction accumulates over time;
-4. natural bond rupture and bond formation use the same transition framework;
-5. multi-constituent transitions can arise from recurring/coherent local patterns without a universal weakest-bond rule;
-6. energy is conserved;
-7. acidity/toxicity/catalysis/etc. require no dedicated fields or organelles;
-8. rigid and fluid material share chemical transition logic while retaining different physical states;
-9. runtime uses local lookup/evaluation rather than global pair scanning or an exhaustive formation-pair reaction table;
-10. a simple qualifying-genome organism can acquire, manipulate, transform, incorporate, and survive material using these primitives.
+3. static pairwise interaction potential is separated from distance-dependent attraction;
+4. attraction increases as interacting materials approach;
+5. reaction interaction accumulates over time with dissipation;
+6. transitions use calculated activation barriers;
+7. natural bond rupture and bond formation use the same transition framework;
+8. multi-constituent transitions can arise from recurring/coherent local patterns without a universal weakest-bond rule;
+9. energy is conserved;
+10. acidity/toxicity/catalysis/etc. require no dedicated fields or organelles;
+11. rigid and fluid material share chemical transition logic while retaining different physical states;
+12. runtime uses local lookup/evaluation rather than global pair scanning or an exhaustive formation-pair reaction table;
+13. Chemistry uses Bob's canonical geometry/interface knowledge rather than duplicating geometry discovery;
+14. the persistent Chemistry Library can cache reusable interaction knowledge without unbounded redundant representations;
+15. the organism-free environment can populate common geometry/chemistry interactions before the organism is introduced.
 
 This does not require predicting every chemistry before simulation. Remaining curve and transition details should be settled by focused experiments once the primitive interfaces exist.
 
 ### Current status
 
-The above is the current design target. Implementation has not yet migrated the old reactivity equations to this model. The old exponential reactivity magnitude, potential-energy-difference direction, reactivity-weighted break yield, and chemistry-dependent constructor similarity are therefore transitional code, not authoritative chemistry.
+The chemistry model and audit plan are established, but implementation has not yet migrated the old reactivity equations to this model. The old exponential reactivity magnitude, potential-energy-difference direction, reactivity-weighted break yield, and chemistry-dependent constructor similarity are transitional code, not authoritative chemistry.
 
-The immediate chemistry work is to finish the remaining fine-detail decisions, then perform a bounded migration of those obsolete equations without redesigning unrelated physical systems.
+The next engineering action is the **Chemistry implementation inventory audit**. No chemistry implementation changes should be made until that audit is complete.
 
 ## Project direction
 
 The long-term goal remains an open-ended simulation in which organisms can develop structure, acquire resources, sense their environment, reproduce, form niches, and potentially evolve multicellular cooperation from the same general physical and behavioral mechanisms.
 
-The current core bottleneck is narrower: **replacing the temporary fixed genesis scaffold with a valid, fast, local free-form constructor and then completing the physical 80/80 reproduction split.**
+The project execution order is now:
+
+**Chemistry -> system migration -> Bob/Geometry Library -> Chemistry Library -> organism-free environment maturation -> viable cell -> organism in environment.**
 
 ## Base-resource geometry
 
