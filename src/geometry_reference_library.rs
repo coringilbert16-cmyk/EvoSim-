@@ -974,7 +974,7 @@ pub fn len(&self) -> usize {
                                 .and_then(|formation| formation.constituents.get(family.anchor_constituent))
                                 .map(|constituent| constituent.resource.as_str());
                             if line_material == &family.candidate_resource
-                                && edge_material == &anchor_material.unwrap_or_default()
+                                && edge_material == anchor_material.unwrap_or_default()
                                 && *line_point == family.candidate_endpoint
                                 && *edge == family.anchor_edge
                                 && parameter >= family.anchor_parameter_start - QUANTUM
@@ -1000,7 +1000,7 @@ pub fn len(&self) -> usize {
                                 .and_then(|formation| formation.constituents.get(family.anchor_constituent))
                                 .map(|constituent| constituent.resource.as_str());
                             if corner_material == &family.candidate_resource
-                                && edge_material == &anchor_material.unwrap_or_default()
+                                && edge_material == anchor_material.unwrap_or_default()
                                 && *corner_point == family.candidate_vertex
                                 && *edge == family.anchor_edge
                                 && parameter >= family.anchor_parameter_start - QUANTUM
