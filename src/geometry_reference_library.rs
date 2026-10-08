@@ -3064,4 +3064,51 @@ mod tests {
         assert!(!validate_formation(&formation, &catalog));
     }
 
+    #[test]
+    fn realized_live_interface_is_translation_and_endpoint_order_invariant() {
+        let catalog = default_catalog();
+        let a = crate::structure::StructuralUnit::new(
+            "Carbon",
+            Placement { x: 10.0, y: 20.0, rotation_radians: 0.0 },
+        );
+        let b = crate::structure::StructuralUnit::new(
+            "Carbon",
+            Placement { x: 11.0, y: 20.0, rotation_radians: 0.0 },
+        );
+        let candidate = crate::contact::ConnectionPairCandidate {
+            endpoint_a: ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            endpoint_b: ConnectionEndpoint::Boundary { angle_radians: std::f64::consts::PI },
+            distance: 0.0,
+            facing: 1.0,
+            load_a: 0.0,
+            load_b: 0.0,
+            available_a: true,
+            available_b: true,
+        };
+        let forward = resolve_live_contact_candidate("Carbon", &a, "Carbon", &b, candidate, &catalog).unwrap();
+
+        let reversed_candidate = crate::contact::ConnectionPairCandidate {
+            endpoint_a: candidate.endpoint_b,
+            endpoint_b: candidate.endpoint_a,
+            ..candidate
+        };
+        let reverse = resolve_live_contact_candidate("Carbon", &b, "Carbon", &a, reversed_candidate, &catalog).unwrap();
+        assert_eq!(forward, reverse);
+        assert!(forward.signature.contains("edge:"));
+    }
+
+    #[test]
+    fn topology_only_live_resolution_refuses_to_guess_a_persistent_family() {
+        let interface = resolve_live_contact_interface(
+            "Carbon",
+            ConnectionEndpoint::Corner { point_index: 0 },
+            "Carbon",
+            ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+        );
+        assert_eq!(
+            classify_live_family_resolution(&interface),
+            LiveFamilyResolution::Unresolved
+        );
+    }
+
 }
