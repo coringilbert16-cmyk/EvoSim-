@@ -200,6 +200,20 @@ fn rigid_surface_candidates(
     let Some(shape_b) = b.shape(catalog) else {
         return Vec::new();
     };
+    // A finite-area material can still use a specialized structural
+    // endpoint topology. Hydrogen is the current example: its rectangle is
+    // collision geometry, while its two longitudinal ends are the only
+    // primary bond interfaces. Do not reintroduce arbitrary polygon
+    // corner/edge contacts through the generic surface-feature pass.
+    if endpoint_indices(a, catalog)
+        .iter()
+        .any(|endpoint| matches!(endpoint, ConnectionEndpoint::LineEndpoint { .. }))
+        || endpoint_indices(b, catalog)
+            .iter()
+            .any(|endpoint| matches!(endpoint, ConnectionEndpoint::LineEndpoint { .. }))
+    {
+        return Vec::new();
+    }
     if matches!(
         shape_a.form,
         Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }
