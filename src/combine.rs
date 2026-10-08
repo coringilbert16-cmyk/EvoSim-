@@ -3,7 +3,6 @@
 //! resource-derived bond strength.
 use crate::contact::{ConnectionCompatibilityCache, ConnectionPairCandidate};
 use crate::chemistry::{attraction, interaction_potential};
-use crate::math::exponential_influence;
 use crate::resources::{combine_materials, BaseResource, Material, ResourceProperties};
 use crate::structure::{formation_threshold, OrganismStructure};
 use std::collections::HashMap;
@@ -82,15 +81,10 @@ pub fn experimental_interaction(
         signed_value: direction * magnitude,
     }
 }
-pub fn experimental_combine_work_cost(
-    a: ResourceProperties,
-    b: ResourceProperties,
-    candidate: ConnectionPairCandidate,
-) -> f64 {
-    let interaction = experimental_interaction(a, b, candidate);
+pub fn formation_work_cost(a: ResourceProperties, b: ResourceProperties) -> f64 {
     let complexity_factor = 1.0 + ((a.mass.max(0.0) + b.mass.max(0.0)) * 0.5).sqrt();
     let cohesion_factor = 1.0 + ((a.cohesion.clamp(0.0, 1.0) + b.cohesion.clamp(0.0, 1.0)) * 0.5);
-    (0.25 + interaction.magnitude) * complexity_factor * cohesion_factor
+    0.25 * complexity_factor * cohesion_factor
 }
 pub fn experimental_bond_strength(surplus: f64) -> f64 {
     if !surplus.is_finite() || surplus <= 0.0 {
@@ -204,20 +198,19 @@ pub enum CombineEvaluationError {
     NonFiniteWorkCost,
     InvalidFormationThreshold,
 }
-pub fn required_investment(
+pub fn formation_cost(
     a: ResourceProperties,
     b: ResourceProperties,
     evaluation: FormationEvaluation,
-) -> Result<(ExperimentalInteraction, f64, f64), CombineEvaluationError> {
-    let interaction = experimental_interaction(a, b, evaluation.candidate);
-    let work = experimental_combine_work_cost(a, b, evaluation.candidate);
+) -> Result<(f64, f64), CombineEvaluationError> {
+    let work = formation_work_cost(a, b);
     if !work.is_finite() || work < 0.0 {
         return Err(CombineEvaluationError::NonFiniteWorkCost);
     }
     if !evaluation.threshold.is_finite() || evaluation.threshold < 0.0 {
         return Err(CombineEvaluationError::InvalidFormationThreshold);
     }
-    Ok((interaction, work, evaluation.threshold))
+    Ok((work, evaluation.threshold))
 }
 pub fn eligible_candidates(
     structure: &OrganismStructure,
