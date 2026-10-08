@@ -1022,7 +1022,7 @@ mod tests {
     fn waiting_construction_resumes_from_same_graph_when_material_arrives() {
         let mut simulation = Simulation::new(37, 20.0);
         let mut parent = simulation.organisms.remove(0);
-                let mut ledger = EnergyLedger::default();
+        let mut ledger = EnergyLedger::default();
 
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
