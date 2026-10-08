@@ -336,3 +336,33 @@ fn process_one_frontier(
     metrics.total_formations = library.len();
     Ok(Some(metrics))
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::geometry_reference_library::generate_two_constituent_candidates;
+    use crate::geometry_reference_library::GeometryFormation;
+
+    #[test]
+    fn chemistry_gate_accepts_a_realized_valid_contact() {
+        let catalog = default_catalog();
+        let target = GeometryFormation::single("Carbon");
+        let hydrogen = catalog.iter().find(|resource| resource.name == "Hydrogen").unwrap();
+        let candidates = generate_two_constituent_candidates(&target, hydrogen, &catalog);
+        assert!(!candidates.is_empty());
+
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-chemistry-gate-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut chemistry_library = ChemistryLibrary::open(&root).unwrap();
+
+        let result =
+            evaluate_formation_chemistry(&candidates[0], &catalog, &mut chemistry_library).unwrap();
+        assert!(result.is_ok());
+        assert!(chemistry_library.len() >= 1);
+        let _ = std::fs::remove_dir_all(root);
+    }
+}
