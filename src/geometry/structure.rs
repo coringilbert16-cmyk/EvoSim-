@@ -1058,7 +1058,7 @@ mod tests {
             ),
             endpoint_b: BondEndpoint::new(
                 s.physical_id(carbon).unwrap(),
-                ConnectionEndpoint::Corner { point_index: 0 },
+                ConnectionEndpoint::Corner { point_index: 3 },
             ),
             strength: 0.5,
             bond_energy: 1.0,
