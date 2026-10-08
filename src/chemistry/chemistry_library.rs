@@ -198,7 +198,7 @@ impl ChemistryRecord {
                     .is_some_and(|value| value.is_finite() && value >= 0.0)
                     && self
                         .bond_strength
-                        .is_none_or(|value| value.is_finite() && (0.0..=1.0).contains(&value))
+                        .map_or(true, |value| value.is_finite() && (0.0..=1.0).contains(&value))
                     && self.rejection_reason.is_none()
             }
             ChemistryEvaluationState::Rejected => {
@@ -459,13 +459,38 @@ mod tests {
             Some(0.625)
         );
         assert_eq!(
-            lib.get(&key).map(|record| record.static_potential),
+            lib.get(&key).and_then(|record| record.static_potential),
             Some(0.625)
         );
         let reopened = ChemistryLibrary::open(&root).unwrap();
         assert_eq!(
-            reopened.get(&key).map(|record| record.static_potential),
+            reopened.get(&key).and_then(|record| record.static_potential),
             Some(0.625)
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn library_caches_negative_knowledge() {
+        let root =
+            std::env::temp_dir().join(format!("evosim-chemistry-rejection-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let mut lib = ChemistryLibrary::open(&root).unwrap();
+        let key = ChemistryKey::new("Carbon", "Nitrogen", "rigid_edge", "impossible");
+        assert!(lib
+            .record_rejection(key.clone(), "missing chemical interaction")
+            .unwrap());
+        let record = lib.get(&key).unwrap();
+        assert_eq!(record.state, ChemistryEvaluationState::Rejected);
+        assert_eq!(
+            record.rejection_reason.as_deref(),
+            Some("missing chemical interaction")
+        );
+        assert_eq!(record.static_potential, None);
+        let reopened = ChemistryLibrary::open(&root).unwrap();
+        assert_eq!(
+            reopened.get(&key).map(|record| record.state),
+            Some(ChemistryEvaluationState::Rejected)
         );
         let _ = fs::remove_dir_all(root);
     }
