@@ -306,44 +306,16 @@ mod tests {
     }
 
     #[test]
-    fn potential_energy_sets_direction() {
-        let low = ResourceProperties {
-            mass: 1.0,
-            potential_energy: 1.0,
-            reactivity: 1.0,
-            chemical_position: None,
-            cohesion: 0.5,
-        };
-        let high = ResourceProperties {
-            potential_energy: 10.0,
-            ..low
-        };
-        let e = experimental_interaction(low, high, candidate(0.0, 0.0));
-        assert_eq!(e.direction, 1.0)
+    fn formation_work_cost_is_not_chemistry_driven() {
+        let a = ResourceProperties { mass: 1.0, potential_energy: 1.0, reactivity: 0.0, chemical_position: Some(1.5), cohesion: 0.5 };
+        let b = ResourceProperties { mass: 2.0, potential_energy: 99.0, reactivity: 999.0, chemical_position: Some(12.5), cohesion: 0.8 };
+        let mut altered = b;
+        altered.potential_energy = -500.0;
+        altered.reactivity = 0.01;
+        altered.chemical_position = Some(4.0);
+        assert_eq!(formation_work_cost(a, b), formation_work_cost(a, altered));
     }
-    #[test]
-    fn poor_geometry_reduces_interaction() {
-        let a = ResourceProperties {
-            mass: 1.0,
-            potential_energy: 1.0,
-            reactivity: 4.0,
-            chemical_position: None,
-            cohesion: 0.5,
-        };
-        let b = ResourceProperties {
-            potential_energy: 10.0,
-            ..a
-        };
-        let close = candidate(0.0, 0.0);
-        let far = ConnectionPairCandidate {
-            distance: 9.0,
-            ..close
-        };
-        assert!(
-            experimental_interaction(a, b, close).magnitude
-                > experimental_interaction(a, b, far).magnitude
-        )
-    }
+
     #[test]
     fn intrinsic_bond_strength_is_cohesion_only() {
         let a = ResourceProperties {
