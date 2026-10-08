@@ -2,6 +2,7 @@
 //! COMBINE support: deterministic recipe caching, locked formation threshold, and
 //! resource-derived bond strength.
 use crate::contact::{ConnectionCompatibilityCache, ConnectionPairCandidate};
+use crate::chemistry::{attraction, interaction_potential};
 use crate::math::exponential_influence;
 use crate::resources::{combine_materials, BaseResource, Material, ResourceProperties};
 use crate::structure::{formation_threshold, OrganismStructure};
@@ -15,6 +16,38 @@ pub struct ExperimentalInteraction {
     pub magnitude: f64,
     pub signed_value: f64,
 }
+/// Chemistry-facing pair interaction. The tuning constants are supplied by the caller
+/// so this layer does not invent biological chemistry parameters.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ChemicalInteraction {
+    pub static_potential: f64,
+    pub attraction: f64,
+}
+
+pub fn chemical_interaction(
+    a: ResourceProperties,
+    b: ResourceProperties,
+    candidate: ConnectionPairCandidate,
+    k: f64,
+    d_max: f64,
+    contact_radius: f64,
+    max_force: f64,
+) -> Option<ChemicalInteraction> {
+    let position_a = a.chemical_position?;
+    let position_b = b.chemical_position?;
+    let static_potential = interaction_potential(position_a, position_b, k, d_max)?;
+    let attraction = attraction(
+        position_a,
+        position_b,
+        candidate.distance.max(0.0),
+        k,
+        d_max,
+        contact_radius,
+        max_force,
+    )?;
+    Some(ChemicalInteraction { static_potential, attraction })
+}
+
 pub fn experimental_interaction(
     a: ResourceProperties,
     b: ResourceProperties,
@@ -298,6 +331,27 @@ mod tests {
             MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(3.0)])
         )
     }
+    #[test]
+    fn chemical_interaction_uses_catalog_positions_not_potential_energy() {
+        let a = ResourceProperties {
+            mass: 1.0,
+            potential_energy: 100.0,
+            reactivity: 999.0,
+            chemical_position: Some(1.5),
+            cohesion: 0.5,
+        };
+        let b = ResourceProperties {
+            potential_energy: 0.0,
+            reactivity: 0.0,
+            chemical_position: Some(12.5),
+            ..a
+        };
+        let result =
+            chemical_interaction(a, b, candidate(0.0, 0.0), 0.5, 11.0, 1.0, 10.0).unwrap();
+        assert!(result.static_potential > 0.0);
+        assert!((result.attraction - 10.0 * result.static_potential).abs() < 1e-12);
+    }
+
     #[test]
     fn potential_energy_sets_direction() {
         let low = ResourceProperties {
