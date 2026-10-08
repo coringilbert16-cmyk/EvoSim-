@@ -2017,3 +2017,157 @@ fn exposed_line_intervals(
                     let d = world_point(vertices[(edge + 1) % vertices.len()], other.placement);
                     let cross_c = dx * (c.1 - anchor_start.1) - dy * (c.0 - anchor_start.0);
                     let cross_d = dx * (d.1 - anchor_start.1) - dy * (d.0 - anchor_start.0);
+
+#[cfg(test)]
+mod bob_lookup_contract_tests {
+    use super::*;
+    use crate::resources::default_catalog;
+    use std::hint::black_box;
+    use std::time::Instant;
+
+    fn edge_query(library: &GeometryLibrary) -> Option<LiveGeometryInterface> {
+        let family = library.rigid_contact_families().next()?;
+        let formation = library.get(&family.formation_signature)?;
+        let anchor = formation.constituents.get(family.anchor_constituent)?;
+        let anchor_parameter =
+            (family.anchor_parameter_start + family.anchor_parameter_end) * 0.5;
+
+        Some(LiveGeometryInterface {
+            interface_class: "rigid_edge",
+            signature: String::new(),
+            query: Some(LiveGeometryQuery::RigidEdge {
+                a_material: family.candidate_resource.clone(),
+                a_edge: family.candidate_edge,
+                a_parameter: 0,
+                a_rotation: (family.candidate_rotation_radians * 1_000_000_000.0) as i64,
+                b_material: anchor.resource.clone(),
+                b_edge: family.anchor_edge,
+                b_parameter: (anchor_parameter * 1_000_000_000.0) as i64,
+                b_rotation: 0,
+            }),
+        })
+    }
+
+    #[test]
+    fn live_interface_is_endpoint_order_invariant() {
+        let forward = resolve_live_contact_interface(
+            "Carbon",
+            ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            "Nitrogen",
+            ConnectionEndpoint::Boundary {
+                angle_radians: std::f64::consts::PI,
+            },
+        );
+        let reverse = resolve_live_contact_interface(
+            "Nitrogen",
+            ConnectionEndpoint::Boundary {
+                angle_radians: std::f64::consts::PI,
+            },
+            "Carbon",
+            ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+        );
+
+        assert_eq!(forward.interface_class, reverse.interface_class);
+        assert_eq!(forward.signature, reverse.signature);
+        assert_eq!(forward.query, reverse.query);
+    }
+
+    #[test]
+    fn indexed_edge_lookup_rejects_wrong_anchor_material() {
+        let catalog = default_catalog();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-contract-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+
+        let formation = GeometryFormation::single("Carbon");
+        let signature = formation.signature.clone();
+        let family = GeometryRigidContactFamily {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            formation_signature: signature,
+            candidate_resource: "Carbon".to_string(),
+            anchor_constituent: 0,
+            anchor_edge: 0,
+            candidate_edge: 0,
+            candidate_rotation_radians: 0.0,
+            anchor_parameter_start: 0.0,
+            anchor_parameter_end: 1.0,
+        };
+
+        library
+            .entries
+            .insert(formation.signature.clone(), formation);
+        library
+            .rigid_contact_families
+            .insert(family.signature(), family.clone());
+        library
+            .rigid_contact_index
+            .entry(contact_bucket_hash(
+                &family.candidate_resource,
+                family.anchor_edge,
+                family.candidate_edge,
+            ))
+            .or_default()
+            .push(family.signature());
+
+        let interface = LiveGeometryInterface {
+            interface_class: "rigid_edge",
+            signature: String::new(),
+            query: Some(LiveGeometryQuery::RigidEdge {
+                a_material: "Carbon".to_string(),
+                a_edge: 0,
+                a_parameter: 0,
+                a_rotation: 0,
+                b_material: "Nitrogen".to_string(),
+                b_edge: 0,
+                b_parameter: 500_000_000,
+                b_rotation: 0,
+            }),
+        };
+
+        assert_eq!(
+            library.resolve_persistent_interface(&interface),
+            LiveFamilyResolution::Unresolved
+        );
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    #[ignore = "requires the persistent Bob catalogue and is intended for local performance measurement"]
+    fn benchmark_indexed_lookup_throughput() {
+        let catalog = default_catalog();
+        let library = GeometryLibrary::open("geometry_library/data", &catalog).unwrap();
+        let Some(query) = edge_query(&library) else {
+            panic!("Bob has no rigid-edge family to benchmark");
+        };
+
+        const WARMUP: u64 = 10_000;
+        const ITERATIONS: u64 = 200_000;
+
+        for _ in 0..WARMUP {
+            black_box(library.resolve_persistent_interface(&query));
+        }
+
+        let start = Instant::now();
+        let mut resolved = 0u64;
+        for _ in 0..ITERATIONS {
+            if black_box(library.resolve_persistent_interface(&query))
+                != LiveFamilyResolution::Unresolved
+            {
+                resolved += 1;
+            }
+        }
+
+        let elapsed = start.elapsed();
+        let qps = ITERATIONS as f64 / elapsed.as_secs_f64();
+        println!(
+            "Bob rigid-edge lookup: {} queries in {:?}; {:.0} queries/sec; {} resolved",
+            ITERATIONS, elapsed, qps, resolved
+        );
+
+        assert_eq!(resolved, ITERATIONS);
+    }
+}
