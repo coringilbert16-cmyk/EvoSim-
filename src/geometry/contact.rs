@@ -345,6 +345,7 @@ pub(crate) fn endpoint_world_point(
                     unit.placement.rotation_radians,
                 )
             }
+        }
         ConnectionEndpoint::Boundary { angle_radians } => {
             let (s, c) = angle_radians.sin_cos();
             let point = boundary_point_toward(shape, c, s)?;
