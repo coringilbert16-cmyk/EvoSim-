@@ -584,6 +584,8 @@ impl Simulation {
                 self.chemical_breaks.extend(operations);
             }
 
+            if chemical_break_pending || self.chemical_breaks.iter().any(|operation| operation.organism_id == organism.id) { continue; }
+
             let stored_amount_before_transfer = organism.stored_material.total_amount();
             Self::transfer_contained_environmental_material(organism, &mut self.environment);
             let acquired_amount =
