@@ -137,12 +137,17 @@ fn evaluate_formation_chemistry(
                 .properties(catalog)
                 .ok_or_else(|| std::io::Error::other("missing resource properties"))?;
 
-            let interface = crate::geometry_reference_library::resolve_live_contact_interface(
+            let interface = crate::geometry_reference_library::resolve_live_contact_candidate(
                 &formation.constituents[bond.constituent_a].resource,
-                candidate.endpoint_a,
+                unit_a,
                 &formation.constituents[bond.constituent_b].resource,
-                candidate.endpoint_b,
-            );
+                unit_b,
+                candidate,
+                catalog,
+            )
+            .ok_or_else(|| {
+                std::io::Error::other("could not resolve realized chemistry interface")
+            })?;
             let key = ChemistryKey::from_live_geometry(
                 &formation.constituents[bond.constituent_a].resource,
                 &formation.constituents[bond.constituent_b].resource,
