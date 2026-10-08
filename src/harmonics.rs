@@ -128,6 +128,7 @@ pub(crate) fn resonance_response(
 pub(crate) fn nonlinear_harmonic_amplitude(
     fundamental_amplitude: f64,
     reactivity: f64,
+            chemical_position: None,
     harmonic_order: usize,
 ) -> f64 {
     if harmonic_order < 2 || !fundamental_amplitude.is_finite() {
@@ -680,6 +681,7 @@ mod tests {
             mass: 1.0,
             potential_energy: 1.0,
             reactivity: 1.0,
+            chemical_position: None,
             cohesion: 1.0,
         }
     }
