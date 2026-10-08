@@ -1,5 +1,8 @@
 # Phase 3 — Physical Structure Authority Audit
 
+> **Historical architecture note:** This document records the Phase 3 audit state at the time it was written. It is not current architecture authority. The repository README and current source supersede its migration-status claims; use this document as historical rationale rather than a current inventory of remaining work.
+
+
 ## Status
 
 Phase 3 begins with an audit-only boundary pass. No physical authority is removed or rewritten until each active consumer has a migration path.
