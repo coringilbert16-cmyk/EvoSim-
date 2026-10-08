@@ -9,7 +9,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
-pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 2;
+pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 3;
 
 fn quantize(value: f64) -> i64 {
     (value * 1_000_000_000.0).round() as i64
@@ -163,21 +163,53 @@ impl ChemistryKey {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChemistryEvaluationState {
+    Valid,
+    Rejected,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ChemistryRecord {
     pub key: ChemistryKey,
-    pub static_potential: f64,
+    pub state: ChemistryEvaluationState,
+    #[serde(default)]
+    pub static_potential: Option<f64>,
+    #[serde(default)]
+    pub bond_strength: Option<f64>,
+    #[serde(default)]
+    pub rejection_reason: Option<String>,
 }
 
 impl ChemistryRecord {
     fn is_valid(&self) -> bool {
-        self.key.schema_version == CHEMISTRY_LIBRARY_SCHEMA_VERSION
-            && !self.key.material_a.is_empty()
-            && !self.key.material_b.is_empty()
-            && !self.key.interface_class.is_empty()
-            && !self.key.interface_signature.is_empty()
-            && self.static_potential.is_finite()
-            && self.static_potential >= 0.0
+        if self.key.schema_version != CHEMISTRY_LIBRARY_SCHEMA_VERSION
+            || self.key.material_a.is_empty()
+            || self.key.material_b.is_empty()
+            || self.key.interface_class.is_empty()
+            || self.key.interface_signature.is_empty()
+        {
+            return false;
+        }
+
+        match self.state {
+            ChemistryEvaluationState::Valid => {
+                self.static_potential
+                    .is_some_and(|value| value.is_finite() && value >= 0.0)
+                    && self
+                        .bond_strength
+                        .is_none_or(|value| value.is_finite() && (0.0..=1.0).contains(&value))
+                    && self.rejection_reason.is_none()
+            }
+            ChemistryEvaluationState::Rejected => {
+                self.static_potential.is_none()
+                    && self.bond_strength.is_none()
+                    && self
+                        .rejection_reason
+                        .as_deref()
+                        .is_some_and(|reason| !reason.is_empty())
+            }
+        }
     }
 }
 
@@ -255,14 +287,52 @@ impl ChemistryLibrary {
             return Ok(None);
         }
         if let Some(record) = self.get(&key) {
-            return Ok(Some(record.static_potential));
+            return Ok(record.static_potential);
         }
         let record = ChemistryRecord {
             key,
-            static_potential,
+            state: ChemistryEvaluationState::Valid,
+            static_potential: Some(static_potential),
+            bond_strength: None,
+            rejection_reason: None,
         };
         self.insert(record)?;
         Ok(Some(static_potential))
+    }
+
+    pub fn record_valid_evaluation(
+        &mut self,
+        key: ChemistryKey,
+        static_potential: f64,
+        bond_strength: f64,
+    ) -> std::io::Result<bool> {
+        let record = ChemistryRecord {
+            key,
+            state: ChemistryEvaluationState::Valid,
+            static_potential: Some(static_potential),
+            bond_strength: Some(bond_strength),
+            rejection_reason: None,
+        };
+        self.insert(record)
+    }
+
+    pub fn record_rejection(
+        &mut self,
+        key: ChemistryKey,
+        reason: impl Into<String>,
+    ) -> std::io::Result<bool> {
+        let reason = reason.into();
+        if reason.is_empty() {
+            return Ok(false);
+        }
+        let record = ChemistryRecord {
+            key,
+            state: ChemistryEvaluationState::Rejected,
+            static_potential: None,
+            bond_strength: None,
+            rejection_reason: Some(reason),
+        };
+        self.insert(record)
     }
     pub fn len(&self) -> usize {
         self.entries.len()
@@ -408,7 +478,10 @@ mod tests {
         let key = ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "g");
         let record = ChemistryRecord {
             key: key.clone(),
-            static_potential: 0.5,
+            state: ChemistryEvaluationState::Valid,
+            static_potential: Some(0.5),
+            bond_strength: None,
+            rejection_reason: None,
         };
         assert!(lib.insert(record.clone()).unwrap());
         assert!(!lib.insert(record).unwrap());
