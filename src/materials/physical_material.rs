@@ -15,6 +15,8 @@ pub(crate) struct PhysicalMaterialBond {
     pub(crate) endpoint_a: ConnectionEndpoint,
     pub(crate) part_b: usize,
     pub(crate) endpoint_b: ConnectionEndpoint,
+    #[serde(default)]
+    pub(crate) bond_energy: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -73,11 +75,19 @@ impl PhysicalMaterial {
                     .find(|candidate| {
                         candidate.available_a && candidate.available_b && candidate.distance <= 1.0
                     })?;
+            let a = structure.units.get(bond.part_a)?.properties(catalog)?;
+            let b = structure.units.get(bond.part_b)?.properties(catalog)?;
+            let strength = crate::combine::bond_strength(a, b);
+            let bond_energy = crate::combine::intrinsic_bond_potential(a, b, strength);
+            if !bond_energy.is_finite() || bond_energy < 0.0 {
+                return None;
+            }
             internal_connections.push(PhysicalMaterialBond {
                 part_a: bond.part_a,
                 endpoint_a: candidate.endpoint_a,
                 part_b: bond.part_b,
                 endpoint_b: candidate.endpoint_b,
+                bond_energy,
             });
         }
 
@@ -172,6 +182,7 @@ impl PhysicalMaterial {
             endpoint_a: bond.endpoint_a,
             part_b: remap[bond.part_b],
             endpoint_b: bond.endpoint_b,
+            bond_energy: bond.bond_energy,
         }
     }
 
