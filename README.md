@@ -226,7 +226,16 @@ The approved reaction-accumulation direction is a bounded accumulation model wit
 
 where G represents the actual interface/geometry engagement, lambda represents dissipation, and B is a calculated activation barrier derived from the physical situation rather than a universal arbitrary reaction threshold.
 
-The exact values and parameterization of k, R, F_max, lambda, G, and the activation-barrier function remain implementation decisions to be established by focused experiments and conservation/invariant tests.
+The current parameter contract is now fixed for the first implementation pass:
+- D_max = 13.0: fixed ceiling of the chemical-position coordinate system.
+- k = 1 / D_max: the nonlinear exponent reaches 1 at the top of that coordinate domain.
+- R = 1.0: one shared physical geometry unit for the chemistry contact radius.
+- F_max = 1.0: one chemistry attraction unit; this is not resource energy.
+- lambda = 0.10 per tick: ten percent of accumulated reaction dissipates each tick.
+- G = calculated from the realized interface/geometry engagement, constrained to 0..1.
+- B = calculated from the actual physical interface/bond state; it is not a universal reaction threshold.
+
+These fixed values establish the first chemistry scale without turning chemistry into a collection of arbitrary per-pair constants. G and B remain calculated quantities because they must reflect actual geometry and structural requirements.
 
 ### Multiple constituents and rupture
 
