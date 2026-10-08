@@ -532,7 +532,7 @@ pub(crate) fn try_combine_stored_unit(
                 &environment.catalog,
                 cache,
             ) {
-                if let Some((evaluation, _, _, _, required)) =
+                if let Some((evaluation, _, _, required)) =
                     evaluate_candidate(&hypothetical, ua, ub, candidate, &environment.catalog)
                 {
                     let developmental_score = developmental
