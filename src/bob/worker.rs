@@ -3,8 +3,8 @@ use crate::chemistry_library::{ChemistryKey, ChemistryLibrary};
 use crate::geometry_reference_library::{
     expand_formation_candidates, generate_fluid_boundary_families, generate_rigid_contact_families,
     generate_rigid_point_contact_families, generate_rigid_vertex_contact_families,
-    generate_water_contact_families, open_default_library, seed_base_catalogue,
-    GeometryFormation, GeometryFrontierState, GeometryLibrary,
+    generate_water_contact_families, open_default_library, seed_base_catalogue, GeometryFormation,
+    GeometryFrontierState, GeometryLibrary,
 };
 use crate::resources::{default_catalog, BaseResource};
 use std::thread;
@@ -138,10 +138,8 @@ fn evaluate_formation_chemistry(
                 )?;
             }
             None => {
-                chemistry_library.record_rejection(
-                    key,
-                    "no defined static chemical interaction",
-                )?;
+                chemistry_library
+                    .record_rejection(key, "no defined static chemical interaction")?;
                 return Ok(Err("no defined static chemical interaction".into()));
             }
         }
@@ -261,11 +259,7 @@ fn process_one_frontier(
                     metrics.chemistry_rejections += 1;
                     continue;
                 }
-                match evaluate_formation_chemistry(
-                    &canonical,
-                    catalog,
-                    chemistry_library,
-                )? {
+                match evaluate_formation_chemistry(&canonical, catalog, chemistry_library)? {
                     Ok(()) => chemistry_valid.push(canonical),
                     Err(reason) => {
                         library.insert_rejection(canonical.signature.clone(), reason)?;
