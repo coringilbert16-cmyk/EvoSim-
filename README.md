@@ -448,9 +448,11 @@ This does not require predicting every chemistry before simulation. Remaining cu
 
 ### Current status
 
-The chemistry model and audit plan are established, but implementation has not yet migrated the old reactivity equations to this model. The old exponential reactivity magnitude, potential-energy-difference direction, reactivity-weighted break yield, and chemistry-dependent constructor similarity are transitional code, not authoritative chemistry.
+The chemistry model and audit plan are established and implementation migration is underway. Resource chemical positions, the core chemistry equations, COMBINE's energy boundary, and BREAK's energy boundary have been migrated away from the retired interaction semantics.
 
-The next engineering action is the **Chemistry implementation inventory audit**. No chemistry implementation changes should be made until that audit is complete.
+The remaining `reactivity` uses are transitional subsystem code rather than authoritative chemistry. They are concentrated in legacy resource helpers, harmonic/nonlinear spectral response, construction material selection, compatibility fixtures, and supporting math. Each remaining use requires its own replacement contract before removal.
+
+The next engineering action is to continue the **repo-wide chemistry migration audit**, then establish the canonical Bob geometry/interface key and persistent Chemistry Library boundary. Chemistry is not yet runtime-complete: natural local reaction accumulation and chemistry-driven transitions are still to be integrated.
 
 ## Project direction
 
