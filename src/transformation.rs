@@ -816,11 +816,13 @@ mod tests {
             mass: 1.0,
             potential_energy: 1.0,
             reactivity: 1.0,
+            chemical_position: None,
             cohesion: 0.5,
         };
         let methane = crate::resources::ResourceProperties {
             potential_energy: 20.0,
             reactivity: 4.0,
+            chemical_position: None,
             cohesion: 0.1,
             ..carbon
         };
