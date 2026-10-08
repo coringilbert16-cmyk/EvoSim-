@@ -37,12 +37,7 @@ pub const CHEMICAL_DISSIPATION: f64 = 0.10;
 ///
 /// The result is 0 at zero separation and 1 at D == d_max. Values are
 /// clamped to the physical domain rather than silently extrapolated.
-pub fn interaction_potential(
-    position_a: f64,
-    position_b: f64,
-    k: f64,
-    d_max: f64,
-) -> Option<f64> {
+pub fn interaction_potential(position_a: f64, position_b: f64, k: f64, d_max: f64) -> Option<f64> {
     if !position_a.is_finite()
         || !position_b.is_finite()
         || !k.is_finite()
