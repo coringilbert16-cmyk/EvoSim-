@@ -22,7 +22,7 @@ pub(crate) struct DevelopmentalContext {
 }
 
 pub(crate) fn context(
-    organism: &mut Organism,
+    organism: &Organism,
     environment: &Environment,
     seed_reference: (f64, f64),
 ) -> Option<DevelopmentalContext> {
