@@ -1032,6 +1032,41 @@ mod tests {
     }
 
     #[test]
+    fn hydrogen_line_endpoint_is_a_valid_physical_bond_location() {
+        let catalog = crate::resources::default_catalog();
+        let mut s = OrganismStructure::new();
+        let hydrogen = s.add_unit(StructuralUnit::new(
+            "Hydrogen",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let carbon = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.5,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let bond = Bond {
+            endpoint_a: BondEndpoint::new(
+                s.physical_id(hydrogen).unwrap(),
+                ConnectionEndpoint::LineEndpoint { point_index: 1 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                s.physical_id(carbon).unwrap(),
+                ConnectionEndpoint::Corner { point_index: 0 },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        };
+        assert!(s.is_valid_bond(&bond, &catalog));
+    }
+
+    #[test]
     fn bond_identity_uses_physical_ids() {
         let a = PhysicalConstituentId(11);
         let b = PhysicalConstituentId(22);
