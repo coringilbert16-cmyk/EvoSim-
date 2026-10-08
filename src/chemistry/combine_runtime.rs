@@ -288,11 +288,8 @@ fn form_bond_from_candidate(
     // COMBINE consumes the formation threshold and allocates the newly created
     // bond's intrinsic potential to structure. Remaining physical approach work
     // is dissipated. No chemistry potential is manufactured by the transaction.
-    let transaction = EnergyTransaction::expenditure(
-        EnergyReason::Combine,
-        investment + bond_energy,
-        work,
-    )?;
+    let transaction =
+        EnergyTransaction::expenditure(EnergyReason::Combine, investment + bond_energy, work)?;
     if !ledger.settle_transaction(energy, transaction) {
         *energy = before;
         return None;
