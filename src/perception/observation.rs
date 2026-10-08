@@ -404,7 +404,10 @@ impl OrganismObservation {
         Some(Self {
             id: organism.id.clone(),
             physical,
-            developmental_growth_fraction: crate::developmental_decision::growth_fraction(organism, &simulation.environment),
+            developmental_growth_fraction: crate::developmental_decision::growth_fraction(
+                organism,
+                &simulation.environment,
+            ),
             usable_energy: organism.usable_energy,
             stress: organism.stress,
             active_transformation: organism.active_transformation_id.and_then(|id| {
