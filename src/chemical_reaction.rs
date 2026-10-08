@@ -10,10 +10,8 @@ pub(crate) struct ChemicalBreakOperation {
     pub(crate) bond: Bond,
     pub(crate) reaction_energy: f64,
     pub(crate) disruption_cost: f64,
-    pub(crate) remaining_ticks: u64,
 }
 
-pub(crate) const CHEMICAL_BREAK_DURATION_TICKS: u64 = 3;
 
 fn reaction_key(bond: &Bond, interface_signature: &str) -> String {
     format!("{:?}|{:?}|{}", bond.endpoint_a, bond.endpoint_b, interface_signature)
@@ -24,7 +22,7 @@ pub(crate) fn accumulate(
     catalog: &[BaseResource],
     accumulation: &mut std::collections::BTreeMap<String, f64>,
 ) -> Vec<ChemicalBreakOperation> {
-    if organism.structure.bonds.is_empty() || organism.active_transformation_id.is_some() {
+    if organism.structure.bonds.is_empty() {
         return Vec::new();
     }
     let current_prefix = format!("{}|rev:{}|", organism.id, organism.structure_revision);
@@ -81,9 +79,8 @@ pub(crate) fn accumulate(
                 bond,
                 reaction_energy: next,
                 disruption_cost,
-                remaining_ticks: CHEMICAL_BREAK_DURATION_TICKS,
             });
-            organism.chemical_reaction_accumulation.remove(&key);
+            accumulation.remove(&key);
         } else {
             accumulation.insert(key, next);
         }
@@ -96,7 +93,7 @@ pub(crate) fn resolve(
     organism: &mut Organism,
     ledger: &mut crate::state::EnergyLedger,
 ) -> bool {
-    if organism.id != operation.organism_id || operation.remaining_ticks != 0 {
+    if organism.id != operation.organism_id {
         return false;
     }
     let processing_efficiency = organism.genome.processing_efficiency();
@@ -114,11 +111,3 @@ pub(crate) fn resolve(
     success
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn chemical_break_duration_is_three_ticks() {
-        assert_eq!(CHEMICAL_BREAK_DURATION_TICKS, 3);
-    }
-}
