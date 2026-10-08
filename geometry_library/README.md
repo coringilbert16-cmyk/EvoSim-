@@ -2,12 +2,14 @@
 
 This directory is the persistent home for generated geometry knowledge.
 
-- data/ is runtime-generated and should not be committed as source code.
+- `data/` is runtime-generated persistent library state, not source code. The normal `library_sync` checkpoint process intentionally mirrors this generated state into Git history; the data should therefore not be edited as source files.
 - The catalogue is versioned by its manifest and resource-shape signature.
 - Tests must use isolated temporary roots.
 - The worker will eventually populate this directory continuously as new valid formations are discovered.
 
 The source-of-truth implementation is src/geometry_reference_library.rs.
+
+The library uses a locked positional equivalence tolerance of **0.5 units**. If two otherwise-identical formations differ only by a positional displacement of **≤ 0.5 units**, Bob treats them as the same geometric record rather than storing another microscopic variation. This is a geometric knowledge equivalence rule, not permission for live construction to penetrate or skip physical validation.
 
 ### Locked base-resource geometry
 
@@ -62,6 +64,10 @@ A formation's seven resource frontiers are processed as one durable pass. Water 
 
 
 The library's continuous-contact model is being expanded with exact symbolic rigid boundary families; no sampled geometry is used.
+
+### Bob worker measurements
+
+The worker reports per-frontier-pass measurements including constituent size, generated candidate count, newly persisted formations, candidate records not newly persisted, rigid edge/point/vertex family counts, Water/fluid-boundary family counts, total catalogue size, and elapsed time. These measurements are intended to establish the real growth curve before any decision is made about changing the current 20-constituent expansion target or expansion policy.
 ### Rigid continuous contact families
 
 Rigid edge-to-edge contact is also continuous: after the boundary directions are aligned, one body can translate along the shared boundary while maintaining contact. The library now records this degree of freedom as a symbolic GeometryRigidContactFamily with exact edge identifiers, relative rotation, and the complete boundary-overlap parameter interval. A family can be instantiated at a chosen parameter without angular search; the normal formation validator remains authoritative for the resulting complete structure.
