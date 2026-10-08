@@ -86,6 +86,28 @@ pub fn attraction(
     Some(potential * max_force * contact)
 }
 
+/// Converts realized interface alignment into chemistry engagement.
+///
+/// Facing is supplied by the physical contact system; chemistry only bounds it
+/// to the normalized engagement domain. Distance attenuation remains the job
+/// of contact_factor, so this does not duplicate spatial falloff.
+pub fn interface_engagement(facing: f64) -> Option<f64> {
+    if !facing.is_finite() {
+        return None;
+    }
+    Some(facing.clamp(0.0, 1.0))
+}
+
+/// A structural activation barrier expressed in the same normalized scale as
+/// accumulated reaction. Existing bond strength is the physical barrier; no
+/// second arbitrary chemistry threshold is introduced.
+pub fn activation_barrier_from_bond_strength(bond_strength: f64) -> Option<f64> {
+    if !bond_strength.is_finite() || bond_strength < 0.0 {
+        return None;
+    }
+    Some(bond_strength.clamp(0.0, 1.0))
+}
+
 /// One tick of bounded reaction accumulation.
 ///
 /// The returned value is never negative. Dissipation applies to accumulated
@@ -213,6 +235,19 @@ mod tests {
         let far = interaction_potential(1.0, 14.0, 0.5, 13.0).unwrap();
         let contact = interaction_potential(1.0, 14.0, 0.5, 13.0).unwrap();
         assert_eq!(far, contact);
+    }
+
+    #[test]
+    fn interface_engagement_uses_realized_facing() {
+        assert_eq!(interface_engagement(1.0), Some(1.0));
+        assert_eq!(interface_engagement(0.5), Some(0.5));
+        assert_eq!(interface_engagement(-1.0), Some(0.0));
+    }
+
+    #[test]
+    fn activation_barrier_is_existing_bond_strength() {
+        assert_eq!(activation_barrier_from_bond_strength(0.75), Some(0.75));
+        assert_eq!(activation_barrier_from_bond_strength(2.0), Some(1.0));
     }
 
     #[test]
