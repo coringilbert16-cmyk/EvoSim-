@@ -301,7 +301,7 @@ fn candidate_endpoints(
     candidates
 }
 
-fn endpoint_world_point(
+pub(crate) fn endpoint_world_point(
     endpoint: ConnectionEndpoint,
     unit: &StructuralUnit,
     catalog: &[crate::resources::BaseResource],
