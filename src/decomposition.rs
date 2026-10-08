@@ -61,23 +61,10 @@ pub(crate) fn resolve_one_bond_with_ledger(
     ledger: &mut EnergyLedger,
 ) -> Option<DecompositionStep> {
     let target = *body.structure.bonds.first()?;
-    let ia = body
-        .structure
-        .unit_index(target.endpoint_a.constituent_id)?;
-    let ib = body
-        .structure
-        .unit_index(target.endpoint_b.constituent_id)?;
-    let a = body
-        .structure
-        .units
-        .get(ia)?
-        .properties(&environment.catalog)?;
-    let b = body
-        .structure
-        .units
-        .get(ib)?
-        .properties(&environment.catalog)?;
-
+    // A decomposition step still breaks an existing physical bond. Its
+    // energy source is therefore the bond's stored intrinsic potential, not
+    // the constituent material potential (which was never consumed by
+    // formation).
     let mut trial_structure = body.structure.clone();
     trial_structure.break_matching_bond(target)?;
     let released_material = if trial_structure.bonds.is_empty() {
@@ -99,7 +86,8 @@ pub(crate) fn resolve_one_bond_with_ledger(
     };
 
     let before = body.energy_budget;
-    let (gross, usable, heat) = crate::transformation::break_energy_yield(a, b, 1.0)?;
+    let (gross, usable, heat) =
+        crate::transformation::bond_break_energy_yield(target.bond_energy, 1.0)?;
     let transaction = EnergyTransaction {
         reason: EnergyReason::Decomposition,
         potential_released: gross,
