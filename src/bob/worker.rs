@@ -336,8 +336,6 @@ fn process_one_frontier(
     metrics.total_formations = library.len();
     Ok(Some(metrics))
 }
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -348,7 +346,10 @@ mod tests {
     fn chemistry_gate_accepts_a_realized_valid_contact() {
         let catalog = default_catalog();
         let target = GeometryFormation::single("Carbon");
-        let hydrogen = catalog.iter().find(|resource| resource.name == "Hydrogen").unwrap();
+        let hydrogen = catalog
+            .iter()
+            .find(|resource| resource.name == "Hydrogen")
+            .unwrap();
         let candidates = generate_two_constituent_candidates(&target, hydrogen, &catalog);
         assert!(!candidates.is_empty());
 
