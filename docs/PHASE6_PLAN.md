@@ -1,5 +1,8 @@
 # Phase 6 — Growth & Development
 
+> **Historical architecture note:** This document records the Phase 6 state at the time it was written. It is not current architecture authority. The repository README and current source supersede lifecycle, blueprint, construction, and completion claims here; statements below should be read as historical decisions and migration records.
+
+
 ## Status
 
 **P6.0–P6.6 COMPLETE — FINAL README AUTHORITY AUDIT PASSED**
