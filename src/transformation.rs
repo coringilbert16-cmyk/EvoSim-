@@ -20,15 +20,14 @@ pub(crate) fn break_energy_yield(
     if !gross.is_finite() || gross < 0.0 {
         return None;
     }
-    let reactivity = (crate::math::exponential_influence(a.reactivity.max(0.0))
-        + crate::math::exponential_influence(b.reactivity.max(0.0)))
-        * 0.5;
+    // Breaking exposes the bonded material's intrinsic potential energy. The
+    // retired reactivity multiplier is deliberately absent: chemistry does not
+    // get to manufacture an accessibility factor here.
     let cohesion =
         ((a.cohesion.clamp(0.0, 1.0) + b.cohesion.clamp(0.0, 1.0)) * 0.5).clamp(0.0, 1.0);
-    let accessible = gross * reactivity;
-    let cohesion_loss = accessible * cohesion * 0.5;
-    let pre_processing = (accessible - cohesion_loss).max(0.0);
     let efficiency = processing_efficiency.clamp(0.0, 1.0);
+    let cohesion_loss = gross * cohesion * 0.5;
+    let pre_processing = (gross - cohesion_loss).max(0.0);
     let usable = pre_processing * efficiency;
     let heat = (gross - usable).max(0.0);
     (usable.is_finite() && heat.is_finite()).then_some((gross, usable, heat))
@@ -809,6 +808,27 @@ pub(crate) fn break_work_cost(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn break_yield_does_not_depend_on_retired_reactivity_or_chemical_position() {
+        let a = crate::resources::ResourceProperties {
+            mass: 1.0,
+            potential_energy: 10.0,
+            reactivity: 0.1,
+            chemical_position: Some(1.5),
+            cohesion: 0.4,
+        };
+        let b = crate::resources::ResourceProperties {
+            potential_energy: 5.0,
+            reactivity: 99.0,
+            chemical_position: Some(12.5),
+            ..a
+        };
+        let mut altered = b;
+        altered.reactivity = 0.0;
+        altered.chemical_position = Some(7.0);
+        assert_eq!(break_energy_yield(a, b, 1.0), break_energy_yield(a, altered, 1.0));
+    }
 
     #[test]
     fn break_energy_yield_is_positive_when_resources_have_reactive_potential() {
