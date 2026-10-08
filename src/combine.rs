@@ -1,8 +1,8 @@
 #![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 //! COMBINE support: deterministic recipe caching, locked formation threshold, and
 //! resource-derived bond strength.
-use crate::contact::{ConnectionCompatibilityCache, ConnectionPairCandidate};
 use crate::chemistry::{attraction, interaction_potential, CHEMICAL_D_MAX, CHEMICAL_K};
+use crate::contact::{ConnectionCompatibilityCache, ConnectionPairCandidate};
 use crate::resources::{combine_materials, BaseResource, Material, ResourceProperties};
 use crate::structure::{formation_threshold, OrganismStructure};
 use std::collections::HashMap;
@@ -38,7 +38,10 @@ pub fn chemical_interaction(
         contact_radius,
         max_force,
     )?;
-    Some(ChemicalInteraction { static_potential, attraction })
+    Some(ChemicalInteraction {
+        static_potential,
+        attraction,
+    })
 }
 
 /// Remaining physical work required to bring an eligible chemical interface
@@ -60,12 +63,9 @@ pub fn formation_work_cost(
     else {
         return 0.0;
     };
-    let Some(static_potential) = interaction_potential(
-        position_a,
-        position_b,
-        CHEMICAL_K,
-        CHEMICAL_D_MAX,
-    ) else {
+    let Some(static_potential) =
+        interaction_potential(position_a, position_b, CHEMICAL_K, CHEMICAL_D_MAX)
+    else {
         return f64::NAN;
     };
     let d = distance.min(crate::chemistry::CHEMICAL_CONTACT_RADIUS);
@@ -358,8 +358,16 @@ mod tests {
             chemical_position: Some(12.5),
             ..a
         };
-        let result =
-            chemical_interaction(a, b, candidate(0.0, 0.0), CHEMICAL_K, CHEMICAL_D_MAX, 1.0, 10.0).unwrap();
+        let result = chemical_interaction(
+            a,
+            b,
+            candidate(0.0, 0.0),
+            CHEMICAL_K,
+            CHEMICAL_D_MAX,
+            1.0,
+            10.0,
+        )
+        .unwrap();
         assert!(result.static_potential > 0.0);
         assert!((result.attraction - 10.0 * result.static_potential).abs() < 1e-12);
     }
