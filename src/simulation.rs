@@ -29,6 +29,7 @@ impl Simulation {
             environment,
             active_transformations: Vec::new(),
             chemical_breaks: Vec::new(),
+            chemical_reaction_accumulation: std::collections::BTreeMap::new(),
             decomposing_bodies: Vec::new(),
             energy_ledger: EnergyLedger::default(),
             next_organism_id: 2,
@@ -116,7 +117,6 @@ impl Simulation {
             peak_developmental_realization: 0.0,
             cached_harmonic_key: None,
             last_movement_attempt: None,
-            chemical_reaction_accumulation: std::collections::BTreeMap::new(),
         }
     }
     fn record_action_experience(
