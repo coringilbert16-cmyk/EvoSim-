@@ -75,6 +75,23 @@ fn evaluate_candidate(
     }
     let a = structure.units.get(ua)?.properties(catalog)?;
     let b = structure.units.get(ub)?.properties(catalog)?;
+    // Chemical materials must have a real attractive interaction at the
+    // realized contact. This makes chemistry an actual formation driver,
+    // rather than merely a source of stored bond energy after COMBINE.
+    if a.chemical_position.is_some() && b.chemical_position.is_some() {
+        let interaction = crate::combine::chemical_interaction(
+            a,
+            b,
+            candidate,
+            crate::chemistry::CHEMICAL_K,
+            crate::chemistry::CHEMICAL_D_MAX,
+            crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+            crate::chemistry::CHEMICAL_MAX_FORCE,
+        )?;
+        if interaction.attraction <= EPSILON {
+            return None;
+        }
+    }
     let evaluation = crate::combine::evaluate_formation(candidate, a.cohesion, b.cohesion);
     let (work, investment) = formation_cost(a, b, evaluation).ok()?;
     let strength = bond_strength(a, b);
