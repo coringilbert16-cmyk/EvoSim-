@@ -304,6 +304,7 @@ mod tests {
             mass: 1.0,
             potential_energy: 1.0,
             reactivity: 1.0,
+            chemical_position: None,
             cohesion: 0.5,
         };
         let high = ResourceProperties {
@@ -319,6 +320,7 @@ mod tests {
             mass: 1.0,
             potential_energy: 1.0,
             reactivity: 4.0,
+            chemical_position: None,
             cohesion: 0.5,
         };
         let b = ResourceProperties {
@@ -341,11 +343,13 @@ mod tests {
             mass: 1.0,
             potential_energy: 1.0,
             reactivity: 0.1,
+            chemical_position: None,
             cohesion: 0.8,
         };
         let b = ResourceProperties {
             potential_energy: 10.0,
             reactivity: 4.0,
+            chemical_position: None,
             cohesion: 0.2,
             ..a
         };
