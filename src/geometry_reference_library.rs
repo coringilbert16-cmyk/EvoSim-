@@ -16,6 +16,10 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 pub const GEOMETRY_LIBRARY_SCHEMA_VERSION: u32 = 1;
+/// Positional equivalence used by Bob when deciding whether two otherwise
+/// identical geometric records describe the same meaningful contact.
+/// Differences at or below this distance do not create a new record.
+pub const GEOMETRY_EQUIVALENCE_TOLERANCE: f64 = 0.5;
 const QUANTUM: f64 = 1e-9;
 
 /// Canonical identity of a live physical interface.
@@ -1130,9 +1134,18 @@ pub fn len(&self) -> usize {
         let mut unique = BTreeMap::new();
         for formation in formations {
             if let Some(canonical) = formation.canonicalized(catalog) {
-                if !self.entries.contains_key(&canonical.signature) {
-                    unique.insert(canonical.signature.clone(), canonical);
+                if self.entries.contains_key(&canonical.signature)
+                    || self
+                        .entries
+                        .values()
+                        .any(|existing| formations_equivalent_within_tolerance(existing, &canonical))
+                    || unique
+                        .values()
+                        .any(|existing| formations_equivalent_within_tolerance(existing, &canonical))
+                {
+                    continue;
                 }
+                unique.insert(canonical.signature.clone(), canonical);
             }
         }
         if unique.is_empty() {
@@ -1199,6 +1212,33 @@ fn canonical_pose_candidates(formation: &GeometryFormation, catalog: &[BaseResou
         candidates.push(candidate);
     }
     candidates
+}
+
+fn formations_equivalent_within_tolerance(
+    a: &GeometryFormation,
+    b: &GeometryFormation,
+) -> bool {
+    if a.schema_version != b.schema_version
+        || a.constituents.len() != b.constituents.len()
+        || a.bonds != b.bonds
+    {
+        return false;
+    }
+
+    a.constituents.iter().zip(&b.constituents).all(|(left, right)| {
+        left.resource == right.resource
+            && angular_difference(
+                left.placement.rotation_radians,
+                right.placement.rotation_radians,
+            ) <= QUANTUM
+            && (left.placement.x - right.placement.x).hypot(
+                left.placement.y - right.placement.y,
+            ) <= GEOMETRY_EQUIVALENCE_TOLERANCE
+    })
+}
+
+fn angular_difference(a: f64, b: f64) -> f64 {
+    normalized_angle(a - b).abs()
 }
 
 fn resource_catalog_signature(catalog: &[BaseResource]) -> String {
@@ -2737,6 +2777,51 @@ mod tests {
         std::env::temp_dir().join(format!("evosim-geometry-library-{nonce}"))
     }
 
+
+    #[test]
+    fn bob_equivalence_collapses_sub_half_unit_face_to_face_variation() {
+        let root = temp_root();
+        let catalog = default_catalog();
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let base = GeometryFormation::single("Carbon");
+        let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
+        let pair = generate_two_constituent_candidates(&base, carbon, &catalog)
+            .into_iter()
+            .find(|formation| exposed_polygon_edge_intervals(formation, 0, &catalog).len() == 5)
+            .expect("face-to-face carbon pair");
+
+        assert!(validate_formation(&pair, &catalog));
+        assert!(library.insert(pair.clone(), &catalog).unwrap());
+
+        let mut near_duplicate = pair.clone();
+        near_duplicate.constituents[1].placement.x += 0.01;
+        let canonical = near_duplicate.canonicalized(&catalog).unwrap();
+        assert!(formations_equivalent_within_tolerance(
+            library.get(&pair.canonicalized(&catalog).unwrap().signature).unwrap(),
+            &canonical,
+        ));
+        assert!(!library.insert(near_duplicate, &catalog).unwrap());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn bob_equivalence_includes_the_half_unit_boundary() {
+        let root = temp_root();
+        let catalog = default_catalog();
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let base = GeometryFormation::single("Carbon");
+        let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
+        let pair = generate_two_constituent_candidates(&base, carbon, &catalog)
+            .into_iter()
+            .find(|formation| exposed_polygon_edge_intervals(formation, 0, &catalog).len() == 5)
+            .expect("face-to-face carbon pair");
+        assert!(library.insert(pair.clone(), &catalog).unwrap());
+
+        let mut boundary = pair.clone();
+        boundary.constituents[1].placement.x += GEOMETRY_EQUIVALENCE_TOLERANCE;
+        assert!(!library.insert(boundary, &catalog).unwrap());
+        let _ = fs::remove_dir_all(root);
+    }
 
     #[test]
     fn isolated_rigid_boundary_is_fully_exposed() {
