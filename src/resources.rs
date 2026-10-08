@@ -251,7 +251,8 @@ impl ResourceBaselines {
                 .map(|r| r.properties.potential_energy)
                 .sum::<f64>()
                 / count,
-            reactivity: catalog.iter().map(|r| r.properties.reactivity).sum::<f64>() / count,\n            cohesion: catalog.iter().map(|r| r.properties.cohesion).sum::<f64>() / count,
+            reactivity: catalog.iter().map(|r| r.properties.reactivity).sum::<f64>() / count,
+            cohesion: catalog.iter().map(|r| r.properties.cohesion).sum::<f64>() / count,
         }
     }
 }
