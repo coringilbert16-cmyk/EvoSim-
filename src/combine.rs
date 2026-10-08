@@ -9,12 +9,6 @@ use std::collections::HashMap;
 const EPSILON: f64 = 1e-12;
 pub const EXPERIMENTAL_BOND_STRENGTH_SCALE: f64 = 1.0;
 pub const EXPERIMENTAL_MAX_BOND_STRENGTH: f64 = 1.0;
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ExperimentalInteraction {
-    pub direction: f64,
-    pub magnitude: f64,
-    pub signed_value: f64,
-}
 /// Chemistry-facing pair interaction. The tuning constants are supplied by the caller
 /// so this layer does not invent biological chemistry parameters.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -47,40 +41,6 @@ pub fn chemical_interaction(
     Some(ChemicalInteraction { static_potential, attraction })
 }
 
-pub fn experimental_interaction(
-    a: ResourceProperties,
-    b: ResourceProperties,
-    candidate: ConnectionPairCandidate,
-) -> ExperimentalInteraction {
-    let potential_delta = b.potential_energy - a.potential_energy;
-    let direction = if potential_delta > EPSILON {
-        1.0
-    } else if potential_delta < -EPSILON {
-        -1.0
-    } else {
-        0.0
-    };
-    let reactivity = (exponential_influence(a.reactivity.max(0.0))
-        + exponential_influence(b.reactivity.max(0.0)))
-        / 2.0;
-    let facing = ((candidate.facing.clamp(-1.0, 1.0) + 1.0) * 0.5).clamp(0.0, 1.0);
-    let distance = if candidate.distance.is_finite() {
-        candidate.distance.max(0.0)
-    } else {
-        f64::INFINITY
-    };
-    let distance_factor = if distance.is_finite() {
-        1.0 / (1.0 + distance)
-    } else {
-        0.0
-    };
-    let magnitude = potential_delta.abs() * reactivity * facing * distance_factor;
-    ExperimentalInteraction {
-        direction,
-        magnitude,
-        signed_value: direction * magnitude,
-    }
-}
 pub fn formation_work_cost(a: ResourceProperties, b: ResourceProperties) -> f64 {
     let complexity_factor = 1.0 + ((a.mass.max(0.0) + b.mass.max(0.0)) * 0.5).sqrt();
     let cohesion_factor = 1.0 + ((a.cohesion.clamp(0.0, 1.0) + b.cohesion.clamp(0.0, 1.0)) * 0.5);
