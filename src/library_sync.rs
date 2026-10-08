@@ -56,10 +56,28 @@ fn repo_root() -> Option<PathBuf> {
     }
 }
 
-fn data_paths(repo: &Path) -> Vec<&'static str> {
-    [GEOMETRY_DATA, CHEMISTRY_DATA]
-        .into_iter()
-        .filter(|path| repo.join(path).exists())
+fn data_paths(repo: &Path) -> Vec<String> {
+    const GEOMETRY_FILES: &[&str] = &[
+        "formations.jsonl",
+        "manifest.json",
+        "frontier.json",
+        "contact_families.jsonl",
+        "fluid_boundary_families.jsonl",
+        "rigid_contact_families.jsonl",
+        "rigid_point_contact_families.jsonl",
+        "rigid_vertex_contact_families.jsonl",
+    ];
+    const CHEMISTRY_FILES: &[&str] = &["chemistry.jsonl", "manifest.json"];
+
+    GEOMETRY_FILES
+        .iter()
+        .map(|file| format!("{GEOMETRY_DATA}/{file}"))
+        .chain(
+            CHEMISTRY_FILES
+                .iter()
+                .map(|file| format!("{CHEMISTRY_DATA}/{file}")),
+        )
+        .filter(|path| repo.join(path).is_file())
         .collect()
 }
 
@@ -165,17 +183,13 @@ fn publish_once() -> std::io::Result<bool> {
         }
 
         let mut add_args = vec!["add", "-f", "--"];
-        add_args.extend(paths.iter().copied());
+        add_args.extend(paths.iter().map(String::as_str));
         let output = run_git(&repo, &add_args, Some(&index))?;
         if !output.status.success() {
             return Ok(false);
         }
 
-        let output = run_git(
-            &repo,
-            &["diff", "--cached", "--quiet", "--", GEOMETRY_DATA, CHEMISTRY_DATA],
-            Some(&index),
-        )?;
+        let output = run_git(&repo, &["diff", "--cached", "--quiet"], Some(&index))?;
 
         if output.status.success() {
             push_if_ahead(&repo, &branch);
