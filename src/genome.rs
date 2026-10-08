@@ -19,7 +19,10 @@ pub struct TraitDef {
 pub struct Genome {
     pub traits: Vec<TraitDef>,
     /// Inherited energy allocation available to a newly constructed offspring during budding.
-    #[serde(default = "default_reproductive_energy_allocation", alias = "juvenile_energy_reserve")]
+    #[serde(
+        default = "default_reproductive_energy_allocation",
+        alias = "juvenile_energy_reserve"
+    )]
     pub reproductive_energy_allocation: f64,
     /// Sole inherited structural-developmental authority. This stores continuous
     /// developmental tendencies, never exact constituent instances or topology.
