@@ -382,7 +382,7 @@ mod tests {
                 crate::geometry_reference_library::GeometryConstituent {
                     resource: "Carbon".to_string(),
                     placement: crate::structure::Placement {
-                        x: 0.5,
+                        x: 1.5,
                         y: 0.0,
                         rotation_radians: 0.0,
                     },
@@ -461,7 +461,7 @@ mod tests {
                 crate::geometry_reference_library::GeometryConstituent {
                     resource: "Carbon".to_string(),
                     placement: crate::structure::Placement {
-                        x: 0.5,
+                        x: 1.5,
                         y: 0.0,
                         rotation_radians: 0.0,
                     },
