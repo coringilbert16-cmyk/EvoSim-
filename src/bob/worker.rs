@@ -378,8 +378,10 @@ mod tests {
         .canonicalized(&catalog)
         .unwrap();
 
-        let root = std::env::temp_dir()
-            .join(format!("evosim-bob-chemistry-negative-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-chemistry-negative-{}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&root);
         let mut chemistry_library = ChemistryLibrary::open(&root).unwrap();
 
@@ -391,13 +393,8 @@ mod tests {
             ));
         }
         let mut cache = ConnectionCompatibilityCache::new();
-        let candidates = crate::combine::eligible_candidates(
-            &structure,
-            0,
-            1,
-            &catalog,
-            &mut cache,
-        );
+        let candidates =
+            crate::combine::eligible_candidates(&structure, 0, 1, &catalog, &mut cache);
         assert!(!candidates.is_empty(), "test formation has a contact");
         for candidate in candidates {
             let interface = crate::geometry_reference_library::resolve_live_contact_candidate(
@@ -473,13 +470,8 @@ mod tests {
             ));
         }
         let mut cache = ConnectionCompatibilityCache::new();
-        let candidates = crate::combine::eligible_candidates(
-            &structure,
-            0,
-            1,
-            &catalog,
-            &mut cache,
-        );
+        let candidates =
+            crate::combine::eligible_candidates(&structure, 0, 1, &catalog, &mut cache);
         assert!(!candidates.is_empty(), "test formation has a contact");
         let keys = candidates
             .into_iter()
