@@ -94,7 +94,10 @@ mod simulation_tests;
 async fn main() {
     let command = std::env::args().nth(1);
 
-    if command.as_deref() != Some("--library-sync") {
+    if !matches!(
+        command.as_deref(),
+        Some("--library-sync") | Some("--library-sync-once")
+    ) {
         library_sync::spawn_background();
     }
 
