@@ -105,9 +105,9 @@ pub fn transform_rectangle_end_face_center(
         return None;
     };
     let x = if endpoint == 0 {
-        -*width / 2.0
+        -width / 2.0
     } else if endpoint == 1 {
-        *width / 2.0
+        width / 2.0
     } else {
         return None;
     };
