@@ -8,7 +8,7 @@
 use crate::capillary_geometry::{solve_water_against_solid, CapillaryContactFamily, ContactTranslationInterval};
 use crate::material_geometry::{placed_forms_penetrate, placed_forms_rigid_contact, PlacedMaterialPart};
 use crate::resources::{default_catalog, BaseResource, Form};
-use crate::structure::{ConnectionEndpoint, Placement, StructuralUnit};
+use crate::structure::{ConnectionEndpoint, Placement};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
