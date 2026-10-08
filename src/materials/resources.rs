@@ -873,7 +873,7 @@ mod shape_tests {
             .any(|r| matches!(r.shape.form, Form::RegularPolygon { sides, .. } if sides != 6)));
         assert!(catalog
             .iter()
-            .any(|r| matches!(r.shape.form, Form::Line { .. })));
+            .any(|r| matches!(r.shape.form, Form::Rectangle { .. })));
     }
 
     #[test]
