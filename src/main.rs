@@ -104,13 +104,14 @@ mod observation;
 mod recycling;
 #[path = "organism/reproduction.rs"]
 mod reproduction;
-#[path = "structural_blueprint_unified.rs"]
+#[path = "organism/structural_blueprint_unified.rs"]
 #[allow(clippy::needless_range_loop, unused_variables)]
 mod structural_blueprint;
 #[path = "chemistry/transformation.rs"]
 mod transformation;
 
 // Simulation and application runtime.
+#[path = "infrastructure/math.rs"]
 mod math;
 #[path = "ui/resource_visualization.rs"]
 mod resource_visualization;
@@ -129,20 +130,28 @@ mod state;
 
 // Integration and contract tests.
 #[cfg(test)]
+#[path = "tests/blueprint_diagnostics.rs"]
 mod blueprint_diagnostics;
 #[cfg(test)]
+#[path = "tests/blueprint_spatial_target_tests.rs"]
 mod blueprint_spatial_target_tests;
 #[cfg(test)]
+#[path = "tests/bond_driven_contract_tests.rs"]
 mod bond_driven_contract_tests;
 #[cfg(test)]
+#[path = "tests/observation_contract_tests.rs"]
 mod observation_contract_tests;
 #[cfg(test)]
+#[path = "tests/phase1_acquisition_contract_tests.rs"]
 mod phase1_acquisition_contract_tests;
 #[cfg(test)]
+#[path = "tests/phase2_structure_contract_tests.rs"]
 mod phase2_structure_contract_tests;
 #[cfg(test)]
+#[path = "tests/phase3_authority_contract_tests.rs"]
 mod phase3_authority_contract_tests;
 #[cfg(test)]
+#[path = "tests/simulation_tests.rs"]
 mod simulation_tests;
 
 #[tokio::main]
