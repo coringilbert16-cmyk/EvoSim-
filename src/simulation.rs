@@ -28,6 +28,7 @@ impl Simulation {
             organisms: vec![organism],
             environment,
             active_transformations: Vec::new(),
+            chemical_breaks: Vec::new(),
             decomposing_bodies: Vec::new(),
             energy_ledger: EnergyLedger::default(),
             next_organism_id: 2,
@@ -115,6 +116,7 @@ impl Simulation {
             peak_developmental_realization: 0.0,
             cached_harmonic_key: None,
             last_movement_attempt: None,
+            chemical_reaction_accumulation: std::collections::BTreeMap::new(),
         }
     }
     fn record_action_experience(
@@ -450,6 +452,20 @@ impl Simulation {
     }
     pub(crate) fn step(&mut self) {
         self.tick += 1;
+
+        let mut pending_chemical_breaks = Vec::new();
+        for mut operation in self.chemical_breaks.drain(..) {
+            operation.remaining_ticks = operation.remaining_ticks.saturating_sub(1);
+            if operation.remaining_ticks == 0 {
+                if let Some(organism) = self.organisms.iter_mut().find(|o| o.id == operation.organism_id) {
+                    let _ = crate::chemical_reaction::resolve(operation, organism, &mut self.energy_ledger);
+                }
+            } else {
+                pending_chemical_breaks.push(operation);
+            }
+        }
+        self.chemical_breaks = pending_chemical_breaks;
+
         let mut still_active = Vec::new();
         let mut completed = Vec::new();
         for mut transformation in self.active_transformations.drain(..) {
@@ -562,6 +578,12 @@ impl Simulation {
                     &mut self.energy_ledger,
                 );
             }
+            let chemical_break_pending = self.chemical_breaks.iter().any(|operation| operation.organism_id == organism.id);
+            if !chemical_break_pending {
+                let operations = crate::chemical_reaction::accumulate(organism, &self.environment.catalog);
+                self.chemical_breaks.extend(operations);
+            }
+
             let stored_amount_before_transfer = organism.stored_material.total_amount();
             Self::transfer_contained_environmental_material(organism, &mut self.environment);
             let acquired_amount =
