@@ -350,9 +350,9 @@ The chemistry migration is active. The following boundaries have now been audite
 | BREAK energy boundary | **Migrated** | BREAK no longer uses retired reactivity to determine accessible energy. Intrinsic potential energy, cohesion, and processing efficiency remain explicit inputs. |
 | Energy conservation | **Boundary established** | The ledger remains authoritative. Chemical transitions still need an explicit source/transition transaction rather than implicit interaction energy. |
 | Geometry → chemistry interface | **Partially established** | COMBINE can consume chemical position plus a physical contact candidate, but the canonical Bob interface key and persistent Chemistry Library are not yet wired into runtime. |
-| Chemistry Library | **Not yet integrated** | The required canonical key and persistent demand-driven cache still need implementation. |
+| Chemistry Library | **Storage implemented; runtime not integrated** | A versioned persistent key/value library now exists for material pair + interface class + Bob canonical interface signature. Runtime lookup/miss calculation is still to be wired. |
 | Natural chemistry-driven transitions | **Not yet integrated** | Ordinary runtime interactions do not yet accumulate chemistry and trigger material transitions without an explicit transformation path. |
-| Retired reactivity cleanup | **In progress** | Remaining uses are concentrated in legacy resource helpers, harmonics/nonlinear spectral response, construction material selection, tests/fixtures, and compatibility data. Each must be audited before removal or replacement. |
+| Retired reactivity cleanup | **In progress** | Obsolete resource helpers and construction-selection use have been removed. Remaining uses are concentrated in harmonics/nonlinear spectral response and compatibility fixtures/data; those are being treated as separate physics/compatibility audits rather than mapped to chemical position. |
 
 **Migration rule:** chemical position is chemistry; reactivity is not a fallback chemical position, interaction magnitude, break-efficiency factor, or formation-energy source. Remaining `reactivity` code is therefore treated as transitional until its owning subsystem has an explicit replacement contract.
 
