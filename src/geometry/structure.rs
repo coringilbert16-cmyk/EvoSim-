@@ -252,13 +252,26 @@ impl ConnectionEndpoint {
             }
             Self::LineEndpoint { point_index } => {
                 let shape = unit.shape(catalog)?;
-                crate::connection_geometry::transform_line_endpoint(
-                    shape,
-                    point_index,
-                    unit.placement.x,
-                    unit.placement.y,
-                    unit.placement.rotation_radians,
-                )
+                if unit.material.parts.len() == 1
+                    && unit.material.parts[0].0 == "Hydrogen"
+                    && matches!(shape.form, crate::resources::Form::Rectangle { .. })
+                {
+                    crate::connection_geometry::transform_rectangle_end_face_center(
+                        shape,
+                        point_index,
+                        unit.placement.x,
+                        unit.placement.y,
+                        unit.placement.rotation_radians,
+                    )
+                } else {
+                    crate::connection_geometry::transform_line_endpoint(
+                        shape,
+                        point_index,
+                        unit.placement.x,
+                        unit.placement.y,
+                        unit.placement.rotation_radians,
+                    )
+                }
             }
             Self::Boundary { angle_radians } => {
                 let crate::resources::Form::Circle { radius } = unit.shape(catalog)?.form else {
