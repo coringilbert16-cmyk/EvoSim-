@@ -83,7 +83,7 @@ impl std::fmt::Display for WorkerPassMetrics {
 fn process_one_frontier(
     library: &mut GeometryLibrary,
     catalog: &[BaseResource],
-) -> std::io::Result<bool> {
+) -> std::io::Result<Option<WorkerPassMetrics>> {
     // The library is already held in a BTreeMap keyed by canonical
     // signature. Do not clone and sort the entire catalogue on every worker
     // step; that turns catalogue growth itself into the hot path. We only
