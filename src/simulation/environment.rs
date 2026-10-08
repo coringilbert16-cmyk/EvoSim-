@@ -587,5 +587,5 @@ fn distribute_evenly(field: &mut ActiveMaterialField, mut mat: Material, neighbo
 }
 
 #[cfg(test)]
-#[path = "environment_tests.rs"]
+#[path = "../tests/environment_tests.rs"]
 mod environment_tests;
