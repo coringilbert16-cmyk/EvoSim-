@@ -725,8 +725,6 @@ fn realize_next_bond_driven(
         return None;
     }
 
-
-
     for existing_index in existing_indices {
         let existing_unit = structure.units.get(existing_index)?;
         let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
@@ -1210,8 +1208,7 @@ fn construct_blueprint_bond_driven_internal(
                     // structure and leave the next construction phase to the
                     // caller. No uncommitted future topology is inspected.
                     if stop_at_genome
-                        && crate::cavity::analyze_genome_cavity(&structure, catalog)?
-                            .is_some()
+                        && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_some()
                     {
                         return Ok((structure, total_heat));
                     }
