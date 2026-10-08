@@ -45,11 +45,17 @@ struct BondFormationRequest {
     investment: f64,
 }
 
-fn energy_requirement(investment: f64, work: f64) -> Option<f64> {
-    if !investment.is_finite() || investment < 0.0 || !work.is_finite() || work < 0.0 {
+fn energy_requirement(investment: f64, bond_energy: f64, work: f64) -> Option<f64> {
+    if !investment.is_finite()
+        || investment < 0.0
+        || !bond_energy.is_finite()
+        || bond_energy < 0.0
+        || !work.is_finite()
+        || work < 0.0
+    {
         return None;
     }
-    let required = investment + work;
+    let required = investment + bond_energy + work;
     required.is_finite().then_some(required)
 }
 
@@ -70,7 +76,15 @@ fn evaluate_candidate(
     let b = structure.units.get(ub)?.properties(catalog)?;
     let evaluation = crate::combine::evaluate_formation(candidate, a.cohesion, b.cohesion);
     let (work, investment) = formation_cost(a, b, evaluation).ok()?;
-    let required = energy_requirement(investment, work)?;
+    let strength = bond_strength(a, b);
+    if !strength.is_finite() {
+        return None;
+    }
+    let bond_energy = crate::combine::intrinsic_bond_potential(a, b, strength);
+    if !bond_energy.is_finite() || bond_energy < 0.0 {
+        return None;
+    }
+    let required = energy_requirement(investment, bond_energy, work)?;
     Some((evaluation, work, investment, required))
 }
 
@@ -242,22 +256,25 @@ fn form_bond_from_candidate(
     if !strength.is_finite() {
         return None;
     }
+    let bond_energy = crate::combine::intrinsic_bond_potential(a, b, strength);
+    if !bond_energy.is_finite() || bond_energy < 0.0 {
+        return None;
+    }
     let mut trial_structure = structure.clone();
     let bond = crate::structure::Bond {
         endpoint_a: BondEndpoint::new(id_a, endpoint_a),
         endpoint_b: BondEndpoint::new(id_b, endpoint_b),
         strength,
-        bond_energy: investment,
+        bond_energy,
     };
     crate::contact::try_add_bond(&mut trial_structure, bond, catalog).ok()?;
     let before = *energy;
-    // COMBINE currently consumes energy; it must not manufacture potential
-    // energy merely because the legacy interaction model returned a value.
-    // Chemistry will later provide an explicit source transaction when a
-    // reaction actually releases energy.
+    // COMBINE consumes the formation threshold and allocates the newly created
+    // bond's intrinsic potential to structure. Remaining physical approach work
+    // is dissipated. No chemistry potential is manufactured by the transaction.
     let transaction = EnergyTransaction::expenditure(
         EnergyReason::Combine,
-        investment,
+        investment + bond_energy,
         work,
     )?;
     if !ledger.settle_transaction(energy, transaction) {
@@ -272,11 +289,11 @@ fn form_bond_from_candidate(
         endpoint_a,
         endpoint_b,
         work_cost: work,
-        energy_invested: investment,
+        energy_invested: investment + bond_energy,
         formation_threshold: threshold,
         net_energy_change: net,
         bond_strength: strength,
-        bond_energy: investment,
+        bond_energy,
         environmental_source: None,
     })
 }
