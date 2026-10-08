@@ -94,6 +94,35 @@ pub fn transform_line_endpoint(
 ///
 /// This function is deliberately keyed by the realized shape and vertex index,
 /// not by connection metadata. It is the preferred endpoint API for rigid shapes.
+pub fn transform_rectangle_end_face_center(
+    shape: &Shape,
+    endpoint: usize,
+    origin_x: f64,
+    origin_y: f64,
+    rotation_radians: f64,
+) -> Option<WorldConnectionPoint> {
+    let crate::resources::Form::Rectangle { width, .. } = shape.form else {
+        return None;
+    };
+    let x = if endpoint == 0 {
+        -*width / 2.0
+    } else if endpoint == 1 {
+        *width / 2.0
+    } else {
+        return None;
+    };
+    let normal_x = if endpoint == 0 { -1.0 } else { 1.0 };
+    Some(transform_derived_point(
+        x,
+        0.0,
+        normal_x,
+        0.0,
+        origin_x,
+        origin_y,
+        rotation_radians,
+    ))
+}
+
 pub fn rigid_endpoint_world_point(
     shape: &Shape,
     vertex: usize,
@@ -104,23 +133,6 @@ pub fn rigid_endpoint_world_point(
     match &shape.form {
         crate::resources::Form::Line { .. } => {
             transform_line_endpoint(shape, vertex, origin_x, origin_y, rotation_radians)
-        }
-        crate::resources::Form::Rectangle { width, .. } if vertex < 2 => {
-            let x = if vertex == 0 {
-                -*width / 2.0
-            } else {
-                *width / 2.0
-            };
-            let normal_x = if vertex == 0 { -1.0 } else { 1.0 };
-            Some(transform_derived_point(
-                x,
-                0.0,
-                normal_x,
-                0.0,
-                origin_x,
-                origin_y,
-                rotation_radians,
-            ))
         }
         _ => transform_polygon_vertex(shape, vertex, origin_x, origin_y, rotation_radians),
     }
@@ -215,8 +227,8 @@ mod tests {
                 height: 0.1,
             },
         };
-        let left = rigid_endpoint_world_point(&shape, 0, 0.0, 0.0, 0.0).unwrap();
-        let right = rigid_endpoint_world_point(&shape, 1, 0.0, 0.0, 0.0).unwrap();
+        let left = transform_rectangle_end_face_center(&shape, 0, 0.0, 0.0, 0.0).unwrap();
+        let right = transform_rectangle_end_face_center(&shape, 1, 0.0, 0.0, 0.0).unwrap();
         assert_eq!((left.x, left.y), (-0.5, 0.0));
         assert_eq!((right.x, right.y), (0.5, 0.0));
         assert_eq!((left.normal_x, left.normal_y), (-1.0, 0.0));
