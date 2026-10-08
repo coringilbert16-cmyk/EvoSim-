@@ -179,34 +179,6 @@ pub(crate) fn resolve_stress_break(
     }
     let target_index = candidate_indices[rng.gen_range(0..candidate_indices.len())];
     let target = organism.structure.bonds[target_index];
-    let Some(ia) = organism
-        .structure
-        .unit_index(target.endpoint_a.constituent_id)
-    else {
-        return false;
-    };
-    let Some(ib) = organism
-        .structure
-        .unit_index(target.endpoint_b.constituent_id)
-    else {
-        return false;
-    };
-    let Some(a) = organism
-        .structure
-        .units
-        .get(ia)
-        .and_then(|u| u.properties(&environment.catalog))
-    else {
-        return false;
-    };
-    let Some(b) = organism
-        .structure
-        .units
-        .get(ib)
-        .and_then(|u| u.properties(&environment.catalog))
-    else {
-        return false;
-    };
     // A physical bond stores its own intrinsic potential. Do not recreate
     // constituent potential energy here: those material potentials were not
     // consumed when the bond was formed.
