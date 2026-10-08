@@ -16,4 +16,10 @@ Persistence rules:
 - Tests use isolated temporary stores.
 - Library data never becomes a second source of simulation rules.
 
-The concrete record/index layout will be added when the chemistry persistence boundary is wired; this establishes ownership without inventing storage schema prematurely.
+Current persistence:
+- Chemistry records carry an explicit Valid/Rejected state.
+- Valid records may cache static chemical potential and bond strength.
+- Rejected records retain a stable rejection reason.
+- Schema versioning prevents older chemistry knowledge from being silently reused.
+
+Bob's worker may submit newly discovered material-pair chemistry through the chemistry library, but the chemistry implementation remains authoritative. Runtime formation success still depends on the physical candidate, load, and available investment.
