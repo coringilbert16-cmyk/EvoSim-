@@ -803,6 +803,52 @@ pub fn len(&self) -> usize {
         self.rigid_vertex_contact_families.values()
     }
 
+    /// Match a realized interface against persisted family geometry without
+    /// generating formations or sampling orientations. Multiple formation
+    /// records that describe the same local interface collapse to one
+    /// canonical projection; genuinely different projections remain ambiguous.
+    pub fn resolve_persistent_interface(
+        &self,
+        interface: &LiveGeometryInterface,
+    ) -> LiveFamilyResolution {
+        let mut projections = BTreeMap::<String, ()>::new();
+        match interface.interface_class {
+            "rigid_edge" => {
+                if let Some((a, b)) = parse_edge_pair(&interface.signature) {
+                    for family in self.rigid_contact_families.values() {
+                        if edge_pair_matches_family(&a, &b, family) {
+                            projections.insert(rigid_family_projection(family), ());
+                        }
+                    }
+                }
+            }
+            "rigid_point" => {
+                if let Some((a, b)) = parse_edge_pair(&interface.signature) {
+                    for family in self.rigid_point_contact_families.values() {
+                        if edge_point_pair_matches_family(&a, &b, family) {
+                            projections.insert(point_family_projection(family), ());
+                        }
+                    }
+                }
+            }
+            "rigid_vertex" => {
+                if let Some((a, b)) = parse_edge_pair(&interface.signature) {
+                    for family in self.rigid_vertex_contact_families.values() {
+                        if edge_vertex_pair_matches_family(&a, &b, family) {
+                            projections.insert(vertex_family_projection(family), ());
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        match projections.len() {
+            0 => LiveFamilyResolution::Unresolved,
+            1 => LiveFamilyResolution::Unique,
+            _ => LiveFamilyResolution::Ambiguous,
+        }
+    }
+
     pub fn insert_rigid_vertex_contact_families(
         &mut self,
         families: Vec<GeometryRigidVertexContactFamily>,
@@ -3112,3 +3158,73 @@ mod tests {
     }
 
 }
+#[derive(Clone, Debug, PartialEq)]
+struct LiveEdgeDescriptor { material: String, edge: usize, parameter: f64 }
+
+fn parse_edge_pair(signature: &str) -> Option<(LiveEdgeDescriptor, LiveEdgeDescriptor)> {
+    let mut parts = signature.split('|');
+    let _prefix = parts.next()?;
+    let first = parts.next()?.split_once(':')?;
+    let second = parts.next()?.split_once(':')?;
+    Some((parse_edge_descriptor(first.0, first.1)?, parse_edge_descriptor(second.0, second.1)?))
+}
+
+fn parse_edge_descriptor(material: &str, value: &str) -> Option<LiveEdgeDescriptor> {
+    let value = value.strip_prefix("edge:")?;
+    let (edge, parameter) = value.split_once('@')?;
+    Some(LiveEdgeDescriptor {
+        material: material.to_owned(),
+        edge: edge.parse().ok()?,
+        parameter: parameter.parse::<i64>().ok()? as f64 / 1_000_000_000.0,
+    })
+}
+
+fn edge_pair_matches_family(
+    a: &LiveEdgeDescriptor,
+    b: &LiveEdgeDescriptor,
+    family: &GeometryRigidContactFamily,
+) -> bool {
+    ((a.material == family.candidate_resource && b.edge == family.anchor_edge)
+        || (b.material == family.candidate_resource && a.edge == family.anchor_edge))
+        && ((a.parameter >= family.anchor_parameter_start - QUANTUM
+            && a.parameter <= family.anchor_parameter_end + QUANTUM)
+            || (b.parameter >= family.anchor_parameter_start - QUANTUM
+                && b.parameter <= family.anchor_parameter_end + QUANTUM))
+}
+
+fn edge_point_pair_matches_family(
+    a: &LiveEdgeDescriptor,
+    b: &LiveEdgeDescriptor,
+    family: &GeometryRigidPointContactFamily,
+) -> bool {
+    (a.material == family.candidate_resource || b.material == family.candidate_resource)
+        && (a.edge == family.anchor_edge || b.edge == family.anchor_edge)
+        && ((a.parameter >= family.anchor_parameter_start - QUANTUM
+            && a.parameter <= family.anchor_parameter_end + QUANTUM)
+            || (b.parameter >= family.anchor_parameter_start - QUANTUM
+                && b.parameter <= family.anchor_parameter_end + QUANTUM))
+}
+
+fn edge_vertex_pair_matches_family(
+    a: &LiveEdgeDescriptor,
+    b: &LiveEdgeDescriptor,
+    family: &GeometryRigidVertexContactFamily,
+) -> bool {
+    (a.material == family.candidate_resource || b.material == family.candidate_resource)
+        && (a.edge == family.anchor_edge || b.edge == family.anchor_edge)
+        && ((a.parameter >= family.anchor_parameter_start - QUANTUM
+            && a.parameter <= family.anchor_parameter_end + QUANTUM)
+            || (b.parameter >= family.anchor_parameter_start - QUANTUM
+                && b.parameter <= family.anchor_parameter_end + QUANTUM))
+}
+
+fn rigid_family_projection(family: &GeometryRigidContactFamily) -> String {
+    format!("edge|{}|{}|{}|{}|{}", family.anchor_edge, family.candidate_edge, quantize(family.candidate_rotation_radians), quantize(family.anchor_parameter_start), quantize(family.anchor_parameter_end))
+}
+fn point_family_projection(family: &GeometryRigidPointContactFamily) -> String {
+    format!("point|{}|{}|{}|{}|{}", family.anchor_edge, family.candidate_endpoint, quantize(family.anchor_parameter_start), quantize(family.anchor_parameter_end), quantize(family.candidate_rotation_start_radians))
+}
+fn vertex_family_projection(family: &GeometryRigidVertexContactFamily) -> String {
+    format!("vertex|{}|{}|{}|{}|{}", family.anchor_edge, family.candidate_vertex, quantize(family.anchor_parameter_start), quantize(family.anchor_parameter_end), quantize(family.candidate_rotation_start_radians))
+}
+
