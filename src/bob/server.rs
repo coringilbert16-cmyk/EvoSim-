@@ -1,4 +1,4 @@
-use crate::geometry_reference_library::{open_default_library, GeometryFormation};
+use crate::geometry_reference_library::GeometryFormation;
 use crate::resources::default_catalog;
 use axum::{
     extract::Query,
