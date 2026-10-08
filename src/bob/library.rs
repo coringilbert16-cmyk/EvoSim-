@@ -2672,10 +2672,16 @@ fn load_rigid_point_contact_families(
     catalog: &[BaseResource],
 ) -> BTreeMap<String, GeometryRigidPointContactFamily> {
     let mut out = BTreeMap::new();
-    let Ok(file) = File::open(path) else { return out; };
+    let Ok(file) = File::open(path) else {
+        return out;
+    };
     for line in BufReader::new(file).lines().flatten() {
-        if line.trim().is_empty() { continue; }
-        let Ok(family) = serde_json::from_str::<GeometryRigidPointContactFamily>(&line) else { continue; };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let Ok(family) = serde_json::from_str::<GeometryRigidPointContactFamily>(&line) else {
+            continue;
+        };
         if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
             || !family.anchor_parameter_start.is_finite()
             || !family.anchor_parameter_end.is_finite()
@@ -2684,32 +2690,47 @@ fn load_rigid_point_contact_families(
             || family.anchor_parameter_start > family.anchor_parameter_end
             || family.candidate_endpoint > 1
             || !entries.contains_key(&family.formation_signature)
-            || family.anchor_constituent >= entries.get(&family.formation_signature).map(|f| f.constituents.len()).unwrap_or(0)
-            || catalog.iter().all(|r| r.name != family.candidate_resource)
-        {
-            continue;
-        }
-        out.insert(family.signature(), family);
-    }
-    out
-}
-
-fn load_rigid_vertex_contact_families(
+            || family.anchor_constituent
+                >= entries
+                    .get(&family.formation_signature)
+                    .map(|f| f.constituents.len())
+                    .unwrap_or(0)
+            || catalog.iter().all(|r| r.name != famfn load_rigid_vertex_contact_families(
     path: &Path,
     entries: &BTreeMap<String, GeometryFormation>,
     catalog: &[BaseResource],
 ) -> BTreeMap<String, GeometryRigidVertexContactFamily> {
     let mut out = BTreeMap::new();
-    let Ok(file) = File::open(path) else { return out; };
+    let Ok(file) = File::open(path) else {
+        return out;
+    };
     for line in BufReader::new(file).lines().flatten() {
-        if line.trim().is_empty() { continue; }
-        let Ok(family) = serde_json::from_str::<GeometryRigidVertexContactFamily>(&line) else { continue; };
-        let Some(formation) = entries.get(&family.formation_signature) else { continue; };
-        let Some(anchor) = formation.constituents.get(family.anchor_constituent) else { continue; };
-        let Some(anchor_resource) = catalog.iter().find(|r| r.name == anchor.resource) else { continue; };
-        let Some(anchor_vertices) = anchor_resource.shape.form.polygon_vertices() else { continue; };
-        let Some(candidate_resource) = catalog.iter().find(|r| r.name == family.candidate_resource) else { continue; };
-        let Some(candidate_vertices) = candidate_resource.shape.form.polygon_vertices() else { continue; };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let Ok(family) = serde_json::from_str::<GeometryRigidVertexContactFamily>(&line) else {
+            continue;
+        };
+        let Some(formation) = entries.get(&family.formation_signature) else {
+            continue;
+        };
+        let Some(anchor) = formation.constituents.get(family.anchor_constituent) else {
+            continue;
+        };
+        let Some(anchor_resource) = catalog.iter().find(|r| r.name == anchor.resource) else {
+            continue;
+        };
+        let Some(anchor_vertices) = anchor_resource.shape.form.polygon_vertices() else {
+            continue;
+        };
+        let Some(candidate_resource) =
+            catalog.iter().find(|r| r.name == family.candidate_resource)
+        else {
+            continue;
+        };
+        let Some(candidate_vertices) = candidate_resource.shape.form.polygon_vertices() else {
+            continue;
+        };
         if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
             || !family.anchor_parameter_start.is_finite()
             || !family.anchor_parameter_end.is_finite()
@@ -2737,7 +2758,12 @@ pub fn generate_rigid_contact_families(
     let mut unique = BTreeMap::new();
     let candidate_segments = rigid_boundary_segments(&candidate_resource.shape.form);
     for anchor_index in 0..formation.constituents.len() {
-        let Some(anchor_resource) = catalog.iter().find(|r| r.name == formation.constituents[anchor_index].resource) else { continue; };
+        let Some(anchor_resource) = catalog
+            .iter()
+            .find(|r| r.name == formation.constituents[anchor_index].resource)
+        else {
+            continue;
+        };
         let anchor_segments = rigid_boundary_segments(&anchor_resource.shape.form);
         let exposed = if matches!(anchor_resource.shape.form, Form::Line { .. }) {
             exposed_line_intervals(formation, anchor_index, catalog)
@@ -2745,17 +2771,23 @@ pub fn generate_rigid_contact_families(
             exposed_polygon_edge_intervals(formation, anchor_index, catalog)
         };
         for interval in exposed {
-            let Some(&(a0, a1)) = anchor_segments.get(interval.edge) else { continue; };
-            let anchor_length = (a1.0-a0.0).hypot(a1.1-a0.1);
-            if anchor_length <= QUANTUM { continue; }
+            let Some(&(a0, a1)) = anchor_segments.get(interval.edge) else {
+                continue;
+            };
+            let anchor_length = (a1.0 - a0.0).hypot(a1.1 - a0.1);
+            if anchor_length <= QUANTUM {
+                continue;
+            }
             let anchor = formation.constituents[anchor_index].placement;
             let world_a0 = world_point(a0, anchor);
             let world_a1 = world_point(a1, anchor);
             let anchor_angle = (world_a1.1 - world_a0.1).atan2(world_a1.0 - world_a0.0);
-            for (candidate_edge, &(c0,c1)) in candidate_segments.iter().enumerate() {
-                let candidate_length = (c1.0-c0.0).hypot(c1.1-c0.1);
-                if candidate_length <= QUANTUM { continue; }
-                let candidate_angle = (c1.1-c0.1).atan2(c1.0-c0.0);
+            for (candidate_edge, &(c0, c1)) in candidate_segments.iter().enumerate() {
+                let candidate_length = (c1.0 - c0.0).hypot(c1.1 - c0.1);
+                if candidate_length <= QUANTUM {
+                    continue;
+                }
+                let candidate_angle = (c1.1 - c0.1).atan2(c1.0 - c0.0);
                 for flip in [0.0, std::f64::consts::PI] {
                     let rotation = normalize_angle(anchor_angle + flip - candidate_angle);
                     let ratio = candidate_length / anchor_length;
@@ -2785,10 +2817,17 @@ pub fn generate_rigid_point_contact_families(
     candidate_resource: &BaseResource,
     catalog: &[BaseResource],
 ) -> Vec<GeometryRigidPointContactFamily> {
-    let Form::Line { .. } = candidate_resource.shape.form else { return Vec::new(); };
+    let Form::Line { .. } = candidate_resource.shape.form else {
+        return Vec::new();
+    };
     let mut unique = BTreeMap::new();
     for anchor_index in 0..formation.constituents.len() {
-        let Some(anchor_resource) = catalog.iter().find(|r| r.name == formation.constituents[anchor_index].resource) else { continue; };
+        let Some(anchor_resource) = catalog
+            .iter()
+            .find(|r| r.name == formation.constituents[anchor_index].resource)
+        else {
+            continue;
+        };
         if matches!(anchor_resource.shape.form, Form::Line { .. }) {
             for interval in exposed_line_intervals(formation, anchor_index, catalog) {
                 for endpoint in 0..2 {
@@ -2809,20 +2848,58 @@ pub fn generate_rigid_point_contact_families(
             }
             continue;
         }
-        let Some(vertices) = anchor_resource.shape.form.polygon_vertices() else { continue; };
+        let Some(vertices) = anchor_resource.shape.form.polygon_vertices() else {
+            continue;
+        };
         let exposed = exposed_polygon_edge_intervals(formation, anchor_index, catalog);
         let placement = formation.constituents[anchor_index].placement;
-        let signed_area = vertices.iter().enumerate().map(|(i,&(x0,y0))| { let (x1,y1)=vertices[(i+1)%vertices.len()]; x0*y1-y0*x1 }).sum::<f64>();
+        let signed_area = vertices
+            .iter()
+            .enumerate()
+            .map(|(i, &(x0, y0))| {
+                let (x1, y1) = vertices[(i + 1) % vertices.len()];
+                x0 * y1 - y0 * x1
+            })
+            .sum::<f64>();
         for interval in exposed {
-            let a0=vertices[interval.edge]; let a1=vertices[(interval.edge+1)%vertices.len()];
-            let dx=a1.0-a0.0; let dy=a1.1-a0.1; let length=dx.hypot(dy); if length<=QUANTUM { continue; }
-            let (nx,ny)=if signed_area>=0.0 {(dy/length,-dx/length)} else {(-dy/length,dx/length)};
-            let world_n=(nx*placement.rotation_radians.cos()-ny*placement.rotation_radians.sin(),nx*placement.rotation_radians.sin()+ny*placement.rotation_radians.cos());
-            let outward_angle=world_n.1.atan2(world_n.0);
+            let a0 = vertices[interval.edge];
+            let a1 = vertices[(interval.edge + 1) % vertices.len()];
+            let dx = a1.0 - a0.0;
+            let dy = a1.1 - a0.1;
+            let length = dx.hypot(dy);
+            if length <= QUANTUM {
+                continue;
+            }
+            let (nx, ny) = if signed_area >= 0.0 {
+                (dy / length, -dx / length)
+            } else {
+                (-dy / length, dx / length)
+            };
+            let world_n = (
+                nx * placement.rotation_radians.cos() - ny * placement.rotation_radians.sin(),
+                nx * placement.rotation_radians.sin() + ny * placement.rotation_radians.cos(),
+            );
+            let outward_angle = world_n.1.atan2(world_n.0);
             for endpoint in 0..2 {
-                let center=outward_angle-(if endpoint==0 {0.0} else {std::f64::consts::PI});
-                let family=GeometryRigidPointContactFamily { schema_version:GEOMETRY_LIBRARY_SCHEMA_VERSION, formation_signature:formation.signature.clone(), candidate_resource:candidate_resource.name.clone(), anchor_constituent:anchor_index, anchor_edge:interval.edge, candidate_endpoint:endpoint, anchor_parameter_start:interval.start, anchor_parameter_end:interval.end, candidate_rotation_start_radians:center-std::f64::consts::FRAC_PI_2, candidate_rotation_end_radians:center+std::f64::consts::FRAC_PI_2 };
-                unique.insert(family.signature(),family);
+                let center = outward_angle
+                    - (if endpoint == 0 {
+                        0.0
+                    } else {
+                        std::f64::consts::PI
+                    });
+                let family = GeometryRigidPointContactFamily {
+                    schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+                    formation_signature: formation.signature.clone(),
+                    candidate_resource: candidate_resource.name.clone(),
+                    anchor_constituent: anchor_index,
+                    anchor_edge: interval.edge,
+                    candidate_endpoint: endpoint,
+                    anchor_parameter_start: interval.start,
+                    anchor_parameter_end: interval.end,
+                    candidate_rotation_start_radians: center - std::f64::consts::FRAC_PI_2,
+                    candidate_rotation_end_radians: center + std::f64::consts::FRAC_PI_2,
+                };
+                unique.insert(family.signature(), family);
             }
         }
     }
@@ -2834,24 +2911,70 @@ pub fn generate_rigid_vertex_contact_families(
     candidate_resource: &BaseResource,
     catalog: &[BaseResource],
 ) -> Vec<GeometryRigidVertexContactFamily> {
-    let Some(candidate_vertices)=candidate_resource.shape.form.polygon_vertices() else { return Vec::new(); };
-    if !is_convex_polygon(&candidate_vertices) { return Vec::new(); }
-    let mut unique=BTreeMap::new();
+    let Some(candidate_vertices) = candidate_resource.shape.form.polygon_vertices() else {
+        return Vec::new();
+    };
+    if !is_convex_polygon(&candidate_vertices) {
+        return Vec::new();
+    }
+    let mut unique = BTreeMap::new();
     for anchor_index in 0..formation.constituents.len() {
-        let Some(anchor_resource)=catalog.iter().find(|r| r.name==formation.constituents[anchor_index].resource) else { continue; };
-        let Some(anchor_vertices)=anchor_resource.shape.form.polygon_vertices() else { continue; };
-        let placement=formation.constituents[anchor_index].placement;
-        let signed_area=anchor_vertices.iter().enumerate().map(|(i,&(x0,y0))|{let (x1,y1)=anchor_vertices[(i+1)%anchor_vertices.len()];x0*y1-y0*x1}).sum::<f64>();
-        for interval in exposed_polygon_edge_intervals(formation,anchor_index,catalog) {
-            let a0=anchor_vertices[interval.edge]; let a1=anchor_vertices[(interval.edge+1)%anchor_vertices.len()];
-            let dx=a1.0-a0.0; let dy=a1.1-a0.1; let length=dx.hypot(dy); if length<=QUANTUM {continue;}
-            let (nx,ny)=if signed_area>=0.0 {(dy/length,-dx/length)} else {(-dy/length,dx/length)};
-            let world_n=(nx*placement.rotation_radians.cos()-ny*placement.rotation_radians.sin(),nx*placement.rotation_radians.sin()+ny*placement.rotation_radians.cos());
-            let outward_angle=world_n.1.atan2(world_n.0);
+        let Some(anchor_resource) = catalog
+            .iter()
+            .find(|r| r.name == formation.constituents[anchor_index].resource)
+        else {
+            continue;
+        };
+        let Some(anchor_vertices) = anchor_resource.shape.form.polygon_vertices() else {
+            continue;
+        };
+        let placement = formation.constituents[anchor_index].placement;
+        let signed_area = anchor_vertices
+            .iter()
+            .enumerate()
+            .map(|(i, &(x0, y0))| {
+                let (x1, y1) = anchor_vertices[(i + 1) % anchor_vertices.len()];
+                x0 * y1 - y0 * x1
+            })
+            .sum::<f64>();
+        for interval in exposed_polygon_edge_intervals(formation, anchor_index, catalog) {
+            let a0 = anchor_vertices[interval.edge];
+            let a1 = anchor_vertices[(interval.edge + 1) % anchor_vertices.len()];
+            let dx = a1.0 - a0.0;
+            let dy = a1.1 - a0.1;
+            let length = dx.hypot(dy);
+            if length <= QUANTUM {
+                continue;
+            }
+            let (nx, ny) = if signed_area >= 0.0 {
+                (dy / length, -dx / length)
+            } else {
+                (-dy / length, dx / length)
+            };
+            let world_n = (
+                nx * placement.rotation_radians.cos() - ny * placement.rotation_radians.sin(),
+                nx * placement.rotation_radians.sin() + ny * placement.rotation_radians.cos(),
+            );
+            let outward_angle = world_n.1.atan2(world_n.0);
             for candidate_vertex in 0..candidate_vertices.len() {
-                let Some((start,end))=exact_vertex_rotation_interval(&candidate_vertices,candidate_vertex,outward_angle) else {continue;};
-                let family=GeometryRigidVertexContactFamily{schema_version:GEOMETRY_LIBRARY_SCHEMA_VERSION,formation_signature:formation.signature.clone(),candidate_resource:candidate_resource.name.clone(),anchor_constituent:anchor_index,anchor_edge:interval.edge,candidate_vertex,anchor_parameter_start:interval.start,anchor_parameter_end:interval.end,candidate_rotation_start_radians:start,candidate_rotation_end_radians:end};
-                unique.insert(family.signature(),family);
+                let Some((start, end)) =
+                    exact_vertex_rotation_interval(&candidate_vertices, candidate_vertex, outward_angle)
+                else {
+                    continue;
+                };
+                let family = GeometryRigidVertexContactFamily {
+                    schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+                    formation_signature: formation.signature.clone(),
+                    candidate_resource: candidate_resource.name.clone(),
+                    anchor_constituent: anchor_index,
+                    anchor_edge: interval.edge,
+                    candidate_vertex,
+                    anchor_parameter_start: interval.start,
+                    anchor_parameter_end: interval.end,
+                    candidate_rotation_start_radians: start,
+                    candidate_rotation_end_radians: end,
+                };
+                unique.insert(family.signature(), family);
             }
         }
     }
