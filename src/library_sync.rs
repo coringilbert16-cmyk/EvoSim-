@@ -24,7 +24,11 @@ fn interval() -> Duration {
         .unwrap_or(DEFAULT_INTERVAL)
 }
 
-fn run_git(repo: &Path, args: &[&str], index: Option<&Path>) -> std::io::Result<std::process::Output> {
+fn run_git(
+    repo: &Path,
+    args: &[&str],
+    index: Option<&Path>,
+) -> std::io::Result<std::process::Output> {
     let mut command = Command::new("git");
     command.current_dir(repo).args(args);
     if let Some(index) = index {
@@ -70,12 +74,77 @@ fn remove_temp_index(path: &Path) {
     let _ = fs::remove_file(path.with_extension("lock"));
 }
 
+fn current_branch(repo: &Path) -> Option<String> {
+    let output = run_git(repo, &["symbolic-ref", "--short", "HEAD"], None).ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let branch = String::from_utf8(output.stdout).ok()?;
+    let branch = branch.trim();
+    if branch.is_empty() {
+        None
+    } else {
+        Some(branch.to_owned())
+    }
+}
+
+fn push_if_ahead(repo: &Path, branch: &str) {
+    let comparison = run_git(
+        repo,
+        &[
+            "rev-list",
+            "--left-right",
+            "--count",
+            &format!("origin/{branch}...{branch}"),
+        ],
+        None,
+    );
+
+    let should_push = match comparison {
+        Ok(output) if output.status.success() => {
+            let counts = String::from_utf8_lossy(&output.stdout);
+            let mut values = counts.split_whitespace();
+            let _behind = values.next().and_then(|value| value.parse::<u64>().ok());
+            values
+                .next()
+                .map(|ahead| ahead.parse::<u64>().unwrap_or(0) > 0)
+                .unwrap_or(false)
+        }
+        // A missing remote branch is treated as needing the initial push.
+        _ => true,
+    };
+
+    if !should_push {
+        return;
+    }
+
+    match run_git(repo, &["push", "origin", branch], None) {
+        Ok(output) if output.status.success() => {
+            eprintln!("library sync: pushed {branch}");
+        }
+        Ok(output) => {
+            eprintln!(
+                "library sync: push deferred: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        Err(error) => {
+            eprintln!("library sync: push deferred: {error}");
+        }
+    }
+}
+
 fn publish_once() -> std::io::Result<bool> {
     let Some(repo) = repo_root() else {
         return Ok(false);
     };
+    let Some(branch) = current_branch(&repo) else {
+        return Ok(false);
+    };
     let paths = data_paths(&repo);
+
     if paths.is_empty() {
+        push_if_ahead(&repo, &branch);
         return Ok(false);
     }
 
@@ -109,6 +178,7 @@ fn publish_once() -> std::io::Result<bool> {
         )?;
 
         if output.status.success() {
+            push_if_ahead(&repo, &branch);
             return Ok(false);
         }
         if output.status.code() != Some(1) {
@@ -135,40 +205,33 @@ fn publish_once() -> std::io::Result<bool> {
             .output()?;
 
         if !commit.status.success() {
+            eprintln!(
+                "library sync: commit deferred: {}",
+                String::from_utf8_lossy(&commit.stderr).trim()
+            );
             return Ok(false);
         }
         let commit_sha = String::from_utf8_lossy(&commit.stdout).trim().to_owned();
-
-        let branch = run_git(&repo, &["symbolic-ref", "--short", "HEAD"], None)?;
-        if !branch.status.success() {
-            return Ok(false);
-        }
-        let branch = String::from_utf8_lossy(&branch.stdout).trim().to_owned();
-        if branch.is_empty() {
-            return Ok(false);
-        }
 
         // Only advance the local branch if HEAD is still the commit we read
         // before staging. If the user committed concurrently, leave the
         // checkpoint commit unreachable and retry against the new HEAD later.
         let update = run_git(
             &repo,
-            &["update-ref", &format!("refs/heads/{branch}"), &commit_sha, &parent],
+            &[
+                "update-ref",
+                &format!("refs/heads/{branch}"),
+                &commit_sha,
+                &parent,
+            ],
             None,
         )?;
         if !update.status.success() {
             return Ok(false);
         }
 
-        let push = run_git(&repo, &["push", "origin", &branch], None)?;
-        if !push.status.success() {
-            eprintln!(
-                "library sync: checkpoint {commit_sha} created locally; push will be retried"
-            );
-        } else {
-            eprintln!("library sync: published checkpoint {commit_sha}");
-        }
-
+        eprintln!("library sync: created checkpoint {commit_sha}");
+        push_if_ahead(&repo, &branch);
         Ok(true)
     })();
 
