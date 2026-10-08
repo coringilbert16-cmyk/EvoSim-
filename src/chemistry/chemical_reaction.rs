@@ -252,7 +252,6 @@ pub(crate) fn resolve(
     success
 }
 
-
 #[cfg(test)]
 mod material_identity_tests {
     use super::*;
