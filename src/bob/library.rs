@@ -673,6 +673,21 @@ impl GeometryFormation {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GeometryFormationRejection {
+    pub schema_version: u32,
+    pub formation_signature: String,
+    pub reason: String,
+}
+
+impl GeometryFormationRejection {
+    fn is_valid(&self) -> bool {
+        self.schema_version == GEOMETRY_LIBRARY_SCHEMA_VERSION
+            && !self.formation_signature.is_empty()
+            && !self.reason.is_empty()
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GeometryLibraryManifest {
     pub schema_version: u32,
     pub resource_catalog_version: String,
@@ -728,6 +743,7 @@ impl GeometryLibrary {
         let rigid_contact_family_path = root.join("rigid_contact_families.jsonl");
         let rigid_point_contact_family_path = root.join("rigid_point_contact_families.jsonl");
         let rigid_vertex_contact_family_path = root.join("rigid_vertex_contact_families.jsonl");
+        let rejected_formation_path = root.join("rejected_formations.jsonl");
 
         let mut entries = BTreeMap::new();
         if data_path.exists() {
@@ -867,6 +883,30 @@ impl GeometryLibrary {
             }
         }
 
+        let mut rejected_formations = BTreeMap::new();
+        if rejected_formation_path.exists() {
+            let file = File::open(&rejected_formation_path)?;
+            let lines: Vec<String> = BufReader::new(file).lines().collect::<Result<_, _>>()?;
+            for (line_index, line) in lines.iter().enumerate() {
+                if line.trim().is_empty() {
+                    continue;
+                }
+                let rejection: GeometryFormationRejection = match serde_json::from_str(line) {
+                    Ok(value) => value,
+                    Err(error) if line_index + 1 == lines.len() => {
+                        let _ = error;
+                        continue;
+                    }
+                    Err(error) => {
+                        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, error));
+                    }
+                };
+                if rejection.is_valid() {
+                    rejected_formations.insert(rejection.formation_signature.clone(), rejection);
+                }
+            }
+        }
+
         let frontier = if frontier_path.exists() {
             let bytes = fs::read(&frontier_path)?;
             serde_json::from_slice(&bytes)
@@ -942,6 +982,7 @@ impl GeometryLibrary {
             rigid_point_contact_index,
             rigid_vertex_contact_families,
             rigid_vertex_contact_index,
+            rejected_formations,
         };
         library.manifest.entries = library.entries.len() as u64;
         library.write_manifest()?;
@@ -992,6 +1033,42 @@ impl GeometryLibrary {
 
     pub fn formations(&self) -> impl Iterator<Item = &GeometryFormation> {
         self.entries.values()
+    }
+
+    pub fn rejected_formations(&self) -> impl Iterator<Item = &GeometryFormationRejection> {
+        self.rejected_formations.values()
+    }
+
+    pub fn rejection(&self, formation_signature: &str) -> Option<&GeometryFormationRejection> {
+        self.rejected_formations.get(formation_signature)
+    }
+
+    pub fn insert_rejection(
+        &mut self,
+        formation_signature: impl Into<String>,
+        reason: impl Into<String>,
+    ) -> std::io::Result<bool> {
+        let rejection = GeometryFormationRejection {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            formation_signature: formation_signature.into(),
+            reason: reason.into(),
+        };
+        if !rejection.is_valid()
+            || self
+                .rejected_formations
+                .contains_key(&rejection.formation_signature)
+        {
+            return Ok(false);
+        }
+        let path = self.root.join("rejected_formations.jsonl");
+        let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+        serde_json::to_writer(&mut file, &rejection)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        file.write_all(b"\n")?;
+        file.sync_data()?;
+        self.rejected_formations
+            .insert(rejection.formation_signature.clone(), rejection);
+        Ok(true)
     }
 
     pub fn frontier(&self) -> &GeometryFrontier {
