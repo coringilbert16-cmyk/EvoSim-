@@ -80,8 +80,22 @@ async fn formations(Query(q): Query<ListQuery>) -> impl IntoResponse {
     let total = all.len();
     let off = q.offset.unwrap_or(0).min(total);
     let lim = q.limit.unwrap_or(250).clamp(1, 1000);
-    let rows=all.into_iter().skip(off).take(lim)
-        .map(|f|json!({"signature":f.signature,"constituent_count":f.constituents.len(),"bond_count":f.bonds.len(),"resources":f.constituents.iter().map(|c|c.resource.clone()).collect::<Vec<_>>()}))
+    let rows = all
+        .into_iter()
+        .skip(off)
+        .take(lim)
+        .map(|f| {
+            json!({
+                "signature": f.signature,
+                "constituent_count": f.constituents.len(),
+                "bond_count": f.bonds.len(),
+                "resources": f
+                    .constituents
+                    .iter()
+                    .map(|c| c.resource.clone())
+                    .collect::<Vec<_>>()
+            })
+        })
         .collect::<Vec<_>>();
     Json(
         json!({"total":total,"library_entries":library_entries,"formations":rows,"resource_count":cat.len()}),
@@ -129,4 +143,22 @@ async fn formation(Query(q): Query<FormationQuery>) -> impl IntoResponse {
         "rigid_vertex_contact_families":[]
     }))
 }
-pub async fn run(){let app=Router::new().route("/",get(index)).route("/geometry",get(index)).route("/geometry_library.js",get(script)).route("/geometry/api/formations",get(formations)).route("/geometry/api/formation",get(formation)).layer(CorsLayer::permissive());let addr=std::net::SocketAddr::from(([0,0,0,0],3001));println!("Geometry library viewer: http://{addr}/geometry");let listener=tokio::net::TcpListener::bind(addr).await.expect("could not bind geometry viewer");axum::serve(listener,app).await.expect("geometry viewer stopped");}
+pub async fn run() {
+    let app = Router::new()
+        .route("/", get(index))
+        .route("/geometry", get(index))
+        .route("/geometry_library.js", get(script))
+        .route("/geometry/api/formations", get(formations))
+        .route("/geometry/api/formation", get(formation))
+        .layer(CorsLayer::permissive());
+
+    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 3001));
+    println!("Geometry library viewer: http://{addr}/geometry");
+
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .expect("could not bind geometry viewer");
+    axum::serve(listener, app)
+        .await
+        .expect("geometry viewer stopped");
+}
