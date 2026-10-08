@@ -100,12 +100,16 @@ pub(crate) fn accumulate(
         }
         let Some(barrier) = crate::chemistry::activation_barrier_from_bond_strength(bond.strength) else { continue };
 
-        if crate::chemistry::activated(next, barrier) {
+        // Accumulation remains normalized chemistry state. Only when the
+        // activation threshold is crossed do we convert that state into the
+        // physical energy quantity consumed by the BREAK ledger transaction.
+        let Some(reaction_energy) = crate::chemistry::normalized_chemistry_to_energy(next) else { continue };
+        if crate::chemistry::activated(reaction_energy, barrier) {
             let Some(disruption_cost) = crate::transformation::break_work_cost(a, b, 1.0) else { continue };
             operations.push(ChemicalBreakOperation {
                 organism_id: organism.id.clone(),
                 bond,
-                reaction_energy: next,
+                reaction_energy,
                 disruption_cost,
             });
             accumulation.remove(&key);
