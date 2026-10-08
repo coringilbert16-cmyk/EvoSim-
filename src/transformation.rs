@@ -44,8 +44,13 @@ pub(crate) fn chemical_break_energy_yield(
     }
     let efficiency = processing_efficiency.clamp(0.0, 1.0);
     let usable = usable_surplus * efficiency;
-    let heat = (reaction_energy - usable).max(0.0);
-    (usable.is_finite() && heat.is_finite()).then_some((reaction_energy, usable, heat))
+    // The reaction energy is one conserved source. Bond disruption consumes
+    // disruption_cost from that source; only the remainder can become usable
+    // energy or heat. Do not count the disruption cost as heat as well.
+    let heat = (usable_surplus - usable).max(0.0);
+    (usable.is_finite() && heat.is_finite() &&
+        (reaction_energy - disruption_cost - usable - heat).abs() <= 1e-9)
+        .then_some((reaction_energy, usable, heat))
 }
 
 /// Apply a chemistry-caused BREAK after the chemistry system has produced a
@@ -75,7 +80,7 @@ pub(crate) fn settle_chemical_break_energy(
         reason: EnergyReason::Break,
         potential_released: gross,
         usable_delta: usable,
-        structural_delta: 0.0,
+        structural_delta: disruption_cost,
         heat_dissipated: heat,
     };
     if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
@@ -889,6 +894,15 @@ mod tests {
         altered.reactivity = 0.0;
         altered.chemical_position = Some(7.0);
         assert_eq!(break_energy_yield(a, b, 1.0), break_energy_yield(a, altered, 1.0));
+    }
+
+    #[test]
+    fn chemical_break_energy_is_conserved_between_disruption_usable_energy_and_heat() {
+        let (released, usable, heat) = chemical_break_energy_yield(10.0, 4.0, 0.5).unwrap();
+        assert!((released - 10.0).abs() < 1e-12);
+        assert!((usable - 3.0).abs() < 1e-12);
+        assert!((heat - 3.0).abs() < 1e-12);
+        assert!((released - 4.0 - usable - heat).abs() < 1e-12);
     }
 
     #[test]
