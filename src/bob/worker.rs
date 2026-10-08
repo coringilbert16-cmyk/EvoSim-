@@ -1,6 +1,6 @@
 use crate::chemistry::evaluate_static_chemical_interaction;
-use crate::combine::{evaluate_formation, formation_cost};
 use crate::chemistry_library::{ChemistryEvaluationState, ChemistryKey, ChemistryLibrary};
+use crate::combine::{evaluate_formation, formation_cost};
 use crate::contact::ConnectionCompatibilityCache;
 use crate::geometry_reference_library::{
     expand_formation_candidates, generate_fluid_boundary_families, generate_rigid_contact_families,
