@@ -43,7 +43,7 @@ Completed:
 
 Still in migration:
 - Unit/contract tests remain beside executable modules in src/ because they depend on private crate internals.
-- chemistry_library/ needs its durable-record layout and runtime persistence boundary finalized.
+- chemistry_library/ now has a durable positive/negative record boundary; Bob can feed discovered material-pair chemistry into it without making the library authoritative over chemistry rules.
 - Bob's large library.rs still needs an internal split into lookup/query/index/resolution/persistence/validation responsibilities.
 - Remaining documentation should be grouped under architecture, mechanics, libraries, decisions, and audits as those documents are touched.
 
