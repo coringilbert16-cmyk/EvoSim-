@@ -938,45 +938,6 @@ fn try_combine_environmental(
     None
 }
 
-pub(crate) fn try_start_combine(
-    organism: &mut Organism,
-    next_id: &mut u64,
-) -> Option<crate::state::ActiveTransformation> {
-    if organism.active_transformation_id.is_some() || organism.structure.units.is_empty() {
-        return None;
-    }
-
-    // Tick 1 is selection only. Candidate search, environmental reservation,
-    // energy settlement, and structure mutation all wait for Tick 2/3.
-    let complexity = crate::math::complexity(2.0);
-    let duration = 1_u64.max(complexity.ceil() as u64);
-    let transformation = crate::state::ActiveTransformation {
-        id: *next_id,
-        organism_id: organism.id.clone(),
-        kind: crate::state::TransformationKind::Combine,
-        material: crate::resources::Material::free_base("", 0.0),
-        bond: None,
-        stored_material: None,
-        stored_bond: None,
-        environmental_source: false,
-        complexity,
-        duration_ticks: duration,
-        remaining_ticks: duration,
-        prepared_energy: None,
-        pending_experience: None,
-        decision_context_key: None,
-        prepared_structure: None,
-        prepared_stored_material: None,
-        prepared_usable_energy: None,
-        prepared_stress: None,
-        prepared_ledger: None,
-        combine_environmental_source: None,
-    };
-    *next_id += 1;
-    organism.active_transformation_id = Some(transformation.id);
-    Some(transformation)
-}
-
 pub(crate) fn try_combine(
     organism: &mut Organism,
     environment: &mut Environment,
