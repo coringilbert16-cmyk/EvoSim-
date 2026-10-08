@@ -2476,7 +2476,7 @@ mod bob_lookup_contract_tests {
 }
 
 /* Restored Bob generation/lookup helpers. These remain pure library operations:
-   live construction stays authoritative for physical validity. */
+live construction stays authoritative for physical validity. */
 
 #[derive(Clone, Debug)]
 struct ParsedEdgeDescriptor {
@@ -2732,8 +2732,7 @@ fn load_rigid_vertex_contact_families(
         let Some(anchor_vertices) = anchor_resource.shape.form.polygon_vertices() else {
             continue;
         };
-        let Some(candidate_resource) =
-            catalog.iter().find(|r| r.name == family.candidate_resource)
+        let Some(candidate_resource) = catalog.iter().find(|r| r.name == family.candidate_resource)
         else {
             continue;
         };
@@ -2966,9 +2965,11 @@ pub fn generate_rigid_vertex_contact_families(
             );
             let outward_angle = world_n.1.atan2(world_n.0);
             for candidate_vertex in 0..candidate_vertices.len() {
-                let Some((start, end)) =
-                    exact_vertex_rotation_interval(&candidate_vertices, candidate_vertex, outward_angle)
-                else {
+                let Some((start, end)) = exact_vertex_rotation_interval(
+                    &candidate_vertices,
+                    candidate_vertex,
+                    outward_angle,
+                ) else {
                     continue;
                 };
                 let family = GeometryRigidVertexContactFamily {
@@ -2995,22 +2996,43 @@ pub fn expand_formation_candidates(
     candidate_resource: &BaseResource,
     catalog: &[BaseResource],
 ) -> Vec<GeometryFormation> {
-    if formation.constituents.is_empty() || formation.constituents.len() >= 20 { return Vec::new(); }
-    let mut out=Vec::new();
+    if formation.constituents.is_empty() || formation.constituents.len() >= 20 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
     for anchor_index in 0..formation.constituents.len() {
-        let anchor=&formation.constituents[anchor_index];
-        let anchor_formation=GeometryFormation{schema_version:GEOMETRY_LIBRARY_SCHEMA_VERSION,constituents:vec![anchor.clone()],bonds:Vec::new(),signature:String::new()};
-        for pair in generate_two_constituent_candidates(&anchor_formation,candidate_resource,catalog) {
-            let world=compose_placements(anchor.placement,pair.constituents[1].placement);
-            let mut candidate=formation.clone();
-            let new_index=candidate.constituents.len();
-            candidate.constituents.push(GeometryConstituent{resource:candidate_resource.name.clone(),placement:world});
-            candidate.bonds.push(GeometryBond{constituent_a:anchor_index,constituent_b:new_index});
-            if validate_formation(&candidate,catalog){out.push(candidate);}
+        let anchor = &formation.constituents[anchor_index];
+        let anchor_formation = GeometryFormation {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            constituents: vec![anchor.clone()],
+            bonds: Vec::new(),
+            signature: String::new(),
+        };
+        for pair in
+            generate_two_constituent_candidates(&anchor_formation, candidate_resource, catalog)
+        {
+            let world = compose_placements(anchor.placement, pair.constituents[1].placement);
+            let mut candidate = formation.clone();
+            let new_index = candidate.constituents.len();
+            candidate.constituents.push(GeometryConstituent {
+                resource: candidate_resource.name.clone(),
+                placement: world,
+            });
+            candidate.bonds.push(GeometryBond {
+                constituent_a: anchor_index,
+                constituent_b: new_index,
+            });
+            if validate_formation(&candidate, catalog) {
+                out.push(candidate);
+            }
         }
     }
-    let mut unique=BTreeMap::new();
-    for candidate in out { if let Some(canonical)=candidate.canonicalized(catalog){unique.insert(canonical.signature.clone(),canonical);} }
+    let mut unique = BTreeMap::new();
+    for candidate in out {
+        if let Some(canonical) = candidate.canonicalized(catalog) {
+            unique.insert(canonical.signature.clone(), canonical);
+        }
+    }
     unique.into_values().collect()
 }
 
@@ -3019,27 +3041,219 @@ pub fn generate_two_constituent_candidates(
     candidate_resource: &BaseResource,
     catalog: &[BaseResource],
 ) -> Vec<GeometryFormation> {
-    if target.constituents.len()!=1 {return Vec::new();}
-    let Some(target_resource)=catalog.iter().find(|r| r.name==target.constituents[0].resource) else {return Vec::new();};
-    if target_resource.physical_state==crate::resources::PhysicalState::Fluid && candidate_resource.physical_state==crate::resources::PhysicalState::Fluid {return Vec::new();}
-    let target_placement=target.constituents[0].placement;
-    let mut out=Vec::new();
-    let target_vertices=target_resource.shape.form.polygon_vertices();
-    let candidate_vertices=candidate_resource.shape.form.polygon_vertices();
-    if let (Some(tv),Some(cv))=(&target_vertices,&candidate_vertices) {
-        for ti in 0..tv.len(){for ci in 0..cv.len(){for rotation in crate::rigid_boundary::corner_alignment_rotations(&candidate_resource.shape,ci,&target_resource.shape,ti,target_placement.rotation_radians){let Some((tx,ty))=crate::rigid_boundary::world_vertex(&target_resource.shape,ti,target_placement) else {continue;};let (cx,cy)=rotated_point(cv[ci],rotation);let placement=Placement{x:tx-cx,y:ty-cy,rotation_radians:rotation};let formation=GeometryFormation{schema_version:GEOMETRY_LIBRARY_SCHEMA_VERSION,constituents:vec![target.constituents[0].clone(),GeometryConstituent{resource:candidate_resource.name.clone(),placement}],bonds:vec![GeometryBond{constituent_a:0,constituent_b:1}],signature:String::new()};if validate_formation(&formation,catalog){out.push(formation);}}}}
-        for te in 0..tv.len(){let tn=(te+1)%tv.len();for ce in 0..cv.len(){let cn=(ce+1)%cv.len();let Some(ta)=edge_angle_world(tv[te],tv[tn],target_placement.rotation_radians) else {continue;};let Some(ca)=edge_angle(cv[ce],cv[cn]) else {continue;};for flip in [0.0,std::f64::consts::PI]{let rotation=normalize_angle(ta+flip-ca);let (tx,ty)=world_point(tv[te],target_placement);let (cx,cy)=rotated_point(cv[ce],rotation);let placement=Placement{x:tx-cx,y:ty-cy,rotation_radians:rotation};let formation=GeometryFormation{schema_version:GEOMETRY_LIBRARY_SCHEMA_VERSION,constituents:vec![target.constituents[0].clone(),GeometryConstituent{resource:candidate_resource.name.clone(),placement}],bonds:vec![GeometryBond{constituent_a:0,constituent_b:1}],signature:String::new()};if validate_formation(&formation,catalog){out.push(formation);}}}}
+    if target.constituents.len() != 1 {
+        return Vec::new();
     }
-    if let Form::Line{length}= &candidate_resource.shape.form {if let Some(tv)=target_vertices{let half=*length/2.0;let endpoints=[(-half,0.0),(half,0.0)];for ti in 0..tv.len(){for endpoint in 0..2{for rotation in crate::rigid_boundary::line_endpoint_alignment_rotations(endpoint,0,target_placement.rotation_radians){let (tx,ty)=world_point(tv[ti],target_placement);let (cx,cy)=rotated_point(endpoints[endpoint],rotation);let placement=Placement{x:tx-cx,y:ty-cy,rotation_radians:rotation};let formation=GeometryFormation{schema_version:GEOMETRY_LIBRARY_SCHEMA_VERSION,constituents:vec![target.constituents[0].clone(),GeometryConstituent{resource:candidate_resource.name.clone(),placement}],bonds:vec![GeometryBond{constituent_a:0,constituent_b:1}],signature:String::new()};if validate_formation(&formation,catalog){out.push(formation);}}}}}}
-    if let (Form::Line{length:target_length},Form::Line{length:candidate_length})=(&target_resource.shape.form,&candidate_resource.shape.form){let th=*target_length/2.0;let ch=*candidate_length/2.0;for tx in [-th,th]{let world=world_point((tx,0.0),target_placement);for cx in [-ch,ch]{for flip in [0.0,std::f64::consts::PI]{let rotation=normalize_angle(target_placement.rotation_radians+flip);let (rx,ry)=rotated_point((cx,0.0),rotation);let placement=Placement{x:world.0-rx,y:world.1-ry,rotation_radians:rotation};let formation=GeometryFormation{schema_version:GEOMETRY_LIBRARY_SCHEMA_VERSION,constituents:vec![target.constituents[0].clone(),GeometryConstituent{resource:candidate_resource.name.clone(),placement}],bonds:vec![GeometryBond{constituent_a:0,constituent_b:1}],signature:String::new()};if validate_formation(&formation,catalog){out.push(formation);}}}}}
-    let mut unique=BTreeMap::new();for formation in out{if let Some(canonical)=formation.canonicalized(catalog){unique.insert(canonical.signature.clone(),canonical);}}unique.into_values().collect()
+    let Some(target_resource) = catalog
+        .iter()
+        .find(|r| r.name == target.constituents[0].resource)
+    else {
+        return Vec::new();
+    };
+    if target_resource.physical_state == crate::resources::PhysicalState::Fluid
+        && candidate_resource.physical_state == crate::resources::PhysicalState::Fluid
+    {
+        return Vec::new();
+    }
+    let target_placement = target.constituents[0].placement;
+    let mut out = Vec::new();
+    let target_vertices = target_resource.shape.form.polygon_vertices();
+    let candidate_vertices = candidate_resource.shape.form.polygon_vertices();
+    if let (Some(tv), Some(cv)) = (&target_vertices, &candidate_vertices) {
+        for ti in 0..tv.len() {
+            for ci in 0..cv.len() {
+                for rotation in crate::rigid_boundary::corner_alignment_rotations(
+                    &candidate_resource.shape,
+                    ci,
+                    &target_resource.shape,
+                    ti,
+                    target_placement.rotation_radians,
+                ) {
+                    let Some((tx, ty)) = crate::rigid_boundary::world_vertex(
+                        &target_resource.shape,
+                        ti,
+                        target_placement,
+                    ) else {
+                        continue;
+                    };
+                    let (cx, cy) = rotated_point(cv[ci], rotation);
+                    let placement = Placement {
+                        x: tx - cx,
+                        y: ty - cy,
+                        rotation_radians: rotation,
+                    };
+                    let formation = GeometryFormation {
+                        schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+                        constituents: vec![
+                            target.constituents[0].clone(),
+                            GeometryConstituent {
+                                resource: candidate_resource.name.clone(),
+                                placement,
+                            },
+                        ],
+                        bonds: vec![GeometryBond {
+                            constituent_a: 0,
+                            constituent_b: 1,
+                        }],
+                        signature: String::new(),
+                    };
+                    if validate_formation(&formation, catalog) {
+                        out.push(formation);
+                    }
+                }
+            }
+        }
+        for te in 0..tv.len() {
+            let tn = (te + 1) % tv.len();
+            for ce in 0..cv.len() {
+                let cn = (ce + 1) % cv.len();
+                let Some(ta) =
+                    edge_angle_world(tv[te], tv[tn], target_placement.rotation_radians)
+                else {
+                    continue;
+                };
+                let Some(ca) = edge_angle(cv[ce], cv[cn]) else {
+                    continue;
+                };
+                for flip in [0.0, std::f64::consts::PI] {
+                    let rotation = normalize_angle(ta + flip - ca);
+                    let (tx, ty) = world_point(tv[te], target_placement);
+                    let (cx, cy) = rotated_point(cv[ce], rotation);
+                    let placement = Placement {
+                        x: tx - cx,
+                        y: ty - cy,
+                        rotation_radians: rotation,
+                    };
+                    let formation = GeometryFormation {
+                        schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+                        constituents: vec![
+                            target.constituents[0].clone(),
+                            GeometryConstituent {
+                                resource: candidate_resource.name.clone(),
+                                placement,
+                            },
+                        ],
+                        bonds: vec![GeometryBond {
+                            constituent_a: 0,
+                            constituent_b: 1,
+                        }],
+                        signature: String::new(),
+                    };
+                    if validate_formation(&formation, catalog) {
+                        out.push(formation);
+                    }
+                }
+            }
+        }
+    }
+    if let Form::Line { length } = &candidate_resource.shape.form {
+        if let Some(tv) = target_vertices {
+            let half = *length / 2.0;
+            let endpoints = [(-half, 0.0), (half, 0.0)];
+            for ti in 0..tv.len() {
+                for endpoint in 0..2 {
+                    for rotation in crate::rigid_boundary::line_endpoint_alignment_rotations(
+                        endpoint,
+                        0,
+                        target_placement.rotation_radians,
+                    ) {
+                        let (tx, ty) = world_point(tv[ti], target_placement);
+                        let (cx, cy) = rotated_point(endpoints[endpoint], rotation);
+                        let placement = Placement {
+                            x: tx - cx,
+                            y: ty - cy,
+                            rotation_radians: rotation,
+                        };
+                        let formation = GeometryFormation {
+                            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+                            constituents: vec![
+                                target.constituents[0].clone(),
+                                GeometryConstituent {
+                                    resource: candidate_resource.name.clone(),
+                                    placement,
+                                },
+                            ],
+                            bonds: vec![GeometryBond {
+                                constituent_a: 0,
+                                constituent_b: 1,
+                            }],
+                            signature: String::new(),
+                        };
+                        if validate_formation(&formation, catalog) {
+                            out.push(formation);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if let (
+        Form::Line {
+            length: target_length,
+        },
+        Form::Line {
+            length: candidate_length,
+        },
+    ) = (&target_resource.shape.form, &candidate_resource.shape.form)
+    {
+        let th = *target_length / 2.0;
+        let ch = *candidate_length / 2.0;
+        for tx in [-th, th] {
+            let world = world_point((tx, 0.0), target_placement);
+            for cx in [-ch, ch] {
+                for flip in [0.0, std::f64::consts::PI] {
+                    let rotation = normalize_angle(target_placement.rotation_radians + flip);
+                    let (rx, ry) = rotated_point((cx, 0.0), rotation);
+                    let placement = Placement {
+                        x: world.0 - rx,
+                        y: world.1 - ry,
+                        rotation_radians: rotation,
+                    };
+                    let formation = GeometryFormation {
+                        schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+                        constituents: vec![
+                            target.constituents[0].clone(),
+                            GeometryConstituent {
+                                resource: candidate_resource.name.clone(),
+                                placement,
+                            },
+                        ],
+                        bonds: vec![GeometryBond {
+                            constituent_a: 0,
+                            constituent_b: 1,
+                        }],
+                        signature: String::new(),
+                    };
+                    if validate_formation(&formation, catalog) {
+                        out.push(formation);
+                    }
+                }
+            }
+        }
+    }
+    let mut unique = BTreeMap::new();
+    for formation in out {
+        if let Some(canonical) = formation.canonicalized(catalog) {
+            unique.insert(canonical.signature.clone(), canonical);
+        }
+    }
+    unique.into_values().collect()
 }
 
-pub fn seed_base_catalogue(library:&mut GeometryLibrary,catalog:&[BaseResource])->std::io::Result<usize>{
-    let mut added=0;for resource in catalog{if library.insert(GeometryFormation::single(resource.name.clone()),catalog)?{added+=1;}}Ok(added)
+pub fn seed_base_catalogue(
+    library: &mut GeometryLibrary,
+    catalog: &[BaseResource],
+) -> std::io::Result<usize> {
+    let mut added = 0;
+    for resource in catalog {
+        if library.insert(GeometryFormation::single(resource.name.clone()), catalog)? {
+            added += 1;
+        }
+    }
+    Ok(added)
 }
 
-pub fn open_default_library()->std::io::Result<GeometryLibrary>{
-    let catalog=default_catalog();
-    GeometryLibrary::open("geometry_library/data",&catalog)
+pub fn open_default_library() -> std::io::Result<GeometryLibrary> {
+    let catalog = default_catalog();
+    GeometryLibrary::open("geometry_library/data", &catalog)
 }
