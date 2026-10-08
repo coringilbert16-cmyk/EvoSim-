@@ -3117,7 +3117,10 @@ pub fn expand_formation_candidates(
     candidate_resource: &BaseResource,
     catalog: &[BaseResource],
 ) -> Vec<GeometryFormation> {
-    if formation.constituents.is_empty() || formation.constituents.len() >= 20 {
+    // Bob's search is open-ended: formation size is not a geometry rule.
+    // Operational limits belong in worker scheduling/resource budgets, not
+    // in candidate validity or expansion eligibility.
+    if formation.constituents.is_empty() {
         return Vec::new();
     }
     let mut out = Vec::new();
