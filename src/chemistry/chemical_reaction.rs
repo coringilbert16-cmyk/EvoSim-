@@ -22,6 +22,13 @@ fn reaction_key(bond: &Bond, interface_signature: &str) -> String {
 }
 
 fn material_identity(unit: &crate::structure::StructuralUnit) -> String {
+    // Keep single-resource units keyed exactly like Bob's base-material
+    // catalogue. Composite materials retain their quantity-aware identity.
+    if let [(name, amount)] = unit.material.parts.as_slice() {
+        if crate::chemistry_library::quantized_amount(*amount) == 1_000_000_000 {
+            return name.clone();
+        }
+    }
     let mut parts = unit.material.parts.clone();
     parts.sort_by(|a, b| {
         a.0.cmp(&b.0)
