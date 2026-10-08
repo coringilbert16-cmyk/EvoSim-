@@ -13,7 +13,7 @@ fi
 # by the dedicated restoration authority and are not new COMBINE events.
 while IFS= read -r file; do
   case "$file" in
-    src/contact.rs|src/structure.rs|src/combine_runtime.rs|src/material_restoration.rs) continue ;;
+    src/geometry/contact.rs|src/geometry/structure.rs|src/chemistry/combine_runtime.rs|src/materials/material_restoration.rs) continue ;;
   esac
   if awk '/#\[cfg\(test\)\]/{exit} /(\.add_bond|::add_bond|try_add_bond)[[:space:]]*\(/ {print; found=1} END{exit found ? 0 : 1}' "$file"; then
     echo "ERROR: production raw bond-admission path found in $file"
@@ -41,12 +41,12 @@ if grep -R -n 'structural_combine' src --include='*.rs'; then
 fi
 
 # Runtime must not contain an independent COMBINE physics equation.
-if grep -nE 'potential_energy.*-.*potential_energy|exponential_influence\(|formation_threshold\(' src/combine_runtime.rs; then
+if grep -nE 'potential_energy.*-.*potential_energy|exponential_influence\(|formation_threshold\(' src/chemistry/combine_runtime.rs; then
   echo "ERROR: COMBINE physics equation appears in runtime"
   fail=1
 fi
 
-if ! grep -q 'pub fn try_add_bond' src/contact.rs; then
+if ! grep -q 'pub fn try_add_bond' src/geometry/contact.rs; then
   echo "ERROR: contact::try_add_bond() authority is missing"
   fail=1
 fi
@@ -56,7 +56,7 @@ if ! grep -q 'pub(crate) fn combine_specific_pair' src/combine_runtime.rs; then
   fail=1
 fi
 
-if ! grep -q 'pub(crate) fn restore_material' src/material_restoration.rs; then
+if ! grep -q 'pub(crate) fn restore_material' src/materials/material_restoration.rs; then
   echo "ERROR: physical material restoration authority is missing"
   fail=1
 fi
