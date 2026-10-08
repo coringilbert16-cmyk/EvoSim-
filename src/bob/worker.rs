@@ -125,7 +125,8 @@ fn evaluate_formation_chemistry(
         // A formation is accepted only when at least one realized contact
         // interface for every required bond is chemically realizable.
         let mut valid_interface = false;
-        let mut last_rejection = None;
+        let mut last_chemistry_rejection = None;
+        let mut saw_invalid_formation_cost = false;
 
         for candidate in candidates {
             let unit_a = &structure.units[bond.constituent_a];
@@ -159,7 +160,9 @@ fn evaluate_formation_chemistry(
             let formation_evaluation =
                 evaluate_formation(candidate, properties_a.cohesion, properties_b.cohesion);
             if formation_cost(properties_a, properties_b, formation_evaluation).is_err() {
-                last_rejection = Some("invalid physical formation cost".to_string());
+                // This candidate cannot be formed physically, but that does not
+                // erase chemistry knowledge already found for other interfaces.
+                saw_invalid_formation_cost = true;
                 continue;
             }
 
@@ -168,7 +171,9 @@ fn evaluate_formation_chemistry(
                     valid_interface = true;
                     break;
                 }
-                last_rejection = record.rejection_reason.clone();
+                if record.rejection_reason.is_some() {
+                    last_chemistry_rejection = record.rejection_reason.clone();
+                }
                 continue;
             }
 
@@ -180,7 +185,7 @@ fn evaluate_formation_chemistry(
             ) else {
                 let reason = "no defined static chemical interaction".to_string();
                 chemistry_library.record_rejection(key, reason.clone())?;
-                last_rejection = Some(reason);
+                last_chemistry_rejection = Some(reason);
                 continue;
             };
 
@@ -194,8 +199,12 @@ fn evaluate_formation_chemistry(
         }
 
         if !valid_interface {
-            return Ok(Err(last_rejection.unwrap_or_else(|| {
-                "no chemically realizable contact interface".to_string()
+            return Ok(Err(last_chemistry_rejection.unwrap_or_else(|| {
+                if saw_invalid_formation_cost {
+                    "invalid physical formation cost".to_string()
+                } else {
+                    "no chemically realizable contact interface".to_string()
+                }
             })));
         }
     }
