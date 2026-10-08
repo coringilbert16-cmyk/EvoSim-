@@ -7,6 +7,10 @@ edition = "2021"
 name = "evosim"
 path = "src/main.rs"
 
+[[bin]]
+name = "bob-benchmark"
+path = "src/bin/bob_benchmark.rs"
+
 [dependencies]
 axum = { version = "0.8", features = ["ws"] }
 parking_lot = "0.12"
