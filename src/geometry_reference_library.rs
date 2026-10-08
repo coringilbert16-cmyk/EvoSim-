@@ -107,12 +107,23 @@ pub fn resolve_live_contact_candidate(
         "rigid_point" => {
             let parsed = if sides[0].1.starts_with("line:") {
                 parse_point_descriptor(sides[0].0, &sides[0].1, "line:").and_then(|line| parse_edge_descriptor(sides[1].0, &sides[1].1).map(|edge| (line, edge)))
-            } else { None };
+            } else {
+                parse_point_descriptor(sides[1].0, &sides[1].1, "line:").and_then(|line| parse_edge_descriptor(sides[0].0, &sides[0].1).map(|edge| (line, edge)))
+            };
             parsed.map(|(line, edge)| LiveGeometryQuery::RigidPoint {
                 line_material: line.material, line_point: line.point_index, edge_material: edge.material, edge: edge.edge, edge_parameter: quantize(edge.parameter),
             })
         },
-        "rigid_vertex" => None,
+        "rigid_vertex" => {
+            let parsed = if sides[0].1.starts_with("corner:") {
+                parse_point_descriptor(sides[0].0, &sides[0].1, "corner:").and_then(|corner| parse_edge_descriptor(sides[1].0, &sides[1].1).map(|edge| (corner, edge)))
+            } else if sides[1].1.starts_with("corner:") {
+                parse_point_descriptor(sides[1].0, &sides[1].1, "corner:").and_then(|corner| parse_edge_descriptor(sides[0].0, &sides[0].1).map(|edge| (corner, edge)))
+            } else { None };
+            parsed.map(|(corner, edge)| LiveGeometryQuery::RigidVertex {
+                corner_material: corner.material, corner_point: corner.point_index, edge_material: edge.material, edge: edge.edge, edge_parameter: quantize(edge.parameter),
+            })
+        },
         _ => None,
     };
     Some(LiveGeometryInterface {
