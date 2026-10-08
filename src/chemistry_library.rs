@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 2;
 
 fn quantize(value: f64) -> i64 { (value * 1_000_000_000.0).round() as i64 }
+pub fn quantized_amount(value: f64) -> i64 { quantize(value) }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ChemistryKey {
@@ -183,7 +184,7 @@ impl ChemistryLibrary {
         }
         let record = ChemistryRecord { key, static_potential };
         self.insert(record)?;
-        Ok(self.entries.values().last().map(|_| static_potential))
+        Ok(Some(static_potential))
     }
     pub fn len(&self) -> usize { self.entries.len() }
     pub fn is_empty(&self) -> bool { self.entries.is_empty() }
