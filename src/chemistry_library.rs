@@ -4,7 +4,7 @@ use crate::geometry_reference_library::{
     GeometryRigidPointContactFamily, GeometryRigidVertexContactFamily, LiveGeometryInterface,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -190,7 +190,7 @@ pub struct ChemistryLibraryManifest {
 #[derive(Clone)]
 pub struct ChemistryLibrary {
     root: PathBuf,
-    entries: BTreeMap<ChemistryKey, ChemistryRecord>,
+    entries: HashMap<ChemistryKey, ChemistryRecord>,
     manifest: ChemistryLibraryManifest,
 }
 
@@ -200,7 +200,7 @@ impl ChemistryLibrary {
         fs::create_dir_all(&root)?;
         let data = root.join("chemistry.jsonl");
         let manifest_path = root.join("manifest.json");
-        let mut entries = BTreeMap::new();
+        let mut entries = HashMap::new();
         if data.exists() {
             let file = File::open(&data)?;
             let lines: Vec<String> = BufReader::new(file).lines().collect::<Result<_, _>>()?;
