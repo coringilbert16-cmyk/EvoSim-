@@ -541,6 +541,7 @@ pub struct GeometryLibrary {
     contact_families: BTreeMap<String, GeometryContactFamily>,
     fluid_boundary_families: BTreeMap<String, GeometryFluidBoundaryFamily>,
     rigid_contact_families: BTreeMap<String, GeometryRigidContactFamily>,
+    rigid_contact_index: BTreeMap<(String, usize, usize), Vec<String>>,
     rigid_point_contact_families: BTreeMap<String, GeometryRigidPointContactFamily>,
     rigid_vertex_contact_families: BTreeMap<String, GeometryRigidVertexContactFamily>,
 }
@@ -723,6 +724,18 @@ impl GeometryLibrary {
             catalog,
         );
 
+        let mut rigid_contact_index = BTreeMap::<(String, usize, usize), Vec<String>>::new();
+        for (signature, family) in &rigid_contact_families {
+            rigid_contact_index
+                .entry((
+                    family.candidate_resource.clone(),
+                    family.anchor_edge,
+                    family.candidate_edge,
+                ))
+                .or_default()
+                .push(signature.clone());
+        }
+
         let mut library = Self {
             root,
             entries,
@@ -731,6 +744,7 @@ impl GeometryLibrary {
             contact_families,
             fluid_boundary_families,
             rigid_contact_families,
+            rigid_contact_index,
             rigid_point_contact_families,
             rigid_vertex_contact_families,
         };
@@ -819,9 +833,19 @@ pub fn len(&self) -> usize {
         match interface.interface_class {
             "rigid_edge" => {
                 if let Some((a, b)) = parse_edge_pair(&interface.signature) {
-                    for family in self.rigid_contact_families.values() {
-                        if edge_pair_matches_family(&a, &b, family) {
-                            projections.insert(rigid_family_projection(family), ());
+                    let keys = [
+                        (a.material.clone(), b.edge, a.edge),
+                        (b.material.clone(), a.edge, b.edge),
+                    ];
+                    for key in keys {
+                        if let Some(signatures) = self.rigid_contact_index.get(&key) {
+                            for signature in signatures {
+                                if let Some(family) = self.rigid_contact_families.get(signature) {
+                                    if edge_pair_matches_family(&a, &b, family) {
+                                        projections.insert(rigid_family_projection(family), ());
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -993,6 +1017,16 @@ pub fn len(&self) -> usize {
         }
         file.sync_data()?;
         let added = unique.len();
+        for (signature, family) in &unique {
+            self.rigid_contact_index
+                .entry((
+                    family.candidate_resource.clone(),
+                    family.anchor_edge,
+                    family.candidate_edge,
+                ))
+                .or_default()
+                .push(signature.clone());
+        }
         self.rigid_contact_families.extend(unique);
         Ok(added)
     }
@@ -3294,7 +3328,7 @@ fn parse_edge_pair(signature: &str) -> Option<(LiveEdgeDescriptor, LiveEdgeDescr
 
 fn parse_edge_descriptor(material: &str, value: &str) -> Option<LiveEdgeDescriptor> {
     let value = value.strip_prefix("edge:")?;
-    let mut fields = value.strip_prefix("edge:")?.split('@');
+    let mut fields = value.split('@');
     let edge = fields.next()?;
     let parameter = fields.next()?;
     let rotation = fields.next()?;
