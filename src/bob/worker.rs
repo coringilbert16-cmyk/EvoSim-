@@ -170,11 +170,13 @@ fn process_one_frontier(
             metrics.rigid_edge_families += families.len();
             library.insert_rigid_contact_families(families)?;
 
-            let point_families = generate_rigid_point_contact_families(&formation, resource, catalog);
+            let point_families =
+                generate_rigid_point_contact_families(&formation, resource, catalog);
             metrics.rigid_point_families += point_families.len();
             library.insert_rigid_point_contact_families(point_families)?;
 
-            let vertex_families = generate_rigid_vertex_contact_families(&formation, resource, catalog);
+            let vertex_families =
+                generate_rigid_vertex_contact_families(&formation, resource, catalog);
             metrics.rigid_vertex_families += vertex_families.len();
             library.insert_rigid_vertex_contact_families(vertex_families)?;
 
