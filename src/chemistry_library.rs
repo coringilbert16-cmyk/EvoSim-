@@ -35,8 +35,9 @@ impl ChemistryKey {
 
     pub fn from_geometry_contact(a: impl Into<String>, b: impl Into<String>, family: &GeometryContactFamily) -> Self {
         Self::new(a, b, "rigid_surface", format!(
-            "v{}|angle={}|radius={}|edge_start={}|edge_end={}|length={}",
+            "v{}|anchor_edge={}|angle={}|radius={}|edge_start={}|edge_end={}|length={}",
             family.schema_version,
+            family.anchor_edge,
             quantize(family.contact_angle_radians),
             quantize(family.curvature_radius),
             quantize(family.edge_parameter_start),
@@ -47,8 +48,9 @@ impl ChemistryKey {
 
     pub fn from_geometry_fluid_boundary(a: impl Into<String>, b: impl Into<String>, family: &GeometryFluidBoundaryFamily) -> Self {
         Self::new(a, b, "fluid_boundary", format!(
-            "v{}|area={}|angle={}|radius={}|arc={}|length={}|edge_start={}|edge_end={}",
+            "v{}|anchor_edge={}|area={}|angle={}|radius={}|arc={}|length={}|edge_start={}|edge_end={}",
             family.schema_version,
+            family.anchor_edge,
             quantize(family.area),
             quantize(family.contact_angle_radians),
             quantize(family.curvature_radius),
