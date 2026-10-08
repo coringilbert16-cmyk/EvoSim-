@@ -804,12 +804,20 @@ impl Simulation {
                             let mut cache =
                                 crate::contact::ConnectionCompatibilityCache::default();
                             let mut ledger = self.energy_ledger;
+                            let developmental_context = developmental.as_ref().map(|context| {
+                                (
+                                    &context.blueprint,
+                                    context.origin,
+                                    context.orientation,
+                                    context.preferred_length,
+                                )
+                            });
                             let attempt = crate::combine_runtime::try_combine(
                                 &mut organisms[index],
                                 environment,
                                 &mut cache,
                                 &mut ledger,
-                                None,
+                                developmental_context,
                             );
                             if let Some(attempt) = attempt {
                                 self.energy_ledger = ledger;
