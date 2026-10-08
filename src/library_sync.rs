@@ -106,6 +106,27 @@ fn current_branch(repo: &Path) -> Option<String> {
     }
 }
 
+fn remote_is_ancestor(repo: &Path, branch: &str) -> bool {
+    let remote_ref = format!("origin/{branch}");
+    let remote = match run_git(repo, &["rev-parse", &remote_ref], None) {
+        Ok(output) if output.status.success() => remote_ref,
+        // A branch that does not exist on origin yet has no remote history to
+        // protect. The first checkpoint may publish it.
+        _ => return true,
+    };
+
+    match run_git(
+        repo,
+        &["merge-base", "--is-ancestor", &remote, "HEAD"],
+        None,
+    ) {
+        Ok(output) => output.status.success(),
+        // A failed ancestry check is fail-closed: do not manufacture a
+        // checkpoint on a branch whose remote relationship is unknown.
+        Err(_) => false,
+    }
+}
+
 fn push_if_ahead(repo: &Path, branch: &str) {
     let comparison = run_git(
         repo,
@@ -160,6 +181,13 @@ fn publish_once() -> std::io::Result<bool> {
         return Ok(false);
     };
     let paths = data_paths(&repo);
+
+    if !remote_is_ancestor(&repo, &branch) {
+        eprintln!(
+            "library sync: deferred because origin/{branch} is ahead of the local branch"
+        );
+        return Ok(false);
+    }
 
     if paths.is_empty() {
         push_if_ahead(&repo, &branch);
