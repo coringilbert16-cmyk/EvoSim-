@@ -166,10 +166,7 @@ pub fn accumulate_reaction(
 /// bond's physical disruption requirement. The caller supplies both quantities
 /// because the chemistry model does not invent a bond-strength or activation
 /// parameter.
-pub fn chemical_break_surplus(
-    reaction_energy: f64,
-    disruption_cost: f64,
-) -> Option<f64> {
+pub fn chemical_break_surplus(reaction_energy: f64, disruption_cost: f64) -> Option<f64> {
     if !reaction_energy.is_finite()
         || !disruption_cost.is_finite()
         || reaction_energy < 0.0
