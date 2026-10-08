@@ -49,9 +49,14 @@ pub(crate) fn accumulate(
 
         let material_a = organism.structure.units[unit_a].material.parts.first().map(|part| part.0.as_str()).unwrap_or("unknown");
         let material_b = organism.structure.units[unit_b].material.parts.first().map(|part| part.0.as_str()).unwrap_or("unknown");
-        let interface = crate::geometry_reference_library::resolve_live_contact_interface(
-            material_a, bond.endpoint_a.location, material_b, bond.endpoint_b.location,
-        );
+        let Some(interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
+            material_a,
+            &organism.structure.units[unit_a],
+            material_b,
+            &organism.structure.units[unit_b],
+            candidate,
+            catalog,
+        ) else { continue };
         let key = format!("{}|rev:{}|{}", organism.id, organism.structure_revision, reaction_key(&bond, &interface.signature));
 
         let Some(potential) = crate::chemistry::interaction_potential(
