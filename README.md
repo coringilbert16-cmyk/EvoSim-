@@ -189,7 +189,7 @@ D is the fundamental chemical separation. Greater separation means greater chemi
 
 Chemistry must never average positions across a formation. A formation containing positions 2 and 12 is not chemically equivalent to a pure position-7 material. Multi-constituent chemistry must preserve the constituent identities and local interactions.
 
-Interaction strength should be a **bounded nonlinear function of D**, not simply D. Greater opposition must not produce less interaction. The exact curve remains an empirical tuning decision.
+Interaction strength is a **bounded nonlinear function of D**, not simply D. Greater opposition must not produce less interaction. The approved curve is fixed by the equations below; it is no longer an open migration-time tuning decision.
 
 Chemical position is also separate from potential energy. Chemical separation describes interaction tendency; potential energy and bond energy describe energetic consequences.
 
@@ -216,7 +216,7 @@ The approved attraction model separates static chemical potential from distance:
 
     F_AB = I_AB * F_max * C(r)
 
-I_AB is a **static pairwise chemical interaction potential**. It does not increase or decrease as the materials move. Distance changes the amount of that potential expressed as physical attraction. Attraction therefore increases as the materials approach and reaches its maximum at contact; it does not decay toward contact.
+I_AB is a **static pairwise chemical interaction potential**. It does not increase or decrease as the materials move. Distance changes the amount of that potential expressed as physical attraction. Attraction therefore increases as the materials approach and reaches its maximum at contact; it does not decay toward contact. The current simulation has no universal force/acceleration integrator, so this attraction is not routed into a chemistry-specific movement instruction. When universal physical dynamics exists, chemical attraction belongs in that shared physical-force layer.
 
 The approved reaction-accumulation direction is a bounded accumulation model with a calculated activation barrier:
 
@@ -245,7 +245,7 @@ The first layer is **local constituent-pair interaction** at actual interfaces. 
 
 The system must not assume in advance that the weakest bond, strongest bond, or one interface bond is always the one that breaks. Whether rupture is localized or distributed is an experimental question; the affected region should follow the interaction pattern.
 
-**Natural BREAK is required.** The current code can explicitly split an internal bond when instructed, and the chemistry layer now has an energy-surplus BREAK path: a reaction must supply enough energy to meet the exact bond disruption requirement before that bond can rupture. Runtime reaction production and interface-driven selection remain to be integrated.
+**Natural BREAK is required.** The chemistry layer has an energy-surplus BREAK path: a reaction must supply enough energy to meet the exact realized bond disruption requirement before that bond can rupture. Runtime reaction production, interface selection, structure-revision invalidation, and immediate physical BREAK are integrated.
 
 COMBINE follows the same rule: physical contact and compatible geometry make a formation possible, but only the universal transition rules permit the new bond.
 
@@ -349,32 +349,34 @@ The run should continue until discovery substantially saturates rather than stop
 
 ### Chemistry migration status
 
-The chemistry migration is active. The following boundaries have now been audited and partially migrated:
+The chemistry migration is complete at the currently approved architecture boundary. The following boundaries have been audited and migrated:
 
 | Area | Status | Current boundary |
 |---|---|---|
 | Resource chemical positions | **Complete** | Seven catalog positions are explicit data: Methane 1.5, Sulfur 3.5, Hydrogen 5.5, Water 7.0, Nitrogen 8.5, Carbon 10.5, Phosphorus 12.5. |
-| Core chemistry mathematics | **Implemented / parameter tuning remains** | Static chemical-position interaction, distance/contact expression, reaction accumulation, dissipation, and barrier checks exist with invariant tests. |
+| Core chemistry mathematics | **Complete** | Static chemical-position interaction, distance/contact expression, reaction accumulation, dissipation, and barrier checks exist with invariant tests. |
 | COMBINE energy boundary | **Migrated** | Remaining formation work is derived from the approved attraction force over the actual remaining approach distance; there is no arbitrary mass/cohesion formation multiplier. The formation threshold remains a structural eligibility/investment requirement, while intrinsic bond potential is stored separately and allocated through the energy ledger. |
 | BREAK energy boundary | **Migrated** | Structural BREAK releases the realized bond's stored intrinsic bond potential exactly once. Chemical BREAK uses accumulated reaction energy to pay the realized bond's activation/disruption barrier, with only the surplus becoming usable energy or heat. Constituent material potential is not recreated at bond rupture. |
 | Energy conservation | **Implemented at chemical BREAK boundary** | The ledger remains authoritative. Chemical BREAK energy is settled as one conserved reaction-energy source: disruption cost + usable energy + heat = reaction energy. |
 | Geometry → chemistry interface | **Live Bob resolver connected** | Runtime chemistry resolves each realized bond contact through Bob's live candidate resolver, retaining local boundary feature/parameter identity rather than topology alone. Distance and facing remain transient runtime state and are not part of the intrinsic chemistry key. |
 | Chemistry Library | **Runtime lookup + calculate-on-miss + persistence integrated** | The versioned persistent library accepts material pairs plus canonical Bob interface identities. Runtime chemistry now performs lookup, calculates the static interaction potential only on a miss, and persists the reusable result. Activation barriers remain physical bond properties and are not cached as chemistry facts. |
 | Natural chemistry-driven transitions | **Runtime BREAK + immediate COMBINE formation path** | Existing bonded interfaces accumulate local reaction state using the fixed chemistry contract; reaching the physical bond barrier produces an immediate local BREAK event. COMBINE now resolves immediately through the same physical formation boundary, with chemistry attraction gating real formation and developmental preference retained as solver guidance. Independent BREAK interfaces may react in the same tick; physical conflicts are resolved against the current structure. Autonomous multi-interface formation remains. |
-| Retired reactivity cleanup | **In progress** | Obsolete resource helpers and construction-selection use have been removed. Remaining uses are concentrated in harmonics/nonlinear spectral response and compatibility fixtures/data; those are being treated as separate physics/compatibility audits rather than mapped to chemical position. |
+| Retired reactivity cleanup | **Complete** | Obsolete chemistry/resource-selection uses have been removed. Remaining `reactivity` uses are owned by harmonics/nonlinear spectral response or compatibility fixtures/data and are not used as chemical position, interaction magnitude, break efficiency, or formation energy. |
 
 **Migration rule:** chemical position is chemistry; reactivity is not a fallback chemical position, interaction magnitude, break-efficiency factor, or formation-energy source. Remaining `reactivity` code is therefore treated as transitional until its owning subsystem has an explicit replacement contract.
 
 `potential_energy` remains an intrinsic material property and is not being silently repurposed as chemical interaction strength. The energy ledger remains the authority for all realized energy transactions.
 
-### Chemistry audit plan
+### Chemistry completion audit
 
-Before changing implementation, chemistry will be audited in the following gated sequence. Findings are recorded before fixes are made; audits do not become an excuse for opportunistic redesign.
+The migration completion audit is closed at the currently approved architecture boundary. Findings were checked against the live implementation before documentation was finalized. The deferred universal physics consumer is an intentional architectural seam, not a chemistry migration defect.
 
-1. **Chemistry implementation inventory**
-   - Find every current use of `reactivity`, `potential_energy`, `cohesion`, interaction calculations, break/combine energy, reaction thresholds, and chemistry-related tests.
-   - Classify each use as keep, replace, move, delete, or unknown.
-   - Produce the dependency map from resource properties through interaction, transformation, runtime, environment, formations, and organisms.
+1. **Chemistry implementation inventory — complete**
+   - `chemical_position` is the sole chemical-spectrum input.
+   - `reactivity` remains only in harmonics/nonlinear spectral response and compatibility fixtures/data.
+   - `potential_energy` remains an intrinsic material/energy-ledger property.
+   - `cohesion` remains a physical/material property used where its own contracts require it.
+   - Chemistry interaction, BREAK, COMBINE, reaction thresholds, and library persistence use the migrated paths described above.
 
 2. **Resource-property semantics audit**
    - Verify mass, potential energy, cohesion, and chemical position for every base resource.
@@ -413,7 +415,7 @@ Before changing implementation, chemistry will be audited in the following gated
    - Classify chemistry tests as authoritative, expectation-to-update, obsolete, broader physical invariants, or missing.
    - Preserve tests that enforce genuine physical contracts even when old chemistry semantics are removed.
 
-Only after these audits are complete should implementation begin.
+The implementation migration is complete; remaining work belongs to downstream chemistry experiments, universal physics, or separate constructor/geometry workstreams.
 
 ### Chemistry implementation order
 
@@ -457,7 +459,7 @@ This does not require predicting every chemistry before simulation. Remaining cu
 
 ### Current status
 
-The chemistry model and audit plan are established and implementation migration is underway. Resource chemical positions, the core chemistry equations, COMBINE's energy boundary, BREAK's energy boundary, and the chemistry-driven BREAK energy-surplus gate have been migrated away from the retired interaction semantics.
+The chemistry model, migration, and completion audit are complete at the approved architecture boundary. Resource chemical positions, the core chemistry equations, COMBINE's energy boundary, BREAK's energy boundary, and the chemistry-driven BREAK energy-surplus gate have been migrated away from the retired interaction semantics.
 
 The remaining `reactivity` uses are outside authoritative chemistry. The resource-helper, construction-selection, and obsolete math uses have been removed. Harmonic/nonlinear spectral response has been audited and deliberately retains `reactivity` as a separate material-response input; compatibility fixtures/data remain for separate cleanup. No remaining use may be mapped to chemical position without a subsystem-specific contract.
 
