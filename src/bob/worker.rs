@@ -347,6 +347,81 @@ mod tests {
     use crate::geometry_reference_library::GeometryFormation;
 
     #[test]
+    fn chemistry_gate_reuses_persisted_negative_interface_knowledge() {
+        let catalog = default_catalog();
+        let formation = GeometryFormation {
+            schema_version: crate::geometry_reference_library::GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            constituents: vec![
+                crate::geometry_reference_library::GeometryConstituent {
+                    resource: "Hydrogen".to_string(),
+                    placement: crate::structure::Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                },
+                crate::geometry_reference_library::GeometryConstituent {
+                    resource: "Carbon".to_string(),
+                    placement: crate::structure::Placement {
+                        x: 0.5,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                },
+            ],
+            bonds: vec![crate::geometry_reference_library::GeometryBond {
+                constituent_a: 0,
+                constituent_b: 1,
+            }],
+            signature: String::new(),
+        }
+        .canonicalized(&catalog)
+        .unwrap();
+
+        let root =
+            std::env::temp_dir().join(format!("evosim-bob-chemistry-negative-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut chemistry_library = ChemistryLibrary::open(&root).unwrap();
+
+        let mut structure = OrganismStructure::new();
+        for constituent in &formation.constituents {
+            structure.add_unit(StructuralUnit::new(
+                constituent.resource.clone(),
+                constituent.placement,
+            ));
+        }
+        let mut cache = ConnectionCompatibilityCache::new();
+        let candidates = crate::combine::eligible_candidates(
+            &structure,
+            0,
+            1,
+            &catalog,
+            &mut cache,
+        );
+        let candidate = candidates.first().expect("test formation has a contact");
+        let interface = crate::geometry_reference_library::resolve_live_contact_candidate(
+            &formation.constituents[0].resource,
+            &structure.units[0],
+            &formation.constituents[1].resource,
+            &structure.units[1],
+            *candidate,
+            &catalog,
+        )
+        .expect("contact interface resolves");
+        let key = ChemistryKey::from_live_geometry("Hydrogen", "Carbon", &interface);
+        assert!(chemistry_library
+            .record_rejection(key, "test: known chemically invalid interface")
+            .unwrap());
+
+        let result =
+            evaluate_formation_chemistry(&formation, &catalog, &mut chemistry_library).unwrap();
+        assert!(result.is_err());
+        let reopened = ChemistryLibrary::open(&root).unwrap();
+        assert_eq!(reopened.len(), 1);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn chemistry_gate_accepts_a_realized_valid_contact() {
         let catalog = default_catalog();
         let formation = GeometryFormation {
