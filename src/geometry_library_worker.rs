@@ -1,7 +1,8 @@
 use crate::geometry_reference_library::{
-    expand_formation_candidates, generate_rigid_contact_families, generate_rigid_point_contact_families,
-    generate_rigid_vertex_contact_families, generate_fluid_boundary_families, generate_water_contact_families, open_default_library,
-    seed_base_catalogue, GeometryFrontierState, GeometryLibrary,
+    expand_formation_candidates, generate_fluid_boundary_families, generate_rigid_contact_families,
+    generate_rigid_point_contact_families, generate_rigid_vertex_contact_families,
+    generate_water_contact_families, open_default_library, seed_base_catalogue,
+    GeometryFrontierState, GeometryLibrary,
 };
 use crate::resources::{default_catalog, BaseResource};
 use std::thread;
@@ -55,14 +56,19 @@ fn process_one_frontier(
         .filter(|formation| {
             catalog.iter().any(|resource| {
                 !matches!(
-                    library.frontier().records.get(&format!("{}|{}", formation.signature, resource.name)).map(|record| &record.state),
+                    library
+                        .frontier()
+                        .records
+                        .get(&format!("{}|{}", formation.signature, resource.name))
+                        .map(|record| &record.state),
                     Some(GeometryFrontierState::Exhausted)
                         | Some(GeometryFrontierState::ContinuousFamilyPending)
                 )
             })
         })
         .min_by(|a, b| {
-            a.constituents.len()
+            a.constituents
+                .len()
                 .cmp(&b.constituents.len())
                 .then_with(|| a.signature.cmp(&b.signature))
         })
@@ -74,7 +80,11 @@ fn process_one_frontier(
     {
         for resource in catalog {
             let key = format!("{}|{}", formation.signature, resource.name);
-            let state = library.frontier().records.get(&key).map(|record| &record.state);
+            let state = library
+                .frontier()
+                .records
+                .get(&key)
+                .map(|record| &record.state);
             if matches!(
                 state,
                 Some(GeometryFrontierState::Exhausted)
