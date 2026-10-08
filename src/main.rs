@@ -42,7 +42,7 @@ mod chemistry_library;
 mod decomposition;
 mod diagnostics;
 mod energy_ledger;
-mod library_sync;
+mod infrastructure;
 
 // Organism genome, behavior, and lifecycle.
 mod decision;
@@ -97,7 +97,7 @@ async fn main() {
         command.as_deref(),
         Some("--library-sync") | Some("--library-sync-once")
     ) {
-        library_sync::spawn_background();
+        infrastructure::library_sync::spawn_background();
     }
 
     if command.as_deref() == Some("--library-sync-once") {
