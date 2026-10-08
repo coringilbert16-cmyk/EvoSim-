@@ -26,8 +26,7 @@ pub const CHEMICAL_ENERGY_DISTANCE: f64 = CHEMICAL_CONTACT_RADIUS;
 /// One full normalized chemistry unit therefore represents this much physical
 /// energy. With the approved scale this is 1.0 energy unit, but the conversion
 /// is explicit rather than relying on identical numerical values by accident.
-pub const CHEMICAL_ENERGY_PER_NORMALIZED_UNIT: f64 =
-    CHEMICAL_MAX_FORCE * CHEMICAL_ENERGY_DISTANCE;
+pub const CHEMICAL_ENERGY_PER_NORMALIZED_UNIT: f64 = CHEMICAL_MAX_FORCE * CHEMICAL_ENERGY_DISTANCE;
 
 /// Fraction of accumulated reaction dissipated per tick when no new reaction
 /// energy replaces it.
