@@ -2284,8 +2284,10 @@ fn exposed_line_intervals(
                     {
                         continue;
                     }
-                    let t0 = ((c.0 - anchor_start.0) * dx + (c.1 - anchor_start.1) * dy) / length_sq;
-                    let t1 = ((d.0 - anchor_start.0) * dx + (d.1 - anchor_start.1) * dy) / length_sq;
+                    let t0 =
+                        ((c.0 - anchor_start.0) * dx + (c.1 - anchor_start.1) * dy) / length_sq;
+                    let t1 =
+                        ((d.0 - anchor_start.0) * dx + (d.1 - anchor_start.1) * dy) / length_sq;
                     let lo = t0.min(t1).max(0.0);
                     let hi = t0.max(t1).min(1.0);
                     if hi - lo > 1e-10 {
