@@ -203,11 +203,10 @@ mod tests {
     #[test]
     fn impossible_contact_interval_is_rejected_without_search() {
         let family = CapillaryContactFamily::solve(0.5, PI / 2.0).unwrap();
-        assert!(ContactTranslationInterval::from_edge_length(
-            family.contact_length - 1e-6,
-            family
-        )
-        .is_none());
+        assert!(
+            ContactTranslationInterval::from_edge_length(family.contact_length - 1e-6, family)
+                .is_none()
+        );
     }
 
     #[test]
