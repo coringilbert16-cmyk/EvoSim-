@@ -465,11 +465,6 @@ impl DiagnosticsRecorder {
             "structure_changes: {}",
             self.summary.structure_changes
         )?;
-        writeln!(
-            file,
-            "lifecycle_changes: {}",
-            self.summary.lifecycle_changes
-        )?;
         write_range(
             &mut file,
             "growth_fraction",
