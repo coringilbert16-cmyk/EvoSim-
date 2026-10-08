@@ -29,6 +29,8 @@ impl Simulation {
             environment,
             active_transformations: Vec::new(),
             chemical_reaction_accumulation: std::collections::BTreeMap::new(),
+            chemistry_library: crate::chemistry_library::open_default_library()
+                .expect("chemistry library must open"),
             decomposing_bodies: Vec::new(),
             energy_ledger: EnergyLedger::default(),
             next_organism_id: 2,
@@ -568,6 +570,7 @@ impl Simulation {
                 organism,
                 &self.environment.catalog,
                 &mut self.chemical_reaction_accumulation,
+                &mut self.chemistry_library,
             );
             // Chemistry events have no artificial duration or per-organism
             // serialization. Every event that still matches the current
