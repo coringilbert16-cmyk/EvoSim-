@@ -465,12 +465,57 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         let mut chemistry_library = ChemistryLibrary::open(&root).unwrap();
 
+        let mut structure = OrganismStructure::new();
+        for constituent in &formation.constituents {
+            structure.add_unit(StructuralUnit::new(
+                constituent.resource.clone(),
+                constituent.placement,
+            ));
+        }
+        let mut cache = ConnectionCompatibilityCache::new();
+        let candidates = crate::combine::eligible_candidates(
+            &structure,
+            0,
+            1,
+            &catalog,
+            &mut cache,
+        );
+        assert!(!candidates.is_empty(), "test formation has a contact");
+        let keys = candidates
+            .into_iter()
+            .map(|candidate| {
+                let interface = crate::geometry_reference_library::resolve_live_contact_candidate(
+                    &formation.constituents[0].resource,
+                    &structure.units[0],
+                    &formation.constituents[1].resource,
+                    &structure.units[1],
+                    candidate,
+                    &catalog,
+                )
+                .expect("contact interface resolves");
+                ChemistryKey::from_live_geometry("Hydrogen", "Carbon", &interface)
+            })
+            .collect::<Vec<_>>();
+
         let result =
             evaluate_formation_chemistry(&formation, &catalog, &mut chemistry_library).unwrap();
         assert!(result.is_ok());
-        assert!(chemistry_library.len() >= 1);
+        assert!(keys.iter().any(|key| {
+            chemistry_library.get(key).is_some_and(|record| {
+                record.state == ChemistryEvaluationState::Valid
+                    && record.static_potential.is_some()
+                    && record.bond_strength.is_some()
+            })
+        }));
         let reopened = ChemistryLibrary::open(&root).unwrap();
         assert_eq!(reopened.len(), chemistry_library.len());
+        assert!(keys.iter().any(|key| {
+            reopened.get(key).is_some_and(|record| {
+                record.state == ChemistryEvaluationState::Valid
+                    && record.static_potential.is_some()
+                    && record.bond_strength.is_some()
+            })
+        }));
         let _ = std::fs::remove_dir_all(root);
     }
 }
