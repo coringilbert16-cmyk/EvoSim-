@@ -1046,7 +1046,7 @@ mod tests {
         let carbon = s.add_unit(StructuralUnit::new(
             "Carbon",
             Placement {
-                x: 0.5,
+                x: 1.5,
                 y: 0.0,
                 rotation_radians: 0.0,
             },
