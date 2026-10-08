@@ -93,13 +93,9 @@ pub fn intrinsic_bond_potential(
         return f64::NAN;
     }
     let normalized = match (a.chemical_position, b.chemical_position) {
-        (Some(position_a), Some(position_b)) => interaction_potential(
-            position_a,
-            position_b,
-            CHEMICAL_K,
-            CHEMICAL_D_MAX,
-        )
-        .unwrap_or(0.0),
+        (Some(position_a), Some(position_b)) => {
+            interaction_potential(position_a, position_b, CHEMICAL_K, CHEMICAL_D_MAX).unwrap_or(0.0)
+        }
         _ => strength.clamp(0.0, 1.0),
     };
     crate::chemistry::normalized_chemistry_to_energy(normalized).unwrap_or(f64::NAN)
