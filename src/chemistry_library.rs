@@ -1,7 +1,7 @@
 //! Persistent chemistry knowledge keyed by canonical physical interfaces.
 use crate::geometry_reference_library::{
     GeometryContactFamily, GeometryFluidBoundaryFamily, GeometryRigidContactFamily,
-    GeometryRigidPointContactFamily, GeometryRigidVertexContactFamily,
+    GeometryRigidPointContactFamily, GeometryRigidVertexContactFamily, LiveGeometryInterface,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -31,6 +31,14 @@ impl ChemistryKey {
     }
     pub fn signature(&self) -> String {
         format!("v{}|{}|{}|{}|{}", self.schema_version, self.material_a, self.material_b, self.interface_class, self.interface_signature)
+    }
+
+    pub fn from_live_geometry(
+        a: impl Into<String>,
+        b: impl Into<String>,
+        interface: &LiveGeometryInterface,
+    ) -> Self {
+        Self::new(a, b, interface.interface_class, interface.signature.clone())
     }
 
     pub fn from_geometry_contact(a: impl Into<String>, b: impl Into<String>, family: &GeometryContactFamily) -> Self {
@@ -186,6 +194,19 @@ impl ChemistryLibrary {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn live_geometry_interface_can_form_chemistry_key() {
+        let interface = crate::geometry_reference_library::resolve_live_contact_interface(
+            "Carbon",
+            crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            "Hydrogen",
+            crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 0 },
+        );
+        let key = ChemistryKey::from_live_geometry("Carbon", "Hydrogen", &interface);
+        assert_eq!(key.interface_class, "rigid_point");
+        assert_eq!(key.interface_signature, interface.signature);
+    }
+
     #[test]
     fn key_canonicalizes_material_order() {
         assert_eq!(ChemistryKey::new("Carbon","Hydrogen","rigid_edge","g"), ChemistryKey::new("Hydrogen","Carbon","rigid_edge","g"));
