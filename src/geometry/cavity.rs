@@ -173,11 +173,7 @@ fn analyze_genome_cavity_in_indices(
                 .copied()
                 .filter(|&unit_index| {
                     unit_boundary_matches_segment(
-                        structure,
-                        catalog,
-                        unit_index,
-                        segment_a,
-                        segment_b,
+                        structure, catalog, unit_index, segment_a, segment_b,
                     )
                 })
                 .collect::<Vec<_>>();
