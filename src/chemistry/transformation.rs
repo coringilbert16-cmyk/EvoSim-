@@ -584,38 +584,8 @@ impl Simulation {
             organism.active_transformation_id = None;
             return false;
         };
-        let Some(a) = stored
-            .material
-            .parts
-            .get(target.part_a)
-            .and_then(|(name, _)| {
-                environment
-                    .catalog
-                    .iter()
-                    .find(|resource| resource.name == *name)
-                    .map(|r| r.properties)
-            })
-        else {
-            organism.active_transformation_id = None;
-            return false;
-        };
-        let Some(b) = stored
-            .material
-            .parts
-            .get(target.part_b)
-            .and_then(|(name, _)| {
-                environment
-                    .catalog
-                    .iter()
-                    .find(|resource| resource.name == *name)
-                    .map(|r| r.properties)
-            })
-        else {
-            organism.active_transformation_id = None;
-            return false;
-        };
         let Some((gross, usable, heat)) =
-            bond_break_energy_yield(a, b, organism.genome.processing_efficiency())
+            bond_break_energy_yield(target.bond_energy, organism.genome.processing_efficiency())
         else {
             organism.active_transformation_id = None;
             return false;
