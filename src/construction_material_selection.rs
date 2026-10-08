@@ -62,7 +62,6 @@ fn structural_similarity(
 
     let (mass_min, mass_max) = ranges(|p| p.mass);
     let (energy_min, energy_max) = ranges(|p| p.potential_energy);
-    let (reactivity_min, reactivity_max) = ranges(|p| p.reactivity);
     let (cohesion_min, cohesion_max) = ranges(|p| p.cohesion);
 
     let property_score = [
@@ -79,12 +78,6 @@ fn structural_similarity(
             energy_max,
         ),
         normalized_similarity(
-            preferred.properties.reactivity,
-            candidate.properties.reactivity,
-            reactivity_min,
-            reactivity_max,
-        ),
-        normalized_similarity(
             preferred.properties.cohesion,
             candidate.properties.cohesion,
             cohesion_min,
@@ -93,7 +86,7 @@ fn structural_similarity(
     ]
     .into_iter()
     .sum::<f64>()
-        / 4.0;
+        / 3.0;
 
     let shape_score = if form_family(&preferred.shape.form) == form_family(&candidate.shape.form) {
         1.0
@@ -101,10 +94,10 @@ fn structural_similarity(
         0.0
     };
 
-    // Geometry is a first-class structural property. The four resource
-    // properties provide the remaining material signature. Equal weighting
-    // keeps the selector small and prevents energy value from becoming a
-    // hidden "food" preference.
+    // Geometry is a first-class structural property. Mass, intrinsic
+    // potential-energy capacity, and cohesion provide the remaining
+    // material signature. Chemistry is deliberately absent: chemical
+    // position must not become a hidden construction preference.
     (property_score * 0.8 + shape_score * 0.2).clamp(0.0, 1.0)
 }
 
