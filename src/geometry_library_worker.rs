@@ -6,7 +6,7 @@ use crate::geometry_reference_library::{
 };
 use crate::resources::{default_catalog, BaseResource};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const IDLE_SLEEP: Duration = Duration::from_secs(1);
 
@@ -16,8 +16,9 @@ pub fn run() {
     seed_base_catalogue(&mut library, &catalog).expect("geometry library seed must succeed");
 
     loop {
-        if !process_one_frontier(&mut library, &catalog).expect("geometry worker failed") {
-            thread::sleep(IDLE_SLEEP);
+        match process_one_frontier(&mut library, &catalog).expect("geometry worker failed") {
+            Some(metrics) => eprintln!("{metrics}"),
+            None => thread::sleep(IDLE_SLEEP),
         }
     }
 }
@@ -31,14 +32,52 @@ pub fn run_once() -> std::io::Result<bool> {
     let catalog = default_catalog();
     let mut library = open_default_library()?;
     let seeded = seed_base_catalogue(&mut library, &catalog)?;
-    let processed = process_one_frontier(&mut library, &catalog)?;
-    eprintln!(
-        "geometry worker once: formations={}, seeded={}, processed={}",
-        library.len(),
-        seeded,
-        processed
-    );
-    Ok(processed)
+    let metrics = process_one_frontier(&mut library, &catalog)?;
+    if let Some(metrics) = metrics {
+        eprintln!("geometry worker once: seeded={seeded}; {metrics}");
+        Ok(true)
+    } else {
+        eprintln!(
+            "geometry worker once: formations={}, seeded={}, processed=false",
+            library.len(),
+            seeded
+        );
+        Ok(false)
+    }
+}
+
+#[derive(Default)]
+struct WorkerPassMetrics {
+    formation_size: usize,
+    generated_candidates: usize,
+    added_formations: usize,
+    rigid_edge_families: usize,
+    rigid_point_families: usize,
+    rigid_vertex_families: usize,
+    water_families: usize,
+    fluid_boundary_families: usize,
+    elapsed: Duration,
+    total_formations: usize,
+}
+
+impl std::fmt::Display for WorkerPassMetrics {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "geometry worker pass: size={} generated={} added={} not_added={} edge_families={} point_families={} vertex_families={} water_families={} fluid_boundary_families={} total_formations={} elapsed_ms={}",
+            self.formation_size,
+            self.generated_candidates,
+            self.added_formations,
+            self.generated_candidates.saturating_sub(self.added_formations),
+            self.rigid_edge_families,
+            self.rigid_point_families,
+            self.rigid_vertex_families,
+            self.water_families,
+            self.fluid_boundary_families,
+            self.total_formations,
+            self.elapsed.as_millis(),
+        )
+    }
 }
 
 fn process_one_frontier(
@@ -77,6 +116,13 @@ fn process_one_frontier(
         return Ok(false);
     };
 
+    let started = Instant::now();
+    let formation_size = formation.constituents.len();
+    let mut metrics = WorkerPassMetrics {
+        formation_size,
+        ..WorkerPassMetrics::default()
+    };
+
     {
         for resource in catalog {
             let key = format!("{}|{}", formation.signature, resource.name);
@@ -106,9 +152,11 @@ fn process_one_frontier(
                 // Water contact; it is exhausted rather than left in a
                 // permanently "pending" state.
                 let families = generate_water_contact_families(&formation, resource, catalog);
+                metrics.water_families += families.len();
                 library.insert_contact_families(families)?;
                 let boundary_states =
                     generate_fluid_boundary_families(&formation, resource, catalog);
+                metrics.fluid_boundary_families += boundary_states.len();
                 library.insert_fluid_boundary_families(boundary_states)?;
                 library.set_frontier_state(
                     formation.signature.clone(),
@@ -119,16 +167,20 @@ fn process_one_frontier(
             }
 
             let families = generate_rigid_contact_families(&formation, resource, catalog);
+            metrics.rigid_edge_families += families.len();
             library.insert_rigid_contact_families(families)?;
 
             let point_families = generate_rigid_point_contact_families(&formation, resource, catalog);
+            metrics.rigid_point_families += point_families.len();
             library.insert_rigid_point_contact_families(point_families)?;
 
             let vertex_families = generate_rigid_vertex_contact_families(&formation, resource, catalog);
+            metrics.rigid_vertex_families += vertex_families.len();
             library.insert_rigid_vertex_contact_families(vertex_families)?;
 
             let candidates = expand_formation_candidates(&formation, resource, catalog);
-            library.insert_many(candidates, catalog)?;
+            metrics.generated_candidates += candidates.len();
+            metrics.added_formations += library.insert_many(candidates, catalog)?;
 
             library.set_frontier_state(
                 formation.signature.clone(),
@@ -142,5 +194,7 @@ fn process_one_frontier(
         // rebuilding and rescanning this same seven-resource row.
     }
 
-    Ok(true)
+    metrics.elapsed = started.elapsed();
+    metrics.total_formations = library.len();
+    Ok(Some(metrics))
 }
