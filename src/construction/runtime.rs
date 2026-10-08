@@ -836,7 +836,7 @@ fn realize_next_bond_driven(
                         continue;
                     };
 
-                    let Some((_, _, _, investment, _required_energy)) =
+                    let Some((_, _, investment, _required_energy)) =
                         crate::combine_runtime::selected_candidate_evaluation(
                             &trial,
                             existing_index,
