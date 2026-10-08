@@ -545,7 +545,10 @@ mod tests {
             0.0,
         );
         let b = part(
-            Form::Rectangle { width: 2.0, height: 2.0 },
+            Form::Rectangle {
+                width: 2.0,
+                height: 2.0,
+            },
             2.0,
             0.0,
             0.0,
