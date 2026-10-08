@@ -181,8 +181,7 @@ pub fn placed_forms_rigid_contact(
     }
 
     if !matches!(a.form, Form::Fluid { .. }) && !matches!(b.form, Form::Fluid { .. }) {
-        return placed_forms_overlap(a, b, tolerance)
-            && !placed_forms_penetrate(a, b, tolerance);
+        return placed_forms_overlap(a, b, tolerance) && !placed_forms_penetrate(a, b, tolerance);
     }
 
     fn fluid_boundary_part(part: &PlacedMaterialPart) -> Option<PlacedMaterialPart> {
@@ -210,7 +209,11 @@ pub fn placed_forms_rigid_contact(
     let Some(boundary) = boundary else {
         return false;
     };
-    let other = if matches!(a.form, Form::Fluid { .. }) { b } else { a };
+    let other = if matches!(a.form, Form::Fluid { .. }) {
+        b
+    } else {
+        a
+    };
 
     placed_forms_overlap(&boundary, other, tolerance)
         && !placed_forms_penetrate(&boundary, other, tolerance)
@@ -508,13 +511,19 @@ mod tests {
     #[test]
     fn rigid_contact_rejects_penetrating_rigid_forms() {
         let a = part(
-            Form::Rectangle { width: 2.0, height: 2.0 },
+            Form::Rectangle {
+                width: 2.0,
+                height: 2.0,
+            },
             0.0,
             0.0,
             0.0,
         );
         let b = part(
-            Form::Rectangle { width: 2.0, height: 2.0 },
+            Form::Rectangle {
+                width: 2.0,
+                height: 2.0,
+            },
             1.0,
             0.0,
             0.0,
@@ -527,7 +536,10 @@ mod tests {
     #[test]
     fn rigid_contact_accepts_boundary_touch_without_penetration() {
         let a = part(
-            Form::Rectangle { width: 2.0, height: 2.0 },
+            Form::Rectangle {
+                width: 2.0,
+                height: 2.0,
+            },
             0.0,
             0.0,
             0.0,
