@@ -510,7 +510,7 @@ mod tests {
 
         let result =
             evaluate_formation_chemistry(&formation, &catalog, &mut chemistry_library).unwrap();
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "chemistry gate rejected fixture: {result:?}");
         assert!(keys.iter().any(|key| {
             chemistry_library.get(key).is_some_and(|record| {
                 record.state == ChemistryEvaluationState::Valid
