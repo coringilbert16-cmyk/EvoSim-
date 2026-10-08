@@ -556,7 +556,12 @@ impl Simulation {
             crate::harmonics::update_organism_harmonics(organism, &self.environment);
             crate::memory::update_experience_memory(organism, &self.environment);
             let budding_available = seed_reference
-                .and_then(|reference| organism.developmental_realization_cached_for_reference(&self.environment.catalog, reference))
+                .and_then(|reference| {
+                    organism.developmental_realization_cached_for_reference(
+                        &self.environment.catalog,
+                        reference,
+                    )
+                })
                 .is_some_and(|realization| realization.overall > BUDDING_AVAILABILITY_FRACTION);
             if budding_available && organism.reproductive_construction.is_none() {
                 let _ = crate::reproduction::begin_reproduction(
@@ -577,11 +582,8 @@ impl Simulation {
             // physical structure is applied immediately; conflicting events
             // naturally fail once an earlier event has changed that structure.
             for operation in chemical_operations {
-                let _ = crate::chemical_reaction::resolve(
-                    operation,
-                    organism,
-                    &mut self.energy_ledger,
-                );
+                let _ =
+                    crate::chemical_reaction::resolve(operation, organism, &mut self.energy_ledger);
             }
 
             let stored_amount_before_transfer = organism.stored_material.total_amount();
@@ -801,8 +803,7 @@ impl Simulation {
                                         .map(|realization| realization.overall)
                                         .unwrap_or(0.0)
                                 });
-                            let mut cache =
-                                crate::contact::ConnectionCompatibilityCache::default();
+                            let mut cache = crate::contact::ConnectionCompatibilityCache::default();
                             let mut ledger = self.energy_ledger;
                             let developmental_context = developmental.as_ref().map(|context| {
                                 (
