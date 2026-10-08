@@ -550,3 +550,30 @@ Then open `http://localhost:3001/geometry`. The viewer supports:
 - zooming and panning the stored formation without changing it.
 
 The visualizer is deliberately separate from the catalogue worker and the live organism constructor. It is a verification microscope: once a formation is selected, it displays that recorded formation as a static view and does not re-read, regenerate, alter, or reinterpret it. Only newly added library entries are discovered by the periodic catalogue refresh.
+
+
+## Bob–Chemistry integration checkpoint
+
+Bob is the persistent geometry-knowledge engine; Chemistry remains authoritative for material-pair chemical evaluation. A candidate formation is not admitted to Bob's positive geometry catalogue until each required bond has at least one realized physical contact interface that passes the chemistry gate. Chemistry records are keyed by canonical material identities and realized local interface geometry, not by the larger formation that happened to discover them.
+
+The persistent chemistry catalogue stores both outcomes:
+
+- **Valid:** cached static chemical potential and bond strength.
+- **Rejected:** cached stable rejection reason for an interface that has no defined static chemical interaction.
+
+Physical formation-cost evaluation remains separate from cached static chemistry. A cached chemical result must not bypass validation of the candidate's current physical formation cost. Geometry formations rejected by the chemistry gate are retained in Bob's negative formation knowledge so the worker does not repeatedly evaluate the same rejected candidate.
+
+The worker now has focused tests for:
+- a realized contact passing the chemistry gate;
+- a valid chemistry record surviving library reopen;
+- a previously rejected interface being reused from negative knowledge without creating duplicate chemistry records;
+- Bob's positive and negative formation-knowledge states surviving reopen;
+- base-resource identity matching between live Chemistry and Bob's catalogue.
+
+**Validation status:** these tests have been added and strengthened, but a fresh Rust test/format run has not yet been observed for the latest commits. The Bob–Chemistry integration must not be described as fully verified until that run passes. Large-scale catalogue generation remains gated on that verification and a worker-progress audit.
+
+The current intended data flow is:
+
+`geometry candidate → canonical formation → realized physical interfaces → Chemistry lookup/evaluation → Bob positive or negative formation knowledge`
+
+Chemistry owns the material interaction rules; Bob owns durable discovery, indexing, and reuse. The persistent libraries are knowledge stores, not alternate authorities for live physical validity.
