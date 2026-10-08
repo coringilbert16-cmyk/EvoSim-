@@ -590,12 +590,12 @@ impl GeometryFormation {
         self.constituents.len()
     }
 
-    pub fn canonicalized(mut self, catalog: &[BaseResource]) -> Option<Self> {
+    pub fn canonicalized(self, catalog: &[BaseResource]) -> Option<Self> {
         if !validate_formation(&self, catalog) {
             return None;
         }
 
-        let candidates = canonical_pose_candidates(&self, catalog);
+        let candidates = canonical_pose_candidates(&self);
         let mut best: Option<Self> = None;
         for mut candidate in candidates {
             let mut indexed: Vec<(usize, GeometryConstituent)> =
@@ -1007,7 +1007,7 @@ impl GeometryLibrary {
             return Ok(Vec::new());
         }
         let file = File::open(path)?;
-        for (line_index, line) in BufReader::new(file).lines().enumerate() {
+        for line in BufReader::new(file).lines() {
             let line = line?;
             if line.trim().is_empty() {
                 continue;
@@ -1167,7 +1167,6 @@ impl GeometryLibrary {
                                 let (
                                     candidate_material,
                                     candidate_edge,
-                                    candidate_parameter,
                                     candidate_rotation,
                                     anchor_edge,
                                     anchor_parameter,
@@ -1175,7 +1174,6 @@ impl GeometryLibrary {
                                     (
                                         a_material,
                                         *a_edge,
-                                        *a_parameter as f64 / 1e9,
                                         *a_rotation as f64 / 1e9,
                                         *b_edge,
                                         *b_parameter as f64 / 1e9,
@@ -1184,7 +1182,6 @@ impl GeometryLibrary {
                                     (
                                         b_material,
                                         *b_edge,
-                                        *b_parameter as f64 / 1e9,
                                         *b_rotation as f64 / 1e9,
                                         *a_edge,
                                         *a_parameter as f64 / 1e9,
@@ -1662,10 +1659,7 @@ impl GeometryLibrary {
     }
 }
 
-fn canonical_pose_candidates(
-    formation: &GeometryFormation,
-    catalog: &[BaseResource],
-) -> Vec<GeometryFormation> {
+fn canonical_pose_candidates(formation: &GeometryFormation) -> Vec<GeometryFormation> {
     let mut candidates = Vec::with_capacity(formation.constituents.len().max(1));
     for anchor_index in 0..formation.constituents.len() {
         let anchor = &formation.constituents[anchor_index];
