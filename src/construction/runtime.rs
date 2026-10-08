@@ -469,9 +469,10 @@ fn construction_angle_candidates(
         }
     };
 
-    // Developmental geometry has priority over the declared pose.
-    // Face/edge alignments are exact consequences of the actual boundaries;
-    // the blueprint angle is only the final preference fallback.
+    // The declared pose is a preference, so try its physically anchored
+    // orientation first. Exact boundary alignments remain available as
+    // deterministic alternatives when that preference cannot form a bond.
+    push_unique(ideal_angle);
     match (existing_endpoint, candidate_endpoint) {
         (
             ConnectionEndpoint::Corner {
@@ -548,9 +549,8 @@ fn construction_angle_candidates(
         _ => {}
     }
 
-    // If no exact boundary alignment was available, the declared pose is
-    // still a preference. Do not manufacture arbitrary angular samples.
-    push_unique(ideal_angle);
+    // No arbitrary angular sampling is introduced: the remaining candidates
+    // are exact boundary alignments derived from the realized geometry.
     angles
 }
 
