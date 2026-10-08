@@ -20,8 +20,9 @@ fn reaction_key(bond: &Bond, interface_signature: &str) -> String {
 }
 
 pub(crate) fn accumulate(
-    organism: &mut Organism,
+    organism: &Organism,
     catalog: &[BaseResource],
+    accumulation: &mut std::collections::BTreeMap<String, f64>,
 ) -> Vec<ChemicalBreakOperation> {
     if organism.structure.bonds.is_empty() || organism.active_transformation_id.is_some() {
         return Vec::new();
@@ -51,7 +52,7 @@ pub(crate) fn accumulate(
         let interface = crate::geometry_reference_library::resolve_live_contact_interface(
             material_a, bond.endpoint_a.location, material_b, bond.endpoint_b.location,
         );
-        let key = reaction_key(&bond, &interface.signature);
+        let key = format!("{}|rev:{}|{}", organism.id, organism.structure_revision, reaction_key(&bond, &interface.signature));
 
         let Some(potential) = crate::chemistry::interaction_potential(
             position_a, position_b, crate::chemistry::CHEMICAL_K, crate::chemistry::CHEMICAL_D_MAX,
@@ -60,13 +61,13 @@ pub(crate) fn accumulate(
             candidate.distance, crate::chemistry::CHEMICAL_CONTACT_RADIUS,
         ) else { continue };
         let Some(engagement) = crate::chemistry::interface_engagement(candidate.facing) else { continue };
-        let previous = organism.chemical_reaction_accumulation.get(&key).copied().unwrap_or(0.0);
+        let previous = accumulation.get(&key).copied().unwrap_or(0.0);
         let Some(next) = crate::chemistry::accumulate_reaction(
             previous, potential, contact, engagement, crate::chemistry::CHEMICAL_DISSIPATION,
         ) else { continue };
 
         if next <= 0.0 {
-            organism.chemical_reaction_accumulation.remove(&key);
+            accumulation.remove(&key);
             continue;
         }
         let Some(barrier) = crate::chemistry::activation_barrier_from_bond_strength(bond.strength) else { continue };
@@ -82,7 +83,7 @@ pub(crate) fn accumulate(
             });
             organism.chemical_reaction_accumulation.remove(&key);
         } else {
-            organism.chemical_reaction_accumulation.insert(key, next);
+            accumulation.insert(key, next);
         }
     }
     operations
@@ -96,12 +97,13 @@ pub(crate) fn resolve(
     if organism.id != operation.organism_id || operation.remaining_ticks != 0 {
         return false;
     }
+    let processing_efficiency = organism.genome.processing_efficiency();
     let success = crate::transformation::settle_chemical_break_energy(
         organism,
         operation.bond,
         operation.reaction_energy,
         operation.disruption_cost,
-        organism.genome.processing_efficiency(),
+        processing_efficiency,
         ledger,
     );
     if !success {
