@@ -4,8 +4,7 @@
 //! candidate, applies the returned result, mutates structure, and settles
 //! the actual energy holder through the unified ledger authority.
 use crate::combine::{
-    bond_strength, eligible_candidates, required_investment, ExperimentalInteraction,
-    FormationEvaluation,
+    bond_strength, eligible_candidates, formation_cost, FormationEvaluation,
 };
 use crate::contact::ConnectionCompatibilityCache;
 use crate::developmental_blueprint::DevelopmentalFieldBlueprint;
@@ -30,10 +29,7 @@ pub(crate) struct CombineAttempt {
     pub endpoint_b: ConnectionEndpoint,
     pub work_cost: f64,
     pub energy_invested: f64,
-    pub interaction_direction: f64,
-    pub interaction_magnitude: f64,
-    pub interaction_energy: f64,
-    pub formation_threshold: f64,
+        pub formation_threshold: f64,
     pub net_energy_change: f64,
     pub bond_strength: f64,
     pub bond_energy: f64,
@@ -49,17 +45,12 @@ struct BondFormationRequest {
     investment: f64,
 }
 
-fn energy_requirement(investment: f64, work: f64, interaction: f64) -> Option<f64> {
-    if !investment.is_finite()
-        || investment < 0.0
-        || !work.is_finite()
-        || work < 0.0
-        || !interaction.is_finite()
-    {
+fn energy_requirement(investment: f64, work: f64) -> Option<f64> {
+    if !investment.is_finite() || investment < 0.0 || !work.is_finite() || work < 0.0 {
         return None;
     }
-    let required = investment + work - interaction;
-    required.is_finite().then_some(required.max(0.0))
+    let required = investment + work;
+    required.is_finite().then_some(required)
 }
 
 fn evaluate_candidate(
@@ -68,7 +59,7 @@ fn evaluate_candidate(
     ub: usize,
     candidate: crate::contact::ConnectionPairCandidate,
     catalog: &[BaseResource],
-) -> Option<(FormationEvaluation, ExperimentalInteraction, f64, f64, f64)> {
+) -> Option<(FormationEvaluation, f64, f64, f64)> {
     if candidate.distance > COMBINE_CONTACT_TOLERANCE
         || !candidate.available_a
         || !candidate.available_b
@@ -78,9 +69,9 @@ fn evaluate_candidate(
     let a = structure.units.get(ua)?.properties(catalog)?;
     let b = structure.units.get(ub)?.properties(catalog)?;
     let evaluation = crate::combine::evaluate_formation(candidate, a.cohesion, b.cohesion);
-    let (interaction, work, investment) = required_investment(a, b, evaluation).ok()?;
-    let required = energy_requirement(investment, work, interaction.signed_value)?;
-    Some((evaluation, interaction, work, investment, required))
+    let (work, investment) = formation_cost(a, b, evaluation).ok()?;
+    let required = energy_requirement(investment, work)?;
+    Some((evaluation, work, investment, required))
 }
 
 /// Shared access to the universal candidate evaluation. Construction
@@ -117,8 +108,7 @@ pub(crate) fn form_specific_bond(
             && candidate.available_a
             && candidate.available_b
     })?;
-    let (_, _, _, investment, _) =
-        evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)?;
+    let (_, _, investment, _) = evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)?;
     form_selected_bond(
         structure, unit_a, unit_b, candidate, investment, catalog, cache, ledger, energy,
     )
@@ -244,8 +234,8 @@ fn form_bond_from_candidate(
     if !crate::combine::formation_succeeds(evaluation, investment) {
         return None;
     }
-    let (interaction, work, threshold) = required_investment(a, b, evaluation).ok()?;
-    if (threshold - investment).abs() > EPSILON || interaction.signed_value < 0.0 {
+    let (work, threshold) = formation_cost(a, b, evaluation).ok()?;
+    if (threshold - investment).abs() > EPSILON {
         return None;
     }
     let strength = bond_strength(a, b);
@@ -283,9 +273,6 @@ fn form_bond_from_candidate(
         endpoint_b,
         work_cost: work,
         energy_invested: investment,
-        interaction_direction: interaction.direction,
-        interaction_magnitude: interaction.magnitude,
-        interaction_energy: interaction.signed_value,
         formation_threshold: threshold,
         net_energy_change: net,
         bond_strength: strength,
@@ -384,7 +371,7 @@ pub(crate) fn try_combine_stored_unit(
                         &environment.catalog,
                         cache,
                     ) {
-                        if let Some((evaluation, _, _, _, required)) = evaluate_candidate(
+                        if let Some((evaluation, _, _, required)) = evaluate_candidate(
                             &hypothetical,
                             ua,
                             ub,
@@ -636,7 +623,7 @@ fn combine_pair_in_direction(
     let mut candidates = eligible_candidates(structure, unit_a, unit_b, catalog, cache)
         .into_iter()
         .filter_map(|candidate| {
-            let (evaluation, _, _, _, required) =
+            let (evaluation, _, _, required) =
                 evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)?;
             Some((evaluation, candidate.distance, required))
         })
