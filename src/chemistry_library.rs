@@ -1,4 +1,8 @@
 //! Persistent chemistry knowledge keyed by canonical physical interfaces.
+use crate::geometry_reference_library::{
+    GeometryContactFamily, GeometryFluidBoundaryFamily, GeometryRigidContactFamily,
+    GeometryRigidPointContactFamily, GeometryRigidVertexContactFamily,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
@@ -6,6 +10,8 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 1;
+
+fn quantize(value: f64) -> i64 { (value * 1_000_000_000.0).round() as i64 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ChemistryKey {
@@ -25,6 +31,70 @@ impl ChemistryKey {
     }
     pub fn signature(&self) -> String {
         format!("v{}|{}|{}|{}|{}", self.schema_version, self.material_a, self.material_b, self.interface_class, self.interface_signature)
+    }
+
+    pub fn from_geometry_contact(a: impl Into<String>, b: impl Into<String>, family: &GeometryContactFamily) -> Self {
+        Self::new(a, b, "rigid_surface", format!(
+            "v{}|angle={}|radius={}|edge_start={}|edge_end={}|length={}",
+            family.schema_version,
+            quantize(family.contact_angle_radians),
+            quantize(family.curvature_radius),
+            quantize(family.edge_parameter_start),
+            quantize(family.edge_parameter_end),
+            quantize(family.contact_length),
+        ))
+    }
+
+    pub fn from_geometry_fluid_boundary(a: impl Into<String>, b: impl Into<String>, family: &GeometryFluidBoundaryFamily) -> Self {
+        Self::new(a, b, "fluid_boundary", format!(
+            "v{}|area={}|angle={}|radius={}|arc={}|length={}|edge_start={}|edge_end={}",
+            family.schema_version,
+            quantize(family.area),
+            quantize(family.contact_angle_radians),
+            quantize(family.curvature_radius),
+            quantize(family.free_arc_angle_radians),
+            quantize(family.contact_length),
+            quantize(family.edge_parameter_start),
+            quantize(family.edge_parameter_end),
+        ))
+    }
+
+    pub fn from_geometry_rigid_contact(a: impl Into<String>, b: impl Into<String>, family: &GeometryRigidContactFamily) -> Self {
+        Self::new(a, b, "rigid_edge", format!(
+            "v{}|anchor_edge={}|candidate_edge={}|rotation={}|start={}|end={}",
+            family.schema_version,
+            family.anchor_edge,
+            family.candidate_edge,
+            quantize(family.candidate_rotation_radians),
+            quantize(family.anchor_parameter_start),
+            quantize(family.anchor_parameter_end),
+        ))
+    }
+
+    pub fn from_geometry_rigid_point(a: impl Into<String>, b: impl Into<String>, family: &GeometryRigidPointContactFamily) -> Self {
+        Self::new(a, b, "rigid_point", format!(
+            "v{}|anchor_edge={}|candidate_endpoint={}|start={}|end={}|rotation_start={}|rotation_end={}",
+            family.schema_version,
+            family.anchor_edge,
+            family.candidate_endpoint,
+            quantize(family.anchor_parameter_start),
+            quantize(family.anchor_parameter_end),
+            quantize(family.candidate_rotation_start_radians),
+            quantize(family.candidate_rotation_end_radians),
+        ))
+    }
+
+    pub fn from_geometry_rigid_vertex(a: impl Into<String>, b: impl Into<String>, family: &GeometryRigidVertexContactFamily) -> Self {
+        Self::new(a, b, "rigid_vertex", format!(
+            "v{}|anchor_edge={}|candidate_vertex={}|start={}|end={}|rotation_start={}|rotation_end={}",
+            family.schema_version,
+            family.anchor_edge,
+            family.candidate_vertex,
+            quantize(family.anchor_parameter_start),
+            quantize(family.anchor_parameter_end),
+            quantize(family.candidate_rotation_start_radians),
+            quantize(family.candidate_rotation_end_radians),
+        ))
     }
 }
 
@@ -118,6 +188,58 @@ mod tests {
     fn key_canonicalizes_material_order() {
         assert_eq!(ChemistryKey::new("Carbon","Hydrogen","rigid_edge","g"), ChemistryKey::new("Hydrogen","Carbon","rigid_edge","g"));
     }
+    #[test]
+    fn bob_interface_key_ignores_formation_context() {
+        let a = GeometryRigidContactFamily {
+            schema_version: 1,
+            formation_signature: "formation-a".into(),
+            candidate_resource: "Hydrogen".into(),
+            anchor_constituent: 0,
+            anchor_edge: 2,
+            candidate_edge: 1,
+            candidate_rotation_radians: 0.5,
+            anchor_parameter_start: 0.25,
+            anchor_parameter_end: 0.75,
+        };
+        let mut b = a.clone();
+        b.formation_signature = "formation-b".into();
+        b.candidate_resource = "Carbon".into();
+        let ka = ChemistryKey::from_geometry_rigid_contact("Carbon", "Hydrogen", &a);
+        let kb = ChemistryKey::from_geometry_rigid_contact("Hydrogen", "Carbon", &b);
+        assert_eq!(ka, kb);
+    }
+
+    #[test]
+    fn bob_interface_key_distinguishes_interface_class() {
+        let rigid = GeometryRigidContactFamily {
+            schema_version: 1,
+            formation_signature: "formation".into(),
+            candidate_resource: "Hydrogen".into(),
+            anchor_constituent: 0,
+            anchor_edge: 1,
+            candidate_edge: 1,
+            candidate_rotation_radians: 0.0,
+            anchor_parameter_start: 0.0,
+            anchor_parameter_end: 1.0,
+        };
+        let point = GeometryRigidPointContactFamily {
+            schema_version: 1,
+            formation_signature: "formation".into(),
+            candidate_resource: "Hydrogen".into(),
+            anchor_constituent: 0,
+            anchor_edge: 1,
+            candidate_endpoint: 0,
+            anchor_parameter_start: 0.0,
+            anchor_parameter_end: 1.0,
+            candidate_rotation_start_radians: 0.0,
+            candidate_rotation_end_radians: 0.0,
+        };
+        assert_ne!(
+            ChemistryKey::from_geometry_rigid_contact("Carbon", "Hydrogen", &rigid),
+            ChemistryKey::from_geometry_rigid_point("Carbon", "Hydrogen", &point)
+        );
+    }
+
     #[test]
     fn library_deduplicates_keys() {
         let root = std::env::temp_dir().join(format!("evosim-chemistry-{}", std::process::id()));
