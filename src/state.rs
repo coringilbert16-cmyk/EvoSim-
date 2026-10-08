@@ -9,7 +9,6 @@ use crate::resources::{BaseResource, Material};
 use crate::structure::{Bond, OrganismStructure, Placement};
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::sync::Arc;
 #[derive(Clone)]
 pub(crate) struct AppState {
@@ -210,9 +209,6 @@ pub(crate) struct Organism {
     pub(crate) cached_harmonic_key: Option<(u64, u64, u64)>,
     #[serde(skip)]
     pub(crate) last_movement_attempt: Option<MovementAttemptDiagnostic>,
-    /// Reaction energy accumulated independently for each realized physical interface.
-    #[serde(default)]
-    pub(crate) chemical_reaction_accumulation: BTreeMap<String, f64>,
 }
 pub(crate) const STRESS_DECAY_PER_TICK: f64 = 0.98;
 pub(crate) const INITIAL_STRESS_THRESHOLD: f64 = 100.0;
@@ -230,7 +226,6 @@ impl Organism {
         self.cached_developmental_revision = None;
         self.cached_developmental_realization = None;
         self.cached_harmonic_key = None;
-        self.chemical_reaction_accumulation.clear();
     }
 
     pub(crate) fn mark_position_changed(&mut self) {
