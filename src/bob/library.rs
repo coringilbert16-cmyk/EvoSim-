@@ -2017,6 +2017,11 @@ fn exposed_line_intervals(
                     let d = world_point(vertices[(edge + 1) % vertices.len()], other.placement);
                     let cross_c = dx * (c.1 - anchor_start.1) - dy * (c.0 - anchor_start.0);
                     let cross_d = dx * (d.1 - anchor_start.1) - dy * (d.0 - anchor_start.0);
+                    if cross_c.abs() > 1e-9 * length_sq.sqrt()
+                        || cross_d.abs() > 1e-9 * length_sq.sqrt()
+                    {
+                        continue;
+                    }
                     let t0 = ((c.0 - anchor_start.0) * dx + (c.1 - anchor_start.1) * dy) / length_sq;
                     let t1 = ((d.0 - anchor_start.0) * dx + (d.1 - anchor_start.1) * dy) / length_sq;
                     let lo = t0.min(t1).max(0.0);
