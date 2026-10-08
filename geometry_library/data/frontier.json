@@ -3533,7 +3533,2377 @@
     "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;|0-1;1-2;|Water": {
       "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;|0-1;1-2;",
       "candidate_resource": "Water",
-      "state": "InProgress"
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-1;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-1;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-1;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-1;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-1;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-1;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-1;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-1047197551;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-1047197551;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-2094395102;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-2094395102;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-2094395102;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-2094395102;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-2094395102;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-2094395102;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-2094395102;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-2094395102;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-2094395102;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-2094395102;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-2094395102;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-2094395102;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-2094395102;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-2094395102;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;Phosphorus@250000000,-716506351,-3141592654;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;Phosphorus@250000000,-716506351,-3141592654;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;Phosphorus@250000000,-716506351,-3141592654;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;Phosphorus@250000000,-716506351,-3141592654;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;Phosphorus@250000000,-716506351,-3141592654;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;Phosphorus@250000000,-716506351,-3141592654;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;Phosphorus@250000000,-716506351,-3141592654;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;Phosphorus@250000000,-716506351,-3141592654;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;Phosphorus@250000000,-716506351,-3141592654;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;Phosphorus@250000000,-716506351,-3141592654;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;Phosphorus@250000000,-716506351,-3141592654;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;Phosphorus@250000000,-716506351,-3141592654;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;Phosphorus@250000000,-716506351,-3141592654;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;Phosphorus@250000000,-716506351,-3141592654;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@-1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@0,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,-1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,1047197551;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Carbon@1000000000,1366025404,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-2282050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,0;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,0;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,0;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,0;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,0;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,0;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,0;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2000000000,-450000000,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,0;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,0;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,0;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,0;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,0;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,0;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,0;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-1774038106,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,0;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,0;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,0;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,0;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,0;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,0;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,0;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@-2293301270,-958012702,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,-2282050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,0;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,0;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,0;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,0;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,0;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,0;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,0;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@0,550000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,-450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,-3141592654;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@1000000000,450000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-1774038106,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Hydrogen@293301270,-958012702,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@-760362971,683012702,0;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@-760362971,683012702,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@-760362971,683012702,0;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@-760362971,683012702,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@-760362971,683012702,0;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@-760362971,683012702,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@-760362971,683012702,0;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@-760362971,683012702,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@-760362971,683012702,0;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@-760362971,683012702,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@-760362971,683012702,0;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@-760362971,683012702,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@-760362971,683012702,0;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@-760362971,683012702,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@211324865,1000000000,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@211324865,1000000000,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@211324865,1000000000,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@211324865,1000000000,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@211324865,1000000000,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@211324865,1000000000,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@211324865,1000000000,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@211324865,1000000000,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@211324865,1000000000,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@211324865,1000000000,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@211324865,1000000000,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@211324865,1000000000,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@211324865,1000000000,2094395102;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@211324865,1000000000,2094395102;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,-1000000000,0;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,-1000000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,-1000000000,0;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,-1000000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,-1000000000,0;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,-1000000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,-1000000000,0;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,-1000000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,-1000000000,0;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,-1000000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,-1000000000,0;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,-1000000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,-1000000000,0;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,-1000000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,0,0;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,0,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,0,0;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,0,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,0,0;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,0,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,0,0;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,0,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,0,0;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,0,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,0,0;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,0,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,0,0;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,0,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,1000000000,0;Nitrogen@0,0,0;|0-2;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,1000000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,1000000000,0;Nitrogen@0,0,0;|0-2;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,1000000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,1000000000,0;Nitrogen@0,0,0;|0-2;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,1000000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,1000000000,0;Nitrogen@0,0,0;|0-2;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,1000000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,1000000000,0;Nitrogen@0,0,0;|0-2;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,1000000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,1000000000,0;Nitrogen@0,0,0;|0-2;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,1000000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,1000000000,0;Nitrogen@0,0,0;|0-2;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Methane@788675135,1000000000,0;Nitrogen@0,0,0;|0-2;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-1000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@-2000000000,0,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,-3141592654;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,-2732050808,0;Nitrogen@0,0,0;|0-1;0-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@0,1000000000,-3141592654;|0-1;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@0,1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@0,1000000000,-3141592654;|0-1;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@0,1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@0,1000000000,-3141592654;|0-1;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@0,1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@0,1000000000,-3141592654;|0-1;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@0,1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@0,1000000000,-3141592654;|0-1;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@0,1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@0,1000000000,-3141592654;|0-1;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@0,1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@0,1000000000,-3141592654;|0-1;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@0,1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,-1000000000,-3141592654;|0-1;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,-1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,-1000000000,-3141592654;|0-1;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,-1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,-1000000000,-3141592654;|0-1;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,-1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,-1000000000,-3141592654;|0-1;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,-1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,-1000000000,-3141592654;|0-1;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,-1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,-1000000000,-3141592654;|0-1;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,-1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,-1000000000,-3141592654;|0-1;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,-1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,0,-3141592654;|0-1;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,0,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,0,-3141592654;|0-1;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,0,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,0,-3141592654;|0-1;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,0,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,0,-3141592654;|0-1;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,0,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,0,-3141592654;|0-1;1-2;|Phosphorus": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,0,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Phosphorus",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,0,-3141592654;|0-1;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,0,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,0,-3141592654;|0-1;1-2;|Water": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,0,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Water",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,1000000000,-3141592654;|0-1;1-2;|Carbon": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Carbon",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,1000000000,-3141592654;|0-1;1-2;|Hydrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Hydrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,1000000000,-3141592654;|0-1;1-2;|Methane": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Methane",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,1000000000,-3141592654;|0-1;1-2;|Nitrogen": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Nitrogen",
+      "state": "Exhausted"
+    },
+    "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,1000000000,-3141592654;|0-1;1-2;|Sulfur": {
+      "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;Nitrogen@1000000000,1000000000,-3141592654;|0-1;1-2;",
+      "candidate_resource": "Sulfur",
+      "state": "Exhausted"
     },
     "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-1;|Carbon": {
       "formation_signature": "v1|Carbon@-1000000000,-1366025404,-3141592654;Nitrogen@0,0,0;|0-1;",
@@ -16787,4 +19157,4 @@
     },
     "v1|Water@0,0,0;||Phosphorus": {
       "formation_signature": "v1|Water@0,0,0;|",
-      "candidate_resource": "Phosphorus",
+      "candidate_resource": "Phosph
