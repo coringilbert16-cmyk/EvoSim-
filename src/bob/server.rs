@@ -47,7 +47,7 @@ fn matches(f: &GeometryFormation, s: Option<&str>, z: Option<&str>) -> bool {
 async fn index() -> impl IntoResponse {
     (
         [(axum::http::header::CACHE_CONTROL, "no-store")],
-        Html(include_str!("../ui/geometry_library.html")),
+        Html(include_str!("../../ui/geometry_library.html")),
     )
 }
 async fn script() -> impl IntoResponse {
@@ -56,7 +56,7 @@ async fn script() -> impl IntoResponse {
             (axum::http::header::CONTENT_TYPE, "application/javascript"),
             (axum::http::header::CACHE_CONTROL, "no-store"),
         ],
-        include_str!("../ui/geometry_library.js"),
+        include_str!("../../ui/geometry_library.js"),
     )
 }
 async fn formations(Query(q): Query<ListQuery>) -> impl IntoResponse {
