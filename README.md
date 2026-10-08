@@ -570,7 +570,7 @@ The worker now has focused tests for:
 - Bob's positive and negative formation-knowledge states surviving reopen;
 - base-resource identity matching between live Chemistry and Bob's catalogue.
 
-**Validation status:** these tests have been added and strengthened, but a fresh Rust test/format run has not yet been observed for the latest commits. The Bob–Chemistry integration must not be described as fully verified until that run passes. Large-scale catalogue generation remains gated on that verification and a worker-progress audit.
+**Validation status:** Bob now has a dedicated CI job for formatting, the focused geometry/Chemistry gate and persistence tests, and the base-resource chemistry identity test. This job is intentionally independent of the full Rust test job: the transitional organism constructor currently fails integration tests, and waiting for the constructor to pass before checking Bob would block the geometry work needed to repair it. The dedicated Bob job must pass before Bob is considered ready for unattended catalogue generation; the full-suite result remains a separate integration signal. The latest worker changes have not yet been confirmed by a completed CI run.
 
 The current intended data flow is:
 
