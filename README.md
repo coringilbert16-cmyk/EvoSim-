@@ -349,7 +349,7 @@ The chemistry migration is active. The following boundaries have now been audite
 | COMBINE energy boundary | **Migrated** | Formation work is mechanical; COMBINE no longer treats the retired interaction value as an energy source. Pure expenditure is represented explicitly in the energy ledger. |
 | BREAK energy boundary | **Migrated** | BREAK no longer uses retired reactivity to determine accessible energy. Intrinsic potential energy, cohesion, and processing efficiency remain explicit inputs. |
 | Energy conservation | **Boundary established** | The ledger remains authoritative. Chemical transitions still need an explicit source/transition transaction rather than implicit interaction energy. |
-| Geometry → chemistry interface | **Established at the library boundary** | Chemistry keys now derive from Bob's canonical contact-family geometry while excluding formation-level context. Runtime lookup is still not wired. |
+| Geometry → chemistry interface | **Established at the library boundary** | Chemistry keys now derive from Bob's canonical contact-family geometry while excluding formation-level context. The remaining runtime seam is Bob's live-contact-to-family resolver. |
 | Chemistry Library | **Storage + canonical key implemented; runtime not integrated** | The versioned persistent library now accepts material pairs plus canonical Bob interface identities for rigid surface, edge, point, vertex, and fluid-boundary families. Runtime lookup/miss calculation is still to be wired. |
 | Natural chemistry-driven transitions | **Not yet integrated** | Ordinary runtime interactions do not yet accumulate chemistry and trigger material transitions without an explicit transformation path. |
 | Retired reactivity cleanup | **In progress** | Obsolete resource helpers and construction-selection use have been removed. Remaining uses are concentrated in harmonics/nonlinear spectral response and compatibility fixtures/data; those are being treated as separate physics/compatibility audits rather than mapped to chemical position. |
@@ -452,7 +452,7 @@ The chemistry model and audit plan are established and implementation migration 
 
 The remaining `reactivity` uses are outside authoritative chemistry. The resource-helper, construction-selection, and obsolete math uses have been removed. Harmonic/nonlinear spectral response has been audited and deliberately retains `reactivity` as a separate material-response input; compatibility fixtures/data remain for separate cleanup. No remaining use may be mapped to chemical position without a subsystem-specific contract.
 
-The next engineering action is to wire the canonical Bob interface key into local runtime lookup/miss calculation, while continuing the remaining compatibility-fixture audit. Chemistry is not yet runtime-complete: natural local reaction accumulation and chemistry-driven transitions are still to be integrated.
+The next engineering action is to add Bob's live-contact resolver: map an actual runtime contact candidate to its canonical persistent contact family without re-running geometry discovery. Chemistry then consumes that resolved family through the existing ChemistryKey boundary. Chemistry must not implement this mapping itself. Chemistry is not yet runtime-complete: natural local reaction accumulation and chemistry-driven transitions are still to be integrated.
 
 ## Project direction
 
