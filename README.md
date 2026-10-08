@@ -167,7 +167,19 @@ Chemical position is an ordered **1–14 scale**, analogous to an acid/base scal
 
     1 — 2 — 3 — 4 — 5 — 6 — [7 Water] — 8 — 9 — 10 — 11 — 12 — 13 — 14
 
-There are seven base resources: Water plus three resources on each side. Water is the midpoint at **7**. The three resources on each side are intended to be almost, but not quite, mirrored around Water. The exact resource-to-position mapping remains an explicit decision to finish before implementation.
+There are seven base resources. The approved resource-to-position mapping is fixed as follows:
+
+| Resource | Chemical position |
+|---|---:|
+| Methane | 1.5 |
+| Sulfur | 3.5 |
+| Hydrogen | 5.5 |
+| Water | 7.0 |
+| Nitrogen | 8.5 |
+| Carbon | 10.5 |
+| Phosphorus | 12.5 |
+
+Water is the midpoint at **7**. Methane and Phosphorus intentionally remain inside the 1–14 scale rather than occupying its extreme endpoints. These positions are catalog data, not reactivity magnitudes.
 
 Chemical position is **not a reactivity magnitude**. It describes position on the spectrum. For a local pair:
 
