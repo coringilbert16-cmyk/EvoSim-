@@ -872,8 +872,8 @@ pub fn len(&self) -> usize {
             "rigid_edge" => {
                 if let Some((a, b)) = parse_edge_pair(&interface.signature) {
                     let keys = [
-                        (a.material.clone(), b.edge, a.edge),
-                        (b.material.clone(), a.edge, b.edge),
+                        contact_bucket_hash(&a.material, b.edge, a.edge),
+                        contact_bucket_hash(&b.material, a.edge, b.edge),
                     ];
                     for key in keys {
                         if let Some(signatures) = self.rigid_contact_index.get(&key) {
