@@ -945,7 +945,14 @@ pub fn len(&self) -> usize {
                                     } else {
                                         (b_material, *b_edge, *b_parameter as f64 / 1e9, *b_rotation as f64 / 1e9, *a_edge, *a_parameter as f64 / 1e9)
                                     };
+                                let anchor_material = self
+                                    .entries
+                                    .get(&family.formation_signature)
+                                    .and_then(|formation| formation.constituents.get(family.anchor_constituent))
+                                    .map(|constituent| constituent.resource.as_str());
+                                let realized_anchor_material = if candidate_is_a { b_material } else { a_material };
                                 if candidate_material == &family.candidate_resource
+                                    && realized_anchor_material == anchor_material.unwrap_or_default()
                                     && anchor_edge == family.anchor_edge
                                     && candidate_edge == family.candidate_edge
                                     && anchor_parameter >= family.anchor_parameter_start - QUANTUM
