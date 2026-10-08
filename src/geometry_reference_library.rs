@@ -28,9 +28,17 @@ const QUANTUM: f64 = 1e-9;
 /// does not search geometry space, sample orientations, or invent a persistent
 /// family. A later family lookup may use this identity as its lookup boundary.
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LiveGeometryQuery {
+    RigidEdge { a_material: String, a_edge: usize, a_parameter: i64, a_rotation: i64, b_material: String, b_edge: usize, b_parameter: i64, b_rotation: i64 },
+    RigidPoint { line_material: String, line_point: usize, edge_material: String, edge: usize, edge_parameter: i64 },
+    RigidVertex { corner_material: String, corner_point: usize, edge_material: String, edge: usize, edge_parameter: i64 },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LiveGeometryInterface {
     pub interface_class: &'static str,
     pub signature: String,
+    pub query: Option<LiveGeometryQuery>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -186,16 +194,26 @@ pub fn resolve_live_contact_interface(
     ];
     sides.sort_by(|a, b| a.cmp(b));
 
+    let query = match class {
+        "rigid_edge" => {
+            let a = parse_edge_descriptor(sides[0].0, &sides[0].1)?;
+            let b = parse_edge_descriptor(sides[1].0, &sides[1].1)?;
+            Some(LiveGeometryQuery::RigidEdge { a_material: a.material, a_edge: a.edge, a_parameter: quantize(a.parameter), a_rotation: quantize(a.rotation), b_material: b.material, b_edge: b.edge, b_parameter: quantize(b.parameter), b_rotation: quantize(b.rotation) })
+        }
+        "rigid_point" => {
+            let (line, edge) = if sides[0].1.starts_with("line:") { (parse_point_descriptor(sides[0].0, &sides[0].1, "line:")?, parse_edge_descriptor(sides[1].0, &sides[1].1)?) } else { (parse_point_descriptor(sides[1].0, &sides[1].1, "line:")?, parse_edge_descriptor(sides[0].0, &sides[0].1)?) };
+            Some(LiveGeometryQuery::RigidPoint { line_material: line.material, line_point: line.point_index, edge_material: edge.material, edge: edge.edge, edge_parameter: quantize(edge.parameter) })
+        }
+        "rigid_vertex" => {
+            let (corner, edge) = if sides[0].1.starts_with("corner:") { (parse_point_descriptor(sides[0].0, &sides[0].1, "corner:")?, parse_edge_descriptor(sides[1].0, &sides[1].1)?) } else { (parse_point_descriptor(sides[1].0, &sides[1].1, "corner:")?, parse_edge_descriptor(sides[0].0, &sides[0].1)?) };
+            Some(LiveGeometryQuery::RigidVertex { corner_material: corner.material, corner_point: corner.point_index, edge_material: edge.material, edge: edge.edge, edge_parameter: quantize(edge.parameter) })
+        }
+        _ => None,
+    };
     LiveGeometryInterface {
         interface_class: class,
-        signature: format!(
-            "live-v{}|{}:{}|{}:{}",
-            GEOMETRY_LIBRARY_SCHEMA_VERSION,
-            sides[0].0,
-            sides[0].1,
-            sides[1].0,
-            sides[1].1,
-        ),
+        signature: format!("live-v{}|{}:{}|{}:{}", GEOMETRY_LIBRARY_SCHEMA_VERSION, sides[0].0, sides[0].1, sides[1].0, sides[1].1),
+        query,
     }
 }
 
@@ -863,64 +881,32 @@ pub fn len(&self) -> usize {
         }
     }
 
-    fn indexed_interface_projections(
-        &self,
-        interface: &LiveGeometryInterface,
-    ) -> BTreeMap<String, ()> {
+    fn indexed_interface_projections(&self, interface: &LiveGeometryInterface) -> BTreeMap<String, ()> {
         let mut projections = BTreeMap::<String, ()>::new();
-        match interface.interface_class {
-            "rigid_edge" => {
-                if let Some((a, b)) = parse_edge_pair(&interface.signature) {
-                    let keys = [
-                        contact_bucket_hash(&a.material, b.edge, a.edge),
-                        contact_bucket_hash(&b.material, a.edge, b.edge),
-                    ];
-                    for key in keys {
-                        if let Some(signatures) = self.rigid_contact_index.get(&key) {
-                            for signature in signatures {
-                                if let Some(family) = self.rigid_contact_families.get(signature) {
-                                    if edge_pair_matches_family(&a, &b, family) {
-                                        projections.insert(rigid_family_projection(family), ());
-                                    }
-                                }
-                            }
-                        }
-                    }
+        match interface.query.as_ref() {
+            Some(LiveGeometryQuery::RigidEdge { a_material, a_edge, a_parameter, a_rotation, b_material, b_edge, b_parameter, b_rotation }) => {
+                let a=LiveEdgeDescriptor{material:a_material.clone(),edge:*a_edge,parameter:*a_parameter as f64/1e9,rotation:*a_rotation as f64/1e9};
+                let b=LiveEdgeDescriptor{material:b_material.clone(),edge:*b_edge,parameter:*b_parameter as f64/1e9,rotation:*b_rotation as f64/1e9};
+                for key in [contact_bucket_hash(&a.material,b.edge,a.edge),contact_bucket_hash(&b.material,a.edge,b.edge)] {
+                    if let Some(signatures)=self.rigid_contact_index.get(&key) { for signature in signatures { if let Some(family)=self.rigid_contact_families.get(signature) { if edge_pair_matches_family(&a,&b,family) { projections.insert(rigid_family_projection(family),()); } } } }
                 }
             }
-            "rigid_point" => {
-                if let Some((line, edge)) = parse_line_edge_pair(&interface.signature) {
-                    let key = contact_bucket_hash(&line.material, edge.edge, line.point_index);
-                    if let Some(signatures) = self.rigid_point_contact_index.get(&key) {
-                        for signature in signatures {
-                            if let Some(family) = self.rigid_point_contact_families.get(signature) {
-                                if line_edge_pair_matches_family(&line, &edge, family) {
-                                    projections.insert(point_family_projection(family), ());
-                                }
-                            }
-                        }
-                    }
-                }
+            Some(LiveGeometryQuery::RigidPoint { line_material, line_point, edge_material, edge, edge_parameter }) => {
+                let line=LivePointDescriptor{material:line_material.clone(),point_index:*line_point};
+                let edge_desc=LiveEdgeDescriptor{material:edge_material.clone(),edge:*edge,parameter:*edge_parameter as f64/1e9,rotation:0.0};
+                let key=contact_bucket_hash(&line.material,edge_desc.edge,line.point_index);
+                if let Some(signatures)=self.rigid_point_contact_index.get(&key) { for signature in signatures { if let Some(family)=self.rigid_point_contact_families.get(signature) { if line_edge_pair_matches_family(&line,&edge_desc,family) { projections.insert(point_family_projection(family),()); } } } }
             }
-            "rigid_vertex" => {
-                if let Some((corner, edge)) = parse_corner_edge_pair(&interface.signature) {
-                    let key = contact_bucket_hash(&corner.material, edge.edge, corner.point_index);
-                    if let Some(signatures) = self.rigid_vertex_contact_index.get(&key) {
-                        for signature in signatures {
-                            if let Some(family) = self.rigid_vertex_contact_families.get(signature) {
-                                if corner_edge_pair_matches_family(&corner, &edge, family) {
-                                    projections.insert(vertex_family_projection(family), ());
-                                }
-                            }
-                        }
-                    }
-                }
+            Some(LiveGeometryQuery::RigidVertex { corner_material, corner_point, edge_material, edge, edge_parameter }) => {
+                let corner=LivePointDescriptor{material:corner_material.clone(),point_index:*corner_point};
+                let edge_desc=LiveEdgeDescriptor{material:edge_material.clone(),edge:*edge,parameter:*edge_parameter as f64/1e9,rotation:0.0};
+                let key=contact_bucket_hash(&corner.material,edge_desc.edge,corner.point_index);
+                if let Some(signatures)=self.rigid_vertex_contact_index.get(&key) { for signature in signatures { if let Some(family)=self.rigid_vertex_contact_families.get(signature) { if corner_edge_pair_matches_family(&corner,&edge_desc,family) { projections.insert(vertex_family_projection(family),()); } } } }
             }
-            _ => {}
+            None => {}
         }
         projections
     }
-
     pub fn insert_rigid_vertex_contact_families(
         &mut self,
         families: Vec<GeometryRigidVertexContactFamily>,
