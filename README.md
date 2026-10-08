@@ -338,6 +338,26 @@ Each cycle should measure:
 
 The run should continue until discovery substantially saturates rather than stopping at an arbitrary fixed number of ticks. Only after the environment has established a useful baseline of common interactions should the viable initial organism be introduced.
 
+### Chemistry migration status
+
+The chemistry migration is active. The following boundaries have now been audited and partially migrated:
+
+| Area | Status | Current boundary |
+|---|---|---|
+| Resource chemical positions | **Complete** | Seven catalog positions are explicit data: Methane 1.5, Sulfur 3.5, Hydrogen 5.5, Water 7.0, Nitrogen 8.5, Carbon 10.5, Phosphorus 12.5. |
+| Core chemistry mathematics | **Implemented / parameter tuning remains** | Static chemical-position interaction, distance/contact expression, reaction accumulation, dissipation, and barrier checks exist with invariant tests. |
+| COMBINE energy boundary | **Migrated** | Formation work is mechanical; COMBINE no longer treats the retired interaction value as an energy source. Pure expenditure is represented explicitly in the energy ledger. |
+| BREAK energy boundary | **Migrated** | BREAK no longer uses retired reactivity to determine accessible energy. Intrinsic potential energy, cohesion, and processing efficiency remain explicit inputs. |
+| Energy conservation | **Boundary established** | The ledger remains authoritative. Chemical transitions still need an explicit source/transition transaction rather than implicit interaction energy. |
+| Geometry → chemistry interface | **Partially established** | COMBINE can consume chemical position plus a physical contact candidate, but the canonical Bob interface key and persistent Chemistry Library are not yet wired into runtime. |
+| Chemistry Library | **Not yet integrated** | The required canonical key and persistent demand-driven cache still need implementation. |
+| Natural chemistry-driven transitions | **Not yet integrated** | Ordinary runtime interactions do not yet accumulate chemistry and trigger material transitions without an explicit transformation path. |
+| Retired reactivity cleanup | **In progress** | Remaining uses are concentrated in legacy resource helpers, harmonics/nonlinear spectral response, construction material selection, tests/fixtures, and compatibility data. Each must be audited before removal or replacement. |
+
+**Migration rule:** chemical position is chemistry; reactivity is not a fallback chemical position, interaction magnitude, break-efficiency factor, or formation-energy source. Remaining `reactivity` code is therefore treated as transitional until its owning subsystem has an explicit replacement contract.
+
+`potential_energy` remains an intrinsic material property and is not being silently repurposed as chemical interaction strength. The energy ledger remains the authority for all realized energy transactions.
+
 ### Chemistry audit plan
 
 Before changing implementation, chemistry will be audited in the following gated sequence. Findings are recorded before fixes are made; audits do not become an excuse for opportunistic redesign.
