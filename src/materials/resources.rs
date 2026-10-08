@@ -617,13 +617,13 @@ pub fn default_catalog() -> Vec<BaseResource> {
             physical_state: PhysicalState::Rigid,
             shape: Shape {
                 form: Form::Polygon {
+                    // Isosceles trapezoid: bottom 1.5, top 1.0, sides 0.5.
+                    // Centered at the origin; height = sqrt(3) / 4.
                     vertices: vec![
-                        (-0.5, -0.5),
-                        (0.5, -0.5),
-                        (0.5, 0.0),
-                        (0.0, 0.0),
-                        (0.0, 0.5),
-                        (-0.5, 0.5),
+                        (-0.75, -0.216_506_350_946_109_65),
+                        (0.75, -0.216_506_350_946_109_65),
+                        (0.5, 0.216_506_350_946_109_65),
+                        (-0.5, 0.216_506_350_946_109_65),
                     ],
                 },
             },
@@ -773,12 +773,36 @@ mod shape_tests {
             find("Nitrogen").shape.form,
             Form::Rectangle { .. }
         ));
-        assert!(
-            matches!(&find("Phosphorus").shape.form, Form::Polygon { vertices } if vertices.len() == 6)
-        );
+        assert!(matches!(
+            &find("Phosphorus").shape.form,
+            Form::Polygon { vertices } if vertices.len() == 4
+        ));
         assert!(matches!(find("Water").shape.form, Form::Circle { .. }));
         assert_eq!(find("Water").physical_state, PhysicalState::Fluid);
         assert_eq!(find("Hydrogen").physical_state, PhysicalState::Rigid);
+    }
+
+    #[test]
+    fn phosphorus_is_an_isosceles_trapezoid_with_approved_edge_lengths() {
+        fn distance(a: (f64, f64), b: (f64, f64)) -> f64 {
+            (a.0 - b.0).hypot(a.1 - b.1)
+        }
+
+        let catalog = default_catalog();
+        let phosphorus = catalog.iter().find(|r| r.name == "Phosphorus").unwrap();
+        let vertices = phosphorus.shape.form.polygon_vertices().unwrap();
+        assert_eq!(vertices.len(), 4);
+
+        let lengths: Vec<f64> = (0..vertices.len())
+            .map(|i| distance(vertices[i], vertices[(i + 1) % vertices.len()]))
+            .collect();
+        for (actual, expected) in lengths.iter().zip([1.5, 0.5, 1.0, 0.5]) {
+            assert!((actual - expected).abs() < 1e-9, "edge lengths: {lengths:?}");
+        }
+
+        let height = vertices[2].1 - vertices[1].1;
+        assert!((height - 3.0_f64.sqrt() / 2.0).abs() < 1e-9);
+        assert!(phosphorus.shape.form.is_valid());
     }
 
     #[test]
