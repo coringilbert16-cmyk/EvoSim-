@@ -283,6 +283,20 @@ mod tests {
     }
 
     #[test]
+    fn calculate_on_miss_persists_static_potential() {
+        let root = std::env::temp_dir().join(format!("evosim-chemistry-miss-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let mut lib = ChemistryLibrary::open(&root).unwrap();
+        let key = ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "edge");
+        assert_eq!(lib.get(&key), None);
+        assert_eq!(lib.get_or_insert_static_potential(key.clone(), 0.625).unwrap(), Some(0.625));
+        assert_eq!(lib.get(&key).map(|record| record.static_potential), Some(0.625));
+        let reopened = ChemistryLibrary::open(&root).unwrap();
+        assert_eq!(reopened.get(&key).map(|record| record.static_potential), Some(0.625));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn library_deduplicates_keys() {
         let root = std::env::temp_dir().join(format!("evosim-chemistry-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
