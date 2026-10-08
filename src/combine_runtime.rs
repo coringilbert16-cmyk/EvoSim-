@@ -3,9 +3,7 @@
 //! Physics is evaluated by `combine`; this module selects a physical
 //! candidate, applies the returned result, mutates structure, and settles
 //! the actual energy holder through the unified ledger authority.
-use crate::combine::{
-    bond_strength, eligible_candidates, formation_cost, FormationEvaluation,
-};
+use crate::combine::{bond_strength, eligible_candidates, formation_cost, FormationEvaluation};
 use crate::contact::ConnectionCompatibilityCache;
 use crate::developmental_blueprint::DevelopmentalFieldBlueprint;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
