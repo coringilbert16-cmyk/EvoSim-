@@ -51,7 +51,7 @@ if ! grep -q 'pub fn try_add_bond' src/geometry/contact.rs; then
   fail=1
 fi
 
-if ! grep -q 'pub(crate) fn combine_specific_pair' src/combine_runtime.rs; then
+if ! grep -q 'pub(crate) fn combine_specific_pair' src/chemistry/combine_runtime.rs; then
   echo "ERROR: COMBINE runtime construction boundary is missing"
   fail=1
 fi
