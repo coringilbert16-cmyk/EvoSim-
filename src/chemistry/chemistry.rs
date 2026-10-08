@@ -118,6 +118,42 @@ pub fn activation_barrier_from_bond_strength(bond_strength: f64) -> Option<f64> 
 ///
 /// The conversion is derived from the approved force and characteristic contact
 /// distance rather than introducing a second tuning constant.
+/// Reusable chemistry knowledge for a material pair before runtime investment is considered.
+/// This answers whether the pair has a defined chemical interaction and exposes the
+/// static quantities that the persistent chemistry library can cache. Runtime formation
+/// success still depends on the physical candidate, load, and available investment.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StaticChemicalEvaluation {
+    pub static_potential: f64,
+    pub bond_strength: f64,
+}
+
+/// Evaluate the material-level chemical interaction without inventing geometry or
+/// runtime energy state. A missing chemical position means there is no defined
+/// interaction for this pair.
+pub fn evaluate_static_chemical_interaction(
+    position_a: Option<f64>,
+    position_b: Option<f64>,
+    cohesion_a: f64,
+    cohesion_b: f64,
+) -> Option<StaticChemicalEvaluation> {
+    let (position_a, position_b) = (position_a?, position_b?);
+    let static_potential =
+        interaction_potential(position_a, position_b, CHEMICAL_K, CHEMICAL_D_MAX)?;
+    if !cohesion_a.is_finite() || !cohesion_b.is_finite() {
+        return None;
+    }
+    let bond_strength =
+        (cohesion_a.clamp(0.0, 1.0) * cohesion_b.clamp(0.0, 1.0)).sqrt();
+    if !bond_strength.is_finite() {
+        return None;
+    }
+    Some(StaticChemicalEvaluation {
+        static_potential,
+        bond_strength,
+    })
+}
+
 pub fn normalized_chemistry_to_energy(value: f64) -> Option<f64> {
     if !value.is_finite() || value < 0.0 {
         return None;
