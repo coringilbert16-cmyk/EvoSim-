@@ -132,6 +132,7 @@ pub struct ChemistryLibraryManifest {
     pub entries: u64,
 }
 
+#[derive(Clone)]
 pub struct ChemistryLibrary {
     root: PathBuf,
     entries: BTreeMap<String, ChemistryRecord>,
