@@ -1229,6 +1229,8 @@ fn construct_blueprint_bond_driven_internal(
                             available_materials.as_deref_mut(),
                             &reserved_storage_indices,
                         );
+                        *ledger = construction_ledger;
+                        *energy = remaining_energy;
                         return Ok((structure, total_heat));
                     }
 
