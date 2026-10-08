@@ -5,8 +5,12 @@
 //! the production catalogue lives outside `target/` and survives test runs and
 //! process restarts.
 
-use crate::capillary_geometry::{solve_water_against_solid, CapillaryContactFamily, ContactTranslationInterval};
-use crate::material_geometry::{placed_forms_penetrate, placed_forms_rigid_contact, PlacedMaterialPart};
+use crate::capillary_geometry::{
+    solve_water_against_solid, CapillaryContactFamily, ContactTranslationInterval,
+};
+use crate::material_geometry::{
+    placed_forms_penetrate, placed_forms_rigid_contact, PlacedMaterialPart,
+};
 use crate::resources::{default_catalog, BaseResource, Form};
 use crate::structure::{ConnectionEndpoint, Placement};
 use serde::{Deserialize, Serialize};
@@ -29,9 +33,30 @@ const QUANTUM: f64 = 1e-9;
 /// family. A later family lookup may use this identity as its lookup boundary.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LiveGeometryQuery {
-    RigidEdge { a_material: String, a_edge: usize, a_parameter: i64, a_rotation: i64, b_material: String, b_edge: usize, b_parameter: i64, b_rotation: i64 },
-    RigidPoint { line_material: String, line_point: usize, edge_material: String, edge: usize, edge_parameter: i64 },
-    RigidVertex { corner_material: String, corner_point: usize, edge_material: String, edge: usize, edge_parameter: i64 },
+    RigidEdge {
+        a_material: String,
+        a_edge: usize,
+        a_parameter: i64,
+        a_rotation: i64,
+        b_material: String,
+        b_edge: usize,
+        b_parameter: i64,
+        b_rotation: i64,
+    },
+    RigidPoint {
+        line_material: String,
+        line_point: usize,
+        edge_material: String,
+        edge: usize,
+        edge_parameter: i64,
+    },
+    RigidVertex {
+        corner_material: String,
+        corner_point: usize,
+        edge_material: String,
+        edge: usize,
+        edge_parameter: i64,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -82,7 +107,10 @@ pub fn resolve_live_contact_candidate(
     let local_a = local_contact_descriptor(candidate.endpoint_a, unit_a, catalog)?;
     let local_b = local_contact_descriptor(candidate.endpoint_b, unit_b, catalog)?;
 
-    let class = match (endpoint_class(candidate.endpoint_a), endpoint_class(candidate.endpoint_b)) {
+    let class = match (
+        endpoint_class(candidate.endpoint_a),
+        endpoint_class(candidate.endpoint_b),
+    ) {
         ("fluid", _) | (_, "fluid") => "fluid_boundary",
         ("boundary", "boundary") => "rigid_edge",
         ("corner", "boundary") | ("boundary", "corner") | ("corner", "corner") => "rigid_vertex",
@@ -90,40 +118,64 @@ pub fn resolve_live_contact_candidate(
         _ => "rigid_surface",
     };
 
-    let mut sides = [
-        (material_a, local_a),
-        (material_b, local_b),
-    ];
+    let mut sides = [(material_a, local_a), (material_b, local_b)];
     sides.sort_by(|a, b| a.cmp(b));
 
     let query = match class {
-        "rigid_edge" => match (parse_edge_descriptor(sides[0].0, &sides[0].1), parse_edge_descriptor(sides[1].0, &sides[1].1)) {
+        "rigid_edge" => match (
+            parse_edge_descriptor(sides[0].0, &sides[0].1),
+            parse_edge_descriptor(sides[1].0, &sides[1].1),
+        ) {
             (Some(a), Some(b)) => Some(LiveGeometryQuery::RigidEdge {
-                a_material: a.material, a_edge: a.edge, a_parameter: quantize(a.parameter), a_rotation: quantize(a.rotation),
-                b_material: b.material, b_edge: b.edge, b_parameter: quantize(b.parameter), b_rotation: quantize(b.rotation),
+                a_material: a.material,
+                a_edge: a.edge,
+                a_parameter: quantize(a.parameter),
+                a_rotation: quantize(a.rotation),
+                b_material: b.material,
+                b_edge: b.edge,
+                b_parameter: quantize(b.parameter),
+                b_rotation: quantize(b.rotation),
             }),
             _ => None,
         },
         "rigid_point" => {
             let parsed = if sides[0].1.starts_with("line:") {
-                parse_point_descriptor(sides[0].0, &sides[0].1, "line:").and_then(|line| parse_edge_descriptor(sides[1].0, &sides[1].1).map(|edge| (line, edge)))
+                parse_point_descriptor(sides[0].0, &sides[0].1, "line:").and_then(|line| {
+                    parse_edge_descriptor(sides[1].0, &sides[1].1).map(|edge| (line, edge))
+                })
             } else {
-                parse_point_descriptor(sides[1].0, &sides[1].1, "line:").and_then(|line| parse_edge_descriptor(sides[0].0, &sides[0].1).map(|edge| (line, edge)))
+                parse_point_descriptor(sides[1].0, &sides[1].1, "line:").and_then(|line| {
+                    parse_edge_descriptor(sides[0].0, &sides[0].1).map(|edge| (line, edge))
+                })
             };
             parsed.map(|(line, edge)| LiveGeometryQuery::RigidPoint {
-                line_material: line.material, line_point: line.point_index, edge_material: edge.material, edge: edge.edge, edge_parameter: quantize(edge.parameter),
+                line_material: line.material,
+                line_point: line.point_index,
+                edge_material: edge.material,
+                edge: edge.edge,
+                edge_parameter: quantize(edge.parameter),
             })
-        },
+        }
         "rigid_vertex" => {
             let parsed = if sides[0].1.starts_with("corner:") {
-                parse_point_descriptor(sides[0].0, &sides[0].1, "corner:").and_then(|corner| parse_edge_descriptor(sides[1].0, &sides[1].1).map(|edge| (corner, edge)))
+                parse_point_descriptor(sides[0].0, &sides[0].1, "corner:").and_then(|corner| {
+                    parse_edge_descriptor(sides[1].0, &sides[1].1).map(|edge| (corner, edge))
+                })
             } else if sides[1].1.starts_with("corner:") {
-                parse_point_descriptor(sides[1].0, &sides[1].1, "corner:").and_then(|corner| parse_edge_descriptor(sides[0].0, &sides[0].1).map(|edge| (corner, edge)))
-            } else { None };
+                parse_point_descriptor(sides[1].0, &sides[1].1, "corner:").and_then(|corner| {
+                    parse_edge_descriptor(sides[0].0, &sides[0].1).map(|edge| (corner, edge))
+                })
+            } else {
+                None
+            };
             parsed.map(|(corner, edge)| LiveGeometryQuery::RigidVertex {
-                corner_material: corner.material, corner_point: corner.point_index, edge_material: edge.material, edge: edge.edge, edge_parameter: quantize(edge.parameter),
+                corner_material: corner.material,
+                corner_point: corner.point_index,
+                edge_material: edge.material,
+                edge: edge.edge,
+                edge_parameter: quantize(edge.parameter),
             })
-        },
+        }
         _ => None,
     };
     Some(LiveGeometryInterface {
@@ -144,7 +196,9 @@ fn local_contact_descriptor(
     match endpoint {
         ConnectionEndpoint::Corner { point_index } => Some(format!("corner:{}", point_index)),
         ConnectionEndpoint::LineEndpoint { point_index } => Some(format!("line:{}", point_index)),
-        ConnectionEndpoint::Fluid { x, y } => Some(format!("fluid:{},{}", quantize(x), quantize(y))),
+        ConnectionEndpoint::Fluid { x, y } => {
+            Some(format!("fluid:{},{}", quantize(x), quantize(y)))
+        }
         ConnectionEndpoint::Boundary { angle_radians } => {
             let shape = unit.shape(catalog)?;
             let (s, c) = angle_radians.sin_cos();
@@ -156,21 +210,36 @@ fn local_contact_descriptor(
                     let dx = b.0 - a.0;
                     let dy = b.1 - a.1;
                     let len2 = dx * dx + dy * dy;
-                    if len2 <= 1e-24 { return None; }
+                    if len2 <= 1e-24 {
+                        return None;
+                    }
                     let t = ((point.x - a.0) * dx + (point.y - a.1) * dy) / len2;
-                    if !(-1e-9..=1.000000001).contains(&t) { return None; }
+                    if !(-1e-9..=1.000000001).contains(&t) {
+                        return None;
+                    }
                     let px = a.0 + dx * t.clamp(0.0, 1.0);
                     let py = a.1 + dy * t.clamp(0.0, 1.0);
                     if (px - point.x).hypot(py - point.y) <= 1e-8 {
-                        Some(format!("edge:{}@{}@{}", i, quantize(t.clamp(0.0, 1.0)), quantize(normalized_angle(unit.placement.rotation_radians))))
-                    } else { None }
+                        Some(format!(
+                            "edge:{}@{}@{}",
+                            i,
+                            quantize(t.clamp(0.0, 1.0)),
+                            quantize(normalized_angle(unit.placement.rotation_radians))
+                        ))
+                    } else {
+                        None
+                    }
                 })
             });
-            edge.or_else(|| Some(format!("boundary:{}", quantize(normalized_angle(angle_radians)))))
+            edge.or_else(|| {
+                Some(format!(
+                    "boundary:{}",
+                    quantize(normalized_angle(angle_radians))
+                ))
+            })
         }
     }
 }
-
 
 fn endpoint_descriptor(endpoint: ConnectionEndpoint) -> String {
     match endpoint {
@@ -209,8 +278,7 @@ pub fn resolve_live_contact_interface(
     let class = match (endpoint_class(endpoint_a), endpoint_class(endpoint_b)) {
         ("fluid", _) | (_, "fluid") => "fluid_boundary",
         ("boundary", "boundary") => "rigid_edge",
-        ("corner", "boundary") | ("boundary", "corner")
-        | ("corner", "corner") => "rigid_vertex",
+        ("corner", "boundary") | ("boundary", "corner") | ("corner", "corner") => "rigid_vertex",
         ("line", _) | (_, "line") => "rigid_point",
         _ => "rigid_surface",
     };
@@ -222,44 +290,69 @@ pub fn resolve_live_contact_interface(
     sides.sort_by(|a, b| a.cmp(b));
 
     let query = match class {
-        "rigid_edge" => match (parse_edge_descriptor(sides[0].0, &sides[0].1), parse_edge_descriptor(sides[1].0, &sides[1].1)) {
+        "rigid_edge" => match (
+            parse_edge_descriptor(sides[0].0, &sides[0].1),
+            parse_edge_descriptor(sides[1].0, &sides[1].1),
+        ) {
             (Some(a), Some(b)) => Some(LiveGeometryQuery::RigidEdge {
-                a_material: a.material, a_edge: a.edge, a_parameter: quantize(a.parameter), a_rotation: quantize(a.rotation),
-                b_material: b.material, b_edge: b.edge, b_parameter: quantize(b.parameter), b_rotation: quantize(b.rotation),
+                a_material: a.material,
+                a_edge: a.edge,
+                a_parameter: quantize(a.parameter),
+                a_rotation: quantize(a.rotation),
+                b_material: b.material,
+                b_edge: b.edge,
+                b_parameter: quantize(b.parameter),
+                b_rotation: quantize(b.rotation),
             }),
             _ => None,
         },
         "rigid_point" => {
             let parsed = if sides[0].1.starts_with("line:") {
-                parse_point_descriptor(sides[0].0, &sides[0].1, "line:").and_then(|line| parse_edge_descriptor(sides[1].0, &sides[1].1).map(|edge| (line, edge)))
+                parse_point_descriptor(sides[0].0, &sides[0].1, "line:").and_then(|line| {
+                    parse_edge_descriptor(sides[1].0, &sides[1].1).map(|edge| (line, edge))
+                })
             } else {
-                parse_point_descriptor(sides[1].0, &sides[1].1, "line:").and_then(|line| parse_edge_descriptor(sides[0].0, &sides[0].1).map(|edge| (line, edge)))
+                parse_point_descriptor(sides[1].0, &sides[1].1, "line:").and_then(|line| {
+                    parse_edge_descriptor(sides[0].0, &sides[0].1).map(|edge| (line, edge))
+                })
             };
             parsed.map(|(line, edge)| LiveGeometryQuery::RigidPoint {
-                line_material: line.material, line_point: line.point_index,
-                edge_material: edge.material, edge: edge.edge, edge_parameter: quantize(edge.parameter),
+                line_material: line.material,
+                line_point: line.point_index,
+                edge_material: edge.material,
+                edge: edge.edge,
+                edge_parameter: quantize(edge.parameter),
             })
-        },
+        }
         "rigid_vertex" => {
             let parsed = if sides[0].1.starts_with("corner:") {
-                parse_point_descriptor(sides[0].0, &sides[0].1, "corner:").and_then(|corner| parse_edge_descriptor(sides[1].0, &sides[1].1).map(|edge| (corner, edge)))
+                parse_point_descriptor(sides[0].0, &sides[0].1, "corner:").and_then(|corner| {
+                    parse_edge_descriptor(sides[1].0, &sides[1].1).map(|edge| (corner, edge))
+                })
             } else {
-                parse_point_descriptor(sides[1].0, &sides[1].1, "corner:").and_then(|corner| parse_edge_descriptor(sides[0].0, &sides[0].1).map(|edge| (corner, edge)))
+                parse_point_descriptor(sides[1].0, &sides[1].1, "corner:").and_then(|corner| {
+                    parse_edge_descriptor(sides[0].0, &sides[0].1).map(|edge| (corner, edge))
+                })
             };
             parsed.map(|(corner, edge)| LiveGeometryQuery::RigidVertex {
-                corner_material: corner.material, corner_point: corner.point_index,
-                edge_material: edge.material, edge: edge.edge, edge_parameter: quantize(edge.parameter),
+                corner_material: corner.material,
+                corner_point: corner.point_index,
+                edge_material: edge.material,
+                edge: edge.edge,
+                edge_parameter: quantize(edge.parameter),
             })
         }
         _ => None,
     };
     LiveGeometryInterface {
         interface_class: class,
-        signature: format!("live-v{}|{}:{}|{}:{}", GEOMETRY_LIBRARY_SCHEMA_VERSION, sides[0].0, sides[0].1, sides[1].0, sides[1].1),
+        signature: format!(
+            "live-v{}|{}:{}|{}:{}",
+            GEOMETRY_LIBRARY_SCHEMA_VERSION, sides[0].0, sides[0].1, sides[1].0, sides[1].1
+        ),
         query,
     }
 }
-
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct GeometryContactFamily {
@@ -292,8 +385,7 @@ pub struct GeometryFluidBoundaryFamily {
 }
 
 fn fluid_boundary_state_is_self_consistent(family: &GeometryFluidBoundaryFamily) -> bool {
-    if !(0.0 < family.contact_angle_radians
-        && family.contact_angle_radians < std::f64::consts::PI)
+    if !(0.0 < family.contact_angle_radians && family.contact_angle_radians < std::f64::consts::PI)
     {
         return false;
     }
@@ -308,8 +400,7 @@ fn fluid_boundary_state_is_self_consistent(family: &GeometryFluidBoundaryFamily)
         return false;
     }
 
-    let Some(expected) =
-        CapillaryContactFamily::solve(family.area, family.contact_angle_radians)
+    let Some(expected) = CapillaryContactFamily::solve(family.area, family.contact_angle_radians)
     else {
         return false;
     };
@@ -345,7 +436,18 @@ impl GeometryFluidBoundaryFamily {
 
 impl GeometryContactFamily {
     pub fn signature(&self) -> String {
-        format!("v{}|{}|{}|{}|{}|{}|{}|{}|{}", self.schema_version, self.formation_signature, self.candidate_resource, self.anchor_constituent, self.anchor_edge, quantize(self.contact_angle_radians), quantize(self.curvature_radius), quantize(self.edge_parameter_start), quantize(self.edge_parameter_end))
+        format!(
+            "v{}|{}|{}|{}|{}|{}|{}|{}|{}",
+            self.schema_version,
+            self.formation_signature,
+            self.candidate_resource,
+            self.anchor_constituent,
+            self.anchor_edge,
+            quantize(self.contact_angle_radians),
+            quantize(self.curvature_radius),
+            quantize(self.edge_parameter_start),
+            quantize(self.edge_parameter_end)
+        )
     }
 }
 
@@ -507,7 +609,7 @@ impl GeometryFormation {
                         quantize(normalized_angle(a.placement.rotation_radians))
                             .cmp(&quantize(normalized_angle(b.placement.rotation_radians)))
                     })
-                });
+            });
             candidate.constituents = indexed.iter().map(|(_, c)| c.clone()).collect();
 
             // Reduce each constituent's local rotation by the exact proper
@@ -516,8 +618,10 @@ impl GeometryFormation {
             // remain distinct formations.
             for constituent in &mut candidate.constituents {
                 if let Some(resource) = catalog.iter().find(|r| r.name == constituent.resource) {
-                    constituent.placement.rotation_radians =
-                        canonical_shape_rotation(&resource.shape.form, constituent.placement.rotation_radians);
+                    constituent.placement.rotation_radians = canonical_shape_rotation(
+                        &resource.shape.form,
+                        constituent.placement.rotation_radians,
+                    );
                 }
             }
 
@@ -532,7 +636,9 @@ impl GeometryFormation {
                     std::mem::swap(&mut bond.constituent_a, &mut bond.constituent_b);
                 }
             }
-            candidate.bonds.sort_by_key(|b| (b.constituent_a, b.constituent_b));
+            candidate
+                .bonds
+                .sort_by_key(|b| (b.constituent_a, b.constituent_b));
             candidate.signature = candidate.canonical_signature();
 
             if best
@@ -607,7 +713,7 @@ pub struct GeometryLibrary {
     rigid_point_contact_families: BTreeMap<String, GeometryRigidPointContactFamily>,
     rigid_point_contact_index: HashMap<u64, Vec<String>>,
     rigid_vertex_contact_families: BTreeMap<String, GeometryRigidVertexContactFamily>,
-    rigid_vertex_contact_index: HashMap<u64, Vec<String>>
+    rigid_vertex_contact_index: HashMap<u64, Vec<String>>,
 }
 
 impl GeometryLibrary {
@@ -641,10 +747,7 @@ impl GeometryLibrary {
                         continue;
                     }
                     Err(error) => {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            error,
-                        ));
+                        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, error));
                     }
                 };
                 if formation.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
@@ -660,9 +763,8 @@ impl GeometryLibrary {
         let catalog_version = resource_catalog_signature(catalog);
         let manifest = if manifest_path.exists() {
             let bytes = fs::read(&manifest_path)?;
-            serde_json::from_slice(&bytes).map_err(|e| {
-                std::io::Error::new(std::io::ErrorKind::InvalidData, e)
-            })?
+            serde_json::from_slice(&bytes)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
         } else {
             GeometryLibraryManifest {
                 schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
@@ -698,10 +800,7 @@ impl GeometryLibrary {
                         continue;
                     }
                     Err(error) => {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            error,
-                        ));
+                        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, error));
                     }
                 };
                 if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
@@ -714,11 +813,14 @@ impl GeometryLibrary {
                     || family.edge_parameter_end > 1.0
                     || family.edge_parameter_end < family.edge_parameter_start
                     || !entries.contains_key(&family.formation_signature)
-                    || catalog.iter().all(|resource| resource.name != family.candidate_resource)
-                    || family.anchor_constituent >= entries
-                        .get(&family.formation_signature)
-                        .map(|formation| formation.constituents.len())
-                        .unwrap_or(0)
+                    || catalog
+                        .iter()
+                        .all(|resource| resource.name != family.candidate_resource)
+                    || family.anchor_constituent
+                        >= entries
+                            .get(&family.formation_signature)
+                            .map(|formation| formation.constituents.len())
+                            .unwrap_or(0)
                 {
                     continue;
                 }
@@ -741,10 +843,7 @@ impl GeometryLibrary {
                         continue;
                     }
                     Err(error) => {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            error,
-                        ));
+                        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, error));
                     }
                 };
                 if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
@@ -758,7 +857,9 @@ impl GeometryLibrary {
                             .get(&family.formation_signature)
                             .map(|formation| formation.constituents.len())
                             .unwrap_or(0)
-                    || catalog.iter().all(|resource| resource.name != family.candidate_resource)
+                    || catalog
+                        .iter()
+                        .all(|resource| resource.name != family.candidate_resource)
                 {
                     continue;
                 }
@@ -768,20 +869,16 @@ impl GeometryLibrary {
 
         let frontier = if frontier_path.exists() {
             let bytes = fs::read(&frontier_path)?;
-            serde_json::from_slice(&bytes).map_err(|e| {
-                std::io::Error::new(std::io::ErrorKind::InvalidData, e)
-            })?
+            serde_json::from_slice(&bytes)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
         } else {
             GeometryFrontier::default()
         };
 
         let fluid_boundary_families =
             load_fluid_boundary_families(&fluid_boundary_family_path, &entries, catalog);
-        let rigid_point_contact_families = load_rigid_point_contact_families(
-            &rigid_point_contact_family_path,
-            &entries,
-            catalog,
-        );
+        let rigid_point_contact_families =
+            load_rigid_point_contact_families(&rigid_point_contact_family_path, &entries, catalog);
         let rigid_vertex_contact_families = load_rigid_vertex_contact_families(
             &rigid_vertex_contact_family_path,
             &entries,
@@ -791,18 +888,36 @@ impl GeometryLibrary {
         let mut rigid_contact_index = HashMap::<u64, Vec<String>>::new();
         for (signature, family) in &rigid_contact_families {
             rigid_contact_index
-                .entry(contact_bucket_hash(&family.candidate_resource, family.anchor_edge, family.candidate_edge))
+                .entry(contact_bucket_hash(
+                    &family.candidate_resource,
+                    family.anchor_edge,
+                    family.candidate_edge,
+                ))
                 .or_default()
                 .push(signature.clone());
         }
 
         let mut rigid_point_contact_index = HashMap::<u64, Vec<String>>::new();
         for (signature, family) in &rigid_point_contact_families {
-            rigid_point_contact_index.entry(contact_bucket_hash(&family.candidate_resource, family.anchor_edge, family.candidate_endpoint)).or_default().push(signature.clone());
+            rigid_point_contact_index
+                .entry(contact_bucket_hash(
+                    &family.candidate_resource,
+                    family.anchor_edge,
+                    family.candidate_endpoint,
+                ))
+                .or_default()
+                .push(signature.clone());
         }
         let mut rigid_vertex_contact_index = HashMap::<u64, Vec<String>>::new();
         for (signature, family) in &rigid_vertex_contact_families {
-            rigid_vertex_contact_index.entry(contact_bucket_hash(&family.candidate_resource, family.anchor_edge, family.candidate_vertex)).or_default().push(signature.clone());
+            rigid_vertex_contact_index
+                .entry(contact_bucket_hash(
+                    &family.candidate_resource,
+                    family.anchor_edge,
+                    family.candidate_vertex,
+                ))
+                .or_default()
+                .push(signature.clone());
         }
 
         let mut equivalence_index = BTreeMap::<String, Vec<String>>::new();
@@ -833,7 +948,10 @@ impl GeometryLibrary {
         Ok(library)
     }
 
-    pub fn load_formations_only(root: impl AsRef<Path>, catalog: &[BaseResource]) -> std::io::Result<Vec<GeometryFormation>> {
+    pub fn load_formations_only(
+        root: impl AsRef<Path>,
+        catalog: &[BaseResource],
+    ) -> std::io::Result<Vec<GeometryFormation>> {
         let path = root.as_ref().join("formations.jsonl");
         let mut entries = BTreeMap::new();
         if !path.exists() {
@@ -860,7 +978,7 @@ impl GeometryLibrary {
         Ok(entries.into_values().collect())
     }
 
-pub fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.entries.len()
     }
 
@@ -888,16 +1006,19 @@ pub fn len(&self) -> usize {
         self.fluid_boundary_families.values()
     }
 
-
     pub fn rigid_contact_families(&self) -> impl Iterator<Item = &GeometryRigidContactFamily> {
         self.rigid_contact_families.values()
     }
 
-    pub fn rigid_point_contact_families(&self) -> impl Iterator<Item = &GeometryRigidPointContactFamily> {
+    pub fn rigid_point_contact_families(
+        &self,
+    ) -> impl Iterator<Item = &GeometryRigidPointContactFamily> {
         self.rigid_point_contact_families.values()
     }
 
-    pub fn rigid_vertex_contact_families(&self) -> impl Iterator<Item = &GeometryRigidVertexContactFamily> {
+    pub fn rigid_vertex_contact_families(
+        &self,
+    ) -> impl Iterator<Item = &GeometryRigidVertexContactFamily> {
         self.rigid_vertex_contact_families.values()
     }
 
@@ -924,12 +1045,21 @@ pub fn len(&self) -> usize {
         }
     }
 
-    fn indexed_interface_projections(&self, interface: &LiveGeometryInterface) -> BTreeMap<String, ()> {
+    fn indexed_interface_projections(
+        &self,
+        interface: &LiveGeometryInterface,
+    ) -> BTreeMap<String, ()> {
         let mut projections = BTreeMap::<String, ()>::new();
         match interface.query.as_ref() {
             Some(LiveGeometryQuery::RigidEdge {
-                a_material, a_edge, a_parameter, a_rotation,
-                b_material, b_edge, b_parameter, b_rotation,
+                a_material,
+                a_edge,
+                a_parameter,
+                a_rotation,
+                b_material,
+                b_edge,
+                b_parameter,
+                b_rotation,
             }) => {
                 for key in [
                     contact_bucket_hash(a_material, *b_edge, *a_edge),
@@ -939,26 +1069,61 @@ pub fn len(&self) -> usize {
                         for signature in signatures {
                             if let Some(family) = self.rigid_contact_families.get(signature) {
                                 let candidate_is_a = a_material == &family.candidate_resource;
-                                let (candidate_material, candidate_edge, candidate_parameter, candidate_rotation, anchor_edge, anchor_parameter) =
-                                    if candidate_is_a {
-                                        (a_material, *a_edge, *a_parameter as f64 / 1e9, *a_rotation as f64 / 1e9, *b_edge, *b_parameter as f64 / 1e9)
-                                    } else {
-                                        (b_material, *b_edge, *b_parameter as f64 / 1e9, *b_rotation as f64 / 1e9, *a_edge, *a_parameter as f64 / 1e9)
-                                    };
+                                let (
+                                    candidate_material,
+                                    candidate_edge,
+                                    candidate_parameter,
+                                    candidate_rotation,
+                                    anchor_edge,
+                                    anchor_parameter,
+                                ) = if candidate_is_a {
+                                    (
+                                        a_material,
+                                        *a_edge,
+                                        *a_parameter as f64 / 1e9,
+                                        *a_rotation as f64 / 1e9,
+                                        *b_edge,
+                                        *b_parameter as f64 / 1e9,
+                                    )
+                                } else {
+                                    (
+                                        b_material,
+                                        *b_edge,
+                                        *b_parameter as f64 / 1e9,
+                                        *b_rotation as f64 / 1e9,
+                                        *a_edge,
+                                        *a_parameter as f64 / 1e9,
+                                    )
+                                };
                                 let anchor_material = self
                                     .entries
                                     .get(&family.formation_signature)
-                                    .and_then(|formation| formation.constituents.get(family.anchor_constituent))
+                                    .and_then(|formation| {
+                                        formation.constituents.get(family.anchor_constituent)
+                                    })
                                     .map(|constituent| constituent.resource.as_str());
-                                let realized_anchor_material = if candidate_is_a { b_material } else { a_material };
+                                let realized_anchor_material = if candidate_is_a {
+                                    b_material
+                                } else {
+                                    a_material
+                                };
                                 if candidate_material == &family.candidate_resource
-                                    && realized_anchor_material == anchor_material.unwrap_or_default()
+                                    && realized_anchor_material
+                                        == anchor_material.unwrap_or_default()
                                     && anchor_edge == family.anchor_edge
                                     && candidate_edge == family.candidate_edge
                                     && anchor_parameter >= family.anchor_parameter_start - QUANTUM
                                     && anchor_parameter <= family.anchor_parameter_end + QUANTUM
-                                    && (normalize_angle(candidate_rotation - if candidate_is_a { *b_rotation as f64 / 1e9 } else { *a_rotation as f64 / 1e9 })
-                                        - family.candidate_rotation_radians).abs() <= 1e-7
+                                    && (normalize_angle(
+                                        candidate_rotation
+                                            - if candidate_is_a {
+                                                *b_rotation as f64 / 1e9
+                                            } else {
+                                                *a_rotation as f64 / 1e9
+                                            },
+                                    ) - family.candidate_rotation_radians)
+                                        .abs()
+                                        <= 1e-7
                                 {
                                     projections.insert(rigid_family_projection(family), ());
                                 }
@@ -968,7 +1133,11 @@ pub fn len(&self) -> usize {
                 }
             }
             Some(LiveGeometryQuery::RigidPoint {
-                line_material, line_point, edge_material, edge, edge_parameter,
+                line_material,
+                line_point,
+                edge_material,
+                edge,
+                edge_parameter,
             }) => {
                 let key = contact_bucket_hash(line_material, *edge, *line_point);
                 if let Some(signatures) = self.rigid_point_contact_index.get(&key) {
@@ -978,7 +1147,9 @@ pub fn len(&self) -> usize {
                             let anchor_material = self
                                 .entries
                                 .get(&family.formation_signature)
-                                .and_then(|formation| formation.constituents.get(family.anchor_constituent))
+                                .and_then(|formation| {
+                                    formation.constituents.get(family.anchor_constituent)
+                                })
                                 .map(|constituent| constituent.resource.as_str());
                             if line_material == &family.candidate_resource
                                 && edge_material == anchor_material.unwrap_or_default()
@@ -994,7 +1165,11 @@ pub fn len(&self) -> usize {
                 }
             }
             Some(LiveGeometryQuery::RigidVertex {
-                corner_material, corner_point, edge_material, edge, edge_parameter,
+                corner_material,
+                corner_point,
+                edge_material,
+                edge,
+                edge_parameter,
             }) => {
                 let key = contact_bucket_hash(corner_material, *edge, *corner_point);
                 if let Some(signatures) = self.rigid_vertex_contact_index.get(&key) {
@@ -1004,7 +1179,9 @@ pub fn len(&self) -> usize {
                             let anchor_material = self
                                 .entries
                                 .get(&family.formation_signature)
-                                .and_then(|formation| formation.constituents.get(family.anchor_constituent))
+                                .and_then(|formation| {
+                                    formation.constituents.get(family.anchor_constituent)
+                                })
                                 .map(|constituent| constituent.resource.as_str());
                             if corner_material == &family.candidate_resource
                                 && edge_material == anchor_material.unwrap_or_default()
@@ -1036,7 +1213,12 @@ pub fn len(&self) -> usize {
                 || !family.candidate_rotation_end_radians.is_finite()
                 || family.anchor_parameter_start > family.anchor_parameter_end
                 || self.entries.get(&family.formation_signature).is_none()
-                || family.anchor_constituent >= self.entries.get(&family.formation_signature).map(|f| f.constituents.len()).unwrap_or(0)
+                || family.anchor_constituent
+                    >= self
+                        .entries
+                        .get(&family.formation_signature)
+                        .map(|f| f.constituents.len())
+                        .unwrap_or(0)
             {
                 continue;
             }
@@ -1059,7 +1241,11 @@ pub fn len(&self) -> usize {
         let added = unique.len();
         for (signature, family) in &unique {
             self.rigid_vertex_contact_index
-                .entry(contact_bucket_hash(&family.candidate_resource, family.anchor_edge, family.candidate_vertex))
+                .entry(contact_bucket_hash(
+                    &family.candidate_resource,
+                    family.anchor_edge,
+                    family.candidate_vertex,
+                ))
                 .or_default()
                 .push(signature.clone());
         }
@@ -1080,13 +1266,17 @@ pub fn len(&self) -> usize {
                 || !family.candidate_rotation_start_radians.is_finite()
                 || !family.candidate_rotation_end_radians.is_finite()
                 || family.anchor_parameter_start > family.anchor_parameter_end
-            { continue; }
+            {
+                continue;
+            }
             let signature = family.signature();
             if !self.rigid_point_contact_families.contains_key(&signature) {
                 unique.insert(signature, family);
             }
         }
-        if unique.is_empty() { return Ok(0); }
+        if unique.is_empty() {
+            return Ok(0);
+        }
         let path = self.root.join("rigid_point_contact_families.jsonl");
         let mut file = OpenOptions::new().create(true).append(true).open(path)?;
         for family in unique.values() {
@@ -1098,7 +1288,11 @@ pub fn len(&self) -> usize {
         let added = unique.len();
         for (signature, family) in &unique {
             self.rigid_point_contact_index
-                .entry(contact_bucket_hash(&family.candidate_resource, family.anchor_edge, family.candidate_endpoint))
+                .entry(contact_bucket_hash(
+                    &family.candidate_resource,
+                    family.anchor_edge,
+                    family.candidate_endpoint,
+                ))
                 .or_default()
                 .push(signature.clone());
         }
@@ -1139,7 +1333,11 @@ pub fn len(&self) -> usize {
         let added = unique.len();
         for (signature, family) in &unique {
             self.rigid_contact_index
-                .entry(contact_bucket_hash(&family.candidate_resource, family.anchor_edge, family.candidate_edge))
+                .entry(contact_bucket_hash(
+                    &family.candidate_resource,
+                    family.anchor_edge,
+                    family.candidate_edge,
+                ))
                 .or_default()
                 .push(signature.clone());
         }
@@ -1189,13 +1387,28 @@ pub fn len(&self) -> usize {
         Ok(added)
     }
 
-    pub fn insert_contact_family(&mut self, family: GeometryContactFamily) -> std::io::Result<bool> {
-        if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION || !family.contact_angle_radians.is_finite() || !family.curvature_radius.is_finite() || !family.contact_length.is_finite() || !family.edge_parameter_start.is_finite() || !family.edge_parameter_end.is_finite() || family.edge_parameter_end < family.edge_parameter_start { return Ok(false); }
+    pub fn insert_contact_family(
+        &mut self,
+        family: GeometryContactFamily,
+    ) -> std::io::Result<bool> {
+        if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
+            || !family.contact_angle_radians.is_finite()
+            || !family.curvature_radius.is_finite()
+            || !family.contact_length.is_finite()
+            || !family.edge_parameter_start.is_finite()
+            || !family.edge_parameter_end.is_finite()
+            || family.edge_parameter_end < family.edge_parameter_start
+        {
+            return Ok(false);
+        }
         let signature = family.signature();
-        if self.contact_families.contains_key(&signature) { return Ok(false); }
+        if self.contact_families.contains_key(&signature) {
+            return Ok(false);
+        }
         let path = self.root.join("contact_families.jsonl");
         let mut file = OpenOptions::new().create(true).append(true).open(path)?;
-        serde_json::to_writer(&mut file, &family).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        serde_json::to_writer(&mut file, &family)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         file.write_all(b"\n")?;
         file.sync_data()?;
         self.contact_families.insert(signature, family);
@@ -1285,18 +1498,16 @@ pub fn len(&self) -> usize {
         for formation in formations {
             if let Some(canonical) = formation.canonicalized(catalog) {
                 let key = formation_equivalence_key(&canonical);
-                let existing_match = self
-                    .equivalence_index
-                    .get(&key)
-                    .into_iter()
-                    .flatten()
-                    .any(|signature| {
-                        self.entries
-                            .get(signature)
-                            .is_some_and(|existing| {
+                let existing_match =
+                    self.equivalence_index
+                        .get(&key)
+                        .into_iter()
+                        .flatten()
+                        .any(|signature| {
+                            self.entries.get(signature).is_some_and(|existing| {
                                 formations_equivalent_within_tolerance(existing, &canonical)
                             })
-                    });
+                        });
                 let batch_match = unique
                     .values()
                     .any(|existing| formations_equivalent_within_tolerance(existing, &canonical));
@@ -1356,7 +1567,10 @@ pub fn len(&self) -> usize {
     }
 }
 
-fn canonical_pose_candidates(formation: &GeometryFormation, catalog: &[BaseResource]) -> Vec<GeometryFormation> {
+fn canonical_pose_candidates(
+    formation: &GeometryFormation,
+    catalog: &[BaseResource],
+) -> Vec<GeometryFormation> {
     let mut candidates = Vec::with_capacity(formation.constituents.len().max(1));
     for anchor_index in 0..formation.constituents.len() {
         let anchor = &formation.constituents[anchor_index];
@@ -1395,10 +1609,7 @@ fn formation_equivalence_key(formation: &GeometryFormation) -> String {
     out
 }
 
-fn formations_equivalent_within_tolerance(
-    a: &GeometryFormation,
-    b: &GeometryFormation,
-) -> bool {
+fn formations_equivalent_within_tolerance(a: &GeometryFormation, b: &GeometryFormation) -> bool {
     if a.schema_version != b.schema_version
         || a.constituents.len() != b.constituents.len()
         || a.bonds != b.bonds
@@ -1406,16 +1617,19 @@ fn formations_equivalent_within_tolerance(
         return false;
     }
 
-    a.constituents.iter().zip(&b.constituents).all(|(left, right)| {
-        left.resource == right.resource
-            && angular_difference(
-                left.placement.rotation_radians,
-                right.placement.rotation_radians,
-            ) <= QUANTUM
-            && (left.placement.x - right.placement.x).hypot(
-                left.placement.y - right.placement.y,
-            ) <= GEOMETRY_EQUIVALENCE_TOLERANCE
-    })
+    a.constituents
+        .iter()
+        .zip(&b.constituents)
+        .all(|(left, right)| {
+            left.resource == right.resource
+                && angular_difference(
+                    left.placement.rotation_radians,
+                    right.placement.rotation_radians,
+                ) <= QUANTUM
+                && (left.placement.x - right.placement.x)
+                    .hypot(left.placement.y - right.placement.y)
+                    <= GEOMETRY_EQUIVALENCE_TOLERANCE
+        })
 }
 
 fn angular_difference(a: f64, b: f64) -> f64 {
@@ -1438,9 +1652,7 @@ fn quantize(value: f64) -> i64 {
 }
 
 fn normalized_angle(angle: f64) -> f64 {
-    (angle + std::f64::consts::PI)
-        .rem_euclid(std::f64::consts::TAU)
-        - std::f64::consts::PI
+    (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI
 }
 
 fn canonical_shape_rotation(form: &Form, angle: f64) -> f64 {
@@ -1451,22 +1663,34 @@ fn canonical_shape_rotation(form: &Form, angle: f64) -> f64 {
         Form::RegularPolygon { sides, .. } => std::f64::consts::TAU / (*sides as f64),
         Form::Polygon { vertices } => rotational_symmetry_period(vertices),
         Form::Line { .. } => std::f64::consts::PI,
-        Form::Fluid { boundary, .. } => boundary.as_deref()
+        Form::Fluid { boundary, .. } => boundary
+            .as_deref()
             .map(rotational_symmetry_period)
             .unwrap_or(std::f64::consts::TAU),
     };
-    if period >= std::f64::consts::TAU - 1e-12 { return angle; }
+    if period >= std::f64::consts::TAU - 1e-12 {
+        return angle;
+    }
     normalized_angle((angle / period).round() * period)
 }
 
 fn rotational_symmetry_period(vertices: &[(f64, f64)]) -> f64 {
-    if vertices.len() < 3 { return std::f64::consts::TAU; }
+    if vertices.len() < 3 {
+        return std::f64::consts::TAU;
+    }
     let n = vertices.len() as f64;
-    let center = vertices.iter().fold((0.0, 0.0), |(x, y), (vx, vy)| (x + vx, y + vy));
+    let center = vertices
+        .iter()
+        .fold((0.0, 0.0), |(x, y), (vx, vy)| (x + vx, y + vy));
     let center = (center.0 / n, center.1 / n);
-    let points: Vec<(f64, f64)> = vertices.iter().map(|(x, y)| (x - center.0, y - center.1)).collect();
+    let points: Vec<(f64, f64)> = vertices
+        .iter()
+        .map(|(x, y)| (x - center.0, y - center.1))
+        .collect();
     let first = points[0];
-    if first.0.hypot(first.1) <= 1e-12 { return std::f64::consts::TAU; }
+    if first.0.hypot(first.1) <= 1e-12 {
+        return std::f64::consts::TAU;
+    }
     let first_angle = first.1.atan2(first.0);
     let tol = 1e-9;
     for shift in 1..vertices.len() {
@@ -1475,7 +1699,9 @@ fn rotational_symmetry_period(vertices: &[(f64, f64)]) -> f64 {
         let (sin, cos) = rotation.sin_cos();
         if points.iter().all(|p| {
             let rotated = (p.0 * cos - p.1 * sin, p.0 * sin + p.1 * cos);
-            points.iter().any(|q| (rotated.0 - q.0).hypot(rotated.1 - q.1) <= tol)
+            points
+                .iter()
+                .any(|q| (rotated.0 - q.0).hypot(rotated.1 - q.1) <= tol)
         }) {
             return rotation.abs();
         }
@@ -1620,7 +1846,10 @@ pub fn validate_formation(formation: &GeometryFormation, catalog: &[BaseResource
 
     let mut parts = Vec::with_capacity(formation.constituents.len());
     for (index, constituent) in formation.constituents.iter().enumerate() {
-        let resource = catalog.iter().find(|r| r.name == constituent.resource).unwrap();
+        let resource = catalog
+            .iter()
+            .find(|r| r.name == constituent.resource)
+            .unwrap();
         parts.push(PlacedMaterialPart {
             part_index: index,
             form: resource.shape.form.clone(),
@@ -1662,7 +1891,6 @@ pub fn validate_formation(formation: &GeometryFormation, catalog: &[BaseResource
     true
 }
 
-
 /// A polygon edge expressed as the exact exposed parameter intervals that remain
 /// available for a future contact. Parameter 0 is the first vertex and 1 is
 /// the second vertex. Coincident boundary portions belonging to another
@@ -1688,7 +1916,10 @@ pub fn exposed_polygon_edge_intervals(
     if anchor_index >= formation.constituents.len() {
         return Vec::new();
     }
-    let Some(anchor_resource) = catalog.iter().find(|r| r.name == formation.constituents[anchor_index].resource) else {
+    let Some(anchor_resource) = catalog
+        .iter()
+        .find(|r| r.name == formation.constituents[anchor_index].resource)
+    else {
         return Vec::new();
     };
     let Some(anchor_vertices) = anchor_resource.shape.form.polygon_vertices() else {
@@ -1699,7 +1930,10 @@ pub fn exposed_polygon_edge_intervals(
 
     for edge in 0..anchor_vertices.len() {
         let a = world_point(anchor_vertices[edge], anchor_placement);
-        let b = world_point(anchor_vertices[(edge + 1) % anchor_vertices.len()], anchor_placement);
+        let b = world_point(
+            anchor_vertices[(edge + 1) % anchor_vertices.len()],
+            anchor_placement,
+        );
         let dx = b.0 - a.0;
         let dy = b.1 - a.1;
         let length_sq = dx * dx + dy * dy;
@@ -1712,11 +1946,15 @@ pub fn exposed_polygon_edge_intervals(
             if other_index == anchor_index {
                 continue;
             }
-            let Some(resource) = catalog.iter().find(|r| r.name == other.resource) else { continue; };
+            let Some(resource) = catalog.iter().find(|r| r.name == other.resource) else {
+                continue;
+            };
             if resource.physical_state == crate::resources::PhysicalState::Fluid {
                 continue;
             }
-            let Some(vertices) = resource.shape.form.polygon_vertices() else { continue; };
+            let Some(vertices) = resource.shape.form.polygon_vertices() else {
+                continue;
+            };
             let p = other.placement;
             for other_edge in 0..vertices.len() {
                 let c = world_point(vertices[other_edge], p);
@@ -1725,7 +1963,9 @@ pub fn exposed_polygon_edge_intervals(
                 let ey = d.1 - c.1;
                 let cross = dx * (c.1 - a.1) - dy * (c.0 - a.0);
                 let cross_end = dx * (d.1 - a.1) - dy * (d.0 - a.0);
-                if cross.abs() > 1e-9 * length_sq.sqrt() || cross_end.abs() > 1e-9 * length_sq.sqrt() {
+                if cross.abs() > 1e-9 * length_sq.sqrt()
+                    || cross_end.abs() > 1e-9 * length_sq.sqrt()
+                {
                     continue;
                 }
                 let t0 = ((c.0 - a.0) * dx + (c.1 - a.1) * dy) / length_sq;
@@ -1743,7 +1983,11 @@ pub fn exposed_polygon_edge_intervals(
         let mut cursor = 0.0;
         for (start, end) in covered {
             if start > cursor + 1e-10 {
-                out.push(ExposedEdgeInterval { edge, start: cursor, end: start.min(1.0) });
+                out.push(ExposedEdgeInterval {
+                    edge,
+                    start: cursor,
+                    end: start.min(1.0),
+                });
             }
             cursor = cursor.max(end);
             if cursor >= 1.0 - 1e-10 {
@@ -1751,7 +1995,11 @@ pub fn exposed_polygon_edge_intervals(
             }
         }
         if cursor < 1.0 - 1e-10 {
-            out.push(ExposedEdgeInterval { edge, start: cursor, end: 1.0 });
+            out.push(ExposedEdgeInterval {
+                edge,
+                start: cursor,
+                end: 1.0,
+            });
         }
     }
     out
@@ -1768,12 +2016,21 @@ fn load_fluid_boundary_families(
     catalog: &[BaseResource],
 ) -> BTreeMap<String, GeometryFluidBoundaryFamily> {
     let mut out = BTreeMap::new();
-    let Ok(file) = File::open(path) else { return out; };
-    let lines = BufReader::new(file).lines().collect::<Result<Vec<_>, _>>().unwrap_or_default();
+    let Ok(file) = File::open(path) else {
+        return out;
+    };
+    let lines = BufReader::new(file)
+        .lines()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap_or_default();
     for (index, line) in lines.iter().enumerate() {
-        if line.trim().is_empty() { continue; }
+        if line.trim().is_empty() {
+            continue;
+        }
         let Ok(family) = serde_json::from_str::<GeometryFluidBoundaryFamily>(line) else {
-            if index + 1 == lines.len() { continue; }
+            if index + 1 == lines.len() {
+                continue;
+            }
             continue;
         };
         if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
@@ -1790,7 +2047,11 @@ fn load_fluid_boundary_families(
             || family.edge_parameter_end < family.edge_parameter_start
             || !fluid_boundary_state_is_self_consistent(&family)
             || !entries.contains_key(&family.formation_signature)
-            || family.anchor_constituent >= entries.get(&family.formation_signature).map(|f| f.constituents.len()).unwrap_or(0)
+            || family.anchor_constituent
+                >= entries
+                    .get(&family.formation_signature)
+                    .map(|f| f.constituents.len())
+                    .unwrap_or(0)
             || catalog.iter().all(|r| r.name != family.fluid_resource)
         {
             continue;
@@ -1825,8 +2086,7 @@ pub fn generate_fluid_boundary_families(
             area,
             contact_angle_radians: family.contact_angle_radians,
             curvature_radius: family.curvature_radius,
-            free_arc_angle_radians: 2.0
-                * (std::f64::consts::PI - family.contact_angle_radians),
+            free_arc_angle_radians: 2.0 * (std::f64::consts::PI - family.contact_angle_radians),
             contact_length: family.contact_length,
             edge_parameter_start: family.edge_parameter_start,
             edge_parameter_end: family.edge_parameter_end,
@@ -1983,7 +2243,9 @@ fn exposed_line_intervals(
         }
 
         match &other_resource.shape.form {
-            Form::Line { length: other_length } => {
+            Form::Line {
+                length: other_length,
+            } => {
                 let half_other = *other_length * 0.5;
                 let c = (
                     other.placement.x - half_other * other.placement.rotation_radians.cos(),
@@ -2034,10 +2296,7 @@ fn exposed_line_intervals(
         }
     }
 
-    covered.sort_by(|a, b| {
-        a.0.partial_cmp(&b.0)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    covered.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
 
     let mut out = Vec::new();
     let mut cursor = 0.0;
@@ -2075,8 +2334,7 @@ mod bob_lookup_contract_tests {
         let family = library.rigid_contact_families().next()?;
         let formation = library.get(&family.formation_signature)?;
         let anchor = formation.constituents.get(family.anchor_constituent)?;
-        let anchor_parameter =
-            (family.anchor_parameter_start + family.anchor_parameter_end) * 0.5;
+        let anchor_parameter = (family.anchor_parameter_start + family.anchor_parameter_end) * 0.5;
 
         Some(LiveGeometryInterface {
             interface_class: "rigid_edge",
@@ -2121,10 +2379,7 @@ mod bob_lookup_contract_tests {
     #[test]
     fn indexed_edge_lookup_rejects_wrong_anchor_material() {
         let catalog = default_catalog();
-        let root = std::env::temp_dir().join(format!(
-            "evosim-bob-contract-{}",
-            std::process::id()
-        ));
+        let root = std::env::temp_dir().join(format!("evosim-bob-contract-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
 
