@@ -27,9 +27,7 @@ pub(crate) fn bond_break_energy_yield(
     let efficiency = processing_efficiency.clamp(0.0, 1.0);
     let usable = bond_energy * efficiency;
     let heat = (bond_energy - usable).max(0.0);
-    (usable.is_finite()
-        && heat.is_finite()
-        && (bond_energy - usable - heat).abs() <= 1e-9)
+    (usable.is_finite() && heat.is_finite() && (bond_energy - usable - heat).abs() <= 1e-9)
         .then_some((bond_energy, usable, heat))
 }
 
@@ -38,7 +36,8 @@ pub(crate) fn chemical_break_energy_yield(
     disruption_cost: f64,
     processing_efficiency: f64,
 ) -> Option<(f64, f64, f64)> {
-    let usable_surplus = crate::chemistry::chemical_break_surplus(reaction_energy, disruption_cost)?;
+    let usable_surplus =
+        crate::chemistry::chemical_break_surplus(reaction_energy, disruption_cost)?;
     if !crate::chemistry::can_chemical_break(reaction_energy, disruption_cost) {
         return None;
     }
@@ -66,11 +65,9 @@ pub(crate) fn settle_chemical_break_energy(
     processing_efficiency: f64,
     ledger: &mut EnergyLedger,
 ) -> bool {
-    let Some((gross, usable, heat)) = chemical_break_energy_yield(
-        reaction_energy,
-        disruption_cost,
-        processing_efficiency,
-    ) else {
+    let Some((gross, usable, heat)) =
+        chemical_break_energy_yield(reaction_energy, disruption_cost, processing_efficiency)
+    else {
         return false;
     };
     let mut trial_structure = organism.structure.clone();
