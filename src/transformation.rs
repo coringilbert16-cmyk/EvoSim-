@@ -11,28 +11,6 @@ use crate::structure::Placement;
 use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
-pub(crate) fn break_energy_yield(
-    a: crate::resources::ResourceProperties,
-    b: crate::resources::ResourceProperties,
-    processing_efficiency: f64,
-) -> Option<(f64, f64, f64)> {
-    let gross = a.potential_energy + b.potential_energy;
-    if !gross.is_finite() || gross < 0.0 {
-        return None;
-    }
-    // Breaking exposes the bonded material's intrinsic potential energy. The
-    // retired reactivity multiplier is deliberately absent: chemistry does not
-    // get to manufacture an accessibility factor here.
-    let cohesion =
-        ((a.cohesion.clamp(0.0, 1.0) + b.cohesion.clamp(0.0, 1.0)) * 0.5).clamp(0.0, 1.0);
-    let efficiency = processing_efficiency.clamp(0.0, 1.0);
-    let cohesion_loss = gross * cohesion * 0.5;
-    let pre_processing = (gross - cohesion_loss).max(0.0);
-    let usable = pre_processing * efficiency;
-    let heat = (gross - usable).max(0.0);
-    (usable.is_finite() && heat.is_finite()).then_some((gross, usable, heat))
-}
-
 /// Release the intrinsic potential stored in an existing physical bond.
 ///
 /// This is distinct from material decomposition: the constituent potential was
@@ -883,56 +861,12 @@ mod tests {
     }
 
     #[test]
-    fn break_yield_does_not_depend_on_retired_reactivity_or_chemical_position() {
-        let a = crate::resources::ResourceProperties {
-            mass: 1.0,
-            potential_energy: 10.0,
-            reactivity: 0.1,
-            chemical_position: Some(1.5),
-            cohesion: 0.4,
-        };
-        let b = crate::resources::ResourceProperties {
-            potential_energy: 5.0,
-            reactivity: 99.0,
-            chemical_position: Some(12.5),
-            ..a
-        };
-        let mut altered = b;
-        altered.reactivity = 0.0;
-        altered.chemical_position = Some(7.0);
-        assert_eq!(break_energy_yield(a, b, 1.0), break_energy_yield(a, altered, 1.0));
-    }
-
-    #[test]
     fn chemical_break_energy_is_conserved_between_disruption_usable_energy_and_heat() {
         let (released, usable, heat) = chemical_break_energy_yield(10.0, 4.0, 0.5).unwrap();
         assert!((released - 10.0).abs() < 1e-12);
         assert!((usable - 3.0).abs() < 1e-12);
         assert!((heat - 3.0).abs() < 1e-12);
         assert!((released - 4.0 - usable - heat).abs() < 1e-12);
-    }
-
-    #[test]
-    fn break_energy_yield_is_positive_when_resources_have_reactive_potential() {
-        let carbon = crate::resources::ResourceProperties {
-            mass: 1.0,
-            potential_energy: 1.0,
-            reactivity: 1.0,
-            chemical_position: None,
-            cohesion: 0.5,
-        };
-        let methane = crate::resources::ResourceProperties {
-            potential_energy: 20.0,
-            reactivity: 4.0,
-            chemical_position: None,
-            cohesion: 0.1,
-            ..carbon
-        };
-        let (gross, usable, heat) = break_energy_yield(carbon, methane, 0.8).unwrap();
-        assert_eq!(gross, 21.0);
-        assert!(usable > 0.0);
-        assert!(heat >= 0.0);
-        assert!((gross - usable - heat).abs() < 1e-12);
     }
 
     fn stress_break_test_organism() -> (
