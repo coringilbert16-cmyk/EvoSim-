@@ -522,9 +522,7 @@ mod tests {
                 rotation_radians: 0.0,
             },
         );
-        let endpoint = ConnectionEndpoint::Boundary {
-            angle_radians: 0.1,
-        };
+        let endpoint = ConnectionEndpoint::Boundary { angle_radians: 0.1 };
         let point = endpoint_world_point(endpoint, &unit, &catalog).unwrap();
         assert!(point.normal_x > 0.99);
         assert!(point.normal_y.abs() < 1e-12);
