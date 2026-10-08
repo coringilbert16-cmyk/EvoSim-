@@ -62,6 +62,8 @@ Use `cargo run -- --geometry-worker-once` for a bounded smoke test. It opens the
 
 A formation's seven resource frontiers are processed as one durable pass. Water is recorded as symbolic capillary families (or exhausted when no supported rigid boundary can accept the nominal water volume), while rigid candidates are expanded and batch-persisted. Restarted workers resume any frontier not marked `Exhausted`; an interrupted final JSON record is ignored as a truncated append tail rather than destroying the durable catalogue.
 
+The continuous worker runs each session against freshly opened geometry and chemistry stores. If a session returns an I/O error, Bob logs it, waits five seconds, and reopens both stores before retrying; it does not keep operating against stale in-memory state after a reported storage failure. An interrupted frontier remains eligible for replay. This is recoverability, not a guarantee against persistent disk/schema errors: those remain visible in the log and must be resolved before unattended use.
+
 
 The library's continuous-contact model is being expanded with exact symbolic rigid boundary families; no sampled geometry is used.
 
