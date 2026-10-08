@@ -2823,6 +2823,36 @@ mod tests {
 
 
     #[test]
+    fn canonicalization_is_idempotent() {
+        let catalog = default_catalog();
+        let base = GeometryFormation::single("Carbon");
+        let pair = generate_two_constituent_candidates(
+            &base,
+            catalog.iter().find(|r| r.name == "Carbon").unwrap(),
+            &catalog,
+        )
+        .into_iter()
+        .next()
+        .unwrap();
+
+        let once = pair.canonicalized(&catalog).unwrap();
+        let twice = once.clone().canonicalized(&catalog).unwrap();
+        assert_eq!(once.signature, twice.signature);
+    }
+
+    #[test]
+    fn live_edge_signature_parser_preserves_face_contact_identity() {
+        let signature = "live-v1|Carbon:edge:0@0@0|Carbon:edge:0@100000000@0";
+        let (a, b) = parse_edge_pair(signature).expect("edge pair should parse");
+        assert_eq!(a.material, "Carbon");
+        assert_eq!(b.material, "Carbon");
+        assert_eq!(a.edge, 0);
+        assert_eq!(b.edge, 0);
+        assert!((a.parameter - 0.0).abs() < 1e-12);
+        assert!((b.parameter - 0.1).abs() < 1e-12);
+    }
+
+    #[test]
     fn bob_equivalence_collapses_sub_half_unit_face_to_face_variation() {
         let root = temp_root();
         let catalog = default_catalog();
