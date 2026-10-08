@@ -2,7 +2,7 @@
 //! COMBINE support: deterministic recipe caching, locked formation threshold, and
 //! resource-derived bond strength.
 use crate::contact::{ConnectionCompatibilityCache, ConnectionPairCandidate};
-use crate::chemistry::{attraction, interaction_potential};
+use crate::chemistry::{attraction, interaction_potential, CHEMICAL_D_MAX, CHEMICAL_K};
 use crate::resources::{combine_materials, BaseResource, Material, ResourceProperties};
 use crate::structure::{formation_threshold, OrganismStructure};
 use std::collections::HashMap;
@@ -300,7 +300,7 @@ mod tests {
             ..a
         };
         let result =
-            chemical_interaction(a, b, candidate(0.0, 0.0), 0.5, 11.0, 1.0, 10.0).unwrap();
+            chemical_interaction(a, b, candidate(0.0, 0.0), CHEMICAL_K, CHEMICAL_D_MAX, 1.0, 10.0).unwrap();
         assert!(result.static_potential > 0.0);
         assert!((result.attraction - 10.0 * result.static_potential).abs() < 1e-12);
     }
