@@ -64,9 +64,9 @@ pub fn resolve_live_contact_candidate(
     candidate: crate::contact::ConnectionPairCandidate,
     catalog: &[BaseResource],
 ) -> Option<LiveGeometryInterface> {
-    let point_a = crate::contact::endpoint_world_point(candidate.endpoint_a, unit_a, catalog)?;
-    let point_b = crate::contact::endpoint_world_point(candidate.endpoint_b, unit_b, catalog)?;
-
+    // Distance and facing are runtime state, not interface identity. The
+    // canonical key must survive movement while retaining the realized local
+    // geometry of the contact itself.
     let local_a = local_contact_descriptor(candidate.endpoint_a, unit_a, catalog)?;
     let local_b = local_contact_descriptor(candidate.endpoint_b, unit_b, catalog)?;
 
@@ -93,12 +93,6 @@ pub fn resolve_live_contact_candidate(
             sides[0].1,
             sides[1].0,
             sides[1].1,
-            quantize(candidate.distance),
-            quantize(candidate.facing),
-            quantize(point_a.x),
-            quantize(point_a.y),
-            quantize(point_b.x),
-            quantize(point_b.y),
         ),
     })
 }
