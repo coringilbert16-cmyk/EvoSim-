@@ -353,10 +353,8 @@ mod tests {
         let candidates = generate_two_constituent_candidates(&target, hydrogen, &catalog);
         assert!(!candidates.is_empty());
 
-        let root = std::env::temp_dir().join(format!(
-            "evosim-bob-chemistry-gate-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("evosim-bob-chemistry-gate-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let mut chemistry_library = ChemistryLibrary::open(&root).unwrap();
 
