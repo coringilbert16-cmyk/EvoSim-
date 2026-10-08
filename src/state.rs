@@ -459,6 +459,7 @@ pub(crate) struct Simulation {
     pub(crate) organisms: Vec<Organism>,
     pub(crate) environment: Environment,
     pub(crate) active_transformations: Vec<ActiveTransformation>,
+    pub(crate) chemical_breaks: Vec<crate::chemical_reaction::ChemicalBreakOperation>,
     pub(crate) decomposing_bodies: Vec<DecomposingBody>,
     pub(crate) energy_ledger: EnergyLedger,
     pub(crate) next_organism_id: u64,
