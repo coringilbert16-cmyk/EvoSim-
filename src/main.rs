@@ -43,6 +43,7 @@ mod chemistry_library;
 mod decomposition;
 mod diagnostics;
 mod energy_ledger;
+mod library_sync;
 
 // Organism genome, behavior, and lifecycle.
 mod decision;
@@ -91,7 +92,23 @@ mod simulation_tests;
 
 #[tokio::main]
 async fn main() {
-    if std::env::args().nth(1).as_deref() == Some("--simulation-child") {
+    let command = std::env::args().nth(1);
+
+    if command.as_deref() != Some("--library-sync") {
+        library_sync::spawn_background();
+    }
+
+    if command.as_deref() == Some("--library-sync-once") {
+        library_sync::checkpoint_once().expect("library checkpoint failed");
+        return;
+    }
+
+    if command.as_deref() == Some("--library-sync") {
+        library_sync::run_foreground();
+        return;
+    }
+
+    if command.as_deref() == Some("--simulation-child") {
         let port = std::env::args()
             .nth(2)
             .and_then(|value| value.parse::<u16>().ok())
@@ -100,22 +117,22 @@ async fn main() {
         return;
     }
 
-    if std::env::args().nth(1).as_deref() == Some("--geometry-worker-once") {
+    if command.as_deref() == Some("--geometry-worker-once") {
         geometry_library_worker::run_once().expect("geometry worker smoke test failed");
         return;
     }
 
-    if std::env::args().nth(1).as_deref() == Some("--geometry-worker") {
+    if command.as_deref() == Some("--geometry-worker") {
         geometry_library_worker::run();
         return;
     }
 
-    if std::env::args().nth(1).as_deref() == Some("--geometry-viewer") {
+    if command.as_deref() == Some("--geometry-viewer") {
         geometry_server::run().await;
         return;
     }
 
-    if std::env::args().nth(1).as_deref() == Some("--headless") {
+    if command.as_deref() == Some("--headless") {
         simulation_runner::run_from_args(std::env::args());
         return;
     }
