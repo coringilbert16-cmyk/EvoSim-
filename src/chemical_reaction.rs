@@ -79,12 +79,9 @@ pub(crate) fn accumulate(
                 let Some(calculated) = crate::chemistry::interaction_potential(
                     position_a, position_b, crate::chemistry::CHEMICAL_K, crate::chemistry::CHEMICAL_D_MAX,
                 ) else { continue };
-                match chemistry_library.insert(crate::chemistry_library::ChemistryRecord {
-                    key: key_record,
-                    static_potential: calculated,
-                }) {
-                    Ok(_) => calculated,
-                    Err(_) => calculated,
+                match chemistry_library.get_or_insert_static_potential(key_record, calculated) {
+                    Ok(Some(value)) => value,
+                    Ok(None) | Err(_) => calculated,
                 }
             }
         };
