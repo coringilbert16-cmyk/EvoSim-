@@ -57,7 +57,7 @@ pub(crate) fn context(
     })
 }
 
-pub(crate) fn growth_fraction(organism: &mut Organism, environment: &Environment) -> f64 {
+pub(crate) fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
     crate::juvenile::confirmed_seed_scale_reference(&environment.catalog)
         .ok()
         .map(|reference| growth_fraction_for_reference(organism, environment, reference))
@@ -65,7 +65,7 @@ pub(crate) fn growth_fraction(organism: &mut Organism, environment: &Environment
 }
 
 pub(crate) fn growth_fraction_for_reference(
-    organism: &mut Organism,
+    organism: &Organism,
     environment: &Environment,
     seed_reference: (f64, f64),
 ) -> f64 {
