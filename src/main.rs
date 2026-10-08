@@ -166,12 +166,12 @@ async fn main() {
     }
 
     if command.as_deref() == Some("--library-sync-once") {
-        library_sync::checkpoint_once().expect("library checkpoint failed");
+        infrastructure::library_sync::checkpoint_once().expect("library checkpoint failed");
         return;
     }
 
     if command.as_deref() == Some("--library-sync") {
-        library_sync::run_foreground();
+        infrastructure::library_sync::run_foreground();
         return;
     }
 
@@ -186,7 +186,7 @@ async fn main() {
 
     if command.as_deref() == Some("--geometry-worker-once") {
         geometry_library_worker::run_once().expect("geometry worker smoke test failed");
-        let _ = library_sync::checkpoint_once();
+        let _ = infrastructure::library_sync::checkpoint_once();
         return;
     }
 
