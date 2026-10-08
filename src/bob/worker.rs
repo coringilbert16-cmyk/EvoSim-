@@ -1,4 +1,5 @@
-use crate::chemistry::{evaluate_formation, evaluate_static_chemical_interaction, formation_cost};
+use crate::chemistry::evaluate_static_chemical_interaction;
+use crate::combine::{evaluate_formation, formation_cost};
 use crate::chemistry_library::{ChemistryEvaluationState, ChemistryKey, ChemistryLibrary};
 use crate::contact::ConnectionCompatibilityCache;
 use crate::geometry_reference_library::{
