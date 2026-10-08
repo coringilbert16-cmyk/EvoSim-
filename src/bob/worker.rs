@@ -382,6 +382,8 @@ mod tests {
             evaluate_formation_chemistry(&formation, &catalog, &mut chemistry_library).unwrap();
         assert!(result.is_ok());
         assert!(chemistry_library.len() >= 1);
+        let reopened = ChemistryLibrary::open(&root).unwrap();
+        assert_eq!(reopened.len(), chemistry_library.len());
         let _ = std::fs::remove_dir_all(root);
     }
 }
