@@ -671,6 +671,7 @@ mod tests {
             mass,
             potential_energy: 1.0,
             reactivity,
+            chemical_position: None,
             cohesion,
         }
     }
