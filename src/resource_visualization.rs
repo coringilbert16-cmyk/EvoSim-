@@ -49,7 +49,7 @@ mod tests {
                 mass: 1.0,
                 potential_energy: 1.0,
                 reactivity: 1.0,
-            chemical_position: None,
+                chemical_position: None,
                 cohesion: 1.0,
             },
             physical_state: PhysicalState::Rigid,
