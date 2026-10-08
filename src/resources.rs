@@ -253,6 +253,7 @@ impl ResourceBaselines {
                 .sum::<f64>()
                 / count,
             reactivity: catalog.iter().map(|r| r.properties.reactivity).sum::<f64>() / count,
+            chemical_position: None,
             cohesion: catalog.iter().map(|r| r.properties.cohesion).sum::<f64>() / count,
         }
     }
@@ -378,6 +379,7 @@ impl Material {
                 mass: 0.0,
                 potential_energy: 0.0,
                 reactivity: 0.0,
+                chemical_position: None,
                 cohesion: 0.0,
             };
         }
@@ -524,6 +526,7 @@ pub fn property_ranges(catalog: &[BaseResource]) -> ResourceProperties {
         mass: (max_mass - min_mass).max(f64::EPSILON),
         potential_energy: (max_energy - min_energy).max(f64::EPSILON),
         reactivity: (max_reac - min_reac).max(f64::EPSILON),
+        chemical_position: None,
         cohesion: (max_coh - min_coh).max(f64::EPSILON),
     }
 }
@@ -538,6 +541,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 mass: 1.00,
                 potential_energy: 1.0,
                 reactivity: 0.10,
+                chemical_position: None,
                 cohesion: 0.95,
             },
             physical_state: PhysicalState::Rigid,
@@ -554,6 +558,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 mass: 0.75,
                 potential_energy: 20.0,
                 reactivity: 4.0,
+                chemical_position: None,
                 cohesion: 0.10,
             },
             physical_state: PhysicalState::Rigid,
@@ -570,6 +575,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 mass: 0.25,
                 potential_energy: 12.0,
                 reactivity: 3.50,
+                chemical_position: None,
                 cohesion: 0.05,
             },
             physical_state: PhysicalState::Rigid,
@@ -588,6 +594,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 mass: 1.50,
                 potential_energy: 8.0,
                 reactivity: 2.0,
+                chemical_position: None,
                 cohesion: 0.45,
             },
             physical_state: PhysicalState::Rigid,
@@ -604,6 +611,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 mass: 1.25,
                 potential_energy: 0.75,
                 reactivity: 0.35,
+                chemical_position: None,
                 cohesion: 0.70,
             },
             physical_state: PhysicalState::Rigid,
@@ -620,6 +628,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 mass: 1.75,
                 potential_energy: 1.50,
                 reactivity: 0.75,
+                chemical_position: None,
                 cohesion: 0.60,
             },
             physical_state: PhysicalState::Rigid,
@@ -642,6 +651,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 mass: 1.00,
                 potential_energy: 0.0,
                 reactivity: 0.0,
+                chemical_position: None,
                 cohesion: 0.00,
             },
             physical_state: PhysicalState::Fluid,
