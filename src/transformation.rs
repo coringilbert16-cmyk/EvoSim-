@@ -33,6 +33,60 @@ pub(crate) fn break_energy_yield(
     (usable.is_finite() && heat.is_finite()).then_some((gross, usable, heat))
 }
 
+pub(crate) fn chemical_break_energy_yield(
+    reaction_energy: f64,
+    disruption_cost: f64,
+    processing_efficiency: f64,
+) -> Option<(f64, f64, f64)> {
+    let usable_surplus = crate::chemistry::chemical_break_surplus(reaction_energy, disruption_cost)?;
+    if !crate::chemistry::can_chemical_break(reaction_energy, disruption_cost) {
+        return None;
+    }
+    let efficiency = processing_efficiency.clamp(0.0, 1.0);
+    let usable = usable_surplus * efficiency;
+    let heat = (reaction_energy - usable).max(0.0);
+    (usable.is_finite() && heat.is_finite()).then_some((reaction_energy, usable, heat))
+}
+
+/// Apply a chemistry-caused BREAK after the chemistry system has produced a
+/// reaction-energy event. Chemistry supplies the energy; the structure still
+/// decides whether the exact bond exists. No intrinsic bond potential is
+/// released a second time, preventing double-counting.
+pub(crate) fn settle_chemical_break_energy(
+    organism: &mut Organism,
+    bond: crate::structure::Bond,
+    reaction_energy: f64,
+    disruption_cost: f64,
+    processing_efficiency: f64,
+    ledger: &mut EnergyLedger,
+) -> bool {
+    let Some((gross, usable, heat)) = chemical_break_energy_yield(
+        reaction_energy,
+        disruption_cost,
+        processing_efficiency,
+    ) else {
+        return false;
+    };
+    let mut trial_structure = organism.structure.clone();
+    if trial_structure.break_matching_bond(bond).is_none() {
+        return false;
+    }
+    let tx = EnergyTransaction {
+        reason: EnergyReason::Break,
+        potential_released: gross,
+        usable_delta: usable,
+        structural_delta: 0.0,
+        heat_dissipated: heat,
+    };
+    if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
+        return false;
+    }
+    organism.structure = trial_structure;
+    organism.mark_structure_changed();
+    organism.add_transaction_stress(heat);
+    true
+}
+
 fn settle_break_energy(
     organism: &mut Organism,
     bond: crate::structure::Bond,
@@ -808,6 +862,13 @@ pub(crate) fn break_work_cost(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chemical_break_requires_reaction_surplus() {
+        assert!(chemical_break_energy_yield(6.0, 5.0, 1.0).is_some());
+        assert!(chemical_break_energy_yield(5.0, 5.0, 1.0).is_some());
+        assert!(chemical_break_energy_yield(4.0, 5.0, 1.0).is_none());
+    }
 
     #[test]
     fn break_yield_does_not_depend_on_retired_reactivity_or_chemical_position() {
