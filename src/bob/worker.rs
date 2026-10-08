@@ -1,11 +1,13 @@
-use crate::chemistry::evaluate_static_chemical_interaction;
-use crate::chemistry_library::{ChemistryKey, ChemistryLibrary};
+use crate::chemistry::{evaluate_static_chemical_interaction, formation_cost, evaluate_formation};
+use crate::chemistry_library::{ChemistryEvaluationState, ChemistryKey, ChemistryLibrary};
 use crate::geometry_reference_library::{
     expand_formation_candidates, generate_fluid_boundary_families, generate_rigid_contact_families,
     generate_rigid_point_contact_families, generate_rigid_vertex_contact_families,
     generate_water_contact_families, open_default_library, seed_base_catalogue, GeometryFormation,
     GeometryFrontierState, GeometryLibrary,
 };
+use crate::contact::ConnectionCompatibilityCache;
+use crate::structure::{OrganismStructure, StructuralUnit};
 use crate::resources::{default_catalog, BaseResource};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -94,56 +96,101 @@ fn evaluate_formation_chemistry(
     catalog: &[BaseResource],
     chemistry_library: &mut ChemistryLibrary,
 ) -> std::io::Result<Result<(), String>> {
-    for bond in &formation.bonds {
-        let Some(a) = formation.constituents.get(bond.constituent_a) else {
-            return Ok(Err("bond references missing constituent".into()));
-        };
-        let Some(b) = formation.constituents.get(bond.constituent_b) else {
-            return Ok(Err("bond references missing constituent".into()));
-        };
-        let Some(resource_a) = catalog.iter().find(|resource| resource.name == a.resource) else {
-            return Ok(Err(format!("unknown material: {}", a.resource)));
-        };
-        let Some(resource_b) = catalog.iter().find(|resource| resource.name == b.resource) else {
-            return Ok(Err(format!("unknown material: {}", b.resource)));
-        };
+    let mut structure = OrganismStructure::new();
+    for constituent in &formation.constituents {
+        structure.add_unit(StructuralUnit::new(
+            constituent.resource.clone(),
+            constituent.placement,
+        ));
+    }
 
-        let key = ChemistryKey::new(
-            &resource_a.name,
-            &resource_b.name,
-            "material_pair",
-            "static",
+    let mut cache = ConnectionCompatibilityCache::new();
+
+    for bond in &formation.bonds {
+        let candidates = crate::combine::eligible_candidates(
+            &structure,
+            bond.constituent_a,
+            bond.constituent_b,
+            catalog,
+            &mut cache,
         );
-        if let Some(record) = chemistry_library.get(&key) {
-            if record.state == crate::chemistry_library::ChemistryEvaluationState::Rejected {
-                return Ok(Err(record
-                    .rejection_reason
-                    .clone()
-                    .unwrap_or_else(|| "cached chemistry rejection".into())));
-            }
-            continue;
+        if candidates.is_empty() {
+            return Ok(Err(format!(
+                "no realized physical contact for formation bond {}-{}",
+                bond.constituent_a, bond.constituent_b
+            )));
         }
 
-        match evaluate_static_chemical_interaction(
-            resource_a.properties.chemical_position,
-            resource_b.properties.chemical_position,
-            resource_a.properties.cohesion,
-            resource_b.properties.cohesion,
-        ) {
-            Some(evaluation) => {
-                chemistry_library.record_valid_evaluation(
-                    key,
-                    evaluation.static_potential,
-                    evaluation.bond_strength,
-                )?;
+        let mut valid_interface = false;
+        let mut last_rejection = None;
+
+        for candidate in candidates {
+            let unit_a = &structure.units[bond.constituent_a];
+            let unit_b = &structure.units[bond.constituent_b];
+            let properties_a = unit_a
+                .properties(catalog)
+                .ok_or_else(|| std::io::Error::other("missing resource properties"))?;
+            let properties_b = unit_b
+                .properties(catalog)
+                .ok_or_else(|| std::io::Error::other("missing resource properties"))?;
+
+            let interface = crate::geometry_reference_library::resolve_live_contact_interface(
+                &unit_a.material.primary_resource_name().unwrap_or_default(),
+                candidate.endpoint_a,
+                &unit_b.material.primary_resource_name().unwrap_or_default(),
+                candidate.endpoint_b,
+            );
+            let key = ChemistryKey::from_live_geometry(
+                &unit_a.material.primary_resource_name().unwrap_or_default(),
+                &unit_b.material.primary_resource_name().unwrap_or_default(),
+                &interface,
+            );
+
+            if let Some(record) = chemistry_library.get(&key) {
+                if record.state == ChemistryEvaluationState::Valid {
+                    valid_interface = true;
+                    break;
+                }
+                last_rejection = record.rejection_reason.clone();
+                continue;
             }
-            None => {
-                chemistry_library
-                    .record_rejection(key, "no defined static chemical interaction")?;
-                return Ok(Err("no defined static chemical interaction".into()));
+
+            let Some(evaluation) = evaluate_static_chemical_interaction(
+                properties_a.chemical_position,
+                properties_b.chemical_position,
+                properties_a.cohesion,
+                properties_b.cohesion,
+            ) else {
+                let reason = "no defined static chemical interaction".to_string();
+                chemistry_library.record_rejection(key, reason.clone())?;
+                last_rejection = Some(reason);
+                continue;
+            };
+
+            let formation_evaluation =
+                evaluate_formation(candidate, properties_a.cohesion, properties_b.cohesion);
+            if formation_cost(properties_a, properties_b, formation_evaluation).is_err() {
+                let reason = "invalid chemical formation cost".to_string();
+                chemistry_library.record_rejection(key, reason.clone())?;
+                last_rejection = Some(reason);
+                continue;
             }
+
+            chemistry_library.record_valid_evaluation(
+                key,
+                evaluation.static_potential,
+                evaluation.bond_strength,
+            )?;
+            valid_interface = true;
+            break;
+        }
+
+        if !valid_interface {
+            return Ok(Err(last_rejection
+                .unwrap_or_else(|| "no chemically realizable contact interface".to_string())));
         }
     }
+
     Ok(Ok(()))
 }
 
