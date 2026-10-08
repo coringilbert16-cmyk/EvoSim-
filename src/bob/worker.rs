@@ -418,7 +418,10 @@ mod tests {
         let known_negative_count = chemistry_library.len();
         let result =
             evaluate_formation_chemistry(&formation, &catalog, &mut chemistry_library).unwrap();
-        assert!(result.is_err());
+        assert!(result
+            .as_ref()
+            .unwrap_err()
+            .contains("test: known chemically invalid interface"));
         assert_eq!(chemistry_library.len(), known_negative_count);
         let reopened = ChemistryLibrary::open(&root).unwrap();
         assert_eq!(reopened.len(), known_negative_count);
