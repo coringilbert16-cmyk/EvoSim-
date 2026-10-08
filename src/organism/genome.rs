@@ -164,5 +164,4 @@ mod tests {
         assert!((genome.size_preference() - 0.5).abs() < f64::EPSILON);
         assert!((genome.preferred_mass() - 30.0).abs() < 1e-9);
     }
-
 }
