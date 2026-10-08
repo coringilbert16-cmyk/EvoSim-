@@ -729,6 +729,7 @@ pub struct GeometryLibrary {
     rigid_point_contact_index: HashMap<u64, Vec<String>>,
     rigid_vertex_contact_families: BTreeMap<String, GeometryRigidVertexContactFamily>,
     rigid_vertex_contact_index: HashMap<u64, Vec<String>>,
+    rejected_formations: BTreeMap<String, GeometryFormationRejection>,
 }
 
 impl GeometryLibrary {
