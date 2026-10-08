@@ -122,6 +122,8 @@ fn evaluate_formation_chemistry(
             )));
         }
 
+        // A formation is accepted only when at least one realized contact
+        // interface for every required bond is chemically realizable.
         let mut valid_interface = false;
         let mut last_rejection = None;
 
