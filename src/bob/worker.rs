@@ -154,6 +154,15 @@ fn evaluate_formation_chemistry(
                 &interface,
             );
 
+            // Formation work depends on this realized candidate, so validate it
+            // even when the interface's static chemistry is already cached.
+            let formation_evaluation =
+                evaluate_formation(candidate, properties_a.cohesion, properties_b.cohesion);
+            if formation_cost(properties_a, properties_b, formation_evaluation).is_err() {
+                last_rejection = Some("invalid physical formation cost".to_string());
+                continue;
+            }
+
             if let Some(record) = chemistry_library.get(&key) {
                 if record.state == ChemistryEvaluationState::Valid {
                     valid_interface = true;
@@ -174,15 +183,6 @@ fn evaluate_formation_chemistry(
                 last_rejection = Some(reason);
                 continue;
             };
-
-            let formation_evaluation =
-                evaluate_formation(candidate, properties_a.cohesion, properties_b.cohesion);
-            if formation_cost(properties_a, properties_b, formation_evaluation).is_err() {
-                let reason = "invalid chemical formation cost".to_string();
-                chemistry_library.record_rejection(key, reason.clone())?;
-                last_rejection = Some(reason);
-                continue;
-            }
 
             chemistry_library.record_valid_evaluation(
                 key,
