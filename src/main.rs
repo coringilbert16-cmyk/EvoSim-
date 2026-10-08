@@ -122,6 +122,7 @@ async fn main() {
 
     if command.as_deref() == Some("--geometry-worker-once") {
         geometry_library_worker::run_once().expect("geometry worker smoke test failed");
+        let _ = library_sync::checkpoint_once();
         return;
     }
 
