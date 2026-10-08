@@ -48,8 +48,9 @@ pub(crate) fn chemical_break_energy_yield(
     // disruption_cost from that source; only the remainder can become usable
     // energy or heat. Do not count the disruption cost as heat as well.
     let heat = (usable_surplus - usable).max(0.0);
-    (usable.is_finite() && heat.is_finite() &&
-        (reaction_energy - disruption_cost - usable - heat).abs() <= 1e-9)
+    (usable.is_finite()
+        && heat.is_finite()
+        && (reaction_energy - disruption_cost - usable - heat).abs() <= 1e-9)
         .then_some((reaction_energy, usable, heat))
 }
 
