@@ -41,10 +41,69 @@ pub fn chemical_interaction(
     Some(ChemicalInteraction { static_potential, attraction })
 }
 
-pub fn formation_work_cost(a: ResourceProperties, b: ResourceProperties) -> f64 {
-    let complexity_factor = 1.0 + ((a.mass.max(0.0) + b.mass.max(0.0)) * 0.5).sqrt();
-    let cohesion_factor = 1.0 + ((a.cohesion.clamp(0.0, 1.0) + b.cohesion.clamp(0.0, 1.0)) * 0.5);
-    0.25 * complexity_factor * cohesion_factor
+/// Remaining physical work required to bring an eligible chemical interface
+/// from its current separation to contact.
+///
+/// Attraction is a force, not an energy deposit. Work is therefore the integral
+/// of that force over the remaining approach distance. If the constituents are
+/// already touching, no additional formation work is charged; the work that
+/// occurred during their earlier approach belongs to physical motion.
+pub fn formation_work_cost(
+    a: ResourceProperties,
+    b: ResourceProperties,
+    distance: f64,
+) -> f64 {
+    if !distance.is_finite() || distance < 0.0 {
+        return f64::NAN;
+    }
+    let (Some(position_a), Some(position_b)) = (a.chemical_position, b.chemical_position)
+    else {
+        return 0.0;
+    };
+    let Some(static_potential) = interaction_potential(
+        position_a,
+        position_b,
+        CHEMICAL_K,
+        CHEMICAL_D_MAX,
+    ) else {
+        return f64::NAN;
+    };
+    let d = distance.min(crate::chemistry::CHEMICAL_CONTACT_RADIUS);
+    let radius = crate::chemistry::CHEMICAL_CONTACT_RADIUS;
+    let force_scale = crate::chemistry::CHEMICAL_MAX_FORCE;
+    // F(x) = static_potential * force_scale * (1 - x/radius)^2.
+    // Integrate from x=0 to x=d to obtain the work still available to be
+    // performed by attraction while the interface closes.
+    let integral = d - (d * d / radius) + (d * d * d / (3.0 * radius * radius));
+    let work = static_potential * force_scale * integral;
+    if work.is_finite() { work.max(0.0) } else { f64::NAN }
+}
+
+/// Intrinsic potential stored by a newly formed structural bond.
+///
+/// Chemical materials derive this potential from their static chemical
+/// interaction. Materials without a chemical position fall back to their
+/// physically defined cohesion-derived bond strength. This is stored potential,
+/// not formation work, and is therefore accounted for separately.
+pub fn intrinsic_bond_potential(
+    a: ResourceProperties,
+    b: ResourceProperties,
+    strength: f64,
+) -> f64 {
+    if !strength.is_finite() || strength < 0.0 {
+        return f64::NAN;
+    }
+    let normalized = match (a.chemical_position, b.chemical_position) {
+        (Some(position_a), Some(position_b)) => interaction_potential(
+            position_a,
+            position_b,
+            CHEMICAL_K,
+            CHEMICAL_D_MAX,
+        )
+        .unwrap_or(0.0),
+        _ => strength.clamp(0.0, 1.0),
+    };
+    crate::chemistry::normalized_chemistry_to_energy(normalized).unwrap_or(f64::NAN)
 }
 pub fn experimental_bond_strength(surplus: f64) -> f64 {
     if !surplus.is_finite() || surplus <= 0.0 {
@@ -163,7 +222,7 @@ pub fn formation_cost(
     b: ResourceProperties,
     evaluation: FormationEvaluation,
 ) -> Result<(f64, f64), CombineEvaluationError> {
-    let work = formation_work_cost(a, b);
+    let work = formation_work_cost(a, b, evaluation.candidate.distance);
     if !work.is_finite() || work < 0.0 {
         return Err(CombineEvaluationError::NonFiniteWorkCost);
     }
