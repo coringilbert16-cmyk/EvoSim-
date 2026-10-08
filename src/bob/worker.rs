@@ -1,8 +1,10 @@
+use crate::chemistry::evaluate_static_chemical_interaction;
+use crate::chemistry_library::{ChemistryKey, ChemistryLibrary};
 use crate::geometry_reference_library::{
     expand_formation_candidates, generate_fluid_boundary_families, generate_rigid_contact_families,
     generate_rigid_point_contact_families, generate_rigid_vertex_contact_families,
     generate_water_contact_families, open_default_library, seed_base_catalogue,
-    GeometryFrontierState, GeometryLibrary,
+    GeometryFormation, GeometryFrontierState, GeometryLibrary,
 };
 use crate::resources::{default_catalog, BaseResource};
 use std::thread;
@@ -13,10 +15,14 @@ const IDLE_SLEEP: Duration = Duration::from_secs(1);
 pub fn run() {
     let catalog = default_catalog();
     let mut library = open_default_library().expect("geometry library must open");
+    let mut chemistry_library =
+        crate::chemistry_library::open_default_library().expect("chemistry library must open");
     seed_base_catalogue(&mut library, &catalog).expect("geometry library seed must succeed");
 
     loop {
-        match process_one_frontier(&mut library, &catalog).expect("geometry worker failed") {
+        match process_one_frontier(&mut library, &mut chemistry_library, &catalog)
+            .expect("geometry worker failed")
+        {
             Some(metrics) => eprintln!("{metrics}"),
             None => thread::sleep(IDLE_SLEEP),
         }
@@ -31,8 +37,9 @@ pub fn run() {
 pub fn run_once() -> std::io::Result<bool> {
     let catalog = default_catalog();
     let mut library = open_default_library()?;
+    let mut chemistry_library = crate::chemistry_library::open_default_library()?;
     let seeded = seed_base_catalogue(&mut library, &catalog)?;
-    let metrics = process_one_frontier(&mut library, &catalog)?;
+    let metrics = process_one_frontier(&mut library, &mut chemistry_library, &catalog)?;
     if let Some(metrics) = metrics {
         eprintln!("geometry worker once: seeded={seeded}; {metrics}");
         Ok(true)
@@ -55,6 +62,7 @@ struct WorkerPassMetrics {
     rigid_point_families: usize,
     rigid_vertex_families: usize,
     water_families: usize,
+    chemistry_rejections: usize,
     fluid_boundary_families: usize,
     elapsed: Duration,
     total_formations: usize,
@@ -64,11 +72,12 @@ impl std::fmt::Display for WorkerPassMetrics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "geometry worker pass: size={} generated={} added={} not_added={} edge_families={} point_families={} vertex_families={} water_families={} fluid_boundary_families={} total_formations={} elapsed_ms={}",
+            "geometry worker pass: size={} generated={} added={} not_added={} chemistry_rejections={} edge_families={} point_families={} vertex_families={} water_families={} fluid_boundary_families={} total_formations={} elapsed_ms={}",
             self.formation_size,
             self.generated_candidates,
             self.added_formations,
             self.generated_candidates.saturating_sub(self.added_formations),
+            self.chemistry_rejections,
             self.rigid_edge_families,
             self.rigid_point_families,
             self.rigid_vertex_families,
@@ -80,8 +89,69 @@ impl std::fmt::Display for WorkerPassMetrics {
     }
 }
 
+fn evaluate_formation_chemistry(
+    formation: &GeometryFormation,
+    catalog: &[BaseResource],
+    chemistry_library: &mut ChemistryLibrary,
+) -> std::io::Result<Result<(), String>> {
+    for bond in &formation.bonds {
+        let Some(a) = formation.constituents.get(bond.constituent_a) else {
+            return Ok(Err("bond references missing constituent".into()));
+        };
+        let Some(b) = formation.constituents.get(bond.constituent_b) else {
+            return Ok(Err("bond references missing constituent".into()));
+        };
+        let Some(resource_a) = catalog.iter().find(|resource| resource.name == a.resource) else {
+            return Ok(Err(format!("unknown material: {}", a.resource)));
+        };
+        let Some(resource_b) = catalog.iter().find(|resource| resource.name == b.resource) else {
+            return Ok(Err(format!("unknown material: {}", b.resource)));
+        };
+
+        let key = ChemistryKey::new(
+            &resource_a.name,
+            &resource_b.name,
+            "material_pair",
+            "static",
+        );
+        if let Some(record) = chemistry_library.get(&key) {
+            if record.state == crate::chemistry_library::ChemistryEvaluationState::Rejected {
+                return Ok(Err(record
+                    .rejection_reason
+                    .clone()
+                    .unwrap_or_else(|| "cached chemistry rejection".into())));
+            }
+            continue;
+        }
+
+        match evaluate_static_chemical_interaction(
+            resource_a.properties.chemical_position,
+            resource_b.properties.chemical_position,
+            resource_a.properties.cohesion,
+            resource_b.properties.cohesion,
+        ) {
+            Some(evaluation) => {
+                chemistry_library.record_valid_evaluation(
+                    key,
+                    evaluation.static_potential,
+                    evaluation.bond_strength,
+                )?;
+            }
+            None => {
+                chemistry_library.record_rejection(
+                    key,
+                    "no defined static chemical interaction",
+                )?;
+                return Ok(Err("no defined static chemical interaction".into()));
+            }
+        }
+    }
+    Ok(Ok(()))
+}
+
 fn process_one_frontier(
     library: &mut GeometryLibrary,
+    chemistry_library: &mut ChemistryLibrary,
     catalog: &[BaseResource],
 ) -> std::io::Result<Option<WorkerPassMetrics>> {
     // The library is already held in a BTreeMap keyed by canonical
@@ -182,7 +252,28 @@ fn process_one_frontier(
 
             let candidates = expand_formation_candidates(&formation, resource, catalog);
             metrics.generated_candidates += candidates.len();
-            metrics.added_formations += library.insert_many(candidates, catalog)?;
+            let mut chemistry_valid = Vec::new();
+            for candidate in candidates {
+                let Some(canonical) = candidate.canonicalized(catalog) else {
+                    continue;
+                };
+                if library.rejection(&canonical.signature).is_some() {
+                    metrics.chemistry_rejections += 1;
+                    continue;
+                }
+                match evaluate_formation_chemistry(
+                    &canonical,
+                    catalog,
+                    chemistry_library,
+                )? {
+                    Ok(()) => chemistry_valid.push(canonical),
+                    Err(reason) => {
+                        library.insert_rejection(canonical.signature.clone(), reason)?;
+                        metrics.chemistry_rejections += 1;
+                    }
+                }
+            }
+            metrics.added_formations += library.insert_many(chemistry_valid, catalog)?;
 
             library.set_frontier_state(
                 formation.signature.clone(),
