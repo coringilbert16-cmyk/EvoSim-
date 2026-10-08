@@ -21,8 +21,11 @@ mod connection_geometry;
 mod construction_material_selection;
 mod construction_runtime;
 mod contact;
+#[path = "bob/worker.rs"]
 mod geometry_library_worker;
+#[path = "bob/library.rs"]
 mod geometry_reference_library;
+#[path = "bob/server.rs"]
 mod geometry_server;
 mod initial_organism_constructor;
 mod interior_geometry;
