@@ -881,9 +881,19 @@ pub fn len(&self) -> usize {
         match interface.interface_class {
             "rigid_edge" => {
                 if let Some((a, b)) = parse_edge_pair(&interface.signature) {
-                    for family in self.rigid_contact_families.values() {
-                        if edge_pair_matches_family(&a, &b, family) {
-                            projections.insert(rigid_family_projection(family), ());
+                    let keys = [
+                        (a.material.clone(), b.edge, a.edge),
+                        (b.material.clone(), a.edge, b.edge),
+                    ];
+                    for key in keys {
+                        if let Some(signatures) = self.rigid_contact_index.get(&key) {
+                            for signature in signatures {
+                                if let Some(family) = self.rigid_contact_families.get(signature) {
+                                    if edge_pair_matches_family(&a, &b, family) {
+                                        projections.insert(rigid_family_projection(family), ());
+                                    }
+                                }
+                            }
                         }
                     }
                 }
