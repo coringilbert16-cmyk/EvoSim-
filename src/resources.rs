@@ -1,7 +1,7 @@
 #![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 use serde::{Deserialize, Serialize};
 
-use crate::math::{complexity, exponential_influence};
+use crate::math::complexity;
 
 /// Immutable physical state of a resource type. Geometry describes what the
 /// material currently occupies; state describes whether that geometry may
@@ -456,19 +456,6 @@ pub fn combine_materials(inputs: &[Material]) -> Material {
     };
     debug_assert!(result.is_valid());
     result
-}
-
-pub fn combine_work_cost(material: &Material, catalog: &[BaseResource]) -> f64 {
-    let n = material.total_amount().max(2.0);
-    let props = material.weighted_properties(catalog);
-    let reac = exponential_influence(props.reactivity.max(0.0));
-    let cohesion = props.cohesion.clamp(0.0, 1.0);
-    let c = complexity(n);
-    (c * (1.0 + cohesion) * (1.25 - reac)).max(0.2)
-}
-
-pub fn effective_reactivity(reactivity: f64) -> f64 {
-    reactivity.max(0.0)
 }
 
 /// Convert cohesion into boundary permeability using Water and Carbon as the
