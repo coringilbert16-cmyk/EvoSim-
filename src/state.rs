@@ -454,7 +454,6 @@ pub(crate) struct Simulation {
     pub(crate) organisms: Vec<Organism>,
     pub(crate) environment: Environment,
     pub(crate) active_transformations: Vec<ActiveTransformation>,
-    pub(crate) chemical_breaks: Vec<crate::chemical_reaction::ChemicalBreakOperation>,
     pub(crate) chemical_reaction_accumulation: std::collections::BTreeMap<String, f64>,
     pub(crate) decomposing_bodies: Vec<DecomposingBody>,
     pub(crate) energy_ledger: EnergyLedger,
