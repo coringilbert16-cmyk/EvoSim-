@@ -3401,6 +3401,9 @@ mod tests {
 #[derive(Clone, Debug, PartialEq)]
 struct LiveEdgeDescriptor { material: String, edge: usize, parameter: f64, rotation: f64 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct LivePointDescriptor { material: String, point_index: usize }
+
 fn parse_edge_pair(signature: &str) -> Option<(LiveEdgeDescriptor, LiveEdgeDescriptor)> {
     let mut parts = signature.split('|');
     let _prefix = parts.next()?;
@@ -3412,61 +3415,77 @@ fn parse_edge_pair(signature: &str) -> Option<(LiveEdgeDescriptor, LiveEdgeDescr
 fn parse_edge_descriptor(material: &str, value: &str) -> Option<LiveEdgeDescriptor> {
     let value = value.strip_prefix("edge:")?;
     let mut fields = value.split('@');
-    let edge = fields.next()?;
-    let parameter = fields.next()?;
-    let rotation = fields.next()?;
     Some(LiveEdgeDescriptor {
         material: material.to_owned(),
-        edge: edge.parse().ok()?,
-        parameter: parameter.parse::<i64>().ok()? as f64 / 1_000_000_000.0,
-        rotation: rotation.parse::<i64>().ok()? as f64 / 1_000_000_000.0,
+        edge: fields.next()?.parse().ok()?,
+        parameter: fields.next()?.parse::<i64>().ok()? as f64 / 1_000_000_000.0,
+        rotation: fields.next()?.parse::<i64>().ok()? as f64 / 1_000_000_000.0,
     })
 }
 
-fn edge_pair_matches_family(
-    a: &LiveEdgeDescriptor,
-    b: &LiveEdgeDescriptor,
-    family: &GeometryRigidContactFamily,
-) -> bool {
+fn parse_point_descriptor(material: &str, value: &str, prefix: &str) -> Option<LivePointDescriptor> {
+    Some(LivePointDescriptor {
+        material: material.to_owned(),
+        point_index: value.strip_prefix(prefix)?.parse().ok()?,
+    })
+}
+
+fn parse_line_edge_pair(signature: &str) -> Option<(LivePointDescriptor, LiveEdgeDescriptor)> {
+    let mut parts = signature.split('|');
+    let _prefix = parts.next()?;
+    let first = parts.next()?.split_once(':')?;
+    let second = parts.next()?.split_once(':')?;
+    if first.1.starts_with("line:") && second.1.starts_with("edge:") {
+        return Some((parse_point_descriptor(first.0, first.1, "line:")?, parse_edge_descriptor(second.0, second.1)?));
+    }
+    if second.1.starts_with("line:") && first.1.starts_with("edge:") {
+        return Some((parse_point_descriptor(second.0, second.1, "line:")?, parse_edge_descriptor(first.0, first.1)?));
+    }
+    None
+}
+
+fn parse_corner_edge_pair(signature: &str) -> Option<(LivePointDescriptor, LiveEdgeDescriptor)> {
+    let mut parts = signature.split('|');
+    let _prefix = parts.next()?;
+    let first = parts.next()?.split_once(':')?;
+    let second = parts.next()?.split_once(':')?;
+    if first.1.starts_with("corner:") && second.1.starts_with("edge:") {
+        return Some((parse_point_descriptor(first.0, first.1, "corner:")?, parse_edge_descriptor(second.0, second.1)?));
+    }
+    if second.1.starts_with("corner:") && first.1.starts_with("edge:") {
+        return Some((parse_point_descriptor(second.0, second.1, "corner:")?, parse_edge_descriptor(first.0, first.1)?));
+    }
+    None
+}
+
+fn edge_pair_matches_family(a: &LiveEdgeDescriptor, b: &LiveEdgeDescriptor, family: &GeometryRigidContactFamily) -> bool {
     let candidate_is_a = a.material == family.candidate_resource;
     let (candidate, anchor) = if candidate_is_a { (a, b) } else { (b, a) };
     if candidate.material != family.candidate_resource || anchor.edge != family.anchor_edge
         || candidate.edge != family.candidate_edge
         || anchor.parameter < family.anchor_parameter_start - QUANTUM
-        || anchor.parameter > family.anchor_parameter_end + QUANTUM
-    {
-        return false;
-    }
+        || anchor.parameter > family.anchor_parameter_end + QUANTUM { return false; }
     let relative = normalize_angle(candidate.rotation - anchor.rotation);
     (normalize_angle(relative - family.candidate_rotation_radians)).abs() <= 1e-7
 }
 
-fn edge_point_pair_matches_family(
-    a: &LiveEdgeDescriptor,
-    b: &LiveEdgeDescriptor,
-    family: &GeometryRigidPointContactFamily,
-) -> bool {
-    (a.material == family.candidate_resource || b.material == family.candidate_resource)
-        && (a.edge == family.anchor_edge || b.edge == family.anchor_edge)
-        && ((a.parameter >= family.anchor_parameter_start - QUANTUM
-            && a.parameter <= family.anchor_parameter_end + QUANTUM)
-            || (b.parameter >= family.anchor_parameter_start - QUANTUM
-                && b.parameter <= family.anchor_parameter_end + QUANTUM))
+fn line_edge_pair_matches_family(line: &LivePointDescriptor, edge: &LiveEdgeDescriptor, family: &GeometryRigidPointContactFamily) -> bool {
+    line.material == family.candidate_resource
+        && line.point_index == family.candidate_endpoint
+        && edge.edge == family.anchor_edge
+        && edge.parameter >= family.anchor_parameter_start - QUANTUM
+        && edge.parameter <= family.anchor_parameter_end + QUANTUM
+        && family.candidate_rotation_start_radians <= family.candidate_rotation_end_radians
 }
 
-fn edge_vertex_pair_matches_family(
-    a: &LiveEdgeDescriptor,
-    b: &LiveEdgeDescriptor,
-    family: &GeometryRigidVertexContactFamily,
-) -> bool {
-    (a.material == family.candidate_resource || b.material == family.candidate_resource)
-        && (a.edge == family.anchor_edge || b.edge == family.anchor_edge)
-        && ((a.parameter >= family.anchor_parameter_start - QUANTUM
-            && a.parameter <= family.anchor_parameter_end + QUANTUM)
-            || (b.parameter >= family.anchor_parameter_start - QUANTUM
-                && b.parameter <= family.anchor_parameter_end + QUANTUM))
+fn corner_edge_pair_matches_family(corner: &LivePointDescriptor, edge: &LiveEdgeDescriptor, family: &GeometryRigidVertexContactFamily) -> bool {
+    corner.material == family.candidate_resource
+        && corner.point_index == family.candidate_vertex
+        && edge.edge == family.anchor_edge
+        && edge.parameter >= family.anchor_parameter_start - QUANTUM
+        && edge.parameter <= family.anchor_parameter_end + QUANTUM
+        && family.candidate_rotation_start_radians <= family.candidate_rotation_end_radians
 }
-
 fn rigid_family_projection(family: &GeometryRigidContactFamily) -> String {
     format!("edge|{}|{}|{}|{}|{}", family.anchor_edge, family.candidate_edge, quantize(family.candidate_rotation_radians), quantize(family.anchor_parameter_start), quantize(family.anchor_parameter_end))
 }
