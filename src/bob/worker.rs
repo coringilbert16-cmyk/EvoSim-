@@ -1,4 +1,4 @@
-use crate::chemistry::{evaluate_static_chemical_interaction, formation_cost, evaluate_formation};
+use crate::chemistry::{evaluate_formation, evaluate_static_chemical_interaction, formation_cost};
 use crate::chemistry_library::{ChemistryEvaluationState, ChemistryKey, ChemistryLibrary};
 use crate::geometry_reference_library::{
     expand_formation_candidates, generate_fluid_boundary_families, generate_rigid_contact_families,
@@ -7,8 +7,8 @@ use crate::geometry_reference_library::{
     GeometryFrontierState, GeometryLibrary,
 };
 use crate::contact::ConnectionCompatibilityCache;
-use crate::structure::{OrganismStructure, StructuralUnit};
 use crate::resources::{default_catalog, BaseResource};
+use crate::structure::{OrganismStructure, StructuralUnit};
 use std::thread;
 use std::time::{Duration, Instant};
 
