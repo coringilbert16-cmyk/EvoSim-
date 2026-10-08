@@ -672,6 +672,13 @@ impl GeometryFormation {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GeometryKnowledgeState {
+    Unknown,
+    KnownPositive,
+    KnownNegative,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GeometryFormationRejection {
     pub schema_version: u32,
@@ -1034,6 +1041,16 @@ impl GeometryLibrary {
 
     pub fn formations(&self) -> impl Iterator<Item = &GeometryFormation> {
         self.entries.values()
+    }
+
+    pub fn knowledge_state(&self, formation_signature: &str) -> GeometryKnowledgeState {
+        if self.entries.contains_key(formation_signature) {
+            GeometryKnowledgeState::KnownPositive
+        } else if self.rejected_formations.contains_key(formation_signature) {
+            GeometryKnowledgeState::KnownNegative
+        } else {
+            GeometryKnowledgeState::Unknown
+        }
     }
 
     pub fn rejected_formations(&self) -> impl Iterator<Item = &GeometryFormationRejection> {
