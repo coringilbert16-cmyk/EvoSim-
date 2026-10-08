@@ -957,7 +957,7 @@ pub fn len(&self) -> usize {
         let added = unique.len();
         for (signature, family) in &unique {
             self.rigid_vertex_contact_index
-                .entry((family.candidate_resource.clone(), family.anchor_edge, family.candidate_vertex))
+                .entry(contact_bucket_hash(&family.candidate_resource, family.anchor_edge, family.candidate_vertex))
                 .or_default()
                 .push(signature.clone());
         }
@@ -996,7 +996,7 @@ pub fn len(&self) -> usize {
         let added = unique.len();
         for (signature, family) in &unique {
             self.rigid_point_contact_index
-                .entry((family.candidate_resource.clone(), family.anchor_edge, family.candidate_endpoint))
+                .entry(contact_bucket_hash(&family.candidate_resource, family.anchor_edge, family.candidate_endpoint))
                 .or_default()
                 .push(signature.clone());
         }
@@ -1037,11 +1037,7 @@ pub fn len(&self) -> usize {
         let added = unique.len();
         for (signature, family) in &unique {
             self.rigid_contact_index
-                .entry((
-                    family.candidate_resource.clone(),
-                    family.anchor_edge,
-                    family.candidate_edge,
-                ))
+                .entry(contact_bucket_hash(&family.candidate_resource, family.anchor_edge, family.candidate_edge))
                 .or_default()
                 .push(signature.clone());
         }
