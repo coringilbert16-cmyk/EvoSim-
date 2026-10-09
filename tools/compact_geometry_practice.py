@@ -344,7 +344,7 @@ def run(source: Path, destination: Path) -> int:
     print(f"Source:      {source}")
     print(f"Destination: {destination}")
     print(f"Formations indexed: {len(signature_to_id):,}")
-    print("Family file results (source files remain untouched):")
+    print("Compacted file results (source files remain untouched):")
     for name, report in reports:
         print(
             f"  {name}: rows={report['rows']:,}, "
