@@ -1,10 +1,10 @@
 name: Rust
 
-# CI trigger: validate the current main branch after the latest fixes.
+# CI trigger: validate main and the active Bob/library maintenance branch.
 
 on:
   push:
-    branches: [main]
+    branches: [main, remove-library-auto-publisher]
   pull_request:
 
 permissions:
