@@ -6,7 +6,7 @@ use crate::resources::BaseResource;
 use crate::state::Organism;
 use crate::structure::Bond;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ChemicalBreakOperation {
     pub(crate) organism_id: String,
     pub(crate) bond: Bond,
