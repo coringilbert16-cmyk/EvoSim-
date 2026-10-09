@@ -28,7 +28,16 @@ class CompactGeometryPracticeTests(unittest.TestCase):
     def make_source(self, root: Path, family_signature: str = SIGNATURE) -> Path:
         source = root / "source"
         source.mkdir()
-        write_jsonl(source / "formations.jsonl", [{"signature": SIGNATURE, "schema_version": 1}])
+        formation = {
+            "signature": SIGNATURE,
+            "schema_version": 1,
+            "constituents": [{
+                "resource": "Carbon",
+                "placement": {"x": 0.0, "y": 0.0, "rotation_radians": 0.0},
+            }],
+            "bonds": [],
+        }
+        write_jsonl(source / "formations.jsonl", [formation])
         write_jsonl(
             source / "rigid_contact_families.jsonl",
             [{
@@ -51,6 +60,24 @@ class CompactGeometryPracticeTests(unittest.TestCase):
             destination = root / "compact"
             self.assertEqual(migration.run(source, destination), 0)
             compact = json.loads((destination / "rigid_contact_families.jsonl").read_text())
+            compact_formation = json.loads((destination / "formations.jsonl").read_text())
+            self.assertNotIn("signature", compact_formation)
+            self.assertEqual(compact_formation["formation_id"], compact["formation_id"])
+            restored_formation = dict(compact_formation)
+            restored_formation.pop("formation_id")
+            restored_formation["signature"] = SIGNATURE
+            self.assertEqual(
+                restored_formation,
+                {
+                    "schema_version": 1,
+                    "constituents": [{
+                        "resource": "Carbon",
+                        "placement": {"x": 0.0, "y": 0.0, "rotation_radians": 0.0},
+                    }],
+                    "bonds": [],
+                    "signature": SIGNATURE,
+                },
+            )
             self.assertNotIn("storage_version", compact)
             self.assertEqual(len(compact["formation_id"]), 22)
             manifest = json.loads((destination / "storage_manifest.json").read_text())
