@@ -732,14 +732,16 @@ impl GeometryLibrary {
         let mut entries = BTreeMap::new();
         if data_path.exists() {
             let file = File::open(&data_path)?;
-            let lines: Vec<String> = BufReader::new(file).lines().collect::<Result<_, _>>()?;
-            for (line_index, line) in lines.iter().enumerate() {
+            let mut lines = BufReader::new(file).lines().peekable();
+            while let Some(line_result) = lines.next() {
+                let line = line_result?;
+                let is_last = lines.peek().is_none();
                 if line.trim().is_empty() {
                     continue;
                 }
-                let formation: GeometryFormation = match serde_json::from_str(line) {
+                let formation: GeometryFormation = match serde_json::from_str(&line) {
                     Ok(value) => value,
-                    Err(error) if line_index + 1 == lines.len() => {
+                    Err(error) if is_last => {
                         // An interrupted final append can leave a truncated
                         // JSON record. Earlier durable records remain valid;
                         // ignore only the incomplete tail so restart can resume.
@@ -788,14 +790,16 @@ impl GeometryLibrary {
         let mut contact_families = BTreeMap::new();
         if contact_family_path.exists() {
             let file = File::open(&contact_family_path)?;
-            let lines: Vec<String> = BufReader::new(file).lines().collect::<Result<_, _>>()?;
-            for (line_index, line) in lines.iter().enumerate() {
+            let mut lines = BufReader::new(file).lines().peekable();
+            while let Some(line_result) = lines.next() {
+                let line = line_result?;
+                let is_last = lines.peek().is_none();
                 if line.trim().is_empty() {
                     continue;
                 }
-                let family: GeometryContactFamily = match serde_json::from_str(line) {
+                let family: GeometryContactFamily = match serde_json::from_str(&line) {
                     Ok(value) => value,
-                    Err(error) if line_index + 1 == lines.len() => {
+                    Err(error) if is_last => {
                         let _ = error;
                         continue;
                     }
@@ -831,14 +835,16 @@ impl GeometryLibrary {
         let mut rigid_contact_families = BTreeMap::new();
         if rigid_contact_family_path.exists() {
             let file = File::open(&rigid_contact_family_path)?;
-            let lines: Vec<String> = BufReader::new(file).lines().collect::<Result<_, _>>()?;
-            for (line_index, line) in lines.iter().enumerate() {
+            let mut lines = BufReader::new(file).lines().peekable();
+            while let Some(line_result) = lines.next() {
+                let line = line_result?;
+                let is_last = lines.peek().is_none();
                 if line.trim().is_empty() {
                     continue;
                 }
-                let family: GeometryRigidContactFamily = match serde_json::from_str(line) {
+                let family: GeometryRigidContactFamily = match serde_json::from_str(&line) {
                     Ok(value) => value,
-                    Err(error) if line_index + 1 == lines.len() => {
+                    Err(error) if is_last => {
                         let _ = error;
                         continue;
                     }
@@ -2019,18 +2025,17 @@ fn load_fluid_boundary_families(
     let Ok(file) = File::open(path) else {
         return out;
     };
-    let lines = BufReader::new(file)
-        .lines()
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap_or_default();
-    for (index, line) in lines.iter().enumerate() {
+    let mut lines = BufReader::new(file).lines();
+    while let Some(line_result) = lines.next() {
+        // Preserve the previous all-or-empty behavior if the file itself
+        // cannot be read, without buffering the entire JSONL catalogue.
+        let Ok(line) = line_result else {
+            return BTreeMap::new();
+        };
         if line.trim().is_empty() {
             continue;
         }
-        let Ok(family) = serde_json::from_str::<GeometryFluidBoundaryFamily>(line) else {
-            if index + 1 == lines.len() {
-                continue;
-            }
+        let Ok(family) = serde_json::from_str::<GeometryFluidBoundaryFamily>(&line) else {
             continue;
         };
         if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
