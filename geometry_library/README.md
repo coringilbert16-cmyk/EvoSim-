@@ -110,3 +110,10 @@ Water contact is now also persisted as a `GeometryFluidBoundaryFamily`. Unlike t
 ### Intrinsic rotational symmetry
 
 Formation canonicalization removes exact proper rotations that leave an individual constituent's physical geometry unchanged. Regular polygons use their exact rotational symmetry; rectangles and line segments are twofold symmetric; circles have no meaningful local rotation. This is only rotational equivalence, never reflection equivalence, so mirror-image formations remain distinct. Hydrogen remains a finite-area 1.0 × 0.1 rectangle with exactly two line-like primary structural endpoints.
+
+
+### Automatic compact family persistence
+
+Family JSONL records are written in storage format version 2. Instead of repeating the full canonical formation signature in every contact-family row, each row stores a deterministic 128-bit SHA-256 formation ID. The complete canonical signature remains authoritative in `formations.jsonl`; on open, Bob builds the ID map, detects collisions, and resolves compact IDs back to full runtime signatures. Legacy family rows are still readable so a versioned migration can be staged safely. Unknown storage versions, missing IDs, unresolved IDs, and ID collisions fail closed.
+
+This is storage compaction, not geometry pruning: no distinct formation or contact family is intentionally removed. Family-level duplicate checks continue to use the full logical signature. Formation batch deduplication uses its existing canonical geometry-equivalence rule, but now checks only the matching equivalence bucket rather than scanning every accepted candidate, avoiding quadratic comparisons across unrelated formations. The persistent output is compact automatically for all newly written family rows.
