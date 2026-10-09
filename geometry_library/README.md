@@ -120,3 +120,17 @@ Contact-family rows replace their repeated full `formation_signature` with the s
 Formation batch deduplication uses the existing canonical geometry-equivalence rule but checks only matching equivalence buckets, avoiding comparisons against unrelated candidates. Exact compositional storage is lossless: it does not intentionally remove distinct formations or contact families. The checked-in GitHub snapshot's isolated v3 practice run encoded 23,027 of 25,807 formations as exact deltas (maximum reference depth 3) and reduced the formation file from 14,618,529 to 8,536,354 bytes. Those figures are a reference result, not a guarantee for the larger local catalogue.
 
 ### Running the worker safely
+
+Do not erase the only copy of an existing catalogue to switch formats. Use a new, empty directory for the first v3 run; keep the old directory untouched until the new store has been inspected and backed up. An explicit `EVOSIM_GEOMETRY_LIBRARY_DIR` may point to either an existing store (with `manifest.json` and `formations.jsonl`) or an empty directory. Bob initializes the latter as v3. A nonempty directory without those store files is rejected rather than silently treated as a new library.
+
+For a Windows PowerShell smoke run from the source checkout:
+
+```powershell
+$env:EVOSIM_GEOMETRY_LIBRARY_DIR = "$PWD\geometry_library\data-v3-smoke"
+New-Item -ItemType Directory -Force $env:EVOSIM_GEOMETRY_LIBRARY_DIR | Out-Null
+cargo run -- --geometry-worker-once
+cargo run -- --geometry-worker-once
+Get-Content "$env:EVOSIM_GEOMETRY_LIBRARY_DIR\storage_manifest.json"
+```
+
+Use a genuinely empty directory for the first command. The second command verifies that Bob can reopen the store written by the first. The storage manifest should report `storage_format_version: 3`; formation rows should use `formation_id`, and profitable exact deltas may use `base_id`. Do not point the override at the old catalogue until its catalog signature and schema have been deliberately reconciled. The CI smoke test checks these properties and verifies that at least one delta was written.
