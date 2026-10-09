@@ -1579,7 +1579,9 @@ impl GeometryLibrary {
         };
         library.manifest.entries = library.entries.len() as u64;
         library.write_manifest()?;
-        write_storage_manifest(&library.root, library.formation_storage_version)?;
+        if !library.root.join("storage_manifest.json").exists() {
+            write_storage_manifest(&library.root, library.formation_storage_version)?;
+        }
         Ok(library)
     }
 
@@ -4259,6 +4261,54 @@ mod compact_family_storage_tests {
             &ids
         )
         .is_err());
+    }
+
+    #[test]
+    fn profitable_one_constituent_delta_is_written_and_reconstructed() {
+        let catalog = default_catalog();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-compositional-family-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let carbon = GeometryFormation::single("Carbon");
+        let nitrogen = GeometryFormation::single("Nitrogen");
+        library
+            .insert_many(vec![carbon.clone(), nitrogen], &catalog)
+            .unwrap();
+
+        let nitrogen_resource = catalog
+            .iter()
+            .find(|resource| resource.name == "Nitrogen")
+            .unwrap();
+        let candidates = generate_two_constituent_candidates(&carbon, nitrogen_resource, &catalog);
+        assert!(!candidates.is_empty());
+        let mut found_delta = false;
+        for candidate in &candidates {
+            let value =
+                compact_formation_value(candidate, &library.entries, &BTreeMap::new()).unwrap();
+            if value.get("base_id").is_some() {
+                found_delta = true;
+                break;
+            }
+        }
+        assert!(found_delta, "expected at least one exact, profitable one-unit delta");
+
+        library.insert_many(candidates, &catalog).unwrap();
+        let expected: BTreeSet<_> = library
+            .formations()
+            .map(|formation| formation.signature.clone())
+            .collect();
+        drop(library);
+
+        let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
+        let actual: BTreeSet<_> = reopened
+            .formations()
+            .map(|formation| formation.signature.clone())
+            .collect();
+        assert_eq!(actual, expected);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
