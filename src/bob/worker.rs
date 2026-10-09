@@ -91,7 +91,6 @@ fn process_one_frontier(
     // its complete seven-resource row, then return so the next pass advances.
     let Some(formation) = library
         .formations()
-        .filter(|formation| formation.constituents.len() < 20)
         .filter(|formation| {
             catalog.iter().any(|resource| {
                 !matches!(
