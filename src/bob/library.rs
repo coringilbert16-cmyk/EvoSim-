@@ -4187,6 +4187,7 @@ mod bob_candidate_generation_contract_tests {
 mod compact_family_storage_tests {
     use super::*;
     use crate::resources::default_catalog;
+    use std::collections::BTreeSet;
 
     #[test]
     fn compact_family_records_round_trip_and_legacy_rows_remain_readable() {
@@ -4339,6 +4340,17 @@ mod compact_family_storage_tests {
                 .insert_rigid_contact_families(vec![family.clone()])
                 .unwrap(),
             1
+        );
+
+        let storage_manifest: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(root.join("storage_manifest.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            storage_manifest
+                .get("storage_format_version")
+                .and_then(serde_json::Value::as_u64),
+            Some(3)
         );
 
         let path = root.join("rigid_contact_families.jsonl");
