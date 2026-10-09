@@ -13,7 +13,9 @@ use crate::material_geometry::{
 };
 use crate::resources::{default_catalog, BaseResource, Form};
 use crate::structure::{ConnectionEndpoint, Placement};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
@@ -25,6 +27,60 @@ pub const GEOMETRY_LIBRARY_SCHEMA_VERSION: u32 = 1;
 /// Differences at or below this distance do not create a new record.
 pub const GEOMETRY_EQUIVALENCE_TOLERANCE: f64 = 0.5;
 const QUANTUM: f64 = 1e-9;
+const FAMILY_STORAGE_VERSION: u64 = 2;
+
+/// Stable 128-bit prefix of SHA-256; unlike DefaultHasher, this is a persistence contract.
+fn formation_id(signature: &str) -> String {
+    let digest = Sha256::digest(signature.as_bytes());
+    digest[..16].iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn compact_family_value<T: Serialize>(family: &T) -> std::io::Result<serde_json::Value> {
+    let mut value = serde_json::to_value(family)
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+    let object = value.as_object_mut().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidData, "family record must serialize as an object")
+    })?;
+    let signature = object.remove("formation_signature")
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "family record lacks formation_signature"))?;
+    object.insert("formation_id".to_owned(), serde_json::Value::String(formation_id(&signature)));
+    object.insert("storage_version".to_owned(), serde_json::Value::from(FAMILY_STORAGE_VERSION));
+    Ok(value)
+}
+
+fn write_compact_family<W: Write, T: Serialize>(writer: &mut W, family: &T) -> std::io::Result<()> {
+    let value = compact_family_value(family)?;
+    serde_json::to_writer(writer, &value)
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))
+}
+
+fn deserialize_family_record<T: DeserializeOwned>(
+    line: &str,
+    formation_ids: &BTreeMap<String, String>,
+) -> Result<T, serde_json::Error> {
+    let mut value: serde_json::Value = serde_json::from_str(line)?;
+    let object = value.as_object_mut().ok_or_else(|| {
+        serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, "family record must be an object"))
+    })?;
+    if let Some(version) = object.remove("storage_version") {
+        if version.as_u64() != Some(FAMILY_STORAGE_VERSION) {
+            return Err(serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, "unsupported family storage version")));
+        }
+        if object.contains_key("formation_signature") {
+            return Err(serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, "compact family record contains both formation_signature and formation_id")));
+        }
+        let id = object.remove("formation_id").and_then(|value| value.as_str().map(str::to_owned))
+            .ok_or_else(|| serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, "compact family record lacks formation_id")))?;
+        let signature = formation_ids.get(&id).ok_or_else(|| {
+            serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("unresolved formation_id: {id}")))
+        })?;
+        object.insert("formation_signature".to_owned(), serde_json::Value::String(signature.clone()));
+    } else if !object.get("formation_signature").and_then(serde_json::Value::as_str).is_some() {
+        return Err(serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, "legacy family record lacks formation_signature")));
+    }
+    serde_json::from_value(value)
+}
 
 /// Canonical identity of a live physical interface.
 ///
@@ -808,6 +864,20 @@ pub struct GeometryLibrary {
     rigid_point_contact_index: HashMap<u64, Vec<String>>,
     rigid_vertex_contact_families: BTreeMap<String, GeometryRigidVertexContactFamily>,
     rigid_vertex_contact_index: HashMap<u64, Vec<String>>,
+    formation_ids: BTreeMap<String, String>,
+}
+
+fn build_formation_id_index(entries: &BTreeMap<String, GeometryFormation>) -> std::io::Result<BTreeMap<String, String>> {
+    let mut ids = BTreeMap::new();
+    for signature in entries.keys() {
+        let id = formation_id(signature);
+        if let Some(previous) = ids.insert(id.clone(), signature.clone()) {
+            if previous != *signature {
+                return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("formation ID collision for {id}")));
+            }
+        }
+    }
+    Ok(ids)
 }
 
 impl GeometryLibrary {
@@ -881,6 +951,8 @@ impl GeometryLibrary {
             ));
         }
 
+        let formation_ids = build_formation_id_index(&entries)?;
+
         let mut contact_families = BTreeMap::new();
         if contact_family_path.exists() {
             let file = File::open(&contact_family_path)?;
@@ -891,7 +963,7 @@ impl GeometryLibrary {
                 if line.trim().is_empty() {
                     continue;
                 }
-                let family: GeometryContactFamily = match serde_json::from_str(&line) {
+                let family: GeometryContactFamily = match deserialize_family_record(&line, &formation_ids) {
                     Ok(value) => value,
                     Err(error) if is_last => {
                         let _ = error;
@@ -936,7 +1008,7 @@ impl GeometryLibrary {
                 if line.trim().is_empty() {
                     continue;
                 }
-                let family: GeometryRigidContactFamily = match serde_json::from_str(&line) {
+                let family: GeometryRigidContactFamily = match deserialize_family_record(&line, &formation_ids) {
                     Ok(value) => value,
                     Err(error) if is_last => {
                         let _ = error;
@@ -994,13 +1066,14 @@ impl GeometryLibrary {
         };
 
         let fluid_boundary_families =
-            load_fluid_boundary_families(&fluid_boundary_family_path, &entries, catalog);
+            load_fluid_boundary_families(&fluid_boundary_family_path, &entries, catalog, &formation_ids);
         let rigid_point_contact_families =
-            load_rigid_point_contact_families(&rigid_point_contact_family_path, &entries, catalog);
+            load_rigid_point_contact_families(&rigid_point_contact_family_path, &entries, catalog, &formation_ids);
         let rigid_vertex_contact_families = load_rigid_vertex_contact_families(
             &rigid_vertex_contact_family_path,
             &entries,
             catalog,
+            &formation_ids,
         );
 
         let mut rigid_contact_index = HashMap::<u64, Vec<String>>::new();
@@ -1060,6 +1133,7 @@ impl GeometryLibrary {
             rigid_point_contact_index,
             rigid_vertex_contact_families,
             rigid_vertex_contact_index,
+            formation_ids,
         };
         library.manifest.entries = library.entries.len() as u64;
         library.write_manifest()?;
@@ -1351,7 +1425,7 @@ impl GeometryLibrary {
         let path = self.root.join("rigid_vertex_contact_families.jsonl");
         let mut file = OpenOptions::new().create(true).append(true).open(path)?;
         for family in unique.values() {
-            serde_json::to_writer(&mut file, family)
+            write_compact_family(&mut file, family)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
             file.write_all(b"\n")?;
         }
@@ -1405,7 +1479,7 @@ impl GeometryLibrary {
         let path = self.root.join("rigid_point_contact_families.jsonl");
         let mut file = OpenOptions::new().create(true).append(true).open(path)?;
         for family in unique.values() {
-            serde_json::to_writer(&mut file, family)
+            write_compact_family(&mut file, family)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
             file.write_all(b"\n")?;
         }
@@ -1457,7 +1531,7 @@ impl GeometryLibrary {
         let path = self.root.join("rigid_contact_families.jsonl");
         let mut file = OpenOptions::new().create(true).append(true).open(path)?;
         for family in unique.values() {
-            serde_json::to_writer(&mut file, family)
+            write_compact_family(&mut file, family)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
             file.write_all(b"\n")?;
         }
@@ -1509,7 +1583,7 @@ impl GeometryLibrary {
         let path = self.root.join("fluid_boundary_families.jsonl");
         let mut file = OpenOptions::new().create(true).append(true).open(path)?;
         for family in unique.values() {
-            serde_json::to_writer(&mut file, family)
+            write_compact_family(&mut file, family)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
             file.write_all(b"\n")?;
         }
@@ -1539,7 +1613,7 @@ impl GeometryLibrary {
         }
         let path = self.root.join("contact_families.jsonl");
         let mut file = OpenOptions::new().create(true).append(true).open(path)?;
-        serde_json::to_writer(&mut file, &family)
+        write_compact_family(&mut file, &family)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         file.write_all(b"\n")?;
         file.sync_data()?;
@@ -1575,7 +1649,7 @@ impl GeometryLibrary {
         let path = self.root.join("contact_families.jsonl");
         let mut file = OpenOptions::new().create(true).append(true).open(path)?;
         for family in unique.values() {
-            serde_json::to_writer(&mut file, family)
+            write_compact_family(&mut file, family)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
             file.write_all(b"\n")?;
         }
@@ -1627,26 +1701,41 @@ impl GeometryLibrary {
         catalog: &[BaseResource],
     ) -> std::io::Result<usize> {
         let mut unique = BTreeMap::new();
+        let mut batch_equivalence_index = BTreeMap::<String, Vec<String>>::new();
+        let mut batch_formation_ids = BTreeMap::<String, String>::new();
         for formation in formations {
             if let Some(canonical) = formation.canonicalized(catalog) {
+                let signature = canonical.signature.clone();
+                let id = formation_id(&signature);
+                if let Some(previous) = self.formation_ids.get(&id).or_else(|| batch_formation_ids.get(&id)) {
+                    if previous != &signature {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            format!("formation ID collision for {id}"),
+                        ));
+                    }
+                }
                 let key = formation_equivalence_key(&canonical);
-                let existing_match =
-                    self.equivalence_index
-                        .get(&key)
-                        .into_iter()
-                        .flatten()
-                        .any(|signature| {
-                            self.entries.get(signature).is_some_and(|existing| {
-                                formations_equivalent_within_tolerance(existing, &canonical)
-                            })
-                        });
-                let batch_match = unique
-                    .values()
+                let existing_match = self.equivalence_index
+                    .get(&key)
+                    .into_iter()
+                    .flatten()
+                    .any(|existing_signature| {
+                        self.entries.get(existing_signature).is_some_and(|existing| {
+                            formations_equivalent_within_tolerance(existing, &canonical)
+                        })
+                    });
+                let batch_match = batch_equivalence_index.get(&key)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|existing_signature| unique.get(existing_signature))
                     .any(|existing| formations_equivalent_within_tolerance(existing, &canonical));
                 if existing_match || batch_match {
                     continue;
                 }
-                unique.insert(canonical.signature.clone(), canonical);
+                batch_equivalence_index.entry(key).or_default().push(signature.clone());
+                batch_formation_ids.insert(id, signature.clone());
+                unique.insert(signature, canonical);
             }
         }
         if unique.is_empty() {
@@ -1666,6 +1755,9 @@ impl GeometryLibrary {
         file.sync_data()?;
 
         let added = unique.len();
+        for signature in unique.keys() {
+            self.formation_ids.insert(formation_id(signature), signature.clone());
+        }
         for (signature, formation) in &unique {
             self.equivalence_index
                 .entry(formation_equivalence_key(formation))
@@ -2145,6 +2237,7 @@ fn load_fluid_boundary_families(
     path: &Path,
     entries: &BTreeMap<String, GeometryFormation>,
     catalog: &[BaseResource],
+    formation_ids: &BTreeMap<String, String>,
 ) -> BTreeMap<String, GeometryFluidBoundaryFamily> {
     let mut out = BTreeMap::new();
     let Ok(file) = File::open(path) else {
@@ -2160,7 +2253,7 @@ fn load_fluid_boundary_families(
         if line.trim().is_empty() {
             continue;
         }
-        let Ok(family) = serde_json::from_str::<GeometryFluidBoundaryFamily>(&line) else {
+        let Ok(family) = deserialize_family_record::<GeometryFluidBoundaryFamily>(&line, formation_ids) else {
             continue;
         };
         if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
@@ -2522,6 +2615,7 @@ fn load_rigid_point_contact_families(
     path: &Path,
     entries: &BTreeMap<String, GeometryFormation>,
     catalog: &[BaseResource],
+    formation_ids: &BTreeMap<String, String>,
 ) -> BTreeMap<String, GeometryRigidPointContactFamily> {
     let mut out = BTreeMap::new();
     let Ok(file) = File::open(path) else {
@@ -2536,7 +2630,7 @@ fn load_rigid_point_contact_families(
         if line.trim().is_empty() {
             continue;
         }
-        let Ok(family) = serde_json::from_str::<GeometryRigidPointContactFamily>(&line) else {
+        let Ok(family) = deserialize_family_record::<GeometryRigidPointContactFamily>(&line, formation_ids) else {
             continue;
         };
         if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
@@ -2585,6 +2679,7 @@ fn load_rigid_vertex_contact_families(
     path: &Path,
     entries: &BTreeMap<String, GeometryFormation>,
     catalog: &[BaseResource],
+    formation_ids: &BTreeMap<String, String>,
 ) -> BTreeMap<String, GeometryRigidVertexContactFamily> {
     let mut out = BTreeMap::new();
     let Ok(file) = File::open(path) else {
@@ -2599,7 +2694,7 @@ fn load_rigid_vertex_contact_families(
         if line.trim().is_empty() {
             continue;
         }
-        let Ok(family) = serde_json::from_str::<GeometryRigidVertexContactFamily>(&line) else {
+        let Ok(family) = deserialize_family_record::<GeometryRigidVertexContactFamily>(&line, formation_ids) else {
             continue;
         };
         if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
