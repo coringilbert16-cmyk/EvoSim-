@@ -54,7 +54,6 @@ This means a continuous family is now finite data: the mathematics describes the
 The worker batches each formation-expansion result before syncing it to disk. Candidate formations are canonicalized and deduplicated in memory, then appended with one durable sync and one manifest update. Capillary contact families use the same batch boundary. This keeps persistent durability from turning every discovered geometry into a separate filesystem sync operation while preserving restart-safe committed batches.
 
 
-### Running the worker safely
 
 Bob's worker and viewer use the same geometry data root. By default this is `geometry_library/data` relative to the current working directory. To use an existing library stored elsewhere, set `EVOSIM_GEOMETRY_LIBRARY_DIR` to that directory; this does not copy or migrate the data.
 
