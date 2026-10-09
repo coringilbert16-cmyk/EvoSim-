@@ -1,0 +1,91 @@
+# Geometry library compact-storage practice results
+
+Status: **successful isolated data transformation; not yet a runtime storage migration**.
+
+The practice run used the geometry JSONL files checked into the GitHub `main` branch. It wrote a separate compact copy as a GitHub Actions artifact and did not modify the source catalogue.
+
+## Measured result
+
+Validated full-library run (safety tests + formation-signature reconstruction + full conversion + artifact upload): [GitHub Actions run 37973923101](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/37973923101). The artifact is listed in that run's Artifacts section and expires after seven days.
+
+| Compacted file | Rows | Source bytes | Compact bytes | Saved bytes |
+|---|---:|---:|---:|---:|
+| `contact_families.jsonl` | 4,523 | 1,787,563 | 1,482,304 | 305,259 |
+| `fluid_boundary_families.jsonl` | 4,523 | 2,081,909 | 1,776,650 | 305,259 |
+| `formations.jsonl` | 25,807 | 17,386,631 | 14,618,529 | 2,768,102 |
+| `rigid_contact_families.jsonl` | 307,996 | 101,825,277 | 81,486,361 | 20,338,916 |
+| `rigid_vertex_contact_families.jsonl` | 153,998 | 58,430,470 | 48,261,012 | 10,169,458 |
+| **Total** | **496,847** | **181,511,850** | **147,624,856** | **33,886,994** |
+
+The optimized format reduces the five checked-in geometry JSONL files by approximately **18.67%** (about 32.3 MiB), before counting the small sidecar manifest. This is only the checked-in GitHub snapshot, not the user's larger local catalogue.
+
+The first practice format used 32-character hexadecimal IDs and repeated `storage_version: 2` on every family row; it saved 16,987,692 bytes across family files (10.35%). The optimized format removes the repeated row-level version field, stores version/encoding once in `storage_manifest.json`, and encodes the same 128-bit SHA-256 prefix as a 22-character unpadded base64url ID. This alone saved an additional **14,131,200 bytes** over the first family-only format. The latest pass also removed each formation's redundant persisted `signature` string, replacing it with the same compact ID; this saved another **2,768,102 bytes**.
+
+## What the practice tool verified
+
+- Indexed **25,807** canonical formation signatures from `formations.jsonl`.
+- Recomputed each canonical formation signature from its persisted schema version, constituent resources/placements, and bond endpoints using the library's 1e-9 quantization and angle normalization; all 25,807 recomputed signatures matched their stored source signatures exactly before compaction.
+- Generated deterministic 22-character unpadded base64url IDs from the first 128 bits of SHA-256; the ID still carries 128 bits of collision resistance.
+- Stored format version and ID-encoding metadata once in `storage_manifest.json`, not redundantly in every family row.
+- Resolved every family record's ID back to its original canonical signature.
+- Preserved all family fields other than replacing `formation_signature` with `formation_id` and adding `storage_version: 2`.
+- Reconstructed each source record in memory and compared it for exact Python-object equality.
+- Re-read every written compact JSONL file and checked the output row count and parsed records.
+- Removed the redundant `signature` field from compact formation rows only after confirming it can be reconstructed exactly from geometry; retained the canonical signature in memory for ID mapping and round-trip validation.
+- Preserved all source files; the compact copy was uploaded as a short-lived artifact.
+
+The four family files had no duplicate logical rows under the practice tool's signature-plus-fields check. The repository snapshot does not include `rigid_point_contact_families.jsonl`, so that family type was not exercised by this dataset run.
+
+## Limits and next gates
+
+1. The successful run validates a **data transformation**, not the Rust reader/writer integration. Current runtime structs still use `formation_signature`; they must not be switched to compact records until dedicated on-disk DTOs and ID resolution are implemented and verified.
+2. The focused safety-test suite passed in the validated run. It covers exact round-trip, source preservation, unresolved references, duplicate canonical signatures, simulated ID collisions, malformed JSON, and refusal to overwrite a non-empty destination.
+3. Before considering the format for the main/local library, run the same tool on the complete local catalogue, measure its actual savings, and extend the practice validation to every family type present there.
+4. Do not delete or overwrite the source data. Keep the compact output separate until Rust compatibility, restart behavior, and lookup equivalence are proven.
+
+No geometry parameters, canonical signatures, formation records, or construction behavior were changed in this practice run.
+
+## Exact compositional-storage experiment (practice-only)
+
+The one-constituent composition analyzer was run against the same 25,807 formations in [workflow run 37974590539](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/37974590539). Its JSON result is also available as the short-lived `geometry-compositional-storage-results` artifact.
+
+| Measurement | Result |
+|---|---:|
+| Full compact-v2 formation file (measured) | 14,618,529 |
+| Compositional-v3 formation file (measured) | 8,536,354 |
+| Additional formation-file saving | **6,082,175 bytes (41.61%)** |
+| Rows with a profitable exact delta | 23,027 of 25,807 |
+| Profitable rows with 2 constituents | 451 |
+| Profitable rows with 3 constituents | 6,528 |
+| Profitable rows with 4 constituents | 16,048 |
+
+This experiment searches for a smaller stored formation whose constituent list and remaining bond records match the target's one-unit-removed subset exactly. A delta stores the target's own ID, the base ID, insertion index, full removed constituent, and incident bonds with their original positions. Each candidate delta is reconstructed immediately and compared against the original constituent list, bond list, and canonical signature. A canonical-signature match alone is not enough: the actual persisted subset fields must also match exactly.
+
+**Measured result:** the compositional-v3 workflow generated the full formation file and measured 8,536,354 bytes, saving 6,082,175 bytes (41.61%) against the compact-v2 formation file. Since the four family files remain byte-for-byte in compact-v2 encoding, the five JSONL files together would total 141,542,681 bytes, about 22.02% below the 181,511,850-byte source snapshot. This file-size total excludes the small manifest and any runtime in-memory index overhead.
+
+The experiment remains isolated from the source dataset and production library. The separate compositional-v3 encoder/decoder passed focused tests and full-dataset recursive reconstruction in [workflow run 37974902755](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/37974902755), and the follow-up depth-statistics tests and full migration passed in [workflow run 37975331617](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/37975331617). Its actual formation-file size is 8,536,354 bytes, with all 25,807 formations restored and their canonical signatures checked. Reference depth is bounded in this snapshot: maximum 3, mean 1.664, 95th percentile 3, and no row has depth over 8. The decoder checks unresolved/cyclic references, insertion indices, bond positions and ordering, all persisted fields, and reconstructed canonical signatures. The compact-v2 family files remain unchanged in this practice output. Runtime Rust DTO integration, restart behavior, and lookup-equivalence testing are still outstanding; do not replace the main/local library until those gates pass.
+
+
+### Compositional reference-depth check
+
+The follow-up run reports 23,027 delta-encoded rows and 2,780 full rows. A full row has reference depth 0. The longest chain in this snapshot is only 3 delta links (mean 1.664; 95th percentile 3; zero rows above depth 8). This reduces concern about deep recursive decoding for this snapshot, but a Rust implementation should still use cycle detection and preferably iterative decoding or a bounded, explicit decode stack rather than assuming arbitrary catalogues will share the same depth distribution. The JSONL byte saving is materially larger than the compressed GitHub artifact-size difference because ZIP compression already compresses repeated JSON structure; raw file size remains the relevant disk-size comparison.
+
+
+## Final practice checkpoint — 2026-10-09
+
+The latest full validation run, [37975547423](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/37975547423), completed successfully after the expanded decoder tests were added.
+
+- Compact-v2 safety tests: **6 passed**.
+- Compositional-v3 decoder tests: **6 passed**, including missing-base and invalid-position rejection, preservation of extra fields, bond ordering, recursive reconstruction, source preservation, and reference-depth/cycle detection.
+- Full compositional-v3 migration: **25,807 formations decoded and re-verified**, 23,027 delta rows and 2,780 full rows.
+- Measured formation file: **8,536,354 bytes**, saving **6,082,175 bytes** over compact-v2.
+- Reference depth: maximum **3**, mean **1.664**, p95 **3**, zero rows above depth 8.
+- Both compact-v2 and compositional-v3 practice artifacts were uploaded successfully. They are temporary GitHub Actions artifacts and expire after seven days; download them from the run's Artifacts section if needed.
+
+### Stopping decision
+
+This is a good stopping point for the **data-format experiment**: the benefit is measured, the experimental format round-trips the complete checked-in snapshot, corruption cases have focused tests, and an integration plan documents the remaining gates. It is not yet a production-ready migration.
+
+No Rust persistence adapter was added. The checked-in main snapshot is data-only, while the Rust source is on a different branch; implementing the adapter safely requires a runnable Rust checkout and access to the complete local catalogue. The next phase should begin as a separate integration task, not by changing this practice branch's data files or merging a format switch prematurely. Required gates remain: runtime DTO conversion, exact logical lookup/signature equivalence against legacy loading, restart/reopen validation, full-local-catalogue coverage (including any rigid_point_contact_families.jsonl), and load/memory/lookup benchmarks.
+
+Draft PR [#179](https://github.com/coringilbert16-cmyk/EvoSim-/pull/179) remains open and unmerged. The production library, constructor, geometry parameters, and source catalogue remain unchanged.
