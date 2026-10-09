@@ -1,0 +1,40 @@
+name: Geometry storage practice migration
+
+on:
+  push:
+    branches:
+      - geometry-storage-practice
+    paths:
+      - "geometry_library/data/**"
+      - "tools/compact_geometry_practice.py"
+      - ".github/workflows/geometry-storage-practice.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compact-practice-copy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out practice branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build and verify isolated compact copy
+        run: |
+          python tools/compact_geometry_practice.py \
+            geometry_library/data \
+            "$RUNNER_TEMP/geometry-library-compact-practice"
+
+      - name: Upload compact practice library
+        uses: actions/upload-artifact@v4
+        with:
+          name: geometry-library-compact-v2-practice
+          path: ${{ runner.temp }}/geometry-library-compact-practice/
+          if-no-files-found: error
+          retention-days: 7
