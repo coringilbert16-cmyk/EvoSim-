@@ -56,7 +56,18 @@ The worker batches each formation-expansion result before syncing it to disk. Ca
 
 ### Running the worker safely
 
-Use `cargo run -- --geometry-worker-once` for a bounded smoke test. It opens the same persistent library, seeds missing base formations, processes exactly one unfinished formation/resource pass, durably records its results, prints the resulting formation count, and exits. Once that succeeds, `cargo run -- --geometry-worker` runs the same worker continuously and resumes from the persisted frontier after restart.
+Bob's worker and viewer use the same geometry data root. By default this is `geometry_library/data` relative to the current working directory. To use an existing library stored elsewhere, set `EVOSIM_GEOMETRY_LIBRARY_DIR` to that directory; this does not copy or migrate the data.
+
+For the desktop workspace layout where the source checkout is next to `EvoSim--main`, run from the source checkout in PowerShell:
+
+```powershell
+$env:EVOSIM_GEOMETRY_LIBRARY_DIR = (Resolve-Path ..\EvoSim--main\geometry_library\data).Path
+cargo run -- --geometry-worker-once
+```
+
+The explicit path is validated before Bob opens it, so a misspelled or absent override fails instead of silently creating an empty catalogue. Opening the store still checks the manifest schema and resource-catalog signature; a mismatch must be investigated, not bypassed. The worker writes durable results to the configured library, so preserve a backup before the first write.
+
+Use `cargo run -- --geometry-worker-once` for a bounded smoke test. It opens the configured persistent library, seeds missing base formations, processes exactly one unfinished formation/resource pass, durably records its results, prints the resulting formation count, and exits. Only after that succeeds should `cargo run -- --geometry-worker` run continuously and resume from the persisted frontier after restart.
 
 ### Worker frontier semantics
 
