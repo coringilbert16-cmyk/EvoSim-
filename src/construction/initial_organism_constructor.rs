@@ -159,7 +159,7 @@ fn bond_units(
 
         let endpoint_a = candidate.endpoint_a.clone();
         let endpoint_b = candidate.endpoint_b.clone();
-        let (_, _, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
+        let (_, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
             structure, unit_a, unit_b, candidate, catalog,
         )
         .ok_or_else(|| format!("physical bond candidate {unit_a}-{unit_b} failed evaluation"))?;
