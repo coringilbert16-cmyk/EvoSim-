@@ -51,6 +51,7 @@ jobs:
             geometry_library/data \
             "$RUNNER_TEMP/geometry-library-compositional-practice" \
             > "$RUNNER_TEMP/compositional-v3-run.log"
+          cat "$RUNNER_TEMP/compositional-v3-run.log"
 
       - name: Measure exact one-constituent compositional encoding
         run: python tools/analyze_compositional_geometry_practice.py geometry_library/data | tee "$RUNNER_TEMP/compositional-storage-results.json"
