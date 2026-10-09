@@ -1358,6 +1358,13 @@ impl GeometryLibrary {
                 || !family.candidate_rotation_start_radians.is_finite()
                 || !family.candidate_rotation_end_radians.is_finite()
                 || family.anchor_parameter_start > family.anchor_parameter_end
+                || self.entries.get(&family.formation_signature).is_none()
+                || family.anchor_constituent
+                    >= self
+                        .entries
+                        .get(&family.formation_signature)
+                        .map(|formation| formation.constituents.len())
+                        .unwrap_or(0)
             {
                 continue;
             }
@@ -1403,6 +1410,13 @@ impl GeometryLibrary {
                 || !family.anchor_parameter_start.is_finite()
                 || !family.anchor_parameter_end.is_finite()
                 || family.anchor_parameter_start > family.anchor_parameter_end
+                || self.entries.get(&family.formation_signature).is_none()
+                || family.anchor_constituent
+                    >= self
+                        .entries
+                        .get(&family.formation_signature)
+                        .map(|formation| formation.constituents.len())
+                        .unwrap_or(0)
             {
                 continue;
             }
