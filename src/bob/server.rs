@@ -107,7 +107,7 @@ async fn formation(Query(q): Query<FormationQuery>) -> impl IntoResponse {
     };
     let cat = default_catalog();
     let Ok(formations) = crate::geometry_reference_library::GeometryLibrary::load_formations_only(
-        "geometry_library/data",
+        default_library_root(),
         &cat,
     ) else {
         return Json(json!({"error":"library_unavailable"}));
