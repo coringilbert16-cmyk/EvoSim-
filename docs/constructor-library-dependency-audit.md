@@ -79,10 +79,19 @@ A test-only contract suite has been added to `src/bob/library.rs` on the audit b
 - Ensuring two-constituent candidate generation does not mutate its seed, and returns only valid, unique canonical candidates.
 - Checking that the resulting candidate-signature set is invariant to catalogue iteration order.
 
-These tests exercise the geometry reference candidate generator, not the live initial constructor or the full energy/bond transaction. They have **not been executed**: no CI workflow or commit status was returned for the audit branch commit, and this environment cannot clone the repository to run Cargo. The tests must be run on a Rust-capable runner before their results are treated as verified.
+These tests exercise the geometry reference candidate generator, not the live initial constructor or the full energy/bond transaction.
+
+A GitHub Actions run reached `cargo test --all-targets`, but compilation failed before tests could execute. The compiler reported **51 errors** across the current source branch. Important blockers relevant to this plan include:
+
+- Bob's `library.rs` calls missing helpers for parsing edge/point descriptors, indexing contact buckets, and projecting rigid edge/point/vertex families. These are direct blockers to compiling or testing the geometry library.
+- The constructor candidate-evaluation API returns four values, while the initial-constructor call site had stale five-value destructuring. That call site and stale contract-test destructuring were aligned with the actual four-value API on this audit branch.
+- `ChemistryKey` is used as a `HashMap` key but does not implement `Hash`.
+- Other compile errors are outside the immediate constructor/library scope (including stale resource, diagnostics, genome, observation, and transformation references).
+
+The run's formatting, large-file, and COMBINE architecture checks passed. Rust compilation failed, so neither the new geometry tests nor the full test suite ran. This is a verified build failure, not a test failure and not evidence that the newly added tests themselves fail.
 
 ## Evidence boundary and next action
 
-This is a read-only source audit. It does **not** establish successful compilation or test results, and it does not change production code, geometry parameters, or catalogue data.
+This is still an audit/test-only branch; no production catalogue data, geometry parameters, or live constructor algorithm were changed. The CI run did expose existing source inconsistencies, and this branch contains only narrowly scoped API-alignment fixes rather than a broad attempt to repair all 51 errors.
 
-Next safe task: build a small test-only candidate/transaction harness on a dedicated practice branch, using a tiny synthetic catalogue and the existing physical authorities. Prove (a) candidate proposal is non-mutating, (b) full-structure nonpenetration and endpoint compatibility are checked, (c) failed transactions leave structure and ledger byte-for-byte/logically unchanged, and (d) successful commits reconcile bonds and energy. Do this before replacing the live constructor or changing library persistence.
+Next safe task: restore and contract-test Bob's missing helper functions as a bounded library repair, then re-run CI to expose the next layer. Keep unrelated simulation compile failures separate instead of turning this phase into a whole-repository repair sprint. Once Bob can compile, continue with the synthetic candidate/transaction harness and prove (a) candidate proposal is non-mutating, (b) full-structure nonpenetration and endpoint compatibility are checked, (c) failed transactions leave structure and ledger logically unchanged, and (d) successful commits reconcile bonds and energy.
