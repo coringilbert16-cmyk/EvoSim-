@@ -7,6 +7,7 @@ on:
     paths:
       - "geometry_library/data/**"
       - "tools/compact_geometry_practice.py"
+      - "tools/analyze_compositional_geometry_practice.py"
       - "tools/test_compact_geometry_practice.py"
       - ".github/workflows/geometry-storage-practice.yml"
   pull_request:
