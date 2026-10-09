@@ -1,4 +1,4 @@
-use crate::geometry_reference_library::{open_default_library, GeometryFormation};
+use crate::geometry_reference_library::{default_library_root, GeometryFormation};
 use crate::resources::default_catalog;
 use axum::{
     extract::Query,
@@ -62,7 +62,7 @@ async fn script() -> impl IntoResponse {
 async fn formations(Query(q): Query<ListQuery>) -> impl IntoResponse {
     let cat = default_catalog();
     let Ok(formations) = crate::geometry_reference_library::GeometryLibrary::load_formations_only(
-        "geometry_library/data",
+        default_library_root(),
         &cat,
     ) else {
         return Json(json!({"error":"library_unavailable"}));
