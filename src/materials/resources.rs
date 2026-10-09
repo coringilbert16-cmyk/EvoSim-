@@ -1,7 +1,6 @@
 #![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 use serde::{Deserialize, Serialize};
 
-
 /// Immutable physical state of a resource type. Geometry describes what the
 /// material currently occupies; state describes whether that geometry may
 /// deform without changing its composition.
