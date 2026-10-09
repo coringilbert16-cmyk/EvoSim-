@@ -138,7 +138,8 @@ mod tests {
             };
 
             let mut ledger = EnergyLedger::default();
-            let mut energy = 1.0e12;
+            let mut energy = 1.0e6;
+            let before_energy = energy;
             let before_units = trial.units.len();
             let attempt = crate::combine_runtime::form_selected_bond(
                 &mut trial,
@@ -157,6 +158,25 @@ mod tests {
                 assert_eq!(attempt.unit_b, 1);
                 assert_eq!(trial.units.len(), before_units);
                 assert_eq!(trial.bonds.len(), 1);
+                assert!(
+                    (trial.bonds[0].bond_energy - attempt.bond_energy).abs() < 1.0e-9,
+                    "committed bond energy must match the transaction result"
+                );
+                assert!(
+                    ((before_energy - energy)
+                        - (attempt.energy_invested + attempt.work_cost))
+                        .abs()
+                        < 1.0e-6,
+                    "holder energy loss must equal structural investment plus dissipated work"
+                );
+                assert!(
+                    (attempt.net_energy_change - (energy - before_energy)).abs() < 1.0e-9,
+                    "reported net energy change must match the holder balance"
+                );
+                assert!(
+                    (ledger.total_heat_dissipated - attempt.work_cost).abs() < 1.0e-9,
+                    "the ledger must record the transaction's dissipated work"
+                );
                 found = true;
                 break;
             }
