@@ -3249,3 +3249,93 @@ mod bob_lookup_contract_tests {
         assert_eq!(resolved, ITERATIONS);
     }
 }
+
+#[cfg(test)]
+mod bob_candidate_generation_contract_tests {
+    use super::*;
+    use crate::resources::default_catalog;
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn overlapping_rigid_constituents_are_rejected_even_if_declared_bonded() {
+        let catalog = default_catalog();
+        let mut formation = GeometryFormation::single("Carbon");
+        formation.constituents.push(GeometryConstituent {
+            resource: "Carbon".to_string(),
+            placement: Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        });
+        formation.bonds.push(GeometryBond {
+            constituent_a: 0,
+            constituent_b: 1,
+        });
+
+        assert!(!validate_formation(&formation, &catalog));
+    }
+
+    #[test]
+    fn two_constituent_candidates_are_valid_unique_and_do_not_mutate_the_seed() {
+        let catalog = default_catalog();
+        let seed = GeometryFormation::single("Carbon");
+        let original_seed = seed.clone();
+        let nitrogen = catalog
+            .iter()
+            .find(|resource| resource.name == "Nitrogen")
+            .expect("default catalog must include Nitrogen");
+
+        let candidates = generate_two_constituent_candidates(&seed, nitrogen, &catalog);
+        assert_eq!(seed, original_seed, "candidate generation mutated its seed");
+        assert!(
+            !candidates.is_empty(),
+            "expected at least one valid Carbon-Nitrogen contact arrangement"
+        );
+        assert!(candidates
+            .iter()
+            .all(|candidate| validate_formation(candidate, &catalog)));
+
+        let signatures: BTreeSet<_> = candidates
+            .iter()
+            .map(|candidate| candidate.signature.clone())
+            .collect();
+        assert_eq!(
+            signatures.len(),
+            candidates.len(),
+            "candidate generation returned duplicate canonical signatures"
+        );
+    }
+
+    #[test]
+    fn candidate_signatures_do_not_depend_on_catalog_iteration_order() {
+        let catalog = default_catalog();
+        let seed = GeometryFormation::single("Carbon");
+        let nitrogen = catalog
+            .iter()
+            .find(|resource| resource.name == "Nitrogen")
+            .expect("default catalog must include Nitrogen");
+        let forward: BTreeSet<_> =
+            generate_two_constituent_candidates(&seed, nitrogen, &catalog)
+                .into_iter()
+                .map(|candidate| candidate.signature)
+                .collect();
+
+        let mut reversed_catalog = catalog.clone();
+        reversed_catalog.reverse();
+        let reversed_nitrogen = reversed_catalog
+            .iter()
+            .find(|resource| resource.name == "Nitrogen")
+            .expect("reversed catalog must include Nitrogen");
+        let reversed: BTreeSet<_> =
+            generate_two_constituent_candidates(&seed, reversed_nitrogen, &reversed_catalog)
+                .into_iter()
+                .map(|candidate| candidate.signature)
+                .collect();
+
+        assert_eq!(
+            forward, reversed,
+            "candidate results changed when catalog iteration order changed"
+        );
+    }
+}
