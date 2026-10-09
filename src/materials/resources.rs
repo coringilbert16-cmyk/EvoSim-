@@ -619,13 +619,14 @@ pub fn default_catalog() -> Vec<BaseResource> {
             physical_state: PhysicalState::Rigid,
             shape: Shape {
                 form: Form::Polygon {
+                    // Isosceles trapezoid: 1.5-unit bottom, 1.0-unit top,
+                    // and two 0.5-unit sides. Centered at the origin.
+                    // Height = sqrt(3)/4, from the 0.25-unit half-base offset.
                     vertices: vec![
-                        (-0.5, -0.5),
-                        (0.5, -0.5),
-                        (0.5, 0.0),
-                        (0.0, 0.0),
-                        (0.0, 0.5),
-                        (-0.5, 0.5),
+                        (-0.75, -0.21650635094610965),
+                        (0.75, -0.21650635094610965),
+                        (0.5, 0.21650635094610965),
+                        (-0.5, 0.21650635094610965),
                     ],
                 },
             },
@@ -776,7 +777,7 @@ mod shape_tests {
             Form::Rectangle { .. }
         ));
         assert!(
-            matches!(&find("Phosphorus").shape.form, Form::Polygon { vertices } if vertices.len() == 6)
+            matches!(&find("Phosphorus").shape.form, Form::Polygon { vertices } if vertices.len() == 4)
         );
         assert!(matches!(find("Water").shape.form, Form::Circle { .. }));
         assert_eq!(find("Water").physical_state, PhysicalState::Fluid);
@@ -823,23 +824,18 @@ mod shape_tests {
         }
 
         let phosphorus = find("Phosphorus").shape.form.polygon_vertices().unwrap();
+        assert_eq!(phosphorus.len(), 4);
         let lengths = (0..phosphorus.len())
             .map(|i| distance(phosphorus[i], phosphorus[(i + 1) % phosphorus.len()]))
             .collect::<Vec<_>>();
-        assert_eq!(
-            lengths
-                .iter()
-                .filter(|length| (**length - 1.0).abs() < 1e-9)
-                .count(),
-            2
-        );
-        assert_eq!(
-            lengths
-                .iter()
-                .filter(|length| (**length - 0.5).abs() < 1e-9)
-                .count(),
-            4
-        );
+        assert!((lengths[0] - 1.5).abs() < 1e-9, "bottom edge must be 1.5 units");
+        assert!((lengths[1] - 0.5).abs() < 1e-9, "right sloping edge must be 0.5 units");
+        assert!((lengths[2] - 1.0).abs() < 1e-9, "top edge must be 1.0 unit");
+        assert!((lengths[3] - 0.5).abs() < 1e-9, "left sloping edge must be 0.5 units");
+        assert!((phosphorus[0].0 + phosphorus[1].0).abs() < 1e-9);
+        assert!((phosphorus[2].0 + phosphorus[3].0).abs() < 1e-9);
+        assert!((phosphorus[0].1 + phosphorus[2].1).abs() < 1e-9);
+        assert!((phosphorus[1].1 + phosphorus[3].1).abs() < 1e-9);
     }
 
     #[test]
