@@ -116,6 +116,40 @@ def decode_all(encoded_rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return cache
 
 
+def reference_depths(encoded_rows: list[dict[str, Any]]) -> dict[str, float | int]:
+    """Report reference-chain depth, where a full row has depth zero."""
+    by_id = {row["formation_id"]: row for row in encoded_rows}
+    cache: dict[str, int] = {}
+    active: set[str] = set()
+
+    def depth(row_id: str) -> int:
+        if row_id in cache:
+            return cache[row_id]
+        if row_id in active:
+            raise ValueError(f"cyclic compositional reference at {row_id}")
+        row = by_id.get(row_id)
+        if row is None:
+            raise ValueError(f"unresolved compositional base ID: {row_id}")
+        if "base_id" not in row:
+            cache[row_id] = 0
+            return 0
+        active.add(row_id)
+        result = 1 + depth(row["base_id"])
+        active.remove(row_id)
+        cache[row_id] = result
+        return result
+
+    values = [depth(row_id) for row_id in by_id]
+    ordered = sorted(values)
+    count = len(ordered)
+    return {
+        "max_reference_depth": max(ordered, default=0),
+        "mean_reference_depth": round(sum(ordered) / count, 3) if count else 0,
+        "p95_reference_depth": ordered[min(count - 1, int((count - 1) * 0.95))] if count else 0,
+        "rows_with_depth_over_8": sum(value > 8 for value in ordered),
+    }
+
+
 def build_compositional_copy(source: Path, destination: Path) -> dict[str, int]:
     source = source.resolve()
     destination = destination.resolve()
@@ -220,6 +254,7 @@ def build_compositional_copy(source: Path, destination: Path) -> dict[str, int]:
 
     baseline_bytes = sum(len(json.dumps(row, separators=(",", ":"), ensure_ascii=False).encode("utf-8")) + 1 for row in full_rows.values())
     encoded_bytes = output_path.stat().st_size
+    depth_stats = reference_depths(encoded_rows)
     print(json.dumps({
         "formation_rows": len(encoded_rows),
         "full_compact_formation_bytes": baseline_bytes,
@@ -227,6 +262,7 @@ def build_compositional_copy(source: Path, destination: Path) -> dict[str, int]:
         "saved_bytes": baseline_bytes - encoded_bytes,
         "delta_encoded_rows": manifest["formation_rows_delta_encoded"],
         "full_encoded_rows": manifest["formation_rows_full"],
+        **depth_stats,
         "recursive_round_trip": "passed for every formation",
         "source_modified": False,
     }, indent=2, sort_keys=True))
