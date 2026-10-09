@@ -31,11 +31,34 @@ const FAMILY_STORAGE_VERSION: u64 = 2;
 
 /// Stable 128-bit prefix of SHA-256. Unlike `DefaultHasher`, this is a persistence contract.
 fn formation_id(signature: &str) -> String {
+    const ALPHABET: &[u8; 64] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
     let digest = Sha256::digest(signature.as_bytes());
-    digest[..16]
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    let bytes = &digest[..16];
+    let mut encoded = String::with_capacity(22);
+    let mut index = 0;
+    while index + 3 <= bytes.len() {
+        let a = bytes[index] as usize;
+        let b = bytes[index + 1] as usize;
+        let c = bytes[index + 2] as usize;
+        encoded.push(ALPHABET[a >> 2] as char);
+        encoded.push(ALPHABET[((a & 0x03) << 4) | (b >> 4)] as char);
+        encoded.push(ALPHABET[((b & 0x0f) << 2) | (c >> 6)] as char);
+        encoded.push(ALPHABET[c & 0x3f] as char);
+        index += 3;
+    }
+    if index < bytes.len() {
+        let a = bytes[index] as usize;
+        encoded.push(ALPHABET[a >> 2] as char);
+        if index + 1 < bytes.len() {
+            let b = bytes[index + 1] as usize;
+            encoded.push(ALPHABET[((a & 0x03) << 4) | (b >> 4)] as char);
+            encoded.push(ALPHABET[(b & 0x0f) << 2] as char);
+        } else {
+            encoded.push(ALPHABET[(a & 0x03) << 4] as char);
+        }
+    }
+    encoded
 }
 
 fn compact_family_value<T: Serialize>(family: &T) -> std::io::Result<serde_json::Value> {
@@ -915,6 +938,7 @@ pub struct GeometryLibrary {
     rigid_vertex_contact_families: BTreeMap<String, GeometryRigidVertexContactFamily>,
     rigid_vertex_contact_index: HashMap<u64, Vec<String>>,
     formation_ids: BTreeMap<String, String>,
+    formation_storage_version: u32,
 }
 
 fn build_formation_id_index(
@@ -933,6 +957,242 @@ fn build_formation_id_index(
         }
     }
     Ok(ids)
+}
+
+fn invalid_storage_data(message: impl Into<String>) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, message.into())
+}
+
+fn storage_format_version(root: &Path, formations_path: &Path) -> std::io::Result<u32> {
+    let path = root.join("storage_manifest.json");
+    if path.exists() {
+        let value: serde_json::Value = serde_json::from_slice(&fs::read(path)?)
+            .map_err(|error| invalid_storage_data(error.to_string()))?;
+        let version = value
+            .get("storage_format_version")
+            .and_then(serde_json::Value::as_u64)
+            .ok_or_else(|| invalid_storage_data("storage manifest lacks storage_format_version"))?;
+        match version {
+            1 => return Ok(1),
+            3 => {
+                if value.get("formation_encoding").and_then(serde_json::Value::as_str)
+                    != Some("exact-one-constituent-delta-v1")
+                    || value.get("formation_id_algorithm").and_then(serde_json::Value::as_str)
+                        != Some("sha256-128-base64url")
+                {
+                    return Err(invalid_storage_data("unsupported compositional storage encoding"));
+                }
+                return Ok(3);
+            }
+            _ => return Err(invalid_storage_data(format!("unsupported geometry storage format version: {version}"))),
+        }
+    }
+    if formations_path.metadata().map(|metadata| metadata.len() > 0).unwrap_or(false) {
+        Ok(1)
+    } else {
+        Ok(3)
+    }
+}
+
+fn write_storage_manifest(root: &Path, version: u32) -> std::io::Result<()> {
+    let value = if version == 3 {
+        serde_json::json!({
+            "storage_format_version": 3,
+            "formation_encoding": "exact-one-constituent-delta-v1",
+            "formation_id_algorithm": "sha256-128-base64url",
+            "family_encoding": "formation-id-reference-v2"
+        })
+    } else {
+        serde_json::json!({
+            "storage_format_version": 1,
+            "formation_encoding": "legacy-full-signature",
+            "formation_id_algorithm": "sha256-128-base64url",
+            "family_encoding": "formation-id-reference-v2"
+        })
+    };
+    let path = root.join("storage_manifest.json");
+    let temp = root.join("storage_manifest.json.tmp");
+    {
+        let mut file = File::create(&temp)?;
+        serde_json::to_writer(&mut file, &value)
+            .map_err(|error| invalid_storage_data(error.to_string()))?;
+        file.write_all(b"\n")?;
+        file.sync_all()?;
+    }
+    fs::rename(temp, path)?;
+    Ok(())
+}
+
+fn decode_compositional_formation(
+    id: &str,
+    rows: &BTreeMap<String, serde_json::Value>,
+    cache: &mut BTreeMap<String, GeometryFormation>,
+    active: &mut std::collections::BTreeSet<String>,
+    depth: usize,
+    catalog: &[BaseResource],
+) -> std::io::Result<GeometryFormation> {
+    const MAX_COMPOSITION_DEPTH: usize = 64;
+    if let Some(formation) = cache.get(id) {
+        return Ok(formation.clone());
+    }
+    if depth > MAX_COMPOSITION_DEPTH {
+        return Err(invalid_storage_data("compositional formation reference depth exceeds 64"));
+    }
+    if !active.insert(id.to_owned()) {
+        return Err(invalid_storage_data(format!("cyclic compositional formation reference: {id}")));
+    }
+    let row = rows.get(id).cloned()
+        .ok_or_else(|| invalid_storage_data(format!("unresolved compositional base ID: {id}")))?;
+    let schema_version = row.get("schema_version").and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| invalid_storage_data(format!("formation row {id} lacks schema_version")))? as u32;
+
+    let (constituents, bonds) = if let Some(base_value) = row.get("base_id") {
+        let base_id = base_value.as_str()
+            .ok_or_else(|| invalid_storage_data(format!("invalid base_id in formation row {id}")))?;
+        let base = decode_compositional_formation(base_id, rows, cache, active, depth + 1, catalog)?;
+        if base.schema_version != schema_version {
+            return Err(invalid_storage_data(format!("schema version differs across formation delta {id}")));
+        }
+        let insert_at = row.get("insert_at").and_then(serde_json::Value::as_u64)
+            .ok_or_else(|| invalid_storage_data(format!("formation delta {id} lacks insert_at")))? as usize;
+        if insert_at > base.constituents.len() {
+            return Err(invalid_storage_data(format!("invalid constituent insertion index in {id}")));
+        }
+        let constituent: GeometryConstituent = serde_json::from_value(
+            row.get("constituent").cloned()
+                .ok_or_else(|| invalid_storage_data(format!("formation delta {id} lacks constituent")))?,
+        ).map_err(|error| invalid_storage_data(error.to_string()))?;
+        let mut constituents = base.constituents;
+        constituents.insert(insert_at, constituent);
+
+        let mut shifted_base_bonds = base.bonds;
+        for bond in &mut shifted_base_bonds {
+            if bond.constituent_a >= insert_at {
+                bond.constituent_a += 1;
+            }
+            if bond.constituent_b >= insert_at {
+                bond.constituent_b += 1;
+            }
+        }
+        let incident_rows = row.get("incident_bonds").and_then(serde_json::Value::as_array)
+            .ok_or_else(|| invalid_storage_data(format!("formation delta {id} lacks incident_bonds")))?;
+        let mut incident = BTreeMap::<usize, GeometryBond>::new();
+        for item in incident_rows {
+            let position = item.get("at").and_then(serde_json::Value::as_u64)
+                .ok_or_else(|| invalid_storage_data(format!("invalid incident-bond position in {id}")))? as usize;
+            let bond: GeometryBond = serde_json::from_value(
+                item.get("bond").cloned()
+                    .ok_or_else(|| invalid_storage_data(format!("incident bond missing in {id}")))?,
+            ).map_err(|error| invalid_storage_data(error.to_string()))?;
+            if bond.constituent_a != insert_at && bond.constituent_b != insert_at {
+                return Err(invalid_storage_data(format!("incident bond does not touch inserted constituent in {id}")));
+            }
+            if bond.constituent_a >= constituents.len() || bond.constituent_b >= constituents.len()
+                || incident.insert(position, bond).is_some()
+            {
+                return Err(invalid_storage_data(format!("invalid or duplicate incident bond in {id}")));
+            }
+        }
+        let total_bonds = shifted_base_bonds.len() + incident.len();
+        if incident.keys().any(|position| *position >= total_bonds) {
+            return Err(invalid_storage_data(format!("incident-bond position outside reconstructed list in {id}")));
+        }
+        let mut base_iter = shifted_base_bonds.into_iter();
+        let mut bonds = Vec::with_capacity(total_bonds);
+        for position in 0..total_bonds {
+            if let Some(bond) = incident.remove(&position) {
+                bonds.push(bond);
+            } else {
+                bonds.push(base_iter.next().ok_or_else(|| invalid_storage_data(
+                    format!("bond reconstruction underflow in formation delta {id}")
+                ))?);
+            }
+        }
+        if base_iter.next().is_some() || !incident.is_empty() {
+            return Err(invalid_storage_data(format!("bond reconstruction mismatch in formation delta {id}")));
+        }
+        (constituents, bonds)
+    } else {
+        let allowed = ["formation_id", "schema_version", "constituents", "bonds"];
+        if let Some(object) = row.as_object() {
+            if object.keys().any(|key| !allowed.contains(&key.as_str())) {
+                return Err(invalid_storage_data(format!("unexpected field in full compositional formation row {id}")));
+            }
+        }
+        let constituents: Vec<GeometryConstituent> = serde_json::from_value(
+            row.get("constituents").cloned()
+                .ok_or_else(|| invalid_storage_data(format!("full formation row {id} lacks constituents")))?,
+        ).map_err(|error| invalid_storage_data(error.to_string()))?;
+        let bonds: Vec<GeometryBond> = serde_json::from_value(
+            row.get("bonds").cloned()
+                .ok_or_else(|| invalid_storage_data(format!("full formation row {id} lacks bonds")))?,
+        ).map_err(|error| invalid_storage_data(error.to_string()))?;
+        (constituents, bonds)
+    };
+
+    let mut formation = GeometryFormation {
+        schema_version,
+        constituents,
+        bonds,
+        signature: String::new(),
+    };
+    let signature = formation.canonical_signature();
+    if formation_id(&signature) != id {
+        return Err(invalid_storage_data(format!("canonical signature does not match formation ID {id}")));
+    }
+    if formation.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
+        || !validate_formation(&formation, catalog)
+    {
+        return Err(invalid_storage_data(format!("invalid reconstructed formation {id}")));
+    }
+    formation.signature = signature;
+    active.remove(id);
+    cache.insert(id.to_owned(), formation.clone());
+    Ok(formation)
+}
+
+fn load_compositional_formations(
+    path: &Path,
+    catalog: &[BaseResource],
+) -> std::io::Result<BTreeMap<String, GeometryFormation>> {
+    let mut rows = BTreeMap::<String, serde_json::Value>::new();
+    if !path.exists() {
+        return Ok(BTreeMap::new());
+    }
+    let file = File::open(path)?;
+    let mut lines = BufReader::new(file).lines().peekable();
+    while let Some(line_result) = lines.next() {
+        let line = line_result?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let is_last = lines.peek().is_none();
+        let row: serde_json::Value = match serde_json::from_str(&line) {
+            Ok(value) => value,
+            Err(error) if is_last => {
+                let _ = error;
+                continue;
+            }
+            Err(error) => return Err(invalid_storage_data(error.to_string())),
+        };
+        let id = row.get("formation_id").and_then(serde_json::Value::as_str)
+            .ok_or_else(|| invalid_storage_data("compositional formation row lacks formation_id"))?
+            .to_owned();
+        if rows.insert(id.clone(), row).is_some() {
+            return Err(invalid_storage_data(format!("duplicate formation ID in storage: {id}")));
+        }
+    }
+
+    let mut cache = BTreeMap::new();
+    let mut active = std::collections::BTreeSet::new();
+    let mut entries = BTreeMap::new();
+    for id in rows.keys() {
+        let formation = decode_compositional_formation(id, &rows, &mut cache, &mut active, 0, catalog)?;
+        if entries.insert(formation.signature.clone(), formation).is_some() {
+            return Err(invalid_storage_data("duplicate canonical formation signature in compositional storage"));
+        }
+    }
+    Ok(entries)
 }
 
 impl GeometryLibrary {
