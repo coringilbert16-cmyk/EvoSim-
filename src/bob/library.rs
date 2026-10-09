@@ -1764,7 +1764,6 @@ fn normalize_global_pose(formation: &mut GeometryFormation, catalog: &[BaseResou
 pub fn validate_formation(formation: &GeometryFormation, catalog: &[BaseResource]) -> bool {
     if formation.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
         || formation.constituents.is_empty()
-        || formation.constituents.len() > 20
     {
         return false;
     }
@@ -2856,7 +2855,7 @@ pub fn expand_formation_candidates(
     candidate_resource: &BaseResource,
     catalog: &[BaseResource],
 ) -> Vec<GeometryFormation> {
-    if formation.constituents.is_empty() || formation.constituents.len() >= 20 {
+    if formation.constituents.is_empty() {
         return Vec::new();
     }
 
