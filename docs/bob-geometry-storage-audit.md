@@ -1,6 +1,14 @@
 # Bob geometry storage audit and compact-format proposal
 
-Status: source audit only. No compilation, tests, local-catalogue execution, or migration has been performed. This document deliberately does not authorize constructor integration or deleting/replacing existing data.
+Status: storage-specific audit and tooling work in progress. No catalogue has been rewritten and no runtime storage format has been switched. Whole-project Rust compilation is currently blocked by unrelated construction and cross-module errors; that is not a reason to stall independent storage analysis. This document does not authorize constructor integration or deleting/replacing existing data.
+
+### Validation scope and dataset location
+
+The current `remove-library-auto-publisher` branch does not contain the `geometry_library/data/*.jsonl` snapshot, while `main` does contain the six checked-in JSONL snapshots. Therefore, the read-only audit script cannot run against the snapshot from this branch unless the data directory is supplied separately. The checked-in snapshot is also smaller than the user's full local catalogue and must not be presented as the definitive baseline.
+
+Keep the validation gates separate:
+- **Storage-tool validation:** parser correctness, stable-ID collision detection, exact reversible record transformation, counts, references, and logical-key equivalence on an isolated copy or fixture.
+- **Integration validation:** compile and test the Rust reader/writer once the broader codebase has a runnable baseline. Do not make all constructor tests a prerequisite for the independent data audit.
 
 ## Findings
 
@@ -47,8 +55,8 @@ For compatibility, parse a row as legacy only when it has no `storage_version` a
 
 ## Migration sequence
 
-1. Re-run formatting, compilation, and focused tests in a runnable checkout. The earlier reported missing worker/library symbols were found on reinspection; source inspection alone is still not a substitute for a build.
-2. Run `python3 tools/audit_geometry_storage.py geometry_library/data` against the actual local catalogue. Preserve the report as the baseline. The checked-in GitHub snapshot is not a valid proxy for the user's larger local catalogue.
+1. Keep the storage tooling formatted and run it against a supplied catalogue copy or small synthetic fixture. Do not block this stage on constructor compilation. The earlier reported missing worker/library symbols were found on reinspection; the current whole-project CI failures are a separate integration problem.
+2. Run `python3 tools/audit_geometry_storage.py geometry_library/data` against the full local catalogue when available. Preserve the report as the definitive baseline; use the checked-in snapshot only as a secondary comparison.
 3. Implement DTO serialization/deserialization for the three largest rigid-family files first, without changing the runtime structs or logical signatures.
 4. Add an explicit migration command that reads legacy rows and writes to a separate versioned destination. Never rewrite the only source files in place. The migration must stop on malformed required rows, unresolved formation references, ID collisions, or count/key mismatches.
 5. Verify legacy-vs-compact equivalence: source and destination row counts; resolved references; sorted logical family signatures; lookup projections/results; duplicate handling; and behavior when a final line is truncated. Only then consider switching the default reader/writer to the new format.
