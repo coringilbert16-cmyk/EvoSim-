@@ -29,7 +29,7 @@ pub const GEOMETRY_EQUIVALENCE_TOLERANCE: f64 = 0.5;
 const QUANTUM: f64 = 1e-9;
 const FAMILY_STORAGE_VERSION: u64 = 2;
 
-/// Stable 128-bit prefix of SHA-256; unlike DefaultHasher, this is a persistence contract.
+/// Stable 128-bit prefix of SHA-256. Unlike `DefaultHasher`, this is a persistence contract.
 fn formation_id(signature: &str) -> String {
     let digest = Sha256::digest(signature.as_bytes());
     digest[..16]
@@ -917,13 +917,18 @@ pub struct GeometryLibrary {
     formation_ids: BTreeMap<String, String>,
 }
 
-fn build_formation_id_index(entries: &BTreeMap<String, GeometryFormation>) -> std::io::Result<BTreeMap<String, String>> {
+fn build_formation_id_index(
+    entries: &BTreeMap<String, GeometryFormation>,
+) -> std::io::Result<BTreeMap<String, String>> {
     let mut ids = BTreeMap::new();
     for signature in entries.keys() {
         let id = formation_id(signature);
         if let Some(previous) = ids.insert(id.clone(), signature.clone()) {
             if previous != *signature {
-                return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("formation ID collision for {id}")));
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("formation ID collision for {id}"),
+                ));
             }
         }
     }
@@ -1115,10 +1120,18 @@ impl GeometryLibrary {
             GeometryFrontier::default()
         };
 
-        let fluid_boundary_families =
-            load_fluid_boundary_families(&fluid_boundary_family_path, &entries, catalog, &formation_ids);
-        let rigid_point_contact_families =
-            load_rigid_point_contact_families(&rigid_point_contact_family_path, &entries, catalog, &formation_ids);
+        let fluid_boundary_families = load_fluid_boundary_families(
+            &fluid_boundary_family_path,
+            &entries,
+            catalog,
+            &formation_ids,
+        );
+        let rigid_point_contact_families = load_rigid_point_contact_families(
+            &rigid_point_contact_family_path,
+            &entries,
+            catalog,
+            &formation_ids,
+        );
         let rigid_vertex_contact_families = load_rigid_vertex_contact_families(
             &rigid_vertex_contact_family_path,
             &entries,
@@ -1757,7 +1770,11 @@ impl GeometryLibrary {
             if let Some(canonical) = formation.canonicalized(catalog) {
                 let signature = canonical.signature.clone();
                 let id = formation_id(&signature);
-                if let Some(previous) = self.formation_ids.get(&id).or_else(|| batch_formation_ids.get(&id)) {
+                if let Some(previous) = self
+                    .formation_ids
+                    .get(&id)
+                    .or_else(|| batch_formation_ids.get(&id))
+                {
                     if previous != &signature {
                         return Err(std::io::Error::new(
                             std::io::ErrorKind::InvalidData,
@@ -1775,7 +1792,8 @@ impl GeometryLibrary {
                             formations_equivalent_within_tolerance(existing, &canonical)
                         })
                     });
-                let batch_match = batch_equivalence_index.get(&key)
+                let batch_match = batch_equivalence_index
+                    .get(&key)
                     .into_iter()
                     .flatten()
                     .filter_map(|existing_signature| unique.get(existing_signature))
@@ -3821,7 +3839,6 @@ mod compact_family_storage_tests {
         let legacy_decoded: GeometryRigidContactFamily =
             deserialize_family_record(&legacy_line, &ids).unwrap();
         assert_eq!(legacy_decoded, family);
-        let _ = catalog;
     }
 
     #[test]
