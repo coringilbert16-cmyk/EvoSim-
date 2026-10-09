@@ -42,7 +42,7 @@ The checked-in geometry library is already large, and the local catalogue is lar
 
 ## Latest source-audit blocker
 
-A focused source audit found that `src/bob/worker.rs` imports `open_default_library`, `seed_base_catalogue`, `expand_formation_candidates`, and three rigid-family generators that are not defined in the currently mapped `src/bob/library.rs` revision. Treat this as an unresolved source/API mismatch and likely compile blocker until checked in a runnable checkout. Do not implement compact serialization on top of this unresolved API. See [the detailed storage audit and migration proposal](../../docs/bob-geometry-storage-audit.md).
+A focused source audit found that `src/bob/worker.rs` imported `open_default_library`, `seed_base_catalogue`, `expand_formation_candidates`, and three rigid-family generators missing from the mapped `src/bob/library.rs`. The missing production definitions were restored from the last historical source revision where they existed at module scope, while preserving the current indexed lookup and streaming-loader code. This source-level reconciliation is committed, but **compilation and tests remain unverified** because a runnable checkout is not available in this environment. Do not begin compact serialization until the restored API compiles and its focused tests pass. See [the detailed storage audit and migration proposal](../../docs/bob-geometry-storage-audit.md) and [issue #178](https://github.com/coringilbert16-cmyk/EvoSim-/issues/178).
 
 ## Recommended work plan
 
