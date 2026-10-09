@@ -3315,11 +3315,10 @@ mod bob_candidate_generation_contract_tests {
             .iter()
             .find(|resource| resource.name == "Nitrogen")
             .expect("default catalog must include Nitrogen");
-        let forward: BTreeSet<_> =
-            generate_two_constituent_candidates(&seed, nitrogen, &catalog)
-                .into_iter()
-                .map(|candidate| candidate.signature)
-                .collect();
+        let forward: BTreeSet<_> = generate_two_constituent_candidates(&seed, nitrogen, &catalog)
+            .into_iter()
+            .map(|candidate| candidate.signature)
+            .collect();
 
         let mut reversed_catalog = catalog.clone();
         reversed_catalog.reverse();
