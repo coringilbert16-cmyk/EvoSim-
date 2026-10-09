@@ -28,6 +28,12 @@ jobs:
       # even while the repository's known unrelated baseline tests are failing.
       - name: Run Bob compact-storage tests
         run: cargo test compact_family_storage_tests
+      - name: Smoke-test fresh Bob library and reopen
+        run: |
+          library_root="$(mktemp -d)"
+          export EVOSIM_GEOMETRY_LIBRARY_DIR="$library_root"
+          cargo run -- --geometry-worker-once
+          cargo run -- --geometry-worker-once
       # Expensive headless multigeneration validation is paused while the seed
       # topology is being finalized. Keep the normal Rust/Clippy gates active.
       - name: Run Rust tests
