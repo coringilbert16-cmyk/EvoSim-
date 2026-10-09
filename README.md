@@ -2,6 +2,20 @@
 
 EvoSim is an open-ended evolutionary organism simulation. Organisms are built from physical material and physical bonds; structure and behavior should emerge from general mechanisms rather than fixed predator/prey roles or a predefined organism-size progression.
 
+## Constructor audit handoff — 2026-10-09
+
+> [!IMPORTANT]
+> This section is a dated engineering handoff, not a claim that the replacement constructor is implemented. The authoritative architecture is the **Replacement Initial Organism Constructor** plan below. Keep this handoff current as audits progress so work can resume without relying on conversation history.
+
+- **Current working branch / review:** [PR #181 — Audit replacement constructor library dependencies](https://github.com/coringilbert16-cmyk/EvoSim-/pull/181), draft only. Do not merge or switch production behavior until the focused contracts execute and the replacement is independently verified.
+- **Current live path:** `Simulation::create_initial_organism` calls `initial_organism_constructor::construct_valid`. The live constructor is still the fixed Carbon ring/support/outer-ring baseline (54 units); it does not yet use Bob to select a free-form growth sequence.
+- **Geometry library is advisory candidate knowledge, not physical authority.** Revalidate each proposed placement against the whole realized structure and current contact, nonpenetration, endpoint, bonding, and energy rules. Bob's `GEOMETRY_EQUIVALENCE_TOLERANCE = 0.5` is not the approved live-contact tolerance of `0.1`; neither permits penetration.
+- **Chemistry is split across explicit authorities:** catalog material properties in `materials/resources.rs`; chemical-position interaction in `chemistry/chemistry.rs`; bond work/strength in `chemistry/combine.rs`; energy transactions in `chemistry/energy_ledger.rs`; cached static interface potentials in `chemistry/chemistry_library.rs`. Do not duplicate these equations in the constructor.
+- **Known specification mismatches:** catalog Phosphorus geometry is still L-like instead of the approved isosceles trapezoid (bottom 1.5, sides 0.5, top 1.0); constructor uses `CONSTRUCTION_ENERGY = 1.0e12` and startup turns the remainder into organism energy; the inspected bond-strength path does not yet apply the approved full/half contact-feature scaling. These require deliberate, separately tested corrections—not silent audit-time parameter changes.
+- **Latest recorded CI:** formatting, source-size, and COMBINE architecture checks pass. `cargo test --all-targets` stops before executing tests on eight remaining compile errors in other application modules. The newly added geometry/persistence/transaction tests are **unverified, not failed**. Do not broaden this into an unrelated repository-wide repair sprint.
+- **Next audit/implementation gate:** pin the library API semantics and malformed-record behavior; then define a small candidate proposal → whole-structure validation → trial transaction → commit/rollback boundary. Test that boundary once the compile blockers are resolved. Only after that build the milestone-driven genome/acquisition constructor.
+- **Audit detail:** see `docs/constructor-library-dependency-audit.md` for the dependency map, contract observations, blockers, test evidence, and removal checklist.
+
 
 > [!IMPORTANT]
 > ## Authoritative constructor plan — replacement architecture
