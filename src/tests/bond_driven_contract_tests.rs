@@ -514,5 +514,4 @@ mod tests {
             "no candidate with a positive energy requirement was found"
         );
     }
-
 }
