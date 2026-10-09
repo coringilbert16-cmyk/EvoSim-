@@ -37,6 +37,9 @@ jobs:
       - name: Run focused storage-tool safety tests
         run: python tools/test_compact_geometry_practice.py
 
+      - name: Measure exact one-constituent compositional encoding
+        run: python tools/analyze_compositional_geometry_practice.py geometry_library/data
+
       - name: Build and verify isolated compact copy
         run: |
           python tools/compact_geometry_practice.py \
