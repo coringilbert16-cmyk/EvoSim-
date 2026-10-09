@@ -217,8 +217,8 @@ mod tests {
         assert!((vertices[0].0 + 0.75).abs() < 1e-10);
         assert!((vertices[0].1 + 3.0_f64.sqrt() / 8.0).abs() < 1e-10);
         let (nx, ny) = corner_normal(&phosphorus.shape, 0).unwrap();
-        assert!((nx + 0.5).abs() < 1e-10);
-        assert!((ny + 3.0_f64.sqrt() / 2.0).abs() < 1e-10);
+        assert!((nx + 3.0_f64.sqrt() / 2.0).abs() < 1e-10);
+        assert!((ny + 0.5).abs() < 1e-10);
     }
     #[test]
     fn square_corner_normal_is_physical_bisector() {
