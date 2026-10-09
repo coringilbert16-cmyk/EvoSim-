@@ -57,11 +57,31 @@ pub(crate) fn context(
     })
 }
 
-pub(crate) fn growth_fraction(organism: &mut Organism, environment: &Environment) -> f64 {
-    crate::juvenile::confirmed_seed_scale_reference(&environment.catalog)
-        .ok()
-        .map(|reference| growth_fraction_for_reference(organism, environment, reference))
-        .unwrap_or(0.0)
+/// Compute the observed growth fraction without mutating the organism's cache.
+/// Observation must be a read-only projection of simulation state.
+pub(crate) fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
+    let Ok((seed_mass, seed_length)) =
+        crate::juvenile::confirmed_seed_scale_reference(&environment.catalog)
+    else {
+        return 0.0;
+    };
+    let blueprint = &organism.genome.developmental_blueprint;
+    let preferred_length = blueprint.preferred_developmental_length(
+        organism.genome.preferred_mass(),
+        seed_mass,
+        seed_length,
+    );
+    growth_fraction_for_structure(
+        &organism.structure,
+        environment,
+        blueprint,
+        (
+            organism.developmental_origin.x,
+            organism.developmental_origin.y,
+        ),
+        organism.developmental_orientation_radians,
+        preferred_length,
+    )
 }
 
 pub(crate) fn growth_fraction_for_reference(
