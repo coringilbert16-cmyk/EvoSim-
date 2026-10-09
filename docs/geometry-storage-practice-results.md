@@ -6,7 +6,7 @@ The practice run used the geometry JSONL files checked into the GitHub `main` br
 
 ## Measured result
 
-Run: [GitHub Actions run 37973055753](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/37973055753)
+Validated run (safety tests + full conversion + artifact upload): [GitHub Actions run 37973218625](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/37973218625). The compact practice artifact is [available here](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/37973218625).
 
 | Family file | Rows | Source bytes | Compact bytes | Saved bytes |
 |---|---:|---:|---:|---:|
@@ -33,7 +33,7 @@ The four family files had no duplicate logical rows under the practice tool's si
 ## Limits and next gates
 
 1. The successful run validates a **data transformation**, not the Rust reader/writer integration. Current runtime structs still use `formation_signature`; they must not be switched to compact records until dedicated on-disk DTOs and ID resolution are implemented and verified.
-2. A separate focused safety-test suite now covers exact round-trip, source preservation, unresolved references, duplicate canonical signatures, simulated ID collisions, malformed JSON, and refusal to overwrite a non-empty destination. Those tests are included in the next workflow run.
+2. The focused safety-test suite passed in the validated run. It covers exact round-trip, source preservation, unresolved references, duplicate canonical signatures, simulated ID collisions, malformed JSON, and refusal to overwrite a non-empty destination.
 3. Before considering the format for the main/local library, run the same tool on the complete local catalogue, measure its actual savings, and extend the practice validation to every family type present there.
 4. Do not delete or overwrite the source data. Keep the compact output separate until Rust compatibility, restart behavior, and lookup equivalence are proven.
 
