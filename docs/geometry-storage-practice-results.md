@@ -51,9 +51,9 @@ The one-constituent composition analyzer was run against the same 25,807 formati
 
 | Measurement | Result |
 |---|---:|
-| Current compact formation-row bytes | 14,592,722 |
-| Estimated one-constituent delta encoding | 8,510,547 |
-| Additional formation-file saving | **6,082,175 bytes (41.67%)** |
+| Full compact-v2 formation file (measured) | 14,618,529 |
+| Compositional-v3 formation file (measured) | 8,536,354 |
+| Additional formation-file saving | **6,082,175 bytes (41.61%)** |
 | Rows with a profitable exact delta | 23,027 of 25,807 |
 | Profitable rows with 2 constituents | 451 |
 | Profitable rows with 3 constituents | 6,528 |
@@ -61,6 +61,6 @@ The one-constituent composition analyzer was run against the same 25,807 formati
 
 This experiment searches for a smaller stored formation whose constituent list and remaining bond records match the target's one-unit-removed subset exactly. A delta stores the target's own ID, the base ID, insertion index, full removed constituent, and incident bonds with their original positions. Each candidate delta is reconstructed immediately and compared against the original constituent list, bond list, and canonical signature. A canonical-signature match alone is not enough: the actual persisted subset fields must also match exactly.
 
-**Interpretation:** if this representation is implemented in the storage layer, it suggests a further ~6.08 MB reduction from the already compacted formation rows. Applying that estimate to the previously measured full compact copy would reduce the five JSONL files from 147,624,856 bytes to approximately 141,542,681 bytes (about 22.02% below the original snapshot). This is a size estimate, not yet a generated compositional dataset; it excludes any additional decoder/index overhead and does not include a production Rust implementation.
+**Measured result:** the compositional-v3 workflow generated the full formation file and measured 8,536,354 bytes, saving 6,082,175 bytes (41.61%) against the compact-v2 formation file. Since the four family files remain byte-for-byte in compact-v2 encoding, the five JSONL files together would total 141,542,681 bytes, about 22.02% below the 181,511,850-byte source snapshot. This file-size total excludes the small manifest and any runtime in-memory index overhead.
 
-The experiment remains isolated from the source dataset and production library. A separate compositional-v3 encoder/decoder has now been implemented on the practice branch. In [workflow run 37974766627](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/37974766627), the focused compositional round-trip test and full-dataset recursive reconstruction both passed; the workflow also produced a separate `geometry-library-compositional-v3-practice` artifact. The decoder checks unresolved/cyclic references, insertion indices, bond positions and ordering, all persisted fields, and reconstructed canonical signatures. The compact-v2 family files remain unchanged in this practice output. Runtime Rust DTO integration, restart behavior, and lookup-equivalence testing are still outstanding; do not replace the main/local library until those gates pass.
+The experiment remains isolated from the source dataset and production library. The separate compositional-v3 encoder/decoder passed focused tests and full-dataset recursive reconstruction in [workflow run 37974902755](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/37974902755). Its actual formation-file size is 8,536,354 bytes, with all 25,807 formations restored and their canonical signatures checked. The decoder checks unresolved/cyclic references, insertion indices, bond positions and ordering, all persisted fields, and reconstructed canonical signatures. The compact-v2 family files remain unchanged in this practice output. Runtime Rust DTO integration, restart behavior, and lookup-equivalence testing are still outstanding; do not replace the main/local library until those gates pass.
