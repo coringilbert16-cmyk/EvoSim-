@@ -38,13 +38,21 @@ jobs:
         run: python tools/test_compact_geometry_practice.py
 
       - name: Measure exact one-constituent compositional encoding
-        run: python tools/analyze_compositional_geometry_practice.py geometry_library/data
+        run: python tools/analyze_compositional_geometry_practice.py geometry_library/data | tee "$RUNNER_TEMP/compositional-storage-results.json"
 
       - name: Build and verify isolated compact copy
         run: |
           python tools/compact_geometry_practice.py \
             geometry_library/data \
             "$RUNNER_TEMP/geometry-library-compact-practice"
+
+      - name: Upload compositional experiment results
+        uses: actions/upload-artifact@v4
+        with:
+          name: geometry-compositional-storage-results
+          path: ${{ runner.temp }}/compositional-storage-results.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload compact practice library
         uses: actions/upload-artifact@v4
