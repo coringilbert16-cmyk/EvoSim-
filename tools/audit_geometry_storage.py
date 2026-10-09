@@ -103,6 +103,36 @@ def audit_jsonl(path: Path) -> dict:
     }
 
 
+def audit_id_collisions(paths: list[Path]) -> list[dict[str, str]]:
+    """Check proposed IDs across the entire directory, not just individual files."""
+    id_to_signature: dict[str, str] = {}
+    collisions: list[dict[str, str]] = []
+    for path in paths:
+        with path.open("rb") as stream:
+            for raw_line in stream:
+                if not raw_line.strip():
+                    continue
+                try:
+                    record = json.loads(raw_line)
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                signature = record.get("formation_signature")
+                if not isinstance(signature, str):
+                    continue
+                compact_id = formation_id(signature)
+                previous = id_to_signature.setdefault(compact_id, signature)
+                if previous != signature:
+                    collisions.append({
+                        "file": path.name,
+                        "formation_id": compact_id,
+                        "first_signature": previous,
+                        "colliding_signature": signature,
+                    })
+    return collisions
+
+
 def human_bytes(value: int) -> str:
     amount = float(value)
     for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
@@ -126,6 +156,7 @@ def main() -> int:
     results = [audit_jsonl(path) for path in paths]
     total_bytes = sum(item["bytes"] for item in results)
     estimated_bytes = sum(item["estimated_compact_bytes"] for item in results)
+    collisions = audit_id_collisions(paths)
     print(f"Geometry library storage audit: {root}")
     print("Read-only; compact sizes are estimates, not measured migration output.\n")
     print(
@@ -146,6 +177,10 @@ def main() -> int:
     print(f"{'TOTAL JSONL':38} {human_bytes(total_bytes):>11}")
     print(f"Estimated compact JSONL total: {human_bytes(estimated_bytes)}")
     print(f"Estimated savings: {human_bytes(total_bytes - estimated_bytes)}")
+    print(f"Proposed 128-bit formation-ID collisions across all files: {len(collisions)}")
+    if collisions:
+        print("ERROR: collisions must be resolved before migration.")
+        print(json.dumps(collisions, indent=2))
     print("\nPer-file details:")
     print(json.dumps(results, indent=2))
     return 0
