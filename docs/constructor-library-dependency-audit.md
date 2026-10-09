@@ -100,3 +100,12 @@ The latest run's formatting, large-file, and COMBINE architecture checks passed.
 This is still an audit/test-only branch; no production catalogue data, geometry parameters, or live constructor algorithm were changed. The CI run did expose existing source inconsistencies, and this branch contains only narrowly scoped API-alignment fixes rather than a broad attempt to repair all 51 errors.
 
 Next safe task: preserve the restored Bob helpers with direct parser/index tests and keep the eight remaining compile blockers explicitly scoped. Do not start a broad simulation repair sprint just to force the full test suite green. Once the unrelated compile blockers are resolved by their owning workstreams, run the focused geometry and transaction contracts; then prove (a) candidate proposal is non-mutating, (b) full-structure nonpenetration and endpoint compatibility are checked, (c) failed transactions leave structure and ledger logically unchanged, and (d) successful commits reconcile bonds and energy.
+
+## Follow-up: rigid-family persistence boundary
+
+A focused writer-versus-loader inspection found that the rigid-edge and rigid-point insertion methods could append a family whose `formation_signature` was absent from the in-memory formation library, or whose `anchor_constituent` was out of range. The corresponding loaders reject those records on restart. That means the insertion call could report a persisted family which disappears after reopening the library.
+
+The narrow correction adds the same formation-reference and anchor-index checks to both insertion methods. A contract test now submits invalid rigid-edge and rigid-point records and checks that neither is accepted nor written. This does not migrate catalogue data or change geometry generation. The test is pending CI validation; the existing application compile blockers may still prevent execution.
+
+The loader-side geometric checks remain a separate audit item: insertion APIs do not currently retain the resource catalogue needed to validate polygon edge/vertex indices at write time. Do not broaden the API or rewrite stored catalogue data as part of this small correction.
+
