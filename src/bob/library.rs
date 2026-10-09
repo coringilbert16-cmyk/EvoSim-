@@ -3719,3 +3719,136 @@ mod bob_candidate_generation_contract_tests {
         let _ = std::fs::remove_dir_all(root);
     }
 }
+
+
+#[cfg(test)]
+mod compact_family_storage_tests {
+    use super::*;
+    use crate::resources::default_catalog;
+
+    #[test]
+    fn compact_family_records_round_trip_and_legacy_rows_remain_readable() {
+        let catalog = default_catalog();
+        let formation = GeometryFormation::single("Carbon");
+        let mut entries = BTreeMap::new();
+        entries.insert(formation.signature.clone(), formation.clone());
+        let ids = build_formation_id_index(&entries).unwrap();
+
+        let family = GeometryRigidContactFamily {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            formation_signature: formation.signature.clone(),
+            candidate_resource: "Nitrogen".to_string(),
+            anchor_constituent: 0,
+            anchor_edge: 0,
+            candidate_edge: 0,
+            candidate_rotation_radians: 0.0,
+            anchor_parameter_start: 0.0,
+            anchor_parameter_end: 1.0,
+        };
+
+        let compact = compact_family_value(&family).unwrap();
+        let object = compact.as_object().unwrap();
+        assert!(!object.contains_key("formation_signature"));
+        assert_eq!(
+            object.get("storage_version").and_then(serde_json::Value::as_u64),
+            Some(FAMILY_STORAGE_VERSION)
+        );
+        assert_eq!(
+            object.get("formation_id").and_then(serde_json::Value::as_str),
+            Some(formation_id(&formation.signature).as_str())
+        );
+        let compact_line = serde_json::to_string(&compact).unwrap();
+        let decoded: GeometryRigidContactFamily =
+            deserialize_family_record(&compact_line, &ids).unwrap();
+        assert_eq!(decoded, family);
+
+        let legacy_line = serde_json::to_string(&family).unwrap();
+        let legacy_decoded: GeometryRigidContactFamily =
+            deserialize_family_record(&legacy_line, &ids).unwrap();
+        assert_eq!(legacy_decoded, family);
+    }
+
+    #[test]
+    fn compact_family_records_reject_unknown_versions_and_unresolved_ids() {
+        let catalog = default_catalog();
+        let formation = GeometryFormation::single("Carbon");
+        let mut entries = BTreeMap::new();
+        entries.insert(formation.signature.clone(), formation.clone());
+        let ids = build_formation_id_index(&entries).unwrap();
+        let family = GeometryRigidContactFamily {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            formation_signature: formation.signature,
+            candidate_resource: "Nitrogen".to_string(),
+            anchor_constituent: 0,
+            anchor_edge: 0,
+            candidate_edge: 0,
+            candidate_rotation_radians: 0.0,
+            anchor_parameter_start: 0.0,
+            anchor_parameter_end: 1.0,
+        };
+        let mut value = compact_family_value(&family).unwrap();
+        value["storage_version"] = serde_json::Value::from(FAMILY_STORAGE_VERSION + 1);
+        assert!(deserialize_family_record::<GeometryRigidContactFamily>(
+            &serde_json::to_string(&value).unwrap(),
+            &ids
+        )
+        .is_err());
+
+        value = compact_family_value(&family).unwrap();
+        value["formation_id"] = serde_json::Value::String("unresolved-id".to_string());
+        assert!(deserialize_family_record::<GeometryRigidContactFamily>(
+            &serde_json::to_string(&value).unwrap(),
+            &ids
+        )
+        .is_err());
+        let _ = catalog;
+    }
+
+    #[test]
+    fn family_writer_persists_compact_rows_and_reopens_them() {
+        let catalog = default_catalog();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-compact-family-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let formation = GeometryFormation::single("Carbon");
+        library.insert(formation.clone(), &catalog).unwrap();
+
+        let family = GeometryRigidContactFamily {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            formation_signature: formation.signature.clone(),
+            candidate_resource: "Nitrogen".to_string(),
+            anchor_constituent: 0,
+            anchor_edge: 0,
+            candidate_edge: 0,
+            candidate_rotation_radians: 0.0,
+            anchor_parameter_start: 0.0,
+            anchor_parameter_end: 1.0,
+        };
+        assert_eq!(
+            library
+                .insert_rigid_contact_families(vec![family.clone()])
+                .unwrap(),
+            1
+        );
+
+        let path = root.join("rigid_contact_families.jsonl");
+        let line = std::fs::read_to_string(&path).unwrap();
+        let record: serde_json::Value = serde_json::from_str(line.trim()).unwrap();
+        assert!(record.get("formation_signature").is_none());
+        assert!(record.get("formation_id").is_some());
+        assert_eq!(
+            record.get("storage_version").and_then(serde_json::Value::as_u64),
+            Some(FAMILY_STORAGE_VERSION)
+        );
+        drop(library);
+
+        let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
+        let loaded = reopened.rigid_contact_families().next().unwrap();
+        assert_eq!(loaded.signature(), family.signature());
+        drop(reopened);
+        let _ = std::fs::remove_dir_all(root);
+    }
+}
