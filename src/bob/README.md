@@ -40,6 +40,10 @@ The checked-in geometry library is already large, and the local catalogue is lar
 
 **Acceptance criteria:** no formation or valid family is lost; every compact reference resolves uniquely; collision checks are enforced; live physical validation remains authoritative; old data remains recoverable until verification passes; and before/after size and load measurements are recorded. Constructor code and constructor-to-Bob integration remain out of scope.
 
+## Latest source-audit blocker
+
+A focused source audit found that `src/bob/worker.rs` imports `open_default_library`, `seed_base_catalogue`, `expand_formation_candidates`, and three rigid-family generators that are not defined in the currently mapped `src/bob/library.rs` revision. Treat this as an unresolved source/API mismatch and likely compile blocker until checked in a runnable checkout. Do not implement compact serialization on top of this unresolved API. See [the detailed storage audit and migration proposal](../../docs/bob-geometry-storage-audit.md).
+
 ## Recommended work plan
 
 ### 1. Reconcile the source/API contract
