@@ -419,4 +419,85 @@ mod tests {
         );
         assert_eq!(energy, before_energy);
     }
+
+    #[test]
+    fn insufficient_energy_rolls_back_selected_bond_structure_and_ledger() {
+        let catalog = default_catalog();
+        let mut structure = crate::structure::OrganismStructure::new();
+        structure.add_unit(crate::structure::StructuralUnit::new(
+            "Carbon",
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+
+        let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
+        let mut found_failure = false;
+        for placement in crate::construction_runtime::candidate_placements(
+            &structure,
+            carbon,
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &[0],
+            &catalog,
+        ) {
+            let mut trial = structure.clone();
+            trial.add_unit(crate::structure::StructuralUnit::new("Carbon", placement));
+            let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+            let candidates = crate::contact::connection_pair_candidates_cached(
+                &trial, 0, 1, &catalog, &mut cache,
+            );
+            for candidate in candidates {
+                let Some((_, _, _, investment, required)) =
+                    crate::combine_runtime::selected_candidate_evaluation(
+                        &trial, 0, 1, candidate, &catalog,
+                    )
+                else {
+                    continue;
+                };
+                if required <= 0.0 {
+                    continue;
+                }
+
+                let before_structure = trial.clone();
+                let mut ledger = EnergyLedger::default();
+                let before_ledger = ledger;
+                let mut energy = 0.0;
+
+                let result = crate::combine_runtime::form_selected_bond(
+                    &mut trial,
+                    0,
+                    1,
+                    candidate,
+                    investment,
+                    &catalog,
+                    &mut cache,
+                    &mut ledger,
+                    &mut energy,
+                );
+
+                assert!(result.is_none(), "bond should fail without enough energy");
+                assert_eq!(trial.units, before_structure.units);
+                assert_eq!(trial.bonds, before_structure.bonds);
+                assert_eq!(energy, 0.0);
+                assert_eq!(ledger, before_ledger);
+                found_failure = true;
+                break;
+            }
+            if found_failure {
+                break;
+            }
+        }
+
+        assert!(
+            found_failure,
+            "no candidate with a positive energy requirement was found"
+        );
+    }
+
 }
