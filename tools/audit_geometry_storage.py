@@ -11,12 +11,18 @@ exact serialized Rust output. No files are modified.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
 
 
 COMPACT_ID_PLACEHOLDER = "0" * 32
+
+
+def formation_id(signature: str) -> str:
+    """Deterministic 128-bit ID proposal; collisions are checked, never ignored."""
+    return hashlib.sha256(signature.encode("utf-8")).hexdigest()[:32]
 
 
 def compact_estimate(record: dict) -> int | None:
@@ -37,6 +43,9 @@ def audit_jsonl(path: Path) -> dict:
     signature_rows = 0
     max_row_bytes = 0
     estimated_compact_bytes = 0
+    distinct_signatures: set[str] = set()
+    id_to_signature: dict[str, str] = {}
+    id_collisions: list[dict[str, str]] = []
 
     with path.open("rb") as stream:
         for raw_line in stream:
@@ -59,6 +68,15 @@ def audit_jsonl(path: Path) -> dict:
             if isinstance(signature, str):
                 signature_rows += 1
                 signature_bytes += len(signature.encode("utf-8"))
+                distinct_signatures.add(signature)
+                compact_id = formation_id(signature)
+                previous = id_to_signature.setdefault(compact_id, signature)
+                if previous != signature:
+                    id_collisions.append({
+                        "formation_id": compact_id,
+                        "first_signature": previous,
+                        "colliding_signature": signature,
+                    })
                 estimate = compact_estimate(record)
                 if estimate is None:
                     estimated_compact_bytes += row_bytes
@@ -74,6 +92,9 @@ def audit_jsonl(path: Path) -> dict:
         "rows": rows,
         "invalid_rows": invalid_rows,
         "rows_with_formation_signature": signature_rows,
+        "distinct_formation_signatures": len(distinct_signatures),
+        "duplicate_signature_rows": signature_rows - len(distinct_signatures),
+        "formation_id_collisions": id_collisions,
         "formation_signature_utf8_bytes": signature_bytes,
         "average_row_bytes": round(total_bytes / rows, 1) if rows else 0,
         "max_row_bytes": max_row_bytes,
