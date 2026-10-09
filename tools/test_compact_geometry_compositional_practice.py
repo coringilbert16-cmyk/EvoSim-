@@ -31,6 +31,51 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
 
 
 class CompositionalPracticeTests(unittest.TestCase):
+    def test_decoder_rejects_missing_base_and_bad_delta_positions(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unresolved compositional base ID"):
+            composition.decode_all([
+                {"formation_id": "delta", "base_id": "missing", "insert_at": 0,
+                 "constituent": carbon(0.0), "incident_bonds": [], "schema_version": 1}
+            ])
+        base = {"formation_id": "base", "schema_version": 1, "constituents": [carbon(0.0)],
+                "bonds": []}
+        with self.assertRaisesRegex(ValueError, "invalid insertion index"):
+            composition.decode_all([
+                base,
+                {"formation_id": "delta", "schema_version": 1, "base_id": "base", "insert_at": 3,
+                 "constituent": carbon(1.0), "incident_bonds": []},
+            ])
+        with self.assertRaisesRegex(ValueError, "duplicate incident-bond position"):
+            composition.decode_all([
+                {"formation_id": "base", "schema_version": 1, "constituents": [], "bonds": []},
+                {"formation_id": "delta", "schema_version": 1, "base_id": "base", "insert_at": 0,
+                 "constituent": carbon(0.0),
+                 "incident_bonds": [{"at": 0, "bond": {}}, {"at": 0, "bond": {}}]},
+            ])
+
+    def test_decoder_preserves_extra_fields_and_bond_order(self) -> None:
+        base = {
+            "formation_id": "base", "schema_version": 1,
+            "constituents": [carbon(0.0), carbon(1.0)],
+            "bonds": [{"constituent_a": 0, "constituent_b": 1, "kind": "base"}],
+            "metadata": {"source": "fixture"},
+        }
+        delta = {
+            "formation_id": "delta", "schema_version": 1, "base_id": "base", "insert_at": 1,
+            "constituent": carbon(2.0),
+            "incident_bonds": [
+                {"at": 0, "bond": {"constituent_a": 1, "constituent_b": 0, "kind": "first"}},
+                {"at": 2, "bond": {"constituent_a": 1, "constituent_b": 2, "kind": "last"}},
+            ],
+            "extra_fields": {"metadata": {"source": "delta"}},
+        }
+        restored = composition.decode_all([base, delta])["delta"]
+        self.assertEqual(restored["metadata"], {"source": "delta"})
+        self.assertEqual(restored["constituents"], [carbon(0.0), carbon(2.0), carbon(1.0)])
+        self.assertEqual([bond["kind"] for bond in restored["bonds"]], ["first", "base", "last"])
+        self.assertEqual(restored["bonds"][1]["constituent_a"], 0)
+        self.assertEqual(restored["bonds"][1]["constituent_b"], 2)
+
     def test_reference_depth_statistics_and_cycle_detection(self) -> None:
         rows = [
             {"formation_id": "base", "schema_version": 1, "constituents": [], "bonds": []},
