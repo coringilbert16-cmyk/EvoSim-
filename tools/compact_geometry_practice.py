@@ -221,9 +221,9 @@ def run(source: Path, destination: Path) -> int:
             shutil.copy2(path, target)
 
     manifest_path = destination / "storage_manifest.json"
-    with manifest_path.open("w", encoding="utf-8", newline="\\n") as stream:
+    with manifest_path.open("w", encoding="utf-8", newline="\n") as stream:
         json.dump(storage_manifest, stream, separators=(",", ":"), ensure_ascii=False)
-        stream.write("\\n")
+        stream.write("\n")
 
     source_total = sum(item["source_bytes"] for _, item in reports)
     compact_total = sum(item["compact_bytes"] for _, item in reports)
