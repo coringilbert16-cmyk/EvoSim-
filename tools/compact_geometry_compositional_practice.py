@@ -186,14 +186,8 @@ def build_compositional_copy(source: Path, destination: Path) -> dict[str, int]:
                 candidate_size = len(json.dumps(candidate, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
                 if candidate_size >= best_size:
                     continue
-                # Verify this candidate using the same recursive decoder used for the
-                # complete output, with all current source rows available as full rows.
-                trial = dict(encoded_by_id)
-                trial.update({key: value for key, value in full_rows.items() if key not in trial})
-                trial[row_id] = candidate
-                restored = decode_all(list(trial.values()))[row_id]
-                if restored != full:
-                    raise ValueError(f"candidate delta changed persisted fields for {row_id}")
+                # Full recursive decoding and exact comparison are performed for
+                # every chosen row after the complete encoded table has been built.
                 best, best_size = candidate, candidate_size
         encoded_by_id[row_id] = best
 
@@ -224,7 +218,7 @@ def build_compositional_copy(source: Path, destination: Path) -> dict[str, int]:
     manifest["formation_rows_full"] = len(encoded_rows) - manifest["formation_rows_delta_encoded"]
     manifest_path.write_text(json.dumps(manifest, separators=(",", ":"), ensure_ascii=False) + "\n", encoding="utf-8")
 
-    baseline_bytes = sum(len(json.dumps(row, separators=(",", ":"), ensure_ascii=False).encode("utf-8")) for row in full_rows.values())
+    baseline_bytes = sum(len(json.dumps(row, separators=(",", ":"), ensure_ascii=False).encode("utf-8")) + 1 for row in full_rows.values())
     encoded_bytes = output_path.stat().st_size
     print(json.dumps({
         "formation_rows": len(encoded_rows),
