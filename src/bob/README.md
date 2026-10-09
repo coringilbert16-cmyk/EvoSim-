@@ -14,6 +14,32 @@ The current phase is limited to **Bob's internal consistency, library lookup, an
 
 **The initial-organism constructor is out of scope for this phase.** Do not change its algorithm, wire it to Bob, or add constructor-specific cache assumptions as part of this work. Constructor integration requires a separate decision after Bob's interface and behavior are stable.
 
+
+## Approved storage-efficiency work
+
+The checked-in geometry library is already large, and the local catalogue is larger than the repository snapshot. The immediate storage work is a lossless data-model reduction, not deletion of formations, reduced geometric precision, or exhaustive catalogue pruning.
+
+### Findings from source inspection
+
+- The rigid edge, rigid point, rigid vertex, fluid-boundary, and water-contact family records each serialize a full `formation_signature`. That signature encodes the formation's constituents, quantized positions/rotations, and bonds. The same string is repeated in every family row associated with that formation.
+- Family deduplication signatures also embed the full formation signature, so changing the serialized representation must preserve the current logical identity and duplicate behavior.
+- Loaders currently validate family rows by resolving `formation_signature` into the in-memory formation map. A compact reference therefore needs a reliable ID-to-formation index built from the authoritative formation records.
+- Several load paths collect all JSONL lines into `Vec<String>` before parsing. This creates avoidable peak-memory overhead for large files and should be replaced with streaming line-by-line parsing where the existing error/recovery contract can be preserved.
+- The frontier also repeats formation signatures in both its map key and record. It is a secondary target after family storage, because frontier resume semantics must remain exact.
+
+### Storage migration design
+
+1. **Measure a baseline.** Record per-file byte size, row count, representative row lengths, load time, and peak-memory behavior from the real local catalogue when a runnable checkout is available. Do not estimate savings from the GitHub snapshot as though it were the user's 79k-formation local store.
+2. **Add deterministic compact formation IDs.** Derive an ID from the canonical formation signature using a stable, explicitly selected hash algorithm. During load, build an ID-to-formation mapping and detect any ID collision where distinct canonical signatures map to the same ID; fail closed rather than resolving a collision to the wrong formation. Do not use Rust's default hasher for persisted IDs.
+3. **Version the family-record schema.** New compact records store the formation ID instead of repeating the full signature. The formation's full canonical signature remains authoritative in the formation record. Runtime APIs may resolve IDs back to formations, but must preserve family identity, validation, index behavior, and duplicate detection.
+4. **Migrate transactionally.** Keep the current files untouched as the source of truth until all old records are parsed, every reference resolves, counts and logical family signatures are checked, and new files are flushed successfully. Write to a separate versioned output or temporary paths first; never overwrite the only copy during conversion. A restart must not mistake a partially written migration for a completed one.
+5. **Preserve compatibility deliberately.** Old and new formats must be distinguishable by schema/version metadata. Either support reading the legacy format during a migration window or provide an explicit one-way migration command; never silently reinterpret an old row as a new schema. Do not bump the whole library schema until the implications for formations, frontier, and catalogue compatibility are resolved.
+6. **Stream loaders.** Parse one line at a time instead of collecting entire JSONL files into memory. Preserve the existing policy for an incomplete final append and for malformed interior records; do not silently weaken validation while optimizing memory.
+7. **Prove equivalence and savings.** Compare legacy and compact data by row counts, resolved formation references, family keys/projections, and lookup results. Benchmark cold load, memory, and indexed lookup before and after. Report measured disk savings separately from memory and speed changes.
+8. **Apply to remaining repeated references only after the first migration is proven.** The three largest rigid-family files are the first target. Then evaluate fluid/water families and frontier records with the same measurements. Lossless compression can be evaluated afterward; it must not replace fixing repeated data in the model.
+
+**Acceptance criteria:** no formation or valid family is lost; every compact reference resolves uniquely; collision checks are enforced; live physical validation remains authoritative; old data remains recoverable until verification passes; and before/after size and load measurements are recorded. Constructor code and constructor-to-Bob integration remain out of scope.
+
 ## Recommended work plan
 
 ### 1. Reconcile the source/API contract
