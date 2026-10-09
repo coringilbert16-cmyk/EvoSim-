@@ -221,7 +221,7 @@ def run(source: Path, destination: Path) -> int:
             shutil.copy2(path, target)
 
     manifest_path = destination / "storage_manifest.json"
-    with manifest_path.open("w", encoding="utf-8", newline="\n") as stream:
+    with manifest_path.open("w", encoding="utf-8") as stream:
         json.dump(storage_manifest, stream, separators=(",", ":"), ensure_ascii=False)
         stream.write("\n")
 
