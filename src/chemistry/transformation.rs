@@ -31,6 +31,21 @@ pub(crate) fn bond_break_energy_yield(
         .then_some((bond_energy, usable, heat))
 }
 
+/// Resolve the intrinsic potential of a pre-bonded stored-material interface
+/// through the same chemistry authority used when forming bonds. Physical
+/// stored-material bonds currently retain endpoint identity but not a cached
+/// energy value, so this adapter derives the potential from the canonical
+/// material properties rather than duplicating the chemistry equation.
+fn break_energy_yield(
+    a: crate::resources::ResourceProperties,
+    b: crate::resources::ResourceProperties,
+    processing_efficiency: f64,
+) -> Option<(f64, f64, f64)> {
+    let strength = crate::combine::bond_strength(a, b);
+    let potential = crate::combine::intrinsic_bond_potential(a, b, strength);
+    bond_break_energy_yield(potential, processing_efficiency)
+}
+
 pub(crate) fn chemical_break_energy_yield(
     reaction_energy: f64,
     disruption_cost: f64,
