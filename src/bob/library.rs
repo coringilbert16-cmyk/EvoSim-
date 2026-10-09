@@ -725,6 +725,14 @@ impl GeometryFormation {
             candidate
                 .bonds
                 .sort_by_key(|b| (b.constituent_a, b.constituent_b));
+
+            // Canonicalization changes constituent order and normalizes
+            // symmetry-equivalent rotations. Treat the resulting pose as a
+            // new physical arrangement and validate it again before exposing
+            // or persisting it; the pre-canonical pose's validity is not enough.
+            if !validate_formation(&candidate, catalog) {
+                continue;
+            }
             candidate.signature = candidate.canonical_signature();
 
             if best
