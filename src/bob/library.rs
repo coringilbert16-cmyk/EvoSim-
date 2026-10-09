@@ -3567,7 +3567,10 @@ mod bob_candidate_generation_contract_tests {
             candidate_rotation_start_radians: 0.0,
             candidate_rotation_end_radians: 1.0,
         };
-        assert_eq!(library.insert_rigid_contact_families(vec![edge]).unwrap(), 1);
+        assert_eq!(
+            library.insert_rigid_contact_families(vec![edge]).unwrap(),
+            1
+        );
         assert_eq!(
             library
                 .insert_rigid_point_contact_families(vec![point])
