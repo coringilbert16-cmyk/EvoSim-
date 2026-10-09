@@ -81,14 +81,19 @@ A test-only contract suite has been added to `src/bob/library.rs` on the audit b
 
 These tests exercise the geometry reference candidate generator, not the live initial constructor or the full energy/bond transaction.
 
-A GitHub Actions run reached `cargo test --all-targets`, but compilation failed before tests could execute. The compiler reported **51 errors** across the current source branch. Important blockers relevant to this plan include:
+A GitHub Actions run reached `cargo test --all-targets`, but compilation failed before tests could execute. The first compiler run reported **51 errors**. The audit branch then made three narrow repairs: restored Bob lookup helpers from an earlier repository commit, corrected the exhausted-frontier return type in the Bob worker, and derived `Hash` for the chemistry-library key. It also aligned the initial-constructor candidate-evaluation destructuring with the actual four-value API.
 
-- Bob's `library.rs` calls missing helpers for parsing edge/point descriptors, indexing contact buckets, and projecting rigid edge/point/vertex families. These are direct blockers to compiling or testing the geometry library.
-- The constructor candidate-evaluation API returns four values, while the initial-constructor call site had stale five-value destructuring. That call site and stale contract-test destructuring were aligned with the actual four-value API on this audit branch.
-- `ChemistryKey` is used as a `HashMap` key but does not implement `Hash`.
-- Other compile errors are outside the immediate constructor/library scope (including stale resource, diagnostics, genome, observation, and transformation references).
+The latest CI run reports **8 remaining compile errors**, all outside the Bob geometry lookup helper set and the `ChemistryKey` map-key contract:
 
-The run's formatting, large-file, and COMBINE architecture checks passed. Rust compilation failed, so neither the new geometry tests nor the full test suite ran. This is a verified build failure, not a test failure and not evidence that the newly added tests themselves fail.
+- `ChemicalBreakOperation` derives `Copy` despite owning a `String`.
+- `resources.rs` references missing `exponential_influence`.
+- Diagnostics references a missing `lifecycle_changes` field.
+- Genome defaults reference missing `default_reproductive_energy_allocation`.
+- A harmonics test initializes a removed `ResourceBaselines.chemical_position` field.
+- Observation passes an immutable organism where the growth-fraction API requires a mutable reference.
+- Transformation calls `break_energy_yield` while the available helper is named `bond_break_energy_yield`.
+
+The latest run's formatting, large-file, and COMBINE architecture checks passed. Rust compilation still fails before tests execute, so the new geometry and transaction contract tests remain **unverified**, not failed. The reduction from 51 to 8 compile errors is real progress, but it is not a green build.
 
 ## Evidence boundary and next action
 
