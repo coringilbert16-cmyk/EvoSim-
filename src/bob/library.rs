@@ -30,8 +30,7 @@ const QUANTUM: f64 = 1e-9;
 
 /// Stable 128-bit prefix of SHA-256. Unlike `DefaultHasher`, this is a persistence contract.
 fn formation_id(signature: &str) -> String {
-    const ALPHABET: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
     let digest = Sha256::digest(signature.as_bytes());
     let bytes = &digest[..16];
     let mut encoded = String::with_capacity(22);
@@ -85,10 +84,7 @@ fn compact_family_value<T: Serialize>(family: &T) -> std::io::Result<serde_json:
     Ok(value)
 }
 
-fn write_compact_family<W: Write, T: Serialize>(
-    writer: &mut W,
-    family: &T,
-) -> std::io::Result<()> {
+fn write_compact_family<W: Write, T: Serialize>(writer: &mut W, family: &T) -> std::io::Result<()> {
     let value = compact_family_value(family)?;
     serde_json::to_writer(writer, &value)
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))
@@ -952,11 +948,11 @@ fn compact_formation_value(
     existing: &BTreeMap<String, GeometryFormation>,
     batch: &BTreeMap<String, GeometryFormation>,
 ) -> std::io::Result<serde_json::Value> {
-    let mut full = serde_json::to_value(formation)
-        .map_err(|error| invalid_storage_data(error.to_string()))?;
-    let full_object = full.as_object_mut().ok_or_else(|| {
-        invalid_storage_data("formation record must serialize as an object")
-    })?;
+    let mut full =
+        serde_json::to_value(formation).map_err(|error| invalid_storage_data(error.to_string()))?;
+    let full_object = full
+        .as_object_mut()
+        .ok_or_else(|| invalid_storage_data("formation record must serialize as an object"))?;
     full_object.remove("signature");
     full_object.insert(
         "formation_id".to_owned(),
@@ -1006,7 +1002,9 @@ fn compact_formation_value(
             signature: String::new(),
         };
         let base_signature = base_probe.canonical_signature();
-        let Some(base) = existing.get(&base_signature).or_else(|| batch.get(&base_signature))
+        let Some(base) = existing
+            .get(&base_signature)
+            .or_else(|| batch.get(&base_signature))
         else {
             continue;
         };
@@ -1087,12 +1085,18 @@ fn storage_format_version(root: &Path, formations_path: &Path) -> std::io::Resul
         match version {
             1 => return Ok(1),
             3 => {
-                if value.get("formation_encoding").and_then(serde_json::Value::as_str)
+                if value
+                    .get("formation_encoding")
+                    .and_then(serde_json::Value::as_str)
                     != Some("exact-one-constituent-delta-v1")
-                    || value.get("formation_id_algorithm").and_then(serde_json::Value::as_str)
+                    || value
+                        .get("formation_id_algorithm")
+                        .and_then(serde_json::Value::as_str)
                         != Some("sha256-128-base64url")
                 {
-                    return Err(invalid_storage_data("unsupported compositional storage encoding"));
+                    return Err(invalid_storage_data(
+                        "unsupported compositional storage encoding",
+                    ));
                 }
                 return Ok(3);
             }
@@ -1103,7 +1107,11 @@ fn storage_format_version(root: &Path, formations_path: &Path) -> std::io::Resul
             }
         }
     }
-    if formations_path.metadata().map(|metadata| metadata.len() > 0).unwrap_or(false) {
+    if formations_path
+        .metadata()
+        .map(|metadata| metadata.len() > 0)
+        .unwrap_or(false)
+    {
         Ok(1)
     } else {
         Ok(3)
@@ -1152,49 +1160,51 @@ fn decode_compositional_formation(
         return Ok(formation.clone());
     }
     if depth > MAX_COMPOSITION_DEPTH {
-        return Err(invalid_storage_data("compositional formation reference depth exceeds 64"));
+        return Err(invalid_storage_data(
+            "compositional formation reference depth exceeds 64",
+        ));
     }
     if !active.insert(id.to_owned()) {
-        return Err(invalid_storage_data(format!("cyclic compositional formation reference: {id}")));
+        return Err(invalid_storage_data(format!(
+            "cyclic compositional formation reference: {id}"
+        )));
     }
-    let row = rows.get(id).cloned()
+    let row = rows
+        .get(id)
+        .cloned()
         .ok_or_else(|| invalid_storage_data(format!("unresolved compositional base ID: {id}")))?;
-    let schema_version = row.get("schema_version").and_then(serde_json::Value::as_u64)
-        .ok_or_else(|| {
-            invalid_storage_data(format!("formation row {id} lacks schema_version"))
-        })? as u32;
+    let schema_version = row
+        .get("schema_version")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| invalid_storage_data(format!("formation row {id} lacks schema_version")))?
+        as u32;
 
     let (constituents, bonds) = if let Some(base_value) = row.get("base_id") {
-        let base_id = base_value.as_str()
-            .ok_or_else(|| invalid_storage_data(format!("invalid base_id in formation row {id}")))?;
-        let base = decode_compositional_formation(
-            base_id,
-            rows,
-            cache,
-            active,
-            depth + 1,
-            catalog,
-        )?;
+        let base_id = base_value.as_str().ok_or_else(|| {
+            invalid_storage_data(format!("invalid base_id in formation row {id}"))
+        })?;
+        let base =
+            decode_compositional_formation(base_id, rows, cache, active, depth + 1, catalog)?;
         if base.schema_version != schema_version {
             return Err(invalid_storage_data(format!(
                 "schema version differs across formation delta {id}"
             )));
         }
-        let insert_at = row.get("insert_at").and_then(serde_json::Value::as_u64)
-            .ok_or_else(|| {
-                invalid_storage_data(format!("formation delta {id} lacks insert_at"))
-            })? as usize;
+        let insert_at = row
+            .get("insert_at")
+            .and_then(serde_json::Value::as_u64)
+            .ok_or_else(|| invalid_storage_data(format!("formation delta {id} lacks insert_at")))?
+            as usize;
         if insert_at > base.constituents.len() {
             return Err(invalid_storage_data(format!(
                 "invalid constituent insertion index in {id}"
             )));
         }
-        let constituent: GeometryConstituent = serde_json::from_value(
-            row.get("constituent").cloned()
-                .ok_or_else(|| {
-                    invalid_storage_data(format!("formation delta {id} lacks constituent"))
-                })?,
-        ).map_err(|error| invalid_storage_data(error.to_string()))?;
+        let constituent: GeometryConstituent =
+            serde_json::from_value(row.get("constituent").cloned().ok_or_else(|| {
+                invalid_storage_data(format!("formation delta {id} lacks constituent"))
+            })?)
+            .map_err(|error| invalid_storage_data(error.to_string()))?;
         let mut constituents = base.constituents;
         constituents.insert(insert_at, constituent);
 
@@ -1207,26 +1217,32 @@ fn decode_compositional_formation(
                 bond.constituent_b += 1;
             }
         }
-        let incident_rows = row.get("incident_bonds").and_then(serde_json::Value::as_array)
+        let incident_rows = row
+            .get("incident_bonds")
+            .and_then(serde_json::Value::as_array)
             .ok_or_else(|| {
                 invalid_storage_data(format!("formation delta {id} lacks incident_bonds"))
             })?;
         let mut incident = BTreeMap::<usize, GeometryBond>::new();
         for item in incident_rows {
-            let position = item.get("at").and_then(serde_json::Value::as_u64)
+            let position = item
+                .get("at")
+                .and_then(serde_json::Value::as_u64)
                 .ok_or_else(|| {
                     invalid_storage_data(format!("invalid incident-bond position in {id}"))
                 })? as usize;
-            let bond: GeometryBond = serde_json::from_value(
-                item.get("bond").cloned()
-                    .ok_or_else(|| invalid_storage_data(format!("incident bond missing in {id}")))?,
-            ).map_err(|error| invalid_storage_data(error.to_string()))?;
+            let bond: GeometryBond =
+                serde_json::from_value(item.get("bond").cloned().ok_or_else(|| {
+                    invalid_storage_data(format!("incident bond missing in {id}"))
+                })?)
+                .map_err(|error| invalid_storage_data(error.to_string()))?;
             if bond.constituent_a != insert_at && bond.constituent_b != insert_at {
                 return Err(invalid_storage_data(format!(
                     "incident bond does not touch inserted constituent in {id}"
                 )));
             }
-            if bond.constituent_a >= constituents.len() || bond.constituent_b >= constituents.len()
+            if bond.constituent_a >= constituents.len()
+                || bond.constituent_b >= constituents.len()
                 || incident.insert(position, bond).is_some()
             {
                 return Err(invalid_storage_data(format!(
@@ -1246,9 +1262,11 @@ fn decode_compositional_formation(
             if let Some(bond) = incident.remove(&position) {
                 bonds.push(bond);
             } else {
-                bonds.push(base_iter.next().ok_or_else(|| invalid_storage_data(
-                    format!("bond reconstruction underflow in formation delta {id}")
-                ))?);
+                bonds.push(base_iter.next().ok_or_else(|| {
+                    invalid_storage_data(format!(
+                        "bond reconstruction underflow in formation delta {id}"
+                    ))
+                })?);
             }
         }
         if base_iter.next().is_some() || !incident.is_empty() {
@@ -1266,18 +1284,16 @@ fn decode_compositional_formation(
                 )));
             }
         }
-        let constituents: Vec<GeometryConstituent> = serde_json::from_value(
-            row.get("constituents").cloned()
-                .ok_or_else(|| {
-                    invalid_storage_data(format!("full formation row {id} lacks constituents"))
-                })?,
-        ).map_err(|error| invalid_storage_data(error.to_string()))?;
-        let bonds: Vec<GeometryBond> = serde_json::from_value(
-            row.get("bonds").cloned()
-                .ok_or_else(|| {
-                    invalid_storage_data(format!("full formation row {id} lacks bonds"))
-                })?,
-        ).map_err(|error| invalid_storage_data(error.to_string()))?;
+        let constituents: Vec<GeometryConstituent> =
+            serde_json::from_value(row.get("constituents").cloned().ok_or_else(|| {
+                invalid_storage_data(format!("full formation row {id} lacks constituents"))
+            })?)
+            .map_err(|error| invalid_storage_data(error.to_string()))?;
+        let bonds: Vec<GeometryBond> =
+            serde_json::from_value(row.get("bonds").cloned().ok_or_else(|| {
+                invalid_storage_data(format!("full formation row {id} lacks bonds"))
+            })?)
+            .map_err(|error| invalid_storage_data(error.to_string()))?;
         (constituents, bonds)
     };
 
@@ -1296,7 +1312,9 @@ fn decode_compositional_formation(
     if formation.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
         || !validate_formation(&formation, catalog)
     {
-        return Err(invalid_storage_data(format!("invalid reconstructed formation {id}")));
+        return Err(invalid_storage_data(format!(
+            "invalid reconstructed formation {id}"
+        )));
     }
     formation.signature = signature;
     active.remove(id);
@@ -1328,11 +1346,15 @@ fn load_compositional_formations(
             }
             Err(error) => return Err(invalid_storage_data(error.to_string())),
         };
-        let id = row.get("formation_id").and_then(serde_json::Value::as_str)
+        let id = row
+            .get("formation_id")
+            .and_then(serde_json::Value::as_str)
             .ok_or_else(|| invalid_storage_data("compositional formation row lacks formation_id"))?
             .to_owned();
         if rows.insert(id.clone(), row).is_some() {
-            return Err(invalid_storage_data(format!("duplicate formation ID in storage: {id}")));
+            return Err(invalid_storage_data(format!(
+                "duplicate formation ID in storage: {id}"
+            )));
         }
     }
 
@@ -1340,15 +1362,12 @@ fn load_compositional_formations(
     let mut active = std::collections::BTreeSet::new();
     let mut entries = BTreeMap::new();
     for id in rows.keys() {
-        let formation = decode_compositional_formation(
-            id,
-            &rows,
-            &mut cache,
-            &mut active,
-            0,
-            catalog,
-        )?;
-        if entries.insert(formation.signature.clone(), formation).is_some() {
+        let formation =
+            decode_compositional_formation(id, &rows, &mut cache, &mut active, 0, catalog)?;
+        if entries
+            .insert(formation.signature.clone(), formation)
+            .is_some()
+        {
             return Err(invalid_storage_data(
                 "duplicate canonical formation signature in compositional storage",
             ));
@@ -1446,16 +1465,20 @@ impl GeometryLibrary {
                 if line.trim().is_empty() {
                     continue;
                 }
-                let family: GeometryContactFamily = match deserialize_family_record(&line, &formation_ids) {
-                    Ok(value) => value,
-                    Err(error) if is_last => {
-                        let _ = error;
-                        continue;
-                    }
-                    Err(error) => {
-                        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, error));
-                    }
-                };
+                let family: GeometryContactFamily =
+                    match deserialize_family_record(&line, &formation_ids) {
+                        Ok(value) => value,
+                        Err(error) if is_last => {
+                            let _ = error;
+                            continue;
+                        }
+                        Err(error) => {
+                            return Err(std::io::Error::new(
+                                std::io::ErrorKind::InvalidData,
+                                error,
+                            ));
+                        }
+                    };
                 if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
                     || !family.contact_angle_radians.is_finite()
                     || !family.curvature_radius.is_finite()
@@ -1491,16 +1514,20 @@ impl GeometryLibrary {
                 if line.trim().is_empty() {
                     continue;
                 }
-                let family: GeometryRigidContactFamily = match deserialize_family_record(&line, &formation_ids) {
-                    Ok(value) => value,
-                    Err(error) if is_last => {
-                        let _ = error;
-                        continue;
-                    }
-                    Err(error) => {
-                        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, error));
-                    }
-                };
+                let family: GeometryRigidContactFamily =
+                    match deserialize_family_record(&line, &formation_ids) {
+                        Ok(value) => value,
+                        Err(error) if is_last => {
+                            let _ = error;
+                            continue;
+                        }
+                        Err(error) => {
+                            return Err(std::io::Error::new(
+                                std::io::ErrorKind::InvalidData,
+                                error,
+                            ));
+                        }
+                    };
                 if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
                     || !family.candidate_rotation_radians.is_finite()
                     || !family.anchor_parameter_start.is_finite()
@@ -1642,7 +1669,9 @@ impl GeometryLibrary {
         let root = root.as_ref();
         let path = root.join("formations.jsonl");
         if storage_format_version(root, &path)? == 3 {
-            return Ok(load_compositional_formations(&path, catalog)?.into_values().collect());
+            return Ok(load_compositional_formations(&path, catalog)?
+                .into_values()
+                .collect());
         }
         let mut entries = BTreeMap::new();
         if !path.exists() {
@@ -2222,15 +2251,15 @@ impl GeometryLibrary {
                     }
                 }
                 let key = formation_equivalence_key(&canonical);
-                let existing_match = self.equivalence_index
-                    .get(&key)
-                    .into_iter()
-                    .flatten()
-                    .any(|existing_signature| {
-                        self.entries.get(existing_signature).is_some_and(|existing| {
-                            formations_equivalent_within_tolerance(existing, &canonical)
-                        })
-                    });
+                let existing_match = self.equivalence_index.get(&key).into_iter().flatten().any(
+                    |existing_signature| {
+                        self.entries
+                            .get(existing_signature)
+                            .is_some_and(|existing| {
+                                formations_equivalent_within_tolerance(existing, &canonical)
+                            })
+                    },
+                );
                 let batch_match = batch_equivalence_index
                     .get(&key)
                     .into_iter()
@@ -2240,7 +2269,10 @@ impl GeometryLibrary {
                 if existing_match || batch_match {
                     continue;
                 }
-                batch_equivalence_index.entry(key).or_default().push(signature.clone());
+                batch_equivalence_index
+                    .entry(key)
+                    .or_default()
+                    .push(signature.clone());
                 batch_formation_ids.insert(id, signature.clone());
                 unique.insert(signature, canonical);
             }
@@ -2268,7 +2300,8 @@ impl GeometryLibrary {
 
         let added = unique.len();
         for signature in unique.keys() {
-            self.formation_ids.insert(formation_id(signature), signature.clone());
+            self.formation_ids
+                .insert(formation_id(signature), signature.clone());
         }
         for (signature, formation) in &unique {
             self.equivalence_index
@@ -2765,7 +2798,9 @@ fn load_fluid_boundary_families(
         if line.trim().is_empty() {
             continue;
         }
-        let Ok(family) = deserialize_family_record::<GeometryFluidBoundaryFamily>(&line, formation_ids) else {
+        let Ok(family) =
+            deserialize_family_record::<GeometryFluidBoundaryFamily>(&line, formation_ids)
+        else {
             continue;
         };
         if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
@@ -3142,7 +3177,9 @@ fn load_rigid_point_contact_families(
         if line.trim().is_empty() {
             continue;
         }
-        let Ok(family) = deserialize_family_record::<GeometryRigidPointContactFamily>(&line, formation_ids) else {
+        let Ok(family) =
+            deserialize_family_record::<GeometryRigidPointContactFamily>(&line, formation_ids)
+        else {
             continue;
         };
         if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
@@ -3206,7 +3243,9 @@ fn load_rigid_vertex_contact_families(
         if line.trim().is_empty() {
             continue;
         }
-        let Ok(family) = deserialize_family_record::<GeometryRigidVertexContactFamily>(&line, formation_ids) else {
+        let Ok(family) =
+            deserialize_family_record::<GeometryRigidVertexContactFamily>(&line, formation_ids)
+        else {
             continue;
         };
         if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
@@ -4232,7 +4271,6 @@ mod bob_candidate_generation_contract_tests {
     }
 }
 
-
 #[cfg(test)]
 mod compact_family_storage_tests {
     use super::*;
@@ -4344,7 +4382,10 @@ mod compact_family_storage_tests {
                 break;
             }
         }
-        assert!(found_delta, "expected at least one exact, profitable one-unit delta");
+        assert!(
+            found_delta,
+            "expected at least one exact, profitable one-unit delta"
+        );
 
         library.insert_many(candidates, &catalog).unwrap();
         let expected: BTreeSet<_> = library
@@ -4365,10 +4406,8 @@ mod compact_family_storage_tests {
     #[test]
     fn family_writer_persists_compact_rows_and_reopens_them() {
         let catalog = default_catalog();
-        let root = std::env::temp_dir().join(format!(
-            "evosim-bob-compact-family-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("evosim-bob-compact-family-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
         let formation = GeometryFormation::single("Carbon");
@@ -4392,10 +4431,9 @@ mod compact_family_storage_tests {
             1
         );
 
-        let storage_manifest: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(root.join("storage_manifest.json")).unwrap(),
-        )
-        .unwrap();
+        let storage_manifest: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(root.join("storage_manifest.json")).unwrap())
+                .unwrap();
         assert_eq!(
             storage_manifest
                 .get("storage_format_version")
