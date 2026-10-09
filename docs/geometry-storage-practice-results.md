@@ -69,3 +69,23 @@ The experiment remains isolated from the source dataset and production library. 
 ### Compositional reference-depth check
 
 The follow-up run reports 23,027 delta-encoded rows and 2,780 full rows. A full row has reference depth 0. The longest chain in this snapshot is only 3 delta links (mean 1.664; 95th percentile 3; zero rows above depth 8). This reduces concern about deep recursive decoding for this snapshot, but a Rust implementation should still use cycle detection and preferably iterative decoding or a bounded, explicit decode stack rather than assuming arbitrary catalogues will share the same depth distribution. The JSONL byte saving is materially larger than the compressed GitHub artifact-size difference because ZIP compression already compresses repeated JSON structure; raw file size remains the relevant disk-size comparison.
+
+
+## Final practice checkpoint — 2026-10-09
+
+The latest full validation run, [37975547423](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/37975547423), completed successfully after the expanded decoder tests were added.
+
+- Compact-v2 safety tests: **6 passed**.
+- Compositional-v3 decoder tests: **6 passed**, including missing-base and invalid-position rejection, preservation of extra fields, bond ordering, recursive reconstruction, source preservation, and reference-depth/cycle detection.
+- Full compositional-v3 migration: **25,807 formations decoded and re-verified**, 23,027 delta rows and 2,780 full rows.
+- Measured formation file: **8,536,354 bytes**, saving **6,082,175 bytes** over compact-v2.
+- Reference depth: maximum **3**, mean **1.664**, p95 **3**, zero rows above depth 8.
+- Both compact-v2 and compositional-v3 practice artifacts were uploaded successfully. They are temporary GitHub Actions artifacts and expire after seven days; download them from the run's Artifacts section if needed.
+
+### Stopping decision
+
+This is a good stopping point for the **data-format experiment**: the benefit is measured, the experimental format round-trips the complete checked-in snapshot, corruption cases have focused tests, and an integration plan documents the remaining gates. It is not yet a production-ready migration.
+
+No Rust persistence adapter was added. The checked-in main snapshot is data-only, while the Rust source is on a different branch; implementing the adapter safely requires a runnable Rust checkout and access to the complete local catalogue. The next phase should begin as a separate integration task, not by changing this practice branch's data files or merging a format switch prematurely. Required gates remain: runtime DTO conversion, exact logical lookup/signature equivalence against legacy loading, restart/reopen validation, full-local-catalogue coverage (including any rigid_point_contact_families.jsonl), and load/memory/lookup benchmarks.
+
+Draft PR [#179](https://github.com/coringilbert16-cmyk/EvoSim-/pull/179) remains open and unmerged. The production library, constructor, geometry parameters, and source catalogue remain unchanged.
