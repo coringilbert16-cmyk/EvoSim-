@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any
 
 STORAGE_VERSION = 2
-ID_HEX_LENGTH = 32
 FAMILY_SUFFIX = "_families.jsonl"
 
 
@@ -112,6 +111,14 @@ def read_formations(path: Path) -> tuple[dict[str, str], dict[str, str]]:
             raise MigrationError(f"{path}: formation row {row_number} has no non-empty signature")
         if signature in seen_signatures:
             raise MigrationError(f"{path}: duplicate canonical formation signature: {signature[:100]!r}")
+        try:
+            reconstructed_signature = canonical_signature_from_record(formation)
+        except MigrationError as exc:
+            raise MigrationError(f"{path}: formation row {row_number}: {exc}") from exc
+        if reconstructed_signature != signature:
+            raise MigrationError(
+                f"{path}: formation row {row_number}: stored signature differs from geometry fields"
+            )
         seen_signatures.add(signature)
         compact_id = formation_id(signature)
         previous = id_to_signature.get(compact_id)
