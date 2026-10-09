@@ -63,7 +63,6 @@ class CompactGeometryPracticeTests(unittest.TestCase):
             self.assertNotIn("formation_signature", compact)
             self.assertEqual((source / "rigid_contact_families.jsonl").read_bytes(), original)
             restored = dict(compact)
-            restored.pop("storage_version")
             restored.pop("formation_id")
             restored["formation_signature"] = SIGNATURE
             self.assertEqual(
