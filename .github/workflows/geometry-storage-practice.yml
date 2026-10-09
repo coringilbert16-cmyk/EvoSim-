@@ -8,6 +8,13 @@ on:
       - "geometry_library/data/**"
       - "tools/compact_geometry_practice.py"
       - ".github/workflows/geometry-storage-practice.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "geometry_library/data/**"
+      - "tools/compact_geometry_practice.py"
+      - ".github/workflows/geometry-storage-practice.yml"
   workflow_dispatch:
 
 permissions:
