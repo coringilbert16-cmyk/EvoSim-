@@ -129,17 +129,18 @@ def analyze(source: Path) -> dict:
                 restored_constituents = list(base_row["constituents"])
                 restored_constituents.insert(removed_index, unit)
                 restored_bonds = []
-                for base_bond in base_row["bonds"]:
-                    restored = dict(base_bond)
-                    for endpoint in ("constituent_a", "constituent_b"):
-                        if int(restored[endpoint]) >= removed_index:
-                            restored[endpoint] = int(restored[endpoint]) + 1
-                    restored_bonds.append(restored)
-                restored_bonds.extend([])
-                indexed_bonds = [(i, dict(bond)) for i, bond in enumerate(restored_bonds)]
-                indexed_bonds.extend((item["at"], dict(item["bond"])) for item in removed_bonds)
-                indexed_bonds.sort(key=lambda pair: pair[0])
-                restored_bonds = [bond for _, bond in indexed_bonds]
+                incident_by_position = {item["at"]: dict(item["bond"]) for item in removed_bonds}
+                base_bond_iter = iter(base_row["bonds"])
+                for original_position in range(len(base_row["bonds"]) + len(removed_bonds)):
+                    if original_position in incident_by_position:
+                        restored_bonds.append(incident_by_position[original_position])
+                    else:
+                        base_bond = next(base_bond_iter)
+                        restored = dict(base_bond)
+                        for endpoint in ("constituent_a", "constituent_b"):
+                            if int(restored[endpoint]) >= removed_index:
+                                restored[endpoint] = int(restored[endpoint]) + 1
+                        restored_bonds.append(restored)
                 if (restored_constituents != constituents
                         or restored_bonds != bonds
                         or signature_from_parts(row["schema_version"], restored_constituents, restored_bonds) != sig):
