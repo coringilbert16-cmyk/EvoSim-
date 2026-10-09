@@ -15,6 +15,7 @@ on:
     paths:
       - "geometry_library/data/**"
       - "tools/compact_geometry_practice.py"
+      - "tools/test_compact_geometry_practice.py"
       - ".github/workflows/geometry-storage-practice.yml"
   workflow_dispatch:
 
