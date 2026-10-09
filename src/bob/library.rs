@@ -27,7 +27,6 @@ pub const GEOMETRY_LIBRARY_SCHEMA_VERSION: u32 = 1;
 /// Differences at or below this distance do not create a new record.
 pub const GEOMETRY_EQUIVALENCE_TOLERANCE: f64 = 0.5;
 const QUANTUM: f64 = 1e-9;
-const FAMILY_STORAGE_VERSION: u64 = 2;
 
 /// Stable 128-bit prefix of SHA-256. Unlike `DefaultHasher`, this is a persistence contract.
 fn formation_id(signature: &str) -> String {
@@ -83,10 +82,6 @@ fn compact_family_value<T: Serialize>(family: &T) -> std::io::Result<serde_json:
         "formation_id".to_owned(),
         serde_json::Value::String(formation_id(&signature)),
     );
-    object.insert(
-        "storage_version".to_owned(),
-        serde_json::Value::from(FAMILY_STORAGE_VERSION),
-    );
     Ok(value)
 }
 
@@ -97,6 +92,38 @@ fn write_compact_family<W: Write, T: Serialize>(
     let value = compact_family_value(family)?;
     serde_json::to_writer(writer, &value)
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))
+}
+
+fn resolve_family_formation_id(
+    object: &mut serde_json::Map<String, serde_json::Value>,
+    formation_ids: &BTreeMap<String, String>,
+) -> Result<(), serde_json::Error> {
+    if object.contains_key("formation_signature") {
+        return Err(serde_json::Error::io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "compact family record contains both formation_signature and formation_id",
+        )));
+    }
+    let id = object
+        .remove("formation_id")
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .ok_or_else(|| {
+            serde_json::Error::io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "compact family record lacks formation_id",
+            ))
+        })?;
+    let signature = formation_ids.get(&id).ok_or_else(|| {
+        serde_json::Error::io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("unresolved formation_id: {id}"),
+        ))
+    })?;
+    object.insert(
+        "formation_signature".to_owned(),
+        serde_json::Value::String(signature.clone()),
+    );
+    Ok(())
 }
 
 fn deserialize_family_record<T: DeserializeOwned>(
@@ -111,10 +138,10 @@ fn deserialize_family_record<T: DeserializeOwned>(
         ))
     })?;
     if let Some(version) = object.remove("storage_version") {
-        if version.as_u64() != Some(FAMILY_STORAGE_VERSION) {
+        if version.as_u64() != Some(2) {
             return Err(serde_json::Error::io(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                "unsupported family storage version",
+                "unsupported family row storage version",
             )));
         }
         if object.contains_key("formation_signature") {
@@ -123,34 +150,13 @@ fn deserialize_family_record<T: DeserializeOwned>(
                 "compact family record contains both formation_signature and formation_id",
             )));
         }
-        let id = object
-            .remove("formation_id")
-            .and_then(|value| value.as_str().map(str::to_owned))
-            .ok_or_else(|| {
-                serde_json::Error::io(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "compact family record lacks formation_id",
-                ))
-            })?;
-        let signature = formation_ids.get(&id).ok_or_else(|| {
-            serde_json::Error::io(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("unresolved formation_id: {id}"),
-            ))
-        })?;
-        object.insert(
-            "formation_signature".to_owned(),
-            serde_json::Value::String(signature.clone()),
-        );
+        resolve_family_formation_id(object, formation_ids)?;
     } else if object
         .get("formation_signature")
         .and_then(serde_json::Value::as_str)
         .is_none()
     {
-        return Err(serde_json::Error::io(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "legacy family record lacks formation_signature",
-        )));
+        resolve_family_formation_id(object, formation_ids)?;
     }
     serde_json::from_value(value)
 }
@@ -1208,38 +1214,44 @@ impl GeometryLibrary {
         let rigid_point_contact_family_path = root.join("rigid_point_contact_families.jsonl");
         let rigid_vertex_contact_family_path = root.join("rigid_vertex_contact_families.jsonl");
 
-        let mut entries = BTreeMap::new();
-        if data_path.exists() {
-            let file = File::open(&data_path)?;
-            let mut lines = BufReader::new(file).lines().peekable();
-            while let Some(line_result) = lines.next() {
-                let line = line_result?;
-                let is_last = lines.peek().is_none();
-                if line.trim().is_empty() {
-                    continue;
-                }
-                let formation: GeometryFormation = match serde_json::from_str(&line) {
-                    Ok(value) => value,
-                    Err(error) if is_last => {
-                        // An interrupted final append can leave a truncated
-                        // JSON record. Earlier durable records remain valid;
-                        // ignore only the incomplete tail so restart can resume.
-                        let _ = error;
+        let formation_storage_version = storage_format_version(&root, &data_path)?;
+        let mut entries = if formation_storage_version == 3 {
+            load_compositional_formations(&data_path, catalog)?
+        } else {
+            let mut entries = BTreeMap::new();
+            if data_path.exists() {
+                let file = File::open(&data_path)?;
+                let mut lines = BufReader::new(file).lines().peekable();
+                while let Some(line_result) = lines.next() {
+                    let line = line_result?;
+                    let is_last = lines.peek().is_none();
+                    if line.trim().is_empty() {
                         continue;
                     }
-                    Err(error) => {
-                        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, error));
+                    let formation: GeometryFormation = match serde_json::from_str(&line) {
+                        Ok(value) => value,
+                        Err(error) if is_last => {
+                            // An interrupted final append can leave a truncated
+                            // JSON record. Earlier durable records remain valid;
+                            // ignore only the incomplete tail so restart can resume.
+                            let _ = error;
+                            continue;
+                        }
+                        Err(error) => {
+                            return Err(invalid_storage_data(error.to_string()));
+                        }
+                    };
+                    if formation.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
+                        || !validate_formation(&formation, catalog)
+                        || formation.signature != formation.canonical_signature()
+                    {
+                        continue;
                     }
-                };
-                if formation.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
-                    || !validate_formation(&formation, catalog)
-                    || formation.signature != formation.canonical_signature()
-                {
-                    continue;
+                    entries.insert(formation.signature.clone(), formation);
                 }
-                entries.insert(formation.signature.clone(), formation);
             }
-        }
+            entries
+        };
 
         let catalog_version = resource_catalog_signature(catalog);
         let manifest = if manifest_path.exists() {
@@ -1457,9 +1469,11 @@ impl GeometryLibrary {
             rigid_vertex_contact_families,
             rigid_vertex_contact_index,
             formation_ids,
+            formation_storage_version,
         };
         library.manifest.entries = library.entries.len() as u64;
         library.write_manifest()?;
+        write_storage_manifest(&library.root, library.formation_storage_version)?;
         Ok(library)
     }
 
@@ -1467,7 +1481,11 @@ impl GeometryLibrary {
         root: impl AsRef<Path>,
         catalog: &[BaseResource],
     ) -> std::io::Result<Vec<GeometryFormation>> {
-        let path = root.as_ref().join("formations.jsonl");
+        let root = root.as_ref();
+        let path = root.join("formations.jsonl");
+        if storage_format_version(root, &path)? == 3 {
+            return Ok(load_compositional_formations(&path, catalog)?.into_values().collect());
+        }
         let mut entries = BTreeMap::new();
         if !path.exists() {
             return Ok(Vec::new());
@@ -1480,7 +1498,10 @@ impl GeometryLibrary {
             }
             let formation: GeometryFormation = match serde_json::from_str(&line) {
                 Ok(value) => value,
-                Err(_) => continue,
+                Err(_) => {
+                    let _ = line_index;
+                    continue;
+                }
             };
             if formation.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
                 || !validate_formation(&formation, catalog)
@@ -4076,12 +4097,7 @@ mod compact_family_storage_tests {
         let compact = compact_family_value(&family).unwrap();
         let object = compact.as_object().unwrap();
         assert!(!object.contains_key("formation_signature"));
-        assert_eq!(
-            object
-                .get("storage_version")
-                .and_then(serde_json::Value::as_u64),
-            Some(FAMILY_STORAGE_VERSION)
-        );
+        assert!(object.get("storage_version").is_none());
         let expected_id = formation_id(&formation.signature);
         assert_eq!(
             object
@@ -4118,7 +4134,7 @@ mod compact_family_storage_tests {
             anchor_parameter_end: 1.0,
         };
         let mut value = compact_family_value(&family).unwrap();
-        value["storage_version"] = serde_json::Value::from(FAMILY_STORAGE_VERSION + 1);
+        value["storage_version"] = serde_json::Value::from(3);
         assert!(deserialize_family_record::<GeometryRigidContactFamily>(
             &serde_json::to_string(&value).unwrap(),
             &ids
@@ -4169,12 +4185,7 @@ mod compact_family_storage_tests {
         let record: serde_json::Value = serde_json::from_str(line.trim()).unwrap();
         assert!(record.get("formation_signature").is_none());
         assert!(record.get("formation_id").is_some());
-        assert_eq!(
-            record
-                .get("storage_version")
-                .and_then(serde_json::Value::as_u64),
-            Some(FAMILY_STORAGE_VERSION)
-        );
+        assert!(record.get("storage_version").is_none());
         drop(library);
 
         let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
