@@ -555,5 +555,4 @@ mod tests {
             "candidate must be checked against every existing constituent, not only its anchor"
         );
     }
-
 }
