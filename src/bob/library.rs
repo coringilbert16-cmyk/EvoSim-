@@ -3438,7 +3438,6 @@ mod bob_candidate_generation_contract_tests {
         );
     }
 
-
     #[test]
     fn rigid_family_writers_reject_missing_anchor_formations() {
         let catalog = default_catalog();
@@ -3473,7 +3472,10 @@ mod bob_candidate_generation_contract_tests {
             candidate_rotation_end_radians: 1.0,
         };
 
-        assert_eq!(library.insert_rigid_contact_families(vec![edge]).unwrap(), 0);
+        assert_eq!(
+            library.insert_rigid_contact_families(vec![edge]).unwrap(),
+            0
+        );
         assert_eq!(
             library
                 .insert_rigid_point_contact_families(vec![point])
