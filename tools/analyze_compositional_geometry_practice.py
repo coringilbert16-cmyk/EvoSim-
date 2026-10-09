@@ -111,7 +111,12 @@ def analyze(source: Path) -> dict:
                         })
                 base_sig = signature_from_parts(row["schema_version"], kept, kept_bonds)
                 base = by_signature.get(base_sig)
-                if base is None:
+                # Canonical signatures omit any extra persisted fields; require the
+                # actual subset record to match exactly before referencing it.
+                if (base is None
+                        or base["schema_version"] != row["schema_version"]
+                        or base["constituents"] != kept
+                        or base["bonds"] != kept_bonds):
                     continue
                 # Encoding is lossless: base ID, insertion index, full removed constituent,
                 # and original-index bond records incident to the removed constituent.
