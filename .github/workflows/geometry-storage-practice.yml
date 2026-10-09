@@ -7,6 +7,7 @@ on:
     paths:
       - "geometry_library/data/**"
       - "tools/compact_geometry_practice.py"
+      - "tools/test_compact_geometry_practice.py"
       - ".github/workflows/geometry-storage-practice.yml"
   pull_request:
     branches:
@@ -31,6 +32,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Run focused storage-tool safety tests
+        run: python tools/test_compact_geometry_practice.py
 
       - name: Build and verify isolated compact copy
         run: |
