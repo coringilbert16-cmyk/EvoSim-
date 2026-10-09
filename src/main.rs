@@ -79,7 +79,6 @@ mod decomposition;
 mod diagnostics;
 #[path = "chemistry/energy_ledger.rs"]
 mod energy_ledger;
-mod infrastructure;
 
 // Organism genome, behavior, and lifecycle.
 #[path = "organism/decision.rs"]
@@ -158,23 +157,6 @@ mod simulation_tests;
 async fn main() {
     let command = std::env::args().nth(1);
 
-    if !matches!(
-        command.as_deref(),
-        Some("--library-sync") | Some("--library-sync-once")
-    ) {
-        infrastructure::library_sync::spawn_background();
-    }
-
-    if command.as_deref() == Some("--library-sync-once") {
-        infrastructure::library_sync::checkpoint_once().expect("library checkpoint failed");
-        return;
-    }
-
-    if command.as_deref() == Some("--library-sync") {
-        infrastructure::library_sync::run_foreground();
-        return;
-    }
-
     if command.as_deref() == Some("--simulation-child") {
         let port = std::env::args()
             .nth(2)
@@ -186,7 +168,6 @@ async fn main() {
 
     if command.as_deref() == Some("--geometry-worker-once") {
         geometry_library_worker::run_once().expect("geometry worker smoke test failed");
-        let _ = infrastructure::library_sync::checkpoint_once();
         return;
     }
 
