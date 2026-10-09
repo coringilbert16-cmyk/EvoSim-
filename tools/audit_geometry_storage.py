@@ -64,7 +64,7 @@ def audit_jsonl(path: Path) -> dict:
                     estimated_compact_bytes += row_bytes
                 else:
                     # Preserve the JSONL newline in the estimate.
-                    estimated_compact_bytes += estimate + (1 if raw_line.endswith(b"\\n") else 0)
+                    estimated_compact_bytes += estimate + (1 if raw_line.endswith(b"\n") else 0)
             else:
                 estimated_compact_bytes += row_bytes
 
