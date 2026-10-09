@@ -116,6 +116,8 @@ def analyze(source: Path) -> dict:
                 # Encoding is lossless: base ID, insertion index, full removed constituent,
                 # and original-index bond records incident to the removed constituent.
                 candidate = {
+                    "formation_id": row_id,
+                    "schema_version": row["schema_version"],
                     "base_id": formation_id(base_sig),
                     "insert_at": removed_index,
                     "constituent": unit,
