@@ -485,7 +485,22 @@ mod tests {
                 assert_eq!(trial.units, before_structure.units);
                 assert_eq!(trial.bonds, before_structure.bonds);
                 assert_eq!(energy, 0.0);
-                assert_eq!(ledger, before_ledger);
+                assert_eq!(
+                    ledger.total_potential_energy_released,
+                    before_ledger.total_potential_energy_released
+                );
+                assert_eq!(
+                    ledger.total_usable_energy_gained,
+                    before_ledger.total_usable_energy_gained
+                );
+                assert_eq!(
+                    ledger.total_heat_dissipated,
+                    before_ledger.total_heat_dissipated
+                );
+                assert_eq!(
+                    ledger.total_usable_energy_held,
+                    before_ledger.total_usable_energy_held
+                );
                 found_failure = true;
                 break;
             }
