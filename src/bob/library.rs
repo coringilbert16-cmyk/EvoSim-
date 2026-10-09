@@ -2400,11 +2400,12 @@ fn load_rigid_point_contact_families(
 ) -> BTreeMap<String, GeometryRigidPointContactFamily> {
     let mut out = BTreeMap::new();
     let Ok(file) = File::open(path) else { return out; };
-    let lines = BufReader::new(file).lines().collect::<Result<Vec<_>, _>>().unwrap_or_default();
-    for (index, line) in lines.iter().enumerate() {
+    // Keep peak memory bounded: these family files can be large. A read error
+    // preserves the previous all-or-empty behavior of the whole-file loader.
+    for line_result in BufReader::new(file).lines() {
+        let Ok(line) = line_result else { return BTreeMap::new(); };
         if line.trim().is_empty() { continue; }
-        let Ok(family) = serde_json::from_str::<GeometryRigidPointContactFamily>(line) else {
-            if index + 1 == lines.len() { continue; }
+        let Ok(family) = serde_json::from_str::<GeometryRigidPointContactFamily>(&line) else {
             continue;
         };
         if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
@@ -2430,11 +2431,12 @@ fn load_rigid_vertex_contact_families(
 ) -> BTreeMap<String, GeometryRigidVertexContactFamily> {
     let mut out = BTreeMap::new();
     let Ok(file) = File::open(path) else { return out; };
-    let lines = BufReader::new(file).lines().collect::<Result<Vec<_>, _>>().unwrap_or_default();
-    for (index, line) in lines.iter().enumerate() {
+    // Keep peak memory bounded: these family files can be large. A read error
+    // preserves the previous all-or-empty behavior of the whole-file loader.
+    for line_result in BufReader::new(file).lines() {
+        let Ok(line) = line_result else { return BTreeMap::new(); };
         if line.trim().is_empty() { continue; }
-        let Ok(family) = serde_json::from_str::<GeometryRigidVertexContactFamily>(line) else {
-            if index + 1 == lines.len() { continue; }
+        let Ok(family) = serde_json::from_str::<GeometryRigidVertexContactFamily>(&line) else {
             continue;
         };
         if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
