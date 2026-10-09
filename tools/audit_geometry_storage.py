@@ -183,7 +183,7 @@ def main() -> int:
         print(json.dumps(collisions, indent=2))
     print("\nPer-file details:")
     print(json.dumps(results, indent=2))
-    return 0
+    return 1 if collisions else 0
 
 
 if __name__ == "__main__":
