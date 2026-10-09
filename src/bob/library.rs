@@ -3233,9 +3233,32 @@ pub fn seed_base_catalogue(
     Ok(added)
 }
 
+/// Resolve Bob's persistent store once, consistently for the worker and viewer.
+/// An explicit environment override lets a source checkout use an existing
+/// catalogue without copying it into the checkout.
+pub fn default_library_root() -> PathBuf {
+    std::env::var_os("EVOSIM_GEOMETRY_LIBRARY_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("geometry_library/data"))
+}
+
 pub fn open_default_library() -> std::io::Result<GeometryLibrary> {
+    let root = default_library_root();
+    if std::env::var_os("EVOSIM_GEOMETRY_LIBRARY_DIR").is_some()
+        && (!root.is_dir()
+            || !root.join("manifest.json").is_file()
+            || !root.join("formations.jsonl").is_file())
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!(
+                "EVOSIM_GEOMETRY_LIBRARY_DIR must point to an existing Bob data directory containing manifest.json and formations.jsonl: {}",
+                root.display()
+            ),
+        ));
+    }
     let catalog = default_catalog();
-    GeometryLibrary::open("geometry_library/data", &catalog)
+    GeometryLibrary::open(root, &catalog)
 }
 
 #[cfg(test)]
