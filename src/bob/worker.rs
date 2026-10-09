@@ -112,7 +112,7 @@ fn process_one_frontier(
         })
         .cloned()
     else {
-        return Ok(false);
+        return Ok(None);
     };
 
     let started = Instant::now();
