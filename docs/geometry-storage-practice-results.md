@@ -6,29 +6,32 @@ The practice run used the geometry JSONL files checked into the GitHub `main` br
 
 ## Measured result
 
-Validated optimized run (safety tests + full conversion + artifact upload): [GitHub Actions run 37973498112](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/37973498112). The artifact is listed in that run's Artifacts section and expires after seven days.
+Validated full-library run (safety tests + formation-signature reconstruction + full conversion + artifact upload): [GitHub Actions run 37973764647](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/37973764647). The artifact is listed in that run's Artifacts section and expires after seven days.
 
-| Family file | Rows | Source bytes | Compact bytes | Saved bytes |
+| Compacted file | Rows | Source bytes | Compact bytes | Saved bytes |
 |---|---:|---:|---:|---:|
 | `contact_families.jsonl` | 4,523 | 1,787,563 | 1,482,304 | 305,259 |
 | `fluid_boundary_families.jsonl` | 4,523 | 2,081,909 | 1,776,650 | 305,259 |
+| `formations.jsonl` | 25,807 | 17,386,631 | 14,618,529 | 2,768,102 |
 | `rigid_contact_families.jsonl` | 307,996 | 101,825,277 | 81,486,361 | 20,338,916 |
 | `rigid_vertex_contact_families.jsonl` | 153,998 | 58,430,470 | 48,261,012 | 10,169,458 |
-| **Total** | **471,040** | **164,125,219** | **133,006,327** | **31,118,892** |
+| **Total** | **496,847** | **181,511,850** | **147,624,856** | **33,886,994** |
 
-The optimized format reduces family-file bytes by approximately **18.96%** (about 29.7 MiB). Across the five checked-in JSONL files including unchanged `formations.jsonl`, the reduction is approximately 17.14%, before counting the small sidecar manifest. This is only the checked-in GitHub snapshot, not the user's larger local catalogue.
+The optimized format reduces the five checked-in geometry JSONL files by approximately **18.67%** (about 32.3 MiB), before counting the small sidecar manifest. This is only the checked-in GitHub snapshot, not the user's larger local catalogue.
 
-The first practice format used 32-character hexadecimal IDs and repeated `storage_version: 2` on every row; it saved 16,987,692 bytes (10.35%). The optimized practice format removes the repeated row-level version field and stores version/encoding once in `storage_manifest.json`, while encoding the same 128-bit SHA-256 prefix as a 22-character unpadded base64url ID. This saves an additional **14,131,200 bytes** versus the first format.
+The first practice format used 32-character hexadecimal IDs and repeated `storage_version: 2` on every family row; it saved 16,987,692 bytes across family files (10.35%). The optimized format removes the repeated row-level version field, stores version/encoding once in `storage_manifest.json`, and encodes the same 128-bit SHA-256 prefix as a 22-character unpadded base64url ID. This alone saved an additional **14,131,200 bytes** over the first family-only format. The latest pass also removed each formation's redundant persisted `signature` string, replacing it with the same compact ID; this saved another **2,768,102 bytes**.
 
 ## What the practice tool verified
 
 - Indexed **25,807** canonical formation signatures from `formations.jsonl`.
+- Recomputed each canonical formation signature from its persisted schema version, constituent resources/placements, and bond endpoints using the library's 1e-9 quantization and angle normalization; all 25,807 recomputed signatures matched their stored source signatures exactly before compaction.
 - Generated deterministic 22-character unpadded base64url IDs from the first 128 bits of SHA-256; the ID still carries 128 bits of collision resistance.
 - Stored format version and ID-encoding metadata once in `storage_manifest.json`, not redundantly in every family row.
 - Resolved every family record's ID back to its original canonical signature.
 - Preserved all family fields other than replacing `formation_signature` with `formation_id` and adding `storage_version: 2`.
 - Reconstructed each source record in memory and compared it for exact Python-object equality.
 - Re-read every written compact JSONL file and checked the output row count and parsed records.
+- Removed the redundant `signature` field from compact formation rows only after confirming it can be reconstructed exactly from geometry; retained the canonical signature in memory for ID mapping and round-trip validation.
 - Preserved all source files; the compact copy was uploaded as a short-lived artifact.
 
 The four family files had no duplicate logical rows under the practice tool's signature-plus-fields check. The repository snapshot does not include `rigid_point_contact_families.jsonl`, so that family type was not exercised by this dataset run.
