@@ -18,7 +18,7 @@ pub fn quantized_amount(value: f64) -> i64 {
     quantize(value)
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ChemistryKey {
     pub schema_version: u32,
     pub material_a: String,
