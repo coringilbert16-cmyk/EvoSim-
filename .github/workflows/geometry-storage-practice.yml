@@ -7,6 +7,8 @@ on:
     paths:
       - "geometry_library/data/**"
       - "tools/compact_geometry_practice.py"
+      - "tools/compact_geometry_compositional_practice.py"
+      - "tools/test_compact_geometry_compositional_practice.py"
       - "tools/analyze_compositional_geometry_practice.py"
       - "tools/test_compact_geometry_practice.py"
       - ".github/workflows/geometry-storage-practice.yml"
@@ -16,6 +18,8 @@ on:
     paths:
       - "geometry_library/data/**"
       - "tools/compact_geometry_practice.py"
+      - "tools/compact_geometry_compositional_practice.py"
+      - "tools/test_compact_geometry_compositional_practice.py"
       - "tools/test_compact_geometry_practice.py"
       - ".github/workflows/geometry-storage-practice.yml"
   workflow_dispatch:
@@ -38,6 +42,16 @@ jobs:
       - name: Run focused storage-tool safety tests
         run: python tools/test_compact_geometry_practice.py
 
+      - name: Run compositional encoder round-trip tests
+        run: python tools/test_compact_geometry_compositional_practice.py
+
+      - name: Build recursive compositional-v3 practice copy
+        run: |
+          python tools/compact_geometry_compositional_practice.py \
+            geometry_library/data \
+            "$RUNNER_TEMP/geometry-library-compositional-practice" \
+            > "$RUNNER_TEMP/compositional-v3-run.log"
+
       - name: Measure exact one-constituent compositional encoding
         run: python tools/analyze_compositional_geometry_practice.py geometry_library/data | tee "$RUNNER_TEMP/compositional-storage-results.json"
 
@@ -52,6 +66,22 @@ jobs:
         with:
           name: geometry-compositional-storage-results
           path: ${{ runner.temp }}/compositional-storage-results.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload compositional-v3 practice library
+        uses: actions/upload-artifact@v4
+        with:
+          name: geometry-library-compositional-v3-practice
+          path: ${{ runner.temp }}/geometry-library-compositional-practice/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload compositional-v3 validation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: geometry-compositional-v3-validation
+          path: ${{ runner.temp }}/compositional-v3-run.log
           if-no-files-found: error
           retention-days: 7
 
