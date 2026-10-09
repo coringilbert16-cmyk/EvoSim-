@@ -99,10 +99,10 @@ def analyze(source: Path) -> dict:
                              for old in range(len(constituents)) if old != removed_index}
                 kept_bonds = []
                 removed_bonds = []
-                for bond in bonds:
+                for bond_index, bond in enumerate(bonds):
                     a, b = int(bond["constituent_a"]), int(bond["constituent_b"])
                     if a == removed_index or b == removed_index:
-                        removed_bonds.append(dict(bond))
+                        removed_bonds.append({"at": bond_index, "bond": dict(bond)})
                     else:
                         kept_bonds.append({
                             **bond,
@@ -124,6 +124,26 @@ def analyze(source: Path) -> dict:
                     "incident_bonds": removed_bonds,
                 }
                 candidate_size = len(compact_json(candidate).encode("utf-8"))
+                # Decode the proposed delta immediately and compare exact geometry/bond fields.
+                base_row = by_id[candidate["base_id"]]
+                restored_constituents = list(base_row["constituents"])
+                restored_constituents.insert(removed_index, unit)
+                restored_bonds = []
+                for base_bond in base_row["bonds"]:
+                    restored = dict(base_bond)
+                    for endpoint in ("constituent_a", "constituent_b"):
+                        if int(restored[endpoint]) >= removed_index:
+                            restored[endpoint] = int(restored[endpoint]) + 1
+                    restored_bonds.append(restored)
+                restored_bonds.extend([])
+                indexed_bonds = [(i, dict(bond)) for i, bond in enumerate(restored_bonds)]
+                indexed_bonds.extend((item["at"], dict(item["bond"])) for item in removed_bonds)
+                indexed_bonds.sort(key=lambda pair: pair[0])
+                restored_bonds = [bond for _, bond in indexed_bonds]
+                if (restored_constituents != constituents
+                        or restored_bonds != bonds
+                        or signature_from_parts(row["schema_version"], restored_constituents, restored_bonds) != sig):
+                    raise ValueError(f"delta round-trip mismatch for formation {row_id}")
                 if candidate_size < best_size:
                     best_size, best_candidate = candidate_size, candidate
         if best_candidate is not None:
