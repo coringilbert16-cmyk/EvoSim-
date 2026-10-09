@@ -16,6 +16,8 @@ EvoSim is an open-ended evolutionary organism simulation. Organisms are built fr
 - **Next audit/implementation gate:** pin the library API semantics and malformed-record behavior; then define a small candidate proposal → whole-structure validation → trial transaction → commit/rollback boundary. Test that boundary once the compile blockers are resolved. Only after that build the milestone-driven genome/acquisition constructor.
 - **Lookup blocker (2026-10-09):** the geometry library's `classify_live_family_resolution` currently returns `Unresolved` for every interface class. A unique mapping from live endpoint identity to a persisted continuous family is not implemented; do not treat lookup as complete.
 - **Chemistry-cache integrity:** startup skips invalid-but-parseable records, silently overwrites duplicate persisted keys by file order, and does not reconcile an existing manifest's entry count with loaded unique records. Add restart/corruption tests and define recovery behavior before cached chemistry becomes construction-critical.
+- **Acquisition-set gap:** the fixed constructor chooses each resource placement separately. It does not validate the complete set together in one trial state; the replacement must do so before committing any acquisition.
+- **Bond-ranking gap:** the fixed scaffold fallback chooses the farthest eligible contact when no corner-corner candidate is available. This undocumented rule must not be copied into the replacement without an explicit, tested score.
 - **Audit detail:** see `docs/constructor-library-dependency-audit.md` for the dependency map, contract observations, blockers, test evidence, and removal checklist.
 
 
