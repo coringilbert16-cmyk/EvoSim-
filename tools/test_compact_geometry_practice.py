@@ -16,6 +16,19 @@ import compact_geometry_practice as migration  # noqa: E402
 SIGNATURE = "v1|Carbon@0,0,0;|"
 
 
+def formation_record(x: float = 0.0) -> dict:
+    record = {
+        "schema_version": 1,
+        "constituents": [{
+            "resource": "Carbon",
+            "placement": {"x": x, "y": 0.0, "rotation_radians": 0.0},
+        }],
+        "bonds": [],
+    }
+    record["signature"] = migration.canonical_signature_from_record(record)
+    return record
+
+
 def write_jsonl(path: Path, records: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -28,15 +41,7 @@ class CompactGeometryPracticeTests(unittest.TestCase):
     def make_source(self, root: Path, family_signature: str = SIGNATURE) -> Path:
         source = root / "source"
         source.mkdir()
-        formation = {
-            "signature": SIGNATURE,
-            "schema_version": 1,
-            "constituents": [{
-                "resource": "Carbon",
-                "placement": {"x": 0.0, "y": 0.0, "rotation_radians": 0.0},
-            }],
-            "bonds": [],
-        }
+        formation = formation_record()
         write_jsonl(source / "formations.jsonl", [formation])
         write_jsonl(
             source / "rigid_contact_families.jsonl",
@@ -117,14 +122,14 @@ class CompactGeometryPracticeTests(unittest.TestCase):
     def test_duplicate_canonical_signature_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "formations.jsonl"
-            write_jsonl(path, [{"signature": SIGNATURE}, {"signature": SIGNATURE}])
+            write_jsonl(path, [formation_record(), formation_record()])
             with self.assertRaisesRegex(migration.MigrationError, "duplicate canonical"):
                 migration.read_formations(path)
 
     def test_id_collision_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "formations.jsonl"
-            write_jsonl(path, [{"signature": "first"}, {"signature": "second"}])
+            write_jsonl(path, [formation_record(), formation_record(1e-9)])
             with mock.patch.object(migration, "formation_id", return_value="A" * 22):
                 with self.assertRaisesRegex(migration.MigrationError, "ID collision"):
                     migration.read_formations(path)
