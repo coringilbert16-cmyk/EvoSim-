@@ -146,3 +146,25 @@ A library family must never bypass stages 2–6. If a stage lacks an authoritati
 ### Current gate
 
 The audit has identified enough concrete contracts to design the first transactional candidate prototype, but not enough evidence to claim the live constructor can safely use the libraries today. Next work should add small tests for chemistry-cache restart/corruption semantics and endpoint feature scaling, then define the candidate/transaction interface. The eight unrelated compile blockers recorded above still prevent all Rust tests from running; keep that limitation explicit and avoid broad unrelated fixes.
+
+
+## Follow-up audit: runtime interface resolution and cache integrity (2026-10-09)
+
+### Geometry interface resolution is not yet a usable lookup path
+
+- `resolve_live_contact_interface` builds a canonical identity from endpoint classes and endpoint descriptors. The richer `resolve_live_contact_candidate` can also derive local descriptors from realized structural units and the contact candidate.
+- `classify_live_family_resolution` currently returns `Unresolved` for every possible interface class, including `rigid_edge`, `rigid_point`, `rigid_vertex`, `fluid_boundary`, and `rigid_surface`. This is fail-closed and avoids false confidence, but it is not a completed lookup implementation.
+- The canonical `LiveGeometryQuery` records an interface identity, while persisted families are keyed to a formation signature and retain anchor constituent/edge, candidate edge/endpoint/vertex, continuous parameters, and rotation intervals. The source currently does not establish a general unique mapping from a live query to one persisted family. A query signature alone must not be treated as enough to reconstruct missing continuous placement details.
+- A repository-wide symbol search found no external callsites for the richer resolver, the family-resolution classifier, or the chemistry cache insertion API. Treat these as staged APIs, not live constructor integrations. Before wiring them in, add explicit callsites and tests for endpoint-order invariance, reversed material order, all endpoint-class pairings, ambiguity, no-match, and unique match.
+- Proposed policy: return a persisted family only if matching is unique under documented geometry equivalence and current catalog/schema; return explicit no-match or ambiguity otherwise. Never silently select the first family from map/catalog order.
+
+### Chemistry cache integrity details
+
+- During open, malformed JSON on the final line is skipped as a presumed torn append; malformed non-final JSON rejects the library. However, syntactically valid records that fail `ChemistryRecord::is_valid` are silently skipped regardless of position. Duplicate keys in the persisted file overwrite earlier records in memory, so a conflicting duplicate is resolved by file order rather than reported as corruption.
+- If `manifest.json` exists, its schema version is checked, but its `entries` count is not compared with the number of valid unique records loaded from `chemistry.jsonl`. A stale manifest can therefore be accepted.
+- The key constructors quantize geometry-derived floating-point values to integer nanounits. They do not independently validate those values as finite before quantization. Keep validation at the family/input boundary, and do not let invalid values become plausible-looking persisted signatures.
+- These are audit findings, not proof of observed production corruption. Before this cache becomes construction-critical, add tests for conflicting duplicate keys, invalid-but-valid-JSON records, stale manifest counts, truncated final lines, and invalid numeric family inputs. Decide explicitly which cases should recover by skipping a torn tail and which should fail closed as inconsistent durable knowledge.
+
+### Updated dependency gate
+
+The geometry reference library has candidate generators and durable family storage, but **not yet a completed, unambiguous runtime family resolver**. The chemistry library has durable key/value storage, but its corruption and version invalidation policy needs tests and an explicit contract. These are blockers for using library results to make live construction decisions; they do not block designing a non-mutating proposal interface or transaction boundary.
