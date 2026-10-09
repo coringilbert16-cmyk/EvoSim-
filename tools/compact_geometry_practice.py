@@ -9,6 +9,7 @@ of canonical signatures. Every transformed row is round-trip checked.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import shutil
@@ -26,7 +27,9 @@ class MigrationError(RuntimeError):
 
 
 def formation_id(signature: str) -> str:
-    return hashlib.sha256(signature.encode("utf-8")).hexdigest()[:ID_HEX_LENGTH]
+    """Encode a 128-bit SHA-256 prefix compactly as unpadded base64url."""
+    digest = hashlib.sha256(signature.encode("utf-8")).digest()[:16]
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -77,10 +80,9 @@ def compact_record(
     row_number: int,
     signature_to_id: dict[str, str],
 ) -> dict[str, Any]:
-    if "storage_version" in record or "formation_id" in record:
+    if "formation_id" in record:
         raise MigrationError(
-            f"{path}:{row_number}: source already contains compact-format fields; "
-            "refusing to guess its format"
+            f"{path}:{row_number}: source already contains formation_id; refusing to guess its format"
         )
     signature = record.get("formation_signature")
     if not isinstance(signature, str) or not signature:
@@ -93,7 +95,6 @@ def compact_record(
     compact = dict(record)
     del compact["formation_signature"]
     compact["formation_id"] = compact_id
-    compact["storage_version"] = STORAGE_VERSION
     return compact
 
 
@@ -132,7 +133,6 @@ def compact_family_file(
             )
 
         reconstructed = dict(compact)
-        reconstructed.pop("storage_version")
         reconstructed.pop("formation_id")
         reconstructed["formation_signature"] = resolved_signature
         if reconstructed != original:
@@ -195,6 +195,12 @@ def run(source: Path, destination: Path) -> int:
 
     reports: list[tuple[str, dict[str, int]]] = []
     family_names = {path.name for path in family_paths}
+    storage_manifest: dict[str, Any] = {
+        "storage_format_version": STORAGE_VERSION,
+        "formation_id_algorithm": "sha256-128-base64url",
+        "formation_file": "formations.jsonl",
+        "family_files": {},
+    }
     for path in sorted(source.iterdir()):
         if not path.is_file():
             continue
@@ -207,8 +213,17 @@ def run(source: Path, destination: Path) -> int:
                 signature_to_id=signature_to_id,
             )
             reports.append((path.name, report))
+            storage_manifest["family_files"][path.name] = {
+                "rows": report["rows"],
+                "formation_id_field": "formation_id",
+            }
         else:
             shutil.copy2(path, target)
+
+    manifest_path = destination / "storage_manifest.json"
+    with manifest_path.open("w", encoding="utf-8", newline="\\n") as stream:
+        json.dump(storage_manifest, stream, separators=(",", ":"), ensure_ascii=False)
+        stream.write("\\n")
 
     source_total = sum(item["source_bytes"] for _, item in reports)
     compact_total = sum(item["compact_bytes"] for _, item in reports)
@@ -229,6 +244,7 @@ def run(source: Path, destination: Path) -> int:
         f"TOTAL family files: source={source_total:,} B, "
         f"compact={compact_total:,} B, saved={source_total - compact_total:,} B"
     )
+    print(f"Storage manifest: {manifest_path}")
     print("PASS: every compact ID resolved; every family row round-tripped exactly.")
     print("NOTE: this validates the data transformation, not the Rust reader/writer integration.")
     return 0
