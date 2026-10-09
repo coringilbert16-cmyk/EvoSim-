@@ -955,6 +955,24 @@ impl GeometryLibrary {
                 {
                     continue;
                 }
+                let formation = &entries[&family.formation_signature];
+                let Some(anchor_resource) = catalog.iter().find(|resource| {
+                    resource.name == formation.constituents[family.anchor_constituent].resource
+                }) else {
+                    continue;
+                };
+                let Some(candidate_resource) = catalog
+                    .iter()
+                    .find(|resource| resource.name == family.candidate_resource)
+                else {
+                    continue;
+                };
+                if family.anchor_edge >= rigid_boundary_segments(&anchor_resource.shape.form).len()
+                    || family.candidate_edge
+                        >= rigid_boundary_segments(&candidate_resource.shape.form).len()
+                {
+                    continue;
+                }
                 rigid_contact_families.insert(family.signature(), family);
             }
         }
@@ -2527,6 +2545,26 @@ fn load_rigid_point_contact_families(
                     .unwrap_or(0)
             || family.candidate_endpoint > 1
             || catalog.iter().all(|r| r.name != family.candidate_resource)
+        {
+            continue;
+        }
+        let formation = &entries[&family.formation_signature];
+        let Some(anchor_resource) = catalog.iter().find(|resource| {
+            resource.name == formation.constituents[family.anchor_constituent].resource
+        }) else {
+            continue;
+        };
+        let Some(anchor_vertices) = anchor_resource.shape.form.polygon_vertices() else {
+            continue;
+        };
+        let Some(candidate_resource) = catalog
+            .iter()
+            .find(|resource| resource.name == family.candidate_resource)
+        else {
+            continue;
+        };
+        if !matches!(&candidate_resource.shape.form, Form::Line { .. })
+            || family.anchor_edge >= anchor_vertices.len()
         {
             continue;
         }
