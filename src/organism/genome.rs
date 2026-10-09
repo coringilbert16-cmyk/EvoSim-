@@ -133,6 +133,12 @@ fn trait_def(name: &str, value: f64, sigma: f64) -> TraitDef {
     }
 }
 
+/// Preserve the established positive starting allocation for offspring.
+/// This is energy allocation, not a lifecycle-stage or material reserve.
+fn default_reproductive_energy_allocation() -> f64 {
+    crate::juvenile::JUVENILE_INITIAL_ENERGY_RESERVE
+}
+
 pub fn initial_genome() -> Genome {
     Genome {
         traits: vec![
