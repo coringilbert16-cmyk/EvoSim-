@@ -1096,7 +1096,11 @@ fn storage_format_version(root: &Path, formations_path: &Path) -> std::io::Resul
                 }
                 return Ok(3);
             }
-            _ => return Err(invalid_storage_data(format!("unsupported geometry storage format version: {version}"))),
+            _ => {
+                return Err(invalid_storage_data(format!(
+                    "unsupported geometry storage format version: {version}"
+                )))
+            }
         }
     }
     if formations_path.metadata().map(|metadata| metadata.len() > 0).unwrap_or(false) {
@@ -1156,19 +1160,34 @@ fn decode_compositional_formation(
     let row = rows.get(id).cloned()
         .ok_or_else(|| invalid_storage_data(format!("unresolved compositional base ID: {id}")))?;
     let schema_version = row.get("schema_version").and_then(serde_json::Value::as_u64)
-        .ok_or_else(|| invalid_storage_data(format!("formation row {id} lacks schema_version")))? as u32;
+        .ok_or_else(|| {
+            invalid_storage_data(format!("formation row {id} lacks schema_version"))
+        })? as u32;
 
     let (constituents, bonds) = if let Some(base_value) = row.get("base_id") {
         let base_id = base_value.as_str()
             .ok_or_else(|| invalid_storage_data(format!("invalid base_id in formation row {id}")))?;
-        let base = decode_compositional_formation(base_id, rows, cache, active, depth + 1, catalog)?;
+        let base = decode_compositional_formation(
+            base_id,
+            rows,
+            cache,
+            active,
+            depth + 1,
+            catalog,
+        )?;
         if base.schema_version != schema_version {
-            return Err(invalid_storage_data(format!("schema version differs across formation delta {id}")));
+            return Err(invalid_storage_data(format!(
+                "schema version differs across formation delta {id}"
+            )));
         }
         let insert_at = row.get("insert_at").and_then(serde_json::Value::as_u64)
-            .ok_or_else(|| invalid_storage_data(format!("formation delta {id} lacks insert_at")))? as usize;
+            .ok_or_else(|| {
+                invalid_storage_data(format!("formation delta {id} lacks insert_at"))
+            })? as usize;
         if insert_at > base.constituents.len() {
-            return Err(invalid_storage_data(format!("invalid constituent insertion index in {id}")));
+            return Err(invalid_storage_data(format!(
+                "invalid constituent insertion index in {id}"
+            )));
         }
         let constituent: GeometryConstituent = serde_json::from_value(
             row.get("constituent").cloned()
@@ -1187,27 +1206,37 @@ fn decode_compositional_formation(
             }
         }
         let incident_rows = row.get("incident_bonds").and_then(serde_json::Value::as_array)
-            .ok_or_else(|| invalid_storage_data(format!("formation delta {id} lacks incident_bonds")))?;
+            .ok_or_else(|| {
+                invalid_storage_data(format!("formation delta {id} lacks incident_bonds"))
+            })?;
         let mut incident = BTreeMap::<usize, GeometryBond>::new();
         for item in incident_rows {
             let position = item.get("at").and_then(serde_json::Value::as_u64)
-                .ok_or_else(|| invalid_storage_data(format!("invalid incident-bond position in {id}")))? as usize;
+                .ok_or_else(|| {
+                    invalid_storage_data(format!("invalid incident-bond position in {id}"))
+                })? as usize;
             let bond: GeometryBond = serde_json::from_value(
                 item.get("bond").cloned()
                     .ok_or_else(|| invalid_storage_data(format!("incident bond missing in {id}")))?,
             ).map_err(|error| invalid_storage_data(error.to_string()))?;
             if bond.constituent_a != insert_at && bond.constituent_b != insert_at {
-                return Err(invalid_storage_data(format!("incident bond does not touch inserted constituent in {id}")));
+                return Err(invalid_storage_data(format!(
+                    "incident bond does not touch inserted constituent in {id}"
+                )));
             }
             if bond.constituent_a >= constituents.len() || bond.constituent_b >= constituents.len()
                 || incident.insert(position, bond).is_some()
             {
-                return Err(invalid_storage_data(format!("invalid or duplicate incident bond in {id}")));
+                return Err(invalid_storage_data(format!(
+                    "invalid or duplicate incident bond in {id}"
+                )));
             }
         }
         let total_bonds = shifted_base_bonds.len() + incident.len();
         if incident.keys().any(|position| *position >= total_bonds) {
-            return Err(invalid_storage_data(format!("incident-bond position outside reconstructed list in {id}")));
+            return Err(invalid_storage_data(format!(
+                "incident-bond position outside reconstructed list in {id}"
+            )));
         }
         let mut base_iter = shifted_base_bonds.into_iter();
         let mut bonds = Vec::with_capacity(total_bonds);
@@ -1221,23 +1250,31 @@ fn decode_compositional_formation(
             }
         }
         if base_iter.next().is_some() || !incident.is_empty() {
-            return Err(invalid_storage_data(format!("bond reconstruction mismatch in formation delta {id}")));
+            return Err(invalid_storage_data(format!(
+                "bond reconstruction mismatch in formation delta {id}"
+            )));
         }
         (constituents, bonds)
     } else {
         let allowed = ["formation_id", "schema_version", "constituents", "bonds"];
         if let Some(object) = row.as_object() {
             if object.keys().any(|key| !allowed.contains(&key.as_str())) {
-                return Err(invalid_storage_data(format!("unexpected field in full compositional formation row {id}")));
+                return Err(invalid_storage_data(format!(
+                    "unexpected field in full compositional formation row {id}"
+                )));
             }
         }
         let constituents: Vec<GeometryConstituent> = serde_json::from_value(
             row.get("constituents").cloned()
-                .ok_or_else(|| invalid_storage_data(format!("full formation row {id} lacks constituents")))?,
+                .ok_or_else(|| {
+                    invalid_storage_data(format!("full formation row {id} lacks constituents"))
+                })?,
         ).map_err(|error| invalid_storage_data(error.to_string()))?;
         let bonds: Vec<GeometryBond> = serde_json::from_value(
             row.get("bonds").cloned()
-                .ok_or_else(|| invalid_storage_data(format!("full formation row {id} lacks bonds")))?,
+                .ok_or_else(|| {
+                    invalid_storage_data(format!("full formation row {id} lacks bonds"))
+                })?,
         ).map_err(|error| invalid_storage_data(error.to_string()))?;
         (constituents, bonds)
     };
@@ -1250,7 +1287,9 @@ fn decode_compositional_formation(
     };
     let signature = formation.canonical_signature();
     if formation_id(&signature) != id {
-        return Err(invalid_storage_data(format!("canonical signature does not match formation ID {id}")));
+        return Err(invalid_storage_data(format!(
+            "canonical signature does not match formation ID {id}"
+        )));
     }
     if formation.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
         || !validate_formation(&formation, catalog)
@@ -1299,9 +1338,18 @@ fn load_compositional_formations(
     let mut active = std::collections::BTreeSet::new();
     let mut entries = BTreeMap::new();
     for id in rows.keys() {
-        let formation = decode_compositional_formation(id, &rows, &mut cache, &mut active, 0, catalog)?;
+        let formation = decode_compositional_formation(
+            id,
+            &rows,
+            &mut cache,
+            &mut active,
+            0,
+            catalog,
+        )?;
         if entries.insert(formation.signature.clone(), formation).is_some() {
-            return Err(invalid_storage_data("duplicate canonical formation signature in compositional storage"));
+            return Err(invalid_storage_data(
+                "duplicate canonical formation signature in compositional storage",
+            ));
         }
     }
     Ok(entries)
