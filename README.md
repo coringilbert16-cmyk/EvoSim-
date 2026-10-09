@@ -68,41 +68,32 @@ The physical construction/calibration module is still named `juvenile.rs`, but i
 
 ## Immediate engineering plan
 
-The immediate priority is to replace the temporary genesis scaffold with the final local, free-form constructor while preserving the physical contracts already established.
+The immediate engineering priority is **stabilizing Bob's geometry knowledge layer**. Constructor redesign and constructor-to-Bob integration are explicitly deferred until the library interface and lookup behavior are internally consistent and documented.
 
-1. **Verify the current physical baseline.**
-   - Keep the deterministic scaffold only as a validation baseline.
-   - Fix genuine physical-contract defects rather than redesigning around downstream symptoms.
-2. **Make cavity formation a real construction milestone.**
-   - The construction runtime has an explicit genome-phase entry point.
-   - It checks the realized physical graph after committed construction/closure bonds.
-   - When the cavity qualifies, that phase returns immediately rather than treating the cavity as a post-build assertion.
-   - The current baseline still uses the temporary scaffold to reach that milestone; it does not yet provide the final free-form topology.
-3. **Replace transitional endpoint search with direct local construction.**
-   - Exact boundary geometry is authoritative for physical placement.
-   - Face/edge/surface contact is preferred over arbitrary angular sampling.
-   - Once a physically valid continuation is selected, it is committed immediately; the constructor does not continue searching for a globally "best" placement.
-   - No arbitrary angular sweep, candidate cap, timeout, or backtracking should be introduced as a runtime-control mechanism.
-   - The remaining endpoint-pair search is transitional machinery to be replaced by direct frontier-feature construction as the geometry reference library becomes usable by the constructor.
-4. **Build the remainder locally.**
-   - Replace the temporary fixed scaffold with the intended free-form constructive mechanism.
-   - Select only from geometrically valid local continuations.
-   - Commit bonds immediately; no global search or backtracking.
-5. **Verify acquisition.**
-   - Water plus any three additional resources must each be physically acquirable.
-6. **Integrate waiting behavior into final genesis construction.**
-   - Resource shortage becomes a pending construction state rather than constructor failure or a simulation-thread block.
-   - The current catalog-backed genesis path does not yet provide this final behavior.
-7. **Finish the physical 80/80 reproduction migration.**
-   - Implement the full approximately 160% growth condition.
-   - Physically split the parent/developing graph into two approximately 80% organism graphs.
-   - Preserve physical material, energy, genome, and structural validity through detachment.
-8. **Keep documentation and compatibility cleanup aligned with the current physical model.**
-   - Remove remaining retired lifecycle terminology from current documentation and tests.
-   - Retain historical material only where it is explicitly identified as historical.
-   - Rename `juvenile.rs` only when doing so no longer obscures active constructor work.
+1. **Reconcile Bob's source/API contract.**
+   - Confirm that the module wiring, public library functions, worker imports, and documentation describe the same API.
+   - Resolve missing, renamed, duplicated, or incorrectly mapped functions before adding new layers.
+   - Keep one authoritative implementation for persistent formations, contact families, canonicalization, and indexed lookup.
+2. **Define and verify lookup semantics.**
+   - Document which queries are supported, what their results guarantee, and how geometry/schema versions affect eligibility.
+   - Treat library entries as reusable knowledge, not as permission to skip current physical validation.
+   - Keep discovery/worker responsibilities separate from read-only runtime lookup responsibilities.
+3. **Evaluate bounded frequency-aware priority caching.**
+   - First measure existing indexed lookup cost and access patterns; do not assume a cache is needed solely because the catalogue is large.
+   - If measurements justify it, add a bounded in-memory cache for frequently reused formation and contact-family query results.
+   - Promote entries based on observed frequency, enforce a clear memory bound, and expose hit/miss/eviction measurements.
+   - Keep persistent catalogue data authoritative for knowledge storage; the hot cache is disposable acceleration state, not a second source of truth.
+4. **Verify Bob independently.**
+   - Add focused tests for API consistency, canonicalized lookup, contact-family lookup, cache promotion/eviction if implemented, and cache-disabled or cold-start behavior.
+   - Confirm worker persistence and read-only lookup remain separate, and that tests use isolated temporary library roots where writes are involved.
+   - Run formatting, compilation, and focused tests when a runnable source checkout is available; report unrun checks explicitly.
+5. **Stop at the library boundary for this phase.**
+   - Do not redesign, modify, or wire the initial-organism constructor into Bob in this phase.
+   - Do not build cache policy around assumptions about constructor call patterns before those patterns can be measured.
+   - Once Bob's API and measured lookup behavior are stable, document a separate proposal for later constructor integration before beginning that work.
 
 ## Construction invariants
+
 
 These are the constraints that matter to current and final construction work:
 
