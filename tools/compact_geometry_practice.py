@@ -12,6 +12,7 @@ import argparse
 import base64
 import hashlib
 import json
+import math
 import shutil
 import sys
 from pathlib import Path
@@ -30,6 +31,57 @@ def formation_id(signature: str) -> str:
     """Encode a 128-bit SHA-256 prefix compactly as unpadded base64url."""
     digest = hashlib.sha256(signature.encode("utf-8")).digest()[:16]
     return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
+def rust_quantize(value: float) -> int:
+    """Match Rust f64::round() for the library's 1e-9 quantization."""
+    scaled = value / 1e-9
+    return math.floor(scaled + 0.5) if scaled >= 0 else math.ceil(scaled - 0.5)
+
+
+def canonical_signature_from_record(formation: dict[str, Any]) -> str:
+    """Recreate GeometryFormation::canonical_signature from persisted geometry."""
+    schema_version = formation.get("schema_version")
+    constituents = formation.get("constituents")
+    bonds = formation.get("bonds")
+    if not isinstance(schema_version, int) or not isinstance(constituents, list) or not isinstance(bonds, list):
+        raise MigrationError("formation lacks schema_version, constituents, or bonds")
+
+    out = f"v{schema_version}|"
+    for constituent in constituents:
+        if not isinstance(constituent, dict) or not isinstance(constituent.get("resource"), str):
+            raise MigrationError("formation contains an invalid constituent")
+        placement = constituent.get("placement")
+        if not isinstance(placement, dict):
+            raise MigrationError("formation constituent has no placement")
+        try:
+            x = float(placement["x"])
+            y = float(placement["y"])
+            angle = float(placement["rotation_radians"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise MigrationError("formation constituent placement is incomplete") from exc
+        normalized_angle = (angle + math.pi) % math.tau - math.pi
+        out += (
+            constituent["resource"]
+            + "@"
+            + str(rust_quantize(x))
+            + ","
+            + str(rust_quantize(y))
+            + ","
+            + str(rust_quantize(normalized_angle))
+            + ";"
+        )
+    out += "|"
+    for bond in bonds:
+        if not isinstance(bond, dict):
+            raise MigrationError("formation contains an invalid bond")
+        try:
+            a = int(bond["constituent_a"])
+            b = int(bond["constituent_b"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise MigrationError("formation bond endpoints are incomplete") from exc
+        out += f"{a}-{b};"
+    return out
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -104,6 +156,58 @@ def write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
         for record in records:
             stream.write(json.dumps(record, separators=(",", ":"), ensure_ascii=False))
             stream.write("\n")
+
+
+def compact_formations_file(
+    source: Path,
+    destination: Path,
+    *,
+    id_to_signature: dict[str, str],
+    signature_to_id: dict[str, str],
+) -> dict[str, int]:
+    originals = read_jsonl(source)
+    compact_records: list[dict[str, Any]] = []
+    for row_number, original in enumerate(originals, start=1):
+        signature = original.get("signature")
+        if not isinstance(signature, str) or not signature:
+            raise MigrationError(f"{source}:{row_number}: missing canonical signature")
+        try:
+            reconstructed_signature = canonical_signature_from_record(original)
+        except MigrationError as exc:
+            raise MigrationError(f"{source}:{row_number}: {exc}") from exc
+        if reconstructed_signature != signature:
+            raise MigrationError(
+                f"{source}:{row_number}: stored signature differs from signature reconstructed "
+                "from geometry fields"
+            )
+        compact_id = signature_to_id.get(signature)
+        if compact_id is None or id_to_signature.get(compact_id) != signature:
+            raise MigrationError(f"{source}:{row_number}: canonical signature has no unique compact ID")
+        compact = dict(original)
+        del compact["signature"]
+        compact["formation_id"] = compact_id
+        restored = dict(compact)
+        restored.pop("formation_id")
+        restored["signature"] = id_to_signature[compact_id]
+        if restored != original:
+            raise MigrationError(f"{source}:{row_number}: formation round-trip changed source fields")
+        compact_records.append(compact)
+
+    write_jsonl(destination, compact_records)
+    reloaded = read_jsonl(destination)
+    if len(reloaded) != len(originals):
+        raise MigrationError(f"{destination}: formation row count changed during write")
+    for row_number, (actual, expected) in enumerate(zip(reloaded, compact_records), start=1):
+        if actual != expected:
+            raise MigrationError(f"{destination}:{row_number}: serialized formation changed on reload")
+
+    return {
+        "rows": len(originals),
+        "source_bytes": source.stat().st_size,
+        "compact_bytes": destination.stat().st_size,
+        "saved_bytes": source.stat().st_size - destination.stat().st_size,
+        "duplicate_rows_preserved": 0,
+    }
 
 
 def compact_family_file(
@@ -199,13 +303,22 @@ def run(source: Path, destination: Path) -> int:
         "storage_format_version": STORAGE_VERSION,
         "formation_id_algorithm": "sha256-128-base64url",
         "formation_file": "formations.jsonl",
+        "formation_id_field": "formation_id",
         "family_files": {},
     }
     for path in sorted(source.iterdir()):
         if not path.is_file():
             continue
         target = destination / path.name
-        if path.name in family_names:
+        if path.name == "formations.jsonl":
+            report = compact_formations_file(
+                path,
+                target,
+                id_to_signature=id_to_signature,
+                signature_to_id=signature_to_id,
+            )
+            reports.append((path.name, report))
+        elif path.name in family_names:
             report = compact_family_file(
                 path,
                 target,
