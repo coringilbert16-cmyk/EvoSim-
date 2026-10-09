@@ -44,3 +44,23 @@ The four family files had no duplicate logical rows under the practice tool's si
 4. Do not delete or overwrite the source data. Keep the compact output separate until Rust compatibility, restart behavior, and lookup equivalence are proven.
 
 No geometry parameters, canonical signatures, formation records, or construction behavior were changed in this practice run.
+
+## Exact compositional-storage experiment (practice-only)
+
+The one-constituent composition analyzer was run against the same 25,807 formations in [workflow run 37974590539](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/37974590539). Its JSON result is also available as the short-lived `geometry-compositional-storage-results` artifact.
+
+| Measurement | Result |
+|---|---:|
+| Current compact formation-row bytes | 14,592,722 |
+| Estimated one-constituent delta encoding | 8,510,547 |
+| Additional formation-file saving | **6,082,175 bytes (41.67%)** |
+| Rows with a profitable exact delta | 23,027 of 25,807 |
+| Profitable rows with 2 constituents | 451 |
+| Profitable rows with 3 constituents | 6,528 |
+| Profitable rows with 4 constituents | 16,048 |
+
+This experiment searches for a smaller stored formation whose constituent list and remaining bond records match the target's one-unit-removed subset exactly. A delta stores the target's own ID, the base ID, insertion index, full removed constituent, and incident bonds with their original positions. Each candidate delta is reconstructed immediately and compared against the original constituent list, bond list, and canonical signature. A canonical-signature match alone is not enough: the actual persisted subset fields must also match exactly.
+
+**Interpretation:** if this representation is implemented in the storage layer, it suggests a further ~6.08 MB reduction from the already compacted formation rows. Applying that estimate to the previously measured full compact copy would reduce the five JSONL files from 147,624,856 bytes to approximately 141,542,681 bytes (about 22.02% below the original snapshot). This is a size estimate, not yet a generated compositional dataset; it excludes any additional decoder/index overhead and does not include a production Rust implementation.
+
+The experiment remains isolated from the source dataset and production library. Before adopting it, the next gate is to implement a separate compositional encoder/decoder in the practice tool and validate full recursive reconstruction of all 25,807 formations, including bond ordering, extra persisted fields, and chains of base references. The strict decrease in constituent count makes references acyclic, but the recursive decoder and complete output round-trip are not yet implemented.
