@@ -2,7 +2,22 @@
 
 EvoSim is an open-ended evolutionary organism simulation. Organisms are built from physical material and physical bonds; structure and behavior should emerge from general mechanisms rather than fixed predator/prey roles or a predefined organism-size progression.
 
-## Current construction state
+
+> [!IMPORTANT]
+> ## Authoritative constructor plan — replacement architecture
+>
+> **The “Replacement Initial Organism Constructor” plan below is the only current constructor architecture plan. Every earlier constructor plan or proposed construction workflow in this README is obsolete and must not be used to guide implementation.** Historical descriptions are retained only to explain the repository's migration history. They are not competing requirements.
+>
+> The replacement is a library-driven, milestone-based physical growth system. It uses the Geometry Reference Library and Chemistry Library as reusable physical knowledge, validates every candidate through authoritative runtime rules, commits physical changes atomically, discovers the genome from the realized bonded cavity, and stops construction when actual viability requirements are met. It does not build to a fixed piece count or prescribe a final topology.
+>
+> This document records the approved design, not completed implementation. Source inspection, successful compilation, and end-to-end construction are separate forms of evidence and must be reported separately.
+
+## Historical constructor implementation snapshot — not an architectural plan
+
+> [!WARNING]
+> The implementation notes in this section describe a previously inspected transitional implementation. They are historical context only, may no longer describe the current branch head, and must not be interpreted as the approved replacement design. Use the authoritative replacement plan below for all constructor work.
+
+## Historical constructor implementation state (superseded)
 
 The initial-organism constructor is in a **transitional validation/migration phase**.
 
@@ -22,7 +37,11 @@ The current scaffold is **not the final constructor architecture**. It is a temp
 
 The present scaffold is a fixed 54-unit Carbon geometry consisting of an inner ring, six radial supports, and an outer ring. Adjacent rigid units are sealed with distinct endpoint bonds at the two ends of each shared wall segment. This scaffold is a validation baseline, not the intended final organism-construction algorithm.
 
-## Intended constructor architecture
+## OBSOLETE — Previous Intended Constructor Architecture (No Longer Valid)
+
+> [!CAUTION]
+> **OBSOLETE PLAN — DO NOT IMPLEMENT OR EXTEND THIS PLAN.** Its forward-only/local-continuation workflow, wait-on-stall behavior, and other architecture statements are superseded by the authoritative replacement plan below. Reuse valid physical invariants only where the new plan explicitly preserves them.
+
 
 The final constructor is intended to be forward-only and locally constructive:
 
@@ -66,7 +85,11 @@ The serialized field name `juvenile_energy_reserve` remains only as a backward-c
 
 The physical construction/calibration module is still named `juvenile.rs`, but its retained seed machinery is a construction-calibration artifact rather than a biological juvenile stage. Physical viability checks live in `organism_viability.rs` and describe whole-organism physical viability.
 
-## Immediate engineering plan
+## OBSOLETE — Previous Immediate Engineering Plan (No Longer Valid)
+
+> [!CAUTION]
+> **OBSOLETE PLAN — DO NOT FOLLOW ITS CONSTRUCTOR DEFERRAL OR INTEGRATION ORDER.** The earlier instruction to defer constructor redesign and later prepare another proposal is superseded. The approved task is now to develop the replacement constructor around the geometry and chemistry libraries. The library audit and stabilization work described below may still be useful where it supports the new plan, but it is no longer a reason to postpone constructor architecture work.
+
 
 The immediate engineering priority is **stabilizing Bob's geometry knowledge layer**. Constructor redesign and constructor-to-Bob integration are explicitly deferred until the library interface and lookup behavior are internally consistent and documented.
 
@@ -94,6 +117,7 @@ The immediate engineering priority is **stabilizing Bob's geometry knowledge lay
 
 ## Construction invariants
 
+These are physical/specification invariants, not an alternative constructor algorithm. Retain them where consistent with the authoritative replacement plan below.
 
 These are the constraints that matter to current and final construction work:
 
@@ -541,3 +565,359 @@ Then open `http://localhost:3001/geometry`. The viewer supports:
 - zooming and panning the stored formation without changing it.
 
 The visualizer is deliberately separate from the catalogue worker and the live organism constructor. It is a verification microscope: once a formation is selected, it displays that recorded formation as a static view and does not re-read, regenerate, alter, or reinterpret it. Only newly added library entries are discovered by the periodic catalogue refresh.
+
+
+# Replacement Initial Organism Constructor
+## Authoritative architecture, library integration, migration, and validation plan
+
+**Status:** Approved design plan; implementation is not implied by this documentation.  
+**Scope:** Replace the current initial-organism construction architecture and remove superseded constructor plans and implementation paths.  
+**Primary objective:** Produce a physically valid, viable initial organism through the minimum necessary sequence of real construction decisions, without prescribing its final topology.  
+**Core principle:** The constructor coordinates established physical authorities. It does not become another geometry engine, chemistry engine, or organism-design script.
+
+## 1. Executive summary
+
+EvoSim needs a constructor that can produce a viable organism from available materials. It must discover a genome through the realized physical structure, acquire required materials through valid physical interactions, and satisfy the actual biological requirements.
+
+The replacement will not assemble toward a fixed piece count and test viability afterward. It will propose individual physical changes or reusable local arrangements, validate them before commitment, commit only complete valid transactions, and check developmental milestones as construction proceeds.
+
+The geometry library will supply reusable knowledge about shapes, contact features, and physically plausible arrangements. The chemistry library and authoritative bond rules will determine material compatibility and chemical/energetic consequences. The constructor will coordinate these authorities, choose among viable candidates, and stop when the actual organism is viable.
+
+The replacement must:
+- Construct an initial organism without a prescribed blueprint or final shape.
+- Use existing geometry and chemistry knowledge instead of repeatedly rediscovering it.
+- Discover a genome cavity through the real cavity analyzer and require a qualifying bonded seal.
+- Stop treating enclosure as a goal immediately after genome qualification.
+- Physically acquire Water and at least three distinct non-Water resource categories.
+- Enforce geometry, bonding, material, energy, and ledger invariants.
+- Permit multiple viable outcomes, with deterministic reproducibility and seed-driven diversity.
+- Share its physical engine with offspring construction while allowing a different policy and limited inventory.
+- Report why it succeeded, stalled, or failed.
+- Remove the old fixed-size and prescribed-construction architecture rather than wrapping it in another layer.
+
+This is a design plan. It is not evidence that the implementation exists or has passed tests.
+
+## 2. Lessons from other artificial-life simulators
+
+### Framsticks — development versus realized body
+
+Use explicit developmental milestones and evaluate the realized physical result, not the structure the constructor intended to create. Do not import genotype-driven predetermined body construction: EvoSim's first organism must physically discover its qualifying genome cavity.
+
+### MABE — modular authorities
+
+Keep geometry, chemistry, bonding, cavity analysis, acquisition, energy accounting, and construction policy separate. The constructor orchestrates these authorities; it must not duplicate their rules.
+
+### Tierra and Avida — viability is a bootstrap condition
+
+Initial construction establishes a viable starting point. It must not encode a permanent evolutionary trajectory, body ladder, or fixed set of organism roles.
+
+### Polyworld — apparent success is not physical proof
+
+A plausible-looking organism is not sufficient. Independently validate collisions, bonds, cavity qualification, resource acquisition, and accounting.
+
+**Combined lesson:** use milestones without a prescribed body plan, modular physical authorities, minimal viability conditions, and independently measurable correctness.
+
+## 3. Architecture and responsibilities
+
+### 3.1 Authoritative physical knowledge
+
+The Geometry Reference Library provides reusable geometric knowledge. The Chemistry Library and existing chemistry/bond authorities provide material and interaction knowledge. Runtime physical rules remain authoritative for the current organism.
+
+### 3.2 Candidate query and indexing
+
+Indexes narrow the search using material composition, exposed connection features, feature scale, arrangement size, shape, orientation, and validation status. Indexes are regenerable accelerators, not independent sources of physical truth.
+
+### 3.3 Authoritative validation
+
+Every candidate is checked against the actual context. Validation covers geometry and nonpenetration, physical contact, bond compatibility and strength, interactions with the existing structure, available resources, energetic consequences, and accounting.
+
+### 3.4 Atomic construction transaction
+
+A candidate is prepared and validated before commitment. A successful transaction updates all relevant geometry, bonds, inventory, resources, energy, ledger entries, exposed features, and analysis caches together. A failed transaction leaves the organism unchanged.
+
+### 3.5 Developmental policy
+
+The policy selects the next objective and chooses among legal candidates. During genome discovery, it favors feasible growth toward a qualifying cavity. Once a genome is confirmed, it stops optimizing for enclosure and pursues remaining viability requirements.
+
+### 3.6 Verification and handoff
+
+A final validator checks the realized organism and its ledgers. The constructor returns the validated structure in the representation expected by the simulation. It must not silently repair invalid physics at handoff.
+
+## 4. Geometry Reference Library integration
+
+### 4.1 Audit the existing catalogue first
+
+Inventory the files, schemas, versions, record counts, material combinations, shape definitions, connection features, arrangement sizes, provenance, and validation status. Distinguish raw samples from validated arrangements. Record duplicates, malformed records, missing coverage, and version conflicts. Do not assume every stored sample is valid in every context.
+
+### 4.2 Separate stored knowledge from validation guarantees
+
+Track whether an entry is unverified, locally validated, compositionally validated, or validated in a particular context. An arrangement valid in isolation can still collide with a distant part of the organism when inserted into a larger structure.
+
+### 4.3 Index for actual constructor queries
+
+Index by useful physical features: material composition, shape/constituent types, exposed connection feature, feature scale, orientation, local envelope, arrangement complexity, and validation status. Each index must answer a demonstrated query and be reproducible from authoritative data.
+
+### 4.4 Generate placements from features, not blind coordinate sweeps
+
+When a connection feature is exposed, query plausible placements that align compatible features. Enforce the approved contact tolerance of 0.1 where applicable; touching is permitted, penetration is forbidden. Respect feature-scale compatibility and the specified bond-strength distinctions for edge, corner, and line-end contacts. Bounding boxes and spatial indexes may reject obviously irrelevant candidates, but cannot serve as final proof of contact or nonpenetration.
+
+Resolve the existing constructor's 0.05 tolerance against the approved 0.1 value at the shared authority; do not patch only one local constant.
+
+### 4.5 Reuse multi-piece arrangements as optional shortcuts
+
+Validated local composites may reduce repeated search. They are candidate shortcuts, not mandatory building blocks or biological organs. Validate all external interfaces and the full contextual placement. The constructor must remain able to add individual pieces, reject a composite, and deviate from a reused arrangement later.
+
+### 4.6 Query using current context
+
+Candidate lookup must account for actual exposed features, available materials, unmet milestones, existing structure, and feasible resource-acquisition paths. Do not scan the entire catalogue without regard to the current construction state.
+
+### 4.7 Preserve correctness when coverage is incomplete
+
+A missing catalogue entry may make construction slower or reduce success probability; it must never cause invalid geometry to be accepted. Keep a correct fallback candidate-generation path where necessary and measure when it is used.
+
+## 5. Chemistry Library integration
+
+### 5.1 One authoritative source for material properties
+
+Read mass, potential energy, reactivity, cohesion, and other material properties from the same authoritative definitions used by the simulation. Do not duplicate property tables in the constructor. `potential_energy` is the absolute maximum for a resource type; it is not a mutable `energy_content` value.
+
+### 5.2 Centralize compatibility and bond consequences
+
+For each candidate, ask the authoritative chemistry/bond system whether the material pair and contact features may bond, what strength applies, what energetic consequences follow, and which accounting entries are required. Repair an incomplete authority at its source rather than adding constructor-only exceptions.
+
+### 5.3 Separate computation budget from physical energy
+
+The old `ASSEMBLY_ENERGY = 1.0e12` pattern and deriving initial organism energy from the remaining assembly budget must not be carried forward. Computation/search limits are not physical energy. Account for real construction costs, transfers, reserves, and transformations according to the energy ledger; return only energy actually justified by the model.
+
+### 5.4 Preserve physical acquisition
+
+Environmental abundance does not permit direct insertion of logical resource labels. Resource acquisition must use the actual physical acquisition semantics and placement checks. Water and at least three distinct non-Water categories must be acquired and accounted for.
+
+### 5.5 Distinguish availability from suitability
+
+For each candidate, separately evaluate whether a material is available, eligible for the action, chemically compatible, geometrically placeable, and affordable under the applicable constraints. This distinction supports both abundant initial construction and constrained offspring construction.
+
+## 6. Milestone-driven construction algorithm
+
+### Step 1 — Initialize explicit state
+
+Track the realized structure, constituent positions, valid bonds, exposed features, material inventory, acquired resources, energy and material ledgers, genome-analysis status, current milestone, deterministic random seed/state, and diagnostics. Do not silently insert a completed genome, unearned resources, or a prescribed final body plan.
+
+### Step 2 — Identify the current milestone
+
+Begin with a valid physical starting condition. Discover a qualifying genome cavity. Then satisfy the remaining organism requirements. Milestones describe biological conditions, not piece counts or exact arrangements.
+
+### Step 3 — Generate candidates from both libraries
+
+Generate candidate single-piece attachments, reusable local composites, compatible material combinations, and needed resource placements. Candidate generation is demand-driven: missing resource requirements should trigger relevant acquisition opportunities instead of endless unrelated growth.
+
+### Step 4 — Validate before commitment
+
+Geometry checks must confirm valid shapes, contact, scale compatibility, nonpenetration, and consistency with the whole relevant structure. Chemistry checks must confirm material eligibility, bond validity/strength, and energy/accounting consequences. Developmental checks must confirm the candidate serves or preserves the current milestone and does not needlessly destroy all feasible routes to outstanding requirements.
+
+The existing `penetrates_local_neighborhood()` check against only the anchor and its direct bonded neighbors is not a sufficient whole-structure guarantee unless a proven invariant makes it complete. Use spatial indexing for efficiency, but preserve complete relevant collision detection.
+
+### Step 5 — Use bounded, physically grounded feasibility lookahead
+
+Greedy local growth can block later completion. During genome discovery, avoid candidates that demonstrably eliminate all feasible enclosure paths. During resource acquisition, avoid blocking all feasible placements for required resources. Prefer a candidate with plausible continuation when otherwise comparable alternatives lead to dead ends.
+
+Lookahead estimates feasibility; it does not know or prescribe the final organism. It must not be replaced by a fixed piece count, a hardcoded ring, a mandatory scaffold, or arbitrary attempt/node caps treated as biological facts. If an operational computation budget is exhausted, report that the search effort was exhausted; do not claim physical impossibility without proof.
+
+### Step 6 — Select without catalogue-order bias
+
+Reject invalid candidates, compare remaining candidates according to explainable milestone and feasibility criteria, and use seeded randomness among comparable alternatives. File order and material enumeration must not silently dictate the organism. Any material or topology preference must be justified by actual constraints or an explicit approved policy.
+
+### Step 7 — Commit atomically
+
+Commit geometry, bonds, inventory, resource placements, energy, ledgers, exposed features, and cache updates as one transaction. If any required operation fails, roll back the entire transaction. No partial state may become visible to the simulation.
+
+### Step 8 — Re-evaluate after relevant changes
+
+Run cavity analysis after changes that can create or destroy a cavity or alter its seal. Cache analysis only with sound invalidation rules. Re-evaluate outstanding resource and viability requirements after relevant physical changes.
+
+### Step 9 — Stop on actual viability
+
+Return only when the realized organism passes all required checks. If the process stalls, report unmet requirements and blocking causes. Do not keep growing toward an arbitrary size hoping viability will emerge.
+
+## 7. Genome discovery is a real milestone
+
+There is no predefined genome core. A cavity qualifies only when the authoritative analyzer finds it in the realized structure and confirms the required bonded seal. An unsealed or accidental cavity is not a genome.
+
+Run or refresh analysis when geometry or bonding changes can affect qualification. When a qualifying cavity is confirmed, record the actual result, switch milestones, and immediately stop treating enclosure as a construction objective. Do not make genome bonds indestructible or introduce special cavity-protection physics unless separately required by the physical specification.
+
+## 8. Physical resource acquisition
+
+Track which required categories are available, attempted, acquired, and currently represented. Use the authoritative placement and contact rules, not sampled bounding-box positions as final proof. Confirm Water and at least three distinct non-Water resource categories are physically acquired.
+
+Respect the existing fluid rules: Water is logically abundant but physically represented as required; it remains permeable rather than a rigid wall; the genome cavity interior is exempt from water fill; and water-only sequences must not count as valid structural connections where a non-water connection is required. These rules belong to shared physical authorities, not constructor-specific exceptions.
+
+## 9. One engine, two policies
+
+### Initial-organism policy
+
+Start without a required blueprint, use the abundant environment while obeying real acquisition rules, discover a qualifying genome, acquire the required resources, and stop promptly when viable.
+
+### Offspring policy
+
+Start from the inherited guidance and limited acquired material actually available. A blueprint is a soft preference, not a command. Permit imperfect development and valid deviations. Previously discussed similarity thresholds (>0.90 for early commitment and <0.6 for refusal/reconsideration) may be used only after the metric and semantics are documented and reconciled with the specification; they are not physical laws.
+
+Both policies must share geometry lookup, chemistry/bond rules, validation, transactions, acquisition, ledgers, and diagnostics. Do not retain a separate blueprint renderer with different physical assumptions.
+
+## 10. Invariants
+
+### Geometry
+- No committed change introduces forbidden penetration.
+- Contact tolerance and feature-scale compatibility follow the approved rules.
+- Bonds correspond to valid contact and chemistry.
+- New additions cannot silently corrupt existing structure.
+- Spatial indexes and caches do not weaken completeness or consistency.
+
+### Chemistry and accounting
+- Material properties and bond rules have one authoritative source.
+- Every material and energy change is recorded.
+- Search budget is not converted into physical energy.
+- Failed transactions leave accounting unchanged.
+- Ledgers reconcile with the realized state.
+
+### Biology
+- The real analyzer establishes genome qualification.
+- A qualifying genome has a bonded seal.
+- Enclosure stops being a goal after qualification.
+- Required resource categories are physically acquired.
+- Final accessibility and structural requirements are verified.
+
+### Transaction
+A candidate produces either the original unchanged state or the complete validated new state—never a partially committed intermediate state.
+
+## 11. Required removals and cleanup
+
+The rewrite must remove obsolete architecture, not simply wrap it.
+
+1. **Fixed-size viability target:** remove the strategy of building to a target such as 400 pieces before checking viability. Delete dependent constants, retry logic, comments, and tests that make that target a biological requirement.
+2. **Prescribed initial topology:** remove mandatory rings, scaffolds, spirals, central materials, and topology-specific branches unless an independently documented physical requirement proves they are necessary. Remove tests that equate one topology with success.
+3. **Legacy seed/calibration path:** trace all uses of `confirmed_seed_baseline()`, `confirmed_seed_scale_reference()`, and `juvenile.rs`. If a calibration artifact still serves a legitimate scaling purpose, isolate and document it; remove its influence on live initial construction. Do not delete dependencies blindly.
+4. **Duplicate geometry logic:** remove constructor-owned shape/contact/collision rules, duplicate tolerances, independent feature calculations, and sampled placement checks used as final validation. Route queries and final validation through the authoritative geometry system.
+5. **Duplicate chemistry logic:** remove local material tables, bond-strength rules, compatibility exceptions, and energy calculations that compete with chemistry/bond authorities.
+6. **Approximate resource placement as authority:** replace coarse-grid/four-rotation sampling as final proof with library-backed candidates and authoritative placement validation.
+7. **Artificial assembly energy:** remove the conversion from `ASSEMBLY_ENERGY = 1.0e12` or remaining search allowance into initial organism energy. Preserve legitimate costs/reserves through the ledger.
+8. **Catalogue-order commitment:** remove early-commit paths that choose the first candidate solely because it appears first. Add normalized candidate ordering and seeded, explainable selection.
+9. **Arbitrary brute-force patterns:** remove repeated reconstruction of identical candidates, dead-end retries, redundant analysis, and arbitrary limits treated as biological facts. Keep operational safeguards only when they report exhaustion honestly.
+10. **Duplicate construction entry points:** migrate all runtime, test, benchmark, and utility callers to one physical engine with explicit policies, then delete obsolete constructors and temporary adapters.
+11. **Obsolete tests:** rewrite tests that assert old fixed size, prescribed topology, or retired reproduction rules. Do not delete valid physical requirements merely because old tests fail; retain and update tests for bonded cavities, acquisition, nonpenetration, bonding, and accounting.
+12. **Obsolete documentation:** mark all prior constructor plans as superseded and remove contradictory instructions once their historical context is no longer needed.
+
+Remove old code only after its callers and dependent invariants have been mapped. Do not remove the geometry or chemistry libraries as part of constructor cleanup.
+
+## 12. Migration sequence
+
+### Phase 1 — Source-of-truth audit
+Identify the intended source branch; inventory constructor, simulation integration, geometry and chemistry libraries, bonding, cavity analysis, acquisition, and energy ledger. Map callers and duplicate authorities. Record what is a specification requirement versus an artifact of the old architecture.
+
+**Deliverable:** dependency map and removal checklist.
+
+### Phase 2 — Independent library validation
+On the approved GitHub practice branch, validate representative records, contact-feature and scale coverage, candidate lookup, rejection of invalid candidates, catalogue-order independence, schema/version consistency, and test isolation.
+
+**Deliverable:** library quality/coverage report and repeatable tests.
+
+### Phase 3 — Candidate and validation interfaces
+Implement narrow interfaces for geometry queries, chemistry eligibility, contextual validation, energy/accounting, atomic commit/rollback, and rejection diagnostics.
+
+**Deliverable:** candidates can be proposed and rejected without mutating the organism.
+
+### Phase 4 — Transactional growth
+Prove atomic commits and rollback, bond/geometry consistency, and ledger reconciliation before full organism construction.
+
+**Deliverable:** valid sequences of changes preserve invariants; failed changes leave state unchanged.
+
+### Phase 5 — Genome milestone
+Implement blueprint-free growth using the real cavity analyzer. Switch the objective immediately when a qualifying cavity is found.
+
+**Deliverable:** logs identify the physical change that created the qualifying genome and confirm the policy transition.
+
+### Phase 6 — Acquisition and viability
+Integrate Water and three distinct non-Water categories through real acquisition and verify placements and accounting.
+
+**Deliverable:** an explicit record of satisfied and outstanding viability requirements.
+
+### Phase 7 — Comparative benchmark
+Compare the prototype against the old implementation over multiple seeds, material conditions, and catalogue orderings. Measure correctness, success, time, candidate work, diversity, and failure reasons.
+
+**Deliverable:** comparative report.
+
+### Phase 8 — Live replacement and cleanup
+Connect the new engine to live initial-organism creation, verify the simulation's physical representation and handoff, then migrate offspring policy where supported. Remove superseded code, constants, tests, and documentation. Run formatting, build, focused tests, integration tests, and the full suite; inspect the final diff.
+
+**Deliverable:** one authoritative engine and an auditable migration record.
+
+## 13. Benchmark and acceptance criteria
+
+The replacement is not accepted merely because it compiles or produces one plausible organism.
+
+### Physical correctness
+Prove nonpenetration, valid bonds, analyzer-confirmed bonded cavity, physical resource acquisition, correct fluid behavior, reconciled ledgers, atomic rollback, and correct simulation handoff.
+
+### Multiple seeds
+Record success/failure per seed, failure reasons, time to cavity, time to viability, candidates generated and checked, rejection categories, and committed changes. Choose a meaningful test sample before interpreting the success rate.
+
+### Catalogue-order independence
+Reorder library records and material enumeration. Results may differ due to intentional seeded choices, but must not be systematically controlled by file order. Define deterministic candidate normalization and seeded selection.
+
+### No hidden topology preference
+Inspect outcomes across seeds and material variations. Any recurring topology must be explainable by physical constraints or an explicit policy, not a scaffold, file order, or scoring bug.
+
+### Performance and library leverage
+Measure wall-clock time, candidate count, full geometry checks, chemistry checks, cavity analyses, failed transactions, memory use where measurable, query hit rate, reusable-arrangement rate, and fallback use. The objective is fewer unnecessary decisions and earlier recognition of success.
+
+### Simulation integration
+Verify physical materials, bonds, positions, genome result, resources, and energy survive handoff and that ordinary movement, acquisition, processing, transformation, and reproduction can operate on the organism.
+
+## 14. Failure reporting
+
+Use explicit categories: no valid growth opportunity, no compatible geometry candidate, no permitted chemical connection, collision with existing structure, no feasible enclosure route found, blocked resource acquisition, insufficient material/energy, operational search budget exhausted, final invariant failure, or missing/unusable library coverage.
+
+Distinguish proven impossibility under checked conditions from failure to find a solution within the available search effort. Never report the latter as proof that no viable organism exists.
+
+## 15. Risks and mitigations
+
+- **Greedy growth traps itself:** use bounded feasibility lookahead and maintain alternatives where useful.
+- **Incomplete or stale catalogue:** validate records, track coverage, and retain a correct fallback.
+- **Geometry/chemistry disagreement:** test cross-library combinations and resolve conflicts in authoritative definitions.
+- **Scoring favors one body plan:** keep scoring explainable; vary seeds, catalogue order, and materials.
+- **Whole-structure validation is expensive:** use spatial indexes without weakening collision completeness.
+- **Two constructors remain active:** map callers, migrate one entry point, and remove obsolete paths after acceptance.
+- **Focused tests hide integration failures:** test library, transaction, constructor, handoff, and full-suite layers.
+
+## 16. Implementation status and source discipline
+
+This plan is approved architecture, not proof of implementation. Source inspection, build success, focused tests, and full end-to-end viability are separate evidence levels. Report exactly which checks ran and which did not.
+
+The repository has used separate branches for the geometry data and Rust source. Confirm the intended source branch and reconcile library version/schema before integration. The GitHub geometry library is the practice environment; do not alter the production library or merge the replacement merely because a prototype appears promising.
+
+## 17. Definition of done
+
+- [ ] Geometry and chemistry schemas, coverage, and authoritative rules audited.
+- [ ] Library queries reuse valid arrangements without treating samples as universally valid.
+- [ ] Candidate validation uses authoritative physical rules.
+- [ ] No fixed piece-count viability target.
+- [ ] No required final topology.
+- [ ] Candidate commits are atomic and fully accounted for.
+- [ ] Genome qualification comes from the realized structure and actual analyzer.
+- [ ] Enclosure stops being a goal immediately after qualification.
+- [ ] Required resources are physically acquired.
+- [ ] Multiple deterministic seeds and catalogue-order variations tested.
+- [ ] Hidden topology bias investigated.
+- [ ] Energy and material ledgers reconcile.
+- [ ] Simulation handoff and downstream behavior verified.
+- [ ] Initial and offspring policies share the physical engine.
+- [ ] Superseded constructor paths, duplicate authorities, obsolete tests, and conflicting documentation removed.
+- [ ] Formatting, build, focused, integration, and full-suite results recorded.
+- [ ] Final code diff and migration record reviewed before production integration.
+
+## 18. Final design rule
+
+**Use the libraries to find physically possible next steps, authoritative rules to decide which steps are valid, and biological milestones to decide when construction is finished.**
+
+The first implementation task is the library/dependency audit, followed by a small transactional growth prototype on the practice branch. Replace live construction only after the prototype demonstrates physical correctness, real library reuse, and repeatable viable construction without a prescribed shape or fixed-size assembly.
+
+---
