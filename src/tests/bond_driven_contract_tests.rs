@@ -163,8 +163,7 @@ mod tests {
                     "committed bond energy must match the transaction result"
                 );
                 assert!(
-                    ((before_energy - energy)
-                        - (attempt.energy_invested + attempt.work_cost))
+                    ((before_energy - energy) - (attempt.energy_invested + attempt.work_cost))
                         .abs()
                         < 1.0e-6,
                     "holder energy loss must equal structural investment plus dissipated work"
