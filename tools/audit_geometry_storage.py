@@ -43,6 +43,7 @@ def audit_jsonl(path: Path) -> dict:
             row_bytes = len(raw_line)
             max_row_bytes = max(max_row_bytes, row_bytes)
             if not raw_line.strip():
+                estimated_compact_bytes += row_bytes
                 continue
             rows += 1
             try:
@@ -59,7 +60,11 @@ def audit_jsonl(path: Path) -> dict:
                 signature_rows += 1
                 signature_bytes += len(signature.encode("utf-8"))
                 estimate = compact_estimate(record)
-                estimated_compact_bytes += estimate if estimate is not None else row_bytes
+                if estimate is None:
+                    estimated_compact_bytes += row_bytes
+                else:
+                    # Preserve the JSONL newline in the estimate.
+                    estimated_compact_bytes += estimate + (1 if raw_line.endswith(b"\\n") else 0)
             else:
                 estimated_compact_bytes += row_bytes
 
