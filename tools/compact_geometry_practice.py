@@ -361,7 +361,7 @@ def run(source: Path, destination: Path) -> int:
             f"duplicate rows preserved={report['duplicate_rows_preserved']:,}"
         )
     print(
-        f"TOTAL family files: source={source_total:,} B, "
+        f"TOTAL compacted files: source={source_total:,} B, "
         f"compact={compact_total:,} B, saved={source_total - compact_total:,} B"
     )
     print(f"Storage manifest: {manifest_path}")
