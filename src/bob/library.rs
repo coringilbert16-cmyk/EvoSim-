@@ -1099,7 +1099,7 @@ fn storage_format_version(root: &Path, formations_path: &Path) -> std::io::Resul
             _ => {
                 return Err(invalid_storage_data(format!(
                     "unsupported geometry storage format version: {version}"
-                )))
+                )));
             }
         }
     }
@@ -1191,7 +1191,9 @@ fn decode_compositional_formation(
         }
         let constituent: GeometryConstituent = serde_json::from_value(
             row.get("constituent").cloned()
-                .ok_or_else(|| invalid_storage_data(format!("formation delta {id} lacks constituent")))?,
+                .ok_or_else(|| {
+                    invalid_storage_data(format!("formation delta {id} lacks constituent"))
+                })?,
         ).map_err(|error| invalid_storage_data(error.to_string()))?;
         let mut constituents = base.constituents;
         constituents.insert(insert_at, constituent);
