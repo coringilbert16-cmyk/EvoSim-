@@ -263,7 +263,6 @@ fn endpoint_class(endpoint: ConnectionEndpoint) -> &'static str {
     }
 }
 
-
 /* Restored Bob generation/lookup helpers. These remain pure library operations:
 live construction stays authoritative for physical validity. */
 
