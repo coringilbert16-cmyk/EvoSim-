@@ -32,24 +32,45 @@ const FAMILY_STORAGE_VERSION: u64 = 2;
 /// Stable 128-bit prefix of SHA-256; unlike DefaultHasher, this is a persistence contract.
 fn formation_id(signature: &str) -> String {
     let digest = Sha256::digest(signature.as_bytes());
-    digest[..16].iter().map(|byte| format!("{byte:02x}")).collect()
+    digest[..16]
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 fn compact_family_value<T: Serialize>(family: &T) -> std::io::Result<serde_json::Value> {
     let mut value = serde_json::to_value(family)
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
     let object = value.as_object_mut().ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::InvalidData, "family record must serialize as an object")
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "family record must serialize as an object",
+        )
     })?;
-    let signature = object.remove("formation_signature")
+    let signature = object
+        .remove("formation_signature")
         .and_then(|value| value.as_str().map(str::to_owned))
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "family record lacks formation_signature"))?;
-    object.insert("formation_id".to_owned(), serde_json::Value::String(formation_id(&signature)));
-    object.insert("storage_version".to_owned(), serde_json::Value::from(FAMILY_STORAGE_VERSION));
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "family record lacks formation_signature",
+            )
+        })?;
+    object.insert(
+        "formation_id".to_owned(),
+        serde_json::Value::String(formation_id(&signature)),
+    );
+    object.insert(
+        "storage_version".to_owned(),
+        serde_json::Value::from(FAMILY_STORAGE_VERSION),
+    );
     Ok(value)
 }
 
-fn write_compact_family<W: Write, T: Serialize>(writer: &mut W, family: &T) -> std::io::Result<()> {
+fn write_compact_family<W: Write, T: Serialize>(
+    writer: &mut W,
+    family: &T,
+) -> std::io::Result<()> {
     let value = compact_family_value(family)?;
     serde_json::to_writer(writer, &value)
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))
@@ -61,23 +82,52 @@ fn deserialize_family_record<T: DeserializeOwned>(
 ) -> Result<T, serde_json::Error> {
     let mut value: serde_json::Value = serde_json::from_str(line)?;
     let object = value.as_object_mut().ok_or_else(|| {
-        serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, "family record must be an object"))
+        serde_json::Error::io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "family record must be an object",
+        ))
     })?;
     if let Some(version) = object.remove("storage_version") {
         if version.as_u64() != Some(FAMILY_STORAGE_VERSION) {
-            return Err(serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, "unsupported family storage version")));
+            return Err(serde_json::Error::io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "unsupported family storage version",
+            )));
         }
         if object.contains_key("formation_signature") {
-            return Err(serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, "compact family record contains both formation_signature and formation_id")));
+            return Err(serde_json::Error::io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "compact family record contains both formation_signature and formation_id",
+            )));
         }
-        let id = object.remove("formation_id").and_then(|value| value.as_str().map(str::to_owned))
-            .ok_or_else(|| serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, "compact family record lacks formation_id")))?;
+        let id = object
+            .remove("formation_id")
+            .and_then(|value| value.as_str().map(str::to_owned))
+            .ok_or_else(|| {
+                serde_json::Error::io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "compact family record lacks formation_id",
+                ))
+            })?;
         let signature = formation_ids.get(&id).ok_or_else(|| {
-            serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("unresolved formation_id: {id}")))
+            serde_json::Error::io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("unresolved formation_id: {id}"),
+            ))
         })?;
-        object.insert("formation_signature".to_owned(), serde_json::Value::String(signature.clone()));
-    } else if !object.get("formation_signature").and_then(serde_json::Value::as_str).is_some() {
-        return Err(serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, "legacy family record lacks formation_signature")));
+        object.insert(
+            "formation_signature".to_owned(),
+            serde_json::Value::String(signature.clone()),
+        );
+    } else if object
+        .get("formation_signature")
+        .and_then(serde_json::Value::as_str)
+        .is_none()
+    {
+        return Err(serde_json::Error::io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "legacy family record lacks formation_signature",
+        )));
     }
     serde_json::from_value(value)
 }
@@ -3750,12 +3800,17 @@ mod compact_family_storage_tests {
         let object = compact.as_object().unwrap();
         assert!(!object.contains_key("formation_signature"));
         assert_eq!(
-            object.get("storage_version").and_then(serde_json::Value::as_u64),
+            object
+                .get("storage_version")
+                .and_then(serde_json::Value::as_u64),
             Some(FAMILY_STORAGE_VERSION)
         );
+        let expected_id = formation_id(&formation.signature);
         assert_eq!(
-            object.get("formation_id").and_then(serde_json::Value::as_str),
-            Some(formation_id(&formation.signature).as_str())
+            object
+                .get("formation_id")
+                .and_then(serde_json::Value::as_str),
+            Some(expected_id.as_str())
         );
         let compact_line = serde_json::to_string(&compact).unwrap();
         let decoded: GeometryRigidContactFamily =
@@ -3766,11 +3821,11 @@ mod compact_family_storage_tests {
         let legacy_decoded: GeometryRigidContactFamily =
             deserialize_family_record(&legacy_line, &ids).unwrap();
         assert_eq!(legacy_decoded, family);
+        let _ = catalog;
     }
 
     #[test]
     fn compact_family_records_reject_unknown_versions_and_unresolved_ids() {
-        let catalog = default_catalog();
         let formation = GeometryFormation::single("Carbon");
         let mut entries = BTreeMap::new();
         entries.insert(formation.signature.clone(), formation.clone());
@@ -3801,7 +3856,6 @@ mod compact_family_storage_tests {
             &ids
         )
         .is_err());
-        let _ = catalog;
     }
 
     #[test]
@@ -3840,7 +3894,9 @@ mod compact_family_storage_tests {
         assert!(record.get("formation_signature").is_none());
         assert!(record.get("formation_id").is_some());
         assert_eq!(
-            record.get("storage_version").and_then(serde_json::Value::as_u64),
+            record
+                .get("storage_version")
+                .and_then(serde_json::Value::as_u64),
             Some(FAMILY_STORAGE_VERSION)
         );
         drop(library);
