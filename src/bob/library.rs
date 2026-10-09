@@ -3796,7 +3796,6 @@ mod compact_family_storage_tests {
 
     #[test]
     fn compact_family_records_round_trip_and_legacy_rows_remain_readable() {
-        let catalog = default_catalog();
         let formation = GeometryFormation::single("Carbon");
         let mut entries = BTreeMap::new();
         entries.insert(formation.signature.clone(), formation.clone());
