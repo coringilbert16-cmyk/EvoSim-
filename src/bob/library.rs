@@ -263,6 +263,93 @@ fn endpoint_class(endpoint: ConnectionEndpoint) -> &'static str {
     }
 }
 
+
+/* Restored Bob generation/lookup helpers. These remain pure library operations:
+live construction stays authoritative for physical validity. */
+
+#[derive(Clone, Debug)]
+struct ParsedEdgeDescriptor {
+    material: String,
+    edge: usize,
+    parameter: f64,
+    rotation: f64,
+}
+
+#[derive(Clone, Debug)]
+struct ParsedPointDescriptor {
+    material: String,
+    point_index: usize,
+}
+
+fn parse_edge_descriptor(material: &str, descriptor: &str) -> Option<ParsedEdgeDescriptor> {
+    let rest = descriptor.strip_prefix("edge:")?;
+    let mut fields = rest.split('@');
+    let edge = fields.next()?.parse().ok()?;
+    let parameter = fields.next()?.parse::<i64>().ok()? as f64 / 1e9;
+    let rotation = fields.next()?.parse::<i64>().ok()? as f64 / 1e9;
+    fields.next().is_none().then_some(ParsedEdgeDescriptor {
+        material: material.to_owned(),
+        edge,
+        parameter,
+        rotation,
+    })
+}
+
+fn parse_point_descriptor(
+    material: &str,
+    descriptor: &str,
+    prefix: &str,
+) -> Option<ParsedPointDescriptor> {
+    let value = descriptor.strip_prefix(prefix)?.parse().ok()?;
+    Some(ParsedPointDescriptor {
+        material: material.to_owned(),
+        point_index: value,
+    })
+}
+
+fn contact_bucket_hash(material: &str, anchor_feature: usize, candidate_feature: usize) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    material.hash(&mut hasher);
+    anchor_feature.hash(&mut hasher);
+    candidate_feature.hash(&mut hasher);
+    hasher.finish()
+}
+
+fn rigid_family_projection(family: &GeometryRigidContactFamily) -> String {
+    format!(
+        "edge|{}|{}|{}|{}|{}|{}",
+        family.candidate_resource,
+        family.anchor_constituent,
+        family.anchor_edge,
+        family.candidate_edge,
+        quantize(family.candidate_rotation_radians),
+        quantize(family.anchor_parameter_start),
+    )
+}
+
+fn point_family_projection(family: &GeometryRigidPointContactFamily) -> String {
+    format!(
+        "point|{}|{}|{}|{}|{}",
+        family.candidate_resource,
+        family.anchor_constituent,
+        family.anchor_edge,
+        family.candidate_endpoint,
+        quantize(family.anchor_parameter_start),
+    )
+}
+
+fn vertex_family_projection(family: &GeometryRigidVertexContactFamily) -> String {
+    format!(
+        "vertex|{}|{}|{}|{}|{}",
+        family.candidate_resource,
+        family.anchor_constituent,
+        family.anchor_edge,
+        family.candidate_vertex,
+        quantize(family.anchor_parameter_start),
+    )
+}
+
 /// Resolve a live contact into a canonical Bob-side interface identity.
 ///
 /// This function is intentionally a resolver, not a geometry generator:
