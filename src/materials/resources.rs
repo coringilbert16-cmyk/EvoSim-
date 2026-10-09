@@ -1,7 +1,6 @@
 #![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 use serde::{Deserialize, Serialize};
 
-use crate::math::complexity;
 
 /// Immutable physical state of a resource type. Geometry describes what the
 /// material currently occupies; state describes whether that geometry may
@@ -501,7 +500,9 @@ pub fn property_ranges(catalog: &[BaseResource]) -> ResourceProperties {
         max_mass = max_mass.max(r.properties.mass);
         min_energy = min_energy.min(r.properties.potential_energy);
         max_energy = max_energy.max(r.properties.potential_energy);
-        let er = exponential_influence(r.properties.reactivity);
+        // Keep the measured material property in its native scale. No
+        // approved exponential influence function exists in this subsystem.
+        let er = r.properties.reactivity;
         min_reac = min_reac.min(er);
         max_reac = max_reac.max(er);
         min_coh = min_coh.min(r.properties.cohesion);
