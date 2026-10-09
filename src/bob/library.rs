@@ -3437,4 +3437,58 @@ mod bob_candidate_generation_contract_tests {
             "candidate results changed when catalog iteration order changed"
         );
     }
+
+
+    #[test]
+    fn rigid_family_writers_reject_missing_anchor_formations() {
+        let catalog = default_catalog();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-family-validation-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+
+        let edge = GeometryRigidContactFamily {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            formation_signature: "missing-formation".to_string(),
+            candidate_resource: "Carbon".to_string(),
+            anchor_constituent: 0,
+            anchor_edge: 0,
+            candidate_edge: 0,
+            candidate_rotation_radians: 0.0,
+            anchor_parameter_start: 0.0,
+            anchor_parameter_end: 1.0,
+        };
+        let point = GeometryRigidPointContactFamily {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            formation_signature: "missing-formation".to_string(),
+            candidate_resource: "Hydrogen".to_string(),
+            anchor_constituent: 0,
+            anchor_edge: 0,
+            candidate_endpoint: 0,
+            anchor_parameter_start: 0.0,
+            anchor_parameter_end: 1.0,
+            candidate_rotation_start_radians: 0.0,
+            candidate_rotation_end_radians: 1.0,
+        };
+
+        assert_eq!(library.insert_rigid_contact_families(vec![edge]).unwrap(), 0);
+        assert_eq!(
+            library
+                .insert_rigid_point_contact_families(vec![point])
+                .unwrap(),
+            0
+        );
+        assert!(
+            !root.join("rigid_contact_families.jsonl").exists(),
+            "invalid edge family should not be persisted"
+        );
+        assert!(
+            !root.join("rigid_point_contact_families.jsonl").exists(),
+            "invalid point family should not be persisted"
+        );
+
+        let _ = std::fs::remove_dir_all(root);
+    }
 }
