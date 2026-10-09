@@ -947,6 +947,112 @@ pub struct GeometryLibrary {
     formation_storage_version: u32,
 }
 
+fn compact_formation_value(
+    formation: &GeometryFormation,
+    existing: &BTreeMap<String, GeometryFormation>,
+    batch: &BTreeMap<String, GeometryFormation>,
+) -> std::io::Result<serde_json::Value> {
+    let mut full = serde_json::to_value(formation)
+        .map_err(|error| invalid_storage_data(error.to_string()))?;
+    let full_object = full.as_object_mut().ok_or_else(|| {
+        invalid_storage_data("formation record must serialize as an object")
+    })?;
+    full_object.remove("signature");
+    full_object.insert(
+        "formation_id".to_owned(),
+        serde_json::Value::String(formation_id(&formation.signature)),
+    );
+    let mut best = full;
+    let mut best_size = serde_json::to_vec(&best)
+        .map_err(|error| invalid_storage_data(error.to_string()))?
+        .len();
+
+    if formation.constituents.len() <= 1 {
+        return Ok(best);
+    }
+    for removed_index in 0..formation.constituents.len() {
+        let removed_constituent = formation.constituents[removed_index].clone();
+        let kept_constituents: Vec<_> = formation
+            .constituents
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| *index != removed_index)
+            .map(|(_, constituent)| constituent.clone())
+            .collect();
+        let mut kept_bonds = Vec::new();
+        let mut incident_bonds = Vec::new();
+        for (bond_index, bond) in formation.bonds.iter().enumerate() {
+            if bond.constituent_a == removed_index || bond.constituent_b == removed_index {
+                incident_bonds.push(serde_json::json!({
+                    "at": bond_index,
+                    "bond": bond,
+                }));
+            } else {
+                let mut bond = *bond;
+                if bond.constituent_a > removed_index {
+                    bond.constituent_a -= 1;
+                }
+                if bond.constituent_b > removed_index {
+                    bond.constituent_b -= 1;
+                }
+                kept_bonds.push(bond);
+            }
+        }
+
+        let base_probe = GeometryFormation {
+            schema_version: formation.schema_version,
+            constituents: kept_constituents.clone(),
+            bonds: kept_bonds.clone(),
+            signature: String::new(),
+        };
+        let base_signature = base_probe.canonical_signature();
+        let Some(base) = existing.get(&base_signature).or_else(|| batch.get(&base_signature))
+        else {
+            continue;
+        };
+        if base.schema_version != formation.schema_version
+            || base.constituents != kept_constituents
+            || base.bonds != kept_bonds
+        {
+            continue;
+        }
+
+        let candidate = serde_json::json!({
+            "formation_id": formation_id(&formation.signature),
+            "schema_version": formation.schema_version,
+            "base_id": formation_id(&base.signature),
+            "insert_at": removed_index,
+            "constituent": removed_constituent,
+            "incident_bonds": incident_bonds,
+        });
+        let candidate_size = serde_json::to_vec(&candidate)
+            .map_err(|error| invalid_storage_data(error.to_string()))?
+            .len();
+        if candidate_size < best_size {
+            best = candidate;
+            best_size = candidate_size;
+        }
+    }
+    Ok(best)
+}
+
+fn write_formation_record<W: Write>(
+    writer: &mut W,
+    formation: &GeometryFormation,
+    existing: &BTreeMap<String, GeometryFormation>,
+    batch: &BTreeMap<String, GeometryFormation>,
+    storage_version: u32,
+) -> std::io::Result<()> {
+    if storage_version == 3 {
+        let value = compact_formation_value(formation, existing, batch)?;
+        serde_json::to_writer(writer, &value)
+            .map_err(|error| invalid_storage_data(error.to_string()))
+    } else {
+        serde_json::to_writer(writer, formation)
+            .map_err(|error| invalid_storage_data(error.to_string()))
+    }
+}
+
 fn build_formation_id_index(
     entries: &BTreeMap<String, GeometryFormation>,
 ) -> std::io::Result<BTreeMap<String, String>> {
@@ -2097,8 +2203,13 @@ impl GeometryLibrary {
             .append(true)
             .open(data_path)?;
         for formation in unique.values() {
-            serde_json::to_writer(&mut file, formation)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            write_formation_record(
+                &mut file,
+                formation,
+                &self.entries,
+                &unique,
+                self.formation_storage_version,
+            )?;
             file.write_all(b"\n")?;
         }
         file.sync_data()?;
