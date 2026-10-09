@@ -109,3 +109,40 @@ The narrow correction adds the same formation-reference and anchor-index checks 
 
 The loaders now also reject rigid-edge records whose edge indices exceed the stored materials' rigid boundary segment counts, and rigid-point records whose candidate is not a line or whose anchor edge is invalid. A contract test writes malformed records through the catalogue-less insertion API and verifies they are discarded on reopen. The writer API still cannot validate material shape/index compatibility at insertion time because it does not receive or retain the resource catalogue; changing that API is deferred rather than folded into this audit.
 
+
+
+## Follow-up audit: chemistry cache and energy integration boundary (2026-10-09)
+
+A second source pass inspected `chemistry/chemistry_library.rs`, `chemistry/combine.rs`, and `chemistry/energy_ledger.rs`. These are source observations, not executed-test results.
+
+### Chemistry library observations
+
+- `ChemistryKey` canonicalizes the two material names, then distinguishes the interface class and a signature whose floating-point fields are quantized to 1e-9. This is deterministic for the same input representation, but the equivalence semantics are implicit: future code must not assume quantization means physical tolerance or contact acceptance.
+- The cache stores a nonnegative finite `static_potential`, keyed by material pair and interface signature. The schema version is 2, but records do not separately identify the equation/parameter version that produced the potential. Before live use, decide whether schema version alone is sufficient invalidation when chemistry equations or constants change.
+- `get_or_insert_static_potential` returns the existing cached value on a hit and persists the caller-provided value on a miss. The caller must calculate and validate a miss value with the authoritative chemistry equations. A cache hit is reusable stored knowledge, not proof that the current geometry, bond state, or reaction transition is valid.
+- Persistence appends and syncs a JSONL record, updates the in-memory map, then writes the manifest. The record append and manifest update are not one atomic filesystem transaction. Startup tolerates a malformed final JSONL line (consistent with a torn append) but rejects malformed non-final lines; an existing manifest's entry count is not visibly reconciled against the loaded map in the inspected code. These behaviors need explicit restart/corruption tests before the cache is relied on for construction-critical state.
+- Existing tests cover material-order canonicalization, interface-class distinction, key stability across formation-context changes, cache miss persistence, and duplicate-key rejection. The full test suite cannot currently execute because compilation stops earlier; do not report these tests as passing on this branch.
+
+### Energy and bond observations
+
+- `energy_ledger.rs` is marked as a staged API retained for subsystem integration. Its transaction type provides a balanced-accounting shape and its settlement operation updates holder energy and aggregate ledger totals atomically on validation failure. It does not decide whether a specific physical operation is entitled to release potential energy; that remains the operation's responsibility.
+- `combine.rs` is also marked staged. Its inspected `bond_strength` function returns the geometric mean of the two clamped cohesion values only. It does not accept endpoint feature classes, so it cannot itself apply the approved feature-pair multipliers. Apply those multipliers at one explicit transaction boundary, exactly once, and test all six approved endpoint-pair classes to prevent omission or double scaling.
+- Keep three values distinct in the growth engine: intrinsic bond potential, work/energy expenditure for forming it, and the resulting holder/ledger energy deltas. Tests should reconcile them from the same transaction object; do not infer one from another or use the library's static chemical potential as bond energy.
+- The current `CONSTRUCTION_ENERGY` / `1.0e12 - construction.energy` path remains an independent blocker. Do not use a computational search allowance as a physical energy source.
+
+### Refined interface and transaction contract
+
+Before implementing growth, make the candidate pipeline explicit and test each boundary:
+
+1. **Propose:** library/index may produce candidate placements and interface hypotheses; proposal is non-mutating and may be incomplete.
+2. **Resolve:** identify the actual live endpoint/interface pair. If the interface resolver cannot classify it unambiguously, reject or route to a documented fallback rather than inventing a family.
+3. **Validate:** enforce the 0.1 live-contact tolerance, scale compatibility, strict nonpenetration against every existing rigid constituent, resource/endpoint availability, and the current realized bond graph.
+4. **Evaluate:** compute chemistry, bond potential, work cost, and affordability through their authoritative APIs.
+5. **Trial:** apply geometry, bond graph, resource changes, cavity analysis, and energy settlement to a temporary state.
+6. **Commit or rollback:** publish all state changes together only if every invariant passes; otherwise the externally visible structure, energy holder, ledger, and resource inventory remain unchanged.
+
+A library family must never bypass stages 2–6. If a stage lacks an authoritative API, document that as an implementation prerequisite rather than re-implementing the rule privately inside the constructor.
+
+### Current gate
+
+The audit has identified enough concrete contracts to design the first transactional candidate prototype, but not enough evidence to claim the live constructor can safely use the libraries today. Next work should add small tests for chemistry-cache restart/corruption semantics and endpoint feature scaling, then define the candidate/transaction interface. The eight unrelated compile blockers recorded above still prevent all Rust tests from running; keep that limitation explicit and avoid broad unrelated fixes.
