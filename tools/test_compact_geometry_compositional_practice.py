@@ -31,6 +31,24 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
 
 
 class CompositionalPracticeTests(unittest.TestCase):
+    def test_reference_depth_statistics_and_cycle_detection(self) -> None:
+        rows = [
+            {"formation_id": "base", "schema_version": 1, "constituents": [], "bonds": []},
+            {"formation_id": "middle", "schema_version": 1, "base_id": "base", "insert_at": 0,
+             "constituent": carbon(0.0), "incident_bonds": []},
+            {"formation_id": "top", "schema_version": 1, "base_id": "middle", "insert_at": 1,
+             "constituent": carbon(1.0), "incident_bonds": []},
+        ]
+        stats = composition.reference_depths(rows)
+        self.assertEqual(stats["max_reference_depth"], 2)
+        self.assertEqual(stats["mean_reference_depth"], 1.0)
+        self.assertEqual(stats["p95_reference_depth"], 1)
+        with self.assertRaisesRegex(ValueError, "cyclic"):
+            composition.reference_depths([
+                {"formation_id": "a", "base_id": "b"},
+                {"formation_id": "b", "base_id": "a"},
+            ])
+
     def test_recursive_round_trip_and_source_preservation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
