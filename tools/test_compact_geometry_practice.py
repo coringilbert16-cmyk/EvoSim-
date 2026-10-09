@@ -51,8 +51,15 @@ class CompactGeometryPracticeTests(unittest.TestCase):
             destination = root / "compact"
             self.assertEqual(migration.run(source, destination), 0)
             compact = json.loads((destination / "rigid_contact_families.jsonl").read_text())
-            self.assertEqual(compact["storage_version"], 2)
-            self.assertEqual(len(compact["formation_id"]), 32)
+            self.assertNotIn("storage_version", compact)
+            self.assertEqual(len(compact["formation_id"]), 22)
+            manifest = json.loads((destination / "storage_manifest.json").read_text())
+            self.assertEqual(manifest["storage_format_version"], 2)
+            self.assertEqual(manifest["formation_id_algorithm"], "sha256-128-base64url")
+            self.assertEqual(
+                manifest["family_files"]["rigid_contact_families.jsonl"]["rows"],
+                1,
+            )
             self.assertNotIn("formation_signature", compact)
             self.assertEqual((source / "rigid_contact_families.jsonl").read_bytes(), original)
             restored = dict(compact)
@@ -92,7 +99,7 @@ class CompactGeometryPracticeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "formations.jsonl"
             write_jsonl(path, [{"signature": "first"}, {"signature": "second"}])
-            with mock.patch.object(migration, "formation_id", return_value="0" * 32):
+            with mock.patch.object(migration, "formation_id", return_value="A" * 22):
                 with self.assertRaisesRegex(migration.MigrationError, "ID collision"):
                     migration.read_formations(path)
 
