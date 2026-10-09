@@ -71,6 +71,16 @@ Audit target: `remove-library-auto-publisher` source branch at the time of inspe
 
 Do not remove the current constructor or its valid physical invariants before the replacement is wired and independently validated.
 
+## Phase 2 progress: geometry candidate contracts
+
+A test-only contract suite has been added to `src/bob/library.rs` on the audit branch. It covers:
+
+- Rejecting overlapping rigid constituents even if the formation declares a bond.
+- Ensuring two-constituent candidate generation does not mutate its seed, and returns only valid, unique canonical candidates.
+- Checking that the resulting candidate-signature set is invariant to catalogue iteration order.
+
+These tests exercise the geometry reference candidate generator, not the live initial constructor or the full energy/bond transaction. They have **not been executed**: no CI workflow or commit status was returned for the audit branch commit, and this environment cannot clone the repository to run Cargo. The tests must be run on a Rust-capable runner before their results are treated as verified.
+
 ## Evidence boundary and next action
 
 This is a read-only source audit. It does **not** establish successful compilation or test results, and it does not change production code, geometry parameters, or catalogue data.
