@@ -38,7 +38,7 @@ On branch `remove-library-auto-publisher`, `src/bob/worker.rs` imports these nam
 - `generate_rigid_point_contact_families`
 - `generate_rigid_vertex_contact_families`
 
-Those names are not defined in the fetched `src/bob/library.rs` revision. The file does define `generate_water_contact_families` and `generate_fluid_boundary_families`, but not the listed functions. This is a source-level inconsistency and likely compile blocker, not a test result. Resolve it against the intended authoritative implementation before changing serialization; otherwise the storage migration would be built on an unverified API surface.
+Those names are not defined in the fetched `src/bob/library.rs` revision. The file does define `generate_water_contact_families` and `generate_fluid_boundary_families`, but not the listed functions. Additionally, `src/bob/server.rs` imports `open_default_library`, which is also absent. This is a source-level inconsistency and likely compile blocker, not a test result. It is tracked in [issue #178](https://github.com/coringilbert16-cmyk/EvoSim-/issues/178). Resolve it against the intended authoritative implementation before changing serialization; otherwise the storage migration would be built on an unverified API surface.
 
 ## Recommended compact family format
 
