@@ -514,4 +514,46 @@ mod tests {
             "no candidate with a positive energy requirement was found"
         );
     }
+
+    #[test]
+    fn whole_structure_overlap_check_catches_non_anchor_constituent() {
+        let catalog = default_catalog();
+        let mut structure = crate::structure::OrganismStructure::new();
+        structure.add_unit(crate::structure::StructuralUnit::new(
+            "Carbon",
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        structure.add_unit(crate::structure::StructuralUnit::new(
+            "Carbon",
+            crate::structure::Placement {
+                x: 10.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        structure.add_unit(crate::structure::StructuralUnit::new(
+            "Carbon",
+            crate::structure::Placement {
+                x: 10.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+
+        let candidate = structure.units[2].clone();
+        assert!(
+            crate::construction_runtime::placed_unit_overlaps(
+                &structure,
+                &candidate,
+                &[2],
+                &catalog,
+            ),
+            "candidate must be checked against every existing constituent, not only its anchor"
+        );
+    }
+
 }
