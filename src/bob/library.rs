@@ -3898,18 +3898,23 @@ pub fn default_library_root() -> PathBuf {
 
 pub fn open_default_library() -> std::io::Result<GeometryLibrary> {
     let root = default_library_root();
-    if std::env::var_os("EVOSIM_GEOMETRY_LIBRARY_DIR").is_some()
-        && (!root.is_dir()
-            || !root.join("manifest.json").is_file()
-            || !root.join("formations.jsonl").is_file())
-    {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            format!(
-                "EVOSIM_GEOMETRY_LIBRARY_DIR must point to an existing Bob data directory containing manifest.json and formations.jsonl: {}",
-                root.display()
-            ),
-        ));
+    if std::env::var_os("EVOSIM_GEOMETRY_LIBRARY_DIR").is_some() {
+        let empty_directory = root.is_dir()
+            && fs::read_dir(&root)
+                .and_then(|mut entries| entries.next().transpose())
+                .map(|entry| entry.is_none())
+                .unwrap_or(false);
+        let has_existing_store =
+            root.join("manifest.json").is_file() && root.join("formations.jsonl").is_file();
+        if !root.is_dir() || (!has_existing_store && !empty_directory) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!(
+                    "EVOSIM_GEOMETRY_LIBRARY_DIR must point to an empty directory for a new Bob store or an existing store containing manifest.json and formations.jsonl: {}",
+                    root.display()
+                ),
+            ));
+        }
     }
     let catalog = default_catalog();
     GeometryLibrary::open(root, &catalog)
