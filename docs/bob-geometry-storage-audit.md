@@ -27,18 +27,11 @@ Each family’s logical `signature()` also embeds the full formation signature. 
 - The frontier stores signatures in both a record and the record-map key. Do not include it in the first migration.
 - The current loader streaming edits are present in the branch, but remain uncompiled and untested. The fluid loader’s error handling is not identical to the other loaders; retain and test the existing intended recovery policy rather than “cleaning it up” as part of a storage-format change.
 
-### Source/API blocker found
+### Worker/library API verification
 
-On branch `remove-library-auto-publisher`, `src/bob/worker.rs` imports these names from the module mapped to `src/bob/library.rs` in `src/main.rs`:
+A follow-up inspection of the exact `remove-library-auto-publisher` revision confirms that the worker-facing functions are present in `src/bob/library.rs`: `open_default_library`, `seed_base_catalogue`, `expand_formation_candidates`, `generate_rigid_contact_families`, `generate_rigid_point_contact_families`, and `generate_rigid_vertex_contact_families`. The server's `open_default_library` import is also defined. The earlier source audit incorrectly reported these symbols as missing; issue #178 records that mistaken finding and should be closed as a false alarm.
 
-- `open_default_library`
-- `seed_base_catalogue`
-- `expand_formation_candidates`
-- `generate_rigid_contact_families`
-- `generate_rigid_point_contact_families`
-- `generate_rigid_vertex_contact_families`
-
-Those names are not defined in the fetched `src/bob/library.rs` revision. The file does define `generate_water_contact_families` and `generate_fluid_boundary_families`, but not the listed functions. Additionally, `src/bob/server.rs` imports `open_default_library`, which is also absent. This is a source-level inconsistency and likely compile blocker, not a test result. It is tracked in [issue #178](https://github.com/coringilbert16-cmyk/EvoSim-/issues/178). Resolve it against the intended authoritative implementation before changing serialization; otherwise the storage migration would be built on an unverified API surface.
+This source inspection confirms symbol presence only. It does not establish that the branch compiles or that tests pass. Before changing serialization, run formatting, compilation, and focused tests in a runnable checkout, and record the actual result. Do not treat the previous missing-symbol report as a confirmed blocker.
 
 ## Recommended compact family format
 
@@ -54,7 +47,7 @@ For compatibility, parse a row as legacy only when it has no `storage_version` a
 
 ## Migration sequence
 
-1. Fix and verify the Bob worker/library API mismatch first. Run formatting, compile, and focused tests in a runnable checkout; source inspection is not a substitute.
+1. Re-run formatting, compilation, and focused tests in a runnable checkout. The earlier reported missing worker/library symbols were found on reinspection; source inspection alone is still not a substitute for a build.
 2. Run `python3 tools/audit_geometry_storage.py geometry_library/data` against the actual local catalogue. Preserve the report as the baseline. The checked-in GitHub snapshot is not a valid proxy for the user's larger local catalogue.
 3. Implement DTO serialization/deserialization for the three largest rigid-family files first, without changing the runtime structs or logical signatures.
 4. Add an explicit migration command that reads legacy rows and writes to a separate versioned destination. Never rewrite the only source files in place. The migration must stop on malformed required rows, unresolved formation references, ID collisions, or count/key mismatches.
