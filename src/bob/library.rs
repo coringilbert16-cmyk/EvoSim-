@@ -2414,7 +2414,11 @@ fn load_rigid_point_contact_families(
             || !family.candidate_rotation_end_radians.is_finite()
             || family.anchor_parameter_start > family.anchor_parameter_end
             || !entries.contains_key(&family.formation_signature)
-            || family.anchor_constituent >= entries.get(&family.formation_signature).map(|f| f.constituents.len()).unwrap_or(0)
+            || family.anchor_constituent
+                >= entries
+                    .get(&family.formation_signature)
+                    .map(|f| f.constituents.len())
+                    .unwrap_or(0)
             || family.candidate_endpoint > 1
             || catalog.iter().all(|r| r.name != family.candidate_resource)
         { continue; }
@@ -2445,14 +2449,31 @@ fn load_rigid_vertex_contact_families(
             || !family.candidate_rotation_end_radians.is_finite()
             || family.anchor_parameter_start > family.anchor_parameter_end
             || !entries.contains_key(&family.formation_signature)
-            || family.anchor_constituent >= entries.get(&family.formation_signature).map(|f| f.constituents.len()).unwrap_or(0)
+            || family.anchor_constituent
+                >= entries
+                    .get(&family.formation_signature)
+                    .map(|f| f.constituents.len())
+                    .unwrap_or(0)
             || catalog.iter().all(|r| r.name != family.candidate_resource)
         { continue; }
-        let Some(anchor_resource) = catalog.iter().find(|r| r.name == entries[&family.formation_signature].constituents[family.anchor_constituent].resource) else { continue; };
+        let Some(anchor_resource) = catalog.iter().find(|r| {
+            r.name
+                == entries[&family.formation_signature].constituents[family.anchor_constituent]
+                    .resource
+        }) else {
+            continue;
+        };
         let Some(anchor_vertices) = anchor_resource.shape.form.polygon_vertices() else { continue; };
-        let Some(candidate_resource) = catalog.iter().find(|r| r.name == family.candidate_resource) else { continue; };
+        let Some(candidate_resource) = catalog
+            .iter()
+            .find(|r| r.name == family.candidate_resource)
+        else {
+            continue;
+        };
         let Some(candidate_vertices) = candidate_resource.shape.form.polygon_vertices() else { continue; };
-        if family.anchor_edge >= anchor_vertices.len() || family.candidate_vertex >= candidate_vertices.len() {
+        if family.anchor_edge >= anchor_vertices.len()
+            || family.candidate_vertex >= candidate_vertices.len()
+        {
             continue;
         }
         out.insert(family.signature(), family);
@@ -2471,7 +2492,12 @@ pub fn generate_rigid_point_contact_families(
     let mut unique = BTreeMap::new();
 
     for anchor_index in 0..formation.constituents.len() {
-        let Some(anchor_resource) = catalog.iter().find(|r| r.name == formation.constituents[anchor_index].resource) else { continue; };
+        let Some(anchor_resource) = catalog
+            .iter()
+            .find(|r| r.name == formation.constituents[anchor_index].resource)
+        else {
+            continue;
+        };
         let Some(vertices) = anchor_resource.shape.form.polygon_vertices() else { continue; };
         let exposed = exposed_polygon_edge_intervals(formation, anchor_index, catalog);
         let placement = formation.constituents[anchor_index].placement;
@@ -2539,7 +2565,12 @@ pub fn generate_rigid_vertex_contact_families(
     let mut unique = BTreeMap::new();
 
     for anchor_index in 0..formation.constituents.len() {
-        let Some(anchor_resource) = catalog.iter().find(|r| r.name == formation.constituents[anchor_index].resource) else { continue; };
+        let Some(anchor_resource) = catalog
+            .iter()
+            .find(|r| r.name == formation.constituents[anchor_index].resource)
+        else {
+            continue;
+        };
         let Some(anchor_vertices) = anchor_resource.shape.form.polygon_vertices() else { continue; };
         let exposed = exposed_polygon_edge_intervals(formation, anchor_index, catalog);
         let placement = formation.constituents[anchor_index].placement;
@@ -2606,7 +2637,12 @@ pub fn generate_rigid_contact_families(
     }
     let mut unique = BTreeMap::new();
     for anchor_index in 0..formation.constituents.len() {
-        let Some(anchor_resource) = catalog.iter().find(|r| r.name == formation.constituents[anchor_index].resource) else { continue; };
+        let Some(anchor_resource) = catalog
+            .iter()
+            .find(|r| r.name == formation.constituents[anchor_index].resource)
+        else {
+            continue;
+        };
         let anchor_segments = rigid_boundary_segments(&anchor_resource.shape.form);
         let exposed = if matches!(anchor_resource.shape.form, Form::Line { .. }) {
             exposed_line_intervals(formation, anchor_index, catalog)
@@ -2695,7 +2731,10 @@ pub fn generate_two_constituent_candidates(
             let tn = (te + 1) % tv.len();
             for ce in 0..cv.len() {
                 let cn = (ce + 1) % cv.len();
-                let Some(ta) = edge_angle_world(tv[te], tv[tn], target_placement.rotation_radians) else { continue };
+                let Some(ta) = edge_angle_world(tv[te], tv[tn], target_placement.rotation_radians)
+                else {
+                    continue;
+                };
                 let Some(ca) = edge_angle(cv[ce], cv[cn]) else { continue };
                 for flip in [0.0, std::f64::consts::PI] {
                     let rotation = normalize_angle(ta + flip - ca);
