@@ -3531,4 +3531,62 @@ mod bob_candidate_generation_contract_tests {
 
         let _ = std::fs::remove_dir_all(root);
     }
+
+    #[test]
+    fn rigid_family_loaders_reject_invalid_geometry_references() {
+        let catalog = default_catalog();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-family-loader-validation-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let formation = GeometryFormation::single("Carbon");
+        assert!(library.insert(formation.clone(), &catalog).unwrap());
+
+        let edge = GeometryRigidContactFamily {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            formation_signature: formation.signature.clone(),
+            candidate_resource: "Carbon".to_string(),
+            anchor_constituent: 0,
+            anchor_edge: usize::MAX,
+            candidate_edge: usize::MAX,
+            candidate_rotation_radians: 0.0,
+            anchor_parameter_start: 0.0,
+            anchor_parameter_end: 1.0,
+        };
+        let point = GeometryRigidPointContactFamily {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            formation_signature: formation.signature,
+            candidate_resource: "Carbon".to_string(),
+            anchor_constituent: 0,
+            anchor_edge: 0,
+            candidate_endpoint: 0,
+            anchor_parameter_start: 0.0,
+            anchor_parameter_end: 1.0,
+            candidate_rotation_start_radians: 0.0,
+            candidate_rotation_end_radians: 1.0,
+        };
+        assert_eq!(library.insert_rigid_contact_families(vec![edge]).unwrap(), 1);
+        assert_eq!(
+            library
+                .insert_rigid_point_contact_families(vec![point])
+                .unwrap(),
+            1
+        );
+        drop(library);
+
+        let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
+        assert_eq!(
+            reopened.rigid_contact_families().count(),
+            0,
+            "edge families with invalid edge indices must be discarded on load"
+        );
+        assert_eq!(
+            reopened.rigid_point_contact_families().count(),
+            0,
+            "point families whose candidate is not a line must be discarded on load"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
 }
