@@ -159,25 +159,47 @@ pub(crate) fn form_selected_bond(
     ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) -> Option<CombineAttempt> {
-    if unit_a >= structure.units.len()
-        || unit_b >= structure.units.len()
-        || unit_a == unit_b
-        || candidate.distance > COMBINE_CONTACT_TOLERANCE
+    form_selected_bond_diagnostic(
+        structure, unit_a, unit_b, candidate, investment, catalog, cache, ledger, energy,
+    )
+    .ok()
+}
+
+/// Same transaction authority as the optional-return wrapper, but preserves the
+/// first rejection reason for constructor diagnostics. Failure semantics remain
+/// atomic: no structure mutation is committed on rejection.
+pub(crate) fn form_selected_bond_diagnostic(
+    structure: &mut crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    candidate: crate::contact::ConnectionPairCandidate,
+    investment: f64,
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Result<CombineAttempt, &'static str> {
+    if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b {
+        return Err("invalid unit indices");
+    }
+    if candidate.distance > COMBINE_CONTACT_TOLERANCE
         || !candidate.available_a
         || !candidate.available_b
     {
-        return None;
+        return Err("candidate contact is outside tolerance or an endpoint is unavailable");
     }
     let point_a = candidate
         .endpoint_a
-        .world_point(&structure.units[unit_a], catalog)?;
+        .world_point(&structure.units[unit_a], catalog)
+        .ok_or("candidate endpoint A has no world point")?;
     let point_b = candidate
         .endpoint_b
-        .world_point(&structure.units[unit_b], catalog)?;
+        .world_point(&structure.units[unit_b], catalog)
+        .ok_or("candidate endpoint B has no world point")?;
     if (point_a.x - point_b.x).hypot(point_a.y - point_b.y) > COMBINE_CONTACT_TOLERANCE {
-        return None;
+        return Err("candidate endpoint world points exceed contact tolerance");
     }
-    form_bond_from_candidate(
+    form_bond_from_candidate_diagnostic(
         structure,
         BondFormationRequest {
             unit_a,
@@ -242,10 +264,25 @@ fn form_bond_from_candidate(
     request: BondFormationRequest,
     candidate: crate::contact::ConnectionPairCandidate,
     catalog: &[BaseResource],
-    _cache: &mut ConnectionCompatibilityCache,
+    cache: &mut ConnectionCompatibilityCache,
     ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) -> Option<CombineAttempt> {
+    form_bond_from_candidate_diagnostic(
+        structure, request, candidate, catalog, cache, ledger, energy,
+    )
+    .ok()
+}
+
+fn form_bond_from_candidate_diagnostic(
+    structure: &mut crate::structure::OrganismStructure,
+    request: BondFormationRequest,
+    candidate: crate::contact::ConnectionPairCandidate,
+    catalog: &[BaseResource],
+    _cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Result<CombineAttempt, &'static str> {
     let BondFormationRequest {
         unit_a: ua,
         unit_b: ub,
@@ -254,27 +291,32 @@ fn form_bond_from_candidate(
         investment,
     } = request;
     if ua >= structure.units.len() || ub >= structure.units.len() || ua == ub {
-        return None;
+        return Err("invalid unit indices at bond commit");
     }
-    let id_a = structure.physical_id(ua)?;
-    let id_b = structure.physical_id(ub)?;
-    let a = structure.units[ua].properties(catalog)?;
-    let b = structure.units[ub].properties(catalog)?;
+    let id_a = structure.physical_id(ua).ok_or("unit A has no physical ID")?;
+    let id_b = structure.physical_id(ub).ok_or("unit B has no physical ID")?;
+    let a = structure.units[ua]
+        .properties(catalog)
+        .ok_or("unit A properties unavailable")?;
+    let b = structure.units[ub]
+        .properties(catalog)
+        .ok_or("unit B properties unavailable")?;
     let evaluation = crate::combine::evaluate_formation(candidate, a.cohesion, b.cohesion);
     if !crate::combine::formation_succeeds(evaluation, investment) {
-        return None;
+        return Err("COMBINE formation criteria rejected candidate");
     }
-    let (work, threshold) = formation_cost(a, b, evaluation).ok()?;
+    let (work, threshold) =
+        formation_cost(a, b, evaluation).map_err(|_| "formation cost calculation failed")?;
     if (threshold - investment).abs() > EPSILON {
-        return None;
+        return Err("selected investment differs from formation threshold");
     }
     let strength = bond_strength(a, b);
     if !strength.is_finite() {
-        return None;
+        return Err("calculated bond strength is not finite");
     }
     let bond_energy = crate::combine::intrinsic_bond_potential(a, b, strength);
     if !bond_energy.is_finite() || bond_energy < 0.0 {
-        return None;
+        return Err("calculated intrinsic bond energy is invalid");
     }
     let mut trial_structure = structure.clone();
     let bond = crate::structure::Bond {
@@ -283,20 +325,25 @@ fn form_bond_from_candidate(
         strength,
         bond_energy,
     };
-    crate::contact::try_add_bond(&mut trial_structure, bond, catalog).ok()?;
+    crate::contact::try_add_bond(&mut trial_structure, bond, catalog)
+        .map_err(|_| "physical bond insertion rejected endpoint pair")?;
     let before = *energy;
     // COMBINE consumes the formation threshold and allocates the newly created
     // bond's intrinsic potential to structure. Remaining physical approach work
     // is dissipated. No chemistry potential is manufactured by the transaction.
-    let transaction =
-        EnergyTransaction::expenditure(EnergyReason::Combine, investment + bond_energy, work)?;
+    let transaction = EnergyTransaction::expenditure(
+        EnergyReason::Combine,
+        investment + bond_energy,
+        work,
+    )
+    .ok_or("COMBINE energy transaction could not be constructed")?;
     if !ledger.settle_transaction(energy, transaction) {
         *energy = before;
-        return None;
+        return Err("energy ledger rejected COMBINE expenditure");
     }
     let net = *energy - before;
     *structure = trial_structure;
-    Some(CombineAttempt {
+    Ok(CombineAttempt {
         unit_a: ua,
         unit_b: ub,
         endpoint_a,
