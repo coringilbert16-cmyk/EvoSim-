@@ -710,6 +710,7 @@ fn realize_next_bond_driven(
     nodes: &mut usize,
     ledger: &EnergyLedger,
     available_energy: f64,
+    bob_library: Option<&crate::geometry_reference_library::GeometryLibrary>,
 ) -> Option<(
     OrganismStructure,
     Vec<usize>,
@@ -779,9 +780,45 @@ fn realize_next_bond_driven(
                         .unwrap_or(0.0),
                     ideal_angle,
                 );
-                for angle in angles {
-                    let candidate_origin =
-                        placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
+                // Bob's stored contact families provide real candidate poses.
+                // They are tried before analytic endpoint alignments, but all
+                // suggestions pass through the same live overlap, contact,
+                // compatibility, and energy transaction checks below.
+                let mut candidate_origins = Vec::<Placement>::new();
+                if let Some(library) = bob_library {
+                    let anchor_material = existing_unit.material.parts.first()?.0.as_str();
+                    let candidate_resource = new_material
+                        .material
+                        .parts
+                        .get(part_index)
+                        .and_then(|(name, _)| resource(catalog, name));
+                    if let Some(candidate_resource) = candidate_resource {
+                        candidate_origins.extend(
+                            library
+                                .suggest_rigid_edge_placements(
+                                    anchor_material,
+                                    existing_unit.placement,
+                                    candidate_resource,
+                                    catalog,
+                                )
+                                .into_iter()
+                                .map(|suggestion| suggestion.placement),
+                        );
+                    }
+                }
+                candidate_origins.extend(angles.into_iter().map(|angle| {
+                    placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle)
+                }));
+                let mut seen_origins = std::collections::BTreeSet::<(i64, i64, i64)>::new();
+                candidate_origins.retain(|placement| {
+                    let key = (
+                        (placement.x * 1e8).round() as i64,
+                        (placement.y * 1e8).round() as i64,
+                        (placement.rotation_radians * 1e8).round() as i64,
+                    );
+                    seen_origins.insert(key)
+                });
+                for candidate_origin in candidate_origins {
                     *nodes += 1;
 
                     let mut trial = structure.clone();
@@ -960,6 +997,10 @@ fn construct_blueprint_bond_driven_internal(
         .get(anchor_index)
         .ok_or_else(|| "construction anchor references a missing element".to_string())?;
     let anchor_preferred = anchor_element.material.parts[0].0.clone();
+
+    // Load Bob once per construction, not once per candidate. If no persistent
+    // store is configured yet, the constructor keeps its analytic fallback.
+    let bob_library = crate::geometry_reference_library::open_default_library().ok();
 
     let mut structure = OrganismStructure::new();
     let mut realized = vec![false; blueprint.elements.len()];
@@ -1178,6 +1219,7 @@ fn construct_blueprint_bond_driven_internal(
                     &mut nodes,
                     &construction_ledger,
                     remaining_energy,
+                    bob_library.as_ref(),
                 ) {
                     construction_ledger = trial_ledger;
                     remaining_energy = trial_energy;
