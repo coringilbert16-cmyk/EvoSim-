@@ -1791,7 +1791,23 @@ impl GeometryLibrary {
                     if let Some(signatures) = self.rigid_contact_index.get(&key) {
                         for signature in signatures {
                             if let Some(family) = self.rigid_contact_families.get(signature) {
-                                let candidate_is_a = a_material == &family.candidate_resource;
+                                let candidate_is_a = if a_material == b_material
+                                    && a_material == &family.candidate_resource
+                                {
+                                    if *a_edge == family.candidate_edge
+                                        && *b_edge == family.anchor_edge
+                                    {
+                                        true
+                                    } else if *b_edge == family.candidate_edge
+                                        && *a_edge == family.anchor_edge
+                                    {
+                                        false
+                                    } else {
+                                        continue;
+                                    }
+                                } else {
+                                    a_material == &family.candidate_resource
+                                };
                                 let (
                                     candidate_material,
                                     candidate_edge,
@@ -4028,6 +4044,68 @@ mod bob_lookup_contract_tests {
         assert_eq!(
             library.resolve_persistent_interface(&interface),
             LiveFamilyResolution::Unresolved
+        );
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn same_material_edge_lookup_is_endpoint_order_invariant() {
+        let catalog = default_catalog();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-same-material-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let formation = GeometryFormation::single("Carbon");
+        let signature = formation.signature.clone();
+        library.entries.insert(signature.clone(), formation);
+
+        let family = GeometryRigidContactFamily {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            formation_signature: signature,
+            candidate_resource: "Carbon".to_string(),
+            anchor_constituent: 0,
+            anchor_edge: 0,
+            candidate_edge: 1,
+            candidate_rotation_radians: 0.0,
+            anchor_parameter_start: 0.25,
+            anchor_parameter_end: 0.75,
+        };
+        let family_signature = family.signature();
+        library.rigid_contact_families.insert(family_signature.clone(), family);
+        library.rigid_contact_index
+            .entry(contact_bucket_hash("Carbon", 0, 1))
+            .or_default()
+            .push(family_signature);
+
+        let query = |candidate_first: bool| {
+            let (a_edge, b_edge) = if candidate_first { (1, 0) } else { (0, 1) };
+            LiveGeometryInterface {
+                interface_class: "rigid_edge",
+                signature: String::new(),
+                query: Some(LiveGeometryQuery::RigidEdge {
+                    a_material: "Carbon".to_string(),
+                    a_edge,
+                    a_parameter: 0,
+                    a_rotation: 0,
+                    b_material: "Carbon".to_string(),
+                    b_edge,
+                    b_parameter: 500_000_000,
+                    b_rotation: 0,
+                }),
+            }
+        };
+
+        assert_eq!(
+            library.resolve_persistent_interface(&query(true)),
+            LiveFamilyResolution::Unique
+        );
+        assert_eq!(
+            library.resolve_persistent_interface(&query(false)),
+            LiveFamilyResolution::Unique,
+            "same-material contacts must not depend on endpoint ordering"
         );
 
         let _ = std::fs::remove_dir_all(root);
