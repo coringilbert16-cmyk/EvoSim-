@@ -1827,9 +1827,27 @@ impl GeometryLibrary {
         };
         let anchor_segments = rigid_boundary_segments(&anchor_resource.shape.form);
         let candidate_segments = rigid_boundary_segments(&candidate_resource.shape.form);
+        let mut indexed_families = BTreeMap::<String, ()>::new();
+        for anchor_edge in 0..anchor_segments.len() {
+            for candidate_edge in 0..candidate_segments.len() {
+                let key = contact_bucket_hash(
+                    &candidate_resource.name,
+                    anchor_edge,
+                    candidate_edge,
+                );
+                if let Some(signatures) = self.rigid_contact_index.get(&key) {
+                    for signature in signatures {
+                        indexed_families.insert(signature.clone(), ());
+                    }
+                }
+            }
+        }
         let mut suggestions = BTreeMap::<String, RigidEdgePlacementSuggestion>::new();
 
-        for family in self.rigid_contact_families.values() {
+        for signature in indexed_families.keys() {
+            let Some(family) = self.rigid_contact_families.get(signature) else {
+                continue;
+            };
             if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
                 || family.candidate_resource != candidate_resource.name
             {
