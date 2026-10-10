@@ -4425,7 +4425,10 @@ mod bob_lookup_contract_tests {
     #[test]
     fn generated_rigid_edge_families_store_exposed_contact_intervals() {
         let catalog = crate::resources::default_catalog();
-        let carbon = catalog.iter().find(|resource| resource.name == "Carbon").unwrap();
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap();
         let formation = GeometryFormation::single("Carbon");
         let families = generate_rigid_contact_families(&formation, carbon, &catalog);
         assert!(!families.is_empty());
@@ -4439,7 +4442,11 @@ mod bob_lookup_contract_tests {
             .iter()
             .filter(|family| family.anchor_edge == 0 && family.candidate_edge == 0)
             .collect::<Vec<_>>();
-        assert_eq!(same_edge.len(), 2, "both edge orientations should be retained");
+        assert_eq!(
+            same_edge.len(),
+            2,
+            "both edge orientations should be retained"
+        );
         assert!(same_edge.iter().all(|family| {
             (family.anchor_parameter_start - 0.0).abs() < 1e-9
                 && (family.anchor_parameter_end - 1.0).abs() < 1e-9
