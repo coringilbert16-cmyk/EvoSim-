@@ -4664,7 +4664,6 @@ mod bob_lookup_contract_tests {
             (anchor_world.0 - candidate_world.0).abs() < 1e-7
                 && (anchor_world.1 - candidate_world.1).abs() < 1e-7
         }));
-        let anchor_segments = rigid_boundary_segments(&carbon.shape.form);
         let candidate_segments = rigid_boundary_segments(&carbon.shape.form);
         assert!(suggestions.iter().all(|suggestion| {
             let Some(&(a0, a1)) = anchor_segments.get(suggestion.anchor_edge) else {
