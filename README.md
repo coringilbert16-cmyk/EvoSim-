@@ -2,6 +2,31 @@
 
 EvoSim is an open-ended evolutionary organism simulation. Organisms are built from physical material and physical bonds; structure and behavior should emerge from general mechanisms rather than fixed predator/prey roles or a predefined organism-size progression.
 
+## Repository unification gate — 2026-10-10
+
+> [!CAUTION]
+> **Do not treat the current default branch (`main`) as a downloadable EvoSim source checkout yet.** A recursive GitHub tree audit found only 15 entries, rooted under `chemistry_library/`, `docs/`, and `geometry_library/`; it has no `Cargo.toml` or `src/main.rs`. It is currently a data/documentation branch, not a complete runnable Rust application.
+
+The runnable source and current Bob regeneration changes are on `bob-automatic-compact-storage`. This branch and `main` have diverged substantially: the latest GitHub comparison reports 146 commits ahead and 132 behind. The source prerequisite branch `fix/build-restoration-audit` is also divergent from `main` (74 ahead, 132 behind). Do not resolve this by blindly merging either side or deleting the catalogue: first reconcile the source history and decide which generated data is intentionally retained.
+
+### Current stabilization evidence
+
+- On the latest Bob branch head (`6f50c362c17e9a589688a736000116d9d6f3729b`), formatting, source-file-size checks, COMBINE architecture checks, focused compact-storage tests, and the fresh-library persistence/reopen smoke step passed in CI.
+- The Rust test step and Clippy step failed before a clean verification result. The workflow log reports compile/lint failures, including unfulfilled `dead_code` expectations; the full application test suite therefore has not been demonstrated green on this head.
+- The last separately documented full test execution remains 253 passed, 75 failed, and 1 ignored. Do not present that as a current passing baseline.
+- Open work is split across dependent PRs: [#181 constructor/library dependency audit](https://github.com/coringilbert16-cmyk/EvoSim-/pull/181), [#182 build restoration](https://github.com/coringilbert16-cmyk/EvoSim-/pull/182), [#183 shared Bob library root](https://github.com/coringilbert16-cmyk/EvoSim-/pull/183), and [#184 clean regeneration/storage](https://github.com/coringilbert16-cmyk/EvoSim-/pull/184). They are not yet a single verified production baseline.
+
+### Required order before the next clean download
+
+1. Choose and document one integration lineage; preserve the physical/biological rules and the approved replacement-constructor plan.
+2. Reconcile the source branch with the data-only `main` history without blindly merging unrelated branch histories.
+3. Resolve compile blockers and strict-lint failures without blanket suppressions; then execute focused contracts and the full test suite.
+4. Confirm the constructor actually uses Bob's configured library root and can construct a physically viable organism. A worker smoke test alone is not acceptance.
+5. Decide which generated catalogue files are rebuildable output only after the constructor's required coverage and clean-generation completion criteria are verified.
+6. Set the repository's default branch to the verified runnable source lineage only after the above gates pass.
+
+Until those gates pass, a fresh clone of `main` is not the right download target, and a clone of the Bob branch should be treated as a work-in-progress integration branch rather than a stable release.
+
 ## Constructor audit handoff — 2026-10-09
 
 > [!IMPORTANT]
