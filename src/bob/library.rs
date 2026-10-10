@@ -4554,6 +4554,53 @@ mod bob_lookup_contract_tests {
     }
 
     #[test]
+    fn rigid_edge_suggestions_rebase_family_poses_to_live_anchor() {
+        let catalog = default_catalog();
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap()
+            .clone();
+        let formation = GeometryFormation::single("Carbon");
+        let families = generate_rigid_contact_families(&formation, &carbon, &catalog);
+        assert!(!families.is_empty());
+
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-placement-suggestions-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        library.entries.insert(formation.signature.clone(), formation);
+        for family in families {
+            library
+                .rigid_contact_families
+                .insert(family.signature(), family);
+        }
+
+        let live_anchor = Placement {
+            x: 12.0,
+            y: -4.0,
+            rotation_radians: 0.37,
+        };
+        let suggestions =
+            library.suggest_rigid_edge_placements("Carbon", live_anchor, &carbon, &catalog);
+        assert!(!suggestions.is_empty());
+        assert!(suggestions.iter().all(|suggestion| {
+            suggestion.candidate_resource == "Carbon"
+                && suggestion.anchor_contact_parameter >= 0.0
+                && suggestion.anchor_contact_parameter <= 1.0
+                && (suggestion.placement.rotation_radians - live_anchor.rotation_radians).is_finite()
+        }));
+        assert!(suggestions.iter().any(|suggestion| {
+            (suggestion.placement.x - live_anchor.x).abs() > 1e-6
+                || (suggestion.placement.y - live_anchor.y).abs() > 1e-6
+        }));
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn generated_rigid_edge_families_store_exposed_contact_intervals() {
         let catalog = crate::resources::default_catalog();
         let carbon = catalog
