@@ -20,7 +20,10 @@ pub fn run() {
 /// Run continuously while limiting generated formations to max_constituents.
 /// Existing worker invocations preserve the historical 20-constituent default.
 pub fn run_continuously_with_limit(max_constituents: usize) {
-    assert!(max_constituents > 0, "maximum constituents must be positive");
+    assert!(
+        max_constituents > 0,
+        "maximum constituents must be positive"
+    );
     let catalog = default_catalog();
     let mut library = open_default_library().expect("geometry library must open");
     seed_base_catalogue(&mut library, &catalog).expect("geometry library seed must succeed");
