@@ -304,7 +304,11 @@ pub(crate) fn placed_unit_overlaps(
             form: shape.form.clone(),
             placement: unit.placement,
         };
-        crate::material_geometry::placed_forms_penetrate(&candidate_part, &existing_part, 0.0)
+        crate::material_geometry::placed_forms_penetrate(
+            &candidate_part,
+            &existing_part,
+            crate::material_geometry::GEOMETRY_EPSILON,
+        )
     })
 }
 
