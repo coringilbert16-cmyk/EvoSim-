@@ -180,7 +180,7 @@ pub enum LiveGeometryQuery {
         edge_material: String,
         edge: usize,
         edge_parameter: i64,
-        candidate_rotation: i64,
+        candidate_rotation: Option<i64>,
     },
     RigidVertex {
         corner_material: String,
@@ -188,7 +188,7 @@ pub enum LiveGeometryQuery {
         edge_material: String,
         edge: usize,
         edge_parameter: i64,
-        candidate_rotation: i64,
+        candidate_rotation: Option<i64>,
     },
 }
 
@@ -294,7 +294,7 @@ pub fn resolve_live_contact_candidate(
                 edge_material: edge.material,
                 edge: edge.edge,
                 edge_parameter: quantize(edge.parameter),
-                candidate_rotation,
+                candidate_rotation: Some(candidate_rotation),
             })
         }
         "rigid_vertex" => {
@@ -315,7 +315,7 @@ pub fn resolve_live_contact_candidate(
                 edge_material: edge.material,
                 edge: edge.edge,
                 edge_parameter: quantize(edge.parameter),
-                candidate_rotation,
+                candidate_rotation: None,
             })
         }
         _ => None,
@@ -1922,11 +1922,13 @@ impl GeometryLibrary {
                                 && *edge == family.anchor_edge
                                 && parameter >= family.anchor_parameter_start - QUANTUM
                                 && parameter <= family.anchor_parameter_end + QUANTUM
-                                && angle_in_periodic_interval(
-                                    *candidate_rotation as f64 / 1e9,
-                                    family.candidate_rotation_start_radians,
-                                    family.candidate_rotation_end_radians,
-                                )
+                                && candidate_rotation.is_some_and(|rotation| {
+                                    angle_in_periodic_interval(
+                                        rotation as f64 / 1e9,
+                                        family.candidate_rotation_start_radians,
+                                        family.candidate_rotation_end_radians,
+                                    )
+                                })
                             {
                                 projections.insert(point_family_projection(family), ());
                             }
@@ -1960,11 +1962,13 @@ impl GeometryLibrary {
                                 && *edge == family.anchor_edge
                                 && parameter >= family.anchor_parameter_start - QUANTUM
                                 && parameter <= family.anchor_parameter_end + QUANTUM
-                                && angle_in_periodic_interval(
-                                    *candidate_rotation as f64 / 1e9,
-                                    family.candidate_rotation_start_radians,
-                                    family.candidate_rotation_end_radians,
-                                )
+                                && candidate_rotation.is_some_and(|rotation| {
+                                    angle_in_periodic_interval(
+                                        rotation as f64 / 1e9,
+                                        family.candidate_rotation_start_radians,
+                                        family.candidate_rotation_end_radians,
+                                    )
+                                })
                             {
                                 projections.insert(vertex_family_projection(family), ());
                             }
@@ -3993,6 +3997,21 @@ pub fn open_default_library() -> std::io::Result<GeometryLibrary> {
 #[cfg(test)]
 mod bob_lookup_contract_tests {
     use super::*;
+
+    #[test]
+    fn periodic_angle_interval_handles_normal_and_wrapped_ranges() {
+        let pi = std::f64::consts::PI;
+        let tau = std::f64::consts::TAU;
+        assert!(angle_in_periodic_interval(0.5, 0.25, 0.75));
+        assert!(angle_in_periodic_interval(0.25, 0.25, 0.75));
+        assert!(angle_in_periodic_interval(0.75, 0.25, 0.75));
+        assert!(!angle_in_periodic_interval(0.8, 0.25, 0.75));
+        assert!(angle_in_periodic_interval(-pi + 0.1, pi - 0.2, pi + 0.2));
+        assert!(angle_in_periodic_interval(pi + 0.1, pi - 0.2, pi + 0.2));
+        assert!(!angle_in_periodic_interval(0.0, pi - 0.2, pi + 0.2));
+        assert!(!angle_in_periodic_interval(0.0, 1.0, -1.0));
+        assert!(angle_in_periodic_interval(0.0, -tau, tau));
+    }
     use crate::resources::default_catalog;
     use std::hint::black_box;
     use std::time::Instant;
