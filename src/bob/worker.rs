@@ -49,6 +49,36 @@ pub fn run_once() -> std::io::Result<bool> {
     }
 }
 
+/// Process at most `max_passes` formation frontiers without reopening the
+/// catalogue between passes. This is useful for bounded generation benchmarks.
+pub fn run_passes(max_passes: usize) -> std::io::Result<usize> {
+    let catalog = default_catalog();
+    let mut library = open_default_library()?;
+    let seeded = seed_base_catalogue(&mut library, &catalog)?;
+    let started = Instant::now();
+    let mut processed = 0usize;
+
+    for _ in 0..max_passes {
+        match process_one_frontier(&mut library, &catalog)? {
+            Some(metrics) => {
+                eprintln!("{metrics}");
+                processed += 1;
+            }
+            None => {
+                eprintln!("geometry worker passes: frontier idle; stopping early");
+                break;
+            }
+        }
+    }
+
+    eprintln!(
+        "geometry worker passes complete: processed={processed} requested={max_passes} seeded={seeded} total_formations={} elapsed_ms={}",
+        library.len(),
+        started.elapsed().as_millis()
+    );
+    Ok(processed)
+}
+
 #[derive(Default)]
 struct WorkerPassMetrics {
     formation_size: usize,
