@@ -125,3 +125,16 @@ A second read-only pass over `indexed_interface_projections` and the projection 
 - **Same-material edge contacts need an explicit test.** The rigid-edge matcher determines which query side is the candidate using material equality. When both sides have the same material, that test alone cannot distinguish candidate side from anchor side; the sorted local descriptors may make the order deterministic, but the lookup's candidate/anchor interpretation must be shown to agree with family generation.
 
 These are risks identified by source inspection, not demonstrated runtime failures. Before changing behavior, define the canonical family projection contract and add tests that vary only the omitted rotation/interval fields. Then update the query representation or projection rules according to that contract. No source code or catalogue data was changed in this pass.
+
+
+### Lookup contract test progress — 2026-10-10
+
+The first deterministic edge-resolution tests are now committed in src/bob/library.rs:
+
+- indexed_edge_lookup_distinguishes_unique_ambiguous_and_unresolved checks a single matching family, a query outside all stored parameter intervals, and two distinct matching projections.
+- same_material_edge_lookup_is_endpoint_order_invariant covers a same-material contact where the candidate and anchor use different edge indices. This test exposed an ambiguity in choosing the candidate side from material equality alone. The matcher now uses the candidate/anchor edge indices to orient that case, rejecting records whose edges fit neither orientation.
+- Existing live_interface_is_endpoint_order_invariant still checks canonical query identity when the two endpoint arguments are swapped.
+
+This is a narrow matcher correction plus focused tests; it does not resolve the separate missing-rotation fields for rigid-point/rigid-vertex queries, nor the projection-key omission of interval ends and rotation ranges. Those remain explicit follow-up work because changing their semantics requires a stable identity contract.
+
+Validation status: the commits are present on bob-automatic-compact-storage. The GitHub workflow/status query returned no runs or status records for the latest commit at the time of this note, so test execution and CI success are not verified from this interface. Do not treat these tests as locally run.
