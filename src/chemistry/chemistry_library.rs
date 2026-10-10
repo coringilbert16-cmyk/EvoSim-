@@ -171,8 +171,10 @@ pub struct ChemistryRecord {
 
 impl ChemistryRecord {
     fn is_valid(&self) -> bool {
-        matches!(self.key.schema_version, 2 | CHEMISTRY_LIBRARY_SCHEMA_VERSION)
-            && !self.key.material_a.is_empty()
+        matches!(
+            self.key.schema_version,
+            2 | CHEMISTRY_LIBRARY_SCHEMA_VERSION
+        ) && !self.key.material_a.is_empty()
             && !self.key.material_b.is_empty()
             && !self.key.interface_class.is_empty()
             && !self.key.interface_signature.is_empty()
@@ -224,7 +226,10 @@ impl ChemistryLibrary {
                 if entries.insert(key.clone(), record).is_some() {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::InvalidData,
-                        format!("duplicate chemistry key in persisted store: {}", key.signature()),
+                        format!(
+                            "duplicate chemistry key in persisted store: {}",
+                            key.signature()
+                        ),
                     ));
                 }
             }
@@ -238,10 +243,16 @@ impl ChemistryLibrary {
                 entries: entries.len() as u64,
             }
         };
-        if !matches!(manifest.schema_version, 2 | CHEMISTRY_LIBRARY_SCHEMA_VERSION) {
+        if !matches!(
+            manifest.schema_version,
+            2 | CHEMISTRY_LIBRARY_SCHEMA_VERSION
+        ) {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("unsupported chemistry library schema version: {}", manifest.schema_version),
+                format!(
+                    "unsupported chemistry library schema version: {}",
+                    manifest.schema_version
+                ),
             ));
         }
         if manifest.entries != entries.len() as u64 {
@@ -493,13 +504,15 @@ mod tests {
         write_test_store(&root, 2, &[test_record_json(2, "legacy-edge")], 1);
         let library = ChemistryLibrary::open(&root).unwrap();
         assert_eq!(library.len(), 1);
-        assert!(library.get(&ChemistryKey {
-            schema_version: 2,
-            material_a: "Carbon".into(),
-            material_b: "Hydrogen".into(),
-            interface_class: "rigid_edge".into(),
-            interface_signature: "legacy-edge".into(),
-        }).is_some());
+        assert!(library
+            .get(&ChemistryKey {
+                schema_version: 2,
+                material_a: "Carbon".into(),
+                material_b: "Hydrogen".into(),
+                interface_class: "rigid_edge".into(),
+                interface_signature: "legacy-edge".into(),
+            })
+            .is_some());
         let _ = fs::remove_dir_all(root);
     }
 
@@ -507,7 +520,9 @@ mod tests {
     fn rejects_malformed_final_nonempty_record() {
         let root = test_root("truncated-tail");
         write_test_store(&root, 3, &["{".into()], 1);
-        let error = ChemistryLibrary::open(&root).err().expect("corrupt store must be rejected");
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("corrupt store must be rejected");
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
         let _ = fs::remove_dir_all(root);
     }
@@ -517,7 +532,9 @@ mod tests {
         let root = test_root("duplicate");
         let row = test_record_json(3, "same-edge");
         write_test_store(&root, 3, &[row.clone(), row], 1);
-        let error = ChemistryLibrary::open(&root).err().expect("corrupt store must be rejected");
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("corrupt store must be rejected");
         assert!(error.to_string().contains("duplicate chemistry key"));
         let _ = fs::remove_dir_all(root);
     }
@@ -526,7 +543,9 @@ mod tests {
     fn rejects_manifest_count_mismatch() {
         let root = test_root("count-mismatch");
         write_test_store(&root, 3, &[test_record_json(3, "edge")], 2);
-        let error = ChemistryLibrary::open(&root).err().expect("corrupt store must be rejected");
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("corrupt store must be rejected");
         assert!(error.to_string().contains("entry count mismatch"));
         let _ = fs::remove_dir_all(root);
     }
@@ -548,7 +567,9 @@ mod tests {
         // JSON does not represent NaN, so serialize a parseable record with a negative value.
         let invalid = invalid.replace("null", "-1.0");
         write_test_store(&root, 3, &[invalid], 1);
-        let error = ChemistryLibrary::open(&root).err().expect("corrupt store must be rejected");
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("corrupt store must be rejected");
         assert!(error.to_string().contains("invalid chemistry record"));
         let _ = fs::remove_dir_all(root);
     }
