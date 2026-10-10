@@ -4033,6 +4033,57 @@ mod bob_lookup_contract_tests {
     use super::*;
 
     #[test]
+    fn fresh_empty_library_opens_and_reopens_without_seeding_geometry() {
+        let catalog = crate::resources::default_catalog();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-empty-open-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+
+        {
+            let library = GeometryLibrary::open(&root, &catalog)
+                .expect("an empty isolated geometry root should open");
+            assert_eq!(library.len(), 0);
+            assert_eq!(library.manifest.entries, 0);
+            assert_eq!(library.formation_storage_version, 3);
+            assert!(library.frontier.records.is_empty());
+            assert_eq!(library.contact_families().count(), 0);
+            assert_eq!(library.fluid_boundary_families().count(), 0);
+            assert_eq!(library.rigid_contact_families().count(), 0);
+            assert_eq!(library.rigid_point_contact_families().count(), 0);
+            assert_eq!(library.rigid_vertex_contact_families().count(), 0);
+
+            // Opening initializes schema metadata only; it must not seed or
+            // generate formation/family records as a side effect.
+            assert!(!root.join("formations.jsonl").exists());
+            assert!(!root.join("frontier.json").exists());
+            assert!(!root.join("contact_families.jsonl").exists());
+            assert!(!root.join("fluid_boundary_families.jsonl").exists());
+            assert!(!root.join("rigid_contact_families.jsonl").exists());
+            assert!(!root.join("rigid_point_contact_families.jsonl").exists());
+            assert!(!root.join("rigid_vertex_contact_families.jsonl").exists());
+
+            let storage: serde_json::Value = serde_json::from_slice(
+                &std::fs::read(root.join("storage_manifest.json"))
+                    .expect("open should initialize storage metadata"),
+            )
+            .expect("storage manifest should be valid JSON");
+            assert_eq!(storage["storage_format_version"], 3);
+        }
+
+        let reopened = GeometryLibrary::open(&root, &catalog)
+            .expect("the empty initialized store should reopen");
+        assert_eq!(reopened.len(), 0);
+        assert_eq!(reopened.manifest.entries, 0);
+        assert_eq!(reopened.formation_storage_version, 3);
+        assert!(reopened.frontier.records.is_empty());
+
+        drop(reopened);
+        std::fs::remove_dir_all(root).expect("remove isolated test root");
+    }
+
+    #[test]
     fn periodic_angle_interval_handles_normal_and_wrapped_ranges() {
         let pi = std::f64::consts::PI;
         let tau = std::f64::consts::TAU;
