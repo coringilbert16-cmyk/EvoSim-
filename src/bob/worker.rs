@@ -14,16 +14,100 @@ const IDLE_SLEEP: Duration = Duration::from_secs(1);
 const MAX_LIBRARY_CONSTITUENTS: usize = 20;
 
 pub fn run() {
+    run_continuously_with_limit(MAX_LIBRARY_CONSTITUENTS);
+}
+
+/// Run continuously while limiting generated formations to max_constituents.
+/// Existing worker invocations preserve the historical 20-constituent default.
+pub fn run_continuously_with_limit(max_constituents: usize) {
+    assert!(max_constituents > 0, "maximum constituents must be positive");
     let catalog = default_catalog();
     let mut library = open_default_library().expect("geometry library must open");
     seed_base_catalogue(&mut library, &catalog).expect("geometry library seed must succeed");
 
     loop {
-        match process_one_frontier(&mut library, &catalog).expect("geometry worker failed") {
+        match process_one_frontier(&mut library, &catalog, max_constituents)
+            .expect("geometry worker failed")
+        {
             Some(metrics) => eprintln!("{metrics}"),
             None => thread::sleep(IDLE_SLEEP),
         }
     }
+}
+
+/// Exhaust every durable frontier at or below max_constituents, then reopen
+/// the store and verify that generation stayed within the requested bound.
+/// Unlike run_passes, this terminates only when no eligible frontier remains.
+pub fn run_to_completion(max_constituents: usize) -> std::io::Result<()> {
+    if max_constituents == 0 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "maximum constituents must be positive",
+        ));
+    }
+
+    let catalog = default_catalog();
+    let mut library = open_default_library()?;
+    let seeded = seed_base_catalogue(&mut library, &catalog)?;
+    let started = Instant::now();
+    let mut processed = 0usize;
+    let mut generated = 0usize;
+    let mut added = 0usize;
+    let mut edge_added = 0usize;
+    let mut point_added = 0usize;
+    let mut vertex_added = 0usize;
+    let mut water_added = 0usize;
+    let mut fluid_boundary_added = 0usize;
+
+    while let Some(metrics) = process_one_frontier(&mut library, &catalog, max_constituents)? {
+        eprintln!("{metrics}");
+        processed += 1;
+        generated += metrics.generated_candidates;
+        added += metrics.added_formations;
+        edge_added += metrics.rigid_edge_families_added;
+        point_added += metrics.rigid_point_families_added;
+        vertex_added += metrics.rigid_vertex_families_added;
+        water_added += metrics.water_families_added;
+        fluid_boundary_added += metrics.fluid_boundary_families_added;
+    }
+
+    let formations_before_reopen = library.len();
+    drop(library);
+
+    let reopened = open_default_library()?;
+    let oversized = reopened
+        .formations()
+        .filter(|formation| formation.constituents.len() > max_constituents)
+        .count();
+    let unfinished = reopened
+        .frontier()
+        .records
+        .values()
+        .filter(|record| {
+            !matches!(
+                record.state,
+                GeometryFrontierState::Exhausted | GeometryFrontierState::ContinuousFamilyPending
+            )
+        })
+        .count();
+
+    eprintln!(
+        "geometry worker complete: max_constituents={max_constituents} seeded={seeded} passes={processed} generated_candidates={generated} added_formations={added} not_added={} edge_families_added={edge_added} point_families_added={point_added} vertex_families_added={vertex_added} water_families_added={water_added} fluid_boundary_families_added={fluid_boundary_added} formations_before_reopen={formations_before_reopen} formations_after_reopen={} oversized_formations={oversized} unfinished_frontiers={unfinished} elapsed_ms={}",
+        generated.saturating_sub(added),
+        reopened.len(),
+        started.elapsed().as_millis(),
+    );
+
+    if oversized > 0 || unfinished > 0 || reopened.len() != formations_before_reopen {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!(
+                "bounded generation verification failed: oversized={oversized}, unfinished={unfinished}, before_reopen={formations_before_reopen}, after_reopen={}",
+                reopened.len()
+            ),
+        ));
+    }
+    Ok(())
 }
 
 /// Process exactly one durable frontier pass and exit.
@@ -35,7 +119,7 @@ pub fn run_once() -> std::io::Result<bool> {
     let catalog = default_catalog();
     let mut library = open_default_library()?;
     let seeded = seed_base_catalogue(&mut library, &catalog)?;
-    let metrics = process_one_frontier(&mut library, &catalog)?;
+    let metrics = process_one_frontier(&mut library, &catalog, MAX_LIBRARY_CONSTITUENTS)?;
     if let Some(metrics) = metrics {
         eprintln!("geometry worker once: seeded={seeded}; {metrics}");
         Ok(true)
@@ -128,6 +212,7 @@ impl std::fmt::Display for WorkerPassMetrics {
 fn process_one_frontier(
     library: &mut GeometryLibrary,
     catalog: &[BaseResource],
+    max_constituents: usize,
 ) -> std::io::Result<Option<WorkerPassMetrics>> {
     // The library is already held in a BTreeMap keyed by canonical
     // signature. Do not clone and sort the entire catalogue on every worker
@@ -222,7 +307,7 @@ fn process_one_frontier(
             metrics.rigid_vertex_families_added +=
                 library.insert_rigid_vertex_contact_families(vertex_families)?;
 
-            if formation.constituents.len() < MAX_LIBRARY_CONSTITUENTS {
+            if formation.constituents.len() < max_constituents {
                 let candidates = expand_formation_candidates(&formation, resource, catalog);
                 metrics.generated_candidates += candidates.len();
                 metrics.added_formations += library.insert_many(candidates, catalog)?;
