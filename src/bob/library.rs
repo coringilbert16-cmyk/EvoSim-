@@ -700,6 +700,18 @@ impl GeometryContactFamily {
     }
 }
 
+/// A geometry-library proposal for placing one rigid candidate edge against an
+/// already-realized anchor edge. This is advisory: callers must still run the
+/// live collision, contact, bond, and energy checks before committing it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RigidEdgePlacementSuggestion {
+    pub candidate_resource: String,
+    pub candidate_edge: usize,
+    pub anchor_edge: usize,
+    pub anchor_contact_parameter: f64,
+    pub placement: Placement,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct GeometryRigidContactFamily {
     pub schema_version: u32,
@@ -1792,6 +1804,107 @@ impl GeometryLibrary {
     ) -> Option<String> {
         let projections = self.indexed_interface_projections(interface);
         (projections.len() == 1).then(|| projections.into_keys().next().unwrap())
+    }
+
+    /// Propose candidate placements from persisted rigid-edge families.
+    ///
+    /// The family contributes a candidate edge, an anchor-relative orientation,
+    /// and a normalized contact interval. The interval midpoint is used as a
+    /// deterministic seed point; callers may explore other points and must
+    /// validate every returned pose against the live physical structure.
+    pub fn suggest_rigid_edge_placements(
+        &self,
+        anchor_material: &str,
+        anchor_placement: Placement,
+        candidate_resource: &BaseResource,
+        catalog: &[BaseResource],
+    ) -> Vec<RigidEdgePlacementSuggestion> {
+        if candidate_resource.physical_state == crate::resources::PhysicalState::Fluid {
+            return Vec::new();
+        }
+        let Some(anchor_resource) = catalog.iter().find(|r| r.name == anchor_material) else {
+            return Vec::new();
+        };
+        let anchor_segments = rigid_boundary_segments(&anchor_resource.shape.form);
+        let candidate_segments = rigid_boundary_segments(&candidate_resource.shape.form);
+        let mut suggestions = BTreeMap::<String, RigidEdgePlacementSuggestion>::new();
+
+        for family in self.rigid_contact_families.values() {
+            if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
+                || family.candidate_resource != candidate_resource.name
+            {
+                continue;
+            }
+            let Some(formation) = self.entries.get(&family.formation_signature) else {
+                continue;
+            };
+            let Some(stored_anchor) = formation.constituents.get(family.anchor_constituent) else {
+                continue;
+            };
+            if stored_anchor.resource != anchor_material {
+                continue;
+            }
+            let Some(&(a0, a1)) = anchor_segments.get(family.anchor_edge) else {
+                continue;
+            };
+            let Some(&(c0, c1)) = candidate_segments.get(family.candidate_edge) else {
+                continue;
+            };
+            let anchor_length = (a1.0 - a0.0).hypot(a1.1 - a0.1);
+            let candidate_length = (c1.0 - c0.0).hypot(c1.1 - c0.1);
+            if anchor_length <= QUANTUM || candidate_length <= QUANTUM {
+                continue;
+            }
+            let start = family.anchor_parameter_start.clamp(0.0, 1.0);
+            let end = family.anchor_parameter_end.clamp(0.0, 1.0);
+            if start > end {
+                continue;
+            }
+            let parameter = (start + end) * 0.5;
+            let anchor_local = (
+                a0.0 + (a1.0 - a0.0) * parameter,
+                a0.1 + (a1.1 - a0.1) * parameter,
+            );
+            let anchor_world = world_point(anchor_local, anchor_placement);
+            let anchor_edge_angle = (a1.1 - a0.1).atan2(a1.0 - a0.0)
+                + anchor_placement.rotation_radians;
+            let relative_rotation = normalize_angle(
+                family.candidate_rotation_radians - stored_anchor.placement.rotation_radians,
+            );
+            let rotation = normalize_angle(anchor_placement.rotation_radians + relative_rotation);
+            let candidate_edge_angle = (c1.1 - c0.1).atan2(c1.0 - c0.0) + rotation;
+            if normalize_angle(candidate_edge_angle - anchor_edge_angle).abs() > 1e-7
+                && normalize_angle(candidate_edge_angle - anchor_edge_angle - std::f64::consts::PI)
+                    .abs()
+                    > 1e-7
+            {
+                continue;
+            }
+            let candidate_local_midpoint = ((c0.0 + c1.0) * 0.5, (c0.1 + c1.1) * 0.5);
+            let candidate_rotated_midpoint = rotated_point(candidate_local_midpoint, rotation);
+            let placement = Placement {
+                x: anchor_world.0 - candidate_rotated_midpoint.0,
+                y: anchor_world.1 - candidate_rotated_midpoint.1,
+                rotation_radians: rotation,
+            };
+            let suggestion = RigidEdgePlacementSuggestion {
+                candidate_resource: candidate_resource.name.clone(),
+                candidate_edge: family.candidate_edge,
+                anchor_edge: family.anchor_edge,
+                anchor_contact_parameter: parameter,
+                placement,
+            };
+            let key = format!(
+                "{}|{}|{}|{}|{}",
+                suggestion.candidate_edge,
+                suggestion.anchor_edge,
+                quantize(suggestion.anchor_contact_parameter),
+                quantize(suggestion.placement.x),
+                quantize(suggestion.placement.y)
+            ) + &format!("|{}", quantize(suggestion.placement.rotation_radians));
+            suggestions.entry(key).or_insert(suggestion);
+        }
+        suggestions.into_values().collect()
     }
 
     pub fn resolve_persistent_interface(
