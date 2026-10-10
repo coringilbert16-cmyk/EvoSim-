@@ -208,7 +208,7 @@ The geometry README previously contained worker smoke-test and generation comman
 
 ### Next implementation order
 
-1. Add/verify a non-mutating empty-library open contract using an isolated temporary root; do not invoke worker seeding or frontier processing in this test.
+1. Add/verify a non-generative empty-library open contract using an isolated temporary root; do not invoke worker seeding or frontier processing in this test.
 2. Complete the Bob query result contract: it must return the actual candidate/family information needed to propose a placement, not only classify an interface or return a projection key. Validate real runtime contact descriptors against stored family intervals and report unique, ambiguous, and unresolved results, including fluid boundaries.
 3. Integrate Bob as advisory geometry knowledge into the milestone-driven constructor. Whole-structure collision/nonpenetration, exact contact, chemical interaction, bond formation, energy accounting, and genome-cavity qualification remain authoritative runtime checks.
 4. Diagnose `physical bond transaction 19-3 failed` at the COMBINE transaction boundary. Current caller reduces all internal rejection causes to a generic `None`; expose a structured/internal rejection reason for diagnostics without weakening physical constraints or changing success semantics.
