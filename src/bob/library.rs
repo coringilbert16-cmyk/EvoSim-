@@ -325,7 +325,7 @@ pub fn resolve_live_contact_candidate(
                 edge_material: edge.material,
                 edge: edge.edge,
                 edge_parameter: quantize(edge.parameter),
-                candidate_rotation: Some(candidate_rotation),
+                candidate_rotation,
             })
         }
         _ => None,
@@ -837,12 +837,12 @@ impl GeometryFormation {
         self.constituents.len()
     }
 
-    pub fn canonicalized(mut self, catalog: &[BaseResource]) -> Option<Self> {
+    pub fn canonicalized(self, catalog: &[BaseResource]) -> Option<Self> {
         if !validate_formation(&self, catalog) {
             return None;
         }
 
-        let candidates = canonical_pose_candidates(&self, catalog);
+        let candidates = canonical_pose_candidates(&self);
         let mut best: Option<Self> = None;
         for mut candidate in candidates {
             let mut indexed: Vec<(usize, GeometryConstituent)> =
@@ -1420,7 +1420,7 @@ impl GeometryLibrary {
         let rigid_vertex_contact_family_path = root.join("rigid_vertex_contact_families.jsonl");
 
         let formation_storage_version = storage_format_version(&root, &data_path)?;
-        let mut entries = if formation_storage_version == 3 {
+        let entries = if formation_storage_version == 3 {
             load_compositional_formations(&data_path, catalog)?
         } else {
             let mut entries = BTreeMap::new();
@@ -1846,7 +1846,6 @@ impl GeometryLibrary {
                                 let (
                                     candidate_material,
                                     candidate_edge,
-                                    candidate_parameter,
                                     candidate_rotation,
                                     anchor_edge,
                                     anchor_parameter,
@@ -1854,7 +1853,6 @@ impl GeometryLibrary {
                                     (
                                         a_material,
                                         *a_edge,
-                                        *a_parameter as f64 / 1e9,
                                         *a_rotation as f64 / 1e9,
                                         *b_edge,
                                         *b_parameter as f64 / 1e9,
@@ -1863,7 +1861,6 @@ impl GeometryLibrary {
                                     (
                                         b_material,
                                         *b_edge,
-                                        *b_parameter as f64 / 1e9,
                                         *b_rotation as f64 / 1e9,
                                         *a_edge,
                                         *a_parameter as f64 / 1e9,
@@ -2403,10 +2400,7 @@ impl GeometryLibrary {
     }
 }
 
-fn canonical_pose_candidates(
-    formation: &GeometryFormation,
-    catalog: &[BaseResource],
-) -> Vec<GeometryFormation> {
+fn canonical_pose_candidates(formation: &GeometryFormation) -> Vec<GeometryFormation> {
     let mut candidates = Vec::with_capacity(formation.constituents.len().max(1));
     for anchor_index in 0..formation.constituents.len() {
         let anchor = &formation.constituents[anchor_index];
