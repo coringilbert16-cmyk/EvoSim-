@@ -507,7 +507,7 @@ mod tests {
     fn rejects_malformed_final_nonempty_record() {
         let root = test_root("truncated-tail");
         write_test_store(&root, 3, &["{".into()], 1);
-        let error = ChemistryLibrary::open(&root).unwrap_err();
+        let error = ChemistryLibrary::open(&root).err().expect("corrupt store must be rejected");
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
         let _ = fs::remove_dir_all(root);
     }
@@ -517,7 +517,7 @@ mod tests {
         let root = test_root("duplicate");
         let row = test_record_json(3, "same-edge");
         write_test_store(&root, 3, &[row.clone(), row], 1);
-        let error = ChemistryLibrary::open(&root).unwrap_err();
+        let error = ChemistryLibrary::open(&root).err().expect("corrupt store must be rejected");
         assert!(error.to_string().contains("duplicate chemistry key"));
         let _ = fs::remove_dir_all(root);
     }
@@ -526,7 +526,7 @@ mod tests {
     fn rejects_manifest_count_mismatch() {
         let root = test_root("count-mismatch");
         write_test_store(&root, 3, &[test_record_json(3, "edge")], 2);
-        let error = ChemistryLibrary::open(&root).unwrap_err();
+        let error = ChemistryLibrary::open(&root).err().expect("corrupt store must be rejected");
         assert!(error.to_string().contains("entry count mismatch"));
         let _ = fs::remove_dir_all(root);
     }
@@ -548,7 +548,7 @@ mod tests {
         // JSON does not represent NaN, so serialize a parseable record with a negative value.
         let invalid = invalid.replace("null", "-1.0");
         write_test_store(&root, 3, &[invalid], 1);
-        let error = ChemistryLibrary::open(&root).unwrap_err();
+        let error = ChemistryLibrary::open(&root).err().expect("corrupt store must be rejected");
         assert!(error.to_string().contains("invalid chemistry record"));
         let _ = fs::remove_dir_all(root);
     }
