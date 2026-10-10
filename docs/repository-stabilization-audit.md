@@ -266,11 +266,11 @@ After this correction, the immediate remaining library integration task is a can
 
 ### Implemented API
 
-`GeometryLibrary::suggest_rigid_edge_placements` now turns persisted schema-v2 rigid-edge families into concrete, advisory `Placement` proposals for a candidate rigid material against a live anchor material/pose. It uses the persisted contact index rather than scanning every family, rebases the family orientation relative to the stored anchor pose onto the current anchor rotation, and aligns candidate-edge midpoint to the midpoint of the family interval on the anchor edge. Equivalent proposals are deduplicated by edge IDs, contact parameter, position, and rotation. Fluids are rejected by this rigid-edge path.
+`GeometryLibrary::suggest_rigid_edge_placements` now turns schema-v2 rigid-edge families into concrete, advisory `Placement` proposals for a candidate rigid material against a live anchor material/pose. When matching persisted families exist, it uses the contact index rather than scanning every family and rebases family orientation relative to the stored anchor pose onto the current anchor rotation. When no matching family exists—including the intentionally empty catalogue state—it derives a single-anchor family transiently on demand and does not persist the unverified result. Both paths align candidate-edge midpoint to the midpoint of the family interval on the anchor edge. Equivalent proposals are deduplicated by edge IDs, contact parameter, position, and rotation. Fluids are rejected by this rigid-edge path.
 
 Each result identifies candidate material/edge, anchor edge, contact parameter, and proposed pose. The API is explicitly advisory: it does not claim the pose is collision-free, bondable, energetically affordable, or valid for the current whole-structure cavity. The caller must apply the live nonpenetration/contact checks and physical bond transaction before committing it. The family interval comes from the source formation's exposed edge; it is a search hint, not proof that the corresponding point is exposed in the current live structure.
 
-Regression test `rigid_edge_suggestions_rebase_family_poses_to_live_anchor` builds families from a single Carbon formation, rebases them onto a translated/rotated live anchor, and checks that candidate-edge midpoint and anchor contact point coincide. It intentionally tests suggestion geometry only, not physical acceptance. The test fixture populates the same edge index used by the production API.
+Regression test `empty_library_proposes_rigid_edge_placements_without_persisting_families` opens an empty store, confirms no formation/family rows were seeded, then checks that on-demand suggestions rebase onto a translated/rotated live anchor and candidate-edge midpoint coincides with the anchor contact point. It intentionally tests suggestion geometry only, not physical acceptance.
 
 ### Current limits / next integration gate
 
@@ -280,3 +280,8 @@ Regression test `rigid_edge_suggestions_rebase_family_poses_to_live_anchor` buil
 - Then run the actual blueprint-free constructor as the end-to-end acceptance test. Do not regenerate the catalogue merely to satisfy lookup; measure real family hit/miss coverage from constructor attempts first.
 
 Latest source commits for this increment: `b401bb13` (suggestion API), `5d0ffb0c` (initial geometry test), `e48aceee` (stronger geometric assertions), `0d47da14` (formatting), `cedf37ec` (indexed family lookup), and `3003bf41` (indexed test fixture). CI is being rerun on the latest commit; no catalogue generation was performed.
+
+
+### Empty-library on-demand fallback — 2026-10-10
+
+The suggestion API now has a non-generative-store bootstrap path: if no matching persisted families are found, it creates a one-constituent anchor formation in memory, derives only the relevant rigid-edge families for the requested candidate material, and returns advisory placements. It does not write those families to disk, seed the catalogue, or start the worker. This makes an empty catalogue usable for local constructor proposals while preserving the policy that only physically validated, measured knowledge should later be persisted. The regression test has been renamed to `empty_library_proposes_rigid_edge_placements_without_persisting_families`; its CI run is pending.
