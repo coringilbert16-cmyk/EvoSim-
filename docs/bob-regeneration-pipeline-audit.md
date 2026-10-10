@@ -1,6 +1,6 @@
 # Bob clean-regeneration pipeline audit
 
-Status: active audit; first low-risk worker optimizations are committed on `bob-automatic-compact-storage`. Performance has not yet been benchmarked locally, and no claim is made that a full catalogue rebuild has completed.
+Status: active audit; first low-risk worker optimizations are committed on `bob-automatic-compact-storage`. An initial clean-root Windows benchmark has now been measured and recorded below. A full catalogue rebuild has not completed.
 
 ## Direction
 
@@ -36,6 +36,36 @@ The worker now computes contact families once and derives fluid-boundary records
 Previously the worker wrote the whole `frontier.json` twice for each resource it processed: once for `InProgress` and again for `Exhausted`. A formation pass processes the resource catalog together, so these repeated whole-file writes were unnecessary overhead.
 
 The worker now accumulates completed resource states and persists them with one frontier write at the end of the formation pass. If interrupted before that checkpoint, the old unfinished states remain and generation is safely retried through the library's canonical deduplication and idempotent insertion paths. This is a durability design change, not a measured performance claim yet.
+
+## Initial clean-root Windows benchmark
+
+Measurements supplied from a Windows release build on an isolated temporary library root:
+
+| Run | Passes | Total formations at end | Worker-reported elapsed |
+|---|---:|---:|---:|
+| First `--geometry-worker-once` | 1 | 70 | 144 ms |
+| Second `--geometry-worker-once` | 1 | 144 | 125 ms |
+| `--geometry-worker-passes 25` | 25 | 2,101 | 5.047 s |
+| Follow-up `--geometry-worker-passes 100` | 100 | 8,409 | 20.039 s |
+
+For the 100-pass run, PowerShell measured 20.206 seconds wall time. The data root grew from 5,730,203 bytes to 27,161,049 bytes: 21,430,846 additional bytes while the total formation count increased by 6,308. This is approximately 63 newly persisted formations and 214 KB of additional stored data per pass on average for this interval.
+
+At the end of the run, file sizes were:
+
+| File | Bytes |
+|---|---:|
+| `rigid_contact_families.jsonl` | 14,796,068 |
+| `rigid_vertex_contact_families.jsonl` | 8,800,481 |
+| `formations.jsonl` | 2,834,915 |
+| `fluid_boundary_families.jsonl` | 280,618 |
+| `contact_families.jsonl` | 234,203 |
+| `frontier.json` | 213,915 |
+| `manifest.json` | 672 |
+| `storage_manifest.json` | 177 |
+
+The rigid edge and vertex family files account for approximately 87% of total bytes. This is the clearest next optimization target to investigate: measure how many family records are newly inserted per pass versus merely generated, then determine whether repeated generation, record verbosity, or legitimately distinct contact manifolds dominate. Do not remove valid families or reduce geometric coverage just to shrink output.
+
+All 100 passes reported `size=2`; therefore this benchmark does not establish the cost or completion behavior at larger constituent counts. It shows successful persistence and growth, not a completed or bounded-time full rebuild. The release build emitted 35 warnings, which should be tracked separately from the successful build and worker execution.
 
 ## Next measurements
 
