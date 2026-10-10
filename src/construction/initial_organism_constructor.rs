@@ -669,11 +669,13 @@ mod tests {
         );
         let suggestion_poses = raw_suggestions
             .iter()
-            .map(|suggestion| (
-                suggestion.placement.x,
-                suggestion.placement.y,
-                suggestion.placement.rotation_radians,
-            ))
+            .map(|suggestion| {
+                (
+                    suggestion.placement.x,
+                    suggestion.placement.y,
+                    suggestion.placement.rotation_radians,
+                )
+            })
             .collect::<Vec<_>>();
         let proposed =
             bob_validated_neighbor_placement(&structure, 0, carbon, intended, &library, &catalog)
