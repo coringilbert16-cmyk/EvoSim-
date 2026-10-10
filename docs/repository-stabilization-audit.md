@@ -290,3 +290,22 @@ The suggestion API now has a non-generative-store bootstrap path: if no matching
 ### Verification checkpoint — 2026-10-10 15:22 UTC
 
 On source commit `7bfb6f21`, CI passed formatting, source-size, COMBINE architecture, Bob compact-storage tests, and empty-store open/reopen checks. The new `empty_library_proposes_rigid_edge_placements_without_persisting_families` test passed in the full run. Full Rust suite remains at **266 passed, 75 failed, 1 ignored**; failures are the existing broad simulation/physics/reproduction backlog, not the new Bob empty-library test. Strict Clippy also remains red on existing dead/staged APIs and lint findings; do not blanket-suppress those warnings. The latest follow-up extends the same regression to unequal Phosphorus edge lengths and is undergoing CI. No generated geometry data was written.
+
+
+## Latest verification and constructor blocker — 2026-10-10 15:23 UTC
+
+The GitHub Actions run for source commit `b2443356107fb39a201edf772e3045b77ae8dc82` has now completed. Formatting, source-size enforcement, COMBINE architecture checks, Bob compact-storage tests, and the non-generative empty-store open/reopen check all pass. The unequal-edge Phosphorus regression is included in the completed test run.
+
+- Full Rust suite: **266 passed, 75 failed, 1 ignored**.
+- Strict Clippy: failed; includes ordinary fixable lints in the constructor and other modules, plus unfulfilled `#[expect(dead_code)]` annotations where the API has become used. Do not hide this with blanket allowances.
+- The blueprint-free constructor and every simulation test that initializes the default organism are blocked by the same error: `physical bond transaction 19-3 failed`. The failure is raised after candidate evaluation, inside `form_selected_bond`; the current wrapper reduces the transaction's internal rejection to `None`, so the exact cause is not yet observable from the caller.
+- Bob's new rigid-edge suggestion API remains advisory and is not connected to constructor growth. The fixed Carbon scaffold remains active; the constructor has not been replaced.
+
+### Next action — diagnose before replacing
+
+1. Trace the failed 19–3 COMBINE transaction from candidate evaluation through endpoint revalidation, investment/ledger checks, and bond commit. Add a structured internal rejection reason or a focused diagnostic test at the transaction boundary; do not relax physical constraints or alter success semantics just to make the test pass.
+2. Once the failing transaction is understood, make the smallest correction and rerun the constructor-specific tests first. The current constructor test is the end-to-end acceptance gate; a successful Bob geometry-only test is not a substitute.
+3. Then integrate Bob suggestions as one source of candidate poses in an incremental growth step, with whole-structure nonpenetration, live contact, bond transaction, energy, acquisition, and genome-cavity checks remaining authoritative. Do not swap in a greedy placement loop before those gates are callable.
+4. After the constructor succeeds, use the actual constructor bot to measure query hit/miss and candidate rejection distributions. Keep the catalogue empty until those measurements justify a specific, validated persistence contract.
+
+No geometry worker was run and no generated data was written. This checkpoint supersedes the prior note that the Phosphorus regression was still running; the CI run has completed and the regression did not add a new failure.
