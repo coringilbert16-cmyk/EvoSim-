@@ -21,8 +21,18 @@ fn reaction_key(bond: &Bond, interface_signature: &str) -> String {
     )
 }
 
-fn material_identity(unit: &crate::structure::StructuralUnit) -> String {
-    let mut parts = unit.material.parts.clone();
+fn material_identity(material: &crate::resources::Material) -> String {
+    // Preserve the established base-resource keys used by the checked-in
+    // chemistry cache. A one-part, one-unit material is still identified by
+    // its resource name; amounts and composition remain explicit for mixtures
+    // and non-unit quantities.
+    if material.parts.len() == 1
+        && crate::chemistry_library::quantized_amount(material.parts[0].1) == 1_000_000_000
+    {
+        return material.parts[0].0.clone();
+    }
+
+    let mut parts = material.parts.clone();
     parts.sort_by(|a, b| {
         a.0.cmp(&b.0)
             .then_with(|| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
@@ -123,8 +133,8 @@ pub(crate) fn accumulate(
             .first()
             .map(|part| part.0.as_str())
             .unwrap_or("unknown");
-        let material_a = material_identity(&organism.structure.units[unit_a]);
-        let material_b = material_identity(&organism.structure.units[unit_b]);
+        let material_a = material_identity(&organism.structure.units[unit_a].material);
+        let material_b = material_identity(&organism.structure.units[unit_b].material);
         let Some(interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
             geometry_material_a,
             &organism.structure.units[unit_a],
@@ -235,4 +245,32 @@ pub(crate) fn resolve(
     // already removed when the event crossed the barrier, and the next
     // structure revision will invalidate any remaining interface state.
     success
+}
+
+
+#[cfg(test)]
+mod material_identity_tests {
+    use super::*;
+    use crate::resources::Material;
+
+    #[test]
+    fn one_unit_base_material_keeps_legacy_resource_name() {
+        assert_eq!(material_identity(&Material::free_base("Carbon", 1.0)), "Carbon");
+    }
+
+    #[test]
+    fn composite_and_non_unit_material_identities_keep_amounts() {
+        assert_eq!(
+            material_identity(&Material::free_base("Carbon", 2.0)),
+            "Carbon@2000000000"
+        );
+        let mixed = Material {
+            parts: vec![("Hydrogen".into(), 1.0), ("Carbon".into(), 1.0)],
+            internal_bonds: Vec::new(),
+        };
+        assert_eq!(
+            material_identity(&mixed),
+            "Carbon@1000000000+Hydrogen@1000000000"
+        );
+    }
 }
