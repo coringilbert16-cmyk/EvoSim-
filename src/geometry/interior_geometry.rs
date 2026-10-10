@@ -1,7 +1,7 @@
 //! General realized interior topology derived from the physical boundary.
 use crate::resources::{BaseResource, Form};
 use crate::structure::{OrganismStructure, Placement};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::f64::consts::TAU;
 
 const EPS: f64 = 1e-8;
@@ -207,6 +207,10 @@ pub fn find_enclosed_regions(
     let mut point_index = HashMap::new();
     let mut edges = Vec::new();
     let mut edge_units = Vec::new();
+    // Adjacent polygons contribute the same shared edge in opposite directions.
+    // Keep one undirected edge (and its directed pair) so the planar graph does
+    // not contain duplicate parallel edges that can swallow face traversal.
+    let mut undirected_edges = HashSet::new();
     for (unit, polygon) in &polygons {
         for i in 0..polygon.len() {
             let a_point = polygon[i];
@@ -239,7 +243,7 @@ pub fn find_enclosed_regions(
             for pair in split_points.windows(2) {
                 let a = intern(pair[0], &mut points, &mut point_index);
                 let b = intern(pair[1], &mut points, &mut point_index);
-                if a != b {
+                if a != b && undirected_edges.insert((a.min(b), a.max(b))) {
                     edges.push(Edge { from: a, to: b });
                     edge_units.push(*unit);
                     edges.push(Edge { from: b, to: a });
@@ -251,7 +255,7 @@ pub fn find_enclosed_regions(
     for (unit, (a_point, b_point)) in &line_segments {
         let a = intern(*a_point, &mut points, &mut point_index);
         let b = intern(*b_point, &mut points, &mut point_index);
-        if a != b {
+        if a != b && undirected_edges.insert((a.min(b), a.max(b))) {
             edges.push(Edge { from: a, to: b });
             edge_units.push(*unit);
             edges.push(Edge { from: b, to: a });
