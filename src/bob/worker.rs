@@ -85,10 +85,15 @@ struct WorkerPassMetrics {
     generated_candidates: usize,
     added_formations: usize,
     rigid_edge_families: usize,
+    rigid_edge_families_added: usize,
     rigid_point_families: usize,
+    rigid_point_families_added: usize,
     rigid_vertex_families: usize,
+    rigid_vertex_families_added: usize,
     water_families: usize,
+    water_families_added: usize,
     fluid_boundary_families: usize,
+    fluid_boundary_families_added: usize,
     elapsed: Duration,
     total_formations: usize,
     expansion_limit_reached: bool,
@@ -98,16 +103,21 @@ impl std::fmt::Display for WorkerPassMetrics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "geometry worker pass: size={} generated={} added={} not_added={} edge_families={} point_families={} vertex_families={} water_families={} fluid_boundary_families={} total_formations={} expansion_limit_reached={} elapsed_ms={}",
+            "geometry worker pass: size={} generated={} added={} not_added={} edge_families={} edge_added={} point_families={} point_added={} vertex_families={} vertex_added={} water_families={} water_added={} fluid_boundary_families={} fluid_boundary_added={} total_formations={} expansion_limit_reached={} elapsed_ms={}",
             self.formation_size,
             self.generated_candidates,
             self.added_formations,
             self.generated_candidates.saturating_sub(self.added_formations),
             self.rigid_edge_families,
+            self.rigid_edge_families_added,
             self.rigid_point_families,
+            self.rigid_point_families_added,
             self.rigid_vertex_families,
+            self.rigid_vertex_families_added,
             self.water_families,
+            self.water_families_added,
             self.fluid_boundary_families,
+            self.fluid_boundary_families_added,
             self.total_formations,
             self.expansion_limit_reached,
             self.elapsed.as_millis(),
@@ -182,11 +192,12 @@ fn process_one_frontier(
                 // permanently "pending" state.
                 let families = generate_water_contact_families(&formation, resource, catalog);
                 metrics.water_families += families.len();
+                metrics.water_families_added += library.insert_contact_families(families.clone())?;
                 let boundary_states =
                     generate_fluid_boundary_families_from_contact_families(resource, &families);
                 metrics.fluid_boundary_families += boundary_states.len();
-                library.insert_contact_families(families)?;
-                library.insert_fluid_boundary_families(boundary_states)?;
+                metrics.fluid_boundary_families_added +=
+                    library.insert_fluid_boundary_families(boundary_states)?;
                 completed_frontiers.push((
                     formation.signature.clone(),
                     resource.name.clone(),
@@ -197,17 +208,19 @@ fn process_one_frontier(
 
             let families = generate_rigid_contact_families(&formation, resource, catalog);
             metrics.rigid_edge_families += families.len();
-            library.insert_rigid_contact_families(families)?;
+            metrics.rigid_edge_families_added += library.insert_rigid_contact_families(families)?;
 
             let point_families =
                 generate_rigid_point_contact_families(&formation, resource, catalog);
             metrics.rigid_point_families += point_families.len();
-            library.insert_rigid_point_contact_families(point_families)?;
+            metrics.rigid_point_families_added +=
+                library.insert_rigid_point_contact_families(point_families)?;
 
             let vertex_families =
                 generate_rigid_vertex_contact_families(&formation, resource, catalog);
             metrics.rigid_vertex_families += vertex_families.len();
-            library.insert_rigid_vertex_contact_families(vertex_families)?;
+            metrics.rigid_vertex_families_added +=
+                library.insert_rigid_vertex_contact_families(vertex_families)?;
 
             if formation.constituents.len() < MAX_LIBRARY_CONSTITUENTS {
                 let candidates = expand_formation_candidates(&formation, resource, catalog);
