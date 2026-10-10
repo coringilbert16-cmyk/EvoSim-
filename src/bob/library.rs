@@ -4594,9 +4594,19 @@ mod bob_lookup_contract_tests {
             .entries
             .insert(formation.signature.clone(), formation);
         for family in families {
+            let signature = family.signature();
+            library
+                .rigid_contact_index
+                .entry(contact_bucket_hash(
+                    &family.candidate_resource,
+                    family.anchor_edge,
+                    family.candidate_edge,
+                ))
+                .or_default()
+                .push(signature.clone());
             library
                 .rigid_contact_families
-                .insert(family.signature(), family);
+                .insert(signature, family);
         }
 
         let live_anchor = Placement {
