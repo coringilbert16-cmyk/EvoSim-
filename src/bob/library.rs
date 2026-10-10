@@ -4621,12 +4621,8 @@ mod bob_lookup_contract_tests {
             .iter()
             .find(|resource| resource.name == "Phosphorus")
             .unwrap();
-        let phosphorus_suggestions = library.suggest_rigid_edge_placements(
-            "Carbon",
-            live_anchor,
-            phosphorus,
-            &catalog,
-        );
+        let phosphorus_suggestions =
+            library.suggest_rigid_edge_placements("Carbon", live_anchor, phosphorus, &catalog);
         assert!(
             !phosphorus_suggestions.is_empty(),
             "empty-library fallback should support a different rigid shape"
