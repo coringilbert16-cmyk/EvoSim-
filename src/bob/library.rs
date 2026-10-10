@@ -4081,18 +4081,22 @@ mod bob_lookup_contract_tests {
             .push(family_signature);
 
         let query = |candidate_first: bool| {
-            let (a_edge, b_edge) = if candidate_first { (1, 0) } else { (0, 1) };
+            let (a_edge, b_edge, a_parameter, b_parameter) = if candidate_first {
+                (1, 0, 0, 500_000_000)
+            } else {
+                (0, 1, 500_000_000, 0)
+            };
             LiveGeometryInterface {
                 interface_class: "rigid_edge",
                 signature: String::new(),
                 query: Some(LiveGeometryQuery::RigidEdge {
                     a_material: "Carbon".to_string(),
                     a_edge,
-                    a_parameter: 0,
+                    a_parameter,
                     a_rotation: 0,
                     b_material: "Carbon".to_string(),
                     b_edge,
-                    b_parameter: 500_000_000,
+                    b_parameter,
                     b_rotation: 0,
                 }),
             }
