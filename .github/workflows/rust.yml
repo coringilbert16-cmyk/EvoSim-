@@ -1,10 +1,10 @@
 name: Rust
 
-# CI trigger: validate main and the active Bob/library maintenance branch.
+# CI trigger: validate the default branch and the active integration branch.
 
 on:
   push:
-    branches: [main, remove-library-auto-publisher]
+    branches: [main, integration/unified-source-and-catalogue]
   pull_request:
 
 permissions:
