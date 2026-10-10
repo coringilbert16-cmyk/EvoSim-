@@ -573,5 +573,4 @@ mod tests {
         assert!(error.to_string().contains("invalid chemistry record"));
         let _ = fs::remove_dir_all(root);
     }
-
 }
