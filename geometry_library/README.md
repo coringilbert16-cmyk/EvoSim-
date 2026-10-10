@@ -132,3 +132,8 @@ Worker commands are intentionally withheld from the current operational handoff 
 4. Coverage/quality metrics tied to constructor candidate acceptance and viable-organism completion, not just record counts or bytes.
 
 Until those gates pass, do not run the worker to refill the current data directory. Historical benchmark measurements above remain historical evidence only; they are not instructions to regenerate the removed catalogue.
+
+
+### Approved next-sprint generation scope
+
+The user has explicitly approved running Bob to populate the persistent library for formations of up to **2 constituent pieces**. This supersedes the earlier reset note that prohibited refilling the catalogue, but only within this bounded scope. Before running, make the maximum constituent count an explicit worker setting; do not run the existing hardcoded-20 continuous worker unchanged. Exhaust all one- and two-piece frontiers and applicable contact-family generation, persist and reopen-check the results, and verify no three-piece formations were created. Do not commit generated runtime data by default. The run's measured counts, runtime, disk footprint, and frontier completion must be reported. This is not a substitute for validating the initial constructor.
