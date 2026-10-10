@@ -105,7 +105,9 @@ pub fn rigid_endpoint_world_point(
         crate::resources::Form::Line { .. } => {
             transform_line_endpoint(shape, vertex, origin_x, origin_y, rotation_radians)
         }
-        crate::resources::Form::Rectangle { width, .. } if vertex < 2 => {
+        crate::resources::Form::Rectangle { width, height }
+            if vertex < 2 && *height <= *width * 0.1 + 1e-12 =>
+        {
             let x = if vertex == 0 {
                 -*width / 2.0
             } else {
