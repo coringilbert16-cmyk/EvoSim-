@@ -653,7 +653,11 @@ mod tests {
         );
         let instance = crate::physical_material::PhysicalMaterial::realized(
             Material::free_base(carbon.name.clone(), 1.0),
-            vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
             &catalog,
         )
         .expect("candidate material should realize");
