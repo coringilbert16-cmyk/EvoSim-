@@ -251,12 +251,22 @@ pub fn resolve_live_contact_candidate(
         _ => "rigid_surface",
     };
 
-    let candidate_rotation = if local_a.starts_with("line:") || local_a.starts_with("corner:") {
-        unit_a.placement.rotation_radians
+    let candidate_rotation = if class == "rigid_vertex"
+        && local_a.starts_with("corner:")
+        && local_b.starts_with("corner:")
+    {
+        // A corner-corner contact does not identify which endpoint is the
+        // persisted family candidate. Do not attach one side's rotation to
+        // an arbitrary candidate role.
+        None
     } else {
-        unit_b.placement.rotation_radians
+        let rotation = if local_a.starts_with("line:") || local_a.starts_with("corner:") {
+            unit_a.placement.rotation_radians
+        } else {
+            unit_b.placement.rotation_radians
+        };
+        Some(quantize(normalized_angle(rotation)))
     };
-    let candidate_rotation = quantize(normalized_angle(candidate_rotation));
 
     let mut sides = [(material_a, local_a), (material_b, local_b)];
     sides.sort_by(|a, b| a.cmp(b));
@@ -294,7 +304,7 @@ pub fn resolve_live_contact_candidate(
                 edge_material: edge.material,
                 edge: edge.edge,
                 edge_parameter: quantize(edge.parameter),
-                candidate_rotation: Some(candidate_rotation),
+                candidate_rotation,
             })
         }
         "rigid_vertex" => {
