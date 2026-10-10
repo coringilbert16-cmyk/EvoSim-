@@ -1830,11 +1830,8 @@ impl GeometryLibrary {
         let mut indexed_families = BTreeMap::<String, ()>::new();
         for anchor_edge in 0..anchor_segments.len() {
             for candidate_edge in 0..candidate_segments.len() {
-                let key = contact_bucket_hash(
-                    &candidate_resource.name,
-                    anchor_edge,
-                    candidate_edge,
-                );
+                let key =
+                    contact_bucket_hash(&candidate_resource.name, anchor_edge, candidate_edge);
                 if let Some(signatures) = self.rigid_contact_index.get(&key) {
                     for signature in signatures {
                         indexed_families.insert(signature.clone(), ());
@@ -4604,9 +4601,7 @@ mod bob_lookup_contract_tests {
                 ))
                 .or_default()
                 .push(signature.clone());
-            library
-                .rigid_contact_families
-                .insert(signature, family);
+            library.rigid_contact_families.insert(signature, family);
         }
 
         let live_anchor = Placement {
