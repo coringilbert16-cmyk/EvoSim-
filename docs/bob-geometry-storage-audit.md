@@ -1,14 +1,16 @@
 # Bob geometry storage audit and compact-format proposal
 
-Status: storage-specific audit and tooling work in progress. No catalogue has been rewritten and no runtime storage format has been switched. Whole-project Rust compilation is currently blocked by unrelated construction and cross-module errors; that is not a reason to stall independent storage analysis. This document does not authorize constructor integration or deleting/replacing existing data.
+Status: storage integration is implemented on the `bob-automatic-compact-storage` branch and has passed focused CI tests plus a fresh-library persistence smoke test. The full application test suite and Clippy remain red for broader existing issues. No user's existing catalogue has been migrated or rewritten. This document does not authorize constructor integration or deleting/replacing existing data.
 
 ### Validation scope and dataset location
 
-The current `remove-library-auto-publisher` branch does not contain the `geometry_library/data/*.jsonl` snapshot, while `main` does contain the six checked-in JSONL snapshots. Therefore, the read-only audit script cannot run against the snapshot from this branch unless the data directory is supplied separately. The checked-in snapshot is also smaller than the user's full local catalogue and must not be presented as the definitive baseline.
+The compact-storage integration branch does not contain the full `geometry_library/data/*.jsonl` catalogue. The checked-in practice snapshot used by PR #179 is also smaller than the user's full local catalogue and must not be presented as the definitive baseline. The user's local data directory is not accessible from GitHub CI unless explicitly supplied.
 
 Keep the validation gates separate:
 - **Storage-tool validation:** parser correctness, stable-ID collision detection, exact reversible record transformation, counts, references, and logical-key equivalence on an isolated copy or fixture.
-- **Integration validation:** compile and test the Rust reader/writer once the broader codebase has a runnable baseline. Do not make all constructor tests a prerequisite for the independent data audit.
+- **Storage integration validation:** focused Rust persistence tests and an isolated fresh-library create/reopen smoke test.
+- **Whole-application validation:** full test suite and Clippy. Current failures are not proof that the focused storage tests failed, but they do block declaring the repository green.
+- **Local-catalogue validation:** run read-only identity/coverage checks against the user's actual catalogue before any migration. Never infer equivalence from file size or row counts alone.
 
 ## Findings
 
@@ -73,3 +75,27 @@ For compatibility, parse a row as legacy only when it has no `storage_version` a
 - Legacy data remains intact until equivalence checks pass.
 - Before/after size and performance measurements come from the actual local catalogue and are reported separately.
 - Constructor code and constructor-to-Bob integration remain out of scope.
+
+
+## Verified CI status — 2026-10-10
+
+Commit `049c1533cc268c173545a9f424851b8922245c8f` passed the following CI steps:
+- `cargo fmt --all -- --check`
+- source-file size check
+- COMBINE architecture check
+- focused `compact_family_storage_tests`: **4 passed, 0 failed**
+- fresh-library smoke test and reopen/persistence check
+
+The fresh-library smoke test used a temporary directory through `EVOSIM_GEOMETRY_LIBRARY_DIR`, ran `cargo run -- --geometry-worker-once` twice, and verified that the resulting manifest declares storage format 3 and `exact-one-constituent-delta-v1`; it also verified that formation rows contain compact IDs and at least one exact constituent-delta row. This establishes fresh-store persistence in CI, not compatibility or equivalence of the user's existing local catalogue.
+
+The full `cargo test --all-targets` step compiled and ran but reported **248 passed, 75 failed, 1 ignored**. Failures span constructor/placement closure, contact and endpoint geometry, cavity/genome checks, chemistry/COMBINE, movement, reproduction, and simulation integration. Many simulation tests cascade from initial construction failing with `physical bond transaction 19-3 failed`. Do not attribute these failures to compact storage without isolated evidence. They do mean the complete repository is not green.
+
+Clippy also failed on broad lint debt, including unused/staged APIs and lint expectations across Bob, construction, geometry, organism, and chemistry modules. It should be handled as a separately scoped cleanup; do not silence lints wholesale just to make CI green.
+
+### Remaining storage gates
+
+1. Audit the actual local catalogue read-only: count each record type, validate JSONL parsing, identify logical keys and formation references, detect duplicates and unresolved references, and preserve a baseline report. The checked-in practice snapshot is not a substitute.
+2. Prove legacy-vs-compact equivalence against a copy of the real catalogue: counts, resolved references, sorted logical family signatures, lookup results, duplicate behavior, and malformed/truncated-row behavior.
+3. Only after equivalence, write a compact candidate to a separate destination and measure size, load time, peak memory, and lookup latency.
+4. Investigate live-family lookup separately. `classify_live_family_resolution` currently classifies all listed interface classes as `Unresolved`; compact IDs reduce repeated storage but do not solve the semantic mapping from a realized live contact to a unique persisted family.
+5. Keep constructor replacement and phosphorus geometry validation separate from this storage migration.
