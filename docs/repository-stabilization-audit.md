@@ -238,3 +238,24 @@ Regression test: `indexed_edge_lookup_compares_rotation_relative_to_anchor_pose`
 3. Wire those suggestions into the milestone-driven constructor while retaining full-structure collision/nonpenetration, live contact, chemistry, bond transaction, energy accounting, and cavity qualification as physical authority.
 4. Diagnose `physical bond transaction 19-3 failed` through structured internal rejection reasons. Do not use the current fixed scaffold or weaken physical constraints as a substitute for the replacement constructor.
 5. Only after constructor-facing query coverage is measured should a replacement geometry catalogue be generated. No worker was run by the current implementation change, and no generated catalogue was restored.
+
+
+## Follow-up audit — rigid-edge interval semantics still mismatch — 2026-10-10
+
+The anchor-relative rotation correction above is a real fix, but it does not complete the rigid-edge lookup contract. A further source comparison found a second mismatch that must be resolved before Bob can safely return placement suggestions:
+
+- `generate_rigid_contact_families` stores `anchor_parameter_start/end` from the exposed interval and candidate/anchor edge-length ratio. For a parallel candidate edge, the current formula `[exposed.start - ratio, exposed.end]` describes the allowed position of the candidate edge's first endpoint along the anchor edge.
+- The generator currently writes that same interval for both parallel and antiparallel edge orientations, even though the allowed first-endpoint interval changes when the candidate edge direction is reversed.
+- `LiveGeometryQuery::RigidEdge` already contains both the candidate-edge parameter and anchor-edge parameter at the realized contact. However, `indexed_interface_projections` discards the candidate-edge parameter and compares only the anchor contact parameter against the stored candidate-start interval.
+
+Therefore, the resolver can still produce false unresolved/match/ambiguity results around partial overlaps and reversed edge direction. Do not treat the latest rotation regression as proof that rigid-edge lookup is complete, and do not build constructor placement generation on the current interval semantics yet.
+
+### Required correction before placement suggestions
+
+1. Define the persisted interval's exact meaning explicitly: candidate edge start-position interval versus actual contact-point interval. Use one meaning consistently across generation, persistence, lookup, and placement reconstruction.
+2. Make the allowed interval orientation-aware for parallel and antiparallel edge directions.
+3. Use both realized edge parameters when converting a contact point to the candidate edge's start parameter, or redesign the stored family query contract so it can match the persisted manifold exactly.
+4. Add tests for equal and unequal edge lengths, partially exposed anchor edges, parallel/antiparallel alignment, rotated anchors, reversed endpoint order, and unique/ambiguous/unresolved outcomes.
+5. If the persisted family semantics change, increment the geometry-library schema/version contract and fail closed on old external stores. The generated catalogue was deliberately removed from current branch heads, so correct the schema before any approved regeneration rather than silently reinterpreting old records.
+
+No generated data was produced for this audit. This mismatch is now the immediate geometry-library correctness gate before implementing a constructor-facing placement-suggestion API.
