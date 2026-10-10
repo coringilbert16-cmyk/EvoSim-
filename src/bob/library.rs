@@ -4034,6 +4034,80 @@ mod bob_lookup_contract_tests {
     }
 
     #[test]
+    fn indexed_edge_lookup_distinguishes_unique_ambiguous_and_unresolved() {
+        let catalog = default_catalog();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-resolution-matrix-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let formation = GeometryFormation::single("Carbon");
+        let signature = formation.signature.clone();
+        library.entries.insert(signature.clone(), formation);
+
+        let make_family = |start: f64, end: f64| GeometryRigidContactFamily {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            formation_signature: signature.clone(),
+            candidate_resource: "Nitrogen".to_string(),
+            anchor_constituent: 0,
+            anchor_edge: 0,
+            candidate_edge: 0,
+            candidate_rotation_radians: 0.0,
+            anchor_parameter_start: start,
+            anchor_parameter_end: end,
+        };
+        let first = make_family(0.0, 0.75);
+        let first_signature = first.signature();
+        library.rigid_contact_families.insert(first_signature.clone(), first.clone());
+        library.rigid_contact_index
+            .entry(contact_bucket_hash("Nitrogen", 0, 0))
+            .or_default()
+            .push(first_signature);
+
+        let query_at = |parameter: i64| LiveGeometryInterface {
+            interface_class: "rigid_edge",
+            signature: String::new(),
+            query: Some(LiveGeometryQuery::RigidEdge {
+                a_material: "Nitrogen".to_string(),
+                a_edge: 0,
+                a_parameter: 0,
+                a_rotation: 0,
+                b_material: "Carbon".to_string(),
+                b_edge: 0,
+                b_parameter: parameter,
+                b_rotation: 0,
+            }),
+        };
+
+        assert_eq!(
+            library.resolve_persistent_interface(&query_at(500_000_000)),
+            LiveFamilyResolution::Unique,
+            "one matching family should resolve uniquely"
+        );
+        assert_eq!(
+            library.resolve_persistent_interface(&query_at(900_000_000)),
+            LiveFamilyResolution::Unresolved,
+            "a parameter outside every family interval must not match"
+        );
+
+        let second = make_family(0.25, 1.0);
+        let second_signature = second.signature();
+        library.rigid_contact_families.insert(second_signature.clone(), second);
+        library.rigid_contact_index
+            .entry(contact_bucket_hash("Nitrogen", 0, 0))
+            .or_default()
+            .push(second_signature);
+        assert_eq!(
+            library.resolve_persistent_interface(&query_at(500_000_000)),
+            LiveFamilyResolution::Ambiguous,
+            "two distinct matching projections must be reported as ambiguous"
+        );
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     #[ignore = "requires the persistent Bob catalogue and is intended for local performance measurement"]
     fn benchmark_indexed_lookup_throughput() {
         let catalog = default_catalog();
