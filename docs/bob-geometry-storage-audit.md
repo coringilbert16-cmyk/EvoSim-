@@ -182,3 +182,16 @@ Do not copy the anchor edge's rotation into the candidate-rotation field: they r
 5. Verify with Cargo/CI before calling the resolver rotation-safe. If angle semantics cannot be established from placement/generation code, stop and document the blocker rather than guessing.
 
 This is a source-trace result and implementation plan, not a claim that the query has been fixed. No geometry catalogue rows were modified.
+
+
+### Candidate-rotation validation implementation — 2026-10-10
+
+The rigid-point and rigid-vertex lookup now carries an optional realized candidate rotation in its live query.
+
+- `resolve_live_contact_candidate` obtains the candidate-side unit rotation for line-endpoint/edge and corner/edge contacts, normalizes and quantizes it, and passes it into the indexed query.
+- The point/vertex matcher checks the realized angle against the stored family interval using `angle_in_periodic_interval`, which supports intervals expressed across the normalized-angle seam.
+- The older endpoint-only `resolve_live_contact_interface` has no unit transforms. Its point/vertex query sets candidate rotation to `None`; indexed matching fails closed rather than inventing an angle.
+- Corner-corner contacts are also marked without a candidate rotation because endpoint topology alone does not determine which corner is the family candidate. These remain unresolved rather than selecting an arbitrary side.
+- A focused angle-helper test covers ordinary interval inclusion, endpoints, an outside value, a seam-crossing interval, an invalid reversed interval, and a full-turn interval.
+
+This closes the specific missing-rotation predicate in the indexed point/vertex matcher, but does not establish full live-family coverage. It also does not implement fluid-boundary resolution or decide whether the general contact-family collections should participate. CI must verify formatting, compilation, and the focused test before this change is considered validated. The local full catalogue remains unavailable and has not been scanned.
