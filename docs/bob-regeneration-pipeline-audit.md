@@ -13,6 +13,7 @@ Keep source-of-truth material definitions, geometry rules, generator code, schem
 1. `src/bob/worker.rs::run_once` opens the configured persistent library, seeds missing base formations, processes one unfinished formation/resource pass, writes results, reports metrics, and exits.
 2. `--geometry-worker-once` is the bounded smoke-test CLI path. A second run tests reopening persisted data.
 3. `--geometry-worker` runs continuously and sleeps when no unfinished frontier is found; it is not a bounded full-rebuild command.
+4. `--geometry-worker-passes N` processes at most N formation-frontier passes in one process, retaining the open catalogue between passes. Use this for bounded local throughput measurements before attempting a full regeneration.
 4. `EVOSIM_GEOMETRY_LIBRARY_DIR` selects the persistent library root. The default is `geometry_library/data` relative to the current working directory. An explicit override is validated before opening.
 5. New empty roots use compositional-v3 formation storage; existing legacy roots remain readable. Storage encoding is a persistence detail and must not change logical geometry or lookup results.
 
