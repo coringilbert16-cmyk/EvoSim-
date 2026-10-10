@@ -153,3 +153,20 @@ Recommended default: treat schema 3 as the current persisted format, add an expl
 5. Use the actual constructor run as the end-to-end acceptance test; do not substitute a worker-only generation run.
 
 No catalog records or physical rules were changed as part of this follow-up audit.
+
+### Follow-up implementation — chemistry persistence integrity
+
+The schema policy has been approved and implemented in source on this branch.
+
+- Schema 3 is now the current chemistry format.
+- The loader accepts schema-2 manifests/keys as a legacy compatibility read path without silently relabeling legacy keys. This preserves legacy data identity; it does not pretend a v2 key is identical to a v3 key.
+- Unknown manifest versions, malformed records (including a malformed final non-empty row), semantically invalid records, duplicate persisted keys, and manifest entry-count mismatches now fail with `InvalidData` diagnostics rather than being silently skipped or overwritten.
+- Six focused tests were added for schema-3 loading, schema-2 compatibility, malformed tail rejection, duplicate rejection, manifest count mismatch, and semantically invalid records.
+- Commits: [chemistry loader fix](https://github.com/coringilbert16-cmyk/EvoSim-/commit/4df90c6f9a8ae01ba47cdcb14525dfa85113ddaf), [integrity tests](https://github.com/coringilbert16-cmyk/EvoSim-/commit/e9dcefa6b2740cce3f292b168b2e2c1d8f2b7b98), and [test compile correction](https://github.com/coringilbert16-cmyk/EvoSim-/commit/38982339c5b5023d5b0e1f1b8b17c8100e399896).
+- These changes are committed but **not compiled or executed in this environment**. They are not yet verified as passing.
+
+### Follow-up geometry lookup clarification
+
+The earlier statement that the geometry resolver is wholly unimplemented was too broad. `GeometryLibrary::resolve_persistent_interface` and `persistent_interface_projection` do exist. The indexed resolver attempts matching for rigid-edge, rigid-point, and rigid-vertex queries and distinguishes unique, ambiguous, and unresolved results; focused unit tests cover these paths. The separate `classify_live_family_resolution` helper still returns `Unresolved` for every class, and live contact queries do not currently provide a corresponding query for fluid-boundary families. Therefore, Bob has a **partial indexed resolver**, not a complete universal live-contact resolver. The next audit should compare real runtime contacts against persisted family records, including same-material endpoint ambiguity, candidate rotation intervals, and fluid boundaries, and determine whether this resolver is called by the constructor at all.
+
+The current checked-in phosphorus trapezoid is confirmed correct in this integration branch. Earlier top-level README/handoff statements claiming it is still L-shaped should be treated as stale until corrected; do not change the physical shape to compensate for stale documentation.
