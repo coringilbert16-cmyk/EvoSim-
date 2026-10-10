@@ -15,6 +15,8 @@ const INNER_RING_RADIUS: i32 = 3;
 const OUTER_RING_RADIUS: i32 = 5;
 const SPOKE_RADIUS: i32 = 4;
 const SQRT_3: f64 = 1.7320508075688772935;
+// Numerical guard for floating-point boundary equality; far below physical contact tolerance.
+const GEOMETRY_EPSILON: f64 = 1e-9;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ValidConstruction {
@@ -141,7 +143,7 @@ fn bob_validated_neighbor_placement(
             if crate::material_geometry::placed_forms_penetrate(
                 &candidate_part,
                 &existing_part,
-                0.0,
+                GEOMETRY_EPSILON,
             ) {
                 penetrates = true;
                 break;
@@ -729,7 +731,7 @@ mod tests {
                         form: existing_shape.form.clone(),
                         placement: unit.placement,
                     },
-                    0.0,
+                    GEOMETRY_EPSILON,
                 ),
                 "accepted Bob proposal must not penetrate existing structure"
             );
