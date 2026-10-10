@@ -93,3 +93,24 @@ Clippy also failed on broad lint debt, including unused/staged APIs and lint exp
 3. Only after equivalence, write a compact candidate to a separate destination and measure size, load time, peak memory, and lookup latency.
 4. Investigate live-family lookup separately. `classify_live_family_resolution` currently classifies all listed interface classes as `Unresolved`; compact IDs reduce repeated storage but do not solve the semantic mapping from a realized live contact to a unique persisted family.
 5. Keep constructor replacement and phosphorus geometry validation separate from this storage migration.
+
+
+## Live-family resolution audit — 2026-10-10
+
+Read-only inspection of `src/bob/library.rs` found that the lookup gap is narrower and more specific than “Bob has no live lookup”:
+
+- `GeometryLibrary::resolve_persistent_interface` does perform indexed lookup for the three query variants currently represented in `LiveGeometryQuery`: `RigidEdge`, `RigidPoint`, and `RigidVertex`. It returns `Unresolved`, `Unique`, or `Ambiguous` based on distinct canonical family projections.
+- `indexed_interface_projections` has no query variant for fluid-boundary contacts. `resolve_live_contact_candidate` can label an interface `fluid_boundary`, but its query representation does not encode the fluid-boundary geometry, so that interface has no indexed persistent-family path.
+- The persisted `GeometryContactFamily` and `GeometryFluidBoundaryFamily` collections are not consulted by `indexed_interface_projections`; the implemented indexed resolver only reads the rigid edge, rigid point, and rigid vertex family indexes.
+- `classify_live_family_resolution` is a separate topology-only function that returns `Unresolved` for every interface class. It is not a meaningful availability test for the indexed resolver and should not be treated as evidence that all actual indexed lookups fail.
+- The existing focused lookup contract test proves rejection of one wrong-anchor-material case. The ignored throughput test expects every sampled query to resolve, but it requires the persistent local catalogue and was not run in the reported CI. Current evidence therefore does not establish lookup coverage or correctness across real live contacts.
+
+### Required next lookup work
+
+1. Add deterministic fixtures for each supported query variant: known unique projection, no match, and multiple distinct projections; include endpoint-order invariance and boundary tolerance cases.
+2. Decide whether `classify_live_family_resolution` should be removed, renamed to describe topology-only classification, or replaced with a library-aware call. Do not make it claim uniqueness without consulting indexed records.
+3. Define the runtime geometry/query contract for fluid-boundary contacts before implementing a fluid lookup. Do not guess from the class string alone.
+4. Decide whether `GeometryContactFamily` is intended to participate in live resolution. If so, specify a stable query-to-family projection and ambiguity rules first.
+5. Run lookup coverage against the actual local catalogue and report unique/ambiguous/unresolved counts by query class. The checked-in snapshot is useful for development but is not a substitute for the full local catalogue.
+
+No runtime code was changed during this audit. These findings narrow the next implementation task without changing the storage format or risking catalogue data.
