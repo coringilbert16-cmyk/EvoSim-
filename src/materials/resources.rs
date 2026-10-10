@@ -828,10 +828,19 @@ mod shape_tests {
         let lengths = (0..phosphorus.len())
             .map(|i| distance(phosphorus[i], phosphorus[(i + 1) % phosphorus.len()]))
             .collect::<Vec<_>>();
-        assert!((lengths[0] - 1.5).abs() < 1e-9, "bottom edge must be 1.5 units");
-        assert!((lengths[1] - 0.5).abs() < 1e-9, "right sloping edge must be 0.5 units");
+        assert!(
+            (lengths[0] - 1.5).abs() < 1e-9,
+            "bottom edge must be 1.5 units"
+        );
+        assert!(
+            (lengths[1] - 0.5).abs() < 1e-9,
+            "right sloping edge must be 0.5 units"
+        );
         assert!((lengths[2] - 1.0).abs() < 1e-9, "top edge must be 1.0 unit");
-        assert!((lengths[3] - 0.5).abs() < 1e-9, "left sloping edge must be 0.5 units");
+        assert!(
+            (lengths[3] - 0.5).abs() < 1e-9,
+            "left sloping edge must be 0.5 units"
+        );
         assert!((phosphorus[0].0 + phosphorus[1].0).abs() < 1e-9);
         assert!((phosphorus[2].0 + phosphorus[3].0).abs() < 1e-9);
         assert!((phosphorus[0].1 + phosphorus[2].1).abs() < 1e-9);
