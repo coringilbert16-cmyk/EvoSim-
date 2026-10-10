@@ -351,3 +351,23 @@ The bond-driven construction path now loads Bob's geometry library once per cons
 - This is the first real connection between Bob's placement suggestions and bond-driven construction, not proof that suggestions are selected successfully or that the constructor now produces a viable organism.
 
 Next: obtain a readable test failure summary, add a focused integration assertion that the construction candidate path consumes Bob suggestions, and verify a real candidate reaches the existing transaction. Only then diagnose any remaining physical bond rejection using the observed attempted placement and internal rejection reason. Do not relax physical constraints to force a pass.
+
+
+## Correction to Bob integration scope — 2026-10-10
+
+The previous section's phrase “bond-driven construction path” was accurate but insufficiently specific. Source tracing confirms that the current failing blueprint-free/initial-organism path does **not** call that runtime:
+
+- `construct_valid` in `src/construction/initial_organism_constructor.rs` calls `construct_scaffold`.
+- `construct_scaffold` places the fixed Carbon rings/spokes at prescribed axial coordinates and calls its local `bond_units` helper.
+- That helper calls `selected_candidate_evaluation` and `form_selected_bond` directly. It does not query Bob.
+- The Bob placement proposals added in `src/construction/runtime.rs` apply only to `construct_blueprint_bond_driven` and its related material-aware path. They do not influence the current initial-organism transaction that reports `physical bond transaction 19-3 failed`.
+
+Therefore, the runtime integration is real but it has **not yet connected Bob to the failing acceptance path**, and it is not valid to use the current error to evaluate Bob's effect. The next implementation step is to move the initial-organism construction path onto a Bob-informed incremental placement flow (or replace the fixed scaffold with that flow), with proposals treated as candidates and every chosen pose validated against the whole existing structure, live contact and bond compatibility, COMBINE/energy authority, and sealed genome-cavity qualification. Do not simply pass Bob's API into `bond_units` after all units have already been fixed in place; that would not make its suggestions affect placement.
+
+### Readable CI result for commit `9188414f3a50fedd2e421d04bbb418c3bc9096a9`
+
+The job logs are now retrievable. Formatting, source-size, COMBINE architecture, Bob compact-storage tests, and empty-library open/reopen checks passed. The Rust test stage failed with **266 passed, 75 failed, 1 ignored**. Many failures cascade from the initial-organism constructor error `physical bond transaction 19-3 failed`; other independent failures are present, so this should not be described as the only test defect.
+
+Strict Clippy failed compilation with 58 reported errors in the binary target (and 48 in the test target), including ordinary lint findings and unfulfilled `#[expect(dead_code)]` annotations as APIs became used. The log shows, among other examples, needless explicit lifetimes in `initial_organism_constructor.rs`, `manual_contains`, `default_constructed_unit_structs`, `manual_range_contains`, and stale staged-API expectations. These need normal targeted cleanup; no blanket lint suppression is approved.
+
+No constructor acceptance run has succeeded after the Bob runtime change. No generated geometry data was committed. This correction supersedes any implication that the active blueprint-free constructor already consumes Bob suggestions.
