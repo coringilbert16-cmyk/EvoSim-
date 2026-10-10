@@ -81,6 +81,10 @@ A formation's seven resource frontiers are processed as one durable pass. Water 
 
 The library's continuous-contact model is being expanded with exact symbolic rigid boundary families; no sampled geometry is used.
 
+### Bounded catalogue expansion
+
+The worker enforces a **20-constituent maximum** for generated formations. A formation at that limit can still generate local rigid/fluid contact-family records, but is not expanded into a 21-constituent formation. The per-pass worker metrics report `expansion_limit_reached`. This keeps the reference catalogue focused on local assemblies rather than attempting to grow complete organisms. The bound limits constituent count only; it does not guarantee a small total catalogue because the number of distinct arrangements can still grow combinatorially.
+
 ### Bob worker measurements
 
 The worker reports per-frontier-pass measurements including constituent size, generated candidate count, newly persisted formations, candidate records not newly persisted, rigid edge/point/vertex family counts, Water/fluid-boundary family counts, total catalogue size, and elapsed time. These measurements are intended to establish the real growth curve before any decision is made about changing the current 20-constituent expansion target or expansion policy.
