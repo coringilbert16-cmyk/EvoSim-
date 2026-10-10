@@ -16,6 +16,12 @@ Keep source-of-truth material definitions, geometry rules, generator code, schem
 4. `EVOSIM_GEOMETRY_LIBRARY_DIR` selects the persistent library root. The default is `geometry_library/data` relative to the current working directory. An explicit override is validated before opening.
 5. New empty roots use compositional-v3 formation storage; existing legacy roots remain readable. Storage encoding is a persistence detail and must not change logical geometry or lookup results.
 
+## Expansion bound consistency
+
+The library README described a 20-constituent expansion target, but the inspected worker path previously called `expand_formation_candidates` without enforcing that target. That meant a continuous worker could keep creating larger formations instead of reaching a finite frontier.
+
+The worker now enforces `MAX_LIBRARY_CONSTITUENTS = 20`: formations up to 20 constituents are eligible for expansion; formations at the limit still contribute local contact-family knowledge, but do not generate 21-constituent children. Each pass reports `expansion_limit_reached` when it encounters that boundary. This is an explicit bounded-library policy, not a claim that the catalogue will be small or that the full build will be quick; combinatorial growth below the limit still needs benchmarking.
+
 ## Waste found and changed
 
 ### Repeated Water capillary calculation
