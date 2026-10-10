@@ -1,8 +1,8 @@
 use crate::geometry_reference_library::{
-    expand_formation_candidates, generate_fluid_boundary_families, generate_rigid_contact_families,
-    generate_rigid_point_contact_families, generate_rigid_vertex_contact_families,
-    generate_water_contact_families, open_default_library, seed_base_catalogue,
-    GeometryFrontierState, GeometryLibrary,
+    expand_formation_candidates, generate_fluid_boundary_families_from_contact_families,
+    generate_rigid_contact_families, generate_rigid_point_contact_families,
+    generate_rigid_vertex_contact_families, generate_water_contact_families, open_default_library,
+    seed_base_catalogue, GeometryFrontierState, GeometryLibrary,
 };
 use crate::resources::{default_catalog, BaseResource};
 use std::thread;
@@ -123,6 +123,7 @@ fn process_one_frontier(
     };
 
     {
+        let mut completed_frontiers = Vec::with_capacity(catalog.len());
         for resource in catalog {
             let key = format!("{}|{}", formation.signature, resource.name);
             let state = library
@@ -138,12 +139,6 @@ fn process_one_frontier(
                 continue;
             }
 
-            library.set_frontier_state(
-                formation.signature.clone(),
-                resource.name.clone(),
-                GeometryFrontierState::InProgress,
-            )?;
-
             if resource.name == "Water" {
                 // Every currently supported Water/rigid case is represented
                 // symbolically as an exact capillary contact family. If no
@@ -152,16 +147,16 @@ fn process_one_frontier(
                 // permanently "pending" state.
                 let families = generate_water_contact_families(&formation, resource, catalog);
                 metrics.water_families += families.len();
-                library.insert_contact_families(families)?;
                 let boundary_states =
-                    generate_fluid_boundary_families(&formation, resource, catalog);
+                    generate_fluid_boundary_families_from_contact_families(resource, &families);
                 metrics.fluid_boundary_families += boundary_states.len();
+                library.insert_contact_families(families)?;
                 library.insert_fluid_boundary_families(boundary_states)?;
-                library.set_frontier_state(
+                completed_frontiers.push((
                     formation.signature.clone(),
                     resource.name.clone(),
                     GeometryFrontierState::Exhausted,
-                )?;
+                ));
                 continue;
             }
 
@@ -183,16 +178,17 @@ fn process_one_frontier(
             metrics.generated_candidates += candidates.len();
             metrics.added_formations += library.insert_many(candidates, catalog)?;
 
-            library.set_frontier_state(
+            completed_frontiers.push((
                 formation.signature.clone(),
                 resource.name.clone(),
                 GeometryFrontierState::Exhausted,
-            )?;
+            ));
         }
 
-        // All resource frontiers for this formation were handled in one pass.
-        // The next worker pass advances to the next formation rather than
-        // rebuilding and rescanning this same seven-resource row.
+        // Persist the complete formation frontier once. If interrupted before
+        // this checkpoint, durable results are safe to regenerate because all
+        // insert paths deduplicate by canonical identity.
+        library.set_frontier_states(completed_frontiers)?;
     }
 
     metrics.elapsed = started.elapsed();
