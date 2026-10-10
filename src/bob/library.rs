@@ -180,6 +180,7 @@ pub enum LiveGeometryQuery {
         edge_material: String,
         edge: usize,
         edge_parameter: i64,
+        candidate_rotation: i64,
     },
     RigidVertex {
         corner_material: String,
@@ -187,6 +188,7 @@ pub enum LiveGeometryQuery {
         edge_material: String,
         edge: usize,
         edge_parameter: i64,
+        candidate_rotation: i64,
     },
 }
 
@@ -249,6 +251,13 @@ pub fn resolve_live_contact_candidate(
         _ => "rigid_surface",
     };
 
+    let candidate_rotation = if local_a.starts_with("line:") || local_a.starts_with("corner:") {
+        unit_a.placement.rotation_radians
+    } else {
+        unit_b.placement.rotation_radians
+    };
+    let candidate_rotation = quantize(normalized_angle(candidate_rotation));
+
     let mut sides = [(material_a, local_a), (material_b, local_b)];
     sides.sort_by(|a, b| a.cmp(b));
 
@@ -285,6 +294,7 @@ pub fn resolve_live_contact_candidate(
                 edge_material: edge.material,
                 edge: edge.edge,
                 edge_parameter: quantize(edge.parameter),
+                candidate_rotation,
             })
         }
         "rigid_vertex" => {
@@ -305,6 +315,7 @@ pub fn resolve_live_contact_candidate(
                 edge_material: edge.material,
                 edge: edge.edge,
                 edge_parameter: quantize(edge.parameter),
+                candidate_rotation,
             })
         }
         _ => None,
@@ -546,6 +557,7 @@ pub fn resolve_live_contact_interface(
                 edge_material: edge.material,
                 edge: edge.edge,
                 edge_parameter: quantize(edge.parameter),
+                candidate_rotation,
             })
         }
         "rigid_vertex" => {
@@ -564,6 +576,7 @@ pub fn resolve_live_contact_interface(
                 edge_material: edge.material,
                 edge: edge.edge,
                 edge_parameter: quantize(edge.parameter),
+                candidate_rotation,
             })
         }
         _ => None,
@@ -1889,6 +1902,7 @@ impl GeometryLibrary {
                 edge_material,
                 edge,
                 edge_parameter,
+                candidate_rotation,
             }) => {
                 let key = contact_bucket_hash(line_material, *edge, *line_point);
                 if let Some(signatures) = self.rigid_point_contact_index.get(&key) {
@@ -1908,6 +1922,11 @@ impl GeometryLibrary {
                                 && *edge == family.anchor_edge
                                 && parameter >= family.anchor_parameter_start - QUANTUM
                                 && parameter <= family.anchor_parameter_end + QUANTUM
+                                && angle_in_periodic_interval(
+                                    *candidate_rotation as f64 / 1e9,
+                                    family.candidate_rotation_start_radians,
+                                    family.candidate_rotation_end_radians,
+                                )
                             {
                                 projections.insert(point_family_projection(family), ());
                             }
@@ -1921,6 +1940,7 @@ impl GeometryLibrary {
                 edge_material,
                 edge,
                 edge_parameter,
+                candidate_rotation,
             }) => {
                 let key = contact_bucket_hash(corner_material, *edge, *corner_point);
                 if let Some(signatures) = self.rigid_vertex_contact_index.get(&key) {
@@ -1940,6 +1960,11 @@ impl GeometryLibrary {
                                 && *edge == family.anchor_edge
                                 && parameter >= family.anchor_parameter_start - QUANTUM
                                 && parameter <= family.anchor_parameter_end + QUANTUM
+                                && angle_in_periodic_interval(
+                                    *candidate_rotation as f64 / 1e9,
+                                    family.candidate_rotation_start_radians,
+                                    family.candidate_rotation_end_radians,
+                                )
                             {
                                 projections.insert(vertex_family_projection(family), ());
                             }
@@ -2446,6 +2471,23 @@ fn resource_catalog_signature(catalog: &[BaseResource]) -> String {
 
 fn quantize(value: f64) -> i64 {
     (value / QUANTUM).round() as i64
+}
+
+/// Tests an absolute angle against a possibly seam-crossing interval.
+/// Family intervals are generated in unwrapped radians; the live angle is
+/// normalized, so equivalent turns must be considered without changing the
+/// persisted interval convention.
+fn angle_in_periodic_interval(angle: f64, start: f64, end: f64) -> bool {
+    if !angle.is_finite() || !start.is_finite() || !end.is_finite() || start > end {
+        return false;
+    }
+    let width = end - start;
+    if width >= std::f64::consts::TAU {
+        return true;
+    }
+    let angle = normalized_angle(angle);
+    let delta = (angle - start).rem_euclid(std::f64::consts::TAU);
+    delta <= width + QUANTUM || std::f64::consts::TAU - delta <= QUANTUM
 }
 
 fn normalized_angle(angle: f64) -> f64 {
