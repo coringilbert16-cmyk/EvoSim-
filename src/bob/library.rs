@@ -4617,6 +4617,53 @@ mod bob_lookup_contract_tests {
                 .is_empty(),
             "fluid candidates do not use the rigid-edge placement path"
         );
+        let phosphorus = catalog
+            .iter()
+            .find(|resource| resource.name == "Phosphorus")
+            .unwrap();
+        let phosphorus_suggestions = library.suggest_rigid_edge_placements(
+            "Carbon",
+            live_anchor,
+            phosphorus,
+            &catalog,
+        );
+        assert!(
+            !phosphorus_suggestions.is_empty(),
+            "empty-library fallback should support a different rigid shape"
+        );
+        let anchor_segments = rigid_boundary_segments(&carbon.shape.form);
+        let phosphorus_segments = rigid_boundary_segments(&phosphorus.shape.form);
+        let phosphorus_lengths = phosphorus_segments
+            .iter()
+            .map(|(start, end)| (end.0 - start.0).hypot(end.1 - start.1))
+            .collect::<Vec<_>>();
+        assert!(
+            phosphorus_lengths
+                .iter()
+                .any(|length| (*length - 1.5).abs() < 1e-6)
+                && phosphorus_lengths
+                    .iter()
+                    .any(|length| (*length - 0.5).abs() < 1e-6),
+            "the candidate shape should exercise unequal edge lengths"
+        );
+        assert!(phosphorus_suggestions.iter().all(|suggestion| {
+            let Some(&(a0, a1)) = anchor_segments.get(suggestion.anchor_edge) else {
+                return false;
+            };
+            let Some(&(c0, c1)) = phosphorus_segments.get(suggestion.candidate_edge) else {
+                return false;
+            };
+            let parameter = suggestion.anchor_contact_parameter;
+            let anchor_local = (
+                a0.0 + (a1.0 - a0.0) * parameter,
+                a0.1 + (a1.1 - a0.1) * parameter,
+            );
+            let candidate_midpoint = ((c0.0 + c1.0) * 0.5, (c0.1 + c1.1) * 0.5);
+            let anchor_world = world_point(anchor_local, live_anchor);
+            let candidate_world = world_point(candidate_midpoint, suggestion.placement);
+            (anchor_world.0 - candidate_world.0).abs() < 1e-7
+                && (anchor_world.1 - candidate_world.1).abs() < 1e-7
+        }));
         let anchor_segments = rigid_boundary_segments(&carbon.shape.form);
         let candidate_segments = rigid_boundary_segments(&carbon.shape.form);
         assert!(suggestions.iter().all(|suggestion| {
