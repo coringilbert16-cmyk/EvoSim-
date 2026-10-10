@@ -4,25 +4,28 @@
 Usage:
     python3 tools/audit_geometry_storage.py [geometry_library/data]
 
-The compact-size estimate replaces each JSONL record's repeated
-"formation_signature" field with a 32-hex-character formation_id plus
-storage_version=2. It is an estimate, not a migration or a guarantee of
-exact serialized Rust output. No files are modified.
+The compact-size estimate models Bob's current family encoding: replace
+"formation_signature" with the runtime's 22-character unpadded base64url
+ID derived from the first 128 bits of SHA-256. It estimates family rows only;
+it does not model compositional-v3 formation deltas. The script also checks
+formation references and ID collisions. It is read-only and never migrates data.
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import sys
 from pathlib import Path
 
 
-COMPACT_ID_PLACEHOLDER = "0" * 32
+COMPACT_ID_PLACEHOLDER = "A" * 22
 
 
 def formation_id(signature: str) -> str:
-    """Deterministic 128-bit ID proposal; collisions are checked, never ignored."""
-    return hashlib.sha256(signature.encode("utf-8")).hexdigest()[:32]
+    """Match Bob's stable 128-bit SHA-256 prefix, base64url encoded without padding."""
+    digest = hashlib.sha256(signature.encode("utf-8")).digest()[:16]
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
 def compact_estimate(record: dict) -> int | None:
@@ -31,7 +34,6 @@ def compact_estimate(record: dict) -> int | None:
     compact = dict(record)
     compact.pop("formation_signature", None)
     compact["formation_id"] = COMPACT_ID_PLACEHOLDER
-    compact["storage_version"] = 2
     return len(json.dumps(compact, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
 
 
