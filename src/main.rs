@@ -171,6 +171,17 @@ async fn main() {
         return;
     }
 
+    if command.as_deref() == Some("--geometry-worker-complete-up-to") {
+        let max_constituents = std::env::args()
+            .nth(2)
+            .and_then(|value| value.parse::<usize>().ok())
+            .filter(|count| *count > 0)
+            .expect("--geometry-worker-complete-up-to requires a positive constituent count");
+        geometry_library_worker::run_to_completion(max_constituents)
+            .expect("bounded geometry generation or reopen verification failed");
+        return;
+    }
+
     if command.as_deref() == Some("--geometry-worker-passes") {
         let passes = std::env::args()
             .nth(2)
