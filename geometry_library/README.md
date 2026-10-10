@@ -152,3 +152,26 @@ EVOSIM_GEOMETRY_LIBRARY_DIR=/tmp/evosim-bob-two-piece \
 The command processes every unfinished one- and two-constituent formation frontier, writes all supported contact-family records, then closes and reopens the persistent store. It fails if the reopen changes the formation count, any formation exceeds two constituents, or any eligible frontier remains unfinished. Set `EVOSIM_GEOMETRY_LIBRARY_DIR` to an existing empty directory for a fresh run; the default tracked checkout path is deliberately not used by the dedicated CI generation job.
 
 The dedicated GitHub Actions workflow stores the resulting library and full generation log in the `bob-two-piece-geometry-library` artifact for 30 days. The latest worker implementation exposes this as `--geometry-worker-complete-up-to 2` and reports an explicit post-reopen bound/frontier check. Generated runtime data remains out of Git. Its final summary reports candidate generation/acceptance, family additions, formation counts, reopen verification, and elapsed time; the workflow separately reports file sizes and line counts. The workflow is triggered by changes to this README on the integration branch or manually from Actions when the workflow is available there.
+
+
+### Completed two-piece generation run — 2026-10-10
+
+**Result: successful.** GitHub Actions run [#38066184273](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38066184273) completed the explicit two-piece generation command and uploaded the `bob-two-piece-geometry-library` artifact (artifact ID `11674718881`, retained until 2026-11-09). The generated files are an isolated run artifact, not committed runtime data.
+
+- Maximum constituent count: **2**.
+- Seeded singleton formations: **7**.
+- Frontier passes completed: **279**.
+- Candidate formations generated: **435**.
+- New formations persisted: **272**.
+- Candidates not newly persisted: **163**, deduplicated by canonical/equivalence identity.
+- Final formations: **279** total (**7 singleton + 272 two-piece**).
+- Added rigid edge-contact families: **113,776**; rigid point-contact families: **0**; rigid vertex-contact families: **56,888**.
+- Added Water contact families: **1,341**; fluid-boundary families: **1,341**.
+- Persisted library footprint: **48,316,400 bytes** (about **46.1 MiB**); uploaded compressed artifact: **1,528,928 bytes**.
+- Runtime: **14,921 ms**.
+- Reopen verification: **279 before / 279 after**; oversized formations: **0**; unfinished frontiers: **0**.
+- Generation workflow result: **success**; no generation, persistence, or bound-verification failure was reported.
+
+The full source test suite remains a separate gate: the same integration commit line still reports **266 passed, 75 failed, 1 ignored**, and Clippy remains failing on existing project diagnostics. This successful bounded catalogue run does not establish that the live constructor consumes the library or produces a viable organism.
+
+The generation workflow is now **manual-dispatch only** to prevent documentation edits from unexpectedly regenerating the artifact. When the workflow is available in the default branch, open the Actions workflow and run **Bob Two-Piece Geometry Generation** explicitly.
