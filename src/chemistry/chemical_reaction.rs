@@ -273,4 +273,29 @@ mod material_identity_tests {
             "Carbon@1000000000+Hydrogen@1000000000"
         );
     }
+    #[test]
+    fn base_contact_key_matches_checked_in_cache_identity() {
+        let carbon = Material::free_base("Carbon", 1.0);
+        let hydrogen = Material::free_base("Hydrogen", 1.0);
+        let interface = crate::geometry_reference_library::resolve_live_contact_interface(
+            "Carbon",
+            crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
+            "Hydrogen",
+            crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 0 },
+        );
+        let key = ChemistryKey::from_live_geometry(
+            material_identity(&carbon),
+            material_identity(&hydrogen),
+            &interface,
+        );
+        assert_eq!(key.schema_version, 3);
+        assert_eq!(key.material_a, "Carbon");
+        assert_eq!(key.material_b, "Hydrogen");
+        assert_eq!(key.interface_class, "rigid_point");
+        assert_eq!(
+            key.interface_signature,
+            "live-v1|Carbon:corner:0|Hydrogen:line:0"
+        );
+    }
+
 }
