@@ -253,3 +253,10 @@ The audit found that the persisted rigid-edge interval represented candidate-edg
 A schema bump initially also changed the live chemistry key prefix because the two version concepts shared one constant. That coupling was corrected by introducing a separate `LIVE_GEOMETRY_INTERFACE_SCHEMA_VERSION = 1`; persisted Bob records are schema 2 while the unchanged live-interface key format remains `live-v1`. CI for that decoupling commit is in progress, so final verification is still pending.
 
 The previous “required correction” list is now historical. The remaining blocker is to return actual placement suggestions to the constructor, and to ensure canonical projections collapse equivalent local interfaces across different formation-context constituent indices without hiding genuine geometric ambiguity.
+
+
+## Follow-up correction — local projections ignore formation indices — 2026-10-10
+
+The canonical rigid-edge, rigid-point, and rigid-vertex projection keys no longer include `anchor_constituent`. That index identifies a constituent inside a particular stored formation; it is not part of the local contact geometry visible to a live query. Keeping it in the projection could make equivalent local interfaces appear ambiguous solely because their source formations placed the anchor at different constituent indices. Regression assertions now require projection equality across changed formation-context indices while preserving differences in interval and rotation geometry. The test suite for this commit is pending; no geometry generation was run.
+
+After this correction, the immediate remaining library integration task is a candidate-suggestion API that returns actual proposed placements from the schema-v2 contact families. Those proposals must remain advisory and pass the constructor's physical validation before a bond is formed.
