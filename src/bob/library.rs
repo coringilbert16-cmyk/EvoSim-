@@ -474,9 +474,8 @@ fn rigid_family_projection(
     relative_rotation_radians: f64,
 ) -> String {
     format!(
-        "edge|{}|{}|{}|{}|{}|{}|{}",
+        "edge|{}|{}|{}|{}|{}|{}",
         family.candidate_resource,
-        family.anchor_constituent,
         family.anchor_edge,
         family.candidate_edge,
         quantize(relative_rotation_radians),
@@ -487,9 +486,8 @@ fn rigid_family_projection(
 
 fn point_family_projection(family: &GeometryRigidPointContactFamily) -> String {
     format!(
-        "point|{}|{}|{}|{}|{}|{}|{}|{}",
+        "point|{}|{}|{}|{}|{}|{}|{}",
         family.candidate_resource,
-        family.anchor_constituent,
         family.anchor_edge,
         family.candidate_endpoint,
         quantize(family.anchor_parameter_start),
@@ -501,9 +499,8 @@ fn point_family_projection(family: &GeometryRigidPointContactFamily) -> String {
 
 fn vertex_family_projection(family: &GeometryRigidVertexContactFamily) -> String {
     format!(
-        "vertex|{}|{}|{}|{}|{}|{}|{}|{}",
+        "vertex|{}|{}|{}|{}|{}|{}|{}",
         family.candidate_resource,
-        family.anchor_constituent,
         family.anchor_edge,
         family.candidate_vertex,
         quantize(family.anchor_parameter_start),
@@ -4305,6 +4302,13 @@ mod bob_lookup_contract_tests {
             rigid_family_projection(&edge, 0.5),
             rigid_family_projection(&changed_edge, 0.5)
         );
+        let mut context_edge = edge.clone();
+        context_edge.anchor_constituent = 7;
+        assert_eq!(
+            rigid_family_projection(&edge, 0.5),
+            rigid_family_projection(&context_edge, 0.5),
+            "constituent indices belong to formation context, not local interface identity"
+        );
 
         let point = GeometryRigidPointContactFamily {
             schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
@@ -4330,6 +4334,12 @@ mod bob_lookup_contract_tests {
             point_family_projection(&point),
             point_family_projection(&changed_point_rotation)
         );
+        let mut context_point = point.clone();
+        context_point.anchor_constituent = 7;
+        assert_eq!(
+            point_family_projection(&point),
+            point_family_projection(&context_point)
+        );
 
         let vertex = GeometryRigidVertexContactFamily {
             schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
@@ -4354,6 +4364,12 @@ mod bob_lookup_contract_tests {
         assert_ne!(
             vertex_family_projection(&vertex),
             vertex_family_projection(&changed_vertex_rotation)
+        );
+        let mut context_vertex = vertex.clone();
+        context_vertex.anchor_constituent = 7;
+        assert_eq!(
+            vertex_family_projection(&vertex),
+            vertex_family_projection(&context_vertex)
         );
     }
 
