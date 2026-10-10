@@ -54,10 +54,120 @@ fn hex_ring(radius: i32) -> Vec<(i32, i32)> {
     result
 }
 
+
+/// Ask Bob for candidate neighbor poses, then admit only a pose that is close
+/// to the scaffold's intended lattice point and passes live whole-structure
+/// nonpenetration and contact checks. Bob never authorizes a bond.
+fn bob_validated_neighbor_placement(
+    structure: &crate::structure::OrganismStructure,
+    anchor_index: usize,
+    resource: &BaseResource,
+    intended: (f64, f64),
+    library: &crate::geometry_reference_library::GeometryLibrary,
+    catalog: &[BaseResource],
+) -> Option<Placement> {
+    let anchor = structure.units.get(anchor_index)?;
+    let anchor_material = anchor.material.parts.first()?.0.as_str();
+    let mut suggestions = library.suggest_rigid_edge_placements(
+        anchor_material,
+        anchor.placement,
+        resource,
+        catalog,
+    );
+    suggestions.sort_by(|a, b| {
+        let score = |placement: Placement| {
+            (placement.x - intended.0).hypot(placement.y - intended.1)
+                + normalize_angle_for_constructor(placement.rotation_radians).abs() * 0.25
+        };
+        score(a.placement)
+            .partial_cmp(&score(b.placement))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    for suggestion in suggestions {
+        let proposed = suggestion.placement;
+        // Bob proposes the local interface; the scaffold still defines the
+        // broad cavity topology. Only near-equivalent lattice poses are eligible.
+        if (proposed.x - intended.0).hypot(proposed.y - intended.1)
+            > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+            || normalize_angle_for_constructor(proposed.rotation_radians).abs() > 0.1
+        {
+            continue;
+        }
+        let Some(instance) = crate::physical_material::PhysicalMaterial::realized(
+            Material::free_base(resource.name.clone(), 1.0),
+            vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            catalog,
+        ) else {
+            continue;
+        };
+        let mut trial = structure.clone();
+        let Some(indices) = crate::material_restoration::restore_material(
+            &mut trial, &instance, proposed, catalog,
+        ) else {
+            continue;
+        };
+        let Some(&candidate_index) = indices.first() else {
+            continue;
+        };
+        let candidate = &trial.units[candidate_index];
+        let Some(candidate_shape) = candidate.shape(catalog) else {
+            continue;
+        };
+        let candidate_part = crate::material_geometry::PlacedMaterialPart {
+            part_index: candidate_index,
+            form: candidate_shape.form.clone(),
+            placement: candidate.placement,
+        };
+        let mut penetrates = false;
+        for (index, unit) in trial.units.iter().enumerate() {
+            if indices.contains(&index) {
+                continue;
+            }
+            let Some(shape) = unit.shape(catalog) else {
+                penetrates = true;
+                break;
+            };
+            let existing_part = crate::material_geometry::PlacedMaterialPart {
+                part_index: index,
+                form: shape.form.clone(),
+                placement: unit.placement,
+            };
+            if crate::material_geometry::placed_forms_penetrate(
+                &candidate_part, &existing_part, 0.0,
+            ) {
+                penetrates = true;
+                break;
+            }
+        }
+        if penetrates {
+            continue;
+        }
+        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+        let touches_anchor = crate::contact::connection_pair_candidates_cached(
+            &trial, anchor_index, candidate_index, catalog, &mut cache,
+        ).into_iter().any(|contact| {
+            contact.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                && contact.available_a && contact.available_b
+        });
+        if touches_anchor {
+            return Some(proposed);
+        }
+    }
+    None
+}
+
+fn normalize_angle_for_constructor(angle: f64) -> f64 {
+    (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU)
+        - std::f64::consts::PI
+}
+
 fn add_unit(
     structure: &mut crate::structure::OrganismStructure,
     resource: &BaseResource,
     center: (f64, f64),
+    anchor_index: Option<usize>,
+    bob_library: Option<&crate::geometry_reference_library::GeometryLibrary>,
     catalog: &[BaseResource],
 ) -> Result<usize, String> {
     let material = Material::free_base(resource.name.clone(), 1.0);
@@ -71,14 +181,21 @@ fn add_unit(
         catalog,
     )
     .ok_or_else(|| format!("failed to realize construction unit {}", resource.name))?;
-    let indices = crate::material_restoration::restore_material(
-        structure,
-        &instance,
-        Placement {
+    let proposed_placement = anchor_index
+        .and_then(|anchor| bob_library.and_then(|library| {
+            bob_validated_neighbor_placement(
+                structure, anchor, resource, center, library, catalog,
+            )
+        }))
+        .unwrap_or(Placement {
             x: center.0,
             y: center.1,
             rotation_radians: 0.0,
-        },
+        });
+    let indices = crate::material_restoration::restore_material(
+        structure,
+        &instance,
+        proposed_placement,
         catalog,
     )
     .ok_or_else(|| format!("failed to restore construction unit {}", resource.name))?;
@@ -195,6 +312,9 @@ fn construct_scaffold(
         .ok_or_else(|| "catalog lacks valid rigid Carbon geometry".to_string())?;
 
     let mut structure = crate::structure::OrganismStructure::new();
+    // Load once. An absent/empty persistent store remains valid: Bob's API
+    // derives non-persistent local suggestions and every suggestion is rechecked.
+    let bob_library = crate::geometry_reference_library::open_default_library().ok();
     let mut ledger = EnergyLedger::default();
     let mut energy = CONSTRUCTION_ENERGY;
 
@@ -208,6 +328,8 @@ fn construct_scaffold(
             &mut structure,
             carbon,
             axial_to_world(coordinate.0, coordinate.1),
+            inner_indices.last().copied(),
+            bob_library.as_ref(),
             catalog,
         )?);
     }
@@ -284,6 +406,8 @@ fn construct_scaffold(
             &mut structure,
             carbon,
             axial_to_world(coordinate.0, coordinate.1),
+            None,
+            bob_library.as_ref(),
             catalog,
         )?;
         let inner_position = side * INNER_RING_RADIUS as usize;
@@ -307,6 +431,8 @@ fn construct_scaffold(
             &mut structure,
             carbon,
             axial_to_world(coordinate.0, coordinate.1),
+            if i == 0 { Some(spokes[0]) } else { outer_indices.last().copied() },
+            bob_library.as_ref(),
             catalog,
         )?;
         if i == 0 {
