@@ -9,7 +9,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
-pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 2;
+pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 3;
 
 fn quantize(value: f64) -> i64 {
     (value * 1_000_000_000.0).round() as i64
@@ -171,7 +171,7 @@ pub struct ChemistryRecord {
 
 impl ChemistryRecord {
     fn is_valid(&self) -> bool {
-        self.key.schema_version == CHEMISTRY_LIBRARY_SCHEMA_VERSION
+        matches!(self.key.schema_version, 2 | CHEMISTRY_LIBRARY_SCHEMA_VERSION)
             && !self.key.material_a.is_empty()
             && !self.key.material_b.is_empty()
             && !self.key.interface_class.is_empty()
@@ -208,16 +208,24 @@ impl ChemistryLibrary {
                 if line.trim().is_empty() {
                     continue;
                 }
-                let record: ChemistryRecord = match serde_json::from_str(line) {
-                    Ok(v) => v,
-                    Err(e) if i + 1 == lines.len() => {
-                        let _ = e;
-                        continue;
-                    }
-                    Err(e) => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
-                };
-                if record.is_valid() {
-                    entries.insert(record.key.clone(), record);
+                let record: ChemistryRecord = serde_json::from_str(line).map_err(|error| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("invalid chemistry record at line {}: {error}", i + 1),
+                    )
+                })?;
+                if !record.is_valid() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("invalid chemistry record at line {}", i + 1),
+                    ));
+                }
+                let key = record.key.clone();
+                if entries.insert(key.clone(), record).is_some() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("duplicate chemistry key in persisted store: {}", key.signature()),
+                    ));
                 }
             }
         }
@@ -230,10 +238,20 @@ impl ChemistryLibrary {
                 entries: entries.len() as u64,
             }
         };
-        if manifest.schema_version != CHEMISTRY_LIBRARY_SCHEMA_VERSION {
+        if !matches!(manifest.schema_version, 2 | CHEMISTRY_LIBRARY_SCHEMA_VERSION) {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                "chemistry library schema mismatch",
+                format!("unsupported chemistry library schema version: {}", manifest.schema_version),
+            ));
+        }
+        if manifest.entries != entries.len() as u64 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "chemistry manifest entry count mismatch: manifest={}, loaded_unique={}",
+                    manifest.entries,
+                    entries.len()
+                ),
             ));
         }
         Ok(Self {
