@@ -9,6 +9,12 @@ This directory is the persistent home for generated geometry knowledge.
 
 The source-of-truth implementation is src/bob/library.rs.
 
+### Regeneration is the preferred reset strategy
+
+Generated geometry rows are reproducible output, not source code. Current priority is to make a clean generation run correct and efficient, rather than spending time shrinking an existing generated catalogue. See [the Bob clean-regeneration pipeline audit](../docs/bob-regeneration-pipeline-audit.md) for the verified command paths, identified repeated work, and validation gates.
+
+Use a new empty output directory to verify a rebuild. Keep the generator, material/shape definitions, schema/version rules, and configuration. Once a clean rebuild has passed the documented validation gates, an old generated catalogue may be discarded; do not delete the only checkout or uncommitted source changes as part of that reset. A one-pass smoke test proves persistence/reopen behavior, not that the full catalogue has finished generating.
+
 The library uses a locked positional equivalence tolerance of **0.5 units**. If two otherwise-identical formations differ only by a positional displacement of **≤ 0.5 units**, Bob treats them as the same geometric record rather than storing another microscopic variation. This is a geometric knowledge equivalence rule, not permission for live construction to penetrate or skip physical validation.
 
 ### Locked base-resource geometry
