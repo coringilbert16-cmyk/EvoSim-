@@ -74,6 +74,14 @@ The explicit path is validated before Bob opens it, so a misspelled or absent ov
 
 Use `cargo run -- --geometry-worker-once` for a bounded smoke test. It opens the configured persistent library, seeds missing base formations, processes exactly one unfinished formation/resource pass, durably records its results, prints the resulting formation count, and exits. Only after that succeeds should `cargo run -- --geometry-worker` run continuously and resume from the persisted frontier after restart.
 
+For a bounded generation benchmark without paying process startup and catalogue reload costs for every pass, use:
+
+```powershell
+cargo run --release -- --geometry-worker-passes 25
+```
+
+This processes up to 25 formation-frontier passes in one process and prints per-pass candidate/family counts, elapsed time, catalogue size, and whether the expansion limit was reached. It is a measurement run, not a full catalogue completion command.
+
 ### Worker frontier semantics
 
 A formation's seven resource frontiers are processed as one durable pass. Water is recorded as symbolic capillary families (or exhausted when no supported rigid boundary can accept the nominal water volume), while rigid candidates are expanded and batch-persisted. Restarted workers resume any frontier not marked `Exhausted`; an interrupted final JSON record is ignored as a truncated append tail rather than destroying the durable catalogue.
