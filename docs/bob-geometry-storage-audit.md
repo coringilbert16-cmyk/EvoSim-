@@ -114,3 +114,14 @@ Read-only inspection of `src/bob/library.rs` found that the lookup gap is narrow
 5. Run lookup coverage against the actual local catalogue and report unique/ambiguous/unresolved counts by query class. The checked-in snapshot is useful for development but is not a substitute for the full local catalogue.
 
 No runtime code was changed during this audit. These findings narrow the next implementation task without changing the storage format or risking catalogue data.
+
+
+### Additional matcher correctness risks found — 2026-10-10
+
+A second read-only pass over `indexed_interface_projections` and the projection helpers found concrete reasons not to treat a `Unique` result as fully validated yet:
+
+- **Rigid-point and rigid-vertex queries omit candidate rotation.** Their persisted family records contain candidate rotation start/end ranges, but the live query variants contain only material, endpoint/vertex, anchor edge, and anchor-edge parameter. The matcher therefore cannot check whether the realized candidate rotation lies in the stored range.
+- **Projection keys discard part of each family's interval.** `rigid_family_projection`, `point_family_projection`, and `vertex_family_projection` include the anchor-parameter start but omit the end. Point/vertex projections also omit candidate-rotation ranges. Consequently, distinct stored family records may collapse to one projection even when the omitted ranges differ. This may be intentional if those fields are proven irrelevant to runtime identity, but that contract is not documented or tested.
+- **Same-material edge contacts need an explicit test.** The rigid-edge matcher determines which query side is the candidate using material equality. When both sides have the same material, that test alone cannot distinguish candidate side from anchor side; the sorted local descriptors may make the order deterministic, but the lookup's candidate/anchor interpretation must be shown to agree with family generation.
+
+These are risks identified by source inspection, not demonstrated runtime failures. Before changing behavior, define the canonical family projection contract and add tests that vary only the omitted rotation/interval fields. Then update the query representation or projection rules according to that contract. No source code or catalogue data was changed in this pass.
