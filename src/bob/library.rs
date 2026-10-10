@@ -22,6 +22,8 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 pub const GEOMETRY_LIBRARY_SCHEMA_VERSION: u32 = 2;
+/// Version for the live-interface cache-key format, independent of persisted Bob records.
+pub const LIVE_GEOMETRY_INTERFACE_SCHEMA_VERSION: u32 = 1;
 /// Positional equivalence used by Bob when deciding whether two otherwise
 /// identical geometric records describe the same meaningful contact.
 /// Differences at or below this distance do not create a new record.
@@ -334,7 +336,7 @@ pub fn resolve_live_contact_candidate(
         interface_class: class,
         signature: format!(
             "live-v{}|{}:{}|{}:{}",
-            GEOMETRY_LIBRARY_SCHEMA_VERSION, sides[0].0, sides[0].1, sides[1].0, sides[1].1,
+            LIVE_GEOMETRY_INTERFACE_SCHEMA_VERSION, sides[0].0, sides[0].1, sides[1].0, sides[1].1,
         ),
         query,
     })
@@ -598,7 +600,7 @@ pub fn resolve_live_contact_interface(
         interface_class: class,
         signature: format!(
             "live-v{}|{}:{}|{}:{}",
-            GEOMETRY_LIBRARY_SCHEMA_VERSION, sides[0].0, sides[0].1, sides[1].0, sides[1].1
+            LIVE_GEOMETRY_INTERFACE_SCHEMA_VERSION, sides[0].0, sides[0].1, sides[1].0, sides[1].1
         ),
         query,
     }
