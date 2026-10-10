@@ -1895,13 +1895,14 @@ impl GeometryLibrary {
                 placement,
             };
             let key = format!(
-                "{}|{}|{}|{}|{}",
+                "{}|{}|{}|{}|{}|{}",
                 suggestion.candidate_edge,
                 suggestion.anchor_edge,
                 quantize(suggestion.anchor_contact_parameter),
                 quantize(suggestion.placement.x),
-                quantize(suggestion.placement.y)
-            ) + &format!("|{}", quantize(suggestion.placement.rotation_radians));
+                quantize(suggestion.placement.y),
+                quantize(suggestion.placement.rotation_radians)
+            );
             suggestions.entry(key).or_insert(suggestion);
         }
         suggestions.into_values().collect()
@@ -4586,11 +4587,31 @@ mod bob_lookup_contract_tests {
         let suggestions =
             library.suggest_rigid_edge_placements("Carbon", live_anchor, &carbon, &catalog);
         assert!(!suggestions.is_empty());
+        let anchor_segments = rigid_boundary_segments(&carbon.shape.form);
+        let candidate_segments = rigid_boundary_segments(&carbon.shape.form);
         assert!(suggestions.iter().all(|suggestion| {
+            let Some(&(a0, a1)) = anchor_segments.get(suggestion.anchor_edge) else {
+                return false;
+            };
+            let Some(&(c0, c1)) = candidate_segments.get(suggestion.candidate_edge) else {
+                return false;
+            };
+            let parameter = suggestion.anchor_contact_parameter;
+            let anchor_local = (
+                a0.0 + (a1.0 - a0.0) * parameter,
+                a0.1 + (a1.1 - a0.1) * parameter,
+            );
+            let candidate_midpoint = ((c0.0 + c1.0) * 0.5, (c0.1 + c1.1) * 0.5);
+            let anchor_world = world_point(anchor_local, live_anchor);
+            let candidate_world = world_point(candidate_midpoint, suggestion.placement);
             suggestion.candidate_resource == "Carbon"
-                && suggestion.anchor_contact_parameter >= 0.0
-                && suggestion.anchor_contact_parameter <= 1.0
-                && (suggestion.placement.rotation_radians - live_anchor.rotation_radians).is_finite()
+                && parameter >= 0.0
+                && parameter <= 1.0
+                && suggestion.placement.x.is_finite()
+                && suggestion.placement.y.is_finite()
+                && suggestion.placement.rotation_radians.is_finite()
+                && (anchor_world.0 - candidate_world.0).abs() < 1e-7
+                && (anchor_world.1 - candidate_world.1).abs() < 1e-7
         }));
         assert!(suggestions.iter().any(|suggestion| {
             (suggestion.placement.x - live_anchor.x).abs() > 1e-6
