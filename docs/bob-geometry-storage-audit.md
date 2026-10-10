@@ -158,3 +158,27 @@ The contract tests have been committed, but the available GitHub workflow/status
 
 
 A follow-up guard also makes same-material, same-edge rigid-edge queries fail closed: if both candidate and anchor share the same material and edge index, the query does not identify which side plays which role. The matcher no longer picks an arbitrary side in that case. A dedicated test records this conservative behavior. Different-edge same-material endpoint-order invariance remains covered by its own test.
+
+
+
+### Candidate-rotation query contract trace — 2026-10-10
+
+A follow-up trace checked whether the missing rigid-point/rigid-vertex rotation can be safely filled from the current runtime descriptors.
+
+**What the code currently knows**
+- `local_contact_descriptor` encodes a rigid boundary as `edge:<edge-index>@<boundary-parameter>@<unit-placement-rotation>`.
+- Line endpoints and corners are encoded only as `line:<point-index>` and `corner:<point-index>`; their owning unit's placement rotation is not carried in those descriptor strings.
+- The point/vertex family generators create candidate-rotation intervals from local shape geometry (`center ± PI/2`). The indexed matcher checks the anchor parameter interval but does not check candidate rotation.
+- The live resolver receives both structural units and the original endpoint pair, so candidate rotation is potentially available at the resolver boundary. It is not, however, currently part of the canonical `RigidPoint`/`RigidVertex` query identity or the matcher predicate.
+
+**Safe implementation boundary**
+Do not copy the anchor edge's rotation into the candidate-rotation field: they refer to different units and are not interchangeable. For point/vertex contacts, the candidate is the line-endpoint/corner side described by the family record; rotation must be taken from that side's owning `StructuralUnit`, then compared against the stored interval using a documented angle convention. Because generated intervals may cross the normalized-angle seam, the comparison must explicitly define wrapping or preserve an unwrapped convention; a plain numeric `start <= angle <= end` check is not sufficient until that convention is established.
+
+**Next code task**
+1. Add a small angle-interval helper with explicit seam-crossing behavior and focused tests (ordinary interval, both endpoints, just-outside values, and a wrap-crossing interval).
+2. Add realized candidate rotation to the rigid-point and rigid-vertex live query variants, deriving it from the unit that owns the line endpoint/corner rather than from the anchor edge.
+3. Filter indexed candidates by that angle contract, and add fixtures where the same material/feature/anchor parameter has one in-range family and one out-of-range family. The latter must not make the query appear matched.
+4. Keep endpoint-order invariance tests, including same-material cases, and update the query/projection tests together.
+5. Verify with Cargo/CI before calling the resolver rotation-safe. If angle semantics cannot be established from placement/generation code, stop and document the blocker rather than guessing.
+
+This is a source-trace result and implementation plan, not a claim that the query has been fixed. No geometry catalogue rows were modified.
