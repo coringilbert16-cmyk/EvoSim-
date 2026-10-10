@@ -339,3 +339,15 @@ The user-approved bounded generation run has completed successfully in [GitHub A
 - Artifact name: `bob-two-piece-geometry-library`, artifact ID `11674718881`, expiry 2026-11-09. Generated runtime data was not committed.
 
 The dedicated workflow is now manual-dispatch only, to avoid regeneration on ordinary documentation edits. This result validates bounded generation, persistence, and reopen/bound checks only. It does **not** resolve the existing live-constructor integration gap or full-suite failures. The latest Rust CI still reports **266 passed, 75 failed, 1 ignored**, and Clippy remains failing. Continue the constructor migration separately; do not treat family volume as proof of viable-organism construction.
+
+
+## Bob-to-constructor integration — 2026-10-10
+
+The bond-driven construction path now loads Bob's geometry library once per construction and requests rigid-edge placement suggestions for each existing anchor material / candidate material pair. Bob's suggested poses are tried before the constructor's analytic endpoint-alignment candidates. The candidate then goes through the existing live checks: material restoration, overlap/penetration rejection, actual contact endpoint availability, connection compatibility, selected-candidate evaluation, and the COMBINE bond transaction. Bob is advisory; it cannot commit a bond or bypass energy/physical validation.
+
+- Source change: `src/construction/runtime.rs`, commit `9188414f3a50fedd2e421d04bbb418c3bc9096a9`.
+- Rust CI formatting, source-size, COMBINE architecture, Bob compact-storage tests, and empty-library open/reopen checks passed.
+- The full Rust test stage and strict Clippy both failed in CI. The job logs were not retrievable through the current GitHub log endpoint at audit time, so do not infer that the failures are unchanged or assign a test count without a readable summary.
+- This is the first real connection between Bob's placement suggestions and bond-driven construction, not proof that suggestions are selected successfully or that the constructor now produces a viable organism.
+
+Next: obtain a readable test failure summary, add a focused integration assertion that the construction candidate path consumes Bob suggestions, and verify a real candidate reaches the existing transaction. Only then diagnose any remaining physical bond rejection using the observed attempted placement and internal rejection reason. Do not relax physical constraints to force a pass.
