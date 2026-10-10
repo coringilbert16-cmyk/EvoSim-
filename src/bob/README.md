@@ -1,119 +1,72 @@
-# Bob
+# Bob — Geometry Reference Library
 
-Bob is EvoSim's persistent geometry knowledge engine.
+Bob stores reusable geometry knowledge for EvoSim. It is not live organism state and does not replace the physical validator.
 
-- `library.rs` owns durable formations, contact families, canonicalization, and indexed runtime lookup.
-- `worker.rs` expands and persists geometry knowledge.
-- `server.rs` exposes the read-only geometry viewer.
+## Responsibilities
 
-Bob is knowledge, not live simulation state. A stored result describes previously validated geometry; it does not authorize a live physical change or replace validation of a realized structure.
+- `src/bob/library.rs`: persistent formations, contact-family records, canonical identities, storage schemas, and indexed read paths.
+- `src/bob/worker.rs`: discovers formations and contact families, persists results, and reports generation metrics.
+- `src/bob/server.rs`: read-only geometry-library viewer.
+- `src/construction/initial_organism_constructor.rs`: the live initial-organism constructor. Its current scaffold-based implementation is **not yet the approved library-driven replacement**.
 
-## Current engineering scope
+A library result is reusable knowledge or a candidate, not permission to mutate a live organism. Live placement must still obey authoritative geometry, contact, nonpenetration, chemistry, bonding, energy, and ledger rules.
 
-The current phase is limited to **Bob's internal consistency, library lookup, and measured lookup performance**.
+## Library location
 
-**The initial-organism constructor is out of scope for this phase.** Do not change its algorithm, wire it to Bob, or add constructor-specific cache assumptions as part of this work. Constructor integration requires a separate decision after Bob's interface and behavior are stable.
+Set `EVOSIM_GEOMETRY_LIBRARY_DIR` to choose the persistent library root. If unset, Bob uses `geometry_library/data` relative to the process working directory. An explicit override must point to a valid library; Bob must not silently replace a missing explicitly configured library with a new empty one.
 
+Generated data is rebuildable only when the generation rules and required lookup coverage are preserved. Keep source definitions, generator code, schemas, validation rules, and the commands needed to regenerate it. Do not delete the only useful catalogue until a clean rebuild has demonstrated the coverage the live constructor needs.
 
-## Approved storage-efficiency work
+## Storage behavior
 
-The checked-in geometry library is already large, and the local catalogue is larger than the repository snapshot. The immediate storage work is a lossless data-model reduction, not deletion of formations, reduced geometric precision, or exhaustive catalogue pruning.
+- Fresh empty roots use the compositional-v3 formation format, with deterministic compact formation IDs and exact one-constituent deltas where the delta encoding is smaller.
+- Existing legacy roots remain readable; the on-disk encoding must not change canonical runtime identity or lookup results.
+- Family rows can use compact formation references on disk while runtime signatures remain canonical.
+- Frontier updates are batched at the end of a formation pass. If a pass is interrupted before checkpointing, unfinished work can be retried through idempotent insertion.
+- Water contact families are generated once per formation/resource pass and reused to derive fluid-boundary records.
+- The worker reports generated and newly inserted family counts separately. Equal counts indicate no duplicate keys were rejected; they do not prove all records are geometrically unique.
 
-### Findings from source inspection
+## Worker commands
 
-- The rigid edge, rigid point, rigid vertex, fluid-boundary, and water-contact family records each serialize a full `formation_signature`. That signature encodes the formation's constituents, quantized positions/rotations, and bonds. The same string is repeated in every family row associated with that formation.
-- Family deduplication signatures also embed the full formation signature, so changing the serialized representation must preserve the current logical identity and duplicate behavior.
-- Loaders currently validate family rows by resolving `formation_signature` into the in-memory formation map. A compact reference therefore needs a reliable ID-to-formation index built from the authoritative formation records.
-- The formation, generic contact-family, rigid-edge-family, and fluid-boundary JSONL loaders now parse records incrementally instead of collecting the entire file into `Vec<String>`. The streaming change is committed on this branch; compilation and tests have not yet been run, so behavior preservation still requires verification. The rigid point/vertex loaders were already line-streaming.
-- The frontier also repeats formation signatures in both its map key and record. It is a secondary target after family storage, because frontier resume semantics must remain exact.
+Run these commands from the repository root after building the executable:
 
-### Storage migration design
+```powershell
+# Process one formation/resource frontier pass
+.\target\release\evosim.exe --geometry-worker-once
 
-1. **Measure a baseline.** Run `python3 tools/audit_geometry_storage.py geometry_library/data` to record per-file bytes, rows, row lengths, repeated-signature bytes, and a rough compact-size estimate. This read-only report does not modify the catalogue and is an estimate, not a substitute for measured migration output. Separately record load time and peak memory from the real local catalogue when a runnable checkout is available. Do not estimate savings from the GitHub snapshot as though it were the user's 79k-formation local store.
-2. **Add deterministic compact formation IDs.** Derive an ID from the canonical formation signature using a stable, explicitly selected hash algorithm. During load, build an ID-to-formation mapping and detect any ID collision where distinct canonical signatures map to the same ID; fail closed rather than resolving a collision to the wrong formation. Do not use Rust's default hasher for persisted IDs.
-3. **Version the family-record schema.** New compact records store the formation ID instead of repeating the full signature. The formation's full canonical signature remains authoritative in the formation record. Runtime APIs may resolve IDs back to formations, but must preserve family identity, validation, index behavior, and duplicate detection.
-4. **Migrate transactionally.** Keep the current files untouched as the source of truth until all old records are parsed, every reference resolves, counts and logical family signatures are checked, and new files are flushed successfully. Write to a separate versioned output or temporary paths first; never overwrite the only copy during conversion. A restart must not mistake a partially written migration for a completed one.
-5. **Preserve compatibility deliberately.** Old and new formats must be distinguishable by schema/version metadata. Either support reading the legacy format during a migration window or provide an explicit one-way migration command; never silently reinterpret an old row as a new schema. Do not bump the whole library schema until the implications for formations, frontier, and catalogue compatibility are resolved.
-6. **Stream loaders (source change made; verification pending).** The formation, generic contact-family, rigid-edge-family, and fluid-boundary loaders now parse one line at a time; rigid point/vertex loaders already did. The change retains the prior final-record recovery checks for the three main loaders and the fluid loader's all-or-empty I/O-error behavior. Run formatting, compilation, and focused restart/corrupt-tail tests before treating this as verified.
-7. **Prove equivalence and savings.** Compare legacy and compact data by row counts, resolved formation references, family keys/projections, and lookup results. Benchmark cold load, memory, and indexed lookup before and after. Report measured disk savings separately from memory and speed changes.
-8. **Apply to remaining repeated references only after the first migration is proven.** The three largest rigid-family files are the first target. Then evaluate fluid/water families and frontier records with the same measurements. Lossless compression can be evaluated afterward; it must not replace fixing repeated data in the model.
+# Process at most N passes in one process
+.\target\revosim.exe --geometry-worker-passes 25
 
-**Acceptance criteria:** no formation or valid family is lost; every compact reference resolves uniquely; collision checks are enforced; live physical validation remains authoritative; old data remains recoverable until verification passes; and before/after size and load measurements are recorded. Constructor code and constructor-to-Bob integration remain out of scope.
+# Run continuously; the worker idles when no unfinished work is found
+.\target\evosim.exe --geometry-worker
+```
 
-## Latest source-audit blocker
+The `--geometry-worker-passes N` value must be positive. A one-pass run or a successful persistence/reopen check validates only that narrow behavior; it does not establish full catalogue completion or constructor viability.
 
-A focused source audit found that `src/bob/worker.rs` imported `open_default_library`, `seed_base_catalogue`, `expand_formation_candidates`, and three rigid-family generators missing from the mapped `src/bob/library.rs`. The missing production definitions were restored from the last historical source revision where they existed at module scope, while preserving the current indexed lookup and streaming-loader code. This source-level reconciliation is committed. A follow-up source audit found three independent 20-constituent ceilings (formation validation, candidate expansion, and worker frontier selection); all three were removed so Bob can continue exploring larger formations instead of silently stopping at that size. This is a source-level policy correction, not proof that large formations are computationally cheap. **Compilation and tests remain unverified** because a runnable checkout is not available in this environment. Do not begin compact serialization until the restored API compiles and its focused tests pass. See [the detailed storage audit and migration proposal](../../docs/bob-geometry-storage-integration-audit.md) and [issue #178](https://github.com/coringilbert16-cmyk/EvoSim-/issues/178).
+The worker enforces `MAX_LIBRARY_CONSTITUENTS = 20`: formations below the limit may be expanded, and formations at the limit may still contribute local contact-family knowledge but are not expanded into 21-constituent formations. This is a bounded-library policy, not a guarantee of small storage or quick completion. Combinatorial growth below the limit remains a known risk and must be measured.
 
-## Recommended work plan
+## Constructor integration contract
 
-### 1. Reconcile the source/API contract
+The approved replacement constructor is library-driven and milestone-based, not a fixed topology or piece-count recipe. It must:
 
-Audit the module mapping and the public functions used by `worker.rs`, `library.rs`, and the application entry point.
+1. propose candidate attachments or reusable local arrangements from Bob;
+2. validate every candidate against the whole relevant realized structure and authoritative physical rules;
+3. use atomic trial/commit/rollback for geometry, bonds, material inventory, energy, and ledgers;
+4. discover a genome only when the real cavity analyzer finds a qualifying bonded seal;
+5. stop the genome-building phase as soon as that cavity qualifies;
+6. physically acquire Water plus at least three distinct non-Water resource categories;
+7. return only a physically viable organism and report specific blockers otherwise.
 
-- Every imported library function must resolve to the intended authoritative implementation.
-- The worker's discovery/expansion API must not be confused with the read-only lookup API.
-- Remove or correct stale names, duplicate implementations, and documentation that describes functions or behavior that do not exist.
-- Keep persistent formations, contact families, canonicalization, and indexed lookup under one clear library interface.
-- Record unresolved mismatches rather than building new features on an unverified contract.
+Initial construction and offspring construction should share one physical engine with different policies. A blueprint is a soft preference, not an authoritative final topology. The detailed dependency audit records the current API and integration blockers.
 
-**Exit condition:** module wiring and imports agree, the documented public API matches the source, and compilation is verified in a runnable checkout.
+## Verification status
 
-### 2. Specify lookup contracts
+The latest completed source-branch workflow passed formatting, source-file-size checks, COMBINE architecture checks, focused compact-storage tests, and a fresh-library persistence/reopen check. The Rust test and Clippy steps still fail before a green full-suite result, including strict-lint failures from unfulfilled `dead_code` expectations. The previously recorded full test run was 253 passed, 75 failed, and 1 ignored. Do not describe Bob or the constructor as fully verified based on the focused storage checks.
 
-Document each runtime lookup by its input, result, and guarantees.
+The integration branch is the current consolidation target: [PR #186](https://github.com/coringilbert16-cmyk/EvoSim-/pull/186). It remains draft-only until compile/lint blockers are resolved, focused physical contracts execute, the full suite is recorded, and the actual constructor is shown to produce a viable organism.
 
-- Define how formation identity and canonicalization affect matching.
-- Define how rigid contact families and fluid/contact-family records are queried.
-- Respect catalogue/schema and resource-shape versions; stale or incompatible records must not be treated as current.
-- Make clear whether a result is an exact formation, a contact-family description, or a candidate that still needs instantiation.
-- Keep the full physical validator authoritative whenever a symbolic family is instantiated or a stored formation is applied to a live physical situation.
+## Audit documents
 
-A library hit is knowledge reuse, not a bypass around physical rules.
-
-### 3. Measure before adding a priority cache
-
-The persistent library already has indexed lookup. Establish the actual bottleneck before adding another layer.
-
-Measure representative formation and contact-family queries, including repeated hot queries and varied cold queries. Record query count, elapsed time, and relevant catalogue size; keep benchmark results reproducible and separate from correctness tests.
-
-If measurements show repeated lookups justify it, implement a **bounded, frequency-aware in-memory hot cache** for query results:
-
-- Promote entries according to observed reuse frequency, not only most-recent access.
-- Enforce an explicit memory/entry bound and a defined eviction policy.
-- Track hits, misses, promotions, and evictions so the benefit is measurable.
-- Treat cache contents as disposable acceleration state; the persistent library remains the durable knowledge source.
-- Ensure cold start, cache eviction, and cache-disabled operation preserve identical lookup semantics.
-- Do not persist cache state unless a measured, documented need justifies that separate design.
-
-Do not add a cache simply because the catalogue is expected to grow. If indexed lookup is already fast enough, retain the simpler design and document the measurements.
-
-### 4. Verify Bob in isolation
-
-Use focused tests for:
-
-- API/module consistency and supported query behavior;
-- canonical formation lookup and duplicate handling;
-- rigid and fluid/contact-family lookup semantics;
-- schema/version rejection or migration behavior;
-- cold-start and repeated lookup equivalence;
-- cache bounds and promotion/eviction, if a cache is implemented;
-- worker persistence and restart/resume behavior;
-- separation between worker writes and read-only viewer/lookup paths.
-
-Any test that writes catalogue data must use an isolated temporary library root. Do not let tests mutate the persistent production catalogue.
-
-Run formatting, compilation, and focused tests in a runnable checkout. Report each check as passed, failed, or not run; source inspection alone is not a test result.
-
-### 5. Explicitly defer constructor integration
-
-This phase ends when Bob's API is internally consistent, its lookup guarantees are documented, and measured lookup behavior is understood.
-
-Only after that exit condition is met should a separate proposal describe how a future constructor might query Bob, validate a candidate using the live physical rules, and fall back to on-demand work when the library has no suitable answer. That later proposal is not authorization to modify the constructor now.
-
-## Non-negotiable boundaries
-
-- Bob stores reusable geometry knowledge; it is not live organism state.
-- Persisted records and cache entries never override current physical validation.
-- The worker discovers and persists knowledge; read-only lookup does not silently run discovery.
-- Avoid exhaustive preplanning of every possible organism or universe configuration. Grow the catalogue from validated reusable formations and use symbolic contact families where a continuum cannot be represented as a finite list of samples.
-- Prefer the smallest implementation supported by measurements over speculative layers.
+- [Bob regeneration pipeline audit](../../docs/bob-regeneration-pipeline-audit.md) — worker behavior, measured growth, limits, and rebuild gates.
+- [Bob storage integration audit](../../docs/bob-geometry-storage-integration-audit.md) — compact storage, identity, migration, and compatibility findings.
+- [Constructor/library dependency audit](../../docs/constructor-library-dependency-audit.md) — current APIs, physical-authority gaps, and replacement-constructor gates.
