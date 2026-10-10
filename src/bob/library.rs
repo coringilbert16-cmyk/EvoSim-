@@ -467,14 +467,17 @@ fn contact_bucket_hash(material: &str, anchor_feature: usize, candidate_feature:
     hasher.finish()
 }
 
-fn rigid_family_projection(family: &GeometryRigidContactFamily) -> String {
+fn rigid_family_projection(
+    family: &GeometryRigidContactFamily,
+    relative_rotation_radians: f64,
+) -> String {
     format!(
         "edge|{}|{}|{}|{}|{}|{}|{}",
         family.candidate_resource,
         family.anchor_constituent,
         family.anchor_edge,
         family.candidate_edge,
-        quantize(family.candidate_rotation_radians),
+        quantize(relative_rotation_radians),
         quantize(family.anchor_parameter_start),
         quantize(family.anchor_parameter_end),
     )
@@ -1866,18 +1869,32 @@ impl GeometryLibrary {
                                         *a_parameter as f64 / 1e9,
                                     )
                                 };
-                                let anchor_material = self
+                                let anchor = self
                                     .entries
                                     .get(&family.formation_signature)
                                     .and_then(|formation| {
                                         formation.constituents.get(family.anchor_constituent)
-                                    })
-                                    .map(|constituent| constituent.resource.as_str());
+                                    });
+                                let anchor_material =
+                                    anchor.map(|constituent| constituent.resource.as_str());
+                                let stored_anchor_rotation = anchor
+                                    .map(|constituent| constituent.placement.rotation_radians)
+                                    .unwrap_or_default();
+                                let expected_relative_rotation = normalize_angle(
+                                    family.candidate_rotation_radians - stored_anchor_rotation,
+                                );
                                 let realized_anchor_material = if candidate_is_a {
                                     b_material
                                 } else {
                                     a_material
                                 };
+                                let realized_anchor_rotation = if candidate_is_a {
+                                    *b_rotation as f64 / 1e9
+                                } else {
+                                    *a_rotation as f64 / 1e9
+                                };
+                                let realized_relative_rotation =
+                                    normalize_angle(candidate_rotation - realized_anchor_rotation);
                                 if candidate_material == &family.candidate_resource
                                     && realized_anchor_material
                                         == anchor_material.unwrap_or_default()
@@ -1885,18 +1902,16 @@ impl GeometryLibrary {
                                     && candidate_edge == family.candidate_edge
                                     && anchor_parameter >= family.anchor_parameter_start - QUANTUM
                                     && anchor_parameter <= family.anchor_parameter_end + QUANTUM
-                                    && (normalize_angle(
-                                        candidate_rotation
-                                            - if candidate_is_a {
-                                                *b_rotation as f64 / 1e9
-                                            } else {
-                                                *a_rotation as f64 / 1e9
-                                            },
-                                    ) - family.candidate_rotation_radians)
-                                        .abs()
+                                    && normalize_angle(
+                                        realized_relative_rotation - expected_relative_rotation,
+                                    )
+                                    .abs()
                                         <= 1e-7
                                 {
-                                    projections.insert(rigid_family_projection(family), ());
+                                    projections.insert(
+                                        rigid_family_projection(family, expected_relative_rotation),
+                                        (),
+                                    );
                                 }
                             }
                         }
@@ -4395,6 +4410,70 @@ mod bob_lookup_contract_tests {
         );
 
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn indexed_edge_lookup_compares_rotation_relative_to_anchor_pose() {
+        let catalog = crate::resources::default_catalog();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-relative-rotation-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+
+        let mut formation = GeometryFormation::single("Carbon");
+        formation.constituents[0].placement.rotation_radians = 0.5;
+        formation.signature = formation.canonical_signature();
+        let formation_signature = formation.signature.clone();
+        library.entries.insert(formation_signature.clone(), formation);
+
+        let family = GeometryRigidContactFamily {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            formation_signature,
+            candidate_resource: "Hydrogen".to_string(),
+            anchor_constituent: 0,
+            anchor_edge: 0,
+            candidate_edge: 0,
+            candidate_rotation_radians: 1.2,
+            anchor_parameter_start: 0.0,
+            anchor_parameter_end: 1.0,
+        };
+        let family_signature = family.signature();
+        library
+            .rigid_contact_families
+            .insert(family_signature.clone(), family);
+        library
+            .rigid_contact_index
+            .entry(contact_bucket_hash("Hydrogen", 0, 0))
+            .or_default()
+            .push(family_signature);
+
+        let interface = LiveGeometryInterface {
+            interface_class: "rigid_edge",
+            signature: "relative-rotation-regression".to_string(),
+            query: Some(LiveGeometryQuery::RigidEdge {
+                a_material: "Hydrogen".to_string(),
+                a_edge: 0,
+                a_parameter: 0,
+                a_rotation: quantize(1.2),
+                b_material: "Carbon".to_string(),
+                b_edge: 0,
+                b_parameter: quantize(0.5),
+                b_rotation: quantize(0.5),
+            }),
+        };
+        assert_eq!(
+            library.resolve_persistent_interface(&interface),
+            LiveFamilyResolution::Unique,
+            "family rotation must be compared relative to its anchor's stored pose"
+        );
+        assert!(library
+            .persistent_interface_projection(&interface)
+            .is_some());
+
+        drop(library);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
