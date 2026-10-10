@@ -7,25 +7,27 @@ EvoSim is an open-ended evolutionary organism simulation. Organisms are built fr
 > [!CAUTION]
 > **Do not treat the current default branch (`main`) as a downloadable EvoSim source checkout yet.** A recursive GitHub tree audit found only 15 entries, rooted under `chemistry_library/`, `docs/`, and `geometry_library/`; it has no `Cargo.toml` or `src/main.rs`. It is currently a data/documentation branch, not a complete runnable Rust application.
 
-The runnable source and current Bob regeneration changes are on `bob-automatic-compact-storage`. This branch and `main` have diverged substantially: the latest GitHub comparison reports 146 commits ahead and 132 behind. The source prerequisite branch `fix/build-restoration-audit` is also divergent from `main` (74 ahead, 132 behind). Do not resolve this by blindly merging either side or deleting the catalogue: first reconcile the source history and decide which generated data is intentionally retained.
+The current unified integration target is [PR #186 — Integrate EvoSim source and Bob regeneration into main](https://github.com/coringilbert16-cmyk/EvoSim-/pull/186), branch `integration/unified-source-and-catalogue`. It preserves the main-branch catalogue while restoring the runnable Rust source, UI, scripts, and current project documentation. It remains draft-only.
 
 ### Current stabilization evidence
 
-- On the latest Bob branch head (`6f50c362c17e9a589688a736000116d9d6f3729b`), formatting, source-file-size checks, COMBINE architecture checks, focused compact-storage tests, and the fresh-library persistence/reopen smoke step passed in CI.
-- The Rust test step and Clippy step failed before a clean verification result. The workflow log reports compile/lint failures, including unfulfilled `dead_code` expectations; the full application test suite therefore has not been demonstrated green on this head.
-- The last separately documented full test execution remains 253 passed, 75 failed, and 1 ignored. Do not present that as a current passing baseline.
-- Open work is split across dependent PRs: [#181 constructor/library dependency audit](https://github.com/coringilbert16-cmyk/EvoSim-/pull/181), [#182 build restoration](https://github.com/coringilbert16-cmyk/EvoSim-/pull/182), [#183 shared Bob library root](https://github.com/coringilbert16-cmyk/EvoSim-/pull/183), and [#184 clean regeneration/storage](https://github.com/coringilbert16-cmyk/EvoSim-/pull/184). They are not yet a single verified production baseline.
+- The integration-branch Rust workflow [run 38055388755](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38055388755) passed formatting, source-file-size, COMBINE architecture, focused Bob compact-storage tests (4 passed), and the fresh v3 library create/reopen check. [Runner validation run 38055388762](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38055388762) passed.
+- The same Rust workflow is **not green**: `cargo test --all-targets` reported **253 passed, 75 failed, 1 ignored**. Failures cross geometry/contact, cavity/genome qualification, constructor/acquisition, chemistry/COMBINE, movement/perception, observation, viability, storage, reproduction, transformation, runtime, and simulation integration.
+- Clippy also fails under `-D warnings`, including unfulfilled `dead_code` expectations and ordinary lint errors. Do not suppress these wholesale; determine which APIs need integration and which are obsolete, then fix the relevant code.
+- The live initial-organism constructor remains a fixed 54-unit Carbon scaffold. It does **not** yet use Bob for free-form construction, still relies on a `1.0e12` construction-energy budget, uses an unapproved farthest-contact fallback, and does not validate the full required-resource acquisition set atomically.
+- Bob's focused persistence checks prove only the tested store behavior. They do not prove the live-family query contract, compatibility of the checked-in catalogue, full catalogue-generation completion, or viable organism construction.
 
 ### Required order before the next clean download
 
-1. Choose and document one integration lineage; preserve the physical/biological rules and the approved replacement-constructor plan.
-2. Reconcile the source branch with the data-only `main` history without blindly merging unrelated branch histories.
-3. Resolve compile blockers and strict-lint failures without blanket suppressions; then execute focused contracts and the full test suite.
-4. Confirm the constructor actually uses Bob's configured library root and can construct a physically viable organism. A worker smoke test alone is not acceptance.
-5. Decide which generated catalogue files are rebuildable output only after the constructor's required coverage and clean-generation completion criteria are verified.
-6. Set the repository's default branch to the verified runnable source lineage only after the above gates pass.
+1. Keep PR #186 as the single integration target; preserve the approved biological/physical rules and all required catalogue data.
+2. Resolve Clippy/build hygiene and shared physical-contract failures at their common authority, not by patching failing tests independently or weakening invariants.
+3. Finish Bob's live-family resolution and define corruption/duplicate/manifest recovery for persistent geometry and chemistry data.
+4. Replace the fixed scaffold with the approved milestone-driven constructor, including whole-structure validation, atomic transactions, analyzer-confirmed bonded genome cavity, physical acquisition of Water plus at least three other resources, and reconciled energy/material accounting.
+5. Run the actual constructor as the acceptance test, then focused contracts and the full suite. A Bob worker smoke test alone is not acceptance.
+6. Verify existing-catalogue compatibility and clean-generation criteria before deciding which generated files can be discarded or regenerated.
+7. Only after these gates pass, merge the verified integration lineage and make it the default branch.
 
-Until those gates pass, a fresh clone of `main` is not the right download target, and a clone of the Bob branch should be treated as a work-in-progress integration branch rather than a stable release.
+Until those gates pass, a fresh clone of `main` is not the right download target, and PR #186 remains a work-in-progress integration branch rather than a stable release. See [the full repository stabilization audit](docs/repository-stabilization-audit.md) for source-level findings, CI evidence, ordered implementation gates, and the definition of stable enough to download.
 
 ## Constructor and repository stabilization handoff — 2026-10-10
 
