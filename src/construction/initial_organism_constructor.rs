@@ -181,9 +181,9 @@ fn rotation_preserves_form_symmetry(form: &crate::resources::Form, rotation: f64
     let (s, c) = rotation.sin_cos();
     vertices.iter().all(|&(x, y)| {
         let rotated = (x * c - y * s, x * s + y * c);
-        vertices.iter().any(|&(other_x, other_y)| {
-            (rotated.0 - other_x).hypot(rotated.1 - other_y) <= 1e-7
-        })
+        vertices
+            .iter()
+            .any(|&(other_x, other_y)| (rotated.0 - other_x).hypot(rotated.1 - other_y) <= 1e-7)
     })
 }
 
