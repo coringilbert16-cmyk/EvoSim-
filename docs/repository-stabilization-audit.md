@@ -401,3 +401,11 @@ CI run [#38068822004](https://github.com/coringilbert16-cmyk/EvoSim-/actions/run
 ### Next bounded step
 
 Trace the still-failing blueprint-driven closure path (including the triangle fixture with `connection=2 elements=(1,2)`) from target placement through candidate generation, Bob suggestion merging, contact evaluation, and COMBINE admission. Capture why candidate placement yields zero live contacts before changing any placement tolerance. Keep this separate from the now-working blueprint-free initial constructor and do not weaken the physics to make legacy tests pass.
+
+## Multi-neighbor blueprint placement follow-up — 2026-10-10
+
+The triangle-closure failure was traced to a greedy placement issue: an element could be committed after connecting to one realized neighbor even when that pose made another already-realized declared neighbor unreachable. `realize_next_bond_driven` now validates each candidate pose against every already-realized neighbor in the blueprint before it is eligible for COMBINE. It checks actual contact candidates on the restored trial structure; it does not use the blueprint coordinates as a command and does not relax the overlap or contact tolerances.
+
+CI run [#38069059297](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38069059297) passes formatting, source-size, COMBINE architecture, Bob compact-storage, and empty-store checks. Both the triangle closure and multi-constraint triangle tests now pass. Full-suite status improved to **313 passed, 30 failed, 1 ignored**. Strict Clippy remains red.
+
+The intact-composite placement test remains failing with `no forward bond-driven placement found for blueprint element 1 after 270 placement attempts`. This was also failing before the multi-neighbor constraint was added, so it is not established as a regression. Next inspect how a stored composite's local constituent placements and endpoint coordinates are transformed by Bob and analytic candidate origins; preserve the composite as one intact physical material and do not treat its part-local origin as the composite origin.
