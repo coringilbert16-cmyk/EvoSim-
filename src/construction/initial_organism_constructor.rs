@@ -89,9 +89,11 @@ fn bob_validated_neighbor_placement(
         {
             continue;
         }
-        // Canonicalize a symmetry-equivalent rotation to the scaffold pose.
-        // This preserves the exact shape while avoiding round-off penetration
-        // at a shared edge (for example, a regular hexagon rotated by PI).
+        // Snap only the near-equivalent proposal to the exact scaffold site
+        // and canonical pose. The candidate is rechecked after snapping, so
+        // this cannot bypass collision, contact, or bond validation.
+        proposed.x = intended.0;
+        proposed.y = intended.1;
         proposed.rotation_radians = 0.0;
         let Some(instance) = crate::physical_material::PhysicalMaterial::realized(
             Material::free_base(resource.name.clone(), 1.0),
