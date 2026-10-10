@@ -4035,10 +4035,8 @@ mod bob_lookup_contract_tests {
     #[test]
     fn fresh_empty_library_opens_and_reopens_without_seeding_geometry() {
         let catalog = crate::resources::default_catalog();
-        let root = std::env::temp_dir().join(format!(
-            "evosim-bob-empty-open-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("evosim-bob-empty-open-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
 
         {
