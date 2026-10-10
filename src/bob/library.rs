@@ -448,35 +448,42 @@ fn contact_bucket_hash(material: &str, anchor_feature: usize, candidate_feature:
 
 fn rigid_family_projection(family: &GeometryRigidContactFamily) -> String {
     format!(
-        "edge|{}|{}|{}|{}|{}|{}",
+        "edge|{}|{}|{}|{}|{}|{}|{}",
         family.candidate_resource,
         family.anchor_constituent,
         family.anchor_edge,
         family.candidate_edge,
         quantize(family.candidate_rotation_radians),
         quantize(family.anchor_parameter_start),
+        quantize(family.anchor_parameter_end),
     )
 }
 
 fn point_family_projection(family: &GeometryRigidPointContactFamily) -> String {
     format!(
-        "point|{}|{}|{}|{}|{}",
+        "point|{}|{}|{}|{}|{}|{}|{}|{}",
         family.candidate_resource,
         family.anchor_constituent,
         family.anchor_edge,
         family.candidate_endpoint,
         quantize(family.anchor_parameter_start),
+        quantize(family.anchor_parameter_end),
+        quantize(family.candidate_rotation_start_radians),
+        quantize(family.candidate_rotation_end_radians),
     )
 }
 
 fn vertex_family_projection(family: &GeometryRigidVertexContactFamily) -> String {
     format!(
-        "vertex|{}|{}|{}|{}|{}",
+        "vertex|{}|{}|{}|{}|{}|{}|{}|{}",
         family.candidate_resource,
         family.anchor_constituent,
         family.anchor_edge,
         family.candidate_vertex,
         quantize(family.anchor_parameter_start),
+        quantize(family.anchor_parameter_end),
+        quantize(family.candidate_rotation_start_radians),
+        quantize(family.candidate_rotation_end_radians),
     )
 }
 
@@ -4047,6 +4054,62 @@ mod bob_lookup_contract_tests {
         );
 
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn family_projections_preserve_interval_ends_and_rotation_ranges() {
+        let edge = GeometryRigidContactFamily {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            formation_signature: "formation".to_string(),
+            candidate_resource: "Carbon".to_string(),
+            anchor_constituent: 0,
+            anchor_edge: 0,
+            candidate_edge: 1,
+            candidate_rotation_radians: 0.5,
+            anchor_parameter_start: 0.0,
+            anchor_parameter_end: 0.5,
+        };
+        let mut changed_edge = edge.clone();
+        changed_edge.anchor_parameter_end = 0.75;
+        assert_ne!(rigid_family_projection(&edge), rigid_family_projection(&changed_edge));
+
+        let point = GeometryRigidPointContactFamily {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            formation_signature: "formation".to_string(),
+            candidate_resource: "Carbon".to_string(),
+            anchor_constituent: 0,
+            anchor_edge: 0,
+            candidate_endpoint: 1,
+            anchor_parameter_start: 0.0,
+            anchor_parameter_end: 0.5,
+            candidate_rotation_start_radians: 0.25,
+            candidate_rotation_end_radians: 0.75,
+        };
+        let mut changed_point_end = point.clone();
+        changed_point_end.anchor_parameter_end = 0.75;
+        assert_ne!(point_family_projection(&point), point_family_projection(&changed_point_end));
+        let mut changed_point_rotation = point.clone();
+        changed_point_rotation.candidate_rotation_end_radians = 1.0;
+        assert_ne!(point_family_projection(&point), point_family_projection(&changed_point_rotation));
+
+        let vertex = GeometryRigidVertexContactFamily {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            formation_signature: "formation".to_string(),
+            candidate_resource: "Carbon".to_string(),
+            anchor_constituent: 0,
+            anchor_edge: 0,
+            candidate_vertex: 1,
+            anchor_parameter_start: 0.0,
+            anchor_parameter_end: 0.5,
+            candidate_rotation_start_radians: 0.25,
+            candidate_rotation_end_radians: 0.75,
+        };
+        let mut changed_vertex_end = vertex.clone();
+        changed_vertex_end.anchor_parameter_end = 0.75;
+        assert_ne!(vertex_family_projection(&vertex), vertex_family_projection(&changed_vertex_end));
+        let mut changed_vertex_rotation = vertex.clone();
+        changed_vertex_rotation.candidate_rotation_start_radians = 0.0;
+        assert_ne!(vertex_family_projection(&vertex), vertex_family_projection(&changed_vertex_rotation));
     }
 
     #[test]
