@@ -6,9 +6,9 @@ Usage:
 
 The compact-size estimate models Bob's current family encoding: replace
 "formation_signature" with the runtime's 22-character unpadded base64url
-ID derived from the first 128 bits of SHA-256. It estimates family rows only;
-it does not model compositional-v3 formation deltas. The script also checks
-formation references and ID collisions. It is read-only and never migrates data.
+ID derived from the first 128 bits of SHA-256. It estimates family rows only; it does not model compositional-v3 formation
+deltas or prove reference coverage. It checks proposed ID collisions across
+the scanned JSONL files. It is read-only and never migrates data.
 """
 from __future__ import annotations
 
