@@ -758,9 +758,11 @@ mod tests {
         for radius in 1..=5 {
             let ring = hex_ring(radius);
             assert_eq!(ring.len(), (6 * radius) as usize);
-            assert!(ring.iter().all(|&(q, r)| {
-                q.abs().max(r.abs()).max((q + r).abs()) == radius
-            }), "every generated axial cell must remain on radius {radius}");
+            assert!(
+                ring.iter()
+                    .all(|&(q, r)| { q.abs().max(r.abs()).max((q + r).abs()) == radius }),
+                "every generated axial cell must remain on radius {radius}"
+            );
             let mut unique = ring.clone();
             unique.sort_unstable();
             unique.dedup();
