@@ -315,7 +315,7 @@ pub fn resolve_live_contact_candidate(
                 edge_material: edge.material,
                 edge: edge.edge,
                 edge_parameter: quantize(edge.parameter),
-                candidate_rotation: None,
+                candidate_rotation: Some(candidate_rotation),
             })
         }
         _ => None,
@@ -557,7 +557,7 @@ pub fn resolve_live_contact_interface(
                 edge_material: edge.material,
                 edge: edge.edge,
                 edge_parameter: quantize(edge.parameter),
-                candidate_rotation,
+                candidate_rotation: None,
             })
         }
         "rigid_vertex" => {
@@ -576,7 +576,7 @@ pub fn resolve_live_contact_interface(
                 edge_material: edge.material,
                 edge: edge.edge,
                 edge_parameter: quantize(edge.parameter),
-                candidate_rotation,
+                candidate_rotation: None,
             })
         }
         _ => None,
