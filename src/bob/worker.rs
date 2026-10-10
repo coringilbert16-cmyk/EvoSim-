@@ -85,7 +85,7 @@ pub fn run_to_completion(max_constituents: usize) -> std::io::Result<()> {
         .values()
         .filter(|record| {
             !matches!(
-                record.state,
+                &record.state,
                 GeometryFrontierState::Exhausted | GeometryFrontierState::ContinuousFamilyPending
             )
         })
@@ -143,7 +143,7 @@ pub fn run_passes(max_passes: usize) -> std::io::Result<usize> {
     let mut processed = 0usize;
 
     for _ in 0..max_passes {
-        match process_one_frontier(&mut library, &catalog)? {
+        match process_one_frontier(&mut library, &catalog, MAX_LIBRARY_CONSTITUENTS)? {
             Some(metrics) => {
                 eprintln!("{metrics}");
                 processed += 1;
