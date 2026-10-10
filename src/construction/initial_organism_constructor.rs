@@ -754,6 +754,21 @@ mod tests {
     }
 
     #[test]
+    fn axial_hex_ring_contains_only_unique_perimeter_cells() {
+        for radius in 1..=5 {
+            let ring = hex_ring(radius);
+            assert_eq!(ring.len(), (6 * radius) as usize);
+            assert!(ring.iter().all(|&(q, r)| {
+                q.abs().max(r.abs()).max((q + r).abs()) == radius
+            }), "every generated axial cell must remain on radius {radius}");
+            let mut unique = ring.clone();
+            unique.sort_unstable();
+            unique.dedup();
+            assert_eq!(unique.len(), ring.len(), "ring cells must be unique");
+        }
+    }
+
+    #[test]
     fn blueprint_free_constructor_produces_a_valid_organism() {
         let catalog = crate::resources::default_catalog();
         let result = construct_valid(&catalog).expect("constructor should find a valid organism");
