@@ -61,7 +61,7 @@ Initial construction and offspring construction should share one physical engine
 
 ## Verification status
 
-The latest completed source-branch workflow passed formatting, source-file-size checks, COMBINE architecture checks, focused compact-storage tests, and a fresh-library persistence/reopen check. The Rust test and Clippy steps still fail before a green full-suite result, including strict-lint failures from unfulfilled `dead_code` expectations. The previously recorded full test run was 253 passed, 75 failed, and 1 ignored. Do not describe Bob or the constructor as fully verified based on the focused storage checks.
+The latest completed integration-branch workflow passed formatting, source-file-size checks, COMBINE architecture checks, focused compact-storage tests, and a fresh-library persistence/reopen check. `cargo test --all-targets` executed and reported 253 passed, 75 failed, and 1 ignored. Clippy fails on strict dead-code expectations and other lint diagnostics. Failures span construction/geometry, chemistry, observation, viability, reproduction, and simulation integration. Do not describe Bob or the constructor as fully verified based on the focused storage checks.
 
 The integration branch is the current consolidation target: [PR #186](https://github.com/coringilbert16-cmyk/EvoSim-/pull/186). It remains draft-only until compile/lint blockers are resolved, focused physical contracts execute, the full suite is recorded, and the actual constructor is shown to produce a viable organism.
 
