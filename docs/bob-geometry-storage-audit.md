@@ -155,3 +155,6 @@ Focused tests vary the interval end and rotation-range bounds independently and 
 **Remaining limitation:** rigid-point and rigid-vertex live query variants still do not carry realized candidate rotation. The projection change prevents different stored rotation ranges from collapsing, but it does not yet prove that a single matching family's rotation range contains the live candidate's actual orientation. A follow-up must extend the runtime query contract (including how orientation is derived for the endpoint-only resolver) or fail closed for queries that lack it. Until then, a Unique point/vertex result is not fully rotation-validated and must not be treated as complete geometric proof.
 
 The contract tests have been committed, but the available GitHub workflow/status query did not return a run or check result for these commits. Compilation and test success remain unverified until CI or a local Cargo run reports results.
+
+
+A follow-up guard also makes same-material, same-edge rigid-edge queries fail closed: if both candidate and anchor share the same material and edge index, the query does not identify which side plays which role. The matcher no longer picks an arbitrary side in that case. A dedicated test records this conservative behavior. Different-edge same-material endpoint-order invariance remains covered by its own test.
