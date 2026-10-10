@@ -7,7 +7,7 @@ This directory documents the persistent geometry reference library. Generated ru
 - `data/` is runtime-generated persistent library state, not source code. Do not mirror generated state into Git by default; generated data should not be edited as source files.
 - The catalogue is versioned by its manifest and resource-shape signature.
 - Tests must use isolated temporary roots.
-- The worker will eventually populate this directory continuously as new valid formations are discovered.
+- The worker can populate this directory after the generator and live-constructor query contract have passed the documented validation gates. An empty library is intentional during the current reset.
 
 The source-of-truth implementation is src/bob/library.rs.
 
@@ -141,16 +141,11 @@ Formation batch deduplication uses the existing canonical geometry-equivalence r
 
 ### Running the worker safely
 
-Do not erase the only copy of an existing catalogue to switch formats. Use a new, empty directory for the first v3 run; keep the old directory untouched until the new store has been inspected and backed up. An explicit `EVOSIM_GEOMETRY_LIBRARY_DIR` may point to either an existing store (with `manifest.json` and `formations.jsonl`) or an empty directory. Bob initializes the latter as v3. A nonempty directory without those store files is rejected rather than silently treated as a new library.
+Worker commands are intentionally withheld from the current operational handoff while the generated catalogue is reset. The source supports a fresh empty root, but a successful open or one-pass run is not evidence that Bob's records are useful to the constructor. Before a regeneration run is approved, the project must have:
 
-For a Windows PowerShell smoke run from the source checkout:
+1. A live constructor query contract that consumes geometry suggestions while keeping physical validation authoritative.
+2. Tests for unique, ambiguous, and unresolved family matches, including same-material contacts and fluid-boundary cases.
+3. An isolated-root test proving deterministic generation, persistence, and reopen behavior without modifying any shared or tracked catalogue.
+4. Coverage/quality metrics tied to constructor candidate acceptance and viable-organism completion, not just record counts or bytes.
 
-```powershell
-$env:EVOSIM_GEOMETRY_LIBRARY_DIR = "$PWD\geometry_library\data-v3-smoke"
-New-Item -ItemType Directory -Force $env:EVOSIM_GEOMETRY_LIBRARY_DIR | Out-Null
-cargo run -- --geometry-worker-once
-cargo run -- --geometry-worker-once
-Get-Content "$env:EVOSIM_GEOMETRY_LIBRARY_DIR\storage_manifest.json"
-```
-
-Use a genuinely empty directory for the first command. The second command verifies that Bob can reopen the store written by the first. The storage manifest should report `storage_format_version: 3`; formation rows should use `formation_id`, and profitable exact deltas may use `base_id`. Do not point the override at the old catalogue until its catalog signature and schema have been deliberately reconciled. The CI smoke test checks these properties and verifies that at least one delta was written.
+Until those gates pass, do not run the worker to refill the current data directory. Historical benchmark measurements above remain historical evidence only; they are not instructions to regenerate the removed catalogue.
