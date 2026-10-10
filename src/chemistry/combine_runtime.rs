@@ -293,8 +293,12 @@ fn form_bond_from_candidate_diagnostic(
     if ua >= structure.units.len() || ub >= structure.units.len() || ua == ub {
         return Err("invalid unit indices at bond commit");
     }
-    let id_a = structure.physical_id(ua).ok_or("unit A has no physical ID")?;
-    let id_b = structure.physical_id(ub).ok_or("unit B has no physical ID")?;
+    let id_a = structure
+        .physical_id(ua)
+        .ok_or("unit A has no physical ID")?;
+    let id_b = structure
+        .physical_id(ub)
+        .ok_or("unit B has no physical ID")?;
     let a = structure.units[ua]
         .properties(catalog)
         .ok_or("unit A properties unavailable")?;
@@ -331,12 +335,9 @@ fn form_bond_from_candidate_diagnostic(
     // COMBINE consumes the formation threshold and allocates the newly created
     // bond's intrinsic potential to structure. Remaining physical approach work
     // is dissipated. No chemistry potential is manufactured by the transaction.
-    let transaction = EnergyTransaction::expenditure(
-        EnergyReason::Combine,
-        investment + bond_energy,
-        work,
-    )
-    .ok_or("COMBINE energy transaction could not be constructed")?;
+    let transaction =
+        EnergyTransaction::expenditure(EnergyReason::Combine, investment + bond_energy, work)
+            .ok_or("COMBINE energy transaction could not be constructed")?;
     if !ledger.settle_transaction(energy, transaction) {
         *energy = before;
         return Err("energy ledger rejected COMBINE expenditure");
