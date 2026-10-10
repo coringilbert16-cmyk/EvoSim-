@@ -1,19 +1,21 @@
 # EvoSim Geometry Reference Library
 
-This directory is the persistent home for generated geometry knowledge.
+> **Reset status (2026-10-10):** The generated files under `data/` have intentionally been removed from the current `main` and `integration/unified-source-and-catalogue` branch heads. The checked-in generated catalogue was discarded as obsolete data; this directory currently contains the library documentation only. Do not run a worker just to refill it. Rebuild only after the generator and constructor lookup contract are ready, and keep regenerated output out of Git unless explicitly approved.
 
-- `data/` is runtime-generated persistent library state, not source code. The normal `library_sync` checkpoint process intentionally mirrors this generated state into Git history; the data should therefore not be edited as source files.
+This directory documents the persistent geometry reference library. Generated runtime data is intentionally absent from the current integration and main branch heads pending a validated regeneration plan.
+
+- `data/` is runtime-generated persistent library state, not source code. Do not mirror generated state into Git by default; generated data should not be edited as source files.
 - The catalogue is versioned by its manifest and resource-shape signature.
 - Tests must use isolated temporary roots.
 - The worker will eventually populate this directory continuously as new valid formations are discovered.
 
 The source-of-truth implementation is src/bob/library.rs.
 
-### Regeneration is the preferred reset strategy
+### Regeneration is gated on correctness
 
-Generated geometry rows are reproducible output, not source code. Current priority is to make a clean generation run correct and efficient, rather than spending time shrinking an existing generated catalogue. See [the Bob clean-regeneration pipeline audit](../docs/bob-regeneration-pipeline-audit.md) for the verified command paths, identified repeated work, and validation gates.
+Generated geometry rows are reproducible output, not source code. The previous checked-in catalogue has been removed. Current priority is to validate generator correctness and constructor usefulness before creating a new catalogue. See [the Bob clean-regeneration pipeline audit](../docs/bob-regeneration-pipeline-audit.md) for the verified command paths, identified repeated work, and validation gates.
 
-Use a new empty output directory to verify a rebuild. Keep the generator, material/shape definitions, schema/version rules, and configuration. Once a clean rebuild has passed the documented validation gates, an old generated catalogue may be discarded; do not delete the only checkout or uncommitted source changes as part of that reset. A one-pass smoke test proves persistence/reopen behavior, not that the full catalogue has finished generating.
+Use a new empty output directory to verify a rebuild. Keep the generator, material/shape definitions, schema/version rules, and configuration. Only generate a replacement catalogue after the documented validation gates pass; do not run a worker solely to create bulk data. A one-pass smoke test proves persistence/reopen behavior, not that the full catalogue has finished generating.
 
 The library uses a locked positional equivalence tolerance of **0.5 units**. If two otherwise-identical formations differ only by a positional displacement of **≤ 0.5 units**, Bob treats them as the same geometric record rather than storing another microscopic variation. This is a geometric knowledge equivalence rule, not permission for live construction to penetrate or skip physical validation.
 
