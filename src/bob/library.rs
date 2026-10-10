@@ -4135,10 +4135,8 @@ mod bob_lookup_contract_tests {
     #[test]
     fn same_material_same_edge_lookup_fails_closed_when_orientation_is_unknown() {
         let catalog = default_catalog();
-        let root = std::env::temp_dir().join(format!(
-            "evosim-bob-same-edge-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("evosim-bob-same-edge-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
         let formation = GeometryFormation::single("Carbon");
@@ -4157,8 +4155,11 @@ mod bob_lookup_contract_tests {
             anchor_parameter_end: 0.75,
         };
         let family_signature = family.signature();
-        library.rigid_contact_families.insert(family_signature.clone(), family);
-        library.rigid_contact_index
+        library
+            .rigid_contact_families
+            .insert(family_signature.clone(), family);
+        library
+            .rigid_contact_index
             .entry(contact_bucket_hash("Carbon", 0, 0))
             .or_default()
             .push(family_signature);
@@ -4200,7 +4201,10 @@ mod bob_lookup_contract_tests {
         };
         let mut changed_edge = edge.clone();
         changed_edge.anchor_parameter_end = 0.75;
-        assert_ne!(rigid_family_projection(&edge), rigid_family_projection(&changed_edge));
+        assert_ne!(
+            rigid_family_projection(&edge),
+            rigid_family_projection(&changed_edge)
+        );
 
         let point = GeometryRigidPointContactFamily {
             schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
@@ -4216,10 +4220,16 @@ mod bob_lookup_contract_tests {
         };
         let mut changed_point_end = point.clone();
         changed_point_end.anchor_parameter_end = 0.75;
-        assert_ne!(point_family_projection(&point), point_family_projection(&changed_point_end));
+        assert_ne!(
+            point_family_projection(&point),
+            point_family_projection(&changed_point_end)
+        );
         let mut changed_point_rotation = point.clone();
         changed_point_rotation.candidate_rotation_end_radians = 1.0;
-        assert_ne!(point_family_projection(&point), point_family_projection(&changed_point_rotation));
+        assert_ne!(
+            point_family_projection(&point),
+            point_family_projection(&changed_point_rotation)
+        );
 
         let vertex = GeometryRigidVertexContactFamily {
             schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
@@ -4235,19 +4245,23 @@ mod bob_lookup_contract_tests {
         };
         let mut changed_vertex_end = vertex.clone();
         changed_vertex_end.anchor_parameter_end = 0.75;
-        assert_ne!(vertex_family_projection(&vertex), vertex_family_projection(&changed_vertex_end));
+        assert_ne!(
+            vertex_family_projection(&vertex),
+            vertex_family_projection(&changed_vertex_end)
+        );
         let mut changed_vertex_rotation = vertex.clone();
         changed_vertex_rotation.candidate_rotation_start_radians = 0.0;
-        assert_ne!(vertex_family_projection(&vertex), vertex_family_projection(&changed_vertex_rotation));
+        assert_ne!(
+            vertex_family_projection(&vertex),
+            vertex_family_projection(&changed_vertex_rotation)
+        );
     }
 
     #[test]
     fn same_material_edge_lookup_is_endpoint_order_invariant() {
         let catalog = default_catalog();
-        let root = std::env::temp_dir().join(format!(
-            "evosim-bob-same-material-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("evosim-bob-same-material-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
         let formation = GeometryFormation::single("Carbon");
@@ -4266,8 +4280,11 @@ mod bob_lookup_contract_tests {
             anchor_parameter_end: 0.75,
         };
         let family_signature = family.signature();
-        library.rigid_contact_families.insert(family_signature.clone(), family);
-        library.rigid_contact_index
+        library
+            .rigid_contact_families
+            .insert(family_signature.clone(), family);
+        library
+            .rigid_contact_index
             .entry(contact_bucket_hash("Carbon", 0, 1))
             .or_default()
             .push(family_signature);
@@ -4333,8 +4350,11 @@ mod bob_lookup_contract_tests {
         };
         let first = make_family(0.0, 0.75);
         let first_signature = first.signature();
-        library.rigid_contact_families.insert(first_signature.clone(), first.clone());
-        library.rigid_contact_index
+        library
+            .rigid_contact_families
+            .insert(first_signature.clone(), first.clone());
+        library
+            .rigid_contact_index
             .entry(contact_bucket_hash("Nitrogen", 0, 0))
             .or_default()
             .push(first_signature);
@@ -4367,8 +4387,11 @@ mod bob_lookup_contract_tests {
 
         let second = make_family(0.25, 1.0);
         let second_signature = second.signature();
-        library.rigid_contact_families.insert(second_signature.clone(), second);
-        library.rigid_contact_index
+        library
+            .rigid_contact_families
+            .insert(second_signature.clone(), second);
+        library
+            .rigid_contact_index
             .entry(contact_bucket_hash("Nitrogen", 0, 0))
             .or_default()
             .push(second_signature);
