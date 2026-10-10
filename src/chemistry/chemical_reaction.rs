@@ -247,7 +247,6 @@ pub(crate) fn resolve(
     success
 }
 
-
 #[cfg(test)]
 mod material_identity_tests {
     use super::*;
@@ -255,7 +254,10 @@ mod material_identity_tests {
 
     #[test]
     fn one_unit_base_material_keeps_legacy_resource_name() {
-        assert_eq!(material_identity(&Material::free_base("Carbon", 1.0)), "Carbon");
+        assert_eq!(
+            material_identity(&Material::free_base("Carbon", 1.0)),
+            "Carbon"
+        );
     }
 
     #[test]
@@ -297,5 +299,4 @@ mod material_identity_tests {
             "live-v1|Carbon:corner:0|Hydrogen:line:0"
         );
     }
-
 }
