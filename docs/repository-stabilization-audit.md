@@ -260,3 +260,23 @@ The previous “required correction” list is now historical. The remaining blo
 The canonical rigid-edge, rigid-point, and rigid-vertex projection keys no longer include `anchor_constituent`. That index identifies a constituent inside a particular stored formation; it is not part of the local contact geometry visible to a live query. Keeping it in the projection could make equivalent local interfaces appear ambiguous solely because their source formations placed the anchor at different constituent indices. Regression assertions now require projection equality across changed formation-context indices while preserving differences in interval and rotation geometry. The test suite for this commit is pending; no geometry generation was run.
 
 After this correction, the immediate remaining library integration task is a candidate-suggestion API that returns actual proposed placements from the schema-v2 contact families. Those proposals must remain advisory and pass the constructor's physical validation before a bond is formed.
+
+
+## Constructor-facing Bob placement suggestions — 2026-10-10
+
+### Implemented API
+
+`GeometryLibrary::suggest_rigid_edge_placements` now turns persisted schema-v2 rigid-edge families into concrete, advisory `Placement` proposals for a candidate rigid material against a live anchor material/pose. It uses the persisted contact index rather than scanning every family, rebases the family orientation relative to the stored anchor pose onto the current anchor rotation, and aligns candidate-edge midpoint to the midpoint of the family interval on the anchor edge. Equivalent proposals are deduplicated by edge IDs, contact parameter, position, and rotation. Fluids are rejected by this rigid-edge path.
+
+Each result identifies candidate material/edge, anchor edge, contact parameter, and proposed pose. The API is explicitly advisory: it does not claim the pose is collision-free, bondable, energetically affordable, or valid for the current whole-structure cavity. The caller must apply the live nonpenetration/contact checks and physical bond transaction before committing it. The family interval comes from the source formation's exposed edge; it is a search hint, not proof that the corresponding point is exposed in the current live structure.
+
+Regression test `rigid_edge_suggestions_rebase_family_poses_to_live_anchor` builds families from a single Carbon formation, rebases them onto a translated/rotated live anchor, and checks that candidate-edge midpoint and anchor contact point coincide. It intentionally tests suggestion geometry only, not physical acceptance. The test fixture populates the same edge index used by the production API.
+
+### Current limits / next integration gate
+
+- The API currently handles rigid edge-edge families only. Rigid point/vertex and fluid boundary families still need separate suggestion contracts.
+- The initial-organism constructor does not yet call this API. Wire it into the next growth step only after the proposal can be fed through existing whole-structure collision, physical contact, bond transaction, resource acquisition, and energy accounting paths.
+- Add unequal edge-length and partially exposed interval tests, including candidate-edge endpoint order reversal. Current suggestions align midpoints and do not enumerate the full continuous translation interval.
+- Then run the actual blueprint-free constructor as the end-to-end acceptance test. Do not regenerate the catalogue merely to satisfy lookup; measure real family hit/miss coverage from constructor attempts first.
+
+Latest source commits for this increment: `b401bb13` (suggestion API), `5d0ffb0c` (initial geometry test), `e48aceee` (stronger geometric assertions), `0d47da14` (formatting), `cedf37ec` (indexed family lookup), and `3003bf41` (indexed test fixture). CI is being rerun on the latest commit; no catalogue generation was performed.
