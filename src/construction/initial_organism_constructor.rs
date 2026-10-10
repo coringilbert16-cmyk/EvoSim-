@@ -85,7 +85,7 @@ fn bob_validated_neighbor_placement(
         // broad cavity topology. Only near-equivalent lattice poses are eligible.
         if (proposed.x - intended.0).hypot(proposed.y - intended.1)
             > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-            || normalize_angle_for_constructor(proposed.rotation_radians).abs() > 0.1
+            || !rotation_preserves_form_symmetry(&resource.shape.form, proposed.rotation_radians)
         {
             continue;
         }
@@ -167,6 +167,24 @@ fn bob_validated_neighbor_placement(
 
 fn normalize_angle_for_constructor(angle: f64) -> f64 {
     (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI
+}
+
+/// A rotationally symmetric shape may have a different numeric pose while
+/// occupying exactly the same geometry. Preserve those valid equivalent poses.
+fn rotation_preserves_form_symmetry(form: &crate::resources::Form, rotation: f64) -> bool {
+    if normalize_angle_for_constructor(rotation).abs() <= 0.1 {
+        return true;
+    }
+    let Some(vertices) = form.polygon_vertices() else {
+        return false;
+    };
+    let (s, c) = rotation.sin_cos();
+    vertices.iter().all(|&(x, y)| {
+        let rotated = (x * c - y * s, x * s + y * c);
+        vertices.iter().any(|&(other_x, other_y)| {
+            (rotated.0 - other_x).hypot(rotated.1 - other_y) <= 1e-7
+        })
+    })
 }
 
 fn add_unit(
