@@ -54,7 +54,6 @@ fn hex_ring(radius: i32) -> Vec<(i32, i32)> {
     result
 }
 
-
 /// Ask Bob for candidate neighbor poses, then admit only a pose that is close
 /// to the scaffold's intended lattice point and passes live whole-structure
 /// nonpenetration and contact checks. Bob never authorizes a bond.
@@ -68,12 +67,8 @@ fn bob_validated_neighbor_placement(
 ) -> Option<Placement> {
     let anchor = structure.units.get(anchor_index)?;
     let anchor_material = anchor.material.parts.first()?.0.as_str();
-    let mut suggestions = library.suggest_rigid_edge_placements(
-        anchor_material,
-        anchor.placement,
-        resource,
-        catalog,
-    );
+    let mut suggestions =
+        library.suggest_rigid_edge_placements(anchor_material, anchor.placement, resource, catalog);
     suggestions.sort_by(|a, b| {
         let score = |placement: Placement| {
             (placement.x - intended.0).hypot(placement.y - intended.1)
@@ -96,15 +91,19 @@ fn bob_validated_neighbor_placement(
         }
         let Some(instance) = crate::physical_material::PhysicalMaterial::realized(
             Material::free_base(resource.name.clone(), 1.0),
-            vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
             catalog,
         ) else {
             continue;
         };
         let mut trial = structure.clone();
-        let Some(indices) = crate::material_restoration::restore_material(
-            &mut trial, &instance, proposed, catalog,
-        ) else {
+        let Some(indices) =
+            crate::material_restoration::restore_material(&mut trial, &instance, proposed, catalog)
+        else {
             continue;
         };
         let Some(&candidate_index) = indices.first() else {
@@ -134,7 +133,9 @@ fn bob_validated_neighbor_placement(
                 placement: unit.placement,
             };
             if crate::material_geometry::placed_forms_penetrate(
-                &candidate_part, &existing_part, 0.0,
+                &candidate_part,
+                &existing_part,
+                0.0,
             ) {
                 penetrates = true;
                 break;
@@ -145,10 +146,17 @@ fn bob_validated_neighbor_placement(
         }
         let mut cache = crate::contact::ConnectionCompatibilityCache::new();
         let touches_anchor = crate::contact::connection_pair_candidates_cached(
-            &trial, anchor_index, candidate_index, catalog, &mut cache,
-        ).into_iter().any(|contact| {
+            &trial,
+            anchor_index,
+            candidate_index,
+            catalog,
+            &mut cache,
+        )
+        .into_iter()
+        .any(|contact| {
             contact.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                && contact.available_a && contact.available_b
+                && contact.available_a
+                && contact.available_b
         });
         if touches_anchor {
             return Some(proposed);
@@ -158,8 +166,7 @@ fn bob_validated_neighbor_placement(
 }
 
 fn normalize_angle_for_constructor(angle: f64) -> f64 {
-    (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU)
-        - std::f64::consts::PI
+    (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI
 }
 
 fn add_unit(
@@ -182,11 +189,13 @@ fn add_unit(
     )
     .ok_or_else(|| format!("failed to realize construction unit {}", resource.name))?;
     let proposed_placement = anchor_index
-        .and_then(|anchor| bob_library.and_then(|library| {
-            bob_validated_neighbor_placement(
-                structure, anchor, resource, center, library, catalog,
-            )
-        }))
+        .and_then(|anchor| {
+            bob_library.and_then(|library| {
+                bob_validated_neighbor_placement(
+                    structure, anchor, resource, center, library, catalog,
+                )
+            })
+        })
         .unwrap_or(Placement {
             x: center.0,
             y: center.1,
@@ -431,7 +440,11 @@ fn construct_scaffold(
             &mut structure,
             carbon,
             axial_to_world(coordinate.0, coordinate.1),
-            if i == 0 { Some(spokes[0]) } else { outer_indices.last().copied() },
+            if i == 0 {
+                Some(spokes[0])
+            } else {
+                outer_indices.last().copied()
+            },
             bob_library.as_ref(),
             catalog,
         )?;
@@ -620,7 +633,9 @@ mod tests {
     #[test]
     fn bob_neighbor_suggestions_reach_initial_constructor_physical_validation() {
         let catalog = crate::resources::default_catalog();
-        let carbon = catalog.iter().find(|resource| resource.name == "Carbon")
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
             .expect("default catalog includes Carbon");
         let mut structure = crate::structure::OrganismStructure::new();
         add_unit(&mut structure, carbon, (0.0, 0.0), None, None, &catalog)
@@ -628,9 +643,9 @@ mod tests {
         let library = crate::geometry_reference_library::open_default_library()
             .expect("default Bob library should open, including an empty library");
         let intended = axial_to_world(1, 0);
-        let proposed = bob_validated_neighbor_placement(
-            &structure, 0, carbon, intended, &library, &catalog,
-        ).expect("Bob should propose a nearby pose that passes live physical checks");
+        let proposed =
+            bob_validated_neighbor_placement(&structure, 0, carbon, intended, &library, &catalog)
+                .expect("Bob should propose a nearby pose that passes live physical checks");
         assert!(
             (proposed.x - intended.0).hypot(proposed.y - intended.1)
                 <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE,
@@ -640,33 +655,52 @@ mod tests {
             Material::free_base(carbon.name.clone(), 1.0),
             vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
             &catalog,
-        ).expect("candidate material should realize");
+        )
+        .expect("candidate material should realize");
         let mut trial = structure.clone();
         let indices = crate::material_restoration::restore_material(
             &mut trial, &instance, proposed, &catalog,
-        ).expect("accepted Bob pose should restore into the trial structure");
+        )
+        .expect("accepted Bob pose should restore into the trial structure");
         let candidate = *indices.first().expect("one Carbon constituent");
         for (index, unit) in trial.units.iter().enumerate() {
-            if indices.contains(&index) { continue; }
-            let candidate_shape = trial.units[candidate].shape(&catalog).expect("candidate shape");
+            if indices.contains(&index) {
+                continue;
+            }
+            let candidate_shape = trial.units[candidate]
+                .shape(&catalog)
+                .expect("candidate shape");
             let existing_shape = unit.shape(&catalog).expect("existing shape");
-            assert!(!crate::material_geometry::placed_forms_penetrate(
-                &crate::material_geometry::PlacedMaterialPart {
-                    part_index: candidate, form: candidate_shape.form.clone(),
-                    placement: trial.units[candidate].placement,
-                },
-                &crate::material_geometry::PlacedMaterialPart {
-                    part_index: index, form: existing_shape.form.clone(), placement: unit.placement,
-                }, 0.0,
-            ), "accepted Bob proposal must not penetrate existing structure");
+            assert!(
+                !crate::material_geometry::placed_forms_penetrate(
+                    &crate::material_geometry::PlacedMaterialPart {
+                        part_index: candidate,
+                        form: candidate_shape.form.clone(),
+                        placement: trial.units[candidate].placement,
+                    },
+                    &crate::material_geometry::PlacedMaterialPart {
+                        part_index: index,
+                        form: existing_shape.form.clone(),
+                        placement: unit.placement,
+                    },
+                    0.0,
+                ),
+                "accepted Bob proposal must not penetrate existing structure"
+            );
         }
         let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-        assert!(crate::contact::connection_pair_candidates_cached(
-            &trial, 0, candidate, &catalog, &mut cache,
-        ).into_iter().any(|contact| {
-            contact.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                && contact.available_a && contact.available_b
-        }), "Bob proposal must reach and pass live contact validation");
+        assert!(
+            crate::contact::connection_pair_candidates_cached(
+                &trial, 0, candidate, &catalog, &mut cache,
+            )
+            .into_iter()
+            .any(|contact| {
+                contact.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                    && contact.available_a
+                    && contact.available_b
+            }),
+            "Bob proposal must reach and pass live contact validation"
+        );
     }
 
     #[test]
