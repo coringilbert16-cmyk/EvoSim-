@@ -56,7 +56,7 @@ The Bob persistence checks passing do **not** validate the application or the co
 ### 3. Persistent data and cache integrity need explicit recovery rules
 
 - Fresh empty Bob roots use compositional-v3 formation storage with stable IDs and compact family references; this has focused create/reopen evidence.
-- That fresh-root check is not proof that the existing main-branch catalogue can be loaded, queried, and reopened with equivalent semantics. Do not rewrite or discard the checked-in catalogue based only on file-size savings.
+- Historical note (before the 2026-10-10 reset): the old generated catalogue had not been proven query-compatible. The user subsequently explicitly discarded that generated data as obsolete; the current branch heads no longer contain it. This does not delete generator/source logic or rewrite Git history.
 - Family identity remains formation-scoped. Equal generated/added counts show that the tested generated records were persisted, not that every record is geometrically unique across formations. Cross-formation deduplication is unsafe without query-equivalence evidence.
 - Existing chemistry-library loading has documented integrity gaps: invalid-but-parseable rows may be skipped, duplicate keys may overwrite by file order, and manifest counts are not reconciled with unique loaded keys. Define fail/skip/quarantine behavior and test corrupted files, duplicates, restart, and manifest mismatch before this cache becomes construction-critical.
 - The worker's 20-constituent limit caps the size of any one formation; it does not cap the number of formations below that limit or prove the catalogue will finish in practical time. Full clean-generation completion and useful coverage remain unproven.
@@ -136,7 +136,7 @@ This addendum records direct inspection of the integration branch's current sour
 3. **Chemistry persistence has a confirmed schema mismatch.** `src/chemistry/chemistry_library.rs` sets `CHEMISTRY_LIBRARY_SCHEMA_VERSION = 2` and rejects manifests whose schema is not 2. The checked-in `chemistry_library/data/manifest.json` declares schema 3, and all 17 checked-in rows carry key schema version 3. Therefore, opening this checked-in store through the current `ChemistryLibrary::open` fails with a schema-mismatch error; if the version check were bypassed, `ChemistryRecord::is_valid` would reject schema-3 keys under the schema-2 constant. This must be resolved before relying on persistent chemistry lookup.
 4. **Chemistry loading silently skips semantically invalid rows and permits duplicate-key overwrite.** The loader inserts valid rows into a HashMap without rejecting duplicate keys and does not reconcile the manifest entry count with the number of unique loaded records. A malformed final non-empty row is silently ignored. These behaviors can conceal an incomplete or incompatible store.
 5. **The live geometry-family resolver is explicitly unfinished.** `classify_live_family_resolution` currently returns `Unresolved` for all supported interface classes. A live canonical interface identity is not yet a completed mapping to a stored family record. Bob's catalog must not be described as fully queryable for constructor use until unique resolution or a validated fallback is implemented.
-6. **Geometry and chemistry catalog scale are not proof of constructor utility.** The geometry manifest reports 25,737 formations; the chemistry manifest reports 17 records. The chemistry README still describes the persistence layout as future work even though the data and source implementation exist. Documentation, code, and current persisted schema need to be reconciled.
+6. **Historical library-size snapshot (superseded by the geometry reset).** The former geometry manifest reported 25,737 formations and the chemistry manifest reported 17 records. The generated geometry files have since been deliberately removed from the current `main` and integration branch heads. Those geometry counts describe the discarded snapshot only; the chemistry records remain a separate cache, not a complete chemistry ruleset. Neither row count proves constructor utility.
 
 ### Decision required before chemistry-store repair
 
@@ -188,3 +188,30 @@ GitHub Actions run [38057320097](https://github.com/coringilbert16-cmyk/EvoSim-/
 - Full suite: **262 passed, 75 failed, 1 ignored** in 26.38 seconds. The number of passing tests increased from 253 to 262; the existing broad failure set remains, and the actual constructor still fails with `physical bond transaction 19-3 failed` in simulation startup.
 - Strict Clippy still fails. It reports staged/dead APIs and ordinary lints; this must be addressed by deciding which APIs are live, intentionally staged, or obsolete—not by blanket suppression.
 - This run is evidence for the persistence and key-contract tests only. It is not a passing build/release gate and did not validate constructor viability.
+
+
+## Follow-up audit — geometry catalogue reset and live dependency — 2026-10-10
+
+This addendum supersedes the earlier references to the generated geometry catalogue as present in the current branch heads. The seven generated geometry files were deliberately deleted from both `main` and `integration/unified-source-and-catalogue`; the geometry implementation and its documentation remain on the integration branch. Git history and other branches were not rewritten. No worker was run and no replacement data was generated.
+
+### Empty-root startup: source inspection only
+
+- `GeometryLibrary::open(root, catalog)` creates the root directory, treats missing `formations.jsonl` as an empty formation set, accepts a missing manifest as an in-memory current-schema manifest with zero entries, and treats absent frontier/family files as empty. This indicates that opening a fresh empty root is supported by the source contract; it does **not** prove runtime startup or persistence/reopen behavior, because no executable test was run in this audit.
+- `open_default_library()` creates/opens the default `geometry_library/data` root. When `EVOSIM_GEOMETRY_LIBRARY_DIR` is set, the configured path must already exist and be either empty or contain an existing store's `manifest.json` and `formations.jsonl`.
+- Opening the geometry library does not seed base formations or start generation. The worker's `seed_base_catalogue` and frontier processing are the mutating operations. Do not run the worker just to prove empty-root startup.
+- `Simulation::create_initial_organism` calls `initial_organism_constructor::construct_valid`; it does not open or query Bob. The current constructor therefore does not benefit from the reset library—or from a populated library—until the constructor-to-library interface is implemented.
+- The simulation opens the chemistry cache separately, but the initial constructor also does not query that cache as a candidate-selection input. Chemistry's live equations and transaction authorities remain separate from cached static interface potentials.
+
+### Documentation correction
+
+The geometry README previously contained worker smoke-test and generation commands below the new reset warning, creating conflicting instructions. Those commands have now been removed from the active handoff. Historical benchmark data remains historical evidence only and must not be treated as a request to regenerate the discarded catalogue.
+
+### Next implementation order
+
+1. Add/verify a non-mutating empty-library open contract using an isolated temporary root; do not invoke worker seeding or frontier processing in this test.
+2. Complete the Bob query result contract: it must return the actual candidate/family information needed to propose a placement, not only classify an interface or return a projection key. Validate real runtime contact descriptors against stored family intervals and report unique, ambiguous, and unresolved results, including fluid boundaries.
+3. Integrate Bob as advisory geometry knowledge into the milestone-driven constructor. Whole-structure collision/nonpenetration, exact contact, chemical interaction, bond formation, energy accounting, and genome-cavity qualification remain authoritative runtime checks.
+4. Diagnose `physical bond transaction 19-3 failed` at the COMBINE transaction boundary. Current caller reduces all internal rejection causes to a generic `None`; expose a structured/internal rejection reason for diagnostics without weakening physical constraints or changing success semantics.
+5. Measure usefulness with constructor-facing query hits/misses, ambiguity, candidate rejection reasons, time to a sealed qualifying cavity, required-resource acquisition, and final viability. Only then define and approve a replacement-generation run.
+
+No build, constructor execution, or worker execution was performed for this addendum. These are source-confirmed findings and a next-step plan, not runtime acceptance evidence.
