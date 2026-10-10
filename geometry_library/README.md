@@ -137,3 +137,18 @@ Until those gates pass, do not run the worker to refill the current data directo
 ### Approved next-sprint generation scope
 
 The user has explicitly approved running Bob to populate the persistent library for formations of up to **2 constituent pieces**. This supersedes the earlier reset note that prohibited refilling the catalogue, but only within this bounded scope. Before running, make the maximum constituent count an explicit worker setting; do not run the existing hardcoded-20 continuous worker unchanged. Exhaust all one- and two-piece frontiers and applicable contact-family generation, persist and reopen-check the results, and verify no three-piece formations were created. Do not commit generated runtime data by default. The run's measured counts, runtime, disk footprint, and frontier completion must be reported. This is not a substitute for validating the initial constructor.
+
+
+### Executing the approved two-piece generation
+
+The bounded completion entry point is:
+
+```bash
+mkdir -p /tmp/evosim-bob-two-piece
+EVOSIM_GEOMETRY_LIBRARY_DIR=/tmp/evosim-bob-two-piece \
+  cargo run --release -- --geometry-worker-complete-up-to 2
+```
+
+The command processes every unfinished one- and two-constituent formation frontier, writes all supported contact-family records, then closes and reopens the persistent store. It fails if the reopen changes the formation count, any formation exceeds two constituents, or any eligible frontier remains unfinished. Set `EVOSIM_GEOMETRY_LIBRARY_DIR` to an existing empty directory for a fresh run; the default tracked checkout path is deliberately not used by the dedicated CI generation job.
+
+The dedicated GitHub Actions workflow stores the resulting library and full generation log in the `bob-two-piece-geometry-library` artifact for 30 days. Generated runtime data remains out of Git. Its final summary reports candidate generation/acceptance, family additions, formation counts, reopen verification, and elapsed time; the workflow separately reports file sizes and line counts. The workflow is triggered by changes to this README on the integration branch or manually from Actions when the workflow is available there.
