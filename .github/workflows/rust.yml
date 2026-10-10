@@ -1,0 +1,39 @@
+name: Rust
+
+# CI trigger: validate the default branch and the active integration branch.
+
+on:
+  push:
+    branches: [main, integration/unified-source-and-catalogue]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Check source file sizes
+        run: bash scripts/check_large_files.sh
+      - name: Check COMBINE architecture
+        run: bash scripts/check_combine_architecture.sh
+      # Run the persistence-specific tests independently so their result is visible
+      # even while the repository's known unrelated baseline tests are failing.
+      - name: Run Bob compact-storage tests
+        run: cargo test compact_family_storage_tests
+      - name: Verify empty Bob library open and reopen without generation
+        run: cargo test fresh_empty_library_opens_and_reopens_without_seeding_geometry
+      # Expensive headless multigeneration validation is paused while the seed
+      # topology is being finalized. Keep the normal Rust/Clippy gates active.
+      - name: Run Rust tests
+        run: cargo test --all-targets
+      - name: Run Clippy
+        if: always()
+        run: cargo clippy --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of

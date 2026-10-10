@@ -1,0 +1,51 @@
+name: Bob Two-Piece Geometry Generation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: integration/unified-source-and-catalogue
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Create isolated persistent output root
+        run: mkdir -p "$RUNNER_TEMP/evosim-bob-two-piece"
+      - name: Run Bob to completion for formations up to two constituents
+        env:
+          EVOSIM_GEOMETRY_LIBRARY_DIR: ${{ runner.temp }}/evosim-bob-two-piece
+        run: |
+          set -euo pipefail
+          cargo run --release -- --geometry-worker-complete-up-to 2 2>&1 | tee "$RUNNER_TEMP/bob-two-piece-generation.log"
+      - name: Record generated library footprint
+        if: always()
+        run: |
+          set -euo pipefail
+          echo "=== Persistent geometry library files ==="
+          find "$RUNNER_TEMP/evosim-bob-two-piece" -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
+          echo "=== Total bytes ==="
+          du -sb "$RUNNER_TEMP/evosim-bob-two-piece" || true
+          echo "=== Record counts ==="
+          for file in "$RUNNER_TEMP"/evosim-bob-two-piece/*.jsonl; do
+            [ -f "$file" ] || continue
+            printf '%s ' "$(basename "$file")"
+            wc -l < "$file"
+          done
+      - name: Upload generated library and run log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bob-two-piece-geometry-library
+          path: |
+            ${{ runner.temp }}/evosim-bob-two-piece/
+            ${{ runner.temp }}/bob-two-piece-generation.log
+          if-no-files-found: error
+          retention-days: 30
