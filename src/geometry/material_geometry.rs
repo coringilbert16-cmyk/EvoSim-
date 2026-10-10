@@ -3,6 +3,9 @@
 use crate::resources::{BaseResource, Form, Material};
 use crate::structure::Placement;
 
+/// Sub-nanounit guard for floating-point equality at shared physical boundaries.
+pub const GEOMETRY_EPSILON: f64 = 1e-9;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlacedMaterialPart {
     pub part_index: usize,
