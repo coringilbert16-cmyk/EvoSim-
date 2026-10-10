@@ -992,3 +992,6 @@ Bob now has an indexed `suggest_rigid_edge_placements` API that rebases persiste
 
 
 The placement API now also supports the empty-library bootstrap case: when no matching persisted family exists, it derives only the requested rigid-edge families in memory and returns advisory placements without writing rows or starting a geometry worker. This permits local proposal generation while the checked-in catalogue remains empty. The renamed regression test verifies that an empty store remains empty and that the resulting candidate-edge midpoint is aligned to the live anchor contact point. CI is pending for this follow-up. The API remains advisory and is not yet wired into the initial constructor.
+
+
+Verification checkpoint: on commit `7bfb6f21`, the empty-library bootstrap test passed and the full suite reported **266 passed, 75 failed, 1 ignored**. The existing simulation/physics/reproduction failure backlog and strict-Clippy failures remain unresolved. The newest test-only extension covers the unequal Phosphorus trapezoid edges and is still in CI. See the [stabilization audit](docs/repository-stabilization-audit.md).
