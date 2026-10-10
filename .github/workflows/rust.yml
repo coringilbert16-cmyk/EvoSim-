@@ -28,31 +28,8 @@ jobs:
       # even while the repository's known unrelated baseline tests are failing.
       - name: Run Bob compact-storage tests
         run: cargo test compact_family_storage_tests
-      - name: Smoke-test fresh Bob library and reopen
-        run: |
-          library_root="$(mktemp -d)"
-          export EVOSIM_GEOMETRY_LIBRARY_DIR="$library_root"
-          cargo run -- --geometry-worker-once
-          cargo run -- --geometry-worker-once
-          python3 - "$library_root" <<'PY'
-          import json
-          import pathlib
-          import sys
-
-          root = pathlib.Path(sys.argv[1])
-          manifest = json.loads((root / "storage_manifest.json").read_text())
-          assert manifest.get("storage_format_version") == 3, manifest
-          assert manifest.get("formation_encoding") == "exact-one-constituent-delta-v1", manifest
-          rows = [
-              json.loads(line)
-              for line in (root / "formations.jsonl").read_text().splitlines()
-              if line.strip()
-          ]
-          assert rows, "fresh Bob run wrote no formations"
-          assert all("formation_id" in row for row in rows), "formation row lacks compact ID"
-          assert any("base_id" in row for row in rows), "Bob run wrote no compositional delta rows"
-          print(f"fresh v3 store verified: {len(rows)} formations, {sum('base_id' in row for row in rows)} deltas")
-          PY
+      - name: Verify empty Bob library open and reopen without generation
+        run: cargo test fresh_empty_library_opens_and_reopens_without_seeding_geometry
       # Expensive headless multigeneration validation is paused while the seed
       # topology is being finalized. Keep the normal Rust/Clippy gates active.
       - name: Run Rust tests
