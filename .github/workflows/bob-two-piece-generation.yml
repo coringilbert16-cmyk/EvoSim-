@@ -2,13 +2,6 @@ name: Bob Two-Piece Geometry Generation
 
 on:
   workflow_dispatch:
-  push:
-    branches: [integration/unified-source-and-catalogue]
-    paths:
-      - geometry_library/README.md
-  pull_request:
-    paths:
-      - geometry_library/README.md
 
 permissions:
   contents: read
