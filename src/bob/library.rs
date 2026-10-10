@@ -2261,17 +2261,37 @@ impl GeometryLibrary {
         candidate_resource: impl Into<String>,
         state: GeometryFrontierState,
     ) -> std::io::Result<()> {
-        let formation_signature = formation_signature.into();
-        let candidate_resource = candidate_resource.into();
-        let key = format!("{formation_signature}|{candidate_resource}");
-        self.frontier.records.insert(
-            key,
-            GeometryFrontierRecord {
-                formation_signature,
-                candidate_resource,
-                state,
-            },
-        );
+        self.set_frontier_states(vec![(
+            formation_signature.into(),
+            candidate_resource.into(),
+            state,
+        )])
+    }
+
+    /// Update a complete group of frontier records with one durable file write.
+    ///
+    /// The worker processes all resource frontiers for a formation as a batch.
+    /// Persisting the whole frontier JSON after every individual state transition
+    /// multiplies I/O as the catalogue grows. If a pass is interrupted before this
+    /// write, its old unfinished records remain and idempotent generation can retry.
+    pub fn set_frontier_states(
+        &mut self,
+        updates: Vec<(String, String, GeometryFrontierState)>,
+    ) -> std::io::Result<()> {
+        if updates.is_empty() {
+            return Ok(());
+        }
+        for (formation_signature, candidate_resource, state) in updates {
+            let key = format!("{formation_signature}|{candidate_resource}");
+            self.frontier.records.insert(
+                key,
+                GeometryFrontierRecord {
+                    formation_signature,
+                    candidate_resource,
+                    state,
+                },
+            );
+        }
         self.write_frontier()
     }
 
@@ -2914,6 +2934,16 @@ pub fn generate_fluid_boundary_families(
     fluid_resource: &BaseResource,
     catalog: &[BaseResource],
 ) -> Vec<GeometryFluidBoundaryFamily> {
+    let families = generate_water_contact_families(formation, fluid_resource, catalog);
+    generate_fluid_boundary_families_from_contact_families(fluid_resource, &families)
+}
+
+/// Derive durable fluid-boundary records from contact families already generated
+/// for the same formation. This avoids solving the same capillary geometry twice.
+pub fn generate_fluid_boundary_families_from_contact_families(
+    fluid_resource: &BaseResource,
+    families: &[GeometryContactFamily],
+) -> Vec<GeometryFluidBoundaryFamily> {
     if fluid_resource.physical_state != crate::resources::PhysicalState::Fluid {
         return Vec::new();
     }
@@ -2923,12 +2953,12 @@ pub fn generate_fluid_boundary_families(
         _ => return Vec::new(),
     };
 
-    generate_water_contact_families(formation, fluid_resource, catalog)
-        .into_iter()
+    families
+        .iter()
         .map(|family| GeometryFluidBoundaryFamily {
             schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
-            formation_signature: family.formation_signature,
-            fluid_resource: family.candidate_resource,
+            formation_signature: family.formation_signature.clone(),
+            fluid_resource: family.candidate_resource.clone(),
             anchor_constituent: family.anchor_constituent,
             anchor_edge: family.anchor_edge,
             area,
