@@ -697,6 +697,59 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     None
 }
 
+/// A new blueprint element may have several already-realized neighbors.
+/// Do not commit its first bond at a pose that makes a declared, already-ready
+/// connection geometrically impossible. This is a physical contact constraint,
+/// not a demand to match the blueprint's suggested coordinates.
+fn candidate_contacts_all_realized_neighbors(
+    blueprint: &crate::structural_blueprint::StructuralBlueprint,
+    element_index: usize,
+    realized_units: &[Option<Vec<usize>>],
+    structure: &OrganismStructure,
+    candidate_indices: &[usize],
+    catalog: &[BaseResource],
+) -> bool {
+    let mut required_neighbors = Vec::new();
+    for connection in &blueprint.connections {
+        let neighbor = if connection.element_a == element_index {
+            connection.element_b
+        } else if connection.element_b == element_index {
+            connection.element_a
+        } else {
+            continue;
+        };
+        if realized_units.get(neighbor).is_some_and(Option::is_some)
+            && !required_neighbors.contains(&neighbor)
+        {
+            required_neighbors.push(neighbor);
+        }
+    }
+
+    let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+    required_neighbors.into_iter().all(|neighbor| {
+        let Some(existing_indices) = realized_units.get(neighbor).and_then(Option::as_ref) else {
+            return false;
+        };
+        existing_indices.iter().any(|&existing_index| {
+            candidate_indices.iter().any(|&candidate_index| {
+                crate::contact::connection_pair_candidates_cached(
+                    structure,
+                    existing_index,
+                    candidate_index,
+                    catalog,
+                    &mut cache,
+                )
+                .into_iter()
+                .any(|candidate| {
+                    candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        && candidate.available_a
+                        && candidate.available_b
+                })
+            })
+        })
+    })
+}
+
 fn realize_next_bond_driven(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
@@ -836,6 +889,16 @@ fn realize_next_bond_driven(
                     if indices.iter().any(|index| {
                         placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
                     }) {
+                        continue;
+                    }
+                    if !candidate_contacts_all_realized_neighbors(
+                        blueprint,
+                        _index,
+                        realized_units,
+                        &trial,
+                        &indices,
+                        catalog,
+                    ) {
                         continue;
                     }
 
