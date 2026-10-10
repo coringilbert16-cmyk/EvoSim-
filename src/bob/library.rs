@@ -1801,6 +1801,11 @@ impl GeometryLibrary {
                                 let candidate_is_a = if a_material == b_material
                                     && a_material == &family.candidate_resource
                                 {
+                                    // If the feature indices are also identical, the query
+                                    // contains no fact that distinguishes candidate from anchor.
+                                    if family.candidate_edge == family.anchor_edge {
+                                        continue;
+                                    }
                                     if *a_edge == family.candidate_edge
                                         && *b_edge == family.anchor_edge
                                     {
@@ -4053,6 +4058,59 @@ mod bob_lookup_contract_tests {
             LiveFamilyResolution::Unresolved
         );
 
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn same_material_same_edge_lookup_fails_closed_when_orientation_is_unknown() {
+        let catalog = default_catalog();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-same-edge-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let formation = GeometryFormation::single("Carbon");
+        let signature = formation.signature.clone();
+        library.entries.insert(signature.clone(), formation);
+
+        let family = GeometryRigidContactFamily {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            formation_signature: signature,
+            candidate_resource: "Carbon".to_string(),
+            anchor_constituent: 0,
+            anchor_edge: 0,
+            candidate_edge: 0,
+            candidate_rotation_radians: 0.0,
+            anchor_parameter_start: 0.25,
+            anchor_parameter_end: 0.75,
+        };
+        let family_signature = family.signature();
+        library.rigid_contact_families.insert(family_signature.clone(), family);
+        library.rigid_contact_index
+            .entry(contact_bucket_hash("Carbon", 0, 0))
+            .or_default()
+            .push(family_signature);
+
+        let query = LiveGeometryInterface {
+            interface_class: "rigid_edge",
+            signature: String::new(),
+            query: Some(LiveGeometryQuery::RigidEdge {
+                a_material: "Carbon".to_string(),
+                a_edge: 0,
+                a_parameter: 0,
+                a_rotation: 0,
+                b_material: "Carbon".to_string(),
+                b_edge: 0,
+                b_parameter: 500_000_000,
+                b_rotation: 0,
+            }),
+        };
+        assert_eq!(
+            library.resolve_persistent_interface(&query),
+            LiveFamilyResolution::Unresolved,
+            "same-material, same-edge queries cannot identify candidate vs anchor"
+        );
         let _ = std::fs::remove_dir_all(root);
     }
 
