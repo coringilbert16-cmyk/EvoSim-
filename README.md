@@ -984,3 +984,8 @@ The persisted rigid-edge interval now means the normalized exposed interval on t
 
 
 The latest source follow-up also removes `anchor_constituent` from rigid-edge, rigid-point, and rigid-vertex canonical projection keys. It is a formation-context index, not local interface geometry, so retaining it could falsely turn equivalent contacts into ambiguous matches. Tests for this change are pending in CI.
+
+
+### Bob placement-suggestion milestone — 2026-10-10
+
+Bob now has an indexed `suggest_rigid_edge_placements` API that rebases persisted rigid-edge families to a live anchor pose and returns deduplicated candidate `Placement` suggestions. These are advisory only: the physical constructor must still validate full-structure nonpenetration, contact, bond transaction, acquisition, energy, and cavity requirements. This is a first integration primitive, not yet wired into the constructor; edge-edge is the only suggestion class implemented, and interval-wide placement exploration plus point/vertex/fluid suggestion paths remain. The regression test checks pose rebase and edge-midpoint alignment. CI is being rerun for the latest changes. See [the detailed stabilization audit](docs/repository-stabilization-audit.md).
