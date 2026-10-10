@@ -177,8 +177,7 @@ async fn main() {
             .and_then(|value| value.parse::<usize>().ok())
             .filter(|passes| *passes > 0)
             .expect("--geometry-worker-passes requires a positive integer");
-        geometry_library_worker::run_passes(passes)
-            .expect("bounded geometry worker run failed");
+        geometry_library_worker::run_passes(passes).expect("bounded geometry worker run failed");
         return;
     }
 
