@@ -4607,6 +4607,16 @@ mod bob_lookup_contract_tests {
         let suggestions =
             library.suggest_rigid_edge_placements("Carbon", live_anchor, &carbon, &catalog);
         assert!(!suggestions.is_empty());
+        let water = catalog
+            .iter()
+            .find(|resource| resource.name == "Water")
+            .unwrap();
+        assert!(
+            library
+                .suggest_rigid_edge_placements("Carbon", live_anchor, water, &catalog)
+                .is_empty(),
+            "fluid candidates do not use the rigid-edge placement path"
+        );
         let anchor_segments = rigid_boundary_segments(&carbon.shape.form);
         let candidate_segments = rigid_boundary_segments(&carbon.shape.form);
         assert!(suggestions.iter().all(|suggestion| {
@@ -4638,6 +4648,8 @@ mod bob_lookup_contract_tests {
                 || (suggestion.placement.y - live_anchor.y).abs() > 1e-6
         }));
 
+        assert!(library.entries.is_empty());
+        assert!(library.rigid_contact_families.is_empty());
         let _ = std::fs::remove_dir_all(&root);
     }
 
