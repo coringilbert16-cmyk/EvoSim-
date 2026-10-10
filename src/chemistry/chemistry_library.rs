@@ -434,4 +434,123 @@ mod tests {
         assert_eq!(ChemistryLibrary::open(&root).unwrap().len(), 1);
         let _ = fs::remove_dir_all(root);
     }
+
+    fn test_root(label: &str) -> PathBuf {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock must be after epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "evosim-chemistry-{label}-{}-{nonce}",
+            std::process::id()
+        ))
+    }
+
+    fn write_test_store(root: &Path, schema_version: u32, rows: &[String], manifest_entries: u64) {
+        fs::create_dir_all(root).unwrap();
+        let mut data = rows.join("\n");
+        if !data.is_empty() {
+            data.push('\n');
+        }
+        fs::write(root.join("chemistry.jsonl"), data).unwrap();
+        fs::write(
+            root.join("manifest.json"),
+            serde_json::to_vec(&ChemistryLibraryManifest {
+                schema_version,
+                entries: manifest_entries,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    }
+
+    fn test_record_json(schema_version: u32, signature: &str) -> String {
+        serde_json::to_string(&ChemistryRecord {
+            key: ChemistryKey {
+                schema_version,
+                material_a: "Carbon".into(),
+                material_b: "Hydrogen".into(),
+                interface_class: "rigid_edge".into(),
+                interface_signature: signature.into(),
+            },
+            static_potential: 0.5,
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn loads_current_schema_three_store() {
+        let root = test_root("schema-three");
+        write_test_store(&root, 3, &[test_record_json(3, "edge")], 1);
+        let library = ChemistryLibrary::open(&root).unwrap();
+        assert_eq!(library.len(), 1);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn reads_legacy_schema_two_store_without_relabeling_keys() {
+        let root = test_root("schema-two");
+        write_test_store(&root, 2, &[test_record_json(2, "legacy-edge")], 1);
+        let library = ChemistryLibrary::open(&root).unwrap();
+        assert_eq!(library.len(), 1);
+        assert!(library.get(&ChemistryKey {
+            schema_version: 2,
+            material_a: "Carbon".into(),
+            material_b: "Hydrogen".into(),
+            interface_class: "rigid_edge".into(),
+            interface_signature: "legacy-edge".into(),
+        }).is_some());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_malformed_final_nonempty_record() {
+        let root = test_root("truncated-tail");
+        write_test_store(&root, 3, &["{".into()], 1);
+        let error = ChemistryLibrary::open(&root).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_duplicate_persisted_keys() {
+        let root = test_root("duplicate");
+        let row = test_record_json(3, "same-edge");
+        write_test_store(&root, 3, &[row.clone(), row], 1);
+        let error = ChemistryLibrary::open(&root).unwrap_err();
+        assert!(error.to_string().contains("duplicate chemistry key"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_manifest_count_mismatch() {
+        let root = test_root("count-mismatch");
+        write_test_store(&root, 3, &[test_record_json(3, "edge")], 2);
+        let error = ChemistryLibrary::open(&root).unwrap_err();
+        assert!(error.to_string().contains("entry count mismatch"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_semantically_invalid_persisted_records() {
+        let root = test_root("invalid-record");
+        let invalid = serde_json::to_string(&ChemistryRecord {
+            key: ChemistryKey {
+                schema_version: 3,
+                material_a: "Carbon".into(),
+                material_b: "Hydrogen".into(),
+                interface_class: "rigid_edge".into(),
+                interface_signature: "edge".into(),
+            },
+            static_potential: f64::NAN,
+        })
+        .unwrap();
+        // JSON does not represent NaN, so serialize a parseable record with a negative value.
+        let invalid = invalid.replace("null", "-1.0");
+        write_test_store(&root, 3, &[invalid], 1);
+        let error = ChemistryLibrary::open(&root).unwrap_err();
+        assert!(error.to_string().contains("invalid chemistry record"));
+        let _ = fs::remove_dir_all(root);
+    }
+
 }
