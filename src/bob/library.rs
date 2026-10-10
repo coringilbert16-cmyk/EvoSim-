@@ -21,7 +21,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
-pub const GEOMETRY_LIBRARY_SCHEMA_VERSION: u32 = 1;
+pub const GEOMETRY_LIBRARY_SCHEMA_VERSION: u32 = 2;
 /// Positional equivalence used by Bob when deciding whether two otherwise
 /// identical geometric records describe the same meaningful contact.
 /// Differences at or below this distance do not create a new record.
@@ -710,6 +710,9 @@ pub struct GeometryRigidContactFamily {
     pub anchor_edge: usize,
     pub candidate_edge: usize,
     pub candidate_rotation_radians: f64,
+    /// Exposed interval on the anchor edge where a contact point may lie.
+    /// These are normalized edge parameters in [0, 1], not candidate-edge
+    /// translation coordinates.
     pub anchor_parameter_start: f64,
     pub anchor_parameter_end: f64,
 }
@@ -1565,6 +1568,8 @@ impl GeometryLibrary {
                     || !family.candidate_rotation_radians.is_finite()
                     || !family.anchor_parameter_start.is_finite()
                     || !family.anchor_parameter_end.is_finite()
+                    || family.anchor_parameter_start < 0.0
+                    || family.anchor_parameter_end > 1.0
                     || family.anchor_parameter_start > family.anchor_parameter_end
                     || !entries.contains_key(&family.formation_signature)
                     || family.anchor_constituent
@@ -2119,6 +2124,8 @@ impl GeometryLibrary {
                 || !family.candidate_rotation_radians.is_finite()
                 || !family.anchor_parameter_start.is_finite()
                 || !family.anchor_parameter_end.is_finite()
+                || family.anchor_parameter_start < 0.0
+                || family.anchor_parameter_end > 1.0
                 || family.anchor_parameter_start > family.anchor_parameter_end
                 || self.entries.get(&family.formation_signature).is_none()
                 || family.anchor_constituent
@@ -3626,7 +3633,6 @@ pub fn generate_rigid_contact_families(
                 let candidate_angle = (c1.1 - c0.1).atan2(c1.0 - c0.0);
                 for flip in [0.0, std::f64::consts::PI] {
                     let rotation = normalize_angle(anchor_angle + flip - candidate_angle);
-                    let ratio = candidate_length / anchor_length;
                     let family = GeometryRigidContactFamily {
                         schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
                         formation_signature: formation.signature.clone(),
@@ -3635,7 +3641,11 @@ pub fn generate_rigid_contact_families(
                         anchor_edge: interval.edge,
                         candidate_edge,
                         candidate_rotation_radians: rotation,
-                        anchor_parameter_start: interval.start - ratio,
+                        // The interval describes where the realized contact
+                        // point may lie on the exposed anchor edge. Candidate
+                        // edge length and orientation affect pose reconstruction,
+                        // not this normalized contact-point interval.
+                        anchor_parameter_start: interval.start,
                         anchor_parameter_end: interval.end,
                     };
                     if family.anchor_parameter_end >= family.anchor_parameter_start - QUANTUM {
@@ -4410,6 +4420,30 @@ mod bob_lookup_contract_tests {
         );
 
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn generated_rigid_edge_families_store_exposed_contact_intervals() {
+        let catalog = crate::resources::default_catalog();
+        let carbon = catalog.iter().find(|resource| resource.name == "Carbon").unwrap();
+        let formation = GeometryFormation::single("Carbon");
+        let families = generate_rigid_contact_families(&formation, carbon, &catalog);
+        assert!(!families.is_empty());
+        assert!(families.iter().all(|family| {
+            family.anchor_parameter_start >= 0.0
+                && family.anchor_parameter_end <= 1.0
+                && family.anchor_parameter_start <= family.anchor_parameter_end
+        }));
+
+        let same_edge = families
+            .iter()
+            .filter(|family| family.anchor_edge == 0 && family.candidate_edge == 0)
+            .collect::<Vec<_>>();
+        assert_eq!(same_edge.len(), 2, "both edge orientations should be retained");
+        assert!(same_edge.iter().all(|family| {
+            (family.anchor_parameter_start - 0.0).abs() < 1e-9
+                && (family.anchor_parameter_end - 1.0).abs() < 1e-9
+        }));
     }
 
     #[test]
