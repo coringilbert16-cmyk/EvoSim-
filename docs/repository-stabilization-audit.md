@@ -178,3 +178,13 @@ The chemistry cache loader mismatch was not the only reason the checked-in chemi
 The live reaction key builder now preserves the resource name for a one-part, one-unit base material while keeping amount-qualified canonical identities for mixtures and non-unit quantities. Tests were added for pure-base compatibility, composite identity preservation, and exact key construction for a checked-in Carbon–Hydrogen rigid-point interface. Commit: [base-material chemistry key compatibility](https://github.com/coringilbert16-cmyk/EvoSim-/commit/692741c68536b4e40494d46457ed11a11ea0bfd3) and [exact cache-key contract test](https://github.com/coringilbert16-cmyk/EvoSim-/commit/214a9b3ebb17c95e8e89d2605759cde09d0b0645). These changes have not been compiled or executed here.
 
 Implication for library coverage: the 17 checked-in chemistry rows are all marked `Valid`, but they are only specific material/interface cache records, not a complete chemistry ruleset. Their value depends on runtime key compatibility and the caller's cache-miss path. Do not inflate the catalogue merely to cover every theoretical material pair; first measure real constructor/reaction lookup hits, misses, and newly calculated keys after this key mismatch is fixed.
+
+### Verification update — current chemistry change set
+
+GitHub Actions run [38057320097](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38057320097) ran against the chemistry source changes after formatting corrections.
+
+- Formatting, source-file-size checks, COMBINE architecture checks, focused Bob compact-storage tests, and fresh-library create/reopen checks all passed.
+- The new chemistry persistence tests passed, including schema-3 load, schema-2 legacy read, malformed-tail rejection, duplicate-key rejection, manifest-count rejection, and invalid-record rejection. The three new chemistry-key tests also passed.
+- Full suite: **262 passed, 75 failed, 1 ignored** in 26.38 seconds. The number of passing tests increased from 253 to 262; the existing broad failure set remains, and the actual constructor still fails with `physical bond transaction 19-3 failed` in simulation startup.
+- Strict Clippy still fails. It reports staged/dead APIs and ordinary lints; this must be addressed by deciding which APIs are live, intentionally staged, or obsolete—not by blanket suppression.
+- This run is evidence for the persistence and key-contract tests only. It is not a passing build/release gate and did not validate constructor viability.
