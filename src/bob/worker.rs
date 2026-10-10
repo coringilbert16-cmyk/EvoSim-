@@ -192,10 +192,10 @@ fn process_one_frontier(
                 // permanently "pending" state.
                 let families = generate_water_contact_families(&formation, resource, catalog);
                 metrics.water_families += families.len();
-                metrics.water_families_added += library.insert_contact_families(families.clone())?;
                 let boundary_states =
                     generate_fluid_boundary_families_from_contact_families(resource, &families);
                 metrics.fluid_boundary_families += boundary_states.len();
+                metrics.water_families_added += library.insert_contact_families(families)?;
                 metrics.fluid_boundary_families_added +=
                     library.insert_fluid_boundary_families(boundary_states)?;
                 completed_frontiers.push((
