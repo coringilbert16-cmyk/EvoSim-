@@ -80,7 +80,7 @@ fn bob_validated_neighbor_placement(
     });
 
     for suggestion in suggestions {
-        let proposed = suggestion.placement;
+        let mut proposed = suggestion.placement;
         // Bob proposes the local interface; the scaffold still defines the
         // broad cavity topology. Only near-equivalent lattice poses are eligible.
         if (proposed.x - intended.0).hypot(proposed.y - intended.1)
@@ -89,6 +89,10 @@ fn bob_validated_neighbor_placement(
         {
             continue;
         }
+        // Canonicalize a symmetry-equivalent rotation to the scaffold pose.
+        // This preserves the exact shape while avoiding round-off penetration
+        // at a shared edge (for example, a regular hexagon rotated by PI). 
+        proposed.rotation_radians = 0.0;
         let Some(instance) = crate::physical_material::PhysicalMaterial::realized(
             Material::free_base(resource.name.clone(), 1.0),
             vec![Placement {
