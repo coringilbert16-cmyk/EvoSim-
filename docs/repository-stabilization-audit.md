@@ -381,3 +381,23 @@ A focused test, `bob_neighbor_suggestions_reach_initial_constructor_physical_val
 This integration makes Bob relevant to the initial constructor's placement stage, but it still does not prove that Bob's proposal is responsible for a successful permanent bond: `bond_units` separately re-evaluates the contact and runs the authoritative COMBINE transaction. The next gate is CI, then the actual blueprint-free constructor acceptance test and structured diagnosis of any remaining bond transaction rejection.
 
 The first CI attempt for the initial-constructor integration stopped at `cargo fmt --check`; the reported differences were formatting-only in `src/construction/initial_organism_constructor.rs`. Those rustfmt changes have been applied in commit `170d95c8b031eff0a4e4a640a500575554036bc5`. That attempt did not reach the Rust test stage, so the new focused regression and blueprint-free acceptance test remain unverified; rerun CI on the formatted head before drawing conclusions.
+
+## Initial constructor placement, ring geometry, and cavity graph — 2026-10-10
+
+### Bob suggestion proof
+
+The active blueprint-free path (`construct_valid → construct_scaffold → add_unit/bond_units`) now queries Bob for rigid-edge placement suggestions when a Carbon unit has an already-realized neighbor. Bob candidates are only eligible when their centers are within `COMBINE_CONTACT_TOLERANCE` of the intended lattice point and their rotation is geometrically equivalent for the Carbon hexagon. The accepted candidate is canonicalized to the exact intended lattice pose, then restored into a trial structure and rechecked for whole-structure nonpenetration and available-endpoint contact. This removes floating-point drift from a symmetry-equivalent rotation without relaxing physical contact. The focused test `bob_neighbor_suggestions_reach_initial_constructor_physical_validation` passes in CI.
+
+### Root cause of transaction 19-3
+
+The diagnostic COMBINE path now preserves the first transaction rejection reason rather than collapsing every rejection to `None`. Before the scaffold correction, transaction `19-3` was rejected at physical bond insertion. Source tracing showed that `hex_ring` began at axial coordinate `(-radius, 0)` but walked first in direction `(1, 0)`; by the fourth ring entry it had reached `(0, 0)`. The spoke at index 19 and inner-ring unit 3 therefore occupied the same position. The axial traversal now starts with `(0, 1)`, then proceeds around the six perimeter directions. A regression test checks that rings at radii 1–5 contain exactly `6r` unique cells and every cell satisfies the axial perimeter invariant.
+
+Correcting the ring exposed an enclosure-graph defect. `find_enclosed_regions` added the same shared polygon edge once for each adjacent polygon, producing duplicate parallel directed edges. The planar face walker assumes a simple edge pair and could fail to traverse the inner face. The graph now deduplicates each undirected edge after endpoint interning, retaining one directed pair for face traversal. This applies to both polygon and line segments; shared edges are interior interfaces, while the cavity boundary edges remain owned by their respective wall constituents.
+
+### Current evidence and remaining scope
+
+CI run [#38068822004](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38068822004) passed formatting, source-size, COMBINE-architecture, Bob compact-storage, and empty-store checks. The full suite improved from 267 passed / 75 failed to **311 passed / 32 failed / 1 ignored**. The focused Bob placement test passes, and the initial-organism constructor tests no longer appear in the failure list. The full suite and strict Clippy are still failing. Remaining failures include blueprint-driven construction closure paths reporting `contacts=0`, plus independent chemistry, movement, reproduction, storage, and contract failures. Do not classify these as one common bug without tracing their individual call paths.
+
+### Next bounded step
+
+Trace the still-failing blueprint-driven closure path (including the triangle fixture with `connection=2 elements=(1,2)`) from target placement through candidate generation, Bob suggestion merging, contact evaluation, and COMBINE admission. Capture why candidate placement yields zero live contacts before changing any placement tolerance. Keep this separate from the now-working blueprint-free initial constructor and do not weaken the physics to make legacy tests pass.
