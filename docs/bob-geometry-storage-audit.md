@@ -31,29 +31,23 @@ Each family’s logical `signature()` also embeds the full formation signature. 
 
 ### Read and write paths
 
-- `GeometryLibrary::open` reads formation rows first, then resolves family rows against the loaded formation map. It currently ignores invalid family rows rather than failing the entire library open.
-- Formation rows are appended by `insert_many`; family rows are persisted by `insert_contact_families`, `insert_fluid_boundary_families`, `insert_rigid_contact_families`, `insert_rigid_point_contact_families`, `insert_rigid_vertex_contact_families`, and `insert_contact_family`.
-- The family batch writers serialize the runtime family structs directly with `serde_json::to_writer`. Replacing the field in those structs would affect runtime callers, logical keys, and serialization together. Prefer dedicated on-disk DTOs so the runtime API and current logical family signatures remain unchanged.
+- `GeometryLibrary::open` reads formation rows first, then resolves family rows against the loaded formation map. Current loader recovery behavior is not uniform across family types; invalid-row handling must be explicitly covered by tests before migration.
+- Formation rows are appended by `insert_many`; family rows are persisted by the family insertion methods.
+- Runtime family structs and their logical `signature()` methods retain the full canonical `formation_signature`. On-disk compact rows are produced by `compact_family_value`, which removes that field and writes a deterministic `formation_id`. The reader restores the full signature before deserializing the runtime struct.
+- The family encoding is declared once in `storage_manifest.json` as `formation-id-reference-v2`; current compact family rows do **not** add a per-row `storage_version`. Do not introduce a per-row version requirement without a separate compatibility design.
+- The current family ID is a 128-bit prefix of SHA-256, encoded as 22-character unpadded base64url. The read-only size estimator must use this exact ID shape if its savings estimate is to be meaningful.
 - The frontier stores signatures in both a record and the record-map key. Do not include it in the first migration.
-- The current loader streaming edits are present in the branch, but remain uncompiled and untested. The fluid loader’s error handling is not identical to the other loaders; retain and test the existing intended recovery policy rather than “cleaning it up” as part of a storage-format change.
+- The current integration passes focused storage tests and the isolated fresh-library create/reopen smoke test (see the dated CI status below). These checks do not prove the full local catalogue is equivalent after migration.
+- Invalid family rows and unresolved references require special scrutiny: the existing loader can skip invalid family rows rather than fail the whole open, which risks hiding data loss if used as a migration verifier.
 
-### Worker/library API verification
+## Current compact-family behavior
 
-A follow-up inspection of the exact `remove-library-auto-publisher` revision confirms that the worker-facing functions are present in `src/bob/library.rs`: `open_default_library`, `seed_base_catalogue`, `expand_formation_candidates`, `generate_rigid_contact_families`, `generate_rigid_point_contact_families`, and `generate_rigid_vertex_contact_families`. The server's `open_default_library` import is also defined. The earlier source audit incorrectly reported these symbols as missing; issue #178 records that mistaken finding and should be closed as a false alarm.
+The integrated writer uses compact family references on new writes, regardless of whether formation rows are legacy or v3. The formation storage version and family encoding are related through the manifest but are distinct concerns:
+- **Formation rows:** a fresh empty library uses compositional-v3 with a deterministic formation ID and, when profitable and exactly reconstructible, an exact one-constituent delta. A nonempty legacy formation store remains in legacy formation mode; it is not automatically migrated.
+- **Family rows:** writers replace repeated full `formation_signature` values with deterministic `formation_id` values. On load, those IDs are resolved to the canonical formation signatures used by the runtime.
+- **Frontier:** still stores full signatures and remains outside this compacting change.
 
-This source inspection confirms symbol presence only. It does not establish that the branch compiles or that tests pass. Before changing serialization, run formatting, compilation, and focused tests in a runnable checkout, and record the actual result. Do not treat the previous missing-symbol report as a confirmed blocker.
-
-## Recommended compact family format
-
-Keep runtime structs, formation signatures, and family `signature()` methods unchanged. Introduce dedicated versioned persistence DTOs for each family kind. A new row should contain:
-
-- `storage_version: 2` (persistence format version, separate from geometry `schema_version`)
-- `formation_id` (a fixed-length deterministic ID)
-- all existing family-specific fields except `formation_signature`
-
-The full canonical signature stays in `formations.jsonl` and remains authoritative. At load time, build a map from compact ID to canonical signature/formation. For each ID, detect whether another distinct canonical signature maps to the same ID; if so, fail closed with an explicit invalid-data error. Never silently choose one formation on collision. A stable cryptographic digest (for example, a 128-bit prefix of SHA-256 encoded as 32 hex characters) is preferable to Rust’s default hasher, whose output is not a persistence contract. This requires adding and locking a digest dependency or implementing and reviewing a stable algorithm explicitly.
-
-For compatibility, parse a row as legacy only when it has no `storage_version` and has a string `formation_signature`; parse compact rows only when `storage_version == 2` and `formation_id` is present. Reject unknown versions. Resolve compact IDs to the full canonical signature before reconstructing the runtime struct, so validation, public APIs, indexes, and family deduplication keep their existing semantics. Do not change `GEOMETRY_LIBRARY_SCHEMA_VERSION` just to version the JSON representation.
+The current smoke test proves a fresh isolated library writes v3 metadata and at least one formation delta, then can be reopened. It does not yet prove legacy family data in the user's complete local catalogue can be converted without loss. Keep the actual-catalogue equivalence and separate-destination migration gates below.
 
 ## Migration sequence
 
