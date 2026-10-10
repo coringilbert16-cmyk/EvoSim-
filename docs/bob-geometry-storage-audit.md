@@ -138,3 +138,20 @@ The first deterministic edge-resolution tests are now committed in src/bob/libra
 This is a narrow matcher correction plus focused tests; it does not resolve the separate missing-rotation fields for rigid-point/rigid-vertex queries, nor the projection-key omission of interval ends and rotation ranges. Those remain explicit follow-up work because changing their semantics requires a stable identity contract.
 
 Validation status: the commits are present on bob-automatic-compact-storage. The GitHub workflow/status query returned no runs or status records for the latest commit at the time of this note, so test execution and CI success are not verified from this interface. Do not treat these tests as locally run.
+
+
+### Canonical family projection contract — 2026-10-10
+
+For indexed live resolution, a projection represents a **contact-compatibility class**, not the full persisted record identity. Different formations may share one projection when their runtime contact geometry is equivalent. However, every field that changes the range or orientation of a compatible contact must be represented in the projection; otherwise separate compatibility classes collapse and ambiguity is hidden.
+
+The projection helpers now include:
+
+- Rigid edge: candidate resource, anchor constituent/edge, candidate edge, candidate rotation, and both anchor-parameter interval bounds.
+- Rigid point: candidate resource, anchor constituent/edge, candidate endpoint, both anchor-parameter bounds, and both candidate-rotation bounds.
+- Rigid vertex: candidate resource, anchor constituent/edge, candidate vertex, both anchor-parameter bounds, and both candidate-rotation bounds.
+
+Focused tests vary the interval end and rotation-range bounds independently and assert that each change produces a distinct projection. This deliberately makes resolution conservative: if two matching records describe different contact intervals or candidate-rotation ranges, they count as distinct projections rather than silently collapsing into a false Unique result.
+
+**Remaining limitation:** rigid-point and rigid-vertex live query variants still do not carry realized candidate rotation. The projection change prevents different stored rotation ranges from collapsing, but it does not yet prove that a single matching family's rotation range contains the live candidate's actual orientation. A follow-up must extend the runtime query contract (including how orientation is derived for the endpoint-only resolver) or fail closed for queries that lack it. Until then, a Unique point/vertex result is not fully rotation-validated and must not be treated as complete geometric proof.
+
+The contract tests have been committed, but the available GitHub workflow/status query did not return a run or check result for these commits. Compilation and test success remain unverified until CI or a local Cargo run reports results.
