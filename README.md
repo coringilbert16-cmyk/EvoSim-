@@ -7,7 +7,7 @@ EvoSim is an open-ended evolutionary organism simulation. Organisms are built fr
 > [!CAUTION]
 > **Do not treat the current default branch (`main`) as a downloadable EvoSim source checkout yet.** A recursive GitHub tree audit found only 15 entries, rooted under `chemistry_library/`, `docs/`, and `geometry_library/`; it has no `Cargo.toml` or `src/main.rs`. It is currently a data/documentation branch, not a complete runnable Rust application.
 
-The current unified integration target is [PR #186 — Integrate EvoSim source and Bob regeneration into main](https://github.com/coringilbert16-cmyk/EvoSim-/pull/186), branch `integration/unified-source-and-catalogue`. It preserves the main-branch catalogue while restoring the runnable Rust source, UI, scripts, and current project documentation. It remains draft-only.
+The current unified integration target is [PR #186 — Integrate EvoSim source and Bob regeneration into main](https://github.com/coringilbert16-cmyk/EvoSim-/pull/186), branch `integration/unified-source-and-catalogue`. It restores the runnable Rust source, UI, scripts, and current project documentation. The obsolete generated geometry catalogue has since been deliberately removed from both `main` and this integration branch; geometry knowledge must be regenerated only after the generator/constructor path is validated. It remains draft-only.
 
 ### Current stabilization evidence
 
@@ -19,12 +19,12 @@ The current unified integration target is [PR #186 — Integrate EvoSim source a
 
 ### Required order before the next clean download
 
-1. Keep PR #186 as the single integration target; preserve the approved biological/physical rules and all required catalogue data.
+1. Keep PR #186 as the single integration target; preserve the approved biological/physical rules and geometry-library implementation, but do not treat the deleted generated catalogue as source of truth.
 2. Resolve Clippy/build hygiene and shared physical-contract failures at their common authority, not by patching failing tests independently or weakening invariants.
 3. Finish Bob's live-family resolution and define corruption/duplicate/manifest recovery for persistent geometry and chemistry data.
 4. Replace the fixed scaffold with the approved milestone-driven constructor, including whole-structure validation, atomic transactions, analyzer-confirmed bonded genome cavity, physical acquisition of Water plus at least three other resources, and reconciled energy/material accounting.
 5. Run the actual constructor as the acceptance test, then focused contracts and the full suite. A Bob worker smoke test alone is not acceptance.
-6. Verify existing-catalogue compatibility and clean-generation criteria before deciding which generated files can be discarded or regenerated.
+6. Establish clean-generation criteria and verify empty-library startup/rebuild behavior before regenerating any catalogue data. Do not run the worker just to refill the deleted files.
 7. Only after these gates pass, merge the verified integration lineage and make it the default branch.
 
 Until those gates pass, a fresh clone of `main` is not the right download target, and PR #186 remains a work-in-progress integration branch rather than a stable release. See [the full repository stabilization audit](docs/repository-stabilization-audit.md) for source-level findings, CI evidence, ordered implementation gates, and the definition of stable enough to download.
