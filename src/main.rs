@@ -171,6 +171,17 @@ async fn main() {
         return;
     }
 
+    if command.as_deref() == Some("--geometry-worker-passes") {
+        let passes = std::env::args()
+            .nth(2)
+            .and_then(|value| value.parse::<usize>().ok())
+            .filter(|passes| *passes > 0)
+            .expect("--geometry-worker-passes requires a positive integer");
+        geometry_library_worker::run_passes(passes)
+            .expect("bounded geometry worker run failed");
+        return;
+    }
+
     if command.as_deref() == Some("--geometry-worker") {
         geometry_library_worker::run();
         return;
