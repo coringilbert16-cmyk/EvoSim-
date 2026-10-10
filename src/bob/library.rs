@@ -4426,7 +4426,9 @@ mod bob_lookup_contract_tests {
         formation.constituents[0].placement.rotation_radians = 0.5;
         formation.signature = formation.canonical_signature();
         let formation_signature = formation.signature.clone();
-        library.entries.insert(formation_signature.clone(), formation);
+        library
+            .entries
+            .insert(formation_signature.clone(), formation);
 
         let family = GeometryRigidContactFamily {
             schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
