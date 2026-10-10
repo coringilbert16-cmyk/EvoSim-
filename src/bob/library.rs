@@ -1866,8 +1866,8 @@ impl GeometryLibrary {
                 a0.1 + (a1.1 - a0.1) * parameter,
             );
             let anchor_world = world_point(anchor_local, anchor_placement);
-            let anchor_edge_angle = (a1.1 - a0.1).atan2(a1.0 - a0.0)
-                + anchor_placement.rotation_radians;
+            let anchor_edge_angle =
+                (a1.1 - a0.1).atan2(a1.0 - a0.0) + anchor_placement.rotation_radians;
             let relative_rotation = normalize_angle(
                 family.candidate_rotation_radians - stored_anchor.placement.rotation_radians,
             );
@@ -4572,7 +4572,9 @@ mod bob_lookup_contract_tests {
         ));
         let _ = std::fs::remove_dir_all(&root);
         let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
-        library.entries.insert(formation.signature.clone(), formation);
+        library
+            .entries
+            .insert(formation.signature.clone(), formation);
         for family in families {
             library
                 .rigid_contact_families
