@@ -123,3 +123,33 @@ The Bob persistence checks passing do **not** validate the application or the co
 - [ ] The default branch points to that verified source/data lineage.
 
 Until then, the integration branch is the working stabilization target, not a stable release.
+
+
+## Follow-up source audit — 2026-10-10
+
+This addendum records direct inspection of the integration branch's current source and checked-in library files. It supersedes earlier statements below where they conflict with the exact current files. This remains a source audit; no Rust build or constructor run was performed in this follow-up.
+
+### Confirmed current state
+
+1. **The initial constructor is still not the approved replacement.** `src/construction/initial_organism_constructor.rs` defines `CONSTRUCTION_ENERGY = 1.0e12`, a deterministic inner ring, six radial supports, and an outer ring. It does not query Bob to select a free-form growth sequence. The bond selector's fallback chooses the farthest eligible contact when no corner-corner candidate exists. The acquisition search uses a small fixed set of sample points and four rotations. These are source-confirmed migration targets, not inferred from old test names.
+2. **The phosphorus shape discrepancy is resolved in this integration branch.** Both `src/materials/resources.rs::default_catalog` and `geometry_library/data/manifest.json` define the approved centered isosceles trapezoid: 1.5-unit bottom, 1.0-unit top, 0.5-unit sides. Earlier audit text claiming that the current integration branch still uses an L-like phosphorus shape is stale for this branch. No phosphorus geometry change is requested here. Its actual runtime realization and catalog-signature consistency still require tests.
+3. **Chemistry persistence has a confirmed schema mismatch.** `src/chemistry/chemistry_library.rs` sets `CHEMISTRY_LIBRARY_SCHEMA_VERSION = 2` and rejects manifests whose schema is not 2. The checked-in `chemistry_library/data/manifest.json` declares schema 3, and all 17 checked-in rows carry key schema version 3. Therefore, opening this checked-in store through the current `ChemistryLibrary::open` fails with a schema-mismatch error; if the version check were bypassed, `ChemistryRecord::is_valid` would reject schema-3 keys under the schema-2 constant. This must be resolved before relying on persistent chemistry lookup.
+4. **Chemistry loading silently skips semantically invalid rows and permits duplicate-key overwrite.** The loader inserts valid rows into a HashMap without rejecting duplicate keys and does not reconcile the manifest entry count with the number of unique loaded records. A malformed final non-empty row is silently ignored. These behaviors can conceal an incomplete or incompatible store.
+5. **The live geometry-family resolver is explicitly unfinished.** `classify_live_family_resolution` currently returns `Unresolved` for all supported interface classes. A live canonical interface identity is not yet a completed mapping to a stored family record. Bob's catalog must not be described as fully queryable for constructor use until unique resolution or a validated fallback is implemented.
+6. **Geometry and chemistry catalog scale are not proof of constructor utility.** The geometry manifest reports 25,737 formations; the chemistry manifest reports 17 records. The chemistry README still describes the persistence layout as future work even though the data and source implementation exist. Documentation, code, and current persisted schema need to be reconciled.
+
+### Decision required before chemistry-store repair
+
+The checked-in manifest and all checked-in rows consistently use schema 3, while the source constant and validator expect schema 2. The source/readme do not specify a schema-2-to-schema-3 compatibility policy.
+
+Recommended default: treat schema 3 as the current persisted format, add an explicit, tested migration or compatibility reader for schema 2 if any schema-2 store must remain supported, and reject unknown schemas with a clear diagnostic. Do not silently relabel old rows, discard data, or weaken validation. This policy needs confirmation before changing chemistry persistence code.
+
+### Next implementation order
+
+1. Resolve and test the chemistry schema compatibility contract without deleting or rewriting the checked-in store.
+2. Add corruption/duplicate/manifest-count tests and make the loader's recovery behavior explicit.
+3. Finish unique live geometry-family resolution (or a physically validated fallback) and prove queries against the existing catalog.
+4. Repair shared physical-contract failures, then replace the scaffold constructor with the approved milestone-driven engine.
+5. Use the actual constructor run as the end-to-end acceptance test; do not substitute a worker-only generation run.
+
+No catalog records or physical rules were changed as part of this follow-up audit.
