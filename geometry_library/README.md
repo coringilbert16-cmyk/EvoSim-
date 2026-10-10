@@ -63,26 +63,9 @@ The worker batches each formation-expansion result before syncing it to disk. Ca
 
 
 
-Bob's worker and viewer use the same geometry data root. By default this is `geometry_library/data` relative to the current working directory. To use an existing library stored elsewhere, set `EVOSIM_GEOMETRY_LIBRARY_DIR` to that directory; this does not copy or migrate the data.
+Bob's worker and viewer use the same geometry data root. By default this is `geometry_library/data` relative to the current working directory. The source-level audit confirms that opening a missing default root creates an empty store, and opening an explicitly configured empty directory is also supported. Opening the library does not itself seed formations or run generation; the worker's seeding and expansion are mutating operations.
 
-For the desktop workspace layout where the source checkout is next to `EvoSim--main`, run from the source checkout in PowerShell:
-
-```powershell
-$env:EVOSIM_GEOMETRY_LIBRARY_DIR = (Resolve-Path ..\EvoSim--main\geometry_library\data).Path
-cargo run -- --geometry-worker-once
-```
-
-The explicit path is validated before Bob opens it, so a misspelled or absent override fails instead of silently creating an empty catalogue. Opening the store still checks the manifest schema and resource-catalog signature; a mismatch must be investigated, not bypassed. The worker writes durable results to the configured library, so preserve a backup before the first write.
-
-Use `cargo run -- --geometry-worker-once` for a bounded smoke test. It opens the configured persistent library, seeds missing base formations, processes exactly one unfinished formation/resource pass, durably records its results, prints the resulting formation count, and exits. Only after that succeeds should `cargo run -- --geometry-worker` run continuously and resume from the persisted frontier after restart.
-
-For a bounded generation benchmark without paying process startup and catalogue reload costs for every pass, use:
-
-```powershell
-cargo run --release -- --geometry-worker-passes 25
-```
-
-This processes up to 25 formation-frontier passes in one process and prints per-pass candidate/family counts, elapsed time, catalogue size, and whether the expansion limit was reached. It is a measurement run, not a full catalogue completion command.
+**Current reset policy:** do not run `--geometry-worker-once`, `--geometry-worker-passes`, or the continuous worker merely to test startup or repopulate this deleted catalogue. Those commands seed and persist generated records. First validate the constructor-facing lookup contract and define measurable acceptance criteria. Use an isolated temporary directory only when a test specifically needs to exercise persistence, and do not commit generated output by default.
 
 ### Worker frontier semantics
 
