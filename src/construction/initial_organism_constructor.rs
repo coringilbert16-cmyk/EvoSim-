@@ -42,7 +42,7 @@ fn hex_ring(radius: i32) -> Vec<(i32, i32)> {
     if radius <= 0 {
         return Vec::new();
     }
-    let directions = [(1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1)];
+    let directions = [(0, 1), (1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1)];
     let mut q = -radius;
     let mut r = 0;
     let mut result = Vec::with_capacity((radius * 6) as usize);
