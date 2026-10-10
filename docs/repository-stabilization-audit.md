@@ -215,3 +215,26 @@ The geometry README previously contained worker smoke-test and generation comman
 5. Measure usefulness with constructor-facing query hits/misses, ambiguity, candidate rejection reasons, time to a sealed qualifying cavity, required-resource acquisition, and final viability. Only then define and approve a replacement-generation run.
 
 No build, constructor execution, or worker execution was performed for this addendum. These are source-confirmed findings and a next-step plan, not runtime acceptance evidence.
+
+
+## Follow-up implementation — anchor-relative Bob edge lookup — 2026-10-10
+
+### Correction made
+
+The rigid-edge family generator stores `candidate_rotation_radians` in the formation's coordinate frame. The indexed live resolver was comparing the realized candidate-minus-anchor rotation against that absolute stored rotation. These quantities differ whenever the family's anchor constituent is rotated in its formation, so valid contacts could be missed or projected as distinct interfaces. The resolver now converts the stored family rotation to the anchor-relative frame before comparison and uses that same relative rotation in the canonical projection key. This preserves the existing record schema and does not change physical contact rules.
+
+Regression test: `indexed_edge_lookup_compares_rotation_relative_to_anchor_pose` passes in GitHub Actions. The isolated empty-root open/reopen test also passes and confirms that opening an empty store initializes schema metadata but does not seed formations or family rows.
+
+### CI and worker policy
+
+- CI now runs `cargo test fresh_empty_library_opens_and_reopens_without_seeding_geometry` instead of running the geometry worker twice to smoke-test persistence. The active workflow no longer generates a catalogue as a startup check.
+- One CI run that had started before the workflow edit still completed the previous worker smoke step in a temporary GitHub runner directory. It did not write generated data to the repository or either branch's tracked tree. Future runs use the non-generative test.
+- Latest Rust run [38060589759](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38060589759): formatting, source-size, COMBINE architecture, focused Bob compact-storage tests, empty-root test, and the new relative-rotation regression passed. The full suite remains red at **264 passed, 75 failed, 1 ignored**. Strict Clippy remains red on the existing staged/dead-code and other lint backlog; this change does not claim repository stability.
+
+### Updated next steps
+
+1. Add a constructor-facing Bob suggestion API that returns enough local geometry data to propose actual candidate placements. The current resolver returns only a resolution classification or canonical projection string; it does not return a placement candidate.
+2. Test edge-edge, line-end/edge, and vertex/edge suggestion construction, including rotated anchors, same-material ambiguity, and unsupported/fluid interfaces.
+3. Wire those suggestions into the milestone-driven constructor while retaining full-structure collision/nonpenetration, live contact, chemistry, bond transaction, energy accounting, and cavity qualification as physical authority.
+4. Diagnose `physical bond transaction 19-3 failed` through structured internal rejection reasons. Do not use the current fixed scaffold or weaken physical constraints as a substitute for the replacement constructor.
+5. Only after constructor-facing query coverage is measured should a replacement geometry catalogue be generated. No worker was run by the current implementation change, and no generated catalogue was restored.
