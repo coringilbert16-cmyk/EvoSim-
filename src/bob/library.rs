@@ -4290,8 +4290,8 @@ mod bob_lookup_contract_tests {
         let mut changed_edge = edge.clone();
         changed_edge.anchor_parameter_end = 0.75;
         assert_ne!(
-            rigid_family_projection(&edge),
-            rigid_family_projection(&changed_edge)
+            rigid_family_projection(&edge, 0.5),
+            rigid_family_projection(&changed_edge, 0.5)
         );
 
         let point = GeometryRigidPointContactFamily {
