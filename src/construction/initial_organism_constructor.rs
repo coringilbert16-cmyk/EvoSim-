@@ -318,10 +318,12 @@ fn bond_units(
 
         // Recompute candidates on the next iteration after this transaction
         // changes endpoint availability.
-        crate::combine_runtime::form_selected_bond(
+        crate::combine_runtime::form_selected_bond_diagnostic(
             structure, unit_a, unit_b, candidate, investment, catalog, &mut cache, ledger, energy,
         )
-        .ok_or_else(|| format!("physical bond transaction {unit_a}-{unit_b} failed"))?;
+        .map_err(|reason| {
+            format!("physical bond transaction {unit_a}-{unit_b} failed: {reason}")
+        })?;
 
         used_a.push(endpoint_a);
         used_b.push(endpoint_b);
