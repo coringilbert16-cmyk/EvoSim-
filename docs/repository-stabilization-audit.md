@@ -285,3 +285,8 @@ Latest source commits for this increment: `b401bb13` (suggestion API), `5d0ffb0c
 ### Empty-library on-demand fallback — 2026-10-10
 
 The suggestion API now has a non-generative-store bootstrap path: if no matching persisted families are found, it creates a one-constituent anchor formation in memory, derives only the relevant rigid-edge families for the requested candidate material, and returns advisory placements. It does not write those families to disk, seed the catalogue, or start the worker. This makes an empty catalogue usable for local constructor proposals while preserving the policy that only physically validated, measured knowledge should later be persisted. The regression test has been renamed to `empty_library_proposes_rigid_edge_placements_without_persisting_families`; its CI run is pending.
+
+
+### Verification checkpoint — 2026-10-10 15:22 UTC
+
+On source commit `7bfb6f21`, CI passed formatting, source-size, COMBINE architecture, Bob compact-storage tests, and empty-store open/reopen checks. The new `empty_library_proposes_rigid_edge_placements_without_persisting_families` test passed in the full run. Full Rust suite remains at **266 passed, 75 failed, 1 ignored**; failures are the existing broad simulation/physics/reproduction backlog, not the new Bob empty-library test. Strict Clippy also remains red on existing dead/staged APIs and lint findings; do not blanket-suppress those warnings. The latest follow-up extends the same regression to unequal Phosphorus edge lengths and is undergoing CI. No generated geometry data was written.
