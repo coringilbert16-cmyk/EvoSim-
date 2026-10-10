@@ -661,9 +661,25 @@ mod tests {
         let library = crate::geometry_reference_library::open_default_library()
             .expect("default Bob library should open, including an empty library");
         let intended = axial_to_world(1, 0);
+        let raw_suggestions = library.suggest_rigid_edge_placements(
+            "Carbon",
+            structure.units[0].placement,
+            carbon,
+            &catalog,
+        );
+        let suggestion_poses = raw_suggestions
+            .iter()
+            .map(|suggestion| (
+                suggestion.placement.x,
+                suggestion.placement.y,
+                suggestion.placement.rotation_radians,
+            ))
+            .collect::<Vec<_>>();
         let proposed =
             bob_validated_neighbor_placement(&structure, 0, carbon, intended, &library, &catalog)
-                .expect("Bob should propose a nearby pose that passes live physical checks");
+                .unwrap_or_else(|| panic!(
+                    "Bob had no suggestion accepted by live physical validation; raw poses={suggestion_poses:?}"
+                ));
         assert!(
             (proposed.x - intended.0).hypot(proposed.y - intended.1)
                 <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE,
