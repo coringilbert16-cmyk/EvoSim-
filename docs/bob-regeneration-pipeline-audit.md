@@ -67,6 +67,21 @@ The rigid edge and vertex family files account for approximately 87% of total by
 
 All 100 passes reported `size=2`; therefore this benchmark does not establish the cost or completion behavior at larger constituent counts. It shows successful persistence and growth, not a completed or bounded-time full rebuild. The release build emitted 35 warnings, which should be tracked separately from the successful build and worker execution.
 
+## Family insertion metrics and identity audit
+
+The follow-up instrumentation reports generated and newly persisted family counts separately. In the clean-root 25-pass run, every generated rigid edge and rigid vertex family was newly persisted in each pass; point families were zero in this sample. This means storage insertion is not discarding a large share of the generated families as duplicates.
+
+Inspection of `GeometryRigidContactFamily::signature` and `GeometryRigidVertexContactFamily::signature` explains an important caveat: each signature includes the source formation identity, candidate resource, anchor constituent/edge, candidate edge or vertex, and quantized contact parameters/rotation. Thus families from different formations are intentionally distinct lookup records even if some underlying contact geometry appears similar. Equal generated/added counts do not prove all records are geometrically unique; they show that the current signature-based deduplicator found no duplicate keys in those batches or against already stored records.
+
+The next optimization audit should therefore focus on **generation and representation**, not blindly increasing deduplication:
+- quantify family records per formation and per candidate resource;
+- verify which family dimensions the live constructor actually queries and whether the stored families are all needed for those query paths;
+- inspect repeated/symmetric contact cases for equivalent records that the current identity intentionally distinguishes;
+- compare compact JSONL bytes per record and cold-open/index-building cost;
+- preserve all geometrically meaningful lookup cases. Do not merge records across formations unless query semantics and identity can be proven equivalent.
+
+The benchmark is still early: all measured passes were for one- and two-constituent formations. It does not estimate the cost of the full constituent range.
+
 ## Next measurements
 
 On a clean, isolated data root, record:
