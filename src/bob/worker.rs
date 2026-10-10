@@ -10,6 +10,9 @@ use std::time::{Duration, Instant};
 
 const IDLE_SLEEP: Duration = Duration::from_secs(1);
 
+/// Bob catalogs useful local assemblies, not whole organisms. Keep clean builds bounded.
+const MAX_LIBRARY_CONSTITUENTS: usize = 20;
+
 pub fn run() {
     let catalog = default_catalog();
     let mut library = open_default_library().expect("geometry library must open");
@@ -58,13 +61,14 @@ struct WorkerPassMetrics {
     fluid_boundary_families: usize,
     elapsed: Duration,
     total_formations: usize,
+    expansion_limit_reached: bool,
 }
 
 impl std::fmt::Display for WorkerPassMetrics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "geometry worker pass: size={} generated={} added={} not_added={} edge_families={} point_families={} vertex_families={} water_families={} fluid_boundary_families={} total_formations={} elapsed_ms={}",
+            "geometry worker pass: size={} generated={} added={} not_added={} edge_families={} point_families={} vertex_families={} water_families={} fluid_boundary_families={} total_formations={} expansion_limit_reached={} elapsed_ms={}",
             self.formation_size,
             self.generated_candidates,
             self.added_formations,
@@ -75,6 +79,7 @@ impl std::fmt::Display for WorkerPassMetrics {
             self.water_families,
             self.fluid_boundary_families,
             self.total_formations,
+            self.expansion_limit_reached,
             self.elapsed.as_millis(),
         )
     }
@@ -174,9 +179,16 @@ fn process_one_frontier(
             metrics.rigid_vertex_families += vertex_families.len();
             library.insert_rigid_vertex_contact_families(vertex_families)?;
 
-            let candidates = expand_formation_candidates(&formation, resource, catalog);
-            metrics.generated_candidates += candidates.len();
-            metrics.added_formations += library.insert_many(candidates, catalog)?;
+            if formation.constituents.len() < MAX_LIBRARY_CONSTITUENTS {
+                let candidates = expand_formation_candidates(&formation, resource, catalog);
+                metrics.generated_candidates += candidates.len();
+                metrics.added_formations += library.insert_many(candidates, catalog)?;
+            } else {
+                // Still record local contact knowledge for formations at the
+                // limit, but do not create 21-constituent rows from a 20-unit
+                // library target. This makes a fresh catalogue finite.
+                metrics.expansion_limit_reached = true;
+            }
 
             completed_frontiers.push((
                 formation.signature.clone(),
