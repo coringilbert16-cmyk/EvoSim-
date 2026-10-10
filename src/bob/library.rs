@@ -1839,24 +1839,38 @@ impl GeometryLibrary {
                 }
             }
         }
-        let mut suggestions = BTreeMap::<String, RigidEdgePlacementSuggestion>::new();
-
+        let mut families = Vec::<(GeometryRigidContactFamily, f64)>::new();
         for signature in indexed_families.keys() {
             let Some(family) = self.rigid_contact_families.get(signature) else {
                 continue;
             };
-            if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
-                || family.candidate_resource != candidate_resource.name
-            {
-                continue;
-            }
             let Some(formation) = self.entries.get(&family.formation_signature) else {
                 continue;
             };
             let Some(stored_anchor) = formation.constituents.get(family.anchor_constituent) else {
                 continue;
             };
-            if stored_anchor.resource != anchor_material {
+            if stored_anchor.resource == anchor_material {
+                families.push((family.clone(), stored_anchor.placement.rotation_radians));
+            }
+        }
+        // An intentionally empty catalogue is a supported bootstrap state.
+        // Derive local single-anchor families on demand without persisting
+        // unverified records or starting a bulk geometry worker.
+        if families.is_empty() {
+            let seed = GeometryFormation::single(anchor_material);
+            families.extend(
+                generate_rigid_contact_families(&seed, candidate_resource, catalog)
+                    .into_iter()
+                    .map(|family| (family, 0.0)),
+            );
+        }
+
+        let mut suggestions = BTreeMap::<String, RigidEdgePlacementSuggestion>::new();
+        for (family, stored_anchor_rotation) in families {
+            if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
+                || family.candidate_resource != candidate_resource.name
+            {
                 continue;
             }
             let Some(&(a0, a1)) = anchor_segments.get(family.anchor_edge) else {
@@ -1883,9 +1897,8 @@ impl GeometryLibrary {
             let anchor_world = world_point(anchor_local, anchor_placement);
             let anchor_edge_angle =
                 (a1.1 - a0.1).atan2(a1.0 - a0.0) + anchor_placement.rotation_radians;
-            let relative_rotation = normalize_angle(
-                family.candidate_rotation_radians - stored_anchor.placement.rotation_radians,
-            );
+            let relative_rotation =
+                normalize_angle(family.candidate_rotation_radians - stored_anchor_rotation);
             let rotation = normalize_angle(anchor_placement.rotation_radians + relative_rotation);
             let candidate_edge_angle = (c1.1 - c0.1).atan2(c1.0 - c0.0) + rotation;
             if normalize_angle(candidate_edge_angle - anchor_edge_angle).abs() > 1e-7
@@ -4577,32 +4590,14 @@ mod bob_lookup_contract_tests {
             .find(|resource| resource.name == "Carbon")
             .unwrap()
             .clone();
-        let formation = GeometryFormation::single("Carbon");
-        let families = generate_rigid_contact_families(&formation, &carbon, &catalog);
-        assert!(!families.is_empty());
-
         let root = std::env::temp_dir().join(format!(
-            "evosim-bob-placement-suggestions-{}",
+            "evosim-bob-empty-placement-suggestions-{}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
-        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
-        library
-            .entries
-            .insert(formation.signature.clone(), formation);
-        for family in families {
-            let signature = family.signature();
-            library
-                .rigid_contact_index
-                .entry(contact_bucket_hash(
-                    &family.candidate_resource,
-                    family.anchor_edge,
-                    family.candidate_edge,
-                ))
-                .or_default()
-                .push(signature.clone());
-            library.rigid_contact_families.insert(signature, family);
-        }
+        let library = GeometryLibrary::open(&root, &catalog).unwrap();
+        assert!(library.rigid_contact_families.is_empty());
+        assert!(library.entries.is_empty());
 
         let live_anchor = Placement {
             x: 12.0,
