@@ -325,3 +325,17 @@ The current worker's `MAX_LIBRARY_CONSTITUENTS` is hardcoded to 20; continuous `
 6. Treat this as geometry-library preparation only. It does not replace the actual constructor acceptance test and does not resolve the current `physical bond transaction 19-3 failed` blocker.
 
 No generation was started in this documentation update. The run is assigned to the next sprint, as requested.
+
+
+## Bob two-piece generation result — 2026-10-10
+
+The user-approved bounded generation run has completed successfully in [GitHub Actions run #38066184273](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38066184273). The worker was given a fresh isolated `EVOSIM_GEOMETRY_LIBRARY_DIR` and invoked with `--geometry-worker-complete-up-to 2`.
+
+- **279 formations total:** 7 seeded singletons and 272 two-piece formations.
+- **435 candidate formations generated; 272 newly persisted; 163 not newly persisted** after canonical/equivalence deduplication.
+- **Family records added:** 113,776 rigid edge-contact, 0 rigid point-contact, 56,888 rigid vertex-contact, 1,341 Water contact, and 1,341 fluid-boundary families.
+- **Elapsed time:** 14,921 ms. **Persistent data footprint:** 48,316,400 bytes. Compressed Actions artifact: 1,528,928 bytes.
+- **Post-reopen checks passed:** 279 formations before and after reopen; zero formations above the two-constituent limit; zero unfinished frontiers.
+- Artifact name: `bob-two-piece-geometry-library`, artifact ID `11674718881`, expiry 2026-11-09. Generated runtime data was not committed.
+
+The dedicated workflow is now manual-dispatch only, to avoid regeneration on ordinary documentation edits. This result validates bounded generation, persistence, and reopen/bound checks only. It does **not** resolve the existing live-constructor integration gap or full-suite failures. The latest Rust CI still reports **266 passed, 75 failed, 1 ignored**, and Clippy remains failing. Continue the constructor migration separately; do not treat family volume as proof of viable-organism construction.
