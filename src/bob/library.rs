@@ -4583,7 +4583,7 @@ mod bob_lookup_contract_tests {
     }
 
     #[test]
-    fn rigid_edge_suggestions_rebase_family_poses_to_live_anchor() {
+    fn empty_library_proposes_rigid_edge_placements_without_persisting_families() {
         let catalog = default_catalog();
         let carbon = catalog
             .iter()
