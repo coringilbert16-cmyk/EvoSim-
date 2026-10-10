@@ -309,3 +309,19 @@ The GitHub Actions run for source commit `b2443356107fb39a201edf772e3045b77ae8dc
 4. After the constructor succeeds, use the actual constructor bot to measure query hit/miss and candidate rejection distributions. Keep the catalogue empty until those measurements justify a specific, validated persistence contract.
 
 No geometry worker was run and no generated data was written. This checkpoint supersedes the prior note that the Phosphorus regression was still running; the CI run has completed and the regression did not add a new failure.
+
+
+## User-approved bounded geometry generation — next sprint
+
+The user has now explicitly authorized Bob to run and populate the persistent geometry library for formations of **up to 2 constituent pieces**. This is a scoped exception to the earlier reset policy that prohibited refilling the deleted catalogue. It does not authorize unbounded generation or formations with 3+ constituents.
+
+The current worker's `MAX_LIBRARY_CONSTITUENTS` is hardcoded to 20; continuous `--geometry-worker` does not terminate when the frontier is exhausted, but idles and keeps running. Therefore, do not launch the current continuous worker unchanged. Next sprint:
+
+1. Add an explicit max-constituent parameter for the worker run and preserve the existing default for normal invocations.
+2. Run with maximum size 2 against the intended persistent data root. Process all singleton frontiers and all valid two-piece formations; also compute and persist their applicable rigid and Water/fluid contact-family records.
+3. Stop once all frontiers for formations of size 1 and 2 are exhausted. Ensure the worker does not expand two-piece formations into three-piece candidates.
+4. Reopen the generated library and validate manifest/row counts, signatures/deduplication, per-resource frontier states, and that no formation exceeds two constituents. Report generated, accepted, deduplicated/not-added counts, runtime, and disk footprint.
+5. Do not commit generated runtime data by default. Preserve the generated local persistent store for subsequent constructor work; report its location and exact measured size.
+6. Treat this as geometry-library preparation only. It does not replace the actual constructor acceptance test and does not resolve the current `physical bond transaction 19-3 failed` blocker.
+
+No generation was started in this documentation update. The run is assigned to the next sprint, as requested.
