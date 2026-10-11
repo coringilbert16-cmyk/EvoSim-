@@ -359,3 +359,41 @@ fn process_one_frontier(
     metrics.total_formations = library.len();
     Ok(Some(metrics))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::geometry_reference_library::GeometryFormation;
+
+    #[test]
+    fn worker_persists_water_inclusive_formations_and_reopens_them() {
+        let catalog = default_catalog();
+        let root =
+            std::env::temp_dir().join(format!("evosim-bob-water-worker-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let carbon = GeometryFormation::single("Carbon");
+        let carbon_signature = carbon.signature.clone();
+        library.insert(carbon, &catalog).unwrap();
+
+        let metrics = process_one_frontier(&mut library, &catalog, 2)
+            .unwrap()
+            .expect("the seeded Carbon formation must have an unfinished frontier");
+        assert!(metrics.fluid_formations > 0);
+        assert!(metrics.fluid_formations_added > 0);
+        assert!(library.fluid_formations().all(|formation| {
+            formation.parent_formation_signature == carbon_signature
+                && formation.fluid_resource == "Water"
+        }));
+        drop(library);
+
+        let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
+        assert!(reopened.fluid_formations().count() > 0);
+        assert!(reopened.fluid_formations().all(|formation| {
+            formation.parent_formation_signature == carbon_signature
+                && formation.fluid_resource == "Water"
+        }));
+        drop(reopened);
+        let _ = std::fs::remove_dir_all(root);
+    }
+}
