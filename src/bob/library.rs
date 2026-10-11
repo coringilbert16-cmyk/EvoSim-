@@ -1886,6 +1886,21 @@ impl GeometryLibrary {
         self.fluid_formations.values()
     }
 
+    /// Read-only construction query for fluid formations recorded against an
+    /// exact canonical rigid-parent arrangement. This does not realize or
+    /// authorize a placement; callers must still derive a live fluid shape
+    /// and pass it through the physical geometry/transaction authorities.
+    pub fn fluid_formations_for_parent<'a>(
+        &'a self,
+        parent_formation_signature: &'a str,
+        fluid_resource: &'a str,
+    ) -> impl Iterator<Item = &'a GeometryFluidFormation> + 'a {
+        self.fluid_formations.values().filter(move |formation| {
+            formation.parent_formation_signature == parent_formation_signature
+                && formation.fluid_resource == fluid_resource
+        })
+    }
+
     pub fn fluid_boundary_families(&self) -> impl Iterator<Item = &GeometryFluidBoundaryFamily> {
         self.fluid_boundary_families.values()
     }
@@ -5768,6 +5783,22 @@ mod compact_family_storage_tests {
             "each valid Water-inclusive formation must be persisted"
         );
         assert_eq!(library.fluid_formations().count(), fluid_formations.len());
+        let parent_signature = GeometryFormation::single("Carbon").signature;
+        let parent_suggestions: Vec<_> = library
+            .fluid_formations_for_parent(&parent_signature, "Water")
+            .collect();
+        assert!(!parent_suggestions.is_empty());
+        assert!(parent_suggestions.iter().all(|formation| {
+            formation.parent_formation_signature == parent_signature
+                && formation.fluid_resource == "Water"
+        }));
+        assert_eq!(
+            library
+                .fluid_formations_for_parent("missing-parent", "Water")
+                .count(),
+            0,
+            "the fluid query must not silently match an unresolved parent"
+        );
         assert_eq!(
             library
                 .insert_fluid_formations(fluid_formations, &catalog)
