@@ -411,6 +411,8 @@ impl CircularArcBoundary {
 /// interval; a circular piece is a free interface. Pieces are ordered around the
 /// fluid region and share endpoints exactly within the boundary tolerance.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+pub type ContactSegment = ((f64, f64), (f64, f64));
+
 pub enum FluidBoundaryPiece {
     SolidContact {
         start_x: f64,
@@ -1069,7 +1071,7 @@ pub fn normalize_arc_parameter(angle: f64) -> Option<f64> {
 pub fn solve_water_against_collinear_contacts(
     area: f64,
     contact_angle_radians: f64,
-    ordered_segments: &[((f64, f64), (f64, f64))],
+    ordered_segments: &[ContactSegment],
 ) -> Option<MultiContactFluidBoundary> {
     if ordered_segments.len() < 2 {
         return None;
