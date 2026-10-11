@@ -118,9 +118,7 @@ impl PhysicalMaterial {
             return None;
         }
         let default_area = match &resource.shape.form {
-            crate::resources::Form::Circle { radius } => {
-                std::f64::consts::PI * radius * radius
-            }
+            crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
             crate::resources::Form::Fluid { nominal_area, .. } => *nominal_area,
             _ => return None,
         };
@@ -429,7 +427,10 @@ mod tests {
     #[test]
     fn exact_multi_contact_fluid_shape_survives_material_round_trip() {
         let catalog = crate::resources::default_catalog();
-        let water = catalog.iter().find(|resource| resource.name == "Water").unwrap();
+        let water = catalog
+            .iter()
+            .find(|resource| resource.name == "Water")
+            .unwrap();
         let area = match &water.shape.form {
             crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
             _ => panic!("default Water shape should have a measurable area"),
