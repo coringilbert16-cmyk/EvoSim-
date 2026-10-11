@@ -1021,7 +1021,13 @@ fn realize_next_bond_driven(
         return None;
     }
 
-    let bob_parent = bob_library.and_then(|_| canonical_live_rigid_parent(structure, catalog));
+    let needs_fluid_suggestions = new_material.material.parts.iter().any(|(name, _)| {
+        resource(catalog, name)
+            .is_some_and(|candidate| candidate.physical_state == PhysicalState::Fluid)
+    });
+    let bob_parent = needs_fluid_suggestions
+        .then(|| bob_library.and_then(|_| canonical_live_rigid_parent(structure, catalog)))
+        .flatten();
 
     for existing_index in existing_indices {
         let existing_unit = structure.units.get(existing_index)?;
