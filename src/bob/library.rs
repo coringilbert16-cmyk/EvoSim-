@@ -750,15 +750,17 @@ impl GeometryFluidFormation {
                 || self.contact_constraints.iter().any(|constraint| {
                     constraint.constituent_index >= parent.constituents.len()
                         || !parent
-                        .constituents
-                        .get(constraint.constituent_index)
-                        .and_then(|constituent| {
-                            catalog.iter().find(|item| item.name == constituent.resource)
-                        })
-                        .is_some_and(|resource| {
-                            constraint.edge_index
-                                < rigid_boundary_segments(&resource.shape.form).len()
-                        })
+                            .constituents
+                            .get(constraint.constituent_index)
+                            .and_then(|constituent| {
+                                catalog
+                                    .iter()
+                                    .find(|item| item.name == constituent.resource)
+                            })
+                            .is_some_and(|resource| {
+                                constraint.edge_index
+                                    < rigid_boundary_segments(&resource.shape.form).len()
+                            })
                         || !constraint.contact_length.is_finite()
                         || constraint.contact_length <= 0.0
                         || !constraint.edge_parameter_start.is_finite()
@@ -6261,8 +6263,8 @@ mod fluid_contact_constraint_schema_tests {
         let formation = legacy_fluid_formation();
         let mut value = serde_json::to_value(&formation).unwrap();
         let object = value.as_object_mut().unwrap();
-        object.remove("contact_constraints");
-        object.remove("solved_boundary");
+        let _ = object.remove("contact_constraints");
+        let _ = object.remove("solved_boundary");
 
         let decoded: GeometryFluidFormation = serde_json::from_value(value).unwrap();
         assert!(decoded.contact_constraints.is_empty());
