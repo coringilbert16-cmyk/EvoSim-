@@ -14,7 +14,7 @@ This checkpoint supersedes older repository-status and CI summaries later in thi
 
 ### Latest locked CI verification
 
-At integration head `03b264d032135e47ce06b4b3229beac669d62379`, [Rust workflow #38140332317](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38140332317) completed. Formatting, source-size policy, COMBINE architecture checks, Bob compact-storage tests, and the non-generative empty-library open/reopen test passed. The full suite remains **314 passed, 29 failed, 1 ignored**; failures span construction, chemistry, geometry/contact, cavity/viability, movement, reproduction, and storage contracts. Strict Clippy failed with 48 diagnostics while compiling the test target and 58 while compiling the application. [Runner validation #38140332276](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38140332276) passed. These results verify the locked dependency setup and repository guards, not application correctness or release readiness.
+At prior code head `03b264d032135e47ce06b4b3229beac669d62379`, before the persistent runner was changed to require `--locked`, [Rust workflow #38140332317](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38140332317) completed. Formatting, source-size policy, COMBINE architecture checks, Bob compact-storage tests, and the non-generative empty-library open/reopen test passed. The full suite remains **314 passed, 29 failed, 1 ignored**; failures span construction, chemistry, geometry/contact, cavity/viability, movement, reproduction, and storage contracts. Strict Clippy failed with 48 diagnostics while compiling the test target and 58 while compiling the application. [Runner validation #38140332276](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38140332276) passed. These results verify the locked dependency setup and repository guards, not application correctness or release readiness.
 
 ### Remaining repository-integrity gates
 
@@ -60,10 +60,10 @@ The current unified integration target is [PR #186 — Integrate EvoSim source a
 
 Until those gates pass, a fresh clone of `main` is not the right download target, and PR #186 remains a work-in-progress integration branch rather than a stable release. See [the full repository stabilization audit](docs/repository-stabilization-audit.md) for source-level findings, CI evidence, ordered implementation gates, and the definition of stable enough to download.
 
-## Constructor and repository stabilization handoff — 2026-10-10
+## Historical constructor and repository stabilization handoff — 2026-10-10 (superseded)
 
-> [!IMPORTANT]
-> This section is a dated engineering handoff, not a claim that the replacement constructor is implemented. The authoritative architecture is the **Replacement Initial Organism Constructor** plan below. Keep this handoff current as audits progress so work can resume without relying on conversation history.
+> [!WARNING]
+> This is a dated handoff preserved for engineering history, not the current branch inventory. Some claims below—especially that Bob is not connected to the active constructor path and the listed CI counts—are superseded by later commits and the current checkpoint at the top of this README. Do not use this section to determine current implementation status. The **Replacement Initial Organism Constructor** plan below remains the sole approved architecture plan.
 
 - **Current integration target:** [PR #186 — Integrate EvoSim source and Bob regeneration into main](https://github.com/coringilbert16-cmyk/EvoSim-/pull/186), draft only. The prior staged PRs #181–#185 were closed as superseded; their source commits remain in the integration lineage. Do not merge or download this as a stable release while compile/lint and constructor-viability gates remain open.
 - **Current live path:** `Simulation::create_initial_organism` calls `initial_organism_constructor::construct_valid`. The live constructor is still the fixed Carbon ring/support/outer-ring baseline (54 units); it does not yet use Bob to select a free-form growth sequence.

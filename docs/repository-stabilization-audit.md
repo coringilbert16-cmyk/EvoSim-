@@ -12,7 +12,7 @@
 
 ## Latest locked CI evidence
 
-At integration head `03b264d032135e47ce06b4b3229beac669d62379`, [Rust workflow #38140332317](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38140332317) completed. Formatting, source-size guard, COMBINE architecture guard, Bob compact-storage tests, and empty-library open/reopen tests passed. The full suite reported **314 passed, 29 failed, 1 ignored**, with failures across multiple subsystems. Strict Clippy failed with 48 diagnostics on the test target and 58 on the application target. [Runner validation #38140332276](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38140332276) passed. This is current locked-CI evidence, not a green release gate.
+At prior code head `03b264d032135e47ce06b4b3229beac669d62379`, before the persistent runner was changed to require `--locked`, [Rust workflow #38140332317](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38140332317) completed. Formatting, source-size guard, COMBINE architecture guard, Bob compact-storage tests, and empty-library open/reopen tests passed. The full suite reported **314 passed, 29 failed, 1 ignored**, with failures across multiple subsystems. Strict Clippy failed with 48 diagnostics on the test target and 58 on the application target. [Runner validation #38140332276](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38140332276) passed. This is current locked-CI evidence, not a green release gate.
 
 ## Repository-integrity work order
 
