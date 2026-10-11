@@ -355,7 +355,7 @@ pub fn resolve_live_contact_candidate(
                     .iter()
                     .find(|resource| resource.name == edge.material)?;
                 let area = match &fluid.shape.form {
-                    Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+                    Form::Circle { radius } => std::f64::consts::PI * *radius * *radius,
                     Form::Fluid { nominal_area, .. } => *nominal_area,
                     _ => return None,
                 };
@@ -1019,7 +1019,9 @@ pub fn solve_collinear_multi_contact_formation(
         _ => return None,
     };
     let first_constraint = constraints.first()?;
-    let first_constituent = parent.constituents.get(first_constraint.constituent_index)?;
+    let first_constituent = parent
+        .constituents
+        .get(first_constraint.constituent_index)?;
     let first_solid = catalog
         .iter()
         .find(|resource| resource.name == first_constituent.resource)?;
@@ -1053,8 +1055,11 @@ pub fn solve_collinear_multi_contact_formation(
     if distinct_constituents.len() < 2 {
         return None;
     }
-    let boundary =
-        solve_water_against_collinear_contacts(area, family.contact_angle_radians, ordered_segments)?;
+    let boundary = solve_water_against_collinear_contacts(
+        area,
+        family.contact_angle_radians,
+        ordered_segments,
+    )?;
     if boundary.contact_count() != constraints.len()
         || !multi_contact_boundary_matches_constraints(&boundary, parent, &constraints, catalog)
     {
@@ -6602,24 +6607,31 @@ mod fluid_contact_constraint_schema_tests {
         use crate::resources::Form;
 
         let mut catalog = crate::resources::default_catalog();
-        let water = catalog.iter().find(|item| item.name == "Water").unwrap().clone();
-        let carbon = catalog.iter().find(|item| item.name == "Carbon").unwrap().clone();
+        let water = catalog
+            .iter()
+            .find(|item| item.name == "Water")
+            .unwrap()
+            .clone();
+        let carbon = catalog
+            .iter()
+            .find(|item| item.name == "Carbon")
+            .unwrap()
+            .clone();
         let area = match &water.shape.form {
             Form::Circle { radius } => std::f64::consts::PI * radius * radius,
             Form::Fluid { nominal_area, .. } => *nominal_area,
             _ => panic!("Water must expose a conserved fluid area"),
         };
-        let family = solve_water_against_solid(
-            area,
-            water.properties.cohesion,
-            carbon.properties.cohesion,
-        )
-        .unwrap();
+        let family =
+            solve_water_against_solid(area, water.properties.cohesion, carbon.properties.cohesion)
+                .unwrap();
         let wall_length = family.contact_length / 3.0;
         for name in ["TestWallA", "TestWallB", "TestWallC"] {
             let mut wall = carbon.clone();
             wall.name = name.to_string();
-            wall.shape.form = Form::Line { length: wall_length };
+            wall.shape.form = Form::Line {
+                length: wall_length,
+            };
             catalog.push(wall);
         }
 
@@ -6628,33 +6640,61 @@ mod fluid_contact_constraint_schema_tests {
             constituents: vec![
                 GeometryConstituent {
                     resource: "TestWallA".to_string(),
-                    placement: Placement { x: -wall_length, y: 0.0, rotation_radians: 0.0 },
+                    placement: Placement {
+                        x: -wall_length,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
                 },
                 GeometryConstituent {
                     resource: "TestWallB".to_string(),
-                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                    placement: Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
                 },
                 GeometryConstituent {
                     resource: "TestWallC".to_string(),
-                    placement: Placement { x: wall_length, y: 0.0, rotation_radians: 0.0 },
+                    placement: Placement {
+                        x: wall_length,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
                 },
             ],
             bonds: vec![
-                GeometryBond { constituent_a: 0, constituent_b: 1 },
-                GeometryBond { constituent_a: 1, constituent_b: 2 },
+                GeometryBond {
+                    constituent_a: 0,
+                    constituent_b: 1,
+                },
+                GeometryBond {
+                    constituent_a: 1,
+                    constituent_b: 2,
+                },
             ],
             signature: String::new(),
         };
         raw_parent.signature = raw_parent.canonical_signature();
         assert!(validate_formation(&raw_parent, &catalog));
         let parent = raw_parent.canonicalized(&catalog).unwrap();
-        let mut edges = parent.constituents.iter().enumerate().map(|(index, constituent)| {
-            let resource = catalog.iter().find(|item| item.name == constituent.resource).unwrap();
-            let Form::Line { length } = &resource.shape.form else { panic!("test wall must be a line") };
-            let a = world_point((-*length * 0.5, 0.0), constituent.placement);
-            let b = world_point((*length * 0.5, 0.0), constituent.placement);
-            (index, a, b)
-        }).collect::<Vec<_>>();
+        let mut edges = parent
+            .constituents
+            .iter()
+            .enumerate()
+            .map(|(index, constituent)| {
+                let resource = catalog
+                    .iter()
+                    .find(|item| item.name == constituent.resource)
+                    .unwrap();
+                let Form::Line { length } = &resource.shape.form else {
+                    panic!("test wall must be a line")
+                };
+                let a = world_point((-*length * 0.5, 0.0), constituent.placement);
+                let b = world_point((*length * 0.5, 0.0), constituent.placement);
+                (index, a, b)
+            })
+            .collect::<Vec<_>>();
         let first = edges.first().unwrap();
         let mut direction = (first.2.0 - first.1.0, first.2.1 - first.1.1);
         if direction.0 < -1e-9 || (direction.0.abs() <= 1e-9 && direction.1 < 0.0) {
@@ -6666,42 +6706,60 @@ mod fluid_contact_constraint_schema_tests {
         let projection = |point: (f64, f64)| {
             (point.0 - origin.0) * direction.0 + (point.1 - origin.1) * direction.1
         };
-        let mut mapped = edges.drain(..).map(|(index, a, b)| {
-            let (start, end) = if projection(a) <= projection(b) { (a, b) } else { (b, a) };
-            let start_t = if start == a { 0.0 } else { 1.0 };
-            let end_t = if end == b { 1.0 } else { 0.0 };
-            let constraint = GeometryFluidContactConstraint {
-                constituent_index: index,
-                edge_index: 0,
-                contact_length: (end.0 - start.0).hypot(end.1 - start.1),
-                edge_parameter_start: start_t.min(end_t),
-                edge_parameter_end: start_t.max(end_t),
-            };
-            (projection(start), start, end, constraint)
-        }).collect::<Vec<_>>();
+        let mut mapped = edges
+            .drain(..)
+            .map(|(index, a, b)| {
+                let (start, end) = if projection(a) <= projection(b) {
+                    (a, b)
+                } else {
+                    (b, a)
+                };
+                let start_t: f64 = if start == a { 0.0 } else { 1.0 };
+                let end_t: f64 = if end == b { 1.0 } else { 0.0 };
+                let constraint = GeometryFluidContactConstraint {
+                    constituent_index: index,
+                    edge_index: 0,
+                    contact_length: (end.0 - start.0).hypot(end.1 - start.1),
+                    edge_parameter_start: start_t.min(end_t),
+                    edge_parameter_end: start_t.max(end_t),
+                };
+                (projection(start), start, end, constraint)
+            })
+            .collect::<Vec<_>>();
         mapped.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
         let segments = mapped.iter().map(|item| (item.1, item.2)).collect::<Vec<_>>();
         let constraints = mapped.into_iter().map(|item| item.3).collect::<Vec<_>>();
 
         let record = solve_collinear_multi_contact_formation(
-            &parent, &water, constraints, &segments, &catalog,
-        ).expect("simultaneous solver should produce a valid three-parent contact record");
+            &parent,
+            &water,
+            constraints,
+            &segments,
+            &catalog,
+        )
+        .expect("simultaneous solver should produce a valid three-parent contact record");
         assert_eq!(record.contact_constraints.len(), 3);
         assert_eq!(record.solved_boundary.as_ref().unwrap().contact_count(), 3);
         let parents = BTreeMap::from([(parent.signature.clone(), parent.clone())]);
         assert!(fluid_formation_is_valid(&record, &parents, &catalog));
 
-        let root = std::env::temp_dir().join(format!(
-            "evosim-bob-collinear-fluid-{}", std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("evosim-bob-collinear-fluid-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         {
             let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
             library.insert(parent.clone(), &catalog).unwrap();
-            assert_eq!(library.insert_fluid_formations(vec![record.clone()], &catalog).unwrap(), 1);
+            assert_eq!(
+                library
+                    .insert_fluid_formations(vec![record.clone()], &catalog)
+                    .unwrap(),
+                1
+            );
         }
         let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
-        let stored = reopened.fluid_formations_for_parent(&parent.signature, "Water").collect::<Vec<_>>();
+        let stored = reopened
+            .fluid_formations_for_parent(&parent.signature, "Water")
+            .collect::<Vec<_>>();
         assert_eq!(stored.len(), 1);
         assert_eq!(stored[0].signature(), record.signature());
         drop(reopened);
