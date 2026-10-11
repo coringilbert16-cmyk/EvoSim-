@@ -5668,13 +5668,10 @@ mod compact_family_storage_tests {
         assert_eq!(reopened_fluid_formations, expected_fluid_formation_signatures);
         assert!(reopened_fluid_formations.values().all(|formation| {
             formation.fluid_resource == "Water"
-                && formation.parent_formation_signature == formation.signature()
-                    .strip_prefix("fluid-v")
-                    .unwrap_or_default()
-                    .split('|')
-                    .nth(1)
-                    .unwrap_or_default()
-                || formation.fluid_resource == "Water"
+                && formation.parent_formation_signature
+                    == GeometryFormation::single("Carbon").signature
+                && formation.area.is_finite()
+                && formation.area > 0.0
         }));
         drop(reopened);
         let _ = std::fs::remove_dir_all(root);
