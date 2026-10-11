@@ -1807,19 +1807,31 @@ mod tests {
             nominal_area: NOMINAL_UNIT_AREA,
             pieces: vec![
                 FluidBoundaryPiece::SolidContact {
-                    start_x: -half, start_y: -half, end_x: half, end_y: -half,
+                    start_x: -half,
+                    start_y: -half,
+                    end_x: half,
+                    end_y: -half,
                     contact_angle_radians: angle,
                 },
                 FluidBoundaryPiece::SolidContact {
-                    start_x: half, start_y: -half, end_x: half, end_y: half,
+                    start_x: half,
+                    start_y: -half,
+                    end_x: half,
+                    end_y: half,
                     contact_angle_radians: angle,
                 },
                 FluidBoundaryPiece::SolidContact {
-                    start_x: half, start_y: half, end_x: -half, end_y: half,
+                    start_x: half,
+                    start_y: half,
+                    end_x: -half,
+                    end_y: half,
                     contact_angle_radians: angle,
                 },
                 FluidBoundaryPiece::SolidContact {
-                    start_x: -half, start_y: half, end_x: -half, end_y: -half,
+                    start_x: -half,
+                    start_y: half,
+                    end_x: -half,
+                    end_y: -half,
                     contact_angle_radians: angle,
                 },
             ],
@@ -1835,18 +1847,26 @@ mod tests {
         };
         let material = crate::physical_material::PhysicalMaterial::realized(
             Material::free_base("Water", 1.0),
-            vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
             &catalog,
         )
         .unwrap()
         .with_single_fluid_shape(shape.clone(), &catalog)
         .unwrap();
 
-        let origin = Placement { x: 4.0, y: -3.0, rotation_radians: 0.41 };
+        let origin = Placement {
+            x: 4.0,
+            y: -3.0,
+            rotation_radians: 0.41,
+        };
         let mut restored = OrganismStructure::new();
-        let indices = crate::material_restoration::restore_material(
-            &mut restored, &material, origin, &catalog,
-        ).expect("multi-contact fluid should restore");
+        let indices =
+            crate::material_restoration::restore_material(&mut restored, &material, origin, &catalog)
+                .expect("multi-contact fluid should restore");
         let fluid_unit = &restored.units[indices[0]];
         assert_eq!(fluid_unit.shape(&catalog), Some(&shape));
 
@@ -1881,7 +1901,12 @@ mod tests {
             assert!(placed_forms_boundary_contact(&fluid, &rigid, 1e-8));
             assert!(placed_forms_rigid_contact(&fluid, &rigid, 1e-8));
         }
-        assert!((fluid_unit.shape(&catalog).unwrap().form.bounding_radius() - shape.form.bounding_radius()).abs() < 1e-9);
+        assert!(
+            (fluid_unit.shape(&catalog).unwrap().form.bounding_radius()
+                - shape.form.bounding_radius())
+            .abs()
+                < 1e-9
+        );
     }
 
     #[test]
