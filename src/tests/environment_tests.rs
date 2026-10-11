@@ -137,8 +137,7 @@ fn exact_fluid_arc_region_check_allows_chord_contact_but_rejects_curve_escape() 
         nominal_area: 0.5,
         boundary: None,
         arc_boundary: Some(arc),
-        multi_contact_boundary: None,
-};
+    };
     let inside_region = crate::interior_geometry::EnclosedRegion {
         area: 8.0,
         boundary_units: vec![],
