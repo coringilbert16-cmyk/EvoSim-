@@ -2168,21 +2168,17 @@ mod tests {
         use crate::structure::StructuralUnit;
 
         let mut catalog = crate::resources::default_catalog();
-        let carbon = catalog
+        let carbon_index = catalog
             .iter()
-            .find(|resource| resource.name == "Carbon")
-            .unwrap()
-            .clone();
+            .position(|resource| resource.name == "Carbon")
+            .unwrap();
         let area = NOMINAL_UNIT_AREA;
         let angle = std::f64::consts::FRAC_PI_2;
         let family = CapillaryContactFamily::solve(area, angle).unwrap();
         let segment_length = family.contact_length / 3.0;
-        let mut test_line = carbon;
-        test_line.name = "TestMultiContactLine".to_string();
-        test_line.shape.form = Form::Line {
+        catalog[carbon_index].shape.form = Form::Line {
             length: segment_length,
         };
-        catalog.push(test_line);
 
         let third = family.contact_length / 3.0;
         let segments = [
@@ -2227,7 +2223,7 @@ mod tests {
         .unwrap()[0];
         for x in [-third, 0.0, third] {
             structure.add_unit(StructuralUnit::new(
-                "TestMultiContactLine",
+                "Carbon",
                 Placement {
                     x,
                     y: 0.0,
