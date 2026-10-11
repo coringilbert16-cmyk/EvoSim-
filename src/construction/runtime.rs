@@ -1864,9 +1864,13 @@ mod tests {
             rotation_radians: 0.41,
         };
         let mut restored = OrganismStructure::new();
-        let indices =
-            crate::material_restoration::restore_material(&mut restored, &material, origin, &catalog)
-                .expect("multi-contact fluid should restore");
+        let indices = crate::material_restoration::restore_material(
+            &mut restored,
+            &material,
+            origin,
+            &catalog,
+        )
+        .expect("multi-contact fluid should restore");
         let fluid_unit = &restored.units[indices[0]];
         assert_eq!(fluid_unit.shape(&catalog), Some(&shape));
 
