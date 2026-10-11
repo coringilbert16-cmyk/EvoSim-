@@ -143,11 +143,7 @@ fn exact_fluid_arc_touches_part(
             let closest = arc.closest_point(other.placement.x, other.placement.y);
             closest.is_some_and(|(x, y)| {
                 (x - other.placement.x).hypot(y - other.placement.y) <= radius + tolerance
-            }) || arc.intersects_circle(
-                other.placement.x,
-                other.placement.y,
-                radius + tolerance,
-            )
+            }) || arc.intersects_circle(other.placement.x, other.placement.y, radius + tolerance)
         }
         Form::Line { .. } => {
             let Some((start, end)) = line_segment(&other.form, other.placement) else {
@@ -250,9 +246,21 @@ pub fn placed_forms_rigid_contact(
     b: &PlacedMaterialPart,
     tolerance: f64,
 ) -> bool {
-    if matches!(a.form, Form::Fluid { boundary: None, arc_boundary: None, .. })
-        || matches!(b.form, Form::Fluid { boundary: None, arc_boundary: None, .. })
-    {
+    if matches!(
+        a.form,
+        Form::Fluid {
+            boundary: None,
+            arc_boundary: None,
+            ..
+        }
+    ) || matches!(
+        b.form,
+        Form::Fluid {
+            boundary: None,
+            arc_boundary: None,
+            ..
+        }
+    ) {
         return false;
     }
     if exact_fluid_arc_touches_part(a, b, tolerance)
