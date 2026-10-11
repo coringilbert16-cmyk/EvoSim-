@@ -1,4 +1,4 @@
-name: Bob Two-Piece Geometry Generation
+name: Bob Three-Piece Geometry Generation (Gated)
 
 on:
   workflow_dispatch:
@@ -18,23 +18,31 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Create isolated persistent output root
-        run: mkdir -p "$RUNNER_TEMP/evosim-bob-two-piece"
-      - name: Run Bob to completion for formations up to two constituents
+        run: mkdir -p "$RUNNER_TEMP/evosim-bob-three-piece"
+      - name: Run focused worker cap regression
         env:
           EVOSIM_GEOMETRY_LIBRARY_DIR: ${{ runner.temp }}/evosim-bob-two-piece
         run: |
           set -euo pipefail
-          cargo run --release -- --geometry-worker-complete-up-to 2 2>&1 | tee "$RUNNER_TEMP/bob-two-piece-generation.log"
+          cargo test worker_accepts_three_piece_limit_and_rejects_wider_limits -- --nocapture
+      - name: Verify persisted fluid record reaches live transaction
+        run: cargo test reopened_two_piece_bob_record_maps_into_transformed_live_parent -- --nocapture
+      - name: Run Bob to completion for formations up to three constituents
+        env:
+          EVOSIM_GEOMETRY_LIBRARY_DIR: ${{ runner.temp }}/evosim-bob-three-piece
+        run: |
+          set -euo pipefail
+          cargo run --release -- --geometry-worker-complete-up-to 3 2>&1 | tee "$RUNNER_TEMP/bob-three-piece-generation.log"
       - name: Record generated library footprint
         if: always()
         run: |
           set -euo pipefail
-          echo "=== Persistent geometry library files ==="
+          echo "=== Persistent geometry library files (up to 3 pieces) ==="
           find "$RUNNER_TEMP/evosim-bob-two-piece" -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
           echo "=== Total bytes ==="
           du -sb "$RUNNER_TEMP/evosim-bob-two-piece" || true
           echo "=== Record counts ==="
-          for file in "$RUNNER_TEMP"/evosim-bob-two-piece/*.jsonl; do
+          for file in "$RUNNER_TEMP"/evosim-bob-three-piece/*.jsonl; do
             [ -f "$file" ] || continue
             printf '%s ' "$(basename "$file")"
             wc -l < "$file"
@@ -43,9 +51,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: bob-two-piece-geometry-library
+          name: bob-three-piece-geometry-library
           path: |
             ${{ runner.temp }}/evosim-bob-two-piece/
-            ${{ runner.temp }}/bob-two-piece-generation.log
+            ${{ runner.temp }}/bob-three-piece-generation.log
           if-no-files-found: error
           retention-days: 30
