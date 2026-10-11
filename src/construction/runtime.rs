@@ -723,14 +723,14 @@ pub(crate) fn try_attach_physical_material_bond_driven(
 /// Do not commit its first bond at a pose that makes a declared, already-ready
 /// connection geometrically impossible. This is a physical contact constraint,
 /// not a demand to match the blueprint's suggested coordinates.
-fn candidate_contacts_all_realized_neighbors(
+fn missing_realized_neighbor_contacts(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     element_index: usize,
     realized_units: &[Option<Vec<usize>>],
     structure: &OrganismStructure,
     candidate_indices: &[usize],
     catalog: &[BaseResource],
-) -> bool {
+) -> Vec<usize> {
     let mut required_neighbors = Vec::new();
     for connection in &blueprint.connections {
         let neighbor = if connection.element_a == element_index {
@@ -748,28 +748,36 @@ fn candidate_contacts_all_realized_neighbors(
     }
 
     let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-    required_neighbors.into_iter().all(|neighbor| {
-        let Some(existing_indices) = realized_units.get(neighbor).and_then(Option::as_ref) else {
-            return false;
-        };
-        existing_indices.iter().any(|&existing_index| {
-            candidate_indices.iter().any(|&candidate_index| {
-                crate::contact::connection_pair_candidates_cached(
-                    structure,
-                    existing_index,
-                    candidate_index,
-                    catalog,
-                    &mut cache,
-                )
-                .into_iter()
-                .any(|candidate| {
-                    candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                        && candidate.available_a
-                        && candidate.available_b
+    let mut missing_neighbors = Vec::new();
+    for neighbor in required_neighbors {
+        let has_contact = realized_units
+            .get(neighbor)
+            .and_then(Option::as_ref)
+            .is_some_and(|existing_indices| {
+                existing_indices.iter().any(|&existing_index| {
+                    candidate_indices.iter().any(|&candidate_index| {
+                        crate::contact::connection_pair_candidates_cached(
+                            structure,
+                            existing_index,
+                            candidate_index,
+                            catalog,
+                            &mut cache,
+                        )
+                        .into_iter()
+                        .any(|candidate| {
+                            candidate.distance
+                                <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                                && candidate.available_a
+                                && candidate.available_b
+                        })
+                    })
                 })
-            })
-        })
-    })
+            });
+        if !has_contact {
+            missing_neighbors.push(neighbor);
+        }
+    }
+    missing_neighbors
 }
 
 #[derive(Default, Debug)]
@@ -783,6 +791,7 @@ struct PlacementRejectionCounts {
     no_bond_contact: usize,
     candidate_evaluation_rejections: usize,
     combine_rejections: usize,
+    neighbor_rejections_by_index: std::collections::BTreeMap<usize, usize>,
 }
 
 fn realize_next_bond_driven(
@@ -946,15 +955,22 @@ fn realize_next_bond_driven(
                         rejection_counts.overlap_rejections += 1;
                         continue;
                     }
-                    if !candidate_contacts_all_realized_neighbors(
+                    let missing_neighbors = missing_realized_neighbor_contacts(
                         blueprint,
                         _index,
                         realized_units,
                         &trial,
                         &indices,
                         catalog,
-                    ) {
+                    );
+                    if !missing_neighbors.is_empty() {
                         rejection_counts.neighbor_contact_rejections += 1;
+                        for neighbor in missing_neighbors {
+                            *rejection_counts
+                                .neighbor_rejections_by_index
+                                .entry(neighbor)
+                                .or_default() += 1;
+                        }
                         continue;
                     }
 
@@ -1386,12 +1402,14 @@ fn construct_blueprint_bond_driven_internal(
 
         if !attached {
             eprintln!(
-                "[construction-placement-diagnostics] element={index} attempts={nodes} generated={} deduplicated={} restore_failures={} overlap_rejections={} neighbor_contact_rejections={} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={}",
+                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} overlap_rejections={} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={}",
+                rejection_counts.attempted_origins,
                 rejection_counts.generated_origins,
                 rejection_counts.deduplicated_origins,
                 rejection_counts.restore_failures,
                 rejection_counts.overlap_rejections,
                 rejection_counts.neighbor_contact_rejections,
+                rejection_counts.neighbor_rejections_by_index,
                 rejection_counts.no_bond_contact,
                 rejection_counts.candidate_evaluation_rejections,
                 rejection_counts.combine_rejections,
