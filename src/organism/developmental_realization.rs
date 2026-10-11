@@ -769,7 +769,7 @@ mod fitted_water_tests {
                 boundary: Some(vec![(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]),
                 arc_boundary: None,
                 multi_contact_boundary: None,
-},
+            },
         };
         assert!(water.realize_fluid_geometry(fitted, &catalog));
         let index = structure.add_unit(water);
