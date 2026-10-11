@@ -2327,6 +2327,96 @@ mod tests {
             }
             _ => panic!("runtime must preserve the exact multi-contact fluid boundary"),
         }
+
+        // Continue the exact reopened-record path into the same staged bond
+        // transaction used by construction. The pre-existing rigid bond is
+        // retained, while both fluid-to-rigid contacts must commit together.
+        let water_material = crate::physical_material::PhysicalMaterial::realized(
+            Material::free_base("Water", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .unwrap()
+        .with_single_fluid_shape(shape.clone(), &catalog)
+        .unwrap();
+        let mut trial = live.clone();
+        let fluid_index = crate::material_restoration::restore_material(
+            &mut trial,
+            &water_material,
+            origin,
+            &catalog,
+        )
+        .expect("reopened Bob fluid geometry should restore into the live structure")[0];
+        let mut first_bond = None;
+        for target_index in [left, right] {
+            let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+            let candidates = crate::contact::connection_pair_candidates_cached(
+                &trial,
+                target_index,
+                fluid_index,
+                &catalog,
+                &mut cache,
+            );
+            for candidate in candidates.into_iter().filter(|candidate| {
+                candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                    && candidate.available_a
+                    && candidate.available_b
+            }) {
+                let Some((_, _, investment, _)) =
+                    crate::combine_runtime::selected_candidate_evaluation(
+                        &trial,
+                        target_index,
+                        fluid_index,
+                        candidate,
+                        &catalog,
+                    )
+                else {
+                    continue;
+                };
+                let mut ledger = EnergyLedger::default();
+                let mut energy = 100.0;
+                if crate::combine_runtime::form_selected_bond(
+                    &mut trial,
+                    target_index,
+                    fluid_index,
+                    candidate,
+                    investment,
+                    &catalog,
+                    &mut cache,
+                    &mut ledger,
+                    &mut energy,
+                )
+                .is_some()
+                {
+                    first_bond = Some((target_index, ledger, energy));
+                    break;
+                }
+            }
+            if first_bond.is_some() {
+                break;
+            }
+        }
+        let (first_target, mut ledger, mut energy) = first_bond
+            .expect("the first persisted fluid contact should be bondable");
+        assert!(
+            form_remaining_multi_contact_bonds(
+                &mut trial,
+                fluid_index,
+                first_target,
+                &catalog,
+                &mut ledger,
+                &mut energy,
+            ),
+            "all remaining contacts from the reopened Bob record must form in the same trial"
+        );
+        assert_eq!(trial.bonds.len(), live.bonds.len() + 2);
+        assert!(energy.is_finite());
+        assert!(trial.units[fluid_index].shape(&catalog).unwrap().is_valid());
+        assert_eq!(live.bonds.len(), 1, "the source structure must remain unchanged");
         drop(library);
         let _ = std::fs::remove_dir_all(root);
     }
