@@ -378,9 +378,7 @@ pub(crate) fn try_start_environmental_break(
     let candidates = environment
         .field
         .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
-    let selected = if candidates
-        .iter()
-        .any(|&candidate_cell| candidate_cell == cell_index)
+    let selected = if candidates.contains(&cell_index)
     {
         let cell = environment.field.cells.get(cell_index)?;
         let mut selected = None;
@@ -514,7 +512,7 @@ impl Simulation {
             }
             let original_ledger = *ledger;
             let mut trial_ledger = original_ledger;
-            let mut cache = crate::contact::ConnectionCompatibilityCache::default();
+            let mut cache = crate::contact::ConnectionCompatibilityCache;
             let developmental_context = seed_scale_reference.and_then(|reference| {
                 crate::developmental_decision::context(
                     &mut trial_organism,

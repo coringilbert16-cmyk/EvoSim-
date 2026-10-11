@@ -4677,8 +4677,7 @@ mod bob_lookup_contract_tests {
             let anchor_world = world_point(anchor_local, live_anchor);
             let candidate_world = world_point(candidate_midpoint, suggestion.placement);
             suggestion.candidate_resource == "Carbon"
-                && parameter >= 0.0
-                && parameter <= 1.0
+                && (0.0..=1.0).contains(&parameter)
                 && suggestion.placement.x.is_finite()
                 && suggestion.placement.y.is_finite()
                 && suggestion.placement.rotation_radians.is_finite()

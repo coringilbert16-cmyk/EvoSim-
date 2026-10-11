@@ -803,7 +803,7 @@ impl Simulation {
                                         .map(|realization| realization.overall)
                                         .unwrap_or(0.0)
                                 });
-                            let mut cache = crate::contact::ConnectionCompatibilityCache::default();
+                            let mut cache = crate::contact::ConnectionCompatibilityCache;
                             let mut ledger = self.energy_ledger;
                             let developmental_context = developmental.as_ref().map(|context| {
                                 (
