@@ -5642,6 +5642,32 @@ mod compact_family_storage_tests {
             0,
             "re-inserting identical fluid formations must be idempotent"
         );
+        let mut unresolved_parent = expected_fluid_formation_signatures
+            .values()
+            .next()
+            .unwrap()
+            .clone();
+        unresolved_parent.parent_formation_signature = "missing-parent".to_string();
+        assert_eq!(
+            library
+                .insert_fluid_formations(vec![unresolved_parent], &catalog)
+                .unwrap(),
+            0,
+            "fluid formations must reference a stored parent"
+        );
+        let mut invalid_area = expected_fluid_formation_signatures
+            .values()
+            .next()
+            .unwrap()
+            .clone();
+        invalid_area.area = f64::NAN;
+        assert_eq!(
+            library
+                .insert_fluid_formations(vec![invalid_area], &catalog)
+                .unwrap(),
+            0,
+            "fluid formations must retain a finite conserved area"
+        );
         let interface = LiveGeometryInterface {
             interface_class: "fluid_boundary",
             signature: "test-fluid-boundary".to_string(),
