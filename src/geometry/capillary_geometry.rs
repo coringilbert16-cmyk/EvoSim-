@@ -571,6 +571,25 @@ impl MultiContactFluidBoundary {
             && (signed_area - self.nominal_area).abs() <= 1e-9 * self.nominal_area.max(1.0)
     }
 
+    /// Conservative radial bound used by broad-phase geometry queries.
+    pub fn bounding_radius(&self) -> f64 {
+        self.pieces
+            .iter()
+            .map(|piece| match piece {
+                FluidBoundaryPiece::SolidContact {
+                    start_x,
+                    start_y,
+                    end_x,
+                    end_y,
+                    ..
+                } => start_x
+                    .hypot(*start_y)
+                    .max(end_x.hypot(*end_y)),
+                FluidBoundaryPiece::FreeArc(arc) => arc.center_x.hypot(arc.center_y) + arc.radius,
+            })
+            .fold(0.0_f64, f64::max)
+    }
+
     /// Transform the complete boundary without sampling or changing its area.
     pub fn transformed(&self, translate_x: f64, translate_y: f64, rotation_radians: f64) -> Option<Self> {
         let transformed = Self {
