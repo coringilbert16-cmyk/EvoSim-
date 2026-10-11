@@ -1,8 +1,3 @@
-#![expect(
-    dead_code,
-    reason = "Staged transformation API retained for subsystem integration"
-)]
-
 use crate::decision::ActionKind;
 use crate::decision_runtime::ActionCandidate;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
