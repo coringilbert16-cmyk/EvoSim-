@@ -1267,3 +1267,6 @@ This changes only the confirmed-seed calibration blueprint; it does not change t
 The change is **not yet verified**. Wait for CI on the fix branch. If the seed-construction and cavity tests pass, compare the full suite by failure name and counts. If element 9 is no longer the failing location but a later independent failure remains, diagnose that new failure separately. If the ring closure still fails, retain the physical rules and instrument actual realized center poses and contact-feature candidates before making another change.
 
 Do not run Bob generation or begin fluid-boundary implementation during this diagnostic sprint. The two-piece catalogue's prior generation/reopen result remains a separate completed task.
+
+
+The Rust workflow's pull-request trigger has also been enabled for the active integration branch, so this change can be validated before the source integration PR reaches `main`. No test or lint gate was removed.
