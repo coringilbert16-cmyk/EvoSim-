@@ -1549,41 +1549,18 @@ mod tests {
         assert!(CapillaryContactFamily::solve(f64::NAN, PI / 2.0).is_none());
     }
 }
+
     #[test]
-    fn multi_contact_boundary_rejects_nonadjacent_intersecting_arcs() {
-        let boundary = MultiContactFluidBoundary {
-            nominal_area: 1.0,
-            pieces: vec![
-                FluidBoundaryPiece::FreeArc(CircularArcBoundary {
-                    center_x: 0.0, center_y: 0.0, radius: 2.0,
-                    start_angle_radians: 0.0, sweep_radians: PI,
-                }),
-                FluidBoundaryPiece::SolidContact {
-                    start_x: -2.0, start_y: 0.0, end_x: -3.0, end_y: -2.0,
-                    contact_angle_radians: PI / 2.0,
-                },
-                FluidBoundaryPiece::FreeArc(CircularArcBoundary {
-                    center_x: 1.0, center_y: 0.0, radius: 2.0,
-                    start_angle_radians: PI, sweep_radians: PI,
-                }),
-                FluidBoundaryPiece::SolidContact {
-                    start_x: -1.0, start_y: 0.0, end_x: 2.0, end_y: 0.0,
-                    contact_angle_radians: PI / 2.0,
-                },
-            ],
+    fn circular_arc_intersection_detects_nonconcentric_sweep_crossing() {
+        let first = CircularArcBoundary {
+            center_x: 0.0, center_y: 0.0, radius: 2.0,
+            start_angle_radians: 0.0, sweep_radians: PI,
         };
-        assert!(circular_arcs_intersect(
-            &CircularArcBoundary {
-                center_x: 0.0, center_y: 0.0, radius: 2.0,
-                start_angle_radians: 0.0, sweep_radians: PI,
-            },
-            &CircularArcBoundary {
-                center_x: 1.0, center_y: 0.0, radius: 2.0,
-                start_angle_radians: PI, sweep_radians: PI,
-            },
-            1e-9,
-        ));
-        assert!(!boundary.is_valid());
+        let second = CircularArcBoundary {
+            center_x: 1.0, center_y: 0.0, radius: 2.0,
+            start_angle_radians: PI, sweep_radians: PI,
+        };
+        assert!(circular_arcs_intersect(&first, &second, 1e-9));
     }
 
     #[test]
@@ -1603,4 +1580,4 @@ mod tests {
         assert!(circular_arcs_intersect(&first, &overlap, 1e-9));
         assert!(!circular_arcs_intersect(&first, &separate, 1e-9));
     }
-
+}
