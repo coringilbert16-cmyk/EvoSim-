@@ -393,16 +393,18 @@ mod tests {
     #[test]
     fn worker_generates_fluid_records_for_parent_at_constituent_limit() {
         let catalog = default_catalog();
-        let carbon = catalog.iter().find(|resource| resource.name == "Carbon").unwrap();
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap();
         let seed = GeometryFormation::single("Carbon");
         let parent = expand_formation_candidates(&seed, carbon, &catalog)
             .into_iter()
             .find(|formation| formation.constituents.len() == 2)
             .expect("Bob should produce at least one valid two-constituent Carbon parent");
         let signature = parent.signature.clone();
-        let root = std::env::temp_dir().join(format!(
-            "evosim-bob-fluid-at-limit-{}", std::process::id()
-        ));
+        let root = std::env::temp_dir()
+            .join(format!("evosim-bob-fluid-at-limit-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
         library.insert(parent, &catalog).unwrap();
@@ -411,10 +413,13 @@ mod tests {
             .unwrap()
             .expect("the two-constituent parent should have an unfinished frontier");
         assert!(metrics.fluid_formations > 0);
-        assert!(library.fluid_formations().any(|formation| {
-            formation.parent_formation_signature == signature
-                && formation.fluid_resource == "Water"
-        }), "the parent at the rigid-constituent limit must still receive fluid formations");
+        assert!(
+            library.fluid_formations().any(|formation| {
+                formation.parent_formation_signature == signature
+                    && formation.fluid_resource == "Water"
+            }),
+            "the parent at the rigid-constituent limit must still receive fluid formations"
+        );
         drop(library);
         let _ = std::fs::remove_dir_all(root);
     }
