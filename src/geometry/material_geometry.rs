@@ -241,7 +241,6 @@ fn exact_multi_contact_fluid_touches_part(
     tolerance: f64,
 ) -> bool {
     let Form::Fluid {
-        nominal_area,
         multi_contact_boundary: Some(local_boundary),
         ..
     } = &fluid.form
@@ -337,6 +336,8 @@ pub fn placed_forms_rigid_contact(
     }
     if exact_fluid_arc_touches_part(a, b, tolerance)
         || exact_fluid_arc_touches_part(b, a, tolerance)
+        || exact_multi_contact_fluid_touches_part(a, b, tolerance)
+        || exact_multi_contact_fluid_touches_part(b, a, tolerance)
     {
         return true;
     }
