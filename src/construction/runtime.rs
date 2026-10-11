@@ -301,7 +301,7 @@ fn composite_origin_for_constituent_pose(
 #[derive(Clone, Debug)]
 struct CanonicalLiveRigidParent {
     formation: crate::geometry_reference_library::GeometryFormation,
-    canonical_index_by_id: std::collections::BTreeMap<
+    canonical_index_by_id: std::collections::HashMap<
         crate::structure::PhysicalConstituentId,
         usize,
     >,
@@ -317,10 +317,10 @@ fn canonical_live_rigid_parent(
     use crate::geometry_reference_library::{GeometryBond, GeometryConstituent, GeometryFormation,
         GEOMETRY_LIBRARY_SCHEMA_VERSION};
     use crate::structure::PhysicalConstituentId;
-    use std::collections::{BTreeMap, BTreeSet};
+    use std::collections::{BTreeSet, HashMap};
 
     let mut live_units = Vec::new();
-    let mut index_by_id = BTreeMap::new();
+    let mut index_by_id = HashMap::new();
     for unit in &structure.units {
         let [(resource_name, amount)] = unit.material.parts.as_slice() else {
             continue;
@@ -387,7 +387,7 @@ fn canonical_live_rigid_parent(
         .map(|(input_index, (id, _))| (*id, input_to_canonical[input_index]))
         .collect();
     // Keep this explicit type to make the stable-ID boundary obvious at call sites.
-    let canonical_index_by_id: BTreeMap<PhysicalConstituentId, usize> = canonical_index_by_id;
+    let canonical_index_by_id: HashMap<PhysicalConstituentId, usize> = canonical_index_by_id;
     Some(CanonicalLiveRigidParent {
         formation,
         canonical_index_by_id,
