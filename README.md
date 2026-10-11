@@ -14,13 +14,15 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 - `src/` currently contains contract/unit tests that exercise private crate internals. Do not move them into external integration-test targets without an explicit API-boundary plan.
 - Hydrogen is a finite-area rigid rectangle (1.0 × 0.1 units) with two primary end contact points. It is not a zero-thickness line.
 - Bob's 0.5-unit positional equivalence is a **catalogue deduplication** tolerance only. It does not replace the live geometry/contact tolerance or permit penetration.
+- **Hard catalogue size rule:** Bob may persist only singleton and two-constituent rigid formations (maximum `constituents.len() == 2`). The worker rejects configured limits above 2 and never expands beyond two pieces. Multi-contact fluid geometry may contact multiple surfaces of those same two constituents; contact count is not constituent count. Do not store 3+-constituent assemblies in Bob's catalogue.
+- Generated geometry stays outside Git. The last bounded two-piece artifact was about 48.3 MB uncompressed and was already an artifact rather than tracked source; monitor artifact size and family counts as generation changes.
 - Fluid knowledge is stored as symbolic capillary boundary/family records with conserved area and contact constraints—not sampled rigid poses. Current records have persistence validation and live-interface resolution; the active work is converting those records into a reproducible, area-preserving realized fluid boundary and proving it through physical validation.
 
 ### Operational gates
 
 1. Keep the geometry catalogue empty in the tracked tree. Never run the continuous worker or use the default catalogue directory for tests.
 2. Do not start bounded two-piece generation until construction has a tested fluid-realization/query path and live validation remains authoritative.
-3. Treat the existing two-piece workflow as the approved isolated generation path after that gate; report formation/family counts, runtime, storage size, frontier completion, and reopen verification.
+3. Treat the existing two-piece workflow as the only approved generation path after that gate; the hard limit is two constituents, never three or more. Report formation/family counts, runtime, storage size, frontier completion, and reopen verification.
 4. Do not divert the active geometry-library/fluid-formation sprint into the unrelated constructor-test backlog. Keep those failures visible, but prioritize fluid-record realization, interface-class coverage, and Bob's persisted-knowledge contract; never disable tests or weaken physical invariants.
 5. Keep PR #186 as the single integration target. Do not merge or change the default branch as a side effect of cleanup.
 6. All new decisions and handoffs go in this root README. Before adding a new audit note, update the current summary and avoid repeating obsolete checkpoints.
@@ -664,8 +666,8 @@ The intended catalogue grows exhaustively from the smallest physical formations 
 
 1. record every valid single-resource geometry;
 2. enumerate every physically valid two-constituent combination, including repeated resources;
-3. derive every valid three-constituent formation from validated smaller formations;
-4. continue physically reachable expansion through larger composites, eventually up to 20 constituent resources;
+3. [SUPERSEDED] Do not persist three-constituent formations. The active catalogue limit is two constituents maximum.
+4. [SUPERSEDED] Do not expand Bob's catalogue toward 20 constituents. Larger live structures must be composed from bounded records at runtime, subject to normal physical validation; they are not stored as whole-assembly catalogue entries.
 5. canonicalize equivalent formations so the library stores each physical geometry once;
 6. preserve the library across tests, process restarts, and constructor runs.
 
@@ -676,7 +678,7 @@ The implementation provides the persistent store, schema/versioning, canonical f
 - The library is **knowledge, not authority for live organism state**. The constructor may use it as a read-only source of known-valid continuations, but committed simulation bonds still go through the normal physical transaction.
 - Validation is independent of discovery. A formation is stored only after resource/shape validity, bond topology, connectivity, and non-penetration checks succeed.
 - Global translation and rigid rotation are canonicalized. Reflections are **not** collapsed: a mirror image is a distinct physical formation unless the geometry itself makes it identical.
-- Repeated constituents are allowed. "20 constituents" means twenty physical pieces; it does not mean twenty distinct resource types.
+- [SUPERSEDED] The historical 20-constituent catalogue plan is invalid. Repeated constituents are allowed within the active maximum of two physical pieces per formation.
 - Water remains a real resource. Fluid formations without a finite boundary are represented without inventing rigid collision geometry; their context-fitting realization remains a separate physical-field concern.
 - Fluid-to-fluid contact is not a rigid bond. Combining fluid with the same fluid produces the same fluid shape with greater volume; the geometry library must not represent that operation as two bonded fluid constituents.
 - Floating-point coordinates are represented in canonical signatures with a fixed geometric quantization tolerance. The geometry schema and resource-shape catalogue are versioned so stale geometry cannot silently become current knowledge.
@@ -694,13 +696,13 @@ The geometry library is intended to become the long-lived reference layer that t
 
 ### Current implementation status
 
-**Implemented:** persistent library core, canonical formation schema, independent validation, durable append-only storage, version manifest, base-resource seeding, durable frontier/progress records, resumable worker process, exact rigid feature-contact generation for the current finite polygon/line feature model, and expansion through the currently implemented constituent range.
+**Implemented:** persistent library core, canonical formation schema, independent validation, durable append-only storage, version manifest, base-resource seeding, durable frontier/progress records, resumable worker process, exact rigid feature-contact generation for the current finite polygon/line feature model, and expansion bounded to the active two-constituent catalogue rule.
 
 **Still incomplete:** exhaustive representation and expansion of every continuous contact family, the final completeness audit of symmetry reduction, and integration of the library into the live organism constructor.
 
 ### Geometry library progress
 
-The library includes exact feature-contact generation for rigid formations and expansion from validated smaller formations. Two-body seeding considers base resources against single-resource formations, validates candidates, canonicalizes them, and persists only new formations. Three-body expansion reuses validated smaller contacts, and the worker architecture can continue the same expansion toward 20 constituents.
+The library includes exact feature-contact generation for rigid formations and expansion from validated smaller formations. Two-body seeding considers base resources against single-resource formations, validates candidates, canonicalizes them, and persists only new formations. [SUPERSEDED] Three-body expansion and the former plan to expand toward 20 constituents are prohibited by the active two-constituent catalogue cap.
 
 Every declared rigid bond must correspond to actual physical boundary contact without positive-area/interior penetration. Fluid-to-fluid combinations are deliberately not represented as rigid bonds because they merge into the same fluid geometry with increased volume. The rigid path does not use arbitrary angular sampling or an attempt budget. Runtime rigid surface-contact candidates likewise use exact polygon feature relationships rather than a sampled angular sweep.
 
