@@ -2270,19 +2270,34 @@ mod tests {
         let mut ledger = EnergyLedger::default();
         let mut energy = 100.0;
         let mut incomplete_trial = structure.clone();
+        let mut failed_cache = crate::contact::ConnectionCompatibilityCache::new();
+        let mut failed_ledger = EnergyLedger::default();
+        let mut failed_energy = 100.0;
+        assert!(crate::combine_runtime::form_selected_bond(
+            &mut incomplete_trial,
+            first_target,
+            fluid_index,
+            candidate,
+            investment,
+            &catalog,
+            &mut failed_cache,
+            &mut failed_ledger,
+            &mut failed_energy,
+        )
+        .is_some());
         let _ = incomplete_trial.units.pop();
-        let energy_before_failed_trial = energy;
+        let energy_before_failed_trial = failed_energy;
         assert!(!form_remaining_multi_contact_bonds(
             &mut incomplete_trial,
             fluid_index,
             first_target,
             &catalog,
-            &mut ledger,
-            &mut energy,
+            &mut failed_ledger,
+            &mut failed_energy,
         ));
+        assert_eq!(incomplete_trial.bonds.len(), 1);
         assert!(structure.bonds.is_empty());
-        assert!(incomplete_trial.bonds.is_empty());
-        assert_eq!(energy, energy_before_failed_trial);
+        assert_eq!(failed_energy, energy_before_failed_trial);
 
         assert!(crate::combine_runtime::form_selected_bond(
             &mut structure,
