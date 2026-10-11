@@ -2458,6 +2458,34 @@ impl GeometryLibrary {
         Ok(added)
     }
 
+    pub fn insert_fluid_formations(
+        &mut self,
+        formations: Vec<GeometryFluidFormation>,
+        catalog: &[BaseResource],
+    ) -> std::io::Result<usize> {
+        let mut unique = BTreeMap::new();
+        for formation in formations {
+            if fluid_formation_is_valid(&formation, &self.entries, catalog) {
+                unique.entry(formation.signature()).or_insert(formation);
+            }
+        }
+        unique.retain(|signature, _| !self.fluid_formations.contains_key(signature));
+        if unique.is_empty() {
+            return Ok(0);
+        }
+        let path = self.root.join("fluid_formations.jsonl");
+        let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+        for formation in unique.values() {
+            serde_json::to_writer(&mut file, formation)
+                .map_err(|error| invalid_storage_data(error.to_string()))?;
+            file.write_all(b"\\n")?;
+        }
+        file.sync_data()?;
+        let added = unique.len();
+        self.fluid_formations.extend(unique);
+        Ok(added)
+    }
+
     pub fn insert_fluid_boundary_families(
         &mut self,
         families: Vec<GeometryFluidBoundaryFamily>,
@@ -3188,6 +3216,85 @@ pub fn exposed_polygon_edge_intervals(
 /// Polygon edges use exact collinear interval subtraction. A rigid line is
 /// represented as one boundary segment. Water therefore does not need a
 /// special sampled placement for either supported rigid boundary primitive.
+fn fluid_formation_is_valid(
+    formation: &GeometryFluidFormation,
+    parents: &BTreeMap<String, GeometryFormation>,
+    catalog: &[BaseResource],
+) -> bool {
+    let Some(parent) = parents.get(&formation.parent_formation_signature) else {
+        return false;
+    };
+    let Some(fluid) = catalog.iter().find(|resource| resource.name == formation.fluid_resource) else {
+        return false;
+    };
+    if formation.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
+        || fluid.physical_state != crate::resources::PhysicalState::Fluid
+        || formation.anchor_constituent >= parent.constituents.len()
+        || !formation.area.is_finite()
+        || formation.area <= 0.0
+    {
+        return false;
+    }
+    let Some(anchor) = catalog.iter().find(|resource| {
+        resource.name == parent.constituents[formation.anchor_constituent].resource
+    }) else {
+        return false;
+    };
+    if anchor.physical_state == crate::resources::PhysicalState::Fluid
+        || formation.anchor_edge >= rigid_boundary_segments(&anchor.shape.form).len()
+    {
+        return false;
+    }
+    let family = GeometryFluidBoundaryFamily {
+        schema_version: formation.schema_version,
+        formation_signature: formation.parent_formation_signature.clone(),
+        fluid_resource: formation.fluid_resource.clone(),
+        anchor_constituent: formation.anchor_constituent,
+        anchor_edge: formation.anchor_edge,
+        area: formation.area,
+        contact_angle_radians: formation.contact_angle_radians,
+        curvature_radius: formation.curvature_radius,
+        free_arc_angle_radians: formation.free_arc_angle_radians,
+        contact_length: formation.contact_length,
+        edge_parameter_start: formation.edge_parameter_start,
+        edge_parameter_end: formation.edge_parameter_end,
+    };
+    formation.signature() == formation.signature()
+        && fluid_boundary_state_is_self_consistent(&family)
+}
+
+fn load_fluid_formations(
+    path: &Path,
+    parents: &BTreeMap<String, GeometryFormation>,
+    catalog: &[BaseResource],
+) -> BTreeMap<String, GeometryFluidFormation> {
+    let mut records = BTreeMap::new();
+    if !path.exists() {
+        return records;
+    }
+    let Ok(file) = File::open(path) else {
+        return records;
+    };
+    let mut lines = BufReader::new(file).lines().peekable();
+    while let Some(Ok(line)) = lines.next() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let is_last = lines.peek().is_none();
+        let Ok(record) = serde_json::from_str::<GeometryFluidFormation>(&line) else {
+            if is_last {
+                continue;
+            }
+            continue;
+        };
+        if !fluid_formation_is_valid(&record, parents, catalog) {
+            continue;
+        }
+        records.entry(record.signature()).or_insert(record);
+    }
+    records
+}
+
 fn load_fluid_boundary_families(
     path: &Path,
     entries: &BTreeMap<String, GeometryFormation>,
