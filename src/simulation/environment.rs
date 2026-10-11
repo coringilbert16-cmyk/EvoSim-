@@ -310,6 +310,57 @@ impl ActiveMaterialField {
         placement: crate::structure::Placement,
         region: &crate::interior_geometry::EnclosedRegion,
     ) -> bool {
+        if let crate::resources::Form::Fluid {
+            arc_boundary: Some(arc),
+            ..
+        } = form
+        {
+            let Some(world_arc) = arc.transformed(
+                placement.x,
+                placement.y,
+                placement.rotation_radians,
+            ) else {
+                return false;
+            };
+            let start = world_arc.start_point();
+            let end = world_arc.end_point();
+            let midpoint_angle =
+                world_arc.start_angle_radians + world_arc.sweep_radians * 0.5;
+            let midpoint = (
+                world_arc.center_x + world_arc.radius * midpoint_angle.cos(),
+                world_arc.center_y + world_arc.radius * midpoint_angle.sin(),
+            );
+            let point_inside_or_on_boundary = |point: (f64, f64)| {
+                region.contains_point(point.0, point.1)
+                    || region.boundary.iter().enumerate().any(|(index, &a)| {
+                        let b = region.boundary[(index + 1) % region.boundary.len()];
+                        Self::point_segment_distance(point, a, b) <= 1e-9
+                    })
+            };
+            if ![start, midpoint, end]
+                .into_iter()
+                .all(point_inside_or_on_boundary)
+            {
+                return false;
+            }
+            // The chord is the solid-contact interval and may lie on the region
+            // boundary. The free arc, however, must not cross the region boundary
+            // anywhere except at its two contact endpoints.
+            for (index, &a) in region.boundary.iter().enumerate() {
+                let b = region.boundary[(index + 1) % region.boundary.len()];
+                let Some(intersections) = world_arc.segment_intersections(a.0, a.1, b.0, b.1)
+                else {
+                    return false;
+                };
+                if intersections.into_iter().any(|point| {
+                    (point.0 - start.0).hypot(point.1 - start.1) > 1e-8
+                        && (point.0 - end.0).hypot(point.1 - end.1) > 1e-8
+                }) {
+                    return false;
+                }
+            }
+            return true;
+        }
         let (sin, cos) = placement.rotation_radians.sin_cos();
         let transform = |x: f64, y: f64| {
             (
