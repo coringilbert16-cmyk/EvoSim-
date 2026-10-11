@@ -88,3 +88,8 @@ At code head `87bda9e6f9b8670ca2885edc2c15d7c257e1ecc3`, [Rust workflow #3814102
 - [Bob regeneration pipeline audit](../../docs/bob-regeneration-pipeline-audit.md) — worker behavior, measured growth, limits, and rebuild gates.
 - [Bob storage integration audit](../../docs/bob-geometry-storage-integration-audit.md) — compact storage, identity, migration, and compatibility findings.
 - [Constructor/library dependency audit](../../docs/constructor-library-dependency-audit.md) — current APIs, physical-authority gaps, and replacement-constructor gates.
+
+
+### Water-generation reason diagnostics
+
+The Water-contact generator exposes per-pass counters for unsupported anchor geometry, capillary-solver failures, anchors with no exposed boundary intervals, invalid contact intervals, and exposed intervals with no valid capillary-contact overlap. The existing empty-Water-frontier count remains as a top-level signal. These categories explain distinct generation paths; they do not imply that all fluid shapes or physical cases are supported. Focused tests and exact-head CI must pass before broad catalogue generation.
