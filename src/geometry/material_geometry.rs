@@ -195,6 +195,8 @@ pub fn placed_forms_boundary_contact(
     }
     if exact_fluid_arc_touches_part(a, b, tolerance)
         || exact_fluid_arc_touches_part(b, a, tolerance)
+        || exact_multi_contact_fluid_touches_part(a, b, tolerance)
+        || exact_multi_contact_fluid_touches_part(b, a, tolerance)
     {
         return true;
     }
@@ -231,6 +233,77 @@ pub fn placed_forms_boundary_contact(
         }
     }
     false
+}
+
+fn exact_multi_contact_fluid_touches_part(
+    fluid: &PlacedMaterialPart,
+    other: &PlacedMaterialPart,
+    tolerance: f64,
+) -> bool {
+    let Form::Fluid {
+        nominal_area,
+        multi_contact_boundary: Some(local_boundary),
+        ..
+    } = &fluid.form
+    else {
+        return false;
+    };
+    if matches!(other.form, Form::Fluid { .. }) {
+        return false;
+    }
+    let Some(boundary) = local_boundary.transformed(
+        fluid.placement.x,
+        fluid.placement.y,
+        fluid.placement.rotation_radians,
+    ) else {
+        return false;
+    };
+    boundary.pieces.iter().any(|piece| match piece {
+        crate::capillary_geometry::FluidBoundaryPiece::FreeArc(arc) => {
+            let Some(area) = arc.segment_area() else {
+                return false;
+            };
+            let arc_part = PlacedMaterialPart {
+                part_index: fluid.part_index,
+                form: Form::Fluid {
+                    nominal_area: area,
+                    boundary: None,
+                    arc_boundary: Some(*arc),
+                    multi_contact_boundary: None,
+                },
+                placement: Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            };
+            exact_fluid_arc_touches_part(&arc_part, other, tolerance)
+        }
+        crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+            start_x,
+            start_y,
+            end_x,
+            end_y,
+            ..
+        } => {
+            let dx = end_x - start_x;
+            let dy = end_y - start_y;
+            let length = dx.hypot(dy);
+            if !length.is_finite() || length <= f64::EPSILON {
+                return false;
+            }
+            let contact_part = PlacedMaterialPart {
+                part_index: fluid.part_index,
+                form: Form::Line { length },
+                placement: Placement {
+                    x: (start_x + end_x) * 0.5,
+                    y: (start_y + end_y) * 0.5,
+                    rotation_radians: dy.atan2(dx),
+                },
+            };
+            placed_forms_overlap(&contact_part, other, tolerance)
+        }
+    })
 }
 
 /// Returns true only when two material parts meet at their physical boundary
