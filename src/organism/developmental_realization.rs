@@ -701,6 +701,14 @@ fn point_in_form(
                 && (local_x - arc.center_x).hypot(local_y - arc.center_y)
                     <= arc.radius + f64::EPSILON
         }
+        crate::resources::Form::Fluid {
+            multi_contact_boundary: Some(boundary),
+            ..
+        } => {
+            let (local_x, local_y) =
+                developmental_point(x, y, (placement.x, placement.y), placement.rotation_radians);
+            boundary.contains_point(local_x, local_y)
+        }
         crate::resources::Form::Rectangle { .. }
         | crate::resources::Form::RegularPolygon { .. }
         | crate::resources::Form::Polygon { .. }
