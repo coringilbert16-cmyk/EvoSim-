@@ -407,9 +407,7 @@ fn canonical_live_rigid_parent(
             let live_dx = live_units[second].1.placement.x - live_units[first].1.placement.x;
             let live_dy = live_units[second].1.placement.y - live_units[first].1.placement.y;
             if canonical_dx.hypot(canonical_dy) > 1e-9 && live_dx.hypot(live_dy) > 1e-9 {
-                frame_rotation = Some(
-                    live_dy.atan2(live_dx) - canonical_dy.atan2(canonical_dx),
-                );
+                frame_rotation = Some(live_dy.atan2(live_dx) - canonical_dy.atan2(canonical_dx));
                 break 'pairs;
             }
         }
@@ -420,10 +418,10 @@ fn canonical_live_rigid_parent(
     });
     let (sin, cos) = canonical_to_live_rotation.sin_cos();
     let canonical_anchor = &formation.constituents[input_to_canonical[0]].placement;
-    let canonical_to_live_x = live_units[0].1.placement.x
-        - (canonical_anchor.x * cos - canonical_anchor.y * sin);
-    let canonical_to_live_y = live_units[0].1.placement.y
-        - (canonical_anchor.x * sin + canonical_anchor.y * cos);
+    let canonical_to_live_x =
+        live_units[0].1.placement.x - (canonical_anchor.x * cos - canonical_anchor.y * sin);
+    let canonical_to_live_y =
+        live_units[0].1.placement.y - (canonical_anchor.x * sin + canonical_anchor.y * cos);
 
     for (input_index, (_, live_constituent)) in live_units.iter().enumerate() {
         let canonical = &formation.constituents[input_to_canonical[input_index]].placement;
@@ -466,8 +464,8 @@ fn bob_fluid_origins_for_live_parent(
     };
     let (s, c) = parent.canonical_to_live_rotation.sin_cos();
     let mut out = Vec::new();
-    for suggestion in library
-        .fluid_formations_for_parent(&parent.formation.signature, &fluid_resource.name)
+    for suggestion in
+        library.fluid_formations_for_parent(&parent.formation.signature, &fluid_resource.name)
     {
         // The live stable ID selects the matching canonical anchor slot.
         if suggestion.anchor_constituent != anchor_canonical_index {
