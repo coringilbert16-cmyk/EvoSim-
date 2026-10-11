@@ -18,6 +18,103 @@ use std::f64::consts::{PI, TAU};
 
 const EPS: f64 = 1e-12;
 
+/// Exact circular free-boundary descriptor in a constituent-local coordinate frame.
+///
+/// The fluid region represented here is the circular segment bounded by the
+/// arc and its endpoint chord. The chord is the solid-contact interval; it is
+/// not a rigid bond and must not be exposed as a fluid-fluid bond. Angles are
+/// in radians, and the sweep follows the positive angular direction from the
+/// start angle. This type is deliberately separate from the legacy polygon
+/// boundary so consumers cannot accidentally mistake an arc for sampled edges.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+pub struct CircularArcBoundary {
+    pub center_x: f64,
+    pub center_y: f64,
+    pub radius: f64,
+    pub start_angle_radians: f64,
+    pub sweep_radians: f64,
+}
+
+impl CircularArcBoundary {
+    /// Validate the descriptor and its finite, non-degenerate circular segment.
+    pub fn is_valid(&self) -> bool {
+        self.center_x.is_finite()
+            && self.center_y.is_finite()
+            && self.radius.is_finite()
+            && self.radius > 0.0
+            && self.start_angle_radians.is_finite()
+            && self.sweep_radians.is_finite()
+            && self.sweep_radians > 0.0
+            && self.sweep_radians < TAU
+            && self.segment_area().is_some_and(|area| area.is_finite() && area > EPS)
+    }
+
+    /// Exact arc start point in the descriptor's local frame.
+    pub fn start_point(&self) -> (f64, f64) {
+        (
+            self.center_x + self.radius * self.start_angle_radians.cos(),
+            self.center_y + self.radius * self.start_angle_radians.sin(),
+        )
+    }
+
+    /// Exact arc end point in the descriptor's local frame.
+    pub fn end_point(&self) -> (f64, f64) {
+        let angle = self.start_angle_radians + self.sweep_radians;
+        (
+            self.center_x + self.radius * angle.cos(),
+            self.center_y + self.radius * angle.sin(),
+        )
+    }
+
+    /// Exact free-interface length, without polygonal sampling.
+    pub fn arc_length(&self) -> Option<f64> {
+        self.is_finite_arc().then_some(self.radius * self.sweep_radians)
+    }
+
+    /// Exact chord/contact length joining the arc endpoints.
+    pub fn chord_length(&self) -> Option<f64> {
+        self.is_finite_arc()
+            .then_some(2.0 * self.radius * (self.sweep_radians * 0.5).sin())
+    }
+
+    /// Exact area of the circular segment closed by the endpoint chord.
+    pub fn segment_area(&self) -> Option<f64> {
+        if !self.center_x.is_finite()
+            || !self.center_y.is_finite()
+            || !self.radius.is_finite()
+            || self.radius <= 0.0
+            || !self.start_angle_radians.is_finite()
+            || !self.sweep_radians.is_finite()
+            || self.sweep_radians <= 0.0
+            || self.sweep_radians >= TAU
+        {
+            return None;
+        }
+        let area = 0.5 * self.radius * self.radius
+            * (self.sweep_radians - self.sweep_radians.sin());
+        (area.is_finite() && area > 0.0).then_some(area)
+    }
+
+    /// Exact outward normal at a point identified by arc parameter angle.
+    pub fn normal_at_angle(&self, angle_radians: f64) -> Option<(f64, f64)> {
+        if !self.is_finite_arc() || !angle_radians.is_finite() {
+            return None;
+        }
+        Some((angle_radians.cos(), angle_radians.sin()))
+    }
+
+    fn is_finite_arc(&self) -> bool {
+        self.center_x.is_finite()
+            && self.center_y.is_finite()
+            && self.radius.is_finite()
+            && self.radius > 0.0
+            && self.start_angle_radians.is_finite()
+            && self.sweep_radians.is_finite()
+            && self.sweep_radians > 0.0
+            && self.sweep_radians < TAU
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CapillaryContactFamily {
     /// Conserved 2-D fluid area.
@@ -180,6 +277,57 @@ pub fn normalize_arc_parameter(angle: f64) -> Option<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn circular_arc_descriptor_preserves_exact_segment_area_and_contact_length() {
+        let family = CapillaryContactFamily::solve(0.5, PI * 0.5).unwrap();
+        let arc = CircularArcBoundary {
+            center_x: 0.0,
+            center_y: -family.curvature_radius,
+            radius: family.curvature_radius,
+            start_angle_radians: PI * 0.5,
+            sweep_radians: family.free_arc_angle_radians,
+        };
+        assert!(arc.is_valid());
+        assert!((arc.segment_area().unwrap() - family.area).abs() < 1e-12);
+        assert!((arc.chord_length().unwrap() - family.contact_length).abs() < 1e-12);
+        assert!((arc.arc_length().unwrap() - family.curvature_radius * PI).abs() < 1e-12);
+        assert!((arc.start_point().0 + family.curvature_radius).abs() < 1e-12);
+        assert!((arc.end_point().0 - family.curvature_radius).abs() < 1e-12);
+    }
+
+    #[test]
+    fn circular_arc_descriptor_rejects_invalid_or_degenerate_parameters() {
+        let mut arc = CircularArcBoundary {
+            center_x: 0.0,
+            center_y: 0.0,
+            radius: 1.0,
+            start_angle_radians: 0.0,
+            sweep_radians: PI,
+        };
+        assert!(arc.is_valid());
+        arc.radius = f64::NAN;
+        assert!(!arc.is_valid());
+        arc.radius = 1.0;
+        arc.sweep_radians = TAU;
+        assert!(!arc.is_valid());
+        arc.sweep_radians = 0.0;
+        assert!(arc.segment_area().is_none());
+    }
+
+    #[test]
+    fn circular_arc_normal_is_radial_and_exact() {
+        let arc = CircularArcBoundary {
+            center_x: 2.0,
+            center_y: -3.0,
+            radius: 4.0,
+            start_angle_radians: 0.0,
+            sweep_radians: PI,
+        };
+        let normal = arc.normal_at_angle(PI / 3.0).unwrap();
+        assert!((normal.0 - 0.5).abs() < 1e-12);
+        assert!((normal.1 - 3.0_f64.sqrt() / 2.0).abs() < 1e-12);
+    }
 
     #[test]
     fn semicircular_solution_is_exact_at_ninety_degrees() {
