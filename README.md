@@ -15,6 +15,7 @@ This checkpoint supersedes older repository-status and CI summaries later in thi
 ### Fluid-geometry lookup implementation — 2026-10-11
 
 - Bob now has a `LiveGeometryQuery::FluidBoundary` identity containing fluid/solid material, solid edge, realized edge parameter, conserved fluid area, and capillary contact angle.
+- **Water-inclusive formation gap:** the worker persists capillary contact families and fluid-boundary records attached to rigid parent formations, but does not yet store Water as a constituent of a `GeometryFormation`. These records are useful fluid-interface knowledge, not proof that Bob has generated water-containing formations. The next Bob sprint must add a deterministic, persistent fluid-inclusive formation representation that retains conserved area and solved capillary geometry; see `src/bob/README.md` for acceptance gates. Broad catalogue regeneration remains gated on that work.
 - `resolve_live_contact_candidate` builds this query from the realized fluid endpoint and solid boundary; `GeometryLibrary::resolve_persistent_interface` now matches it against persisted fluid-boundary families and returns unresolved/unique/ambiguous based on canonical local-interface projections.
 - Equivalent local fluid interfaces are projected independently of their parent formation signature so the same reusable relationship in multiple formations does not create a false ambiguity.
 - Added a regression test that persists a fluid-boundary family, resolves it, reopens the library, and resolves it again.
