@@ -1215,13 +1215,7 @@ pub fn generate_collinear_multi_contact_formations(
         aligned.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
 
         for start_index in 0..aligned.len() {
-            let mut chosen: Vec<(
-                f64,
-                f64,
-                (usize, usize, f64, f64, (f64, f64), (f64, f64)),
-                (f64, f64),
-                (f64, f64),
-            )> = Vec::new();
+            let mut chosen: Vec<AlignedExposedInterval> = Vec::new();
             let mut total_length = 0.0;
             let mut distinct_constituents = std::collections::BTreeSet::new();
             for item in aligned.iter().skip(start_index) {
@@ -3739,7 +3733,15 @@ pub fn validate_formation(formation: &GeometryFormation, catalog: &[BaseResource
 /// the second vertex. Coincident boundary portions belonging to another
 /// constituent are removed; point contacts do not remove an interval.
 #[derive(Clone, Debug, PartialEq)]
-pub struct ExposedEdgeInterval {
+pub type AlignedExposedInterval = (
+    f64,
+    f64,
+    (usize, usize, f64, f64, (f64, f64), (f64, f64)),
+    (f64, f64),
+    (f64, f64),
+);
+
+struct ExposedEdgeInterval {
     pub edge: usize,
     pub start: f64,
     pub end: f64,
