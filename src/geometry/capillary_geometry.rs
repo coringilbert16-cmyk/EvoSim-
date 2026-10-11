@@ -655,7 +655,7 @@ impl MultiContactFluidBoundary {
                         if normalized < arc.start_angle_radians.rem_euclid(TAU) - EPS {
                             normalized += TAU;
                         }
-                        let start = arc.start_angle_radians;
+                        let start = arc.start_angle_radians.rem_euclid(TAU);
                         let end = start + arc.sweep_radians;
                         if normalized <= start + EPS || normalized >= end - EPS {
                             continue;
