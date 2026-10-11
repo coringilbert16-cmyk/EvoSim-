@@ -38,6 +38,53 @@ pub struct CircularArcBoundary {
 
 #[allow(dead_code)] // Keep the exact primitive available to the integration sprint.
 impl CircularArcBoundary {
+    /// Construct the exact free arc for a solved flat-contact capillary family.
+    ///
+    /// The returned descriptor is in an edge-local frame: the solid contact
+    /// chord is centered at the origin on y = 0, and the fluid segment bulges
+    /// toward positive y. The caller must rotate/translate this frame to the
+    /// realized anchor edge; this method does not guess world coordinates.
+    pub fn from_flat_contact(family: CapillaryContactFamily) -> Option<Self> {
+        if !family.area.is_finite()
+            || family.area <= 0.0
+            || !family.curvature_radius.is_finite()
+            || family.curvature_radius <= 0.0
+            || !family.contact_angle_radians.is_finite()
+            || !(0.0 < family.contact_angle_radians
+                && family.contact_angle_radians < PI)
+        {
+            return None;
+        }
+        let expected =
+            CapillaryContactFamily::solve(family.area, family.contact_angle_radians)?;
+        let scale = family.curvature_radius.max(1.0);
+        if (expected.curvature_radius - family.curvature_radius).abs() > EPS * scale
+            || (expected.free_arc_angle_radians - family.free_arc_angle_radians).abs() > EPS
+            || (expected.contact_length - family.contact_length).abs()
+                > EPS * family.contact_length.max(1.0)
+        {
+            return None;
+        }
+
+        let sweep = family.free_arc_angle_radians;
+        let radius = family.curvature_radius;
+        let arc = Self {
+            center_x: 0.0,
+            center_y: -radius * (sweep * 0.5).cos(),
+            radius,
+            start_angle_radians: PI * 0.5 - sweep * 0.5,
+            sweep_radians: sweep,
+        };
+        if !arc.is_valid()
+            || (arc.segment_area()? - family.area).abs() > 1e-10 * family.area.max(1.0)
+            || (arc.chord_length()? - family.contact_length).abs()
+                > 1e-10 * family.contact_length.max(1.0)
+        {
+            return None;
+        }
+        Some(arc)
+    }
+
     /// Validate the descriptor and its finite, non-degenerate circular segment.
     pub fn is_valid(&self) -> bool {
         self.center_x.is_finite()
@@ -460,6 +507,33 @@ pub fn normalize_arc_parameter(angle: f64) -> Option<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn flat_contact_solver_realizes_exact_edge_local_arcs_for_varied_angles() {
+        for angle in [PI / 6.0, PI / 3.0, PI / 2.0, 2.0 * PI / 3.0, 5.0 * PI / 6.0] {
+            let family = CapillaryContactFamily::solve(0.5, angle).unwrap();
+            let arc = CircularArcBoundary::from_flat_contact(family).unwrap();
+            let start = arc.start_point();
+            let end = arc.end_point();
+            assert!(arc.is_valid());
+            assert!((arc.segment_area().unwrap() - family.area).abs() < 1e-10);
+            assert!((arc.chord_length().unwrap() - family.contact_length).abs() < 1e-10);
+            assert!(start.1.abs() < 1e-10);
+            assert!(end.1.abs() < 1e-10);
+            assert!((start.0 + family.half_contact_length()).abs() < 1e-10);
+            assert!((end.0 - family.half_contact_length()).abs() < 1e-10);
+            let midpoint = arc.start_angle_radians + arc.sweep_radians * 0.5;
+            assert!((arc.center_y + arc.radius * midpoint.sin()).abs() > 0.0);
+            assert!(arc.center_y + arc.radius * midpoint.sin() > 0.0);
+        }
+    }
+
+    #[test]
+    fn flat_contact_arc_rejects_inconsistent_persisted_scalars() {
+        let mut family = CapillaryContactFamily::solve(0.5, PI / 2.0).unwrap();
+        family.contact_length *= 1.1;
+        assert!(CircularArcBoundary::from_flat_contact(family).is_none());
+    }
 
     #[test]
     fn circular_arc_descriptor_preserves_exact_segment_area_and_contact_length() {
