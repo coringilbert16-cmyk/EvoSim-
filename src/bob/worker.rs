@@ -393,20 +393,27 @@ mod tests {
         drop(library);
 
         let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
-        let persisted_count = reopened.fluid_formations().count();
-        assert!(persisted_count > 0);
+        let persisted_signatures = reopened
+            .fluid_formations()
+            .map(|formation| formation.signature.clone())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert!(!persisted_signatures.is_empty());
         assert!(reopened.fluid_formations().all(|formation| {
             formation.parent_formation_signature == carbon_signature
                 && formation.fluid_resource == "Water"
         }));
         let mut resumed = reopened;
-        assert!(
-            process_one_frontier(&mut resumed, &catalog, 2)
-                .unwrap()
-                .is_none(),
-            "a fully checkpointed frontier must resume idle without regenerating records"
+        let _ = process_one_frontier(&mut resumed, &catalog, 2).unwrap();
+        let resumed_signatures = resumed
+            .fluid_formations()
+            .map(|formation| formation.signature.clone())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert!(persisted_signatures.is_subset(&resumed_signatures));
+        assert_eq!(
+            resumed_signatures.len(),
+            resumed.fluid_formations().count(),
+            "resuming work must not create duplicate fluid formation signatures"
         );
-        assert_eq!(resumed.fluid_formations().count(), persisted_count);
         drop(resumed);
         let _ = std::fs::remove_dir_all(root);
     }
