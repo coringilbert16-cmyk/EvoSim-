@@ -993,6 +993,84 @@ mod tests {
     }
 
     #[test]
+    fn persisted_bob_fluid_suggestion_reaches_live_constructor_validation() {
+        let catalog = crate::resources::default_catalog();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-constructor-fluid-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = crate::geometry_reference_library::GeometryLibrary::open(&root, &catalog)
+            .expect("isolated Bob library should open");
+        let parent = crate::geometry_reference_library::GeometryFormation::single("Carbon");
+        library
+            .insert(parent.clone(), &catalog)
+            .expect("Carbon singleton should persist");
+
+        let water = catalog
+            .iter()
+            .find(|resource| resource.name == "Water")
+            .expect("Water exists in catalog");
+        let (contacts, diagnostics) =
+            crate::geometry_reference_library::generate_water_contact_families_with_diagnostics(
+                &parent, water, &catalog,
+            );
+        assert_eq!(diagnostics.capillary_solver_failures, 0);
+        assert!(!contacts.is_empty());
+        let boundaries =
+            crate::geometry_reference_library::generate_fluid_boundary_families_from_contact_families(
+                water, &contacts,
+            );
+        let formations =
+            crate::geometry_reference_library::fluid_formations_from_boundaries(&boundaries);
+        assert!(!formations.is_empty());
+        assert_eq!(
+            library
+                .insert_fluid_formations(formations.clone(), &catalog)
+                .unwrap(),
+            formations.len()
+        );
+
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap();
+        let mut structure = crate::structure::OrganismStructure::new();
+        add_unit(&mut structure, carbon, (0.0, 0.0), None, None, &catalog)
+            .expect("Carbon anchor should realize");
+        let region = crate::interior_geometry::EnclosedRegion {
+            area: 400.0,
+            boundary_units: vec![],
+            sample_point: (0.0, 0.0),
+            boundary: vec![(-10.0, -10.0), (10.0, -10.0), (10.0, 10.0), (-10.0, 10.0)],
+        };
+        let (candidate, had_records) = bob_fluid_acquisition_candidate(
+            &structure,
+            std::slice::from_ref(&region),
+            water,
+            &library,
+            &catalog,
+        );
+        assert!(had_records, "construction must query the persisted Bob fluid records");
+        let (shape, placement) = candidate
+            .expect("at least one exact fluid suggestion should pass live validation");
+        assert!(shape.is_valid());
+        assert!(matches!(
+            shape.form,
+            Form::Fluid {
+                nominal_area,
+                boundary: None,
+                arc_boundary: Some(_)
+            } if (nominal_area - std::f64::consts::PI * match water.shape.form {
+                Form::Circle { radius } => radius * radius,
+                _ => 0.0,
+            }).abs() < 1e-9
+        ));
+        assert!(placement.x.is_finite() && placement.y.is_finite());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn axial_hex_ring_contains_only_unique_perimeter_cells() {
         for radius in 1..=5 {
             let ring = hex_ring(radius);
