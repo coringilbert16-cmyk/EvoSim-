@@ -2213,7 +2213,17 @@ impl GeometryLibrary {
                         && parameter >= family.edge_parameter_start - QUANTUM
                         && parameter <= family.edge_parameter_end + QUANTUM
                     {
-                        projections.insert(family.signature(), ());
+                        let projection = format!(
+                            "fluid|{}|{}|{}|{}|{}|{}|{}",
+                            family.fluid_resource,
+                            anchor_material.unwrap_or_default(),
+                            family.anchor_edge,
+                            quantize(family.area),
+                            quantize(family.contact_angle_radians),
+                            quantize(family.edge_parameter_start),
+                            quantize(family.edge_parameter_end),
+                        );
+                        projections.insert(projection, ());
                     }
                 }
             }
