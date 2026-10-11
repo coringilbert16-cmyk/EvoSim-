@@ -152,8 +152,7 @@ fn form_contains_point(
             nominal_area,
             boundary,
             arc_boundary,
-            multi_contact_boundary: None,
-} => {
+        } => {
             if let Some(arc) = arc_boundary {
                 let start = arc.start_point();
                 let end = arc.end_point();
@@ -297,8 +296,7 @@ mod tests {
             nominal_area: 0.5,
             boundary: None,
             arc_boundary: Some(arc),
-            multi_contact_boundary: None,
-};
+        };
         assert!(form_contains_point(
             &form,
             0.0,
@@ -330,8 +328,7 @@ mod tests {
             nominal_area: 0.5,
             boundary: None,
             arc_boundary: Some(arc),
-            multi_contact_boundary: None,
-};
+        };
         let inside = form_contains_point(
             &form,
             2.0,
