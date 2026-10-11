@@ -679,6 +679,26 @@ fn point_in_form(
         crate::resources::Form::Circle { radius } => {
             (x - placement.x).hypot(y - placement.y) <= *radius
         }
+        crate::resources::Form::Fluid {
+            arc_boundary: Some(arc),
+            ..
+        } => {
+            let (local_x, local_y) = world_to_local((x, y), (placement.x, placement.y), placement.rotation_radians);
+            let start = arc.start_point();
+            let end = arc.end_point();
+            let chord_side = (end.0 - start.0) * (local_y - start.1)
+                - (end.1 - start.1) * (local_x - start.0);
+            let midpoint_angle = arc.start_angle_radians + arc.sweep_radians * 0.5;
+            let midpoint = (
+                arc.center_x + arc.radius * midpoint_angle.cos(),
+                arc.center_y + arc.radius * midpoint_angle.sin(),
+            );
+            let arc_side = (end.0 - start.0) * (midpoint.1 - start.1)
+                - (end.1 - start.1) * (midpoint.0 - start.0);
+            chord_side * arc_side >= -f64::EPSILON
+                && (local_x - arc.center_x).hypot(local_y - arc.center_y)
+                    <= arc.radius + f64::EPSILON
+        }
         crate::resources::Form::Rectangle { .. }
         | crate::resources::Form::RegularPolygon { .. }
         | crate::resources::Form::Polygon { .. }
