@@ -344,10 +344,14 @@ fn process_one_frontier(
                 metrics.water_families_added += library.insert_contact_families(families)?;
                 metrics.fluid_boundary_families_added +=
                     library.insert_fluid_boundary_families(boundary_states)?;
-                metrics.fluid_formations_added +=
-                    library.insert_fluid_formations(fluid_formations, catalog)?;
-                metrics.multi_contact_fluid_formations_added +=
-                    library.insert_fluid_formations(multi_contact_formations, catalog)?;
+                let (fluid_added, multi_contact_added) = library
+                    .insert_fluid_formations_with_multi_contact_counts(
+                        fluid_formations,
+                        multi_contact_formations,
+                        catalog,
+                    )?;
+                metrics.fluid_formations_added += fluid_added;
+                metrics.multi_contact_fluid_formations_added += multi_contact_added;
                 completed_frontiers.push((
                     formation.signature.clone(),
                     resource.name.clone(),
