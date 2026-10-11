@@ -25,6 +25,10 @@ pub(crate) struct PhysicalMaterial {
     pub(crate) internal_connections: Option<Vec<PhysicalMaterialBond>>,
     #[serde(default)]
     pub(crate) owner_relative_origin: Option<Placement>,
+    /// Optional constituent-local shapes for physically realized deformable material.
+    /// Legacy stored materials omit this field and continue to use catalog shapes.
+    #[serde(default)]
+    pub(crate) realized_shapes: Option<Vec<crate::resources::Shape>>,
 }
 
 impl PhysicalMaterial {
@@ -86,7 +90,85 @@ impl PhysicalMaterial {
             placements: Some(placements),
             internal_connections: Some(internal_connections),
             owner_relative_origin: None,
+            realized_shapes: None,
         })
+    }
+
+    /// Attach an exact fluid shape to a single-part acquired fluid material.
+    ///
+    /// This first bridge is intentionally limited to one free fluid constituent:
+    /// bonded composite endpoint geometry must be recomputed transactionally before
+    /// arbitrary constituent shape overrides can be supported.
+    pub(crate) fn with_single_fluid_shape(
+        mut self,
+        shape: crate::resources::Shape,
+        catalog: &[BaseResource],
+    ) -> Option<Self> {
+        if self.material.parts.len() != 1
+            || !self.material.internal_bonds.is_empty()
+            || !shape.is_valid()
+        {
+            return None;
+        }
+        let (name, amount) = self.material.parts.first()?;
+        if (*amount - 1.0).abs() > 1e-9 {
+            return None;
+        }
+        let resource = catalog.iter().find(|resource| resource.name == *name)?;
+        if resource.physical_state != crate::resources::PhysicalState::Fluid {
+            return None;
+        }
+        let default_area = match resource.shape.form {
+            crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+            crate::resources::Form::Fluid { nominal_area, .. } => nominal_area,
+            _ => return None,
+        };
+        let shape_area = match shape.form {
+            crate::resources::Form::Fluid { nominal_area, .. } => nominal_area,
+            _ => return None,
+        };
+        if (shape_area - default_area).abs() > 1e-9 * default_area.max(1.0) {
+            return None;
+        }
+        self.realized_shapes = Some(vec![shape]);
+        Some(self)
+    }
+
+    /// Resolve the stored physical shape for one constituent, validating any
+    /// override against the catalog's material state and conserved fluid area.
+    pub(crate) fn realized_shape_for_part(
+        &self,
+        part_index: usize,
+        catalog: &[BaseResource],
+    ) -> Option<crate::resources::Shape> {
+        let (name, _) = self.material.parts.get(part_index)?;
+        let resource = catalog.iter().find(|resource| resource.name == *name)?;
+        let shape = match self.realized_shapes.as_ref() {
+            Some(shapes) if shapes.len() == self.material.parts.len() => shapes.get(part_index)?,
+            Some(_) => return None,
+            None => &resource.shape,
+        };
+        if !shape.is_valid() {
+            return None;
+        }
+        if shape != &resource.shape {
+            if resource.physical_state != crate::resources::PhysicalState::Fluid {
+                return None;
+            }
+            let default_area = match resource.shape.form {
+                crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+                crate::resources::Form::Fluid { nominal_area, .. } => nominal_area,
+                _ => return None,
+            };
+            let shape_area = match shape.form {
+                crate::resources::Form::Fluid { nominal_area, .. } => nominal_area,
+                _ => return None,
+            };
+            if (shape_area - default_area).abs() > 1e-9 * default_area.max(1.0) {
+                return None;
+            }
+        }
+        Some(shape.clone())
     }
 
     /// Break one pre-existing internal bond and return the resulting physically
@@ -161,6 +243,9 @@ impl PhysicalMaterial {
                 placements: Some(piece_placements),
                 internal_connections: Some(internal_connections),
                 owner_relative_origin: self.owner_relative_origin,
+                realized_shapes: self.realized_shapes.as_ref().map(|shapes| {
+                    members.iter().map(|&old_index| shapes[old_index].clone()).collect()
+                }),
             });
         }
         Some(pieces)
@@ -204,6 +289,7 @@ impl PhysicalMaterial {
             placements: Some(rebased),
             internal_connections: self.internal_connections,
             owner_relative_origin: self.owner_relative_origin,
+            realized_shapes: self.realized_shapes,
         })
     }
 }
