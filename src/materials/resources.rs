@@ -917,12 +917,12 @@ mod shape_tests {
         let form: Form =
             serde_json::from_str(r#"{"Fluid":{"nominal_area":0.5,"boundary":null}}"#).unwrap();
         assert!(matches!(
-            form,
+            &form,
             Form::Fluid {
                 nominal_area,
                 boundary: None,
                 arc_boundary: None
-            } if (nominal_area - 0.5).abs() < f64::EPSILON
+            } if (*nominal_area - 0.5).abs() < f64::EPSILON
         ));
         assert!(form.is_valid());
     }
