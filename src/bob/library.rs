@@ -1115,7 +1115,7 @@ impl GeometryFormation {
                     best = Some((candidate, remap));
                     ambiguous_best = false;
                 }
-                Some((existing, existing_mapping)) if candidate.signature < existing.signature => {
+                Some((existing, _existing_mapping)) if candidate.signature < existing.signature => {
                     best = Some((candidate, remap));
                     ambiguous_best = false;
                 }
