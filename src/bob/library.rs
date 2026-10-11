@@ -6140,3 +6140,55 @@ mod compact_family_storage_tests {
         let _ = std::fs::remove_dir_all(root);
     }
 }
+
+#[cfg(test)]
+mod fluid_contact_constraint_schema_tests {
+    use super::*;
+
+    fn legacy_fluid_formation() -> GeometryFluidFormation {
+        GeometryFluidFormation {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            parent_formation_signature: "parent-signature".to_string(),
+            fluid_resource: "Water".to_string(),
+            anchor_constituent: 0,
+            anchor_edge: 1,
+            area: 1.0,
+            contact_angle_radians: std::f64::consts::FRAC_PI_2,
+            curvature_radius: 1.0,
+            free_arc_angle_radians: std::f64::consts::PI,
+            contact_length: 1.0,
+            edge_parameter_start: 0.25,
+            edge_parameter_end: 0.75,
+            contact_constraints: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn legacy_fluid_records_default_to_no_extra_constraints() {
+        let formation = legacy_fluid_formation();
+        let mut value = serde_json::to_value(&formation).unwrap();
+        value
+            .as_object_mut()
+            .unwrap()
+            .remove("contact_constraints");
+
+        let decoded: GeometryFluidFormation = serde_json::from_value(value).unwrap();
+        assert!(decoded.contact_constraints.is_empty());
+        assert_eq!(decoded.signature(), formation.signature());
+    }
+
+    #[test]
+    fn every_contact_constraint_contributes_to_fluid_signature() {
+        let legacy = legacy_fluid_formation();
+        let mut constrained = legacy.clone();
+        constrained.contact_constraints.push(GeometryFluidContactConstraint {
+            constituent_index: 1,
+            edge_index: 2,
+            contact_length: 0.5,
+            edge_parameter_start: 0.2,
+            edge_parameter_end: 0.8,
+        });
+
+        assert_ne!(legacy.signature(), constrained.signature());
+    }
+}
