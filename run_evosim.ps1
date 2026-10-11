@@ -83,7 +83,7 @@ function Get-GitOutput([string[]]$Arguments) {
 function Test-WorktreeClean {
     $status = Get-GitOutput @("-C", $Repo, "status", "--porcelain", "--untracked-files=all")
     $unexpected = @($status -split "`r?`n" | Where-Object {
-        $_ -and $_ -ne "?? Cargo.lock"
+        $_
     })
     return $unexpected.Count -eq 0
 }
@@ -150,10 +150,10 @@ function Build-Version([string]$Sha) {
         $script:CargoWorkingDirectory = $StagingWorktree
         # Invoke Cargo without PowerShell's native-stderr handling. PowerShell 5.1
         # can turn ordinary Cargo progress on stderr into NativeCommandError records.
-        Invoke-Cargo @("build", "--release", "--target-dir", $StagingTarget)
+        Invoke-Cargo @("build", "--locked", "--release", "--target-dir", $StagingTarget)
 
         Write-Host "Running Rust tests for $Sha ..."
-        Invoke-Cargo @("test", "--all-targets", "--release", "--target-dir", $StagingTarget)
+        Invoke-Cargo @("test", "--locked", "--all-targets", "--release", "--target-dir", $StagingTarget)
 
         $builtExe = Join-Path $StagingTarget "release\evosim.exe"
         if (-not (Test-Path $builtExe)) {
