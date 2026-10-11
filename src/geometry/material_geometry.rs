@@ -911,6 +911,61 @@ mod tests {
     }
 
     #[test]
+    fn multi_contact_fluid_boundary_contacts_multiple_rigid_surfaces() {
+        let angle = std::f64::consts::FRAC_PI_2;
+        let boundary = crate::capillary_geometry::MultiContactFluidBoundary {
+            nominal_area: 4.0,
+            pieces: vec![
+                crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                    start_x: -1.0, start_y: -1.0, end_x: 1.0, end_y: -1.0,
+                    contact_angle_radians: angle,
+                },
+                crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                    start_x: 1.0, start_y: -1.0, end_x: 1.0, end_y: 1.0,
+                    contact_angle_radians: angle,
+                },
+                crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                    start_x: 1.0, start_y: 1.0, end_x: -1.0, end_y: 1.0,
+                    contact_angle_radians: angle,
+                },
+                crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                    start_x: -1.0, start_y: 1.0, end_x: -1.0, end_y: -1.0,
+                    contact_angle_radians: angle,
+                },
+            ],
+        };
+        let fluid = part(
+            Form::Fluid {
+                nominal_area: 4.0,
+                boundary: None,
+                arc_boundary: None,
+                multi_contact_boundary: Some(boundary),
+            },
+            3.0,
+            -2.0,
+            0.37,
+        );
+        let (sin, cos) = 0.37_f64.sin_cos();
+        let bottom_midpoint = (3.0 + sin, -2.0 - cos);
+        let tangent = part(
+            Form::Line { length: 1.0 },
+            bottom_midpoint.0,
+            bottom_midpoint.1,
+            0.37,
+        );
+        assert!(placed_forms_boundary_contact(&fluid, &tangent, 0.0));
+        assert!(placed_forms_rigid_contact(&fluid, &tangent, 0.0));
+
+        let separated = part(
+            Form::Line { length: 1.0 },
+            bottom_midpoint.0,
+            bottom_midpoint.1 - 1.0,
+            0.37,
+        );
+        assert!(!placed_forms_boundary_contact(&fluid, &separated, 0.0));
+    }
+
+    #[test]
     fn fluid_has_no_invented_spatial_boundary() {
         let fluid = part(
             Form::Fluid {
