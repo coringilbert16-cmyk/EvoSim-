@@ -1147,6 +1147,9 @@ mod tests {
         assert!(boundary.is_valid());
         assert_eq!(boundary.contact_count(), 4);
         assert_eq!(boundary.free_arc_count(), 0);
+        assert!(boundary.contains_point(0.0, 0.0));
+        assert!(boundary.contains_point(1.0, 0.0));
+        assert!(!boundary.contains_point(2.0, 0.0));
     }
 
     #[test]
