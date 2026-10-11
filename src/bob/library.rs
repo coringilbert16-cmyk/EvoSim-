@@ -725,7 +725,8 @@ impl GeometryFluidFormation {
         if resource.physical_state == crate::resources::PhysicalState::Fluid {
             return None;
         }
-        let (edge_start, edge_end) = *rigid_boundary_segments(&resource.shape.form).get(self.anchor_edge)?;
+        let (edge_start, edge_end) =
+            *rigid_boundary_segments(&resource.shape.form).get(self.anchor_edge)?;
         let edge_start = world_point(edge_start, anchor.placement);
         let edge_end = world_point(edge_end, anchor.placement);
         let dx = edge_end.0 - edge_start.0;
@@ -760,7 +761,11 @@ impl GeometryFluidFormation {
                 x: edge_start.0 + dx * center_parameter,
                 y: edge_start.1 + dy * center_parameter,
                 rotation_radians: dy.atan2(dx)
-                    + if bulge_left { 0.0 } else { std::f64::consts::PI },
+                    + if bulge_left {
+                        0.0
+                    } else {
+                        std::f64::consts::PI
+                    },
             },
         ))
     }
