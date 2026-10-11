@@ -6887,6 +6887,13 @@ mod fluid_contact_constraint_schema_tests {
         raw_parent.signature = raw_parent.canonical_signature();
         assert!(validate_formation(&raw_parent, &catalog));
         let parent = raw_parent.canonicalized(&catalog).unwrap();
+        let automatically_generated =
+            generate_collinear_multi_contact_formations(&parent, &water, &catalog);
+        assert!(
+            !automatically_generated.is_empty(),
+            "Bob should discover the three exposed collinear contacts without caller-supplied segments"
+        );
+
         let mut edges = parent
             .constituents
             .iter()
