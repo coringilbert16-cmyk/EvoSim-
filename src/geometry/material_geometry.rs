@@ -775,6 +775,59 @@ mod tests {
         ));
     }
     #[test]
+    fn exact_fluid_arc_boundary_contacts_a_line_without_polygon_sampling() {
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            0.5,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .unwrap();
+        let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family)
+            .unwrap();
+        let fluid = part(
+            Form::Fluid {
+                nominal_area: 0.5,
+                boundary: None,
+                arc_boundary: Some(arc),
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
+        let line = part(Form::Line { length: 2.0 }, 0.0, arc.radius, 0.0);
+        assert!(placed_forms_boundary_contact(&fluid, &line, 0.0));
+        assert!(placed_forms_rigid_contact(&fluid, &line, 0.0));
+        assert!(fluid.form.polygon_vertices().is_none());
+    }
+
+    #[test]
+    fn exact_fluid_arc_boundary_respects_world_translation_and_rotation() {
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            0.5,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .unwrap();
+        let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family)
+            .unwrap();
+        let fluid = part(
+            Form::Fluid {
+                nominal_area: 0.5,
+                boundary: None,
+                arc_boundary: Some(arc),
+            },
+            2.0,
+            3.0,
+            std::f64::consts::FRAC_PI_2,
+        );
+        let line = part(
+            Form::Line { length: 2.0 },
+            2.0 - arc.radius,
+            3.0,
+            std::f64::consts::FRAC_PI_2,
+        );
+        assert!(placed_forms_boundary_contact(&fluid, &line, 0.0));
+    }
+
+    #[test]
     fn fluid_has_no_invented_spatial_boundary() {
         let fluid = part(
             Form::Fluid {
