@@ -304,8 +304,7 @@ fn process_one_frontier(
                     generate_water_contact_families_with_diagnostics(&formation, resource, catalog);
                 metrics.water_unsupported_anchor_geometry +=
                     diagnostics.unsupported_anchor_geometry;
-                metrics.water_capillary_solver_failures +=
-                    diagnostics.capillary_solver_failures;
+                metrics.water_capillary_solver_failures += diagnostics.capillary_solver_failures;
                 metrics.water_anchors_without_exposed_intervals +=
                     diagnostics.anchors_without_exposed_intervals;
                 metrics.water_invalid_contact_intervals += diagnostics.invalid_contact_intervals;
