@@ -683,7 +683,8 @@ fn point_in_form(
             arc_boundary: Some(arc),
             ..
         } => {
-            let (local_x, local_y) = world_to_local((x, y), (placement.x, placement.y), placement.rotation_radians);
+            let (local_x, local_y) =
+                developmental_point(x, y, (placement.x, placement.y), placement.rotation_radians);
             let start = arc.start_point();
             let end = arc.end_point();
             let chord_side = (end.0 - start.0) * (local_y - start.1)
