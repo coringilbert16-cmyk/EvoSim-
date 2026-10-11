@@ -615,8 +615,7 @@ fn find_acquisition_set(
 fn resource_area(resource: &BaseResource) -> Option<f64> {
     match &resource.shape.form {
         Form::Circle { radius } => Some(std::f64::consts::PI * radius * radius),
-        multi_contact_boundary: None,
-Form::Fluid { nominal_area, .. } => Some(*nominal_area),
+        Form::Fluid { nominal_area, .. } => Some(*nominal_area),
         _ => None,
     }
 }
@@ -624,7 +623,6 @@ Form::Fluid { nominal_area, .. } => Some(*nominal_area),
 fn fluid_segment_contains_world_point(shape: &Shape, placement: Placement, x: f64, y: f64) -> bool {
     let Form::Fluid {
         arc_boundary: Some(arc),
-        multi_contact_boundary: None,
         ..
     } = &shape.form
     else {
@@ -808,7 +806,6 @@ fn bob_fluid_acquisition_candidate(
                         rigid_part_world_points(&other_shape.form, other_unit.placement);
                     let Form::Fluid {
                         arc_boundary: Some(arc),
-                        multi_contact_boundary: None,
                         ..
                     } = &shape.form
                     else {
@@ -1119,8 +1116,7 @@ mod tests {
         assert!(shape.is_valid());
         let expected_area = match &water.shape.form {
             Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-            multi_contact_boundary: None,
-Form::Fluid { nominal_area, .. } => *nominal_area,
+            Form::Fluid { nominal_area, .. } => *nominal_area,
             _ => panic!("Water must have a fluid-compatible default shape"),
         };
         assert!(matches!(
@@ -1129,7 +1125,6 @@ Form::Fluid { nominal_area, .. } => *nominal_area,
                 nominal_area,
                 boundary: None,
                 arc_boundary: Some(_)
-                multi_contact_boundary: None,
             } if (*nominal_area - expected_area).abs() < 1e-9
         ));
         assert!(placement.x.is_finite() && placement.y.is_finite());
