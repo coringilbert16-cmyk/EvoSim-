@@ -6288,19 +6288,31 @@ mod fluid_contact_constraint_schema_tests {
             nominal_area: NOMINAL_UNIT_AREA,
             pieces: vec![
                 FluidBoundaryPiece::SolidContact {
-                    start_x: -half, start_y: -half, end_x: half, end_y: -half,
+                    start_x: -half,
+                    start_y: -half,
+                    end_x: half,
+                    end_y: -half,
                     contact_angle_radians: angle,
                 },
                 FluidBoundaryPiece::SolidContact {
-                    start_x: half, start_y: -half, end_x: half, end_y: half,
+                    start_x: half,
+                    start_y: -half,
+                    end_x: half,
+                    end_y: half,
                     contact_angle_radians: angle,
                 },
                 FluidBoundaryPiece::SolidContact {
-                    start_x: half, start_y: half, end_x: -half, end_y: half,
+                    start_x: half,
+                    start_y: half,
+                    end_x: -half,
+                    end_y: half,
                     contact_angle_radians: angle,
                 },
                 FluidBoundaryPiece::SolidContact {
-                    start_x: -half, start_y: half, end_x: -half, end_y: -half,
+                    start_x: -half,
+                    start_y: half,
+                    end_x: -half,
+                    end_y: -half,
                     contact_angle_radians: angle,
                 },
             ],
@@ -6326,11 +6338,22 @@ mod fluid_contact_constraint_schema_tests {
         let (shape, pose) = formation
             .realize_against_parent(&parent, &catalog, true)
             .expect("a complete validated boundary must not fall back to one anchor arc");
-        assert_eq!(pose, Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
+        assert_eq!(
+            pose,
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0
+            }
+        );
         assert!(matches!(
             shape.form,
-            Form::Fluid { nominal_area, multi_contact_boundary: Some(_), arc_boundary: None, .. }
-                if (nominal_area - NOMINAL_UNIT_AREA).abs() < 1e-9
+            Form::Fluid {
+                nominal_area,
+                multi_contact_boundary: Some(_),
+                arc_boundary: None,
+                ..
+            } if (nominal_area - NOMINAL_UNIT_AREA).abs() < 1e-9
         ));
         assert_ne!(formation.signature(), {
             let mut legacy = formation.clone();
