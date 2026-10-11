@@ -785,50 +785,7 @@ mod tests {
         assert!(water.realize_fluid_geometry(fitted.clone(), &catalog));
         assert_eq!(water.geometry.as_ref().unwrap().shape(), &fitted);
 
-        let multi_contact = crate::resources::Shape {
-            form: crate::resources::Form::Fluid {
-                nominal_area: 4.0,
-                boundary: None,
-                arc_boundary: None,
-                multi_contact_boundary: Some(
-                    crate::capillary_geometry::MultiContactFluidBoundary {
-                        nominal_area: 4.0,
-                        pieces: vec![
-                            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
-                                start_x: -1.0,
-                                start_y: -1.0,
-                                end_x: 1.0,
-                                end_y: -1.0,
-                                contact_angle_radians: std::f64::consts::FRAC_PI_2,
-                            },
-                            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
-                                start_x: 1.0,
-                                start_y: -1.0,
-                                end_x: 1.0,
-                                end_y: 1.0,
-                                contact_angle_radians: std::f64::consts::FRAC_PI_2,
-                            },
-                            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
-                                start_x: 1.0,
-                                start_y: 1.0,
-                                end_x: -1.0,
-                                end_y: 1.0,
-                                contact_angle_radians: std::f64::consts::FRAC_PI_2,
-                            },
-                            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
-                                start_x: -1.0,
-                                start_y: 1.0,
-                                end_x: -1.0,
-                                end_y: -1.0,
-                                contact_angle_radians: std::f64::consts::FRAC_PI_2,
-                            },
-                        ],
-                    },
-                ),
-            },
-        };
-        assert!(water.realize_fluid_geometry(multi_contact.clone(), &catalog));
-        assert_eq!(water.geometry.as_ref().unwrap().shape(), &multi_contact);
+
 
         let mut bulk_water = StructuralUnit::from_material(
             Material::free_base("Water", 4.0),
@@ -841,6 +798,52 @@ mod tests {
         .unwrap();
         assert!(bulk_water.realize_fluid_geometry(fitted.clone(), &catalog));
         assert_eq!(bulk_water.geometry.as_ref().unwrap().shape(), &fitted);
+
+        let half = 2.0_f64.sqrt() / 2.0;
+        let multi_contact = crate::resources::Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: 2.0,
+                boundary: None,
+                arc_boundary: None,
+                multi_contact_boundary: Some(
+                    crate::capillary_geometry::MultiContactFluidBoundary {
+                        nominal_area: 2.0,
+                        pieces: vec![
+                            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                                start_x: -half,
+                                start_y: -half,
+                                end_x: half,
+                                end_y: -half,
+                                contact_angle_radians: std::f64::consts::FRAC_PI_2,
+                            },
+                            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                                start_x: half,
+                                start_y: -half,
+                                end_x: half,
+                                end_y: half,
+                                contact_angle_radians: std::f64::consts::FRAC_PI_2,
+                            },
+                            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                                start_x: half,
+                                start_y: half,
+                                end_x: -half,
+                                end_y: half,
+                                contact_angle_radians: std::f64::consts::FRAC_PI_2,
+                            },
+                            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                                start_x: -half,
+                                start_y: half,
+                                end_x: -half,
+                                end_y: -half,
+                                contact_angle_radians: std::f64::consts::FRAC_PI_2,
+                            },
+                        ],
+                    },
+                ),
+            },
+        };
+        assert!(bulk_water.realize_fluid_geometry(multi_contact.clone(), &catalog));
+        assert_eq!(bulk_water.geometry.as_ref().unwrap().shape(), &multi_contact);
 
         let mut carbon = StructuralUnit::new(
             "Carbon",
