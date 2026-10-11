@@ -14,14 +14,14 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 - `src/` currently contains contract/unit tests that exercise private crate internals. Do not move them into external integration-test targets without an explicit API-boundary plan.
 - Hydrogen is a finite-area rigid rectangle (1.0 × 0.1 units) with two primary end contact points. It is not a zero-thickness line.
 - Bob's 0.5-unit positional equivalence is a **catalogue deduplication** tolerance only. It does not replace the live geometry/contact tolerance or permit penetration.
-- Fluid knowledge is stored as symbolic capillary boundary/family records with conserved area and contact constraints—not sampled rigid poses. Current records have persistence validation, but fluid-to-construction realization remains an open implementation gate; see the fluid integration contract below.
+- Fluid knowledge is stored as symbolic capillary boundary/family records with conserved area and contact constraints—not sampled rigid poses. Current records have persistence validation and live-interface resolution; the active work is converting those records into a reproducible, area-preserving realized fluid boundary and proving it through physical validation.
 
 ### Operational gates
 
 1. Keep the geometry catalogue empty in the tracked tree. Never run the continuous worker or use the default catalogue directory for tests.
 2. Do not start bounded two-piece generation until construction has a tested fluid-realization/query path and live validation remains authoritative.
 3. Treat the existing two-piece workflow as the approved isolated generation path after that gate; report formation/family counts, runtime, storage size, frontier completion, and reopen verification.
-4. Constructor-related tests may remain failing while the shared seed-realization blocker is investigated, but do not disable tests, weaken physical invariants, or diagnose cascading failures as independent without evidence.
+4. Do not divert the active geometry-library/fluid-formation sprint into the unrelated constructor-test backlog. Keep those failures visible, but prioritize fluid-record realization, interface-class coverage, and Bob's persisted-knowledge contract; never disable tests or weaken physical invariants.
 5. Keep PR #186 as the single integration target. Do not merge or change the default branch as a side effect of cleanup.
 6. All new decisions and handoffs go in this root README. Before adding a new audit note, update the current summary and avoid repeating obsolete checkpoints.
 
@@ -47,6 +47,28 @@ This checkpoint supersedes older repository-status and CI summaries later in thi
 - Added a regression test that persists a fluid-boundary family, resolves it, reopens the library, and resolves it again.
 - **Verification status at the preceding checkpoint:** CI on `354f284d1a4cd7f54f54ee3f6a1bb82be215b53a` passed formatting, source-size, COMBINE architecture, focused compact-storage tests (5 passed), and empty-library open/reopen. The full suite reported 316 passed, 29 failed, 1 ignored; strict Clippy failed on existing lint/staged-API issues. The reason-level diagnostic change is newer and requires its own exact-head CI before it is considered verified.
 - **Still outstanding:** broader fluid-geometry discovery coverage (including applicable fluid–fluid cases), explicit coverage metrics by fluid interface class, and strict end-to-end constructor use of the persisted fluid query. This sprint closes the persistent lookup gap, not the full fluid-geometry requirement.
+
+### Active work handoff — Bob fluid formations and geometry realization — 2026-10-11
+
+This handoff supersedes the seed-ring debugging detour. Do not spend the active sprint chasing the element-9/element-20 constructor failures; those changes were made on a separate branch and are not part of the integration target.
+
+**What is already present in the integration source:**
+- The capillary solver calculates the 2-D Young–Laplace equilibrium against a flat rigid boundary from conserved area and effective contact angle, returning curvature radius, free-arc angle, contact length, and enclosed area.
+- Bob's worker derives and persists `GeometryFluidBoundaryFamily` and `GeometryFluidFormation` sidecar records, including parent formation, Water identity, anchor constituent/edge, area, contact angle, curvature, contact length, and a feasible normalized edge-parameter interval.
+- The live-interface identity includes fluid material, solid material/edge, realized edge parameter, area, and contact angle. Persistent lookup can resolve a matching local fluid-family projection.
+- The prior bounded two-constituent run produced a temporary artifact and passed persistence/reopen and size/frontier checks. It did not prove realized fluid-boundary geometry or constructor consumption.
+
+**Actual remaining gap:** persisted fluid records are still symbolic constraints/solver results, not a complete realized shape in a live coordinate frame. A resolution result alone does not provide a placement/shape that the physical geometry authority can validate. Do not claim fluid geometry is end-to-end merely because rows persist and lookup resolves.
+
+**Next short sprint — fluid realization bridge:**
+1. Trace the exact runtime fluid representation, anchor edge coordinate frame, and the authoritative whole-structure geometry checks. Keep the capillary solver as the calculation authority.
+2. Add a typed realization result from a matching persisted fluid record: resolved live anchor identity, contact interval/position, solver inputs/results, conserved area, and a context-frame boundary representation or feasible boundary descriptor. A missing record must return a coverage miss, not run an unrecorded fallback solve.
+3. Convert that result into the existing fluid realization shape only through a dedicated, testable adapter. Validate finite/simple boundary geometry, area conservation within the approved tolerance, contact-angle/edge constraints, and nonpenetration against the full current structure before commit.
+4. Add focused tests for persistence → reopen → live query → realization; translated/rotated anchor rebasing; invalid/infeasible interval rejection; area conservation; and rejection of a shape that overlaps another constituent. Verify that resolution uses persisted records and that no new record is silently written during a query.
+5. Extend Bob's generation report to summarize fluid coverage by interface class and explicit rejection reason. Respect the model rule that fluid–fluid coalescence increases one fluid's volume; do not encode it as a rigid bond or duplicate fluid constituent.
+6. Only after this bridge and its tests pass, rerun the bounded singleton/two-piece worker in an isolated output root, inspect coverage and artifact integrity, and preserve the generated data as a runtime artifact—not tracked source.
+
+**Out of scope for this sprint:** constructor failure reduction, arbitrary pose/tolerance changes, unbounded catalogue expansion, and committing generated geometry files. The acceptance target is a persisted Bob fluid record becoming a physically validated live fluid realization.
 
 ### Latest locked CI verification
 
