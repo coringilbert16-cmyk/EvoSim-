@@ -2204,11 +2204,12 @@ impl GeometryLibrary {
                             formation.constituents.get(family.anchor_constituent)
                         })
                         .map(|constituent| constituent.resource.as_str());
-                    if family.fluid_resource == *fluid_material
+                    if family.fluid_resource.as_str() == fluid_material.as_str()
                         && anchor_material == Some(solid_material.as_str())
                         && family.anchor_edge == *solid_edge
                         && (family.area - area).abs() <= QUANTUM * area.max(1.0)
-                        && (family.contact_angle_radians - angle).abs() <= QUANTUM * angle.max(1.0)
+                        && (family.contact_angle_radians - angle).abs()
+                    <= QUANTUM * angle.max(1.0)
                         && parameter >= family.edge_parameter_start - QUANTUM
                         && parameter <= family.edge_parameter_end + QUANTUM
                     {
@@ -5374,10 +5375,8 @@ mod compact_family_storage_tests {
     #[test]
     fn fluid_boundary_interface_resolves_persisted_family_after_reopen() {
         let catalog = default_catalog();
-        let root = std::env::temp_dir().join(format!(
-            "evosim-bob-fluid-query-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("evosim-bob-fluid-query-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
         let formation = GeometryFormation::single("Carbon");
