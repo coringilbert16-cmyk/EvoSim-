@@ -648,12 +648,7 @@ fn fluid_segment_contains_world_point(shape: &Shape, placement: Placement, x: f6
         && (local_x - arc.center_x).hypot(local_y - arc.center_y) <= arc.radius + 1e-9
 }
 
-fn rigid_form_contains_world_point(
-    form: &Form,
-    placement: Placement,
-    x: f64,
-    y: f64,
-) -> bool {
+fn rigid_form_contains_world_point(form: &Form, placement: Placement, x: f64, y: f64) -> bool {
     let dx = x - placement.x;
     let dy = y - placement.y;
     let (sin, cos) = placement.rotation_radians.sin_cos();
@@ -661,9 +656,7 @@ fn rigid_form_contains_world_point(
     let local_y = -dx * sin + dy * cos;
     match form {
         Form::Circle { radius } => local_x.hypot(local_y) <= *radius + 1e-9,
-        Form::Line { length } => {
-            local_y.abs() <= 1e-9 && local_x.abs() <= length * 0.5 + 1e-9
-        }
+        Form::Line { length } => local_y.abs() <= 1e-9 && local_x.abs() <= length * 0.5 + 1e-9,
         _ => {
             let Some(vertices) = form.polygon_vertices() else {
                 return false;
@@ -811,17 +804,6 @@ fn bob_fluid_acquisition_candidate(
                     };
                     let rigid_points =
                         rigid_part_world_points(&other_shape.form, other_unit.placement);
-                    let midpoint_angle =
-                        match &shape.form {
-                            Form::Fluid {
-                                arc_boundary: Some(arc),
-                                ..
-                            } => arc.start_angle_radians + arc.sweep_radians * 0.5,
-                            _ => {
-                                valid = false;
-                                break;
-                            }
-                        };
                     let Form::Fluid {
                         arc_boundary: Some(arc),
                         ..
@@ -830,6 +812,7 @@ fn bob_fluid_acquisition_candidate(
                         valid = false;
                         break;
                     };
+                    let midpoint_angle = arc.start_angle_radians + arc.sweep_radians * 0.5;
                     let (fluid_sin, fluid_cos) = placement.rotation_radians.sin_cos();
                     let arc_midpoint_local = (
                         arc.center_x + arc.radius * midpoint_angle.cos(),
@@ -838,7 +821,8 @@ fn bob_fluid_acquisition_candidate(
                     let arc_midpoint_world = (
                         placement.x + arc_midpoint_local.0 * fluid_cos
                             - arc_midpoint_local.1 * fluid_sin,
-                        placement.y + arc_midpoint_local.0 * fluid_sin
+                        placement.y
+                            + arc_midpoint_local.0 * fluid_sin
                             + arc_midpoint_local.1 * fluid_cos,
                     );
                     if rigid_form_contains_world_point(
@@ -912,27 +896,28 @@ fn valid_construction(
     let water = catalog.iter().find(|resource| resource.name == "Water")?;
     let (water_candidate, had_bob_records) =
         bob_fluid_acquisition_candidate(structure, &regions, water, bob_library, catalog);
-    let (water_shape, water_placement, fluid_geometry_status) = match (water_candidate, had_bob_records) {
-        (Some((shape, placement)), _) => (
-            Some(shape),
-            placement,
-            FluidGeometryStatus::BobSuggestionAccepted,
-        ),
-        (None, true) => (
-            None,
-            regions
-                .iter()
-                .find_map(|region| placement_fits_resource(water, region, catalog))?,
-            FluidGeometryStatus::CandidatesRejected,
-        ),
-        (None, false) => (
-            None,
-            regions
-                .iter()
-                .find_map(|region| placement_fits_resource(water, region, catalog))?,
-            FluidGeometryStatus::CoverageMiss,
-        ),
-    };
+    let (water_shape, water_placement, fluid_geometry_status) =
+        match (water_candidate, had_bob_records) {
+            (Some((shape, placement)), _) => (
+                Some(shape),
+                placement,
+                FluidGeometryStatus::BobSuggestionAccepted,
+            ),
+            (None, true) => (
+                None,
+                regions
+                    .iter()
+                    .find_map(|region| placement_fits_resource(water, region, catalog))?,
+                FluidGeometryStatus::CandidatesRejected,
+            ),
+            (None, false) => (
+                None,
+                regions
+                    .iter()
+                    .find_map(|region| placement_fits_resource(water, region, catalog))?,
+                FluidGeometryStatus::CoverageMiss,
+            ),
+        };
     acquired.push((water.name.clone(), water_placement));
     let acquired_shapes = water_shape
         .map(|shape| vec![(water.name.clone(), shape)])
@@ -953,15 +938,9 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
     let bob_library = crate::geometry_reference_library::open_default_library()
         .map_err(|error| format!("failed to open persistent Bob geometry library: {error}"))?;
     let (acquired_resource_placements, acquired_resource_shapes, fluid_geometry_status) =
-        valid_construction(
-            &structure,
-            catalog,
-            &acquisition_candidates,
-            &bob_library,
-        )
-        .ok_or_else(|| {
-            "deterministic construction scaffold did not satisfy viability".to_string()
-        })?;
+        valid_construction(&structure, catalog, &acquisition_candidates, &bob_library).ok_or_else(
+            || "deterministic construction scaffold did not satisfy viability".to_string(),
+        )?;
 
     Ok(ValidConstruction {
         structure,
