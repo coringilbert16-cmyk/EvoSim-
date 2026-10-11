@@ -300,7 +300,7 @@ fn composite_origin_for_constituent_pose(
 /// map is keyed by stable physical IDs, never transient vector positions.
 #[derive(Clone, Debug)]
 struct CanonicalLiveRigidParent {
-    formation: crate::bob::library::GeometryFormation,
+    formation: crate::geometry_reference_library::GeometryFormation,
     canonical_index_by_id: std::collections::BTreeMap<
         crate::structure::PhysicalConstituentId,
         usize,
@@ -314,7 +314,7 @@ fn canonical_live_rigid_parent(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
 ) -> Option<CanonicalLiveRigidParent> {
-    use crate::bob::library::{GeometryBond, GeometryConstituent, GeometryFormation,
+    use crate::geometry_reference_library::{GeometryBond, GeometryConstituent, GeometryFormation,
         GEOMETRY_LIBRARY_SCHEMA_VERSION};
     use crate::structure::PhysicalConstituentId;
     use std::collections::{BTreeMap, BTreeSet};
