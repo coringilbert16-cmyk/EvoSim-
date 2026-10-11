@@ -296,6 +296,104 @@ fn composite_origin_for_constituent_pose(
     }
 }
 
+/// Canonical Bob identity for the rigid portion of a live organism. The
+/// map is keyed by stable physical IDs, never transient vector positions.
+#[derive(Clone, Debug)]
+struct CanonicalLiveRigidParent {
+    formation: crate::bob::library::GeometryFormation,
+    canonical_index_by_id: std::collections::BTreeMap<
+        crate::structure::PhysicalConstituentId,
+        usize,
+    >,
+}
+
+/// Build a connected rigid parent from the live physical graph and preserve
+/// stable-ID-to-canonical-slot identity. Disconnected or ambiguous parents are
+/// rejected rather than guessed.
+fn canonical_live_rigid_parent(
+    structure: &OrganismStructure,
+    catalog: &[BaseResource],
+) -> Option<CanonicalLiveRigidParent> {
+    use crate::bob::library::{GeometryBond, GeometryConstituent, GeometryFormation,
+        GEOMETRY_LIBRARY_SCHEMA_VERSION};
+    use crate::structure::PhysicalConstituentId;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    let mut live_units = Vec::new();
+    let mut index_by_id = BTreeMap::new();
+    for unit in &structure.units {
+        let [(resource_name, amount)] = unit.material.parts.as_slice() else {
+            continue;
+        };
+        if unit.material.has_internal_structure()
+            || !amount.is_finite()
+            || (*amount - 1.0).abs() > f64::EPSILON
+        {
+            continue;
+        }
+        let resource = catalog.iter().find(|resource| resource.name == *resource_name)?;
+        if resource.physical_state == PhysicalState::Fluid {
+            continue;
+        }
+        if unit.physical_id.0 == 0 || index_by_id.contains_key(&unit.physical_id) {
+            return None;
+        }
+        let index = live_units.len();
+        index_by_id.insert(unit.physical_id, index);
+        live_units.push((
+            unit.physical_id,
+            GeometryConstituent {
+                resource: resource.name.clone(),
+                placement: unit.placement,
+            },
+        ));
+    }
+    if live_units.is_empty() {
+        return None;
+    }
+
+    let mut bonds = BTreeSet::new();
+    for bond in &structure.bonds {
+        let Some(&a) = index_by_id.get(&bond.endpoint_a.constituent_id) else {
+            continue;
+        };
+        let Some(&b) = index_by_id.get(&bond.endpoint_b.constituent_id) else {
+            continue;
+        };
+        if a != b {
+            bonds.insert((a.min(b), a.max(b)));
+        }
+    }
+
+    let formation = GeometryFormation {
+        schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+        constituents: live_units.iter().map(|(_, constituent)| constituent.clone()).collect(),
+        bonds: bonds
+            .into_iter()
+            .map(|(constituent_a, constituent_b)| GeometryBond {
+                constituent_a,
+                constituent_b,
+            })
+            .collect(),
+        signature: String::new(),
+    };
+    let (formation, input_to_canonical) = formation.canonicalized_with_mapping(catalog)?;
+    if input_to_canonical.len() != live_units.len() {
+        return None;
+    }
+    let canonical_index_by_id = live_units
+        .iter()
+        .enumerate()
+        .map(|(input_index, (id, _))| (*id, input_to_canonical[input_index]))
+        .collect();
+    // Keep this explicit type to make the stable-ID boundary obvious at call sites.
+    let canonical_index_by_id: BTreeMap<PhysicalConstituentId, usize> = canonical_index_by_id;
+    Some(CanonicalLiveRigidParent {
+        formation,
+        canonical_index_by_id,
+    })
+}
+
 /// Query Bob for fluid formations against one exact rigid parent and transform
 /// each realized suggestion from the parent's canonical frame into live space.
 /// Returned shapes are proposals; the caller must restore and validate them.
