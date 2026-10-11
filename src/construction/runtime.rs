@@ -2173,11 +2173,6 @@ mod tests {
             .find(|resource| resource.name == "Carbon")
             .unwrap()
             .clone();
-        let water = catalog
-            .iter()
-            .find(|resource| resource.name == "Water")
-            .unwrap()
-            .clone();
         let area = NOMINAL_UNIT_AREA;
         let angle = std::f64::consts::FRAC_PI_2;
         let family = CapillaryContactFamily::solve(area, angle).unwrap();
