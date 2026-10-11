@@ -46,7 +46,8 @@ pub(crate) fn candidate_placements(
             Form::Line { .. } => (0..2)
                 .map(|i| ConnectionEndpoint::LineEndpoint { point_index: i })
                 .collect(),
-            Form::Circle { .. } | Form::Fluid { .. } => Vec::new(),
+            Form::Circle { .. } | multi_contact_boundary: None,
+Form::Fluid { .. } => Vec::new(),
         };
         for te in target_endpoints {
             let Some(tp) = te.world_point(unit, catalog) else {
@@ -261,7 +262,8 @@ fn structure_unit_endpoint_options(
         Form::Line { .. } => (0..2)
             .map(|point_index| ConnectionEndpoint::LineEndpoint { point_index })
             .collect(),
-        Form::Circle { .. } | Form::Fluid { .. } => Vec::new(),
+        Form::Circle { .. } | multi_contact_boundary: None,
+Form::Fluid { .. } => Vec::new(),
     }
 }
 
@@ -413,7 +415,8 @@ fn point_inside_form(form: &Form, placement: Placement, x: f64, y: f64) -> bool 
             }
             inside
         }
-        Form::Line { .. } | Form::Fluid { .. } => false,
+        Form::Line { .. } | multi_contact_boundary: None,
+Form::Fluid { .. } => false,
     }
 }
 
@@ -1764,7 +1767,8 @@ mod tests {
                     nominal_area,
                     boundary: None,
                     arc_boundary: Some(_)
-                } if (*nominal_area - crate::resources::NOMINAL_UNIT_AREA).abs() < 1e-9
+                    multi_contact_boundary: None,
+} if (*nominal_area - crate::resources::NOMINAL_UNIT_AREA).abs() < 1e-9
             ));
 
             let material = crate::physical_material::PhysicalMaterial::realized(
