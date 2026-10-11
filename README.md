@@ -1205,3 +1205,28 @@ The runtime resource model distinguishes `PhysicalState::Fluid` from the default
 The root `README.md` is now the repository's sole README and central working authority. The subordinate files `chemistry_library/README.md`, `geometry_library/README.md`, `src/bob/README.md`, `src/infrastructure/README.md`, and `tests/README.md` have been removed after their operationally relevant content was consolidated here. The separate `README_STRESS_DESIGN_AMENDMENT.md` was also retired after its approved rule was moved into the root specification. Detailed files under `docs/` remain supporting audit evidence; they do not override the current decisions and status in this README. Generated geometry data remains absent from Git.
 
 **Fluid integration status remains open:** the source audit confirms that fluid sidecar records are stored and validated, and the physical structure API can accept a realized `Form::Fluid` boundary, but there is no verified end-to-end adapter from Bob's stored formation to that live realization. Do not report fluid suggestions as connected to construction until an exact parent-formation match, conserved-area boundary realization, and regression-tested live-validation path are implemented. The local container could not clone GitHub because network DNS was unavailable, so source changes must not be claimed tested locally on that basis.
+
+## Fluid-to-construction integration audit — 2026-10-11
+
+### Verified state
+
+- Bob now exposes `GeometryLibrary::fluid_formations_for_parent(parent_formation_signature, fluid_resource)`. This is a read-only exact-key query; it does not itself realize a fluid placement or authorize a physical contact.
+- `GeometryFluidFormation` stores the canonical rigid-parent signature, fluid resource, anchor constituent and edge, conserved area, capillary equilibrium scalars, and normalized edge-parameter interval.
+- `src/geometry/capillary_geometry.rs` provides an analytic flat-edge equilibrium: conserved area, contact angle, curvature radius, free-arc angle, and contact length. Its current public solution is scalar geometry; it does **not** return a world-space boundary polygon/polyline or an already-realized physical constituent.
+- Bob's rigid `GeometryFormation::canonicalized` is the appropriate canonicalization boundary for rigid parent arrangements. Do not create a signature by hashing a live structure's incidental iteration order or world translation.
+- The fluid query milestone is therefore library plumbing only. End-to-end fluid suggestion consumption is not complete, and two-piece generation remains gated on a live construction regression.
+
+### Current CI result for fluid-query commit
+
+- Rust workflow run `38155085451`: formatting, source-size policy, COMBINE architecture checks, Bob compact-storage tests, and empty-library open/reopen checks passed. Rust tests completed with **318 passed, 29 failed, 1 ignored**. Clippy also failed under `-D warnings`.
+- Windows runner validation run `38155085424`: passed.
+- The failing Rust tests include existing constructor/developmental realization failures, geometry/contact expectation failures, and a chemical-break expectation failure. Do not attribute all failures to the fluid-query change without a baseline comparison. The focused fluid-query/persistence assertions are not reported as a standalone CI step, so their individual status cannot be inferred from the aggregate summary.
+- CI confirms the repository still compiles far enough to execute the test suite, but the full test and lint gates are not green. Constructor failures remain known work; do not hide them or loosen unrelated assertions to make the gate green.
+
+### Next implementation gate
+
+1. Audit how a live rigid parent maps to a `GeometryFormation`, including constituent indexing, local versus world coordinates, bond topology, and canonicalization. Only query Bob after constructing and validating that exact identity.
+2. Make the capillary geometry authority produce a boundary in the contacted edge's local frame from the persisted equilibrium data and interval; transform it into world coordinates using the realized anchor placement. Preserve area and reject impossible intervals. Do not infer a boundary from scalars alone without a defined coordinate convention.
+3. Feed the resulting fluid shape to construction as an advisory candidate. The existing live physical geometry, contact compatibility, bond/energy transaction, and collision checks remain authoritative.
+4. Add a regression proving that construction actually queries a stored fluid suggestion, preserves the fluid's conserved area, and rejects a suggestion that fails live validation.
+5. Only after that regression passes, run the isolated bounded Bob workflow for formations up to two constituent pieces. Keep generated data out of the repository unless explicitly approved.
