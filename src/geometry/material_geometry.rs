@@ -702,6 +702,7 @@ mod tests {
             Form::Fluid {
                 nominal_area: 100.0,
                 boundary: None,
+                arc_boundary: None,
             },
             0.0,
             0.0,
