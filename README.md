@@ -1235,3 +1235,12 @@ The root `README.md` is now the repository's sole README and central working aut
 ## 2026-10-11 — Validate changes proposed against the integration branch
 
 The Rust workflow now runs for pull requests targeting both `main` and `integration/unified-source-and-catalogue`. The integration branch is the active source authority while the source-integration PR to `main` remains draft; changes targeting integration therefore need their own CI gate rather than waiting for a later main-bound PR. This changes only CI event selection, not test requirements or acceptance criteria.
+
+
+## 2026-10-11 — Element-9 placement failure: seed ring geometry diagnosis
+
+Exact-head Rust CI for `92a289e2f30d03bfe9ffd6b3f3e44d776a6be671` reports **318 passed, 29 failed, 1 ignored**. The shared placement failure at element 9 generated 16,752 origins, deduplicated 2,961, had no restore failures, rejected 7,333 for overlap, and rejected 6,458 for missing contact with already-realized neighbors 0 and 8. No-bond-contact, candidate-evaluation, or COMBINE rejections occurred: the failure is earlier, at satisfying both neighbor contacts.
+
+The confirmed-seed calibration blueprint used a 10-element ring of regular hexagons. Its center spacing was the Carbon hexagon's flat-to-flat distance, but each successive unit rotated by 36 degrees, inconsistent with the hexagon's 60-degree edge symmetry. The targeted correction on `fix/seed-ring-closure-geometry-v2` uses a six-element hexagonal ring, moves the Sulfur/Methane attachment indices to valid vertices, and adds a regression for ring spacing, rotational symmetry, and all six ring connections.
+
+This changes only the confirmed-seed calibration blueprint. It does not relax collision/contact tolerances or alter the general construction rules. It is a root-cause hypothesis until CI verifies that the ring closes and the shared placement failures disappear. If the failure moves or remains, inspect actual realized poses and contact features; do not weaken physical rules. No Bob generation or fluid-boundary work is part of this sprint.
