@@ -382,6 +382,16 @@ Products are not selected from a hard-coded product catalogue. Existing physical
     A + B -> A—B
     A—B—C -> A—C + B
 
+### Heat-stress structural damage selection
+
+When accumulated heat stress reaches the current stress threshold, structural damage selects a **random eligible non-genome structural bond**.
+
+1. Select randomly from eligible non-genome structural bonds.
+2. Genome bonds remain protected while any eligible non-genome structural bond remains.
+3. Genome bonds become eligible only after the non-genome set is exhausted.
+
+Genome-bond identity must come from the existing genome-cavity authority, which identifies the actual physical cavity-boundary bonds. Do not infer genome bonds from a fixed material recipe, unit count, construction index, or other legacy proxy. This approved random-selection rule supersedes the 2026-09-16 weakest-bond amendment.
+
 ### Energy conservation
 
 Chemical transitions must conserve energy. Chemical interaction is not automatically usable organism energy.
