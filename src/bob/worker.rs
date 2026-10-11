@@ -465,7 +465,8 @@ mod tests {
         )
         .unwrap();
         let error = process_one_frontier(&mut library, &catalog, 3)
-            .expect_err("frontier processing must enforce the same hard limit");
+            .err()
+            .expect("frontier processing must enforce the same hard limit");
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
     }
 
