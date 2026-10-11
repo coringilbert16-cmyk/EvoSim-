@@ -2045,7 +2045,9 @@ mod tests {
         let b = structure.add_unit(StructuralUnit::new(
             "Carbon",
             Placement {
-                x: 3.0,
+                // Carbon's radius is 1.0. At a two-unit center offset,
+                // corner 0 of A meets the opposite corner 3 of B.
+                x: 2.0,
                 y: 0.0,
                 rotation_radians: 0.0,
             },
@@ -2059,7 +2061,7 @@ mod tests {
             ),
             endpoint_b: crate::structure::BondEndpoint::new(
                 id_b,
-                ConnectionEndpoint::Corner { point_index: 0 },
+                ConnectionEndpoint::Corner { point_index: 3 },
             ),
             strength: 1.0,
             bond_energy: 0.0,
