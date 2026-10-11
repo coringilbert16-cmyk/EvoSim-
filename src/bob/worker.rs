@@ -391,6 +391,37 @@ mod tests {
     use crate::geometry_reference_library::GeometryFormation;
 
     #[test]
+    fn worker_generates_fluid_records_for_parent_at_constituent_limit() {
+        let catalog = default_catalog();
+        let carbon = catalog.iter().find(|resource| resource.name == "Carbon").unwrap();
+        let seed = GeometryFormation::single("Carbon");
+        let parent = expand_formation_candidates(&seed, carbon, &catalog)
+            .into_iter()
+            .find(|formation| formation.constituents.len() == 2)
+            .expect("Bob should produce at least one valid two-constituent Carbon parent");
+        let signature = parent.signature.clone();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-fluid-at-limit-{}", std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        library.insert(parent, &catalog).unwrap();
+
+        let metrics = process_one_frontier(&mut library, &catalog, 2)
+            .unwrap()
+            .expect("the two-constituent parent should have an unfinished frontier");
+        assert!(
+            library.fluid_formations().any(|formation| {
+                formation.parent_formation_signature == signature
+                    && formation.fluid_resource == "Water"
+            }),
+            "the parent at the rigid-constituent limit must still receive fluid formations; metrics={metrics:?}"
+        );
+        drop(library);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn worker_persists_water_inclusive_formations_and_reopens_them() {
         let catalog = default_catalog();
         let root =
