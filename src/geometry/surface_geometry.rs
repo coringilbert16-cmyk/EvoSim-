@@ -110,6 +110,7 @@ pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Opt
         Form::Fluid {
             boundary,
             arc_boundary,
+            multi_contact_boundary: None,
             ..
         } => {
             if let Some(arc) = arc_boundary {
@@ -216,6 +217,7 @@ mod tests {
                 nominal_area: 0.5,
                 boundary: None,
                 arc_boundary: None,
+                multi_contact_boundary: None,
             },
         };
         assert!(boundary_point_toward(&s, 1.0, 0.0).is_none())
@@ -234,6 +236,7 @@ mod tests {
                 nominal_area: 0.5,
                 boundary: None,
                 arc_boundary: Some(arc),
+                multi_contact_boundary: None,
             },
         };
         assert!(shape.is_valid());
