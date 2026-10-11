@@ -442,6 +442,38 @@ impl FluidBoundaryPiece {
         }
     }
 
+    pub fn transformed(&self, translate_x: f64, translate_y: f64, rotation_radians: f64) -> Option<Self> {
+        if !translate_x.is_finite() || !translate_y.is_finite() || !rotation_radians.is_finite() {
+            return None;
+        }
+        match self {
+            Self::SolidContact {
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+                contact_angle_radians,
+            } => {
+                let (sin, cos) = rotation_radians.sin_cos();
+                let transform = |x: f64, y: f64| {
+                    (translate_x + x * cos - y * sin, translate_y + x * sin + y * cos)
+                };
+                let (sx, sy) = transform(*start_x, *start_y);
+                let (ex, ey) = transform(*end_x, *end_y);
+                Some(Self::SolidContact {
+                    start_x: sx,
+                    start_y: sy,
+                    end_x: ex,
+                    end_y: ey,
+                    contact_angle_radians: *contact_angle_radians,
+                })
+            }
+            Self::FreeArc(arc) => Some(Self::FreeArc(
+                arc.transformed(translate_x, translate_y, rotation_radians)?,
+            )),
+        }
+    }
+
     fn signed_area_contribution(&self) -> Option<f64> {
         match self {
             Self::SolidContact {
@@ -527,6 +559,19 @@ impl MultiContactFluidBoundary {
         signed_area.is_finite()
             && signed_area > 0.0
             && (signed_area - self.nominal_area).abs() <= 1e-9 * self.nominal_area.max(1.0)
+    }
+
+    /// Transform the complete boundary without sampling or changing its area.
+    pub fn transformed(&self, translate_x: f64, translate_y: f64, rotation_radians: f64) -> Option<Self> {
+        let transformed = Self {
+            nominal_area: self.nominal_area,
+            pieces: self
+                .pieces
+                .iter()
+                .map(|piece| piece.transformed(translate_x, translate_y, rotation_radians))
+                .collect::<Option<Vec<_>>>()?,
+        };
+        transformed.is_valid().then_some(transformed)
     }
 
     pub fn contact_count(&self) -> usize {
