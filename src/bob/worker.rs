@@ -64,6 +64,8 @@ pub fn run_to_completion(max_constituents: usize) -> std::io::Result<()> {
     let mut water_added = 0usize;
     let mut fluid_boundary_added = 0usize;
     let mut fluid_formations_added = 0usize;
+    let mut multi_contact_fluid_formations = 0usize;
+    let mut multi_contact_fluid_formations_added = 0usize;
 
     while let Some(metrics) = process_one_frontier(&mut library, &catalog, max_constituents)? {
         eprintln!("{metrics}");
@@ -76,6 +78,8 @@ pub fn run_to_completion(max_constituents: usize) -> std::io::Result<()> {
         water_added += metrics.water_families_added;
         fluid_boundary_added += metrics.fluid_boundary_families_added;
         fluid_formations_added += metrics.fluid_formations_added;
+        multi_contact_fluid_formations += metrics.multi_contact_fluid_formations;
+        multi_contact_fluid_formations_added += metrics.multi_contact_fluid_formations_added;
     }
 
     let formations_before_reopen = library.len();
@@ -200,6 +204,8 @@ struct WorkerPassMetrics {
     water_anchors_without_valid_contact_overlap: usize,
     fluid_formations: usize,
     fluid_formations_added: usize,
+    multi_contact_fluid_formations: usize,
+    multi_contact_fluid_formations_added: usize,
     elapsed: Duration,
     total_formations: usize,
     expansion_limit_reached: bool,
@@ -209,7 +215,7 @@ impl std::fmt::Display for WorkerPassMetrics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "geometry worker pass: size={} generated={} added={} not_added={} edge_families={} edge_added={} point_families={} point_added={} vertex_families={} vertex_added={} water_families={} water_added={} fluid_boundary_families={} fluid_boundary_added={} water_frontiers_without_boundary_candidates={} water_unresolved_anchor_resources={} water_unsupported_anchor_geometry={} water_capillary_solver_failures={} water_anchors_without_exposed_intervals={} water_invalid_contact_intervals={} water_anchors_without_valid_contact_overlap={} fluid_formations={} fluid_formations_added={} total_formations={} expansion_limit_reached={} elapsed_ms={}",
+            "geometry worker pass: size={} generated={} added={} not_added={} edge_families={} edge_added={} point_families={} point_added={} vertex_families={} vertex_added={} water_families={} water_added={} fluid_boundary_families={} fluid_boundary_added={} water_frontiers_without_boundary_candidates={} water_unresolved_anchor_resources={} water_unsupported_anchor_geometry={} water_capillary_solver_failures={} water_anchors_without_exposed_intervals={} water_invalid_contact_intervals={} water_anchors_without_valid_contact_overlap={} fluid_formations={} fluid_formations_added={} multi_contact_fluid_formations={} multi_contact_fluid_formations_added={} total_formations={} expansion_limit_reached={} elapsed_ms={}",
             self.formation_size,
             self.generated_candidates,
             self.added_formations,
@@ -233,6 +239,8 @@ impl std::fmt::Display for WorkerPassMetrics {
             self.water_anchors_without_valid_contact_overlap,
             self.fluid_formations,
             self.fluid_formations_added,
+            self.multi_contact_fluid_formations,
+            self.multi_contact_fluid_formations_added,
             self.total_formations,
             self.expansion_limit_reached,
             self.elapsed.as_millis(),
@@ -326,16 +334,18 @@ fn process_one_frontier(
                 // additional deformable fluid body. Generate fluid records for
                 // every eligible parent at or below the limit, including parents
                 // exactly at max_constituents.
-                let mut fluid_formations = fluid_formations_from_boundaries(&boundary_states);
+                let fluid_formations = fluid_formations_from_boundaries(&boundary_states);
                 let multi_contact_formations =
                     generate_collinear_multi_contact_formations(&formation, resource, catalog);
                 metrics.fluid_formations += fluid_formations.len() + multi_contact_formations.len();
-                fluid_formations.extend(multi_contact_formations);
+                metrics.multi_contact_fluid_formations += multi_contact_formations.len();
                 metrics.water_families_added += library.insert_contact_families(families)?;
                 metrics.fluid_boundary_families_added +=
                     library.insert_fluid_boundary_families(boundary_states)?;
                 metrics.fluid_formations_added +=
                     library.insert_fluid_formations(fluid_formations, catalog)?;
+                metrics.multi_contact_fluid_formations_added +=
+                    library.insert_fluid_formations(multi_contact_formations, catalog)?;
                 completed_frontiers.push((
                     formation.signature.clone(),
                     resource.name.clone(),
