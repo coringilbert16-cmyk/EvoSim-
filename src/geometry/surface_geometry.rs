@@ -158,6 +158,62 @@ fn multi_contact_boundary_toward(
     }
     best.map(|(_, point)| point)
 }
+pub fn boundary_point_at_multi_contact(
+    boundary: &crate::capillary_geometry::MultiContactFluidBoundary,
+    x: f64,
+    y: f64,
+) -> Option<BoundaryPoint> {
+    if !boundary.is_valid() || !x.is_finite() || !y.is_finite() {
+        return None;
+    }
+    let mut best: Option<(f64, BoundaryPoint)> = None;
+    for piece in &boundary.pieces {
+        let candidate = match piece {
+            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+                ..
+            } => {
+                let dx = end_x - start_x;
+                let dy = end_y - start_y;
+                let length_squared = dx * dx + dy * dy;
+                if length_squared <= f64::EPSILON {
+                    continue;
+                }
+                let t = (((x - start_x) * dx + (y - start_y) * dy) / length_squared)
+                    .clamp(0.0, 1.0);
+                let px = start_x + t * dx;
+                let py = start_y + t * dy;
+                let length = length_squared.sqrt();
+                Some(BoundaryPoint {
+                    x: px,
+                    y: py,
+                    normal_x: dy / length,
+                    normal_y: -dx / length,
+                })
+            }
+            crate::capillary_geometry::FluidBoundaryPiece::FreeArc(arc) => {
+                let (px, py) = arc.closest_point(x, y)?;
+                let angle = (py - arc.center_y).atan2(px - arc.center_x);
+                let (normal_x, normal_y) = arc.normal_at_angle(angle)?;
+                Some(BoundaryPoint {
+                    x: px,
+                    y: py,
+                    normal_x,
+                    normal_y,
+                })
+            }
+        }?;
+        let distance_squared = (x - candidate.x).powi(2) + (y - candidate.y).powi(2);
+        if best.is_none_or(|(best_distance, _)| distance_squared < best_distance) {
+            best = Some((distance_squared, candidate));
+        }
+    }
+    best.map(|(_, point)| point)
+}
+
 pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Option<BoundaryPoint> {
     match &shape.form {
         Form::Circle { radius } => {
