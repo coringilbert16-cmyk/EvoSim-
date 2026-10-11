@@ -614,7 +614,7 @@ fn circular_arcs_intersect(
     let dy = second.center_y - first.center_y;
     let distance = dx.hypot(dy);
     let radius_tolerance = tolerance.max(1e-12);
-    let angular_tolerance = |radius: f64| radius_tolerance / radius.max(1.0);
+    let angular_tolerance = |radius: f64| radius_tolerance / radius.max(EPS);
 
     // Concentric arcs intersect only when their radii agree and their angular
     // intervals overlap. Endpoint inclusion handles wrapped intervals too.
