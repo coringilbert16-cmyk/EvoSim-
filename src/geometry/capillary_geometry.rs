@@ -426,9 +426,9 @@ pub enum FluidBoundaryPiece {
 impl FluidBoundaryPiece {
     pub fn start_point(&self) -> Option<(f64, f64)> {
         match self {
-            Self::SolidContact { start_x, start_y, .. } => {
-                (*start_x, *start_y).into()
-            }
+            Self::SolidContact {
+                start_x, start_y, ..
+            } => (*start_x, *start_y).into(),
             Self::FreeArc(arc) if arc.is_valid() => Some(arc.start_point()),
             Self::FreeArc(_) => None,
         }
@@ -444,9 +444,16 @@ impl FluidBoundaryPiece {
 
     fn signed_area_contribution(&self) -> Option<f64> {
         match self {
-            Self::SolidContact { start_x, start_y, end_x, end_y, contact_angle_radians } => {
+            Self::SolidContact {
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+                contact_angle_radians,
+            } => {
                 if ![start_x, start_y, end_x, end_y, contact_angle_radians]
-                    .into_iter().all(|v| v.is_finite())
+                    .into_iter()
+                    .all(|v| v.is_finite())
                     || !(0.0 < *contact_angle_radians && *contact_angle_radians < PI)
                     || (end_x - start_x).hypot(end_y - start_y) <= EPS
                 {
@@ -482,13 +489,14 @@ impl MultiContactFluidBoundary {
     /// Validate closure, each analytic piece, and the area from Green's theorem.
     /// No arc is tessellated or replaced with a polygon.
     pub fn is_valid(&self) -> bool {
-        if !self.nominal_area.is_finite()
-            || self.nominal_area <= 0.0
-            || self.pieces.len() < 2
-        {
+        if !self.nominal_area.is_finite() || self.nominal_area <= 0.0 || self.pieces.len() < 2 {
             return false;
         }
-        let points: Vec<_> = self.pieces.iter().map(FluidBoundaryPiece::start_point).collect();
+        let points: Vec<_> = self
+            .pieces
+            .iter()
+            .map(FluidBoundaryPiece::start_point)
+            .collect();
         if points.iter().any(Option::is_none) {
             return false;
         }
@@ -518,8 +526,7 @@ impl MultiContactFluidBoundary {
         };
         signed_area.is_finite()
             && signed_area > 0.0
-            && (signed_area - self.nominal_area).abs()
-                <= 1e-9 * self.nominal_area.max(1.0)
+            && (signed_area - self.nominal_area).abs() <= 1e-9 * self.nominal_area.max(1.0)
     }
 
     pub fn contact_count(&self) -> usize {
