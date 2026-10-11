@@ -744,7 +744,13 @@ impl MultiContactFluidBoundary {
                     )
                     | (
                         FluidBoundaryPiece::FreeArc(arc),
-                        FluidBoundaryPiece::SolidContact { start_x, start_y, end_x, end_y, .. },
+                        FluidBoundaryPiece::SolidContact {
+                            start_x,
+                            start_y,
+                            end_x,
+                            end_y,
+                            ..
+                        },
                     ) => {
                         if line_segment_intersects_arc(
                             (*start_x, *start_y),
@@ -1588,7 +1594,9 @@ mod tests {
             sweep_radians: PI / 2.0,
         };
         let overlap = CircularArcBoundary {
-            center_x: 0.0, center_y: 0.0, radius: 2.0,
+            center_x: 0.0,
+            center_y: 0.0,
+            radius: 2.0,
             start_angle_radians: PI / 4.0,
             sweep_radians: PI / 2.0,
         };
