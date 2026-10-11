@@ -1494,3 +1494,10 @@ For multi-contact records, `realize_against_parent` now requires a persisted com
 **Important limitation:** this is a persistence/consumption step, not yet a simultaneous equilibrium solver. Current generation still emits single-anchor records, and the validator now checks each segment against its referenced parent edge, but no simultaneous solver yet generates valid multi-contact records. The live construction transaction must still validate every actual contact, nonpenetration, self-intersection, area conservation, and bond creation atomically. Do not claim end-to-end multi-connection construction or expand catalogue generation until that gate exists.
 
 **CI:** the inspected Rust workflow at the earlier README checkpoint failed at rustfmt before running tests; formatting corrections were committed, then the solved-boundary persistence and reconstruction changes followed. The current exact-head workflow has not yet been verified. Runner validation had passed at the earlier checkpoint. Do not treat that as a test result for these later changes.
+
+
+### Multi-contact validator compile correction — 2026-10-11
+
+The exact-head Rust workflow for `4da264c7` reached formatting successfully but failed compilation because the new parent-edge alignment validator referenced `FluidBoundaryPiece::SolidContact` without importing `FluidBoundaryPiece`. The import is now added in `src/bob/library.rs` (commit `454d2c2d`). Runner Validation had passed on `4da264c7`; that result does not validate the import correction, so inspect the new exact-head workflow before claiming compilation is green.
+
+The implementation gate remains unchanged: current worker generation still creates only single-anchor fluid records. Do not try to pass this gate by assembling independent pairwise arcs. The next code sprint must implement one simultaneous solve over a canonical rigid parent, persist its complete boundary and constraints, and add a positive solver-produced persistence/reload regression before connecting atomic multi-bond realization in live construction.
