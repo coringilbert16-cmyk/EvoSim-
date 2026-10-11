@@ -101,3 +101,8 @@ Exact-head workflow [#38149992273](https://github.com/coringilbert16-cmyk/EvoSim
 
 
 The unresolved-resource counter is intentionally distinct from unsupported geometry: the former means the formation references a resource name absent from the catalog; the latter means a known rigid resource uses a boundary shape that this generator does not support.
+
+
+### Exact-head CI follow-up — 2026-10-11
+
+At `1646969ebf7837186da6c7fc2496029341b7ff4d`, formatting, source-size policy, COMBINE architecture, Bob compact-storage tests, empty-library open/reopen, and Runner Validation passed. The full Rust suite reported **318 passed, 29 failed, 1 ignored**; failures span existing cross-subsystem construction/seed, chemistry, COMBINE, contact, cavity, movement/fluid-boundary, reproduction, and storage behavior. Strict Clippy remains red (52 application-target and 41 test-target diagnostics). The focused Water diagnostics and fluid persistence/query tests are present in the full run, but this overall suite is not green and fluid acceptance is not complete. Keep broad library generation gated.
