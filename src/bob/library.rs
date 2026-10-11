@@ -5405,27 +5405,34 @@ mod compact_family_storage_tests {
             carbon.properties.cohesion,
         )
         .unwrap();
-        let family = GeometryFluidBoundaryFamily {
-            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
-            formation_signature: formation.signature,
-            fluid_resource: "Water".to_string(),
-            anchor_constituent: 0,
-            anchor_edge: 0,
-            area,
-            contact_angle_radians: equilibrium.contact_angle_radians,
-            curvature_radius: equilibrium.curvature_radius,
-            free_arc_angle_radians: equilibrium.free_arc_angle_radians,
-            contact_length: equilibrium.contact_length,
-            edge_parameter_start: 0.0,
-            edge_parameter_end: 1.0,
-        };
+        // Exercise Bob's real fluid-contact calculation rather than manually
+        // fabricating a persistence row. The Water/Carbon capillary solution
+        // must produce an exposed-edge family before it can be stored.
+        let contact_families = generate_water_contact_families(&formation, water, &catalog);
+        assert!(
+            contact_families.iter().any(|family| {
+                family.anchor_constituent == 0
+                    && family.anchor_edge == 0
+                    && family.edge_parameter_start <= 0.5
+                    && family.edge_parameter_end >= 0.5
+            }),
+            "expected the capillary solver to find Water contact on Carbon edge 0"
+        );
+        let families =
+            generate_fluid_boundary_families_from_contact_families(water, &contact_families);
+        assert!(!families.is_empty(), "expected fluid-boundary records from solved contacts");
+        assert_eq!(
+            library.insert_contact_families(contact_families).unwrap(),
+            families.len(),
+            "each generated Water contact must be persisted once"
+        );
         assert_eq!(
             library
-                .insert_fluid_boundary_families(vec![family.clone()])
+                .insert_fluid_boundary_families(families.clone())
                 .unwrap(),
-            1
+            families.len(),
+            "each generated fluid boundary must be persisted once"
         );
-
         let interface = LiveGeometryInterface {
             interface_class: "fluid_boundary",
             signature: "test-fluid-boundary".to_string(),
