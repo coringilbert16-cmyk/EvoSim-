@@ -115,6 +115,74 @@ pub fn placed_forms_overlap(
         _ => polygons_overlap(a, b, tolerance),
     }
 }
+fn exact_fluid_arc_touches_part(
+    fluid: &PlacedMaterialPart,
+    other: &PlacedMaterialPart,
+    tolerance: f64,
+) -> bool {
+    let Form::Fluid {
+        arc_boundary: Some(local_arc),
+        ..
+    } = &fluid.form
+    else {
+        return false;
+    };
+    if matches!(other.form, Form::Fluid { .. }) {
+        return false;
+    }
+    let Some(arc) = local_arc.transformed(
+        fluid.placement.x,
+        fluid.placement.y,
+        fluid.placement.rotation_radians,
+    ) else {
+        return false;
+    };
+    let tolerance = tolerance.max(0.0);
+    match &other.form {
+        Form::Circle { radius } => {
+            let closest = arc.closest_point(other.placement.x, other.placement.y);
+            closest.is_some_and(|(x, y)| {
+                (x - other.placement.x).hypot(y - other.placement.y) <= radius + tolerance
+            }) || arc.intersects_circle(
+                other.placement.x,
+                other.placement.y,
+                radius + tolerance,
+            )
+        }
+        Form::Line { .. } => {
+            let Some((start, end)) = line_segment(&other.form, other.placement) else {
+                return false;
+            };
+            !arc.segment_intersections(start.0, start.1, end.0, end.1)
+                .unwrap_or_default()
+                .is_empty()
+        }
+        _ => {
+            let Some(vertices) = world_polygon_vertices(&other.form, other.placement) else {
+                return false;
+            };
+            if vertices.iter().enumerate().any(|(index, &start)| {
+                let end = vertices[(index + 1) % vertices.len()];
+                !arc.segment_intersections(start.0, start.1, end.0, end.1)
+                    .unwrap_or_default()
+                    .is_empty()
+            }) {
+                return true;
+            }
+            let start = arc.start_point();
+            let midpoint_angle = arc.start_angle_radians + arc.sweep_radians * 0.5;
+            let midpoint = (
+                arc.center_x + arc.radius * midpoint_angle.cos(),
+                arc.center_y + arc.radius * midpoint_angle.sin(),
+            );
+            let end = arc.end_point();
+            [start, midpoint, end]
+                .into_iter()
+                .any(|point| point_in_polygon(point, &vertices))
+        }
+    }
+}
+
 /// Returns whether two realized material parts are in geometric contact,
 /// including contact with the explicit boundary of a fluid form.
 ///
@@ -128,6 +196,11 @@ pub fn placed_forms_boundary_contact(
     tolerance: f64,
 ) -> bool {
     if placed_forms_overlap(a, b, tolerance) || placed_forms_penetrate(a, b, tolerance) {
+        return true;
+    }
+    if exact_fluid_arc_touches_part(a, b, tolerance)
+        || exact_fluid_arc_touches_part(b, a, tolerance)
+    {
         return true;
     }
 
@@ -177,10 +250,15 @@ pub fn placed_forms_rigid_contact(
     b: &PlacedMaterialPart,
     tolerance: f64,
 ) -> bool {
-    if matches!(a.form, Form::Fluid { boundary: None, .. })
-        || matches!(b.form, Form::Fluid { boundary: None, .. })
+    if matches!(a.form, Form::Fluid { boundary: None, arc_boundary: None, .. })
+        || matches!(b.form, Form::Fluid { boundary: None, arc_boundary: None, .. })
     {
         return false;
+    }
+    if exact_fluid_arc_touches_part(a, b, tolerance)
+        || exact_fluid_arc_touches_part(b, a, tolerance)
+    {
+        return true;
     }
 
     if !matches!(a.form, Form::Fluid { .. }) && !matches!(b.form, Form::Fluid { .. }) {
