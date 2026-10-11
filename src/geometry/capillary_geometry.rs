@@ -1557,7 +1557,7 @@ mod tests {
         };
         let second = CircularArcBoundary {
             center_x: 1.0, center_y: 0.0, radius: 2.0,
-            start_angle_radians: PI, sweep_radians: PI,
+            start_angle_radians: 1.5, sweep_radians: 1.0,
         };
         assert!(circular_arcs_intersect(&first, &second, 1e-9));
     }
