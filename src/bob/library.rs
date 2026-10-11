@@ -804,7 +804,7 @@ impl GeometryFluidFormation {
     }
 
     pub fn signature(&self) -> String {
-        format!(
+        let mut signature = format!(
             "fluid-v{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
             self.schema_version,
             self.parent_formation_signature,
@@ -818,16 +818,18 @@ impl GeometryFluidFormation {
             quantize(self.contact_length),
             quantize(self.edge_parameter_start),
             quantize(self.edge_parameter_end),
-        ) + &self.contact_constraints.iter().map(|constraint| {
-            format!(
+        );
+        for constraint in &self.contact_constraints {
+            signature.push_str(&format!(
                 "|contact:{}:{}:{}:{}:{}",
                 constraint.constituent_index,
                 constraint.edge_index,
                 quantize(constraint.contact_length),
                 quantize(constraint.edge_parameter_start),
                 quantize(constraint.edge_parameter_end),
-            )
-        }).collect::<String>()
+            ));
+        }
+        signature
     }
 }
 
