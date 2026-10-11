@@ -903,33 +903,28 @@ fn realize_next_bond_driven(
                             // parent. Start with the exact single-unit parent;
                             // both arc orientations are proposals and must still
                             // survive live overlap/contact/transaction checks.
-                            let parent = crate::geometry_reference_library::GeometryFormation::single(
-                                anchor_material.to_owned(),
-                            );
+                            let parent =
+                                crate::geometry_reference_library::GeometryFormation::single(
+                                    anchor_material.to_owned(),
+                                );
                             for suggestion in library.fluid_formations_for_parent(
                                 &parent.signature,
                                 &candidate_resource.name,
                             ) {
                                 for bulge_left in [true, false] {
-                                    let Some((shape, canonical_pose)) =
-                                        suggestion.realize_against_parent(&parent, catalog, bulge_left)
+                                    let Some((shape, canonical_pose)) = suggestion
+                                        .realize_against_parent(&parent, catalog, bulge_left)
                                     else {
                                         continue;
                                     };
-                                    let (s, c) = existing_unit
-                                        .placement
-                                        .rotation_radians
-                                        .sin_cos();
+                                    let (s, c) = existing_unit.placement.rotation_radians.sin_cos();
                                     let live_pose = Placement {
-                                        x: existing_unit.placement.x
-                                            + canonical_pose.x * c
+                                        x: existing_unit.placement.x + canonical_pose.x * c
                                             - canonical_pose.y * s,
                                         y: existing_unit.placement.y
                                             + canonical_pose.x * s
                                             + canonical_pose.y * c,
-                                        rotation_radians: existing_unit
-                                            .placement
-                                            .rotation_radians
+                                        rotation_radians: existing_unit.placement.rotation_radians
                                             + canonical_pose.rotation_radians,
                                     };
                                     candidate_origins.push((
@@ -998,9 +993,7 @@ fn realize_next_bond_driven(
 
                     let mut trial = structure.clone();
                     let candidate_material = if let Some(shape) = fluid_shape {
-                        new_material
-                            .clone()
-                            .with_single_fluid_shape(shape, catalog)
+                        new_material.clone().with_single_fluid_shape(shape, catalog)
                     } else {
                         Some(new_material.clone())
                     };
