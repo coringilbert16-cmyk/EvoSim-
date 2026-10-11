@@ -129,11 +129,9 @@ impl StructuralUnit {
             shape.form,
             crate::resources::Form::Fluid {
                 boundary: Some(_),
-                multi_contact_boundary: None,
                 ..
             } | crate::resources::Form::Fluid {
                 arc_boundary: Some(_),
-                multi_contact_boundary: None,
                 ..
             }
         ) {
@@ -778,8 +776,7 @@ mod tests {
                 nominal_area: 2.0,
                 boundary: Some(vec![(-1.0, 0.0), (0.0, 1.0), (1.0, 0.0), (0.0, -1.0)]),
                 arc_boundary: None,
-                multi_contact_boundary: None,
-},
+            },
         };
         assert!(water.realize_fluid_geometry(fitted.clone(), &catalog));
         assert_eq!(water.geometry.as_ref().unwrap().shape(), &fitted);
