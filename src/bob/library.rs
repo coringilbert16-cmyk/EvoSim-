@@ -716,20 +716,23 @@ impl GeometryFluidFormation {
 pub fn fluid_formations_from_boundaries(
     boundaries: &[GeometryFluidBoundaryFamily],
 ) -> Vec<GeometryFluidFormation> {
-    boundaries.iter().map(|family| GeometryFluidFormation {
-        schema_version: family.schema_version,
-        parent_formation_signature: family.formation_signature.clone(),
-        fluid_resource: family.fluid_resource.clone(),
-        anchor_constituent: family.anchor_constituent,
-        anchor_edge: family.anchor_edge,
-        area: family.area,
-        contact_angle_radians: family.contact_angle_radians,
-        curvature_radius: family.curvature_radius,
-        free_arc_angle_radians: family.free_arc_angle_radians,
-        contact_length: family.contact_length,
-        edge_parameter_start: family.edge_parameter_start,
-        edge_parameter_end: family.edge_parameter_end,
-    }).collect()
+    boundaries
+        .iter()
+        .map(|family| GeometryFluidFormation {
+            schema_version: family.schema_version,
+            parent_formation_signature: family.formation_signature.clone(),
+            fluid_resource: family.fluid_resource.clone(),
+            anchor_constituent: family.anchor_constituent,
+            anchor_edge: family.anchor_edge,
+            area: family.area,
+            contact_angle_radians: family.contact_angle_radians,
+            curvature_radius: family.curvature_radius,
+            free_arc_angle_radians: family.free_arc_angle_radians,
+            contact_length: family.contact_length,
+            edge_parameter_start: family.edge_parameter_start,
+            edge_parameter_end: family.edge_parameter_end,
+        })
+        .collect()
 }
 
 fn fluid_boundary_state_is_self_consistent(family: &GeometryFluidBoundaryFamily) -> bool {
