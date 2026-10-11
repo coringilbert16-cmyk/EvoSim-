@@ -567,8 +567,7 @@ fn line_segments_intersect(
 
 fn angle_lies_on_arc(angle: f64, arc: &CircularArcBoundary, angular_tolerance: f64) -> bool {
     let offset = (angle - arc.start_angle_radians).rem_euclid(TAU);
-    offset <= arc.sweep_radians + angular_tolerance
-        || TAU - offset <= angular_tolerance
+    offset <= arc.sweep_radians + angular_tolerance || TAU - offset <= angular_tolerance
 }
 
 fn line_segment_intersects_arc(
@@ -653,10 +652,28 @@ impl MultiContactFluidBoundary {
                 }
                 match (&self.pieces[first], &self.pieces[second]) {
                     (
-                        FluidBoundaryPiece::SolidContact { start_x: ax, start_y: ay, end_x: bx, end_y: by, .. },
-                        FluidBoundaryPiece::SolidContact { start_x: cx, start_y: cy, end_x: dx, end_y: dy, .. },
+                        FluidBoundaryPiece::SolidContact {
+                            start_x: ax,
+                            start_y: ay,
+                            end_x: bx,
+                            end_y: by,
+                            ..
+                        },
+                        FluidBoundaryPiece::SolidContact {
+                            start_x: cx,
+                            start_y: cy,
+                            end_x: dx,
+                            end_y: dy,
+                            ..
+                        },
                     ) => {
-                        if line_segments_intersect((*ax, *ay), (*bx, *by), (*cx, *cy), (*dx, *dy), tolerance) {
+                        if line_segments_intersect(
+                            (*ax, *ay),
+                            (*bx, *by),
+                            (*cx, *cy),
+                            (*dx, *dy),
+                            tolerance,
+                        ) {
                             return false;
                         }
                     }
@@ -668,7 +685,12 @@ impl MultiContactFluidBoundary {
                         FluidBoundaryPiece::FreeArc(arc),
                         FluidBoundaryPiece::SolidContact { start_x, start_y, end_x, end_y, .. },
                     ) => {
-                        if line_segment_intersects_arc((*start_x, *start_y), (*end_x, *end_y), arc, tolerance) {
+                        if line_segment_intersects_arc(
+                            (*start_x, *start_y),
+                            (*end_x, *end_y),
+                            arc,
+                            tolerance,
+                        ) {
                             return false;
                         }
                     }
