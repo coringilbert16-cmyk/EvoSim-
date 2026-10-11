@@ -356,8 +356,7 @@ pub fn resolve_live_contact_candidate(
                     .find(|resource| resource.name == edge.material)?;
                 let area = match &fluid.shape.form {
                     Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-                    multi_contact_boundary: None,
-Form::Fluid { nominal_area, .. } => *nominal_area,
+                    Form::Fluid { nominal_area, .. } => *nominal_area,
                     _ => return None,
                 };
                 let equilibrium = solve_water_against_solid(
@@ -751,8 +750,7 @@ impl GeometryFluidFormation {
                 nominal_area: self.area,
                 boundary: None,
                 arc_boundary: Some(arc),
-                multi_contact_boundary: None,
-},
+            },
         };
         if !shape.is_valid() {
             return None;
@@ -2975,8 +2973,7 @@ fn canonical_shape_rotation(form: &Form, angle: f64) -> f64 {
         Form::RegularPolygon { sides, .. } => std::f64::consts::TAU / (*sides as f64),
         Form::Polygon { vertices } => rotational_symmetry_period(vertices),
         Form::Line { .. } => std::f64::consts::PI,
-        multi_contact_boundary: None,
-Form::Fluid { boundary, .. } => boundary
+        Form::Fluid { boundary, .. } => boundary
             .as_deref()
             .map(rotational_symmetry_period)
             .unwrap_or(std::f64::consts::TAU),
@@ -3175,10 +3172,8 @@ pub fn validate_formation(formation: &GeometryFormation, catalog: &[BaseResource
     for bond in &formation.bonds {
         let a = &parts[bond.constituent_a];
         let b = &parts[bond.constituent_b];
-        if matches!(a.form, multi_contact_boundary: None,
-Form::Fluid { boundary: None, .. })
-            || matches!(b.form, multi_contact_boundary: None,
-Form::Fluid { boundary: None, .. })
+        if matches!(a.form, Form::Fluid { boundary: None, .. })
+            || matches!(b.form, Form::Fluid { boundary: None, .. })
         {
             continue;
         }
@@ -3191,10 +3186,8 @@ Form::Fluid { boundary: None, .. })
         for j in (i + 1)..parts.len() {
             // Fluids with no explicit boundary have no finite collision surface;
             // their geometric realization is handled by the fluid-field layer.
-            if matches!(parts[i].form, multi_contact_boundary: None,
-Form::Fluid { boundary: None, .. })
-                || matches!(parts[j].form, multi_contact_boundary: None,
-Form::Fluid { boundary: None, .. })
+            if matches!(parts[i].form, Form::Fluid { boundary: None, .. })
+                || matches!(parts[j].form, Form::Fluid { boundary: None, .. })
             {
                 continue;
             }
@@ -3490,8 +3483,7 @@ pub fn generate_fluid_boundary_families_from_contact_families(
     }
     let area = match &fluid_resource.shape.form {
         Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-        multi_contact_boundary: None,
-Form::Fluid { nominal_area, .. } => *nominal_area,
+        Form::Fluid { nominal_area, .. } => *nominal_area,
         _ => return Vec::new(),
     };
 
@@ -3554,8 +3546,7 @@ pub fn generate_water_contact_families_with_diagnostics(
     };
     let water_area = match water.shape.form {
         Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-        multi_contact_boundary: None,
-Form::Fluid { nominal_area, .. } => nominal_area,
+        Form::Fluid { nominal_area, .. } => nominal_area,
         _ => return (Vec::new(), diagnostics),
     };
 
@@ -5798,8 +5789,7 @@ mod compact_family_storage_tests {
             .unwrap();
         let area = match &water.shape.form {
             Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-            multi_contact_boundary: None,
-Form::Fluid { nominal_area, .. } => *nominal_area,
+            Form::Fluid { nominal_area, .. } => *nominal_area,
             _ => panic!("water must have a fluid-compatible shape"),
         };
         let equilibrium =
@@ -5902,8 +5892,7 @@ Form::Fluid { nominal_area, .. } => *nominal_area,
                 nominal_area,
                 boundary: None,
                 arc_boundary: Some(_)
-                multi_contact_boundary: None,
-} if (nominal_area - area).abs() < 1e-10
+            } if (nominal_area - area).abs() < 1e-10
         ));
         assert_eq!(
             library
@@ -6030,8 +6019,7 @@ Form::Fluid { nominal_area, .. } => *nominal_area,
                 nominal_area,
                 boundary: None,
                 arc_boundary: Some(_)
-                multi_contact_boundary: None,
-} if (nominal_area - area).abs() < 1e-10
+            } if (nominal_area - area).abs() < 1e-10
         ));
 
         let reopened_fluid_formations: BTreeMap<_, _> = reopened
