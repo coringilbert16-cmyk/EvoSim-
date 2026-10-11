@@ -3259,7 +3259,15 @@ fn fluid_formation_is_valid(
         edge_parameter_start: formation.edge_parameter_start,
         edge_parameter_end: formation.edge_parameter_end,
     };
-    formation.signature() == formation.signature()
+    formation.contact_angle_radians.is_finite()
+        && formation.curvature_radius.is_finite()
+        && formation.free_arc_angle_radians.is_finite()
+        && formation.contact_length.is_finite()
+        && formation.edge_parameter_start.is_finite()
+        && formation.edge_parameter_end.is_finite()
+        && formation.edge_parameter_start >= 0.0
+        && formation.edge_parameter_end <= 1.0
+        && formation.edge_parameter_end >= formation.edge_parameter_start
         && fluid_boundary_state_is_self_consistent(&family)
 }
 
