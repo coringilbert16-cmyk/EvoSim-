@@ -46,7 +46,9 @@ impl CircularArcBoundary {
             && self.sweep_radians.is_finite()
             && self.sweep_radians > 0.0
             && self.sweep_radians < TAU
-            && self.segment_area().is_some_and(|area| area.is_finite() && area > EPS)
+            && self
+                .segment_area()
+                .is_some_and(|area| area.is_finite() && area > EPS)
     }
 
     /// Exact arc start point in the descriptor's local frame.
@@ -68,7 +70,8 @@ impl CircularArcBoundary {
 
     /// Exact free-interface length, without polygonal sampling.
     pub fn arc_length(&self) -> Option<f64> {
-        self.is_finite_arc().then_some(self.radius * self.sweep_radians)
+        self.is_finite_arc()
+            .then_some(self.radius * self.sweep_radians)
     }
 
     /// Exact chord/contact length joining the arc endpoints.
@@ -90,8 +93,8 @@ impl CircularArcBoundary {
         {
             return None;
         }
-        let area = 0.5 * self.radius * self.radius
-            * (self.sweep_radians - self.sweep_radians.sin());
+        let area =
+            0.5 * self.radius * self.radius * (self.sweep_radians - self.sweep_radians.sin());
         (area.is_finite() && area > 0.0).then_some(area)
     }
 
@@ -115,8 +118,7 @@ impl CircularArcBoundary {
             center_x: translate_x + self.center_x * cos - self.center_y * sin,
             center_y: translate_y + self.center_x * sin + self.center_y * cos,
             radius: self.radius,
-            start_angle_radians: (self.start_angle_radians + rotation_radians)
-                .rem_euclid(TAU),
+            start_angle_radians: (self.start_angle_radians + rotation_radians).rem_euclid(TAU),
             sweep_radians: self.sweep_radians,
         })
     }
