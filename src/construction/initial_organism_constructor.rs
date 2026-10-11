@@ -774,6 +774,20 @@ fn bob_fluid_acquisition_candidate(
                         form: other_shape.form.clone(),
                         placement: other_unit.placement,
                     };
+                    let rigid_points =
+                        rigid_part_world_points(&other_shape.form, other_unit.placement);
+                    if fluid_segment_contains_world_point(
+                        &shape,
+                        placement,
+                        other_unit.placement.x,
+                        other_unit.placement.y,
+                    ) || rigid_points
+                        .iter()
+                        .any(|&(x, y)| fluid_segment_contains_world_point(&shape, placement, x, y))
+                    {
+                        valid = false;
+                        break;
+                    }
                     if other_index == anchor_index {
                         if !crate::material_geometry::placed_forms_rigid_contact(
                             &fluid_part,
@@ -787,10 +801,7 @@ fn bob_fluid_acquisition_candidate(
                         &fluid_part,
                         &other_part,
                         crate::material_geometry::GEOMETRY_EPSILON,
-                    ) || rigid_part_world_points(&other_shape.form, other_unit.placement)
-                        .into_iter()
-                        .any(|(x, y)| fluid_segment_contains_world_point(&shape, placement, x, y))
-                    {
+                    ) {
                         valid = false;
                         break;
                     }
