@@ -279,8 +279,8 @@ impl CircularArcBoundary {
         {
             return false;
         }
-        let along = (self.radius * self.radius - radius * radius + distance * distance)
-            / (2.0 * distance);
+        let along =
+            (self.radius * self.radius - radius * radius + distance * distance) / (2.0 * distance);
         let height_squared = self.radius * self.radius - along * along;
         if height_squared < -EPS {
             return false;
@@ -290,12 +290,15 @@ impl CircularArcBoundary {
         let base_y = self.center_y + along * dy / distance;
         let offset_x = -dy * height / distance;
         let offset_y = dx * height / distance;
-        [(base_x + offset_x, base_y + offset_y), (base_x - offset_x, base_y - offset_y)]
-            .into_iter()
-            .any(|(x, y)| {
-                let angle = (y - self.center_y).atan2(x - self.center_x);
-                self.contains_angle(angle)
-            })
+        [
+            (base_x + offset_x, base_y + offset_y),
+            (base_x - offset_x, base_y - offset_y),
+        ]
+        .into_iter()
+        .any(|(x, y)| {
+            let angle = (y - self.center_y).atan2(x - self.center_x);
+            self.contains_angle(angle)
+        })
     }
 
     /// Exact intersections between this finite circular arc and a segment.
