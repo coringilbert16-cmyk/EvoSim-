@@ -221,6 +221,32 @@ mod tests {
         assert!(boundary_point_toward(&s, 1.0, 0.0).is_none())
     }
     #[test]
+    fn exact_fluid_arc_boundary_query_does_not_sample_polygon_vertices() {
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            0.5,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .unwrap();
+        let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family)
+            .unwrap();
+        let shape = Shape {
+            form: Form::Fluid {
+                nominal_area: 0.5,
+                boundary: None,
+                arc_boundary: Some(arc),
+            },
+        };
+        assert!(shape.is_valid());
+        assert!(shape.form.polygon_vertices().is_none());
+
+        let point = boundary_point_toward(&shape, 0.0, 1.0).unwrap();
+        assert!((point.x).abs() < 1e-10);
+        assert!((point.y - arc.radius).abs() < 1e-10);
+        assert!((point.normal_x).abs() < 1e-10);
+        assert!((point.normal_y - 1.0).abs() < 1e-10);
+    }
+
+    #[test]
     fn segment_endpoints_are_distinct_physical_locations() {
         let (a, b) = segment_endpoints(-1.0, 0.0, 1.0, 0.0).unwrap();
         assert_eq!(a.x, -1.0);
