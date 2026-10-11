@@ -3402,48 +3402,91 @@ pub fn generate_fluid_boundary_families_from_contact_families(
         .collect()
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct WaterContactGenerationDiagnostics {
+    pub eligible_anchors: usize,
+    pub unsupported_anchor_geometry: usize,
+    pub capillary_solver_failures: usize,
+    pub anchors_without_exposed_intervals: usize,
+    pub invalid_contact_intervals: usize,
+    pub anchors_without_valid_contact_overlap: usize,
+}
+
+/// Preserve the original generator API while exposing reason-level outcomes
+/// to Bob's worker and focused diagnostics tests.
 pub fn generate_water_contact_families(
     formation: &GeometryFormation,
     candidate_resource: &BaseResource,
     catalog: &[BaseResource],
 ) -> Vec<GeometryContactFamily> {
+    generate_water_contact_families_with_diagnostics(formation, candidate_resource, catalog).0
+}
+
+pub fn generate_water_contact_families_with_diagnostics(
+    formation: &GeometryFormation,
+    candidate_resource: &BaseResource,
+    catalog: &[BaseResource],
+) -> (Vec<GeometryContactFamily>, WaterContactGenerationDiagnostics) {
+    let mut diagnostics = WaterContactGenerationDiagnostics::default();
     if candidate_resource.name != "Water"
         || candidate_resource.physical_state != crate::resources::PhysicalState::Fluid
     {
-        return Vec::new();
+        return (Vec::new(), diagnostics);
     }
     let Some(water) = catalog.iter().find(|r| r.name == "Water") else {
-        return Vec::new();
+        return (Vec::new(), diagnostics);
     };
     let water_area = match water.shape.form {
         Form::Circle { radius } => std::f64::consts::PI * radius * radius,
         Form::Fluid { nominal_area, .. } => nominal_area,
-        _ => return Vec::new(),
+        _ => return (Vec::new(), diagnostics),
     };
 
     let mut out = Vec::new();
     for (anchor_index, constituent) in formation.constituents.iter().enumerate() {
         let Some(resource) = catalog.iter().find(|r| r.name == constituent.resource) else {
+            diagnostics.unsupported_anchor_geometry += 1;
             continue;
         };
         if resource.physical_state == crate::resources::PhysicalState::Fluid {
             continue;
         }
+
+        let intervals = match &resource.shape.form {
+            Form::Line { .. } => exposed_line_intervals(formation, anchor_index, catalog),
+            form if form.polygon_vertices().is_some() => {
+                exposed_polygon_edge_intervals(formation, anchor_index, catalog)
+            }
+            _ => {
+                diagnostics.unsupported_anchor_geometry += 1;
+                continue;
+            }
+        };
+        diagnostics.eligible_anchors += 1;
+        if intervals.is_empty() {
+            diagnostics.anchors_without_exposed_intervals += 1;
+            continue;
+        }
+
         let Some(family) = solve_water_against_solid(
             water_area,
             water.properties.cohesion,
             resource.properties.cohesion,
         ) else {
+            diagnostics.capillary_solver_failures += 1;
             continue;
         };
 
+        let mut emitted_for_anchor = 0usize;
+        let mut invalid_overlap_for_anchor = false;
         match &resource.shape.form {
             Form::Line { length } => {
                 let Some(contact) = ContactTranslationInterval::from_edge_length(*length, family)
                 else {
+                    diagnostics.invalid_contact_intervals += 1;
                     continue;
                 };
-                for interval in exposed_line_intervals(formation, anchor_index, catalog) {
+                for interval in intervals {
                     let start = contact.edge_start_parameter.max(interval.start);
                     let end = contact.edge_end_parameter.min(interval.end);
                     if end + 1e-10 >= start {
@@ -3459,11 +3502,15 @@ pub fn generate_water_contact_families(
                             edge_parameter_start: start,
                             edge_parameter_end: end,
                         });
+                        emitted_for_anchor += 1;
+                    } else {
+                        invalid_overlap_for_anchor = true;
                     }
                 }
             }
             _ => {
                 let Some(vertices) = resource.shape.form.polygon_vertices() else {
+                    diagnostics.unsupported_anchor_geometry += 1;
                     continue;
                 };
                 let edge_length_cache = vertices
@@ -3475,18 +3522,21 @@ pub fn generate_water_contact_families(
                     })
                     .collect::<BTreeMap<_, _>>();
 
-                for interval in exposed_polygon_edge_intervals(formation, anchor_index, catalog) {
+                for interval in intervals {
                     let Some(&edge_length) = edge_length_cache.get(&interval.edge) else {
+                        diagnostics.invalid_contact_intervals += 1;
                         continue;
                     };
                     let Some(contact) =
                         ContactTranslationInterval::from_edge_length(edge_length, family)
                     else {
+                        diagnostics.invalid_contact_intervals += 1;
                         continue;
                     };
                     let start = contact.edge_start_parameter.max(interval.start);
-                    let end = contact.edge_end_parameter.min(interval.end);
+                    let end = contact.edge_parameter_end.min(interval.end);
                     if end + 1e-10 < start {
+                        invalid_overlap_for_anchor = true;
                         continue;
                     }
                     out.push(GeometryContactFamily {
@@ -3501,11 +3551,15 @@ pub fn generate_water_contact_families(
                         edge_parameter_start: start,
                         edge_parameter_end: end,
                     });
+                    emitted_for_anchor += 1;
                 }
             }
         }
+        if emitted_for_anchor == 0 && invalid_overlap_for_anchor {
+            diagnostics.anchors_without_valid_contact_overlap += 1;
+        }
     }
-    out
+    (out, diagnostics)
 }
 
 fn exposed_line_intervals(
@@ -5567,6 +5621,20 @@ mod compact_family_storage_tests {
     }
 
     #[test]
+    fn water_generator_reports_unsupported_anchor_geometry() {
+        let catalog = default_catalog();
+        let formation = GeometryFormation::single("UnknownResource");
+        let water = catalog.iter().find(|resource| resource.name == "Water").unwrap();
+
+        let (families, diagnostics) =
+            generate_water_contact_families_with_diagnostics(&formation, water, &catalog);
+
+        assert!(families.is_empty());
+        assert_eq!(diagnostics.unsupported_anchor_geometry, 1);
+        assert_eq!(diagnostics.eligible_anchors, 0);
+    }
+
+    #[test]
     fn fluid_boundary_interface_resolves_persisted_family_after_reopen() {
         let catalog = default_catalog();
         let root =
@@ -5595,7 +5663,14 @@ mod compact_family_storage_tests {
         // Exercise Bob's real fluid-contact calculation rather than manually
         // fabricating a persistence row. The Water/Carbon capillary solution
         // must produce an exposed-edge family before it can be stored.
-        let contact_families = generate_water_contact_families(&formation, water, &catalog);
+        let (contact_families, diagnostics) =
+            generate_water_contact_families_with_diagnostics(&formation, water, &catalog);
+        assert_eq!(diagnostics.eligible_anchors, 1);
+        assert_eq!(diagnostics.unsupported_anchor_geometry, 0);
+        assert_eq!(diagnostics.capillary_solver_failures, 0);
+        assert_eq!(diagnostics.anchors_without_exposed_intervals, 0);
+        assert_eq!(diagnostics.invalid_contact_intervals, 0);
+        assert_eq!(diagnostics.anchors_without_valid_contact_overlap, 0);
         assert!(
             contact_families.iter().any(|family| {
                 family.anchor_constituent == 0
