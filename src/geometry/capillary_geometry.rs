@@ -442,7 +442,12 @@ impl FluidBoundaryPiece {
         }
     }
 
-    pub fn transformed(&self, translate_x: f64, translate_y: f64, rotation_radians: f64) -> Option<Self> {
+    pub fn transformed(
+        &self,
+        translate_x: f64,
+        translate_y: f64,
+        rotation_radians: f64,
+    ) -> Option<Self> {
         if !translate_x.is_finite() || !translate_y.is_finite() || !rotation_radians.is_finite() {
             return None;
         }
@@ -456,7 +461,10 @@ impl FluidBoundaryPiece {
             } => {
                 let (sin, cos) = rotation_radians.sin_cos();
                 let transform = |x: f64, y: f64| {
-                    (translate_x + x * cos - y * sin, translate_y + x * sin + y * cos)
+                    (
+                        translate_x + x * cos - y * sin,
+                        translate_y + x * sin + y * cos,
+                    )
                 };
                 let (sx, sy) = transform(*start_x, *start_y);
                 let (ex, ey) = transform(*end_x, *end_y);
@@ -468,9 +476,11 @@ impl FluidBoundaryPiece {
                     contact_angle_radians: *contact_angle_radians,
                 })
             }
-            Self::FreeArc(arc) => Some(Self::FreeArc(
-                arc.transformed(translate_x, translate_y, rotation_radians)?,
-            )),
+            Self::FreeArc(arc) => Some(Self::FreeArc(arc.transformed(
+                translate_x,
+                translate_y,
+                rotation_radians,
+            )?)),
         }
     }
 
@@ -1018,19 +1028,31 @@ mod tests {
             nominal_area: 4.0,
             pieces: vec![
                 FluidBoundaryPiece::SolidContact {
-                    start_x: -1.0, start_y: -1.0, end_x: 1.0, end_y: -1.0,
+                    start_x: -1.0,
+                    start_y: -1.0,
+                    end_x: 1.0,
+                    end_y: -1.0,
                     contact_angle_radians: angle,
                 },
                 FluidBoundaryPiece::SolidContact {
-                    start_x: 1.0, start_y: -1.0, end_x: 1.0, end_y: 1.0,
+                    start_x: 1.0,
+                    start_y: -1.0,
+                    end_x: 1.0,
+                    end_y: 1.0,
                     contact_angle_radians: angle,
                 },
                 FluidBoundaryPiece::SolidContact {
-                    start_x: 1.0, start_y: 1.0, end_x: -1.0, end_y: 1.0,
+                    start_x: 1.0,
+                    start_y: 1.0,
+                    end_x: -1.0,
+                    end_y: 1.0,
                     contact_angle_radians: angle,
                 },
                 FluidBoundaryPiece::SolidContact {
-                    start_x: -1.0, start_y: 1.0, end_x: -1.0, end_y: -1.0,
+                    start_x: -1.0,
+                    start_y: 1.0,
+                    end_x: -1.0,
+                    end_y: -1.0,
                     contact_angle_radians: angle,
                 },
             ],
@@ -1047,26 +1069,41 @@ mod tests {
             nominal_area: 4.0,
             pieces: vec![
                 FluidBoundaryPiece::SolidContact {
-                    start_x: -1.0, start_y: -1.0, end_x: 1.0, end_y: -1.0,
+                    start_x: -1.0,
+                    start_y: -1.0,
+                    end_x: 1.0,
+                    end_y: -1.0,
                     contact_angle_radians: angle,
                 },
                 FluidBoundaryPiece::SolidContact {
-                    start_x: 1.0, start_y: -1.0, end_x: 1.0, end_y: 1.0,
+                    start_x: 1.0,
+                    start_y: -1.0,
+                    end_x: 1.0,
+                    end_y: 1.0,
                     contact_angle_radians: angle,
                 },
                 FluidBoundaryPiece::SolidContact {
-                    start_x: 1.0, start_y: 1.0, end_x: -1.0, end_y: 1.0,
+                    start_x: 1.0,
+                    start_y: 1.0,
+                    end_x: -1.0,
+                    end_y: 1.0,
                     contact_angle_radians: angle,
                 },
                 FluidBoundaryPiece::SolidContact {
-                    start_x: -1.0, start_y: 1.0, end_x: -1.0, end_y: -0.9,
+                    start_x: -1.0,
+                    start_y: 1.0,
+                    end_x: -1.0,
+                    end_y: -0.9,
                     contact_angle_radians: angle,
                 },
             ],
         };
         assert!(!boundary.is_valid());
         boundary.pieces[3] = FluidBoundaryPiece::SolidContact {
-            start_x: -1.0, start_y: 1.0, end_x: -1.0, end_y: -1.0,
+            start_x: -1.0,
+                    start_y: 1.0,
+                    end_x: -1.0,
+                    end_y: -1.0,
             contact_angle_radians: angle,
         };
         boundary.nominal_area = 5.0;
@@ -1080,19 +1117,31 @@ mod tests {
             nominal_area: 4.0,
             pieces: vec![
                 FluidBoundaryPiece::SolidContact {
-                    start_x: -1.0, start_y: -1.0, end_x: 1.0, end_y: -1.0,
+                    start_x: -1.0,
+                    start_y: -1.0,
+                    end_x: 1.0,
+                    end_y: -1.0,
                     contact_angle_radians: angle,
                 },
                 FluidBoundaryPiece::SolidContact {
-                    start_x: 1.0, start_y: -1.0, end_x: 1.0, end_y: 1.0,
+                    start_x: 1.0,
+                    start_y: -1.0,
+                    end_x: 1.0,
+                    end_y: 1.0,
                     contact_angle_radians: angle,
                 },
                 FluidBoundaryPiece::SolidContact {
-                    start_x: 1.0, start_y: 1.0, end_x: -1.0, end_y: 1.0,
+                    start_x: 1.0,
+                    start_y: 1.0,
+                    end_x: -1.0,
+                    end_y: 1.0,
                     contact_angle_radians: angle,
                 },
                 FluidBoundaryPiece::SolidContact {
-                    start_x: -1.0, start_y: 1.0, end_x: -1.0, end_y: -1.0,
+                    start_x: -1.0,
+                    start_y: 1.0,
+                    end_x: -1.0,
+                    end_y: -1.0,
                     contact_angle_radians: angle,
                 },
             ],
