@@ -5717,6 +5717,28 @@ mod compact_family_storage_tests {
             !families.is_empty(),
             "expected fluid-boundary records from solved contacts"
         );
+
+        // Persistence must reject malformed fluid boundary constraints even
+        // when they originate from otherwise valid solver output.
+        let mut invalid_interval = families[0].clone();
+        invalid_interval.edge_parameter_end = 1.01;
+        assert_eq!(
+            library
+                .insert_fluid_boundary_families(vec![invalid_interval])
+                .unwrap(),
+            0,
+            "fluid boundary intervals must remain within the normalized edge"
+        );
+        let mut invalid_contact_angle = families[0].clone();
+        invalid_contact_angle.contact_angle_radians = f64::NAN;
+        assert_eq!(
+            library
+                .insert_fluid_boundary_families(vec![invalid_contact_angle])
+                .unwrap(),
+            0,
+            "fluid boundary records must reject non-finite contact angles"
+        );
+
         assert_eq!(
             library.insert_contact_families(contact_families).unwrap(),
             families.len(),
