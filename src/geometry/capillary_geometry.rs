@@ -1094,7 +1094,7 @@ pub fn solve_water_against_collinear_contacts(
     let direction = dy.atan2(dx);
     let (sin, cos) = direction.sin_cos();
     let origin = (first_x, first_y);
-    let mut previous_end = None;
+    let mut previous_end: Option<(f64, f64)> = None;
     let mut pieces = Vec::with_capacity(ordered_segments.len() + 1);
     for (start, end) in ordered_segments {
         if ![start.0, start.1, end.0, end.1]
