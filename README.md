@@ -1342,3 +1342,21 @@ Source inspection confirms the live graph uses stable `PhysicalConstituentId` va
 Important schema limit: `GeometryBond` currently records constituent connectivity, not the physical bond endpoints/strength. That is sufficient only if fluid parent identity is intended to describe the rigid arrangement and connected-pair topology, not the precise endpoint-level bond graph. Confirm this scope before expanding the record schema; do not silently imply endpoint-level identity.
 
 The latest README-only checkpoint commit is `7c2e3f844058a0b0724c30f420828a3670830fa7`. Runner Validation passed on that commit; its Rust workflow is still running. This audit does not claim multi-constituent fluid lookup is implemented.
+
+### Multi-connection fluid support is a required capability — 2026-10-11
+
+Scope correction from the user: fluid operations must support **multiple simultaneous connections**, and must not be designed around the current Bob limit of formations containing at most two rigid constituents. Two-constituent catalogue generation is only a bounded test stage, not a runtime or fluid-physics ceiling.
+
+**Audit finding:** the present `GeometryFluidFormation` stores exactly one `anchor_constituent`, one `anchor_edge`, one contact interval, and one circular free arc. `realize_against_parent` validates and realizes only that one contact. `Form::Fluid` can store one exact `CircularArcBoundary` (or a legacy polygon), not a general fluid boundary with multiple solid-contact intervals. Therefore the current implementation cannot honestly claim to realize a single fluid body simultaneously constrained by multiple separate parent surfaces. Querying several single-edge records independently is not equivalent to solving one multi-connection fluid operation.
+
+**Required design before broadening parent formation size:**
+
+- Represent a fluid body by conserved area plus a boundary made of connected exact segments/arcs, with one or more solid-contact intervals and free-interface arcs. Keep analytic geometry exact; do not replace it with sampled polygon approximations.
+- Store a list of contact constraints per fluid formation. Each constraint identifies a canonical parent constituent and boundary edge, its normalized exposed interval, and the applicable contact-angle/curvature condition. A record with one constraint is the backward-compatible single-contact case.
+- Solve all active contact constraints together. Reject mutually inconsistent constraints, self-intersection, impossible intervals, invalid topology, or area mismatch; do not pick one anchor and silently ignore the rest.
+- Map canonical constituent indices back to stable live `PhysicalConstituentId` values after canonicalization. Verify each intended contact against the corresponding live surface after world transformation.
+- Run live multi-contact collision, containment, bond/contact, and energy transaction checks. Bob proposes geometry; it never authorizes a physical operation.
+- Test one fluid body contacting two non-collinear rigid edges, three or more contacts, translated/rotated parent poses, reordered equivalent constituents, symmetric/equal-material constituents, impossible contact sets, area conservation, and regression of the current single-edge case.
+- Keep the bounded two-constituent generation workflow as a diagnostic benchmark only. Once the multi-contact model is correct, extend generation by measured growth and topology, not by treating two pieces as a permanent maximum.
+
+**Gate:** do not describe fluid support as multi-connection-capable until the boundary representation, simultaneous constraint solver, runtime mapping, and live transaction tests all pass. This is now a prerequisite to claiming general multi-constituent fluid integration.
