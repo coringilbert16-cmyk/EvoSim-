@@ -300,7 +300,7 @@ mod tests {
             boundary: None,
             arc_boundary: Some(arc),
             multi_contact_boundary: None,
-};
+        };
         assert!(form_contains_point(
             &form,
             0.0,
@@ -333,7 +333,7 @@ mod tests {
             boundary: None,
             arc_boundary: Some(arc),
             multi_contact_boundary: None,
-};
+        };
         let inside = form_contains_point(
             &form,
             2.0,
