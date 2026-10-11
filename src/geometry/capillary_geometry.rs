@@ -260,6 +260,44 @@ impl CircularArcBoundary {
         None
     }
 
+    /// Whether this finite arc intersects a second circle, using analytic circle-circle intersections.
+    pub fn intersects_circle(&self, center_x: f64, center_y: f64, radius: f64) -> bool {
+        if !self.is_finite_arc()
+            || !center_x.is_finite()
+            || !center_y.is_finite()
+            || !radius.is_finite()
+            || radius <= 0.0
+        {
+            return false;
+        }
+        let dx = center_x - self.center_x;
+        let dy = center_y - self.center_y;
+        let distance = dx.hypot(dy);
+        if distance <= EPS
+            || distance > self.radius + radius + EPS
+            || distance < (self.radius - radius).abs() - EPS
+        {
+            return false;
+        }
+        let along = (self.radius * self.radius - radius * radius + distance * distance)
+            / (2.0 * distance);
+        let height_squared = self.radius * self.radius - along * along;
+        if height_squared < -EPS {
+            return false;
+        }
+        let height = height_squared.max(0.0).sqrt();
+        let base_x = self.center_x + along * dx / distance;
+        let base_y = self.center_y + along * dy / distance;
+        let offset_x = -dy * height / distance;
+        let offset_y = dx * height / distance;
+        [(base_x + offset_x, base_y + offset_y), (base_x - offset_x, base_y - offset_y)]
+            .into_iter()
+            .any(|(x, y)| {
+                let angle = (y - self.center_y).atan2(x - self.center_x);
+                self.contains_angle(angle)
+            })
+    }
+
     /// Exact intersections between this finite circular arc and a segment.
     ///
     /// Returns zero, one, or two distinct points. Segment endpoints are included;
@@ -586,6 +624,20 @@ mod tests {
         assert!(closest.0.abs() < 1e-12);
         assert!(closest.1.abs() < 1e-12);
         assert!(arc.ray_intersection(-2.0, -2.0, 1.0, 0.0).is_none());
+    }
+
+    #[test]
+    fn circular_arc_circle_intersections_respect_finite_sweep() {
+        let arc = CircularArcBoundary {
+            center_x: 0.0,
+            center_y: 0.0,
+            radius: 1.0,
+            start_angle_radians: 0.0,
+            sweep_radians: PI,
+        };
+        assert!(arc.intersects_circle(1.0, 0.0, 1.0));
+        assert!(!arc.intersects_circle(0.0, -1.0, 0.25));
+        assert!(!arc.intersects_circle(4.0, 0.0, 1.0));
     }
 
     #[test]
