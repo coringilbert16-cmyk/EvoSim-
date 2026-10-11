@@ -1059,6 +1059,105 @@ pub fn normalize_arc_parameter(angle: f64) -> Option<f64> {
     Some(angle.rem_euclid(TAU))
 }
 
+
+/// Solve one constant-curvature water boundary whose straight contact chord is
+/// split across multiple contiguous, collinear solid surfaces. This is one
+/// simultaneous capillary solution (one conserved area and one free arc), not
+/// a union of independently solved pairwise contacts. The caller supplies the
+/// ordered solid intervals in the target coordinate frame and must associate
+/// each returned SolidContact piece with its parent edge before persistence.
+pub fn solve_water_against_collinear_contacts(
+    area: f64,
+    contact_angle_radians: f64,
+    ordered_segments: &[((f64, f64), (f64, f64))],
+) -> Option<MultiContactFluidBoundary> {
+    if ordered_segments.len() < 2 {
+        return None;
+    }
+    let family = CapillaryContactFamily::solve(area, contact_angle_radians)?;
+    let ((first_x, first_y), (second_x, second_y)) = ordered_segments[0];
+    let dx = second_x - first_x;
+    let dy = second_y - first_y;
+    let total_length = ordered_segments.iter().try_fold(0.0, |sum, (start, end)| {
+        let length = (end.0 - start.0).hypot(end.1 - start.1);
+        (length.is_finite() && length > EPS).then_some(sum + length)
+    })?;
+    let scale = family.contact_length.max(1.0);
+    let tolerance = 1e-9 * scale;
+    if !dx.is_finite()
+        || !dy.is_finite()
+        || dx.hypot(dy) <= EPS
+        || (total_length - family.contact_length).abs() > tolerance
+    {
+        return None;
+    }
+    let direction = dy.atan2(dx);
+    let (sin, cos) = direction.sin_cos();
+    let origin = (first_x, first_y);
+    let mut previous_end = None;
+    let mut pieces = Vec::with_capacity(ordered_segments.len() + 1);
+    for (start, end) in ordered_segments {
+        if ![start.0, start.1, end.0, end.1].into_iter().all(f64::is_finite) {
+            return None;
+        }
+        if let Some(previous) = previous_end {
+            if (previous.0 - start.0).hypot(previous.1 - start.1) > tolerance {
+                return None;
+            }
+        }
+        let project = |point: (f64, f64)| {
+            let x = point.0 - origin.0;
+            let y = point.1 - origin.1;
+            (x * cos + y * sin, -x * sin + y * cos)
+        };
+        let local_start = project(*start);
+        let local_end = project(*end);
+        if local_start.1.abs() > tolerance
+            || local_end.1.abs() > tolerance
+            || local_end.0 <= local_start.0
+        {
+            return None;
+        }
+        pieces.push(FluidBoundaryPiece::SolidContact {
+            start_x: start.0,
+            start_y: start.1,
+            end_x: end.0,
+            end_y: end.1,
+            contact_angle_radians,
+        });
+        previous_end = Some(*end);
+    }
+    let first_local = {
+        let x = first_x - origin.0;
+        let y = first_y - origin.1;
+        (x * cos + y * sin, -x * sin + y * cos)
+    };
+    let last = ordered_segments.last()?.1;
+    let last_local = {
+        let x = last.0 - origin.0;
+        let y = last.1 - origin.1;
+        (x * cos + y * sin, -x * sin + y * cos)
+    };
+    if first_local.0.abs() > tolerance
+        || last_local.1.abs() > tolerance
+        || (last_local.0 - family.contact_length).abs() > tolerance
+    {
+        return None;
+    }
+    let midpoint = (
+        (first_x + last.0) * 0.5,
+        (first_y + last.1) * 0.5,
+    );
+    let arc = CircularArcBoundary::from_flat_contact(family)?
+        .transformed(midpoint.0, midpoint.1, direction)?;
+    pieces.push(FluidBoundaryPiece::FreeArc(arc));
+    let boundary = MultiContactFluidBoundary {
+        nominal_area: area,
+        pieces,
+    };
+    boundary.is_valid().then_some(boundary)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1610,4 +1709,41 @@ mod tests {
         assert!(circular_arcs_intersect(&first, &overlap, 1e-9));
         assert!(!circular_arcs_intersect(&first, &separate, 1e-9));
     }
+    #[test]
+    fn simultaneous_collinear_solver_builds_one_area_conserving_three_surface_boundary() {
+        let area = 0.5;
+        let angle = PI / 2.0;
+        let family = CapillaryContactFamily::solve(area, angle).unwrap();
+        let third = family.contact_length / 3.0;
+        let segments = [
+            ((0.0, 0.0), (third, 0.0)),
+            ((third, 0.0), (2.0 * third, 0.0)),
+            ((2.0 * third, 0.0), (family.contact_length, 0.0)),
+        ];
+        let boundary = solve_water_against_collinear_contacts(area, angle, &segments).unwrap();
+        assert!(boundary.is_valid());
+        assert_eq!(boundary.contact_count(), 3);
+        assert_eq!(boundary.free_arc_count(), 1);
+        assert!((boundary.nominal_area - area).abs() < 1e-12);
+        assert!((boundary.pieces.iter().try_fold(0.0, |sum, piece| {
+            piece.signed_area_contribution().map(|value| sum + value)
+        }).unwrap() - area).abs() < 1e-9);
+    }
+
+    #[test]
+    fn simultaneous_collinear_solver_rejects_gaps_and_wrong_total_contact_length() {
+        let family = CapillaryContactFamily::solve(0.5, PI / 2.0).unwrap();
+        let segments = [
+            ((0.0, 0.0), (family.contact_length * 0.4, 0.0)),
+            ((family.contact_length * 0.4 + 0.01, 0.0), (family.contact_length, 0.0)),
+        ];
+        assert!(solve_water_against_collinear_contacts(0.5, PI / 2.0, &segments).is_none());
+        let short = [
+            ((0.0, 0.0), (family.contact_length * 0.25, 0.0)),
+            ((family.contact_length * 0.25, 0.0), (family.contact_length * 0.5, 0.0)),
+        ];
+        assert!(solve_water_against_collinear_contacts(0.5, PI / 2.0, &short).is_none());
+    }
+
+
 }
