@@ -2160,6 +2160,144 @@ mod tests {
     }
 
     #[test]
+    fn multi_contact_fluid_commits_all_three_rigid_bonds_together() {
+        use crate::capillary_geometry::{
+            solve_water_against_collinear_contacts, CapillaryContactFamily,
+        };
+        use crate::resources::{Form, Material, NOMINAL_UNIT_AREA};
+        use crate::structure::StructuralUnit;
+
+        let mut catalog = crate::resources::default_catalog();
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap()
+            .clone();
+        let water = catalog
+            .iter()
+            .find(|resource| resource.name == "Water")
+            .unwrap()
+            .clone();
+        let area = NOMINAL_UNIT_AREA;
+        let angle = std::f64::consts::FRAC_PI_2;
+        let family = CapillaryContactFamily::solve(area, angle).unwrap();
+        let segment_length = family.contact_length / 3.0;
+        let mut test_line = carbon;
+        test_line.name = "TestMultiContactLine".to_string();
+        test_line.shape.form = Form::Line {
+            length: segment_length,
+        };
+        catalog.push(test_line);
+
+        let third = family.contact_length / 3.0;
+        let segments = [
+            ((-family.contact_length * 0.5, 0.0), (-third, 0.0)),
+            ((-third, 0.0), (third, 0.0)),
+            ((third, 0.0), (family.contact_length * 0.5, 0.0)),
+        ];
+        let boundary = solve_water_against_collinear_contacts(area, angle, &segments)
+            .expect("the three collinear contacts should form one conserved boundary");
+        let shape = crate::resources::Shape {
+            form: Form::Fluid {
+                nominal_area: area,
+                boundary: None,
+                arc_boundary: None,
+                multi_contact_boundary: Some(boundary),
+            },
+        };
+        let material = crate::physical_material::PhysicalMaterial::realized(
+            Material::free_base("Water", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .unwrap()
+        .with_single_fluid_shape(shape, &catalog)
+        .unwrap();
+
+        let mut structure = OrganismStructure::new();
+        let fluid_index = crate::material_restoration::restore_material(
+            &mut structure,
+            &material,
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        )
+        .unwrap()[0];
+        for x in [-third, 0.0, third] {
+            structure.add_unit(StructuralUnit::new(
+                "TestMultiContactLine",
+                Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ));
+        }
+
+        let first_target = 1;
+        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+        let candidate = crate::contact::connection_pair_candidates_cached(
+            &structure,
+            first_target,
+            fluid_index,
+            &catalog,
+            &mut cache,
+        )
+        .into_iter()
+        .filter(|candidate| {
+            candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                && candidate.available_a
+                && candidate.available_b
+        })
+        .min_by(|a, b| {
+            a.distance
+                .partial_cmp(&b.distance)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .expect("first rigid surface must have a valid fluid connection");
+        let (_, _, investment, _) =
+            crate::combine_runtime::selected_candidate_evaluation(
+                &structure,
+                first_target,
+                fluid_index,
+                candidate,
+                &catalog,
+            )
+            .expect("first fluid bond should be energetically admissible");
+        let mut ledger = EnergyLedger::default();
+        let mut energy = 100.0;
+        assert!(crate::combine_runtime::form_selected_bond(
+            &mut structure,
+            first_target,
+            fluid_index,
+            candidate,
+            investment,
+            &catalog,
+            &mut cache,
+            &mut ledger,
+            &mut energy,
+        )
+        .is_some());
+
+        assert!(form_remaining_multi_contact_bonds(
+            &mut structure,
+            fluid_index,
+            first_target,
+            &catalog,
+            &mut ledger,
+            &mut energy,
+        ));
+        assert_eq!(structure.bonds.len(), 3);
+    }
+
+    #[test]
     fn restored_multi_contact_fluid_keeps_three_live_rigid_contacts() {
         use crate::capillary_geometry::{FluidBoundaryPiece, MultiContactFluidBoundary};
         use crate::material_geometry::{
