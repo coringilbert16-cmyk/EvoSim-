@@ -317,8 +317,8 @@ mod tests {
         let boundary =
             solve_water_against_collinear_contacts(area, family.contact_angle_radians, &segments)
                 .unwrap();
-        let point = boundary_point_at_multi_contact(&boundary, -family.contact_length * 0.25, 0.0)
-            .unwrap();
+        let point =
+            boundary_point_at_multi_contact(&boundary, -family.contact_length * 0.25, 0.0).unwrap();
         assert!((point.x + family.contact_length * 0.25).abs() < 1e-12);
         assert!(point.y.abs() < 1e-12);
         assert!(point.normal_y < -0.99);
