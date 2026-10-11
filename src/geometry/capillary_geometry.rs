@@ -1548,7 +1548,6 @@ mod tests {
         assert!(CapillaryContactFamily::solve(1.0, PI).is_none());
         assert!(CapillaryContactFamily::solve(f64::NAN, PI / 2.0).is_none());
     }
-}
 
     #[test]
     fn circular_arc_intersection_detects_nonconcentric_sweep_crossing() {
