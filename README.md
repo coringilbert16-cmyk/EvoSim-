@@ -1372,3 +1372,16 @@ Implemented in `src/geometry/capillary_geometry.rs`:
 **Scope limitation:** this is a geometry foundation only. It is not yet carried by `Form::Fluid`, persisted as a multi-contact Bob formation, or consumed by collision/contact/containment/restoration and live construction transactions. The boundary validator also does not yet prove global non-self-intersection or solve contact constraints from parent geometry. Do not claim the requested multi-connection fluid operations are complete until those integration and solver gates pass.
 
 The implementation must continue beyond the current two-constituent Bob benchmark. Multi-connection tests need to involve one connected fluid boundary contacting multiple non-collinear rigid surfaces, including three or more contacts, rather than merely several independent single-contact suggestions.
+
+
+### Multi-contact fluid geometry sprint — 2026-10-11
+
+This short sprint continued the multi-contact geometry foundation rather than waiting on CI. The current branch now includes:
+- Analytic containment for a closed fluid boundary composed of multiple solid-contact segments and circular free arcs.
+- Normalized circular-arc angle intervals during ray-crossing containment, including arcs whose start angle lies outside the canonical interval.
+- A mixed line/semicircle regression covering interior/exterior containment before and after a rigid transform, plus contact/arc counts.
+- Existing multi-contact shape validation, exact-area preservation, material restoration acceptance, and rigid-surface contact dispatch remain in place from the preceding sprint.
+
+**Not yet complete:** this is not proof of arbitrary-contact end-to-end construction. The boundary validator checks closure and signed area but does not yet establish global non-self-intersection; contact geometry must be checked against multiple distinct rigid surfaces in one integration fixture. Bob's current formation-generation cap is still a separate limit, and general multi-constituent parent matching remains unfinished. Do not report this capability as complete or run broad catalogue generation yet.
+
+**Next short sprint:** add a physically valid fixture for one fluid body simultaneously contacting at least three non-collinear rigid surfaces; test each contact through the live geometry query, verify points inside/outside, then trace the same shape through material restoration and the live construction validation path. Keep CI polling asynchronous: continue code inspection/implementation between status checks and do not spend a sprint waiting for a workflow.
