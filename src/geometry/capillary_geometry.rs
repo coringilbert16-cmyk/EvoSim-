@@ -1276,6 +1276,36 @@ mod tests {
     }
 
     #[test]
+    fn multi_contact_boundary_rejects_crossing_nonadjacent_solid_segments() {
+        let points = [
+            (0.0, 0.0),
+            (2.0, 2.0),
+            (0.0, 2.0),
+            (2.0, 0.0),
+            (3.0, 0.0),
+            (3.0, 3.0),
+            (0.0, 3.0),
+        ];
+        let boundary = MultiContactFluidBoundary {
+            nominal_area: 9.0,
+            pieces: (0..points.len())
+                .map(|index| {
+                    let start = points[index];
+                    let end = points[(index + 1) % points.len()];
+                    FluidBoundaryPiece::SolidContact {
+                        start_x: start.0,
+                        start_y: start.1,
+                        end_x: end.0,
+                        end_y: end.1,
+                        contact_angle_radians: PI / 2.0,
+                    }
+                })
+                .collect(),
+        };
+        assert!(!boundary.is_valid());
+    }
+
+    #[test]
     fn multi_contact_containment_handles_mixed_line_and_arc_with_rotation() {
         let boundary = MultiContactFluidBoundary {
             nominal_area: std::f64::consts::FRAC_PI_2,
