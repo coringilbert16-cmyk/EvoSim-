@@ -5876,6 +5876,19 @@ mod compact_family_storage_tests {
             formation.parent_formation_signature == parent_signature
                 && formation.fluid_resource == "Water"
         }));
+        let realized = parent_suggestions
+            .iter()
+            .find_map(|suggestion| suggestion.realize_against_parent(&formation, &catalog, true))
+            .expect("persisted Bob fluid suggestion should reconstruct an exact shape and pose");
+        assert!(realized.0.is_valid());
+        assert!(matches!(
+            realized.0.form,
+            Form::Fluid {
+                nominal_area,
+                boundary: None,
+                arc_boundary: Some(_)
+            } if (nominal_area - area).abs() < 1e-10
+        ));
         assert_eq!(
             library
                 .fluid_formations_for_parent("missing-parent", "Water")
