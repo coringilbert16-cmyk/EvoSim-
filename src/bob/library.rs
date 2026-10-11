@@ -6167,10 +6167,7 @@ mod fluid_contact_constraint_schema_tests {
     fn legacy_fluid_records_default_to_no_extra_constraints() {
         let formation = legacy_fluid_formation();
         let mut value = serde_json::to_value(&formation).unwrap();
-        value
-            .as_object_mut()
-            .unwrap()
-            .remove("contact_constraints");
+        value.as_object_mut().unwrap().remove("contact_constraints");
 
         let decoded: GeometryFluidFormation = serde_json::from_value(value).unwrap();
         assert!(decoded.contact_constraints.is_empty());
@@ -6181,13 +6178,15 @@ mod fluid_contact_constraint_schema_tests {
     fn every_contact_constraint_contributes_to_fluid_signature() {
         let legacy = legacy_fluid_formation();
         let mut constrained = legacy.clone();
-        constrained.contact_constraints.push(GeometryFluidContactConstraint {
-            constituent_index: 1,
-            edge_index: 2,
-            contact_length: 0.5,
-            edge_parameter_start: 0.2,
-            edge_parameter_end: 0.8,
-        });
+        constrained
+            .contact_constraints
+            .push(GeometryFluidContactConstraint {
+                constituent_index: 1,
+                edge_index: 2,
+                contact_length: 0.5,
+                edge_parameter_start: 0.2,
+                edge_parameter_end: 0.8,
+            });
 
         assert_ne!(legacy.signature(), constrained.signature());
     }
@@ -6197,13 +6196,15 @@ mod fluid_contact_constraint_schema_tests {
         let parent = GeometryFormation::single("Carbon");
         let mut constrained = legacy_fluid_formation();
         constrained.parent_formation_signature = parent.signature.clone();
-        constrained.contact_constraints.push(GeometryFluidContactConstraint {
-            constituent_index: 0,
-            edge_index: 0,
-            contact_length: 0.5,
-            edge_parameter_start: 0.25,
-            edge_parameter_end: 0.75,
-        });
+        constrained
+            .contact_constraints
+            .push(GeometryFluidContactConstraint {
+                constituent_index: 0,
+                edge_index: 0,
+                contact_length: 0.5,
+                edge_parameter_start: 0.25,
+                edge_parameter_end: 0.75,
+            });
 
         assert!(constrained
             .realize_against_parent(&parent, &crate::resources::default_catalog(), true)
