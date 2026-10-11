@@ -1328,3 +1328,17 @@ The exact-head Rust workflow passes formatting, source-size policy, COMBINE arch
 **Current fluid milestone:** persisted Bob fluid formations are queried by the construction runtime for an exact single-rigid-unit parent, reconstructed as an exact circular arc, transformed into the live frame, and carried through material restoration. Both focused fluid regressions pass. This is still not proof that an end-to-end growth transaction accepts and bonds Water successfully; the live transaction remains the authority.
 
 **Next short sprint:** extend parent identity mapping from a single rigid unit to a canonical two-constituent rigid formation, including bond topology, constituent-index remapping, and canonical-frame-to-live-frame transformation. Query Bob fluid records only when the live parent maps unambiguously to the persisted canonical parent signature. Preserve live collision/contact/energy checks and exact area. Then run the isolated `--geometry-worker-complete-up-to 2` generation workflow and report generated candidates, duplicates, rejected formations, rigid/fluid family counts, elapsed time, and artifact size. Do not commit generated catalogue data. The workflow is currently manual-dispatch-only; no new generation run is claimed in this checkpoint.
+
+### Two-constituent parent mapping audit — 2026-10-11
+
+Source inspection confirms the live graph uses stable `PhysicalConstituentId` values on `StructuralUnit` and `BondEndpoint`; live unit-vector indices are not stable identities. A safe two-piece parent adapter must therefore:
+
+1. Select two rigid, externally realized units that are connected by a live bond; resolve each unit's single base-resource identity and exact shape from the catalog.
+2. Express both placements in one selected unit's local frame, including relative rotation; build a two-constituent `GeometryFormation` and canonicalize it through Bob's own `canonicalized(catalog)` path.
+3. Retain an explicit mapping from each live `PhysicalConstituentId` to its canonical Bob constituent index. Do not assume canonicalization preserves insertion order, particularly when both pieces share a resource name.
+4. Derive the rigid transform from Bob's canonical parent frame back into live world coordinates using a matched constituent pose. Reject ambiguous or non-finite mappings rather than falling back to a singleton record.
+5. Query fluid records by the canonical parent's exact signature, realize the exact arc, and still run the normal live overlap, contact, restoration, and bond/energy transaction checks.
+
+Important schema limit: `GeometryBond` currently records constituent connectivity, not the physical bond endpoints/strength. That is sufficient only if fluid parent identity is intended to describe the rigid arrangement and connected-pair topology, not the precise endpoint-level bond graph. Confirm this scope before expanding the record schema; do not silently imply endpoint-level identity.
+
+The latest README-only checkpoint commit is `7c2e3f844058a0b0724c30f420828a3670830fa7`. Runner Validation passed on that commit; its Rust workflow is still running. This audit does not claim multi-constituent fluid lookup is implemented.
