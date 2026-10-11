@@ -625,8 +625,7 @@ impl MultiContactFluidBoundary {
                     let dx = end_x - start_x;
                     let dy = end_y - start_y;
                     let length_sq = dx * dx + dy * dy;
-                    let t = (((x - start_x) * dx + (y - start_y) * dy) / length_sq)
-                        .clamp(0.0, 1.0);
+                    let t = (((x - start_x) * dx + (y - start_y) * dy) / length_sq).clamp(0.0, 1.0);
                     let nearest_x = start_x + t * dx;
                     let nearest_y = start_y + t * dy;
                     if (x - nearest_x).hypot(y - nearest_y) <= tolerance {
@@ -640,9 +639,10 @@ impl MultiContactFluidBoundary {
                     }
                 }
                 FluidBoundaryPiece::FreeArc(arc) => {
-                    if arc.closest_point(x, y).is_some_and(|(px, py)| {
-                        (x - px).hypot(y - py) <= tolerance
-                    }) {
+                    if arc
+                        .closest_point(x, y)
+                        .is_some_and(|(px, py)| (x - px).hypot(y - py) <= tolerance)
+                    {
                         return true;
                     }
                     let normalized_y = (y - arc.center_y) / arc.radius;
