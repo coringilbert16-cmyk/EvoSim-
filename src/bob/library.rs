@@ -677,9 +677,21 @@ pub struct GeometryFluidBoundaryFamily {
     pub edge_parameter_end: f64,
 }
 
+/// One rigid-surface constraint for a fluid-inclusive formation. Parameters
+/// describe the contact interval on an edge of the canonical rigid parent.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct GeometryFluidContactConstraint {
+    pub constituent_index: usize,
+    pub edge_index: usize,
+    pub contact_length: f64,
+    pub edge_parameter_start: f64,
+    pub edge_parameter_end: f64,
+}
+
 /// A persistent fluid-inclusive arrangement: a rigid parent formation plus
-/// one solved, deformable fluid constituent. This is distinct from a rigid
-/// GeometryFormation because the fluid has conserved area, not a fixed pose.
+/// one deformable fluid constituent. The legacy anchor/scalar fields remain
+/// readable; contact_constraints is the forward-compatible representation for
+/// simultaneous contact with multiple rigid surfaces.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct GeometryFluidFormation {
     pub schema_version: u32,
@@ -694,6 +706,8 @@ pub struct GeometryFluidFormation {
     pub contact_length: f64,
     pub edge_parameter_start: f64,
     pub edge_parameter_end: f64,
+    #[serde(default)]
+    pub contact_constraints: Vec<GeometryFluidContactConstraint>,
 }
 
 impl GeometryFluidFormation {
@@ -717,6 +731,23 @@ impl GeometryFluidFormation {
             || self.edge_parameter_start < 0.0
             || self.edge_parameter_end > 1.0
             || self.edge_parameter_end < self.edge_parameter_start
+        {
+            return None;
+        }
+        // Until the simultaneous-boundary solver is available, fail closed
+        // for multi-contact records rather than realizing only the first edge.
+        // Empty constraints preserve legacy single-anchor record behavior.
+        if self.contact_constraints.len() > 1
+            || self.contact_constraints.iter().any(|constraint| {
+                constraint.constituent_index >= parent.constituents.len()
+                    || !constraint.contact_length.is_finite()
+                    || constraint.contact_length <= 0.0
+                    || !constraint.edge_parameter_start.is_finite()
+                    || !constraint.edge_parameter_end.is_finite()
+                    || constraint.edge_parameter_start < 0.0
+                    || constraint.edge_parameter_end > 1.0
+                    || constraint.edge_parameter_end <= constraint.edge_parameter_start
+            })
         {
             return None;
         }
@@ -798,7 +829,16 @@ impl GeometryFluidFormation {
             quantize(self.contact_length),
             quantize(self.edge_parameter_start),
             quantize(self.edge_parameter_end),
-        )
+        ) + &self.contact_constraints.iter().map(|constraint| {
+            format!(
+                "|contact:{}:{}:{}:{}:{}",
+                constraint.constituent_index,
+                constraint.edge_index,
+                quantize(constraint.contact_length),
+                quantize(constraint.edge_parameter_start),
+                quantize(constraint.edge_parameter_end),
+            )
+        }).collect::<String>()
     }
 }
 
@@ -820,6 +860,7 @@ pub fn fluid_formations_from_boundaries(
             contact_length: family.contact_length,
             edge_parameter_start: family.edge_parameter_start,
             edge_parameter_end: family.edge_parameter_end,
+            contact_constraints: Vec::new(),
         })
         .collect()
 }
