@@ -620,12 +620,7 @@ fn resource_area(resource: &BaseResource) -> Option<f64> {
     }
 }
 
-fn fluid_segment_contains_world_point(
-    shape: &Shape,
-    placement: Placement,
-    x: f64,
-    y: f64,
-) -> bool {
+fn fluid_segment_contains_world_point(shape: &Shape, placement: Placement, x: f64, y: f64) -> bool {
     let Form::Fluid {
         arc_boundary: Some(arc),
         ..
@@ -640,15 +635,15 @@ fn fluid_segment_contains_world_point(
     let local_y = -dx * sin + dy * cos;
     let start = arc.start_point();
     let end = arc.end_point();
-    let chord_side = (end.0 - start.0) * (local_y - start.1)
-        - (end.1 - start.1) * (local_x - start.0);
+    let chord_side =
+        (end.0 - start.0) * (local_y - start.1) - (end.1 - start.1) * (local_x - start.0);
     let midpoint_angle = arc.start_angle_radians + arc.sweep_radians * 0.5;
     let midpoint = (
         arc.center_x + arc.radius * midpoint_angle.cos(),
         arc.center_y + arc.radius * midpoint_angle.sin(),
     );
-    let arc_side = (end.0 - start.0) * (midpoint.1 - start.1)
-        - (end.1 - start.1) * (midpoint.0 - start.0);
+    let arc_side =
+        (end.0 - start.0) * (midpoint.1 - start.1) - (end.1 - start.1) * (midpoint.0 - start.0);
     chord_side * arc_side >= -1e-9
         && (local_x - arc.center_x).hypot(local_y - arc.center_y) <= arc.radius + 1e-9
 }
@@ -722,12 +717,8 @@ fn bob_fluid_acquisition_candidate(
                 };
                 let (sin, cos) = anchor_unit.placement.rotation_radians.sin_cos();
                 let placement = Placement {
-                    x: anchor_unit.placement.x
-                        + relative_pose.x * cos
-                        - relative_pose.y * sin,
-                    y: anchor_unit.placement.y
-                        + relative_pose.x * sin
-                        + relative_pose.y * cos,
+                    x: anchor_unit.placement.x + relative_pose.x * cos - relative_pose.y * sin,
+                    y: anchor_unit.placement.y + relative_pose.x * sin + relative_pose.y * cos,
                     rotation_radians: anchor_unit.placement.rotation_radians
                         + relative_pose.rotation_radians,
                 };
@@ -879,10 +870,15 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
     let (structure, _ledger, energy) = construct_scaffold(catalog)?;
     let bob_library = crate::geometry_reference_library::open_default_library().ok();
     let (acquired_resource_placements, acquired_resource_shapes, fluid_geometry_status) =
-        valid_construction(&structure, catalog, &acquisition_candidates, bob_library.as_ref())
-            .ok_or_else(|| {
-                "deterministic construction scaffold did not satisfy viability".to_string()
-            })?;
+        valid_construction(
+            &structure,
+            catalog,
+            &acquisition_candidates,
+            bob_library.as_ref(),
+        )
+        .ok_or_else(|| {
+            "deterministic construction scaffold did not satisfy viability".to_string()
+        })?;
 
     Ok(ValidConstruction {
         structure,
