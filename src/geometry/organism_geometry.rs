@@ -151,8 +151,26 @@ fn form_contains_point(
         Form::Fluid {
             nominal_area,
             boundary,
+            arc_boundary,
         } => {
-            if let Some(vertices) = boundary {
+            if let Some(arc) = arc_boundary {
+                let start = arc.start_point();
+                let end = arc.end_point();
+                let chord_side = (end.0 - start.0) * (local_y - start.1)
+                    - (end.1 - start.1) * (local_x - start.0);
+                let angle = (local_y - arc.center_y).atan2(local_x - arc.center_x);
+                let relative = (angle - arc.start_angle_radians).rem_euclid(std::f64::consts::TAU);
+                let on_arc_side = if arc.sweep_radians <= std::f64::consts::PI {
+                    chord_side <= f64::EPSILON
+                } else {
+                    chord_side >= -f64::EPSILON
+                };
+                let in_sweep = relative <= arc.sweep_radians + f64::EPSILON;
+                on_arc_side
+                    && in_sweep
+                    && (local_x - arc.center_x).hypot(local_y - arc.center_y)
+                        <= arc.radius + f64::EPSILON
+            } else if let Some(vertices) = boundary {
                 point_in_polygon((local_x, local_y), vertices)
             } else {
                 local_x.hypot(local_y)
