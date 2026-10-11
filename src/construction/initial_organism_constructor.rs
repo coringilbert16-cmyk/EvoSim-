@@ -852,14 +852,18 @@ fn bob_fluid_acquisition_candidate(
                     };
                     let rigid_points =
                         rigid_part_world_points(&other_shape.form, other_unit.placement);
-                    let free_boundary_probes =
-                        fluid_free_boundary_probe_points(&shape, placement);
+                    let free_boundary_probes = fluid_free_boundary_probe_points(&shape, placement);
                     if free_boundary_probes.is_empty() {
                         valid = false;
                         break;
                     }
                     if free_boundary_probes.iter().any(|&(x, y)| {
-                        rigid_form_contains_world_point(&other_shape.form, other_unit.placement, x, y)
+                        rigid_form_contains_world_point(
+                            &other_shape.form,
+                            other_unit.placement,
+                            x,
+                            y,
+                        )
                     }) || fluid_segment_contains_world_point(
                         &shape,
                         placement,
