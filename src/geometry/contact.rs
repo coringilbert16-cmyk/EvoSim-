@@ -303,8 +303,7 @@ fn multi_contact_fluid_endpoint_pairs(
             if length_squared <= f64::EPSILON {
                 return false;
             }
-            let t = (((x - start_x) * dx + (y - start_y) * dy) / length_squared)
-                .clamp(0.0, 1.0);
+            let t = (((x - start_x) * dx + (y - start_y) * dy) / length_squared).clamp(0.0, 1.0);
             let px = start_x + t * dx;
             let py = start_y + t * dy;
             (x - px).hypot(y - py) <= tolerance
