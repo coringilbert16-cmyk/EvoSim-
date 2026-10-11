@@ -325,6 +325,7 @@ mod tests {
         assert!(point.y.abs() < 1e-12);
         assert!(point.normal_y < -0.99);
         assert!(point.normal_x.abs() < 1e-12);
+        assert!(boundary_point_at_multi_contact(&boundary, 100.0, 100.0).is_none());
     }
 
     #[test]
