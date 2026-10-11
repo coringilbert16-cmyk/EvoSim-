@@ -656,10 +656,10 @@ fn circular_arcs_intersect(
     .into_iter()
     .any(|(x, y)| {
             let first_angle = (y - first.center_y).atan2(x - first.center_x);
-            let second_angle = (y - second.center_y).atan2(x - second.center_x);
-            angle_lies_on_arc(first_angle, first, angular_tolerance(r1))
-                && angle_lies_on_arc(second_angle, second, angular_tolerance(r2))
-        })
+        let second_angle = (y - second.center_y).atan2(x - second.center_x);
+        angle_lies_on_arc(first_angle, first, angular_tolerance(r1))
+            && angle_lies_on_arc(second_angle, second, angular_tolerance(r2))
+    })
 }
 
 impl MultiContactFluidBoundary {
@@ -1581,7 +1581,9 @@ mod tests {
     #[test]
     fn concentric_arc_intersection_requires_overlapping_sweeps() {
         let first = CircularArcBoundary {
-            center_x: 0.0, center_y: 0.0, radius: 2.0,
+            center_x: 0.0,
+            center_y: 0.0,
+            radius: 2.0,
             start_angle_radians: 0.0,
             sweep_radians: PI / 2.0,
         };
