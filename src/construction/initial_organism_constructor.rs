@@ -1055,16 +1055,18 @@ mod tests {
         let (shape, placement) = candidate
             .expect("at least one exact fluid suggestion should pass live validation");
         assert!(shape.is_valid());
+        let expected_area = match &water.shape.form {
+            Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+            Form::Fluid { nominal_area, .. } => *nominal_area,
+            _ => panic!("Water must have a fluid-compatible default shape"),
+        };
         assert!(matches!(
-            shape.form,
+            &shape.form,
             Form::Fluid {
                 nominal_area,
                 boundary: None,
                 arc_boundary: Some(_)
-            } if (nominal_area - std::f64::consts::PI * match water.shape.form {
-                Form::Circle { radius } => radius * radius,
-                _ => 0.0,
-            }).abs() < 1e-9
+            } if (*nominal_area - expected_area).abs() < 1e-9
         ));
         assert!(placement.x.is_finite() && placement.y.is_finite());
         let _ = std::fs::remove_dir_all(root);
