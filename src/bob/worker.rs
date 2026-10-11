@@ -78,9 +78,11 @@ pub fn run_to_completion(max_constituents: usize) -> std::io::Result<()> {
     }
 
     let formations_before_reopen = library.len();
+    let fluid_formations_before_reopen = library.fluid_formations().count();
     drop(library);
 
     let reopened = open_default_library()?;
+    let fluid_formations_after_reopen = reopened.fluid_formations().count();
     let oversized = reopened
         .formations()
         .filter(|formation| formation.constituents.len() > max_constituents)
@@ -98,17 +100,21 @@ pub fn run_to_completion(max_constituents: usize) -> std::io::Result<()> {
         .count();
 
     eprintln!(
-        "geometry worker complete: max_constituents={max_constituents} seeded={seeded} passes={processed} generated_candidates={generated} added_formations={added} not_added={} edge_families_added={edge_added} point_families_added={point_added} vertex_families_added={vertex_added} water_families_added={water_added} fluid_boundary_families_added={fluid_boundary_added} fluid_formations_added={fluid_formations_added} formations_before_reopen={formations_before_reopen} formations_after_reopen={} oversized_formations={oversized} unfinished_frontiers={unfinished} elapsed_ms={}",
+        "geometry worker complete: max_constituents={max_constituents} seeded={seeded} passes={processed} generated_candidates={generated} added_formations={added} not_added={} edge_families_added={edge_added} point_families_added={point_added} vertex_families_added={vertex_added} water_families_added={water_added} fluid_boundary_families_added={fluid_boundary_added} fluid_formations_added={fluid_formations_added} fluid_formations_before_reopen={fluid_formations_before_reopen} fluid_formations_after_reopen={fluid_formations_after_reopen} formations_before_reopen={formations_before_reopen} formations_after_reopen={} oversized_formations={oversized} unfinished_frontiers={unfinished} elapsed_ms={}",
         generated.saturating_sub(added),
         reopened.len(),
         started.elapsed().as_millis(),
     );
 
-    if oversized > 0 || unfinished > 0 || reopened.len() != formations_before_reopen {
+    if oversized > 0
+        || unfinished > 0
+        || reopened.len() != formations_before_reopen
+        || fluid_formations_after_reopen != fluid_formations_before_reopen
+    {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             format!(
-                "bounded generation verification failed: oversized={oversized}, unfinished={unfinished}, before_reopen={formations_before_reopen}, after_reopen={}",
+                "bounded generation verification failed: oversized={oversized}, unfinished={unfinished}, before_reopen={formations_before_reopen}, after_reopen={}, fluid_before_reopen={fluid_formations_before_reopen}, fluid_after_reopen={fluid_formations_after_reopen}",
                 reopened.len()
             ),
         ));
