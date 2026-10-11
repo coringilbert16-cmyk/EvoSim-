@@ -1567,3 +1567,8 @@ The first full Rust test run exercised the new positive persistence regression a
 ### Exact multi-contact connection endpoints — 2026-10-11
 
 The live three-target regression exposed a second real integration gap: ordinary fluid endpoint discovery projected target points radially from the fluid unit origin, so a line endpoint lying in the middle of a SolidContact interval could be represented by the wrong boundary point. Added exact-point resolution for `ConnectionEndpoint::Fluid` when the shape carries a `MultiContactFluidBoundary`, plus candidate generation from rigid endpoints lying on SolidContact pieces and verified surface points for circles/polygon edges. The atomic bond helper now tries alternate valid contact candidates before rejecting a target. A focused surface-geometry test verifies exact point and outward-normal preservation; exact-head runtime verification is pending.
+
+
+### Multi-contact positive gates passed at checkpoint — 2026-10-11
+
+The Rust test run for checkpoint `0324e7cd` passed both targeted end-to-end regressions: `construction_runtime::tests::multi_contact_fluid_commits_all_three_rigid_bonds_together` and `geometry_reference_library::fluid_contact_constraint_schema_tests::simultaneous_collinear_solution_persists_and_reloads_three_parent_contacts`. The full Rust suite still reports the existing broader failure backlog (364 passed, 33 failed, 1 ignored at that checkpoint), and Clippy still fails on unrelated existing lints. The current exact-point endpoint canonicalization and new surface-geometry regression are newer than that test checkpoint and need another run before treating the branch as verified.
