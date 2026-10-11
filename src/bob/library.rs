@@ -737,18 +737,7 @@ impl GeometryFluidFormation {
         // Until the simultaneous-boundary solver is available, fail closed
         // for multi-contact records rather than realizing only the first edge.
         // Empty constraints preserve legacy single-anchor record behavior.
-        if self.contact_constraints.len() > 1
-            || self.contact_constraints.iter().any(|constraint| {
-                constraint.constituent_index >= parent.constituents.len()
-                    || !constraint.contact_length.is_finite()
-                    || constraint.contact_length <= 0.0
-                    || !constraint.edge_parameter_start.is_finite()
-                    || !constraint.edge_parameter_end.is_finite()
-                    || constraint.edge_parameter_start < 0.0
-                    || constraint.edge_parameter_end > 1.0
-                    || constraint.edge_parameter_end <= constraint.edge_parameter_start
-            })
-        {
+        if !self.contact_constraints.is_empty() {
             return None;
         }
         let anchor = parent.constituents.get(self.anchor_constituent)?;
@@ -3399,6 +3388,9 @@ fn fluid_formation_is_valid(
         || formation.anchor_constituent >= parent.constituents.len()
         || !formation.area.is_finite()
         || formation.area <= 0.0
+        // The current single-arc solver cannot validate simultaneous contacts.
+        // Reject constrained records instead of persisting a misleading partial solve.
+        || !formation.contact_constraints.is_empty()
     {
         return false;
     }
