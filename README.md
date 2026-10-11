@@ -1407,7 +1407,7 @@ Added a focused worker regression that seeds a valid two-constituent Carbon pare
 
 ### Multi-contact boundary topology guard — 2026-10-11
 
-The piecewise fluid-boundary validator now rejects intersections between non-adjacent straight solid-contact segments, including a regression fixture whose signed area is positive and matches the declared area despite a self-crossing path. Intersection tolerance is scaled consistently between coordinate and cross-product units. Adjacent pieces may still share their intended closure endpoints. This is a partial topology guard only: exact free-arc/line and free-arc/free-arc self-intersection checks remain open, so the validator must not yet be described as proving global non-self-intersection for mixed arc/line boundaries.
+The piecewise fluid-boundary validator now rejects intersections between non-adjacent straight solid-contact segments, including a regression fixture whose signed area is positive and matches the declared area despite a self-crossing path. Intersection tolerance is scaled consistently between coordinate and cross-product units. Adjacent pieces may still share their intended closure endpoints. This was a partial topology guard at that checkpoint. Later work added analytic non-adjacent line/arc intersection checks; exact arc/arc checking was still open at the next checkpoint.
 
 ### Constructor free-interface probe audit — 2026-10-11
 
@@ -1416,3 +1416,10 @@ The initial-constructor fluid candidate validator no longer hardcodes a single a
 ### Active short-sprint status — 2026-10-11
 
 The current branch includes the maximum-size Bob fluid-generation correction, the restored three-surface multi-contact regression, a partial non-adjacent straight-segment self-intersection guard, and multi-arc free-interface probe extraction in the initial constructor. Runner Validation has passed on the latest source-changing checkpoint before the README-only update. Rust CI is still running for the constructor probe change; recent completed Rust runs are red on the existing broad Clippy -D warnings backlog and earlier formatting differences, so no full-green claim is made here. The known 29 constructor/lifecycle test failures remain out of scope. Next work stays focused on the missing simultaneous-contact solver and multi-parent live identity mapping, not on the baseline failures.
+
+
+### Exact mixed-boundary intersection checks — 2026-10-11
+
+The multi-contact fluid-boundary validator now analytically checks non-adjacent straight/arc intersections by solving the line-segment/circle equation and filtering intersection points against both the finite segment and arc sweep. The next increment adds circular-arc/circular-arc intersection checks, including concentric equal-radius arcs whose angular sweeps overlap. Adjacent pieces remain exempt so their intended shared endpoints are permitted. Regression coverage was added for line-crossing-arc, intersecting non-concentric arcs, and concentric arcs with overlapping versus disjoint sweeps.
+
+This strengthens the boundary validity guard; it does not complete Bob's simultaneous-contact fluid solver, persistence format, or construction-time mapping from multiple live rigid constituents to a canonical parent formation. Those remain the primary end-to-end tasks. The new code is committed, but CI for this exact checkpoint is queued; do not report it green until its run completes. Continue working without waiting on CI, and do not spend time chasing the known 29 baseline Rust test failures.
