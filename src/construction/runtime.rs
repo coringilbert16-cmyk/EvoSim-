@@ -302,6 +302,9 @@ fn composite_origin_for_constituent_pose(
 struct CanonicalLiveRigidParent {
     formation: crate::geometry_reference_library::GeometryFormation,
     canonical_index_by_id: std::collections::HashMap<crate::structure::PhysicalConstituentId, usize>,
+    canonical_to_live_rotation: f64,
+    canonical_to_live_x: f64,
+    canonical_to_live_y: f64,
 }
 
 /// Build a connected rigid parent from the live physical graph and preserve
@@ -390,19 +393,66 @@ fn canonical_live_rigid_parent(
         .map(|(input_index, (id, _))| (*id, input_to_canonical[input_index]))
         .collect();
     let canonical_index_by_id: HashMap<PhysicalConstituentId, usize> = canonical_index_by_id;
+
+    // Recover the rigid transform from Bob's canonical frame to the live graph.
+    // Prefer constituent centers (independent of local shape symmetry); for a
+    // singleton parent, use its realized orientation as the frame reference.
+    let mut frame_rotation = None;
+    'pairs: for first in 0..live_units.len() {
+        for second in (first + 1)..live_units.len() {
+            let first_canonical = &formation.constituents[input_to_canonical[first]].placement;
+            let second_canonical = &formation.constituents[input_to_canonical[second]].placement;
+            let canonical_dx = second_canonical.x - first_canonical.x;
+            let canonical_dy = second_canonical.y - first_canonical.y;
+            let live_dx = live_units[second].1.placement.x - live_units[first].1.placement.x;
+            let live_dy = live_units[second].1.placement.y - live_units[first].1.placement.y;
+            if canonical_dx.hypot(canonical_dy) > 1e-9 && live_dx.hypot(live_dy) > 1e-9 {
+                frame_rotation = Some(
+                    live_dy.atan2(live_dx) - canonical_dy.atan2(canonical_dx),
+                );
+                break 'pairs;
+            }
+        }
+    }
+    let canonical_to_live_rotation = frame_rotation.unwrap_or_else(|| {
+        let canonical = &formation.constituents[input_to_canonical[0]].placement;
+        live_units[0].1.placement.rotation_radians - canonical.rotation_radians
+    });
+    let (sin, cos) = canonical_to_live_rotation.sin_cos();
+    let canonical_anchor = &formation.constituents[input_to_canonical[0]].placement;
+    let canonical_to_live_x = live_units[0].1.placement.x
+        - (canonical_anchor.x * cos - canonical_anchor.y * sin);
+    let canonical_to_live_y = live_units[0].1.placement.y
+        - (canonical_anchor.x * sin + canonical_anchor.y * cos);
+
+    for (input_index, (_, live_constituent)) in live_units.iter().enumerate() {
+        let canonical = &formation.constituents[input_to_canonical[input_index]].placement;
+        let predicted_x = canonical_to_live_x + canonical.x * cos - canonical.y * sin;
+        let predicted_y = canonical_to_live_y + canonical.x * sin + canonical.y * cos;
+        if (predicted_x - live_constituent.placement.x)
+            .hypot(predicted_y - live_constituent.placement.y)
+            > 0.1
+        {
+            return None;
+        }
+    }
+
     Some(CanonicalLiveRigidParent {
         formation,
         canonical_index_by_id,
+        canonical_to_live_rotation,
+        canonical_to_live_x,
+        canonical_to_live_y,
     })
 }
 
-/// Query Bob for fluid formations against one exact rigid parent and transform
-/// each realized suggestion from the parent's canonical frame into live space.
-/// Returned shapes are proposals; the caller must restore and validate them.
-fn bob_fluid_origins_for_single_parent(
+/// Query Bob for fluid suggestions against the complete connected rigid parent.
+/// Each record still represents one stored anchor contact; live placement and
+/// transaction validation remain authoritative, and simultaneous multi-contact
+/// boundary generation is a separate unfinished capability.
+fn bob_fluid_origins_for_live_parent(
     library: &crate::geometry_reference_library::GeometryLibrary,
-    anchor_material: &str,
-    anchor_placement: Placement,
+    parent: &CanonicalLiveRigidParent,
     fluid_resource: &BaseResource,
     relative_part_placement: Placement,
     catalog: &[BaseResource],
@@ -410,21 +460,28 @@ fn bob_fluid_origins_for_single_parent(
     if fluid_resource.physical_state != PhysicalState::Fluid {
         return Vec::new();
     }
-    let parent =
-        crate::geometry_reference_library::GeometryFormation::single(anchor_material.to_owned());
-    let (s, c) = anchor_placement.rotation_radians.sin_cos();
+    let (s, c) = parent.canonical_to_live_rotation.sin_cos();
     let mut out = Vec::new();
-    for suggestion in library.fluid_formations_for_parent(&parent.signature, &fluid_resource.name) {
+    for suggestion in library
+        .fluid_formations_for_parent(&parent.formation.signature, &fluid_resource.name)
+    {
+        // This mapping is the authoritative stable-ID-to-canonical-slot lookup
+        // for anchor constituent identity. Reject stale/inconsistent records.
+        if suggestion.anchor_constituent >= parent.formation.constituents.len()
+            || !parent.canonical_index_by_id.values().any(|index| *index == suggestion.anchor_constituent)
+        {
+            continue;
+        }
         for bulge_left in [true, false] {
             let Some((shape, canonical_pose)) =
-                suggestion.realize_against_parent(&parent, catalog, bulge_left)
+                suggestion.realize_against_parent(&parent.formation, catalog, bulge_left)
             else {
                 continue;
             };
             let live_pose = Placement {
-                x: anchor_placement.x + canonical_pose.x * c - canonical_pose.y * s,
-                y: anchor_placement.y + canonical_pose.x * s + canonical_pose.y * c,
-                rotation_radians: anchor_placement.rotation_radians
+                x: parent.canonical_to_live_x + canonical_pose.x * c - canonical_pose.y * s,
+                y: parent.canonical_to_live_y + canonical_pose.x * s + canonical_pose.y * c,
+                rotation_radians: parent.canonical_to_live_rotation
                     + canonical_pose.rotation_radians,
             };
             out.push((
