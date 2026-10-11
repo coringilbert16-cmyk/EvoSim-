@@ -6985,7 +6985,7 @@ mod fluid_contact_constraint_schema_tests {
         let family =
             solve_water_against_solid(area, water.properties.cohesion, carbon.properties.cohesion)
                 .unwrap();
-        let wall_length = family.contact_length / 3.0;
+        let wall_length = family.contact_length * 0.45;
         for name in ["TestWallA", "TestWallB", "TestWallC"] {
             let mut wall = carbon.clone();
             wall.name = name.to_string();
@@ -7045,70 +7045,10 @@ mod fluid_contact_constraint_schema_tests {
             "Bob should discover the three exposed collinear contacts without caller-supplied segments"
         );
 
-        let mut edges = parent
-            .constituents
-            .iter()
-            .enumerate()
-            .map(|(index, constituent)| {
-                let resource = catalog
-                    .iter()
-                    .find(|item| item.name == constituent.resource)
-                    .unwrap();
-                let Form::Line { length } = &resource.shape.form else {
-                    panic!("test wall must be a line")
-                };
-                let a = world_point((-*length * 0.5, 0.0), constituent.placement);
-                let b = world_point((*length * 0.5, 0.0), constituent.placement);
-                (index, a, b)
-            })
-            .collect::<Vec<_>>();
-        let first = edges.first().unwrap();
-        let (_, first_start, first_end) = *first;
-        let mut direction = (first_end.0 - first_start.0, first_end.1 - first_start.1);
-        if direction.0 < -1e-9 || (direction.0.abs() <= 1e-9 && direction.1 < 0.0) {
-            direction = (-direction.0, -direction.1);
-        }
-        let norm = direction.0.hypot(direction.1);
-        direction = (direction.0 / norm, direction.1 / norm);
-        let origin = first_start;
-        let projection = |point: (f64, f64)| {
-            (point.0 - origin.0) * direction.0 + (point.1 - origin.1) * direction.1
-        };
-        let mut mapped = edges
-            .drain(..)
-            .map(|(index, a, b)| {
-                let (start, end) = if projection(a) <= projection(b) {
-                    (a, b)
-                } else {
-                    (b, a)
-                };
-                let start_t: f64 = if start == a { 0.0 } else { 1.0 };
-                let end_t: f64 = if end == b { 1.0 } else { 0.0 };
-                let constraint = GeometryFluidContactConstraint {
-                    constituent_index: index,
-                    edge_index: 0,
-                    contact_length: (end.0 - start.0).hypot(end.1 - start.1),
-                    edge_parameter_start: start_t.min(end_t),
-                    edge_parameter_end: start_t.max(end_t),
-                };
-                (projection(start), start, end, constraint)
-            })
-            .collect::<Vec<_>>();
-        mapped.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-        let segments = mapped
-            .iter()
-            .map(|item| (item.1, item.2))
-            .collect::<Vec<_>>();
-        let constraints = mapped.into_iter().map(|item| item.3).collect::<Vec<_>>();
-
-        let record = solve_collinear_multi_contact_formation(
-            &parent,
-            &water,
-            constraints,
-            &segments,
-            &catalog,
-        )
-        .expect("simultaneous solver should produce a valid three-parent contact record");
+        let record = automatically_generated
+            .into_iter()
+            .find(|candidate| candidate.contact_constraints.len() == 3)
+            .expect("clipped exposed intervals should produce a three-surface contact record");
         assert_eq!(record.contact_constraints.len(), 3);
         assert_eq!(record.solved_boundary.as_ref().unwrap().contact_count(), 3);
         let parents = BTreeMap::from([(parent.signature.clone(), parent.clone())]);
