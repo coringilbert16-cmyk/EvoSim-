@@ -443,3 +443,35 @@ The triangle-closure failure was traced to a greedy placement issue: an element 
 CI run [#38069059297](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38069059297) passes formatting, source-size, COMBINE architecture, Bob compact-storage, and empty-store checks. Both the triangle closure and multi-constraint triangle tests now pass. Full-suite status improved to **313 passed, 30 failed, 1 ignored**. Strict Clippy remains red.
 
 The intact-composite placement test remains failing with `no forward bond-driven placement found for blueprint element 1 after 270 placement attempts`. This was also failing before the multi-neighbor constraint was added, so it is not established as a regression. Next inspect how a stored composite's local constituent placements and endpoint coordinates are transformed by Bob and analytic candidate origins; preserve the composite as one intact physical material and do not treat its part-local origin as the composite origin.
+
+
+## Historical test-failure reduction investigation — 2026-10-11
+
+### Evidence
+
+- October 9 CI run [#38000218152](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38000218152), head `64d00b9226c9a3ab62f4712699434ce2c0334569`: **244 passed / 75 failed / 1 ignored** across 320 tests.
+- October 10 run at `058285ed0c`: **267 passed / 75 failed / 1 ignored**. The axial ring fix had not yet reduced the failure count.
+- October 10 run [#38068822004](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38068822004), commit `4b1c6b895ef7e252cafc2aa543e08b603ba8acaa`: **311 passed / 32 failed / 1 ignored**.
+- Multi-neighbor blueprint-placement change, run [#38069059297](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38069059297): **313 passed / 30 failed / 1 ignored**.
+- Latest exact-head run [#38141473000](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38141473000), head `1ea08455b6276328ace59cc454b6229ddb6332c1`: **314 passed / 29 failed / 1 ignored** across 344 tests.
+
+Name-by-name comparison of the October 9 and October 11 logs confirms 46 previously failing tests now pass. The old failures were not simply deleted or filtered, and none of the 24 additional tests in the new suite failed. The old run contains 52 panics at `src/simulation/simulation.rs:61`; the current run contains zero at that location. That line unwraps the result of `initial_organism_constructor::construct_valid`, so the shared failure was default simulation initialization failing before the individual movement, observation, runtime, reproduction, and integration assertions could run. Many of those earlier failures were therefore cascading consequences, as suspected.
+
+### Root cause for the first reduction
+
+Two geometry defects were corrected during October 10 work:
+
+1. `hex_ring` started at axial coordinate `(-radius, 0)` but its old first direction sequence walked through the center. The resulting scaffold put spoke 19 on the same position as inner-ring unit 3, causing a physical bond transaction to be rejected.
+2. `find_enclosed_regions` inserted a shared polygon edge once for each adjacent polygon. Duplicate parallel directed edges violated the planar face walker's assumptions and could prevent the inner face/cavity from being found. Commit `4b1c6b895e` now deduplicates each undirected edge after endpoint interning, then retains one directed pair.
+
+The large drop is bracketed between `058285ed0c` (267/75) and `4b1c6b895e` (311/32). The source-level changes and their geometry explanations are consistent with the change: the blueprint-free initial organism can now be constructed, so default simulation setup no longer aborts at the constructor `expect`. Subsequent multi-neighbor placement checks account for the smaller improvements from 311/32 to 313/30. The final change to 314/29 is not attributed to the recent Clippy-only cleanup without further evidence.
+
+### Remaining shared blocker versus independent failures
+
+The 29-failure baseline still contains repeated errors of the form `no forward bond-driven placement found for blueprint element 9 after 13877 placement attempts`. It appears in cavity, harmonics, viability, decomposition, and simulation tests. These should be treated as downstream manifestations of a shared **blueprint-driven seed realization** blocker, not as separate defects, until the common call path is traced. This is distinct from the now-passing blueprint-free initial-organism constructor test and from the older `simulation.rs:61` initialization panic.
+
+Other remaining failures include intact-composite placement (blueprint element 1 after 270 attempts), chemical-break energy threshold, continuous COMBINE endpoint filtering/heat accounting, boundary surface normals, fluid boundary behavior, movement consequence ranking, reproduction waiting/resumption, shape vocabulary, and storage counts. These have different assertion sites and should be investigated independently after the shared element-9 failure is understood. Do not broaden tolerances, suppress tests, or weaken physical/energy invariants merely to lower the count.
+
+### Next investigation step
+
+Trace the element-9 failure from blueprint ordering and ready-neighbor constraints through candidate generation, Bob suggestion/analytic candidate merging, whole-structure contact and penetration validation, and COMBINE admission. Record rejection counts/reasons by stage for the failing fixture, then make the smallest evidence-backed correction and rerun focused seed/cavity tests before the full suite. Keep constructor-dependent test failures visible while this work proceeds; do not run geometry generation as part of this investigation.
