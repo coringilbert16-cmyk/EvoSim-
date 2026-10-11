@@ -7101,6 +7101,16 @@ mod fluid_contact_constraint_schema_tests {
                     .unwrap(),
                 (1, 1)
             );
+            assert_eq!(
+                library
+                    .insert_fluid_formations_with_multi_contact_counts(
+                        Vec::new(),
+                        vec![record.clone()],
+                        &catalog,
+                    )
+                    .unwrap(),
+                (0, 0)
+            );
         }
         let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
         let stored = reopened
