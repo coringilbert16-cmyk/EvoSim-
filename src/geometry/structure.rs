@@ -865,7 +865,10 @@ mod tests {
             },
         };
         assert!(bulk_water.realize_fluid_geometry(multi_contact.clone(), &catalog));
-        assert_eq!(bulk_water.geometry.as_ref().unwrap().shape(), &multi_contact);
+        assert_eq!(
+            bulk_water.geometry.as_ref().unwrap().shape(),
+            &multi_contact
+        );
 
         let mut carbon = StructuralUnit::new(
             "Carbon",
