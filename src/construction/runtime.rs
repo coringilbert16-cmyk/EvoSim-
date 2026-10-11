@@ -765,8 +765,7 @@ fn missing_realized_neighbor_contacts(
                         )
                         .into_iter()
                         .any(|candidate| {
-                            candidate.distance
-                                <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                            candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
                                 && candidate.available_a
                                 && candidate.available_b
                         })
