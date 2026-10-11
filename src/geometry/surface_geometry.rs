@@ -163,7 +163,12 @@ pub fn boundary_point_at_multi_contact(
     x: f64,
     y: f64,
 ) -> Option<BoundaryPoint> {
-    if !boundary.is_valid() || !x.is_finite() || !y.is_finite() {
+    if boundary.pieces.is_empty()
+        || !boundary.nominal_area.is_finite()
+        || boundary.nominal_area <= 0.0
+        || !x.is_finite()
+        || !y.is_finite()
+    {
         return None;
     }
     let mut best: Option<(f64, BoundaryPoint)> = None;
