@@ -322,6 +322,7 @@ pub fn placed_forms_rigid_contact(
         Form::Fluid {
             boundary: None,
             arc_boundary: None,
+            multi_contact_boundary: None,
             ..
         }
     ) || matches!(
@@ -329,6 +330,7 @@ pub fn placed_forms_rigid_contact(
         Form::Fluid {
             boundary: None,
             arc_boundary: None,
+            multi_contact_boundary: None,
             ..
         }
     ) {
