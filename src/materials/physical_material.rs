@@ -128,6 +128,11 @@ impl PhysicalMaterial {
                 boundary: None,
                 arc_boundary: Some(_),
                 ..
+            }
+            | crate::resources::Form::Fluid {
+                nominal_area,
+                multi_contact_boundary: Some(_),
+                ..
             } => *nominal_area,
             _ => return None,
         };
@@ -173,6 +178,11 @@ impl PhysicalMaterial {
                 | crate::resources::Form::Fluid {
                     nominal_area,
                     arc_boundary: Some(_),
+                    ..
+                }
+                | crate::resources::Form::Fluid {
+                    nominal_area,
+                    multi_contact_boundary: Some(_),
                     ..
                 } => *nominal_area,
                 _ => return None,
