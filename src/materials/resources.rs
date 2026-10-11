@@ -65,11 +65,9 @@ pub enum Form {
         /// Exact free interface. Mutually exclusive with the legacy polygon boundary.
         #[serde(default)]
         arc_boundary: Option<crate::capillary_geometry::CircularArcBoundary>,
-    },
-    /// Exact closed fluid boundary with multiple solid contacts and free arcs.
-    /// Geometry is analytic and must not be flattened to sampled polygon edges.
-    FluidMultiContact {
-        boundary: crate::capillary_geometry::MultiContactFluidBoundary,
+        /// Exact piecewise boundary for simultaneous multiple solid contacts.
+        #[serde(default)]
+        multi_contact_boundary: Option<crate::capillary_geometry::MultiContactFluidBoundary>,
     },
 }
 
@@ -153,17 +151,26 @@ impl Form {
                 *sides >= 3 && radius.is_finite() && *radius > 0.0
             }
             Form::Polygon { vertices } => polygon_geometry_is_valid(vertices),
-            Form::FluidMultiContact { boundary } => boundary.is_valid(),
             Form::Fluid {
                 nominal_area,
                 boundary,
                 arc_boundary,
+                multi_contact_boundary,
             } => {
                 if !nominal_area.is_finite() || *nominal_area <= 0.0 {
                     return false;
                 }
-                if boundary.is_some() && arc_boundary.is_some() {
+                if (boundary.is_some() as u8)
+                    + (arc_boundary.is_some() as u8)
+                    + (multi_contact_boundary.is_some() as u8)
+                    > 1
+                {
                     return false;
+                }
+                if let Some(multi) = multi_contact_boundary {
+                    return multi.is_valid()
+                        && (multi.nominal_area - nominal_area).abs()
+                            <= 1e-10 * nominal_area.max(1.0);
                 }
                 if let Some(arc) = arc_boundary {
                     return arc.is_valid()
@@ -179,7 +186,7 @@ impl Form {
 
     pub fn polygon_vertices(&self) -> Option<Vec<(f64, f64)>> {
         match self {
-            Form::Circle { .. } | Form::Line { .. } | Form::FluidMultiContact { .. } => None,
+            Form::Circle { .. } | Form::Line { .. } => None,
             Form::Fluid {
                 boundary,
                 arc_boundary,
@@ -223,11 +230,11 @@ impl Form {
                 .iter()
                 .map(|(x, y)| (x * x + y * y).sqrt())
                 .fold(0.0_f64, f64::max),
-            Form::FluidMultiContact { boundary } => boundary.bounding_radius(),
             Form::Fluid {
                 nominal_area,
                 boundary,
                 arc_boundary,
+                multi_contact_boundary,
             } => {
                 if let Some(arc) = arc_boundary {
                     arc.center_x.hypot(arc.center_y) + arc.radius
