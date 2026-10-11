@@ -6696,13 +6696,17 @@ mod fluid_contact_constraint_schema_tests {
             })
             .collect::<Vec<_>>();
         let first = edges.first().unwrap();
-        let mut direction = (first.2.0 - first.1.0, first.2.1 - first.1.1);
+        let (_, first_start, first_end) = *first;
+        let mut direction = (
+            first_end.0 - first_start.0,
+            first_end.1 - first_start.1,
+        );
         if direction.0 < -1e-9 || (direction.0.abs() <= 1e-9 && direction.1 < 0.0) {
             direction = (-direction.0, -direction.1);
         }
         let norm = direction.0.hypot(direction.1);
         direction = (direction.0 / norm, direction.1 / norm);
-        let origin = first.1;
+        let origin = first_start;
         let projection = |point: (f64, f64)| {
             (point.0 - origin.0) * direction.0 + (point.1 - origin.1) * direction.1
         };
@@ -6727,7 +6731,10 @@ mod fluid_contact_constraint_schema_tests {
             })
             .collect::<Vec<_>>();
         mapped.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-        let segments = mapped.iter().map(|item| (item.1, item.2)).collect::<Vec<_>>();
+        let segments = mapped
+            .iter()
+            .map(|item| (item.1, item.2))
+            .collect::<Vec<_>>();
         let constraints = mapped.into_iter().map(|item| item.3).collect::<Vec<_>>();
 
         let record = solve_collinear_multi_contact_formation(
