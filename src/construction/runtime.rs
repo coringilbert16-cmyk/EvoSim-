@@ -2245,6 +2245,26 @@ mod tests {
             .into_iter()
             .find(|candidate| candidate.contact_constraints.len() == 2)
             .expect("two-piece parent should yield a two-contact Water record");
+        // The fluid's origin is offset from the rigid parent's center by its
+        // solved contact geometry. Compute both valid bulge orientations in
+        // canonical coordinates, then transform them into the live frame.
+        let expected_live_poses: Vec<Placement> = [true, false]
+            .into_iter()
+            .filter_map(|bulge_left| {
+                record
+                    .realize_against_parent(&live_parent.formation, &catalog, bulge_left)
+                    .map(|(_, pose)| {
+                        let (s, c) = live_parent.canonical_to_live_rotation.sin_cos();
+                        Placement {
+                            x: live_parent.canonical_to_live_x + pose.x * c - pose.y * s,
+                            y: live_parent.canonical_to_live_y + pose.x * s + pose.y * c,
+                            rotation_radians: live_parent.canonical_to_live_rotation
+                                + pose.rotation_radians,
+                        }
+                    })
+            })
+            .collect();
+        assert!(!expected_live_poses.is_empty());
 
         {
             let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
@@ -2255,7 +2275,7 @@ mod tests {
                 library
                     .insert_fluid_formations_with_multi_contact_counts(
                         Vec::new(),
-                        vec![record],
+                        vec![record.clone()],
                         &catalog,
                     )
                     .unwrap(),
@@ -2287,9 +2307,14 @@ mod tests {
                 )
             })
             .expect("runtime query should retrieve the reopened two-contact record");
-        assert!((origin.x - 3.0).abs() < 1e-7);
-        assert!((origin.y + 2.0).abs() < 1e-7);
-        assert!((origin.rotation_radians - rotation).abs() < 1e-7);
+        assert!(
+            expected_live_poses.iter().any(|expected| {
+                (origin.x - expected.x).abs() < 1e-7
+                    && (origin.y - expected.y).abs() < 1e-7
+                    && (origin.rotation_radians - expected.rotation_radians).abs() < 1e-7
+            }),
+            "runtime origin must match one of the exact solved poses transformed into the live frame"
+        );
         assert!(shape.is_valid());
         match &shape.form {
             Form::Fluid {
