@@ -605,7 +605,7 @@ impl MultiContactFluidBoundary {
                 end_x: bx,
                 end_y: by,
                 ..
-            } = self.pieces[first]
+            } = &self.pieces[first]
             else {
                 continue;
             };
@@ -619,15 +619,15 @@ impl MultiContactFluidBoundary {
                     end_x: dx,
                     end_y: dy,
                     ..
-                } = self.pieces[second]
+                } = &self.pieces[second]
                 else {
                     continue;
                 };
                 if line_segments_intersect(
-                    (ax, ay),
-                    (bx, by),
-                    (cx, cy),
-                    (dx, dy),
+                    (*ax, *ay),
+                    (*bx, *by),
+                    (*cx, *cy),
+                    (*dx, *dy),
                     tolerance,
                 ) {
                     return false;
