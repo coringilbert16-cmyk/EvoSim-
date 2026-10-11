@@ -655,7 +655,7 @@ fn circular_arcs_intersect(
     ]
     .into_iter()
     .any(|(x, y)| {
-            let first_angle = (y - first.center_y).atan2(x - first.center_x);
+        let first_angle = (y - first.center_y).atan2(x - first.center_x);
         let second_angle = (y - second.center_y).atan2(x - second.center_x);
         angle_lies_on_arc(first_angle, first, angular_tolerance(r1))
             && angle_lies_on_arc(second_angle, second, angular_tolerance(r2))
