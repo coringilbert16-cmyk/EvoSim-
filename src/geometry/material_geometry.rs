@@ -789,8 +789,8 @@ mod tests {
             std::f64::consts::FRAC_PI_2,
         )
         .unwrap();
-        let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family)
-            .unwrap();
+        let arc =
+            crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
         let fluid = part(
             Form::Fluid {
                 nominal_area: 0.5,
@@ -814,8 +814,8 @@ mod tests {
             std::f64::consts::FRAC_PI_2,
         )
         .unwrap();
-        let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family)
-            .unwrap();
+        let arc =
+            crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
         let fluid = part(
             Form::Fluid {
                 nominal_area: 0.5,
