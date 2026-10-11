@@ -1,7 +1,8 @@
 use crate::geometry_reference_library::{
     expand_formation_candidates, generate_fluid_boundary_families_from_contact_families,
     generate_rigid_contact_families, generate_rigid_point_contact_families,
-    generate_rigid_vertex_contact_families, generate_water_contact_families, open_default_library,
+    generate_rigid_vertex_contact_families, generate_water_contact_families,
+    fluid_formations_from_boundaries, open_default_library,
     seed_base_catalogue, GeometryFrontierState, GeometryLibrary,
 };
 use crate::resources::{default_catalog, BaseResource};
@@ -181,6 +182,8 @@ struct WorkerPassMetrics {
     water_families_added: usize,
     fluid_boundary_families: usize,
     fluid_boundary_families_added: usize,
+    fluid_formations: usize,
+    fluid_formations_added: usize,
     elapsed: Duration,
     total_formations: usize,
     expansion_limit_reached: bool,
@@ -190,7 +193,7 @@ impl std::fmt::Display for WorkerPassMetrics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "geometry worker pass: size={} generated={} added={} not_added={} edge_families={} edge_added={} point_families={} point_added={} vertex_families={} vertex_added={} water_families={} water_added={} fluid_boundary_families={} fluid_boundary_added={} total_formations={} expansion_limit_reached={} elapsed_ms={}",
+            "geometry worker pass: size={} generated={} added={} not_added={} edge_families={} edge_added={} point_families={} point_added={} vertex_families={} vertex_added={} water_families={} water_added={} fluid_boundary_families={} fluid_boundary_added={} fluid_formations={} fluid_formations_added={} total_formations={} expansion_limit_reached={} elapsed_ms={}",
             self.formation_size,
             self.generated_candidates,
             self.added_formations,
@@ -205,6 +208,8 @@ impl std::fmt::Display for WorkerPassMetrics {
             self.water_families_added,
             self.fluid_boundary_families,
             self.fluid_boundary_families_added,
+            self.fluid_formations,
+            self.fluid_formations_added,
             self.total_formations,
             self.expansion_limit_reached,
             self.elapsed.as_millis(),
@@ -283,9 +288,13 @@ fn process_one_frontier(
                 let boundary_states =
                     generate_fluid_boundary_families_from_contact_families(resource, &families);
                 metrics.fluid_boundary_families += boundary_states.len();
+                let fluid_formations = fluid_formations_from_boundaries(&boundary_states);
+                metrics.fluid_formations += fluid_formations.len();
                 metrics.water_families_added += library.insert_contact_families(families)?;
                 metrics.fluid_boundary_families_added +=
                     library.insert_fluid_boundary_families(boundary_states)?;
+                metrics.fluid_formations_added +=
+                    library.insert_fluid_formations(fluid_formations, catalog)?;
                 completed_frontiers.push((
                     formation.signature.clone(),
                     resource.name.clone(),
