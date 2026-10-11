@@ -997,6 +997,7 @@ fn multi_contact_boundary_matches_constraints(
 /// solution and the exact parent-edge constraints corresponding to its ordered
 /// contact pieces. Candidate edge selection remains the caller's job; this
 /// adapter verifies the entire solution before returning it.
+#[allow(dead_code)] // Called by the forthcoming exposed-edge candidate enumerator.
 pub fn solve_collinear_multi_contact_formation(
     parent: &GeometryFormation,
     fluid_resource: &BaseResource,
