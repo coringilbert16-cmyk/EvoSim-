@@ -1146,10 +1146,8 @@ fn clip_aligned_contact_window(
         }
 
         let source = item.2;
-        let source_projection_start =
-            source.4 .0 * direction.0 + source.4 .1 * direction.1;
-        let source_projection_end =
-            source.5 .0 * direction.0 + source.5 .1 * direction.1;
+        let source_projection_start = source.4 .0 * direction.0 + source.4 .1 * direction.1;
+        let source_projection_end = source.5 .0 * direction.0 + source.5 .1 * direction.1;
         let projection_span = source_projection_end - source_projection_start;
         if projection_span.abs() <= tolerance {
             return None;
@@ -1321,21 +1319,16 @@ pub fn generate_collinear_multi_contact_formations(
         let mut start_positions = Vec::new();
         for item in &aligned {
             start_positions.push(item.0);
-            start_positions.push(
-                (item.1 - contact_length * 0.5).clamp(item.0, item.1),
-            );
+            start_positions.push((item.1 - contact_length * 0.5).clamp(item.0, item.1));
             start_positions.push((item.1 - contact_length).clamp(item.0, item.1));
         }
         start_positions.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         start_positions.dedup_by(|a, b| (*a - *b).abs() <= 1e-8);
 
         for start_projection in start_positions {
-            let Some(chosen) = clip_aligned_contact_window(
-                &aligned,
-                start_projection,
-                contact_length,
-                direction,
-            ) else {
+            let Some(chosen) =
+                clip_aligned_contact_window(&aligned, start_projection, contact_length, direction)
+            else {
                 continue;
             };
             let distinct_constituents = chosen
@@ -1382,8 +1375,7 @@ pub fn generate_collinear_multi_contact_formations(
                     compatible = false;
                     break;
                 };
-                if (other_family.contact_angle_radians - family.contact_angle_radians).abs()
-                    > 1e-9
+                if (other_family.contact_angle_radians - family.contact_angle_radians).abs() > 1e-9
                 {
                     compatible = false;
                     break;
@@ -6958,8 +6950,7 @@ mod fluid_contact_constraint_schema_tests {
                 (4.0, 0.0),
             ),
         ];
-        let clipped =
-            clip_aligned_contact_window(&aligned, 1.5, 1.0, (1.0, 0.0)).unwrap();
+        let clipped = clip_aligned_contact_window(&aligned, 1.5, 1.0, (1.0, 0.0)).unwrap();
         assert_eq!(clipped.len(), 2);
         assert!((clipped[0].0 - 1.5).abs() < 1e-12);
         assert!((clipped[0].1 - 2.0).abs() < 1e-12);
