@@ -5643,6 +5643,29 @@ mod compact_family_storage_tests {
     }
 
     #[test]
+    fn water_generator_reports_known_but_unsupported_anchor_shape() {
+        let mut catalog = default_catalog();
+        let carbon = catalog
+            .iter_mut()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap();
+        carbon.shape.form = Form::Circle { radius: 1.0 };
+        let formation = GeometryFormation::single("Carbon");
+        let water = catalog
+            .iter()
+            .find(|resource| resource.name == "Water")
+            .unwrap();
+
+        let (families, diagnostics) =
+            generate_water_contact_families_with_diagnostics(&formation, water, &catalog);
+
+        assert!(families.is_empty());
+        assert_eq!(diagnostics.unresolved_anchor_resources, 0);
+        assert_eq!(diagnostics.unsupported_anchor_geometry, 1);
+        assert_eq!(diagnostics.eligible_anchors, 0);
+    }
+
+    #[test]
     fn fluid_boundary_interface_resolves_persisted_family_after_reopen() {
         let catalog = default_catalog();
         let root =
