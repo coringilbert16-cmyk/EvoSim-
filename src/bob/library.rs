@@ -5801,6 +5801,33 @@ mod compact_family_storage_tests {
             0,
             "fluid formations must retain a finite conserved area"
         );
+
+        let mut invalid_anchor_edge = expected_fluid_formation_signatures
+            .values()
+            .next()
+            .unwrap()
+            .clone();
+        invalid_anchor_edge.anchor_edge = usize::MAX;
+        assert_eq!(
+            library
+                .insert_fluid_formations(vec![invalid_anchor_edge], &catalog)
+                .unwrap(),
+            0,
+            "fluid formations must reference a real rigid boundary edge"
+        );
+        let mut invalid_contact_angle = expected_fluid_formation_signatures
+            .values()
+            .next()
+            .unwrap()
+            .clone();
+        invalid_contact_angle.contact_angle_radians = f64::NAN;
+        assert_eq!(
+            library
+                .insert_fluid_formations(vec![invalid_contact_angle], &catalog)
+                .unwrap(),
+            0,
+            "fluid formations must reject non-finite contact angles"
+        );
         let interface = LiveGeometryInterface {
             interface_class: "fluid_boundary",
             signature: "test-fluid-boundary".to_string(),
