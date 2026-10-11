@@ -126,7 +126,9 @@ impl PhysicalMaterial {
             crate::resources::Form::Fluid {
                 nominal_area,
                 boundary: None,
-                arc_boundary: Some(_), ..} => *nominal_area,
+                arc_boundary: Some(_),
+                ..
+            } => *nominal_area,
             _ => return None,
         };
         if (shape_area - default_area).abs() > 1e-9 * default_area.max(1.0) {
