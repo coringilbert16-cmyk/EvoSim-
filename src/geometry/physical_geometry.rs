@@ -75,6 +75,7 @@ mod tests {
             form: crate::resources::Form::Fluid {
                 nominal_area: 1.0,
                 boundary: Some(vec![(-1.0, 0.0), (0.0, 1.0), (1.0, 0.0), (0.0, -1.0)]),
+                arc_boundary: None,
             },
         };
         assert!(geometry.replace_fluid_realization(fitted.clone()));
