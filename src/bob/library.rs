@@ -751,7 +751,7 @@ impl GeometryFluidFormation {
                 boundary: None,
                 arc_boundary: Some(arc),
                 multi_contact_boundary: None,
-},
+            },
         };
         if !shape.is_valid() {
             return None;
