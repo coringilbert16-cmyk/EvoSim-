@@ -1572,3 +1572,8 @@ The live three-target regression exposed a second real integration gap: ordinary
 ### Multi-contact positive gates passed at checkpoint — 2026-10-11
 
 The Rust test run for checkpoint `0324e7cd` passed both targeted end-to-end regressions: `construction_runtime::tests::multi_contact_fluid_commits_all_three_rigid_bonds_together` and `geometry_reference_library::fluid_contact_constraint_schema_tests::simultaneous_collinear_solution_persists_and_reloads_three_parent_contacts`. The full Rust suite still reports the existing broader failure backlog (364 passed, 33 failed, 1 ignored at that checkpoint), and Clippy still fails on unrelated existing lints. The current exact-point endpoint canonicalization and new surface-geometry regression are newer than that test checkpoint and need another run before treating the branch as verified.
+
+
+### Multi-contact endpoint hardening — 2026-10-11
+
+Exact fluid endpoint resolution now rejects coordinates farther than geometry tolerance from the solved boundary instead of silently projecting arbitrary points onto it. Added a negative construction regression for an incomplete target set: the multi-contact helper must fail closed without adding bonds or changing the caller's original structure/energy. The positive three-target test remains the main proof that all bonds can be staged together. Verification of these newest guards is pending.
