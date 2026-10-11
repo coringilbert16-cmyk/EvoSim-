@@ -278,6 +278,24 @@ fn placement_for_joint(
     }
 }
 
+/// Convert a suggested world pose for one constituent into the origin pose
+/// required to restore its intact composite. Bob suggests the constituent's
+/// pose; restore_material expects the composite origin and transforms every
+/// constituent from its stored relative placement.
+fn composite_origin_for_constituent_pose(
+    suggested_constituent: Placement,
+    relative_constituent: Placement,
+) -> Placement {
+    let rotation_radians =
+        suggested_constituent.rotation_radians - relative_constituent.rotation_radians;
+    let (s, c) = rotation_radians.sin_cos();
+    Placement {
+        x: suggested_constituent.x - relative_constituent.x * c + relative_constituent.y * s,
+        y: suggested_constituent.y - relative_constituent.x * s - relative_constituent.y * c,
+        rotation_radians,
+    }
+}
+
 pub(crate) fn placed_unit_overlaps(
     structure: &OrganismStructure,
     candidate: &StructuralUnit,
@@ -849,7 +867,14 @@ fn realize_next_bond_driven(
                         .parts
                         .get(part_index)
                         .and_then(|(name, _)| resource(catalog, name));
-                    if let Some(candidate_resource) = candidate_resource {
+                    if let (Some(candidate_resource), Some(relative_part_placement)) = (
+                        candidate_resource,
+                        new_material
+                            .placements
+                            .as_ref()
+                            .and_then(|placements| placements.get(part_index))
+                            .copied(),
+                    ) {
                         candidate_origins.extend(
                             library
                                 .suggest_rigid_edge_placements(
@@ -859,7 +884,12 @@ fn realize_next_bond_driven(
                                     catalog,
                                 )
                                 .into_iter()
-                                .map(|suggestion| suggestion.placement),
+                                .map(|suggestion| {
+                                    composite_origin_for_constituent_pose(
+                                        suggestion.placement,
+                                        relative_part_placement,
+                                    )
+                                }),
                         );
                     }
                 }
