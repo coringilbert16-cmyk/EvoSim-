@@ -1734,7 +1734,7 @@ impl GeometryLibrary {
             catalog,
             &formation_ids,
         );
-        let fluid_formations = load_fluid_formations(&fluid_formation_path, &entries, catalog);
+        let fluid_formations = load_fluid_formations(&fluid_formation_path, &entries, catalog)?;
         let rigid_point_contact_families = load_rigid_point_contact_families(
             &rigid_point_contact_family_path,
             &entries,
@@ -3281,32 +3281,30 @@ fn load_fluid_formations(
     path: &Path,
     parents: &BTreeMap<String, GeometryFormation>,
     catalog: &[BaseResource],
-) -> BTreeMap<String, GeometryFluidFormation> {
+) -> std::io::Result<BTreeMap<String, GeometryFluidFormation>> {
     let mut records = BTreeMap::new();
     if !path.exists() {
-        return records;
+        return Ok(records);
     }
-    let Ok(file) = File::open(path) else {
-        return records;
-    };
+    let file = File::open(path)?;
     let mut lines = BufReader::new(file).lines().peekable();
-    while let Some(Ok(line)) = lines.next() {
+    while let Some(line_result) = lines.next() {
+        let line = line_result?;
         if line.trim().is_empty() {
             continue;
         }
         let is_last = lines.peek().is_none();
-        let Ok(record) = serde_json::from_str::<GeometryFluidFormation>(&line) else {
-            if is_last {
-                continue;
-            }
-            continue;
+        let record: GeometryFluidFormation = match serde_json::from_str(&line) {
+            Ok(record) => record,
+            Err(_) if is_last => continue,
+            Err(error) => return Err(invalid_storage_data(error.to_string())),
         };
         if !fluid_formation_is_valid(&record, parents, catalog) {
             continue;
         }
         records.entry(record.signature()).or_insert(record);
     }
-    records
+    Ok(records)
 }
 
 fn load_fluid_boundary_families(
