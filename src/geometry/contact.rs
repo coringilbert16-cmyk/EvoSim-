@@ -257,6 +257,127 @@ fn rigid_surface_candidates(
     out
 }
 
+fn multi_contact_fluid_endpoint_pairs(
+    fluid: &StructuralUnit,
+    rigid: &StructuralUnit,
+    catalog: &[crate::resources::BaseResource],
+) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
+    let Some(fluid_shape) = fluid.shape(catalog) else {
+        return Vec::new();
+    };
+    let Form::Fluid {
+        multi_contact_boundary: Some(boundary),
+        ..
+    } = &fluid_shape.form
+    else {
+        return Vec::new();
+    };
+    let tolerance = crate::combine_runtime::COMBINE_CONTACT_TOLERANCE;
+    let (sin, cos) = fluid.placement.rotation_radians.sin_cos();
+    let local_to_world = |x: f64, y: f64| {
+        (
+            fluid.placement.x + x * cos - y * sin,
+            fluid.placement.y + x * sin + y * cos,
+        )
+    };
+    let world_to_local = |x: f64, y: f64| {
+        let dx = x - fluid.placement.x;
+        let dy = y - fluid.placement.y;
+        (dx * cos + dy * sin, -dx * sin + dy * cos)
+    };
+    let on_solid_contact = |x: f64, y: f64| {
+        boundary.pieces.iter().any(|piece| {
+            let crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+                ..
+            } = piece
+            else {
+                return false;
+            };
+            let dx = end_x - start_x;
+            let dy = end_y - start_y;
+            let length_squared = dx * dx + dy * dy;
+            if length_squared <= f64::EPSILON {
+                return false;
+            }
+            let t = (((x - start_x) * dx + (y - start_y) * dy) / length_squared)
+                .clamp(0.0, 1.0);
+            let px = start_x + t * dx;
+            let py = start_y + t * dy;
+            (x - px).hypot(y - py) <= tolerance
+        })
+    };
+
+    let mut pairs = Vec::new();
+    // Discrete rigid endpoints that lie on an intended fluid contact segment.
+    for rigid_endpoint in endpoint_indices(rigid, catalog) {
+        let Some(world_point) = endpoint_world_point(rigid_endpoint, rigid, catalog) else {
+            continue;
+        };
+        let local = world_to_local(world_point.x, world_point.y);
+        if on_solid_contact(local.0, local.1) {
+            pairs.push((
+                ConnectionEndpoint::Fluid {
+                    x: local.0,
+                    y: local.1,
+                },
+                rigid_endpoint,
+            ));
+        }
+    }
+
+    // For circles and polygon edges, the midpoint of a solid-contact piece
+    // provides an exact surface target. The candidate is kept only if the
+    // rigid boundary maps back to that same world point.
+    for piece in &boundary.pieces {
+        let crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+            start_x,
+            start_y,
+            end_x,
+            end_y,
+            ..
+        } = piece
+        else {
+            continue;
+        };
+        for (local_x, local_y) in [
+            (*start_x, *start_y),
+            ((*start_x + *end_x) * 0.5, (*start_y + *end_y) * 0.5),
+            (*end_x, *end_y),
+        ] {
+            let world = local_to_world(local_x, local_y);
+            let Some(rigid_endpoint) = continuous_endpoint(
+                rigid,
+                crate::connection_geometry::WorldConnectionPoint {
+                    x: world.0,
+                    y: world.1,
+                    normal_x: 0.0,
+                    normal_y: 0.0,
+                },
+                catalog,
+            ) else {
+                continue;
+            };
+            let Some(rigid_world) = endpoint_world_point(rigid_endpoint, rigid, catalog) else {
+                continue;
+            };
+            if (rigid_world.x - world.0).hypot(rigid_world.y - world.1) <= tolerance {
+                pairs.push((
+                    ConnectionEndpoint::Fluid {
+                        x: local_x,
+                        y: local_y,
+                    },
+                    rigid_endpoint,
+                ));
+            }
+        }
+    }
+    pairs
+}
+
 fn candidate_endpoints(
     a: &StructuralUnit,
     b: &StructuralUnit,
@@ -293,6 +414,28 @@ fn candidate_endpoints(
     };
 
     candidates.extend(rigid_surface_candidates(a, b, catalog));
+    if matches!(
+        a.shape(catalog).map(|shape| &shape.form),
+        Some(Form::Fluid {
+            multi_contact_boundary: Some(_),
+            ..
+        })
+    ) {
+        candidates.extend(multi_contact_fluid_endpoint_pairs(a, b, catalog));
+    }
+    if matches!(
+        b.shape(catalog).map(|shape| &shape.form),
+        Some(Form::Fluid {
+            multi_contact_boundary: Some(_),
+            ..
+        })
+    ) {
+        candidates.extend(
+            multi_contact_fluid_endpoint_pairs(b, a, catalog)
+                .into_iter()
+                .map(|(fluid_endpoint, rigid_endpoint)| (rigid_endpoint, fluid_endpoint)),
+        );
+    }
     candidates
 }
 
