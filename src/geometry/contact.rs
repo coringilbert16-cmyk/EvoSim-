@@ -318,10 +318,15 @@ fn multi_contact_fluid_endpoint_pairs(
         };
         let local = world_to_local(world_point.x, world_point.y);
         if on_solid_contact(local.0, local.1) {
+            let Some(contact_point) =
+                crate::surface_geometry::boundary_point_at_multi_contact(boundary, local.0, local.1)
+            else {
+                continue;
+            };
             pairs.push((
                 ConnectionEndpoint::Fluid {
-                    x: local.0,
-                    y: local.1,
+                    x: contact_point.x,
+                    y: contact_point.y,
                 },
                 rigid_endpoint,
             ));
