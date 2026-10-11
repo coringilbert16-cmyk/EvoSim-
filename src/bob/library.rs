@@ -6173,7 +6173,7 @@ mod compact_family_storage_tests {
             .find(|resource| resource.name == "Carbon")
             .unwrap();
         let area = match &water.shape.form {
-            Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+            Form::Circle { radius } => std::f64::consts::PI * *radius * *radius,
             Form::Fluid { nominal_area, .. } => *nominal_area,
             _ => panic!("water must have a fluid-compatible shape"),
         };
