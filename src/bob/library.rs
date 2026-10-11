@@ -6603,9 +6603,9 @@ mod fluid_contact_constraint_schema_tests {
         let mut catalog = crate::resources::default_catalog();
         let water = catalog.iter().find(|item| item.name == "Water").unwrap().clone();
         let carbon = catalog.iter().find(|item| item.name == "Carbon").unwrap().clone();
-        let area = match water.shape.form {
+        let area = match &water.shape.form {
             Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-            Form::Fluid { nominal_area, .. } => nominal_area,
+            Form::Fluid { nominal_area, .. } => *nominal_area,
             _ => panic!("Water must expose a conserved fluid area"),
         };
         let family = solve_water_against_solid(
@@ -6649,9 +6649,9 @@ mod fluid_contact_constraint_schema_tests {
         let parent = raw_parent.canonicalized(&catalog).unwrap();
         let mut edges = parent.constituents.iter().enumerate().map(|(index, constituent)| {
             let resource = catalog.iter().find(|item| item.name == constituent.resource).unwrap();
-            let Form::Line { length } = resource.shape.form else { panic!("test wall must be a line") };
-            let a = world_point((-length * 0.5, 0.0), constituent.placement);
-            let b = world_point((length * 0.5, 0.0), constituent.placement);
+            let Form::Line { length } = &resource.shape.form else { panic!("test wall must be a line") };
+            let a = world_point((-*length * 0.5, 0.0), constituent.placement);
+            let b = world_point((*length * 0.5, 0.0), constituent.placement);
             (index, a, b)
         }).collect::<Vec<_>>();
         let first = edges.first().unwrap();
