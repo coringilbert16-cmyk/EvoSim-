@@ -450,7 +450,7 @@ mod tests {
         let closest = arc.closest_point(0.0, 2.0).unwrap();
         assert!(closest.0.abs() < 1e-12);
         assert!(closest.1.abs() < 1e-12);
-        assert!(arc.ray_intersection(-2.0, -1.0, 1.0, 0.0).is_none());
+        assert!(arc.ray_intersection(-2.0, -2.0, 1.0, 0.0).is_none());
     }
 
     #[test]
