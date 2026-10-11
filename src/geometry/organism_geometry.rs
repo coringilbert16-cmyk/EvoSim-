@@ -151,8 +151,12 @@ fn form_contains_point(
         Form::Fluid {
             nominal_area,
             boundary,
-            arc_boundary, ..} => {
-            if let Some(arc) = arc_boundary {
+            arc_boundary,
+            multi_contact_boundary,
+        } => {
+            if let Some(multi) = multi_contact_boundary {
+                multi.contains_point(local_x, local_y)
+            } else if let Some(arc) = arc_boundary {
                 let start = arc.start_point();
                 let end = arc.end_point();
                 let chord_side = (end.0 - start.0) * (local_y - start.1)
