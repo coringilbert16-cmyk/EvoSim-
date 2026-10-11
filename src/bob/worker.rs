@@ -395,7 +395,7 @@ mod tests {
         let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
         let persisted_signatures = reopened
             .fluid_formations()
-            .map(|formation| formation.signature.clone())
+            .map(|formation| formation.signature().to_owned())
             .collect::<std::collections::BTreeSet<_>>();
         assert!(!persisted_signatures.is_empty());
         assert!(reopened.fluid_formations().all(|formation| {
@@ -406,7 +406,7 @@ mod tests {
         let _ = process_one_frontier(&mut resumed, &catalog, 2).unwrap();
         let resumed_signatures = resumed
             .fluid_formations()
-            .map(|formation| formation.signature.clone())
+            .map(|formation| formation.signature().to_owned())
             .collect::<std::collections::BTreeSet<_>>();
         assert!(persisted_signatures.is_subset(&resumed_signatures));
         assert_eq!(
