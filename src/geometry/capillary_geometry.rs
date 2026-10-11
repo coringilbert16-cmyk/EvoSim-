@@ -38,6 +38,29 @@ pub struct CircularArcBoundary {
 
 #[allow(dead_code)] // Keep the exact primitive available to the integration sprint.
 impl CircularArcBoundary {
+    /// Reconstruct an exact arc from persisted Bob scalars, rejecting inconsistent records.
+    pub fn from_persisted_solution(
+        area: f64,
+        contact_angle_radians: f64,
+        curvature_radius: f64,
+        free_arc_angle_radians: f64,
+        contact_length: f64,
+    ) -> Option<Self> {
+        let family = CapillaryContactFamily::solve(area, contact_angle_radians)?;
+        let radius_tolerance = 1e-9 * family.curvature_radius.max(1.0);
+        let length_tolerance = 1e-9 * family.contact_length.max(1.0);
+        if !curvature_radius.is_finite()
+            || !free_arc_angle_radians.is_finite()
+            || !contact_length.is_finite()
+            || (family.curvature_radius - curvature_radius).abs() > radius_tolerance
+            || (family.free_arc_angle_radians - free_arc_angle_radians).abs() > 1e-9
+            || (family.contact_length - contact_length).abs() > length_tolerance
+        {
+            return None;
+        }
+        Self::from_flat_contact(family)
+    }
+
     /// Construct the exact free arc for a solved flat-contact capillary family.
     ///
     /// The returned descriptor is in an edge-local frame: the solid contact
@@ -565,6 +588,28 @@ mod tests {
             assert!((arc.center_y + arc.radius * midpoint.sin()).abs() > 0.0);
             assert!(arc.center_y + arc.radius * midpoint.sin() > 0.0);
         }
+    }
+
+    #[test]
+    fn persisted_fluid_solution_reconstructs_exact_arc_and_rejects_mismatch() {
+        let family = CapillaryContactFamily::solve(0.5, PI / 2.0).unwrap();
+        let arc = CircularArcBoundary::from_persisted_solution(
+            family.area,
+            family.contact_angle_radians,
+            family.curvature_radius,
+            family.free_arc_angle_radians,
+            family.contact_length,
+        )
+        .unwrap();
+        assert!((arc.segment_area().unwrap() - family.area).abs() < 1e-10);
+        assert!(CircularArcBoundary::from_persisted_solution(
+            family.area,
+            family.contact_angle_radians,
+            family.curvature_radius * 1.1,
+            family.free_arc_angle_radians,
+            family.contact_length,
+        )
+        .is_none());
     }
 
     #[test]
