@@ -576,7 +576,7 @@ fn form_remaining_multi_contact_bonds(
             continue;
         }
         let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
-        let Some(candidate) = crate::contact::connection_pair_candidates_cached(
+        let mut candidates = crate::contact::connection_pair_candidates_cached(
             structure,
             target_index,
             fluid_unit_index,
@@ -589,7 +589,8 @@ fn form_remaining_multi_contact_bonds(
                 && candidate.available_a
                 && candidate.available_b
         })
-        .min_by(|a, b| {
+        .collect::<Vec<_>>();
+        candidates.sort_by(|a, b| {
             a.distance
                 .partial_cmp(&b.distance)
                 .unwrap_or(std::cmp::Ordering::Equal)
@@ -598,33 +599,38 @@ fn form_remaining_multi_contact_bonds(
                         .partial_cmp(&a.facing)
                         .unwrap_or(std::cmp::Ordering::Equal)
                 })
-        }) else {
-            return false;
-        };
-        let Some((_, _, investment, _required_energy)) =
-            crate::combine_runtime::selected_candidate_evaluation(
+        });
+        let mut bonded = false;
+        for candidate in candidates {
+            let Some((_, _, investment, _required_energy)) =
+                crate::combine_runtime::selected_candidate_evaluation(
+                    structure,
+                    target_index,
+                    fluid_unit_index,
+                    candidate,
+                    catalog,
+                )
+            else {
+                continue;
+            };
+            if crate::combine_runtime::form_selected_bond(
                 structure,
                 target_index,
                 fluid_unit_index,
                 candidate,
+                investment,
                 catalog,
+                &mut bond_cache,
+                ledger,
+                energy,
             )
-        else {
-            return false;
-        };
-        if crate::combine_runtime::form_selected_bond(
-            structure,
-            target_index,
-            fluid_unit_index,
-            candidate,
-            investment,
-            catalog,
-            &mut bond_cache,
-            ledger,
-            energy,
-        )
-        .is_none()
-        {
+            .is_some()
+            {
+                bonded = true;
+                break;
+            }
+        }
+        if !bonded {
             return false;
         }
     }
