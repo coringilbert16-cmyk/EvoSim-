@@ -816,6 +816,8 @@ mod tests {
                 multi_contact_boundary: None,
             },
         };
+        assert!(!water.realize_fluid_geometry(bulk_fitted.clone(), &catalog));
+        assert_eq!(water.geometry.as_ref().unwrap().shape(), &fitted);
         assert!(bulk_water.realize_fluid_geometry(bulk_fitted.clone(), &catalog));
         assert_eq!(bulk_water.geometry.as_ref().unwrap().shape(), &bulk_fitted);
 
