@@ -216,7 +216,8 @@ mod tests {
                 nominal_area: 0.5,
                 boundary: None,
                 arc_boundary: None,
-            },
+                        multi_contact_boundary: None,
+},
         };
         assert!(boundary_point_toward(&s, 1.0, 0.0).is_none())
     }
@@ -234,7 +235,8 @@ mod tests {
                 nominal_area: 0.5,
                 boundary: None,
                 arc_boundary: Some(arc),
-            },
+                        multi_contact_boundary: None,
+},
         };
         assert!(shape.is_valid());
         assert!(shape.form.polygon_vertices().is_none());
