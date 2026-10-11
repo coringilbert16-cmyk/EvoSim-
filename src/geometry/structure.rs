@@ -148,7 +148,7 @@ impl StructuralUnit {
             } => *nominal_area,
             _ => return false,
         };
-        let expected_area = default_area * amount;
+        let expected_area = default_area * *amount;
         if !expected_area.is_finite()
             || (realized_area - expected_area).abs() > 1e-9 * expected_area.max(1.0)
         {
