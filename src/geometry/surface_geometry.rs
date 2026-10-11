@@ -88,6 +88,67 @@ fn line_endpoint_toward(length: f64, target_x: f64, target_y: f64) -> Option<Bou
             normal_y: ny,
         })
 }
+fn multi_contact_boundary_toward(
+    boundary: &crate::capillary_geometry::MultiContactFluidBoundary,
+    target_x: f64,
+    target_y: f64,
+) -> Option<BoundaryPoint> {
+    let (ux, uy) = normalized(target_x, target_y)?;
+    if !boundary.is_valid() {
+        return None;
+    }
+    let mut best: Option<(f64, BoundaryPoint)> = None;
+    for piece in &boundary.pieces {
+        let candidate = match piece {
+            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+                ..
+            } => {
+                let ex = end_x - start_x;
+                let ey = end_y - start_y;
+                let denominator = ux * ey - uy * ex;
+                if denominator.abs() <= 1e-12 {
+                    continue;
+                }
+                let t = (start_x * ey - start_y * ex) / denominator;
+                let along = (start_x * uy - start_y * ux) / denominator;
+                if t <= 1e-12 || !(-1e-10..=1.0000000001).contains(&along) {
+                    continue;
+                }
+                let length = ex.hypot(ey);
+                if length <= f64::EPSILON {
+                    continue;
+                }
+                Some((
+                    t,
+                    BoundaryPoint {
+                        x: t * ux,
+                        y: t * uy,
+                        // Valid multi-contact boundaries have positive signed
+                        // area, so their ordered pieces are counter-clockwise.
+                        normal_x: ey / length,
+                        normal_y: -ex / length,
+                    },
+                ))
+            }
+            crate::capillary_geometry::FluidBoundaryPiece::FreeArc(arc) => {
+                let (t, x, y) = arc.ray_intersection(0.0, 0.0, ux, uy)?;
+                let angle = (y - arc.center_y).atan2(x - arc.center_x);
+                let (normal_x, normal_y) = arc.normal_at_angle(angle)?;
+                Some((t, BoundaryPoint { x, y, normal_x, normal_y }))
+            }
+        };
+        if let Some((t, point)) = candidate {
+            if best.as_ref().is_none_or(|(best_t, _)| t < *best_t) {
+                best = Some((t, point));
+            }
+        }
+    }
+    best.map(|(_, point)| point)
+}
 pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Option<BoundaryPoint> {
     match &shape.form {
         Form::Circle { radius } => {
@@ -110,9 +171,12 @@ pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Opt
         Form::Fluid {
             boundary,
             arc_boundary,
+            multi_contact_boundary,
             ..
         } => {
-            if let Some(arc) = arc_boundary {
+            if let Some(multi) = multi_contact_boundary {
+                multi_contact_boundary_toward(multi, target_x, target_y)
+            } else if let Some(arc) = arc_boundary {
                 let (ux, uy) = normalized(target_x, target_y)?;
                 let (_, x, y) = arc.ray_intersection(0.0, 0.0, ux, uy)?;
                 let angle = (y - arc.center_y).atan2(x - arc.center_x);
@@ -246,6 +310,62 @@ mod tests {
         assert!((point.y - arc.radius).abs() < 1e-10);
         assert!((point.normal_x).abs() < 1e-10);
         assert!((point.normal_y - 1.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn multi_contact_fluid_boundary_query_uses_exact_segments_and_outward_normals() {
+        let shape = Shape {
+            form: Form::Fluid {
+                nominal_area: 4.0,
+                boundary: None,
+                arc_boundary: None,
+                multi_contact_boundary: Some(
+                    crate::capillary_geometry::MultiContactFluidBoundary {
+                        nominal_area: 4.0,
+                        pieces: vec![
+                            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                                start_x: -1.0,
+                                start_y: -1.0,
+                                end_x: 1.0,
+                                end_y: -1.0,
+                                contact_angle_radians: std::f64::consts::FRAC_PI_2,
+                            },
+                            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                                start_x: 1.0,
+                                start_y: -1.0,
+                                end_x: 1.0,
+                                end_y: 1.0,
+                                contact_angle_radians: std::f64::consts::FRAC_PI_2,
+                            },
+                            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                                start_x: 1.0,
+                                start_y: 1.0,
+                                end_x: -1.0,
+                                end_y: 1.0,
+                                contact_angle_radians: std::f64::consts::FRAC_PI_2,
+                            },
+                            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                                start_x: -1.0,
+                                start_y: 1.0,
+                                end_x: -1.0,
+                                end_y: -1.0,
+                                contact_angle_radians: std::f64::consts::FRAC_PI_2,
+                            },
+                        ],
+                    },
+                ),
+            },
+        };
+        assert!(shape.is_valid());
+        let right = boundary_point_toward(&shape, 1.0, 0.0).unwrap();
+        assert!((right.x - 1.0).abs() < 1e-12);
+        assert!(right.normal_x > 0.99);
+        assert!(right.normal_y.abs() < 1e-12);
+
+        let top = boundary_point_toward(&shape, 0.0, 1.0).unwrap();
+        assert!((top.y - 1.0).abs() < 1e-12);
+        assert!(top.normal_y > 0.99);
+        assert!(top.normal_x.abs() < 1e-12);
     }
 
     #[test]
