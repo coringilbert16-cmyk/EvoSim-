@@ -291,16 +291,15 @@ impl ActiveMaterialField {
                 .parts
                 .iter()
                 .zip(placements.iter())
-                .all(|((name, _), placement)| {
-                    let Some(resource) = catalog.iter().find(|resource| resource.name == *name)
-                    else {
+                .enumerate()
+                .all(|(part_index, ((name, _), placement))| {
+                    if !catalog.iter().any(|resource| resource.name == *name) {
+                        return false;
+                    }
+                    let Some(shape) = physical.realized_shape_for_part(part_index, catalog) else {
                         return false;
                     };
-                    Self::realized_form_fully_inside_region(
-                        &resource.shape.form,
-                        *placement,
-                        region,
-                    )
+                    Self::realized_form_fully_inside_region(&shape.form, *placement, region)
                 })
         })
     }
