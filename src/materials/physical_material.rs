@@ -165,7 +165,16 @@ impl PhysicalMaterial {
                 _ => return None,
             };
             let shape_area = match &shape.form {
-                crate::resources::Form::Fluid { nominal_area, .. } => *nominal_area,
+                crate::resources::Form::Fluid {
+                    nominal_area,
+                    boundary: Some(_),
+                    ..
+                }
+                | crate::resources::Form::Fluid {
+                    nominal_area,
+                    arc_boundary: Some(_),
+                    ..
+                } => *nominal_area,
                 _ => return None,
             };
             if (shape_area - default_area).abs() > 1e-9 * default_area.max(1.0) {
@@ -275,7 +284,12 @@ impl PhysicalMaterial {
     }
 
     pub(crate) fn is_realized(&self) -> bool {
-        self.placements.is_some() && self.internal_connections.is_some()
+        self.placements.is_some()
+            && self.internal_connections.is_some()
+            && self.realized_shapes.as_ref().map_or(true, |shapes| {
+                shapes.len() == self.material.parts.len()
+                    && shapes.iter().all(crate::resources::Shape::is_valid)
+            })
     }
 
     /// Re-express this realization in a deterministic local frame anchored on
