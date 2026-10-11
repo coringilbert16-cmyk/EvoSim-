@@ -6,7 +6,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, integration/unified-source-and-catalogue]
 
 permissions:
   contents: read
