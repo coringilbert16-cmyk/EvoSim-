@@ -1201,6 +1201,39 @@ mod tests {
     }
 
     #[test]
+    fn multi_contact_containment_handles_mixed_line_and_arc_with_rotation() {
+        let boundary = MultiContactFluidBoundary {
+            nominal_area: std::f64::consts::FRAC_PI_2,
+            pieces: vec![
+                FluidBoundaryPiece::SolidContact {
+                    start_x: -1.0,
+                    start_y: 0.0,
+                    end_x: 1.0,
+                    end_y: 0.0,
+                    contact_angle_radians: std::f64::consts::FRAC_PI_2,
+                },
+                FluidBoundaryPiece::FreeArc(CircularArcBoundary {
+                    center_x: 0.0,
+                    center_y: 0.0,
+                    radius: 1.0,
+                    start_angle_radians: 0.0,
+                    sweep_radians: std::f64::consts::PI,
+                }),
+            ],
+        };
+        assert!(boundary.is_valid());
+        assert!(boundary.contains_point(0.0, 0.5));
+        assert!(!boundary.contains_point(0.0, -0.5));
+        let rotated = boundary
+            .transformed(4.0, -3.0, std::f64::consts::FRAC_PI_2)
+            .expect("rotation preserves a valid closed boundary");
+        assert!(rotated.contains_point(3.5, -3.0));
+        assert!(!rotated.contains_point(4.5, -3.0));
+        assert_eq!(rotated.contact_count(), 1);
+        assert_eq!(rotated.free_arc_count(), 1);
+    }
+
+    #[test]
     fn multi_contact_boundary_transform_preserves_exact_area_and_contacts() {
         let angle = PI / 2.0;
         let boundary = MultiContactFluidBoundary {
