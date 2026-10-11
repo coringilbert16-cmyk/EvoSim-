@@ -747,6 +747,12 @@ impl GeometryFluidFormation {
                 || !boundary.is_valid()
                 || !self.area.is_finite()
                 || (boundary.nominal_area - self.area).abs() > 1e-9 * self.area.max(1.0)
+                || !multi_contact_boundary_matches_constraints(
+                    boundary,
+                    parent,
+                    &self.contact_constraints,
+                    catalog,
+                )
                 || self.contact_constraints.iter().any(|constraint| {
                     constraint.constituent_index >= parent.constituents.len()
                         || !parent
@@ -893,6 +899,97 @@ impl GeometryFluidFormation {
         }
         signature
     }
+}
+
+fn multi_contact_boundary_matches_constraints(
+    boundary: &MultiContactFluidBoundary,
+    parent: &GeometryFormation,
+    constraints: &[GeometryFluidContactConstraint],
+    catalog: &[BaseResource],
+) -> bool {
+    const TOLERANCE: f64 = 1e-7;
+    if constraints.len() < 2 || boundary.contact_count() != constraints.len() {
+        return false;
+    }
+    let mut matched_pieces = std::collections::BTreeSet::new();
+
+    for constraint in constraints {
+        let Some(constituent) = parent.constituents.get(constraint.constituent_index) else {
+            return false;
+        };
+        let Some(resource) = catalog
+            .iter()
+            .find(|item| item.name == constituent.resource)
+        else {
+            return false;
+        };
+        if resource.physical_state == crate::resources::PhysicalState::Fluid {
+            return false;
+        }
+        let Some((local_start, local_end)) =
+            rigid_boundary_segments(&resource.shape.form).get(constraint.edge_index).copied()
+        else {
+            return false;
+        };
+        let edge_start = world_point(local_start, constituent.placement);
+        let edge_end = world_point(local_end, constituent.placement);
+        let edge_dx = edge_end.0 - edge_start.0;
+        let edge_dy = edge_end.1 - edge_start.1;
+        let edge_length_squared = edge_dx * edge_dx + edge_dy * edge_dy;
+        let edge_length = edge_length_squared.sqrt();
+        if !edge_length.is_finite() || edge_length <= TOLERANCE {
+            return false;
+        }
+
+        let mut found = None;
+        for (piece_index, piece) in boundary.pieces.iter().enumerate() {
+            if matched_pieces.contains(&piece_index) {
+                continue;
+            }
+            let FluidBoundaryPiece::SolidContact {
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+                ..
+            } = piece
+            else {
+                continue;
+            };
+            let project = |x: f64, y: f64| {
+                let dx = x - edge_start.0;
+                let dy = y - edge_start.1;
+                let parameter = (dx * edge_dx + dy * edge_dy) / edge_length_squared;
+                let nearest_x = edge_start.0 + parameter * edge_dx;
+                let nearest_y = edge_start.1 + parameter * edge_dy;
+                let distance = (x - nearest_x).hypot(y - nearest_y);
+                (parameter, distance)
+            };
+            let (start_parameter, start_distance) = project(*start_x, *start_y);
+            let (end_parameter, end_distance) = project(*end_x, *end_y);
+            let segment_length = (*end_x - *start_x).hypot(*end_y - *start_y);
+            let center_parameter = (start_parameter + end_parameter) * 0.5;
+            if start_distance <= TOLERANCE
+                && end_distance <= TOLERANCE
+                && start_parameter >= -TOLERANCE
+                && start_parameter <= 1.0 + TOLERANCE
+                && end_parameter >= -TOLERANCE
+                && end_parameter <= 1.0 + TOLERANCE
+                && (segment_length - constraint.contact_length).abs() <= TOLERANCE
+                && center_parameter >= constraint.edge_parameter_start - TOLERANCE
+                && center_parameter <= constraint.edge_parameter_end + TOLERANCE
+            {
+                found = Some(piece_index);
+                break;
+            }
+        }
+        let Some(piece_index) = found else {
+            return false;
+        };
+        matched_pieces.insert(piece_index);
+    }
+
+    matched_pieces.len() == boundary.contact_count()
 }
 
 pub fn fluid_formations_from_boundaries(
