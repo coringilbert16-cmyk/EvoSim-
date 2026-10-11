@@ -321,11 +321,11 @@ fn process_one_frontier(
                 if boundary_states.is_empty() {
                     metrics.water_frontiers_without_boundary_candidates += 1;
                 }
-                let fluid_formations = if formation.constituents.len() < max_constituents {
-                    fluid_formations_from_boundaries(&boundary_states)
-                } else {
-                    Vec::new()
-                };
+                // The configured limit bounds rigid parent formations, not the
+                // additional deformable fluid body. Generate fluid records for
+                // every eligible parent at or below the limit, including parents
+                // exactly at max_constituents.
+                let fluid_formations = fluid_formations_from_boundaries(&boundary_states);
                 metrics.fluid_formations += fluid_formations.len();
                 metrics.water_families_added += library.insert_contact_families(families)?;
                 metrics.fluid_boundary_families_added +=
