@@ -120,6 +120,7 @@ impl PhysicalMaterial {
         let default_area = match &resource.shape.form {
             crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
             crate::resources::multi_contact_boundary: None,
+multi_contact_boundary: None,
 Form::Fluid { nominal_area, .. } => *nominal_area,
             _ => return None,
         };
@@ -163,6 +164,7 @@ Form::Fluid { nominal_area, .. } => *nominal_area,
             let default_area = match &resource.shape.form {
                 crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
                 crate::resources::multi_contact_boundary: None,
+multi_contact_boundary: None,
 Form::Fluid { nominal_area, .. } => *nominal_area,
                 _ => return None,
             };
