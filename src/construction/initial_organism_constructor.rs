@@ -648,6 +648,50 @@ fn fluid_segment_contains_world_point(shape: &Shape, placement: Placement, x: f6
         && (local_x - arc.center_x).hypot(local_y - arc.center_y) <= arc.radius + 1e-9
 }
 
+fn rigid_form_contains_world_point(
+    form: &Form,
+    placement: Placement,
+    x: f64,
+    y: f64,
+) -> bool {
+    let dx = x - placement.x;
+    let dy = y - placement.y;
+    let (sin, cos) = placement.rotation_radians.sin_cos();
+    let local_x = dx * cos + dy * sin;
+    let local_y = -dx * sin + dy * cos;
+    match form {
+        Form::Circle { radius } => local_x.hypot(local_y) <= *radius + 1e-9,
+        Form::Line { length } => {
+            local_y.abs() <= 1e-9 && local_x.abs() <= length * 0.5 + 1e-9
+        }
+        _ => {
+            let Some(vertices) = form.polygon_vertices() else {
+                return false;
+            };
+            let mut inside = false;
+            for index in 0..vertices.len() {
+                let (x1, y1) = vertices[index];
+                let (x2, y2) = vertices[(index + 1) % vertices.len()];
+                let cross = (local_x - x1) * (y2 - y1) - (local_y - y1) * (x2 - x1);
+                if cross.abs() <= 1e-9
+                    && local_x >= x1.min(x2) - 1e-9
+                    && local_x <= x1.max(x2) + 1e-9
+                    && local_y >= y1.min(y2) - 1e-9
+                    && local_y <= y1.max(y2) + 1e-9
+                {
+                    return true;
+                }
+                if (y1 > local_y) != (y2 > local_y)
+                    && local_x < (x2 - x1) * (local_y - y1) / (y2 - y1) + x1
+                {
+                    inside = !inside;
+                }
+            }
+            inside
+        }
+    }
+}
+
 fn rigid_part_world_points(form: &Form, placement: Placement) -> Vec<(f64, f64)> {
     let local = match form {
         Form::Circle { .. } => vec![(0.0, 0.0)],
@@ -767,7 +811,42 @@ fn bob_fluid_acquisition_candidate(
                     };
                     let rigid_points =
                         rigid_part_world_points(&other_shape.form, other_unit.placement);
-                    if fluid_segment_contains_world_point(
+                    let midpoint_angle =
+                        match &shape.form {
+                            Form::Fluid {
+                                arc_boundary: Some(arc),
+                                ..
+                            } => arc.start_angle_radians + arc.sweep_radians * 0.5,
+                            _ => {
+                                valid = false;
+                                break;
+                            }
+                        };
+                    let Form::Fluid {
+                        arc_boundary: Some(arc),
+                        ..
+                    } = &shape.form
+                    else {
+                        valid = false;
+                        break;
+                    };
+                    let (fluid_sin, fluid_cos) = placement.rotation_radians.sin_cos();
+                    let arc_midpoint_local = (
+                        arc.center_x + arc.radius * midpoint_angle.cos(),
+                        arc.center_y + arc.radius * midpoint_angle.sin(),
+                    );
+                    let arc_midpoint_world = (
+                        placement.x + arc_midpoint_local.0 * fluid_cos
+                            - arc_midpoint_local.1 * fluid_sin,
+                        placement.y + arc_midpoint_local.0 * fluid_sin
+                            + arc_midpoint_local.1 * fluid_cos,
+                    );
+                    if rigid_form_contains_world_point(
+                        &other_shape.form,
+                        other_unit.placement,
+                        arc_midpoint_world.0,
+                        arc_midpoint_world.1,
+                    ) || fluid_segment_contains_world_point(
                         &shape,
                         placement,
                         other_unit.placement.x,
