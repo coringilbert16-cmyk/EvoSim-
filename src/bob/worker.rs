@@ -400,9 +400,12 @@ mod tests {
                 && formation.fluid_resource == "Water"
         }));
         let mut resumed = reopened;
-        assert!(process_one_frontier(&mut resumed, &catalog, 2)
-            .unwrap()
-            .is_none(), "a fully checkpointed frontier must resume idle without regenerating records");
+        assert!(
+            process_one_frontier(&mut resumed, &catalog, 2)
+                .unwrap()
+                .is_none(),
+            "a fully checkpointed frontier must resume idle without regenerating records"
+        );
         assert_eq!(resumed.fluid_formations().count(), persisted_count);
         drop(resumed);
         let _ = std::fs::remove_dir_all(root);
