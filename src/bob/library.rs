@@ -1252,6 +1252,7 @@ pub fn generate_collinear_multi_contact_formations(
     }
 
     let mut generated = BTreeMap::<String, GeometryFluidFormation>::new();
+    let mut processed_line_families = std::collections::BTreeSet::new();
     for seed in &exposed {
         let seed_dx = seed.5 .0 - seed.4 .0;
         let seed_dy = seed.5 .1 - seed.4 .1;
@@ -1279,6 +1280,15 @@ pub fn generate_collinear_multi_contact_formations(
         ) else {
             continue;
         };
+        let line_family_key = (
+            quantize(direction.0),
+            quantize(direction.1),
+            quantize(line_offset),
+            quantize(seed_family.contact_angle_radians),
+        );
+        if !processed_line_families.insert(line_family_key) {
+            continue;
+        }
         let mut aligned = exposed
             .iter()
             .filter_map(|edge| {
