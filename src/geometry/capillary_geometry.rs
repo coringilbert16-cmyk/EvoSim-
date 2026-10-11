@@ -526,6 +526,38 @@ pub struct MultiContactFluidBoundary {
     pub pieces: Vec<FluidBoundaryPiece>,
 }
 
+fn line_segments_intersect(
+    a: (f64, f64),
+    b: (f64, f64),
+    c: (f64, f64),
+    d: (f64, f64),
+    tolerance: f64,
+) -> bool {
+    fn cross(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> f64 {
+        (b.0 - a.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0)
+    }
+    fn on_segment(point: (f64, f64), a: (f64, f64), b: (f64, f64), tolerance: f64) -> bool {
+        point.0 >= a.0.min(b.0) - tolerance
+            && point.0 <= a.0.max(b.0) + tolerance
+            && point.1 >= a.1.min(b.1) - tolerance
+            && point.1 <= a.1.max(b.1) + tolerance
+    }
+
+    let o1 = cross(a, b, c);
+    let o2 = cross(a, b, d);
+    let o3 = cross(c, d, a);
+    let o4 = cross(c, d, b);
+    if ((o1 > tolerance && o2 < -tolerance) || (o1 < -tolerance && o2 > tolerance))
+        && ((o3 > tolerance && o4 < -tolerance) || (o3 < -tolerance && o4 > tolerance))
+    {
+        return true;
+    }
+    (o1.abs() <= tolerance && on_segment(c, a, b, tolerance))
+        || (o2.abs() <= tolerance && on_segment(d, a, b, tolerance))
+        || (o3.abs() <= tolerance && on_segment(a, c, d, tolerance))
+        || (o4.abs() <= tolerance && on_segment(b, c, d, tolerance))
+}
+
 impl MultiContactFluidBoundary {
     /// Validate closure, each analytic piece, and the area from Green's theorem.
     /// No arc is tessellated or replaced with a polygon.
@@ -560,6 +592,49 @@ impl MultiContactFluidBoundary {
                 return false;
             }
         }
+
+        // Straight contact intervals that are not neighbors in the closed
+        // boundary may not cross or touch. Adjacent pieces are allowed to
+        // share their one closing endpoint. Arc-related intersections are
+        // handled separately by exact arc operations when that solver lands.
+        let count = self.pieces.len();
+        for first in 0..count {
+            let FluidBoundaryPiece::SolidContact {
+                start_x: ax,
+                start_y: ay,
+                end_x: bx,
+                end_y: by,
+                ..
+            } = self.pieces[first]
+            else {
+                continue;
+            };
+            for second in (first + 1)..count {
+                if second == first + 1 || (first == 0 && second == count - 1) {
+                    continue;
+                }
+                let FluidBoundaryPiece::SolidContact {
+                    start_x: cx,
+                    start_y: cy,
+                    end_x: dx,
+                    end_y: dy,
+                    ..
+                } = self.pieces[second]
+                else {
+                    continue;
+                };
+                if line_segments_intersect(
+                    (ax, ay),
+                    (bx, by),
+                    (cx, cy),
+                    (dx, dy),
+                    tolerance,
+                ) {
+                    return false;
+                }
+            }
+        }
+
         let Some(signed_area) = self.pieces.iter().try_fold(0.0, |sum, piece| {
             piece.signed_area_contribution().map(|value| sum + value)
         }) else {
