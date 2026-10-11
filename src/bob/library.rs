@@ -6391,5 +6391,33 @@ mod fluid_contact_constraint_schema_tests {
             legacy.solved_boundary = None;
             legacy.signature()
         });
+
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-multicontact-fluid-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        {
+            let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+            library.insert(parent.clone(), &catalog).unwrap();
+            assert_eq!(
+                library
+                    .insert_fluid_formations(vec![formation.clone()], &catalog)
+                    .unwrap(),
+                1,
+                "a complete solved boundary should pass Bob's persistence validator"
+            );
+        }
+        let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
+        let persisted = reopened
+            .fluid_formations_for_parent(&parent.signature, "Water")
+            .find(|candidate| candidate.signature() == formation.signature())
+            .expect("complete multi-contact boundary should survive persistence");
+        assert_eq!(persisted.solved_boundary.as_ref(), Some(&boundary));
+        assert!(persisted
+            .realize_against_parent(&parent, &catalog, true)
+            .is_some());
+        drop(reopened);
+        let _ = std::fs::remove_dir_all(root);
     }
 }
