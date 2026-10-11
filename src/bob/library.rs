@@ -3405,6 +3405,7 @@ pub fn generate_fluid_boundary_families_from_contact_families(
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct WaterContactGenerationDiagnostics {
     pub eligible_anchors: usize,
+    pub unresolved_anchor_resources: usize,
     pub unsupported_anchor_geometry: usize,
     pub capillary_solver_failures: usize,
     pub anchors_without_exposed_intervals: usize,
@@ -3448,7 +3449,7 @@ pub fn generate_water_contact_families_with_diagnostics(
     let mut out = Vec::new();
     for (anchor_index, constituent) in formation.constituents.iter().enumerate() {
         let Some(resource) = catalog.iter().find(|r| r.name == constituent.resource) else {
-            diagnostics.unsupported_anchor_geometry += 1;
+            diagnostics.unresolved_anchor_resources += 1;
             continue;
         };
         if resource.physical_state == crate::resources::PhysicalState::Fluid {
@@ -5636,7 +5637,8 @@ mod compact_family_storage_tests {
             generate_water_contact_families_with_diagnostics(&formation, water, &catalog);
 
         assert!(families.is_empty());
-        assert_eq!(diagnostics.unsupported_anchor_geometry, 1);
+        assert_eq!(diagnostics.unresolved_anchor_resources, 1);
+        assert_eq!(diagnostics.unsupported_anchor_geometry, 0);
         assert_eq!(diagnostics.eligible_anchors, 0);
     }
 
