@@ -215,6 +215,70 @@ impl CircularArcBoundary {
         None
     }
 
+    /// Exact intersections between this finite circular arc and a segment.
+    ///
+    /// Returns zero, one, or two distinct points. Segment endpoints are included;
+    /// intersections on the circle but outside this arc's angular sweep are not.
+    pub fn segment_intersections(
+        &self,
+        ax: f64,
+        ay: f64,
+        bx: f64,
+        by: f64,
+    ) -> Option<Vec<(f64, f64)>> {
+        if !self.is_finite_arc()
+            || !ax.is_finite()
+            || !ay.is_finite()
+            || !bx.is_finite()
+            || !by.is_finite()
+        {
+            return None;
+        }
+        let dx = bx - ax;
+        let dy = by - ay;
+        let ox = ax - self.center_x;
+        let oy = ay - self.center_y;
+        let a = dx * dx + dy * dy;
+        if a <= f64::EPSILON {
+            let radial_error = ox.hypot(oy) - self.radius;
+            let angle = oy.atan2(ox);
+            return Some(if radial_error.abs() <= EPS && self.contains_angle(angle) {
+                vec![(ax, ay)]
+            } else {
+                Vec::new()
+            });
+        }
+        let b = 2.0 * (ox * dx + oy * dy);
+        let c = ox * ox + oy * oy - self.radius * self.radius;
+        let discriminant = b * b - 4.0 * a * c;
+        if !discriminant.is_finite() || discriminant < -EPS {
+            return Some(Vec::new());
+        }
+        let root = discriminant.max(0.0).sqrt();
+        let mut parameters = [(-b - root) / (2.0 * a), (-b + root) / (2.0 * a)];
+        parameters.sort_by(|left, right| {
+            left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let mut intersections = Vec::with_capacity(2);
+        for t in parameters {
+            if !(-EPS..=1.0 + EPS).contains(&t) {
+                continue;
+            }
+            let t = t.clamp(0.0, 1.0);
+            let x = ax + t * dx;
+            let y = ay + t * dy;
+            let angle = (y - self.center_y).atan2(x - self.center_x);
+            if self.contains_angle(angle)
+                && intersections
+                    .last()
+                    .is_none_or(|(px, py): &(f64, f64)| (x - px).hypot(y - py) > EPS)
+            {
+                intersections.push((x, y));
+            }
+        }
+        Some(intersections)
+    }
+
     /// Exact outward normal at a point identified by arc parameter angle.
     pub fn normal_at_angle(&self, angle_radians: f64) -> Option<(f64, f64)> {
         if !self.is_finite_arc() || !angle_radians.is_finite() {
@@ -451,6 +515,38 @@ mod tests {
         assert!(closest.0.abs() < 1e-12);
         assert!(closest.1.abs() < 1e-12);
         assert!(arc.ray_intersection(-2.0, -2.0, 1.0, 0.0).is_none());
+    }
+
+    #[test]
+    fn circular_arc_segment_intersections_are_exact_and_sweep_limited() {
+        let arc = CircularArcBoundary {
+            center_x: 0.0,
+            center_y: 0.0,
+            radius: 1.0,
+            start_angle_radians: 0.0,
+            sweep_radians: PI,
+        };
+        let hits = arc.segment_intersections(-2.0, 0.0, 2.0, 0.0).unwrap();
+        assert_eq!(hits.len(), 2);
+        assert!((hits[0].0 + 1.0).abs() < 1e-12);
+        assert!(hits[0].1.abs() < 1e-12);
+        assert!((hits[1].0 - 1.0).abs() < 1e-12);
+        assert!(hits[1].1.abs() < 1e-12);
+
+        let tangent = arc.segment_intersections(-2.0, 1.0, 2.0, 1.0).unwrap();
+        assert_eq!(tangent.len(), 1);
+        assert!(tangent[0].0.abs() < 1e-12);
+        assert!((tangent[0].1 - 1.0).abs() < 1e-12);
+
+        let outside_sweep = CircularArcBoundary {
+            start_angle_radians: PI,
+            sweep_radians: PI * 0.5,
+            ..arc
+        };
+        assert!(outside_sweep
+            .segment_intersections(-2.0, 0.0, 2.0, 0.0)
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
