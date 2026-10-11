@@ -7,7 +7,7 @@
 
 use crate::capillary_geometry::{
     solve_water_against_solid, CapillaryContactFamily, CircularArcBoundary,
-    ContactTranslationInterval,
+    ContactTranslationInterval, MultiContactFluidBoundary,
 };
 use crate::material_geometry::{
     placed_forms_penetrate, placed_forms_rigid_contact, PlacedMaterialPart,
@@ -708,6 +708,10 @@ pub struct GeometryFluidFormation {
     pub edge_parameter_end: f64,
     #[serde(default)]
     pub contact_constraints: Vec<GeometryFluidContactConstraint>,
+    /// Complete boundary in the canonical rigid-parent coordinate frame.
+    /// Present only when the simultaneous multi-contact solver has solved it.
+    #[serde(default)]
+    pub solved_boundary: Option<MultiContactFluidBoundary>,
 }
 
 impl GeometryFluidFormation {
@@ -734,11 +738,56 @@ impl GeometryFluidFormation {
         {
             return None;
         }
-        // Until the simultaneous-boundary solver is available, fail closed
-        // for multi-contact records rather than realizing only the first edge.
-        // Empty constraints preserve legacy single-anchor record behavior.
-        if !self.contact_constraints.is_empty() {
-            return None;
+        // A multi-contact record is only realizable when Bob has persisted the
+        // complete solved boundary. Never degrade it to the legacy single arc.
+        if !self.contact_constraints.is_empty() || self.solved_boundary.is_some() {
+            let boundary = self.solved_boundary.as_ref()?;
+            if self.contact_constraints.len() < 2
+                || boundary.contact_count() != self.contact_constraints.len()
+                || !boundary.is_valid()
+                || !self.area.is_finite()
+                || (boundary.nominal_area - self.area).abs() > 1e-9 * self.area.max(1.0)
+                || self.contact_constraints.iter().any(|constraint| {
+                    constraint.constituent_index >= parent.constituents.len()
+                        || constraint.edge_index
+                            >= parent.constituents.get(constraint.constituent_index)
+                                .and_then(|constituent| catalog.iter().find(|item| item.name == constituent.resource))
+                                .and_then(|resource| rigid_boundary_segments(&resource.shape.form).get(constraint.edge_index))
+                                .map(|_| usize::MAX)
+                                .unwrap_or(0)
+                        || !constraint.contact_length.is_finite()
+                        || constraint.contact_length <= 0.0
+                        || !constraint.edge_parameter_start.is_finite()
+                        || !constraint.edge_parameter_end.is_finite()
+                        || constraint.edge_parameter_start < 0.0
+                        || constraint.edge_parameter_end > 1.0
+                        || constraint.edge_parameter_end <= constraint.edge_parameter_start
+                })
+            {
+                return None;
+            }
+            let shape = crate::resources::Shape {
+                form: Form::Fluid {
+                    nominal_area: self.area,
+                    boundary: None,
+                    arc_boundary: None,
+                    multi_contact_boundary: Some(boundary.clone()),
+                },
+            };
+            if !shape.is_valid() {
+                return None;
+            }
+            // The stored boundary is already in the parent's canonical frame.
+            // Keep its placement at the frame origin; the caller maps the whole
+            // realized arrangement into the live organism frame and revalidates.
+            return Some((
+                shape,
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ));
         }
         let anchor = parent.constituents.get(self.anchor_constituent)?;
         let resource = catalog.iter().find(|item| item.name == anchor.resource)?;
@@ -829,6 +878,13 @@ impl GeometryFluidFormation {
                 quantize(constraint.edge_parameter_end),
             ));
         }
+        if let Some(boundary) = &self.solved_boundary {
+            signature.push_str(&format!(
+                "|solved-boundary:{}:{}",
+                quantize(boundary.nominal_area),
+                serde_json::to_string(boundary).unwrap_or_default(),
+            ));
+        }
         signature
     }
 }
@@ -852,6 +908,7 @@ pub fn fluid_formations_from_boundaries(
             edge_parameter_start: family.edge_parameter_start,
             edge_parameter_end: family.edge_parameter_end,
             contact_constraints: Vec::new(),
+            solved_boundary: None,
         })
         .collect()
 }
@@ -6160,6 +6217,7 @@ mod fluid_contact_constraint_schema_tests {
             edge_parameter_start: 0.25,
             edge_parameter_end: 0.75,
             contact_constraints: Vec::new(),
+            solved_boundary: None,
         }
     }
 
