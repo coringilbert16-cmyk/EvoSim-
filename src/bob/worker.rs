@@ -436,8 +436,7 @@ mod tests {
             crate::resources::Form::Fluid {
                 nominal_area,
                 boundary: None,
-                arc_boundary: Some(_)
-            } if nominal_area.is_finite() && nominal_area > 0.0
+                arc_boundary: Some(_), ..} if nominal_area.is_finite() && nominal_area > 0.0
         ));
         assert!(realized_pose.x.is_finite());
         assert!(realized_pose.y.is_finite());
