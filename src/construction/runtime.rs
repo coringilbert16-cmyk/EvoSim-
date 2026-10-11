@@ -881,7 +881,8 @@ fn realize_next_bond_driven(
                 // They are tried before analytic endpoint alignments, but all
                 // suggestions pass through the same live overlap, contact,
                 // compatibility, and energy transaction checks below.
-                let mut candidate_origins = Vec::<Placement>::new();
+                let mut candidate_origins =
+                    Vec::<(Placement, Option<crate::resources::Shape>)>::new();
                 if let Some(library) = bob_library {
                     let anchor_material = existing_unit.material.parts.first()?.0.as_str();
                     let candidate_resource = new_material
@@ -897,48 +898,119 @@ fn realize_next_bond_driven(
                             .and_then(|placements| placements.get(part_index))
                             .copied(),
                     ) {
-                        candidate_origins.extend(
-                            library
-                                .suggest_rigid_edge_placements(
-                                    anchor_material,
-                                    existing_unit.placement,
-                                    candidate_resource,
-                                    catalog,
-                                )
-                                .into_iter()
-                                .map(|suggestion| {
-                                    composite_origin_for_constituent_pose(
-                                        suggestion.placement,
-                                        relative_part_placement,
+                        if candidate_resource.physical_state == PhysicalState::Fluid {
+                            // Fluid suggestions are keyed by a canonical rigid
+                            // parent. Start with the exact single-unit parent;
+                            // both arc orientations are proposals and must still
+                            // survive live overlap/contact/transaction checks.
+                            let parent = crate::geometry_reference_library::GeometryFormation::single(
+                                anchor_material.to_owned(),
+                            );
+                            for suggestion in library.fluid_formations_for_parent(
+                                &parent.signature,
+                                &candidate_resource.name,
+                            ) {
+                                for bulge_left in [true, false] {
+                                    let Some((shape, canonical_pose)) =
+                                        suggestion.realize_against_parent(&parent, catalog, bulge_left)
+                                    else {
+                                        continue;
+                                    };
+                                    let (s, c) = existing_unit
+                                        .placement
+                                        .rotation_radians
+                                        .sin_cos();
+                                    let live_pose = Placement {
+                                        x: existing_unit.placement.x
+                                            + canonical_pose.x * c
+                                            - canonical_pose.y * s,
+                                        y: existing_unit.placement.y
+                                            + canonical_pose.x * s
+                                            + canonical_pose.y * c,
+                                        rotation_radians: existing_unit
+                                            .placement
+                                            .rotation_radians
+                                            + canonical_pose.rotation_radians,
+                                    };
+                                    candidate_origins.push((
+                                        composite_origin_for_constituent_pose(
+                                            live_pose,
+                                            relative_part_placement,
+                                        ),
+                                        Some(shape),
+                                    ));
+                                }
+                            }
+                        } else {
+                            candidate_origins.extend(
+                                library
+                                    .suggest_rigid_edge_placements(
+                                        anchor_material,
+                                        existing_unit.placement,
+                                        candidate_resource,
+                                        catalog,
                                     )
-                                }),
-                        );
+                                    .into_iter()
+                                    .map(|suggestion| {
+                                        (
+                                            composite_origin_for_constituent_pose(
+                                                suggestion.placement,
+                                                relative_part_placement,
+                                            ),
+                                            None,
+                                        )
+                                    }),
+                            );
+                        }
                     }
                 }
                 candidate_origins.extend(angles.into_iter().map(|angle| {
-                    placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle)
+                    (
+                        placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle),
+                        None,
+                    )
                 }));
                 let generated_origins = candidate_origins.len();
                 rejection_counts.generated_origins += generated_origins;
-                let mut seen_origins = std::collections::BTreeSet::<(i64, i64, i64)>::new();
-                candidate_origins.retain(|placement| {
+                let mut seen_origins =
+                    Vec::<((i64, i64, i64), Option<crate::resources::Shape>)>::new();
+                candidate_origins.retain(|(placement, shape)| {
                     let key = (
                         (placement.x * 1e8).round() as i64,
                         (placement.y * 1e8).round() as i64,
                         (placement.rotation_radians * 1e8).round() as i64,
                     );
-                    seen_origins.insert(key)
+                    if seen_origins
+                        .iter()
+                        .any(|(seen_key, seen_shape)| *seen_key == key && seen_shape == shape)
+                    {
+                        false
+                    } else {
+                        seen_origins.push((key, shape.clone()));
+                        true
+                    }
                 });
                 rejection_counts.deduplicated_origins +=
                     generated_origins.saturating_sub(candidate_origins.len());
-                for candidate_origin in candidate_origins {
+                for (candidate_origin, fluid_shape) in candidate_origins {
                     *nodes += 1;
                     rejection_counts.attempted_origins += 1;
 
                     let mut trial = structure.clone();
+                    let candidate_material = if let Some(shape) = fluid_shape {
+                        new_material
+                            .clone()
+                            .with_single_fluid_shape(shape, catalog)
+                    } else {
+                        Some(new_material.clone())
+                    };
+                    let Some(candidate_material) = candidate_material else {
+                        rejection_counts.restore_failures += 1;
+                        continue;
+                    };
                     let Some(indices) = crate::material_restoration::restore_material(
                         &mut trial,
-                        new_material,
+                        &candidate_material,
                         candidate_origin,
                         catalog,
                     ) else {
