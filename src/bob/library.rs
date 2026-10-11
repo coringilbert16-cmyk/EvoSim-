@@ -3227,7 +3227,10 @@ fn fluid_formation_is_valid(
     let Some(parent) = parents.get(&formation.parent_formation_signature) else {
         return false;
     };
-    let Some(fluid) = catalog.iter().find(|resource| resource.name == formation.fluid_resource) else {
+    let Some(fluid) = catalog
+        .iter()
+        .find(|resource| resource.name == formation.fluid_resource)
+    else {
         return false;
     };
     if formation.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
