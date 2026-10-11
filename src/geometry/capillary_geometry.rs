@@ -285,15 +285,15 @@ mod tests {
             center_x: 0.0,
             center_y: -family.curvature_radius,
             radius: family.curvature_radius,
-            start_angle_radians: PI * 0.5,
+            start_angle_radians: 0.0,
             sweep_radians: family.free_arc_angle_radians,
         };
         assert!(arc.is_valid());
         assert!((arc.segment_area().unwrap() - family.area).abs() < 1e-12);
         assert!((arc.chord_length().unwrap() - family.contact_length).abs() < 1e-12);
         assert!((arc.arc_length().unwrap() - family.curvature_radius * PI).abs() < 1e-12);
-        assert!((arc.start_point().0 + family.curvature_radius).abs() < 1e-12);
-        assert!((arc.end_point().0 - family.curvature_radius).abs() < 1e-12);
+        assert!((arc.start_point().0 - family.curvature_radius).abs() < 1e-12);
+        assert!((arc.end_point().0 + family.curvature_radius).abs() < 1e-12);
     }
 
     #[test]
