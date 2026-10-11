@@ -6941,6 +6941,37 @@ mod fluid_contact_constraint_schema_tests {
         let _ = std::fs::remove_dir_all(root);
     }
     #[test]
+    fn clipped_multi_contact_window_reconstructs_partial_edge_parameters() {
+        let aligned: Vec<AlignedExposedInterval> = vec![
+            (
+                0.0,
+                2.0,
+                (0, 0, 0.0, 1.0, (0.0, 0.0), (2.0, 0.0)),
+                (0.0, 0.0),
+                (2.0, 0.0),
+            ),
+            (
+                2.0,
+                4.0,
+                (1, 0, 0.0, 1.0, (2.0, 0.0), (4.0, 0.0)),
+                (2.0, 0.0),
+                (4.0, 0.0),
+            ),
+        ];
+        let clipped =
+            clip_aligned_contact_window(&aligned, 1.5, 1.0, (1.0, 0.0)).unwrap();
+        assert_eq!(clipped.len(), 2);
+        assert!((clipped[0].0 - 1.5).abs() < 1e-12);
+        assert!((clipped[0].1 - 2.0).abs() < 1e-12);
+        assert!((clipped[0].2 .2 - 0.75).abs() < 1e-12);
+        assert!((clipped[0].2 .3 - 1.0).abs() < 1e-12);
+        assert!((clipped[1].2 .2 - 0.0).abs() < 1e-12);
+        assert!((clipped[1].2 .3 - 0.25).abs() < 1e-12);
+        assert!((clipped[1].1 - clipped[0].0 - 1.0).abs() < 1e-12);
+        assert!((clipped[0].4 .0 - clipped[1].3 .0).abs() < 1e-12);
+    }
+
+    #[test]
     fn simultaneous_collinear_solution_persists_and_reloads_three_parent_contacts() {
         use crate::resources::Form;
 
