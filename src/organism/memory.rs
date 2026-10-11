@@ -1,8 +1,3 @@
-#![expect(
-    dead_code,
-    reason = "New associative memory is staged during runtime migration"
-)]
-
 use serde::{Deserialize, Serialize};
 
 use crate::state::{Environment, Organism, MEMORY_DECAY_PER_TICK};
