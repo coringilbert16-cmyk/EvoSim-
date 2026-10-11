@@ -2269,6 +2269,21 @@ mod tests {
         .expect("first fluid bond should be energetically admissible");
         let mut ledger = EnergyLedger::default();
         let mut energy = 100.0;
+        let mut incomplete_trial = structure.clone();
+        incomplete_trial.units.pop();
+        let energy_before_failed_trial = energy;
+        assert!(!form_remaining_multi_contact_bonds(
+            &mut incomplete_trial,
+            fluid_index,
+            first_target,
+            &catalog,
+            &mut ledger,
+            &mut energy,
+        ));
+        assert!(structure.bonds.is_empty());
+        assert!(incomplete_trial.bonds.is_empty());
+        assert_eq!(energy, energy_before_failed_trial);
+
         assert!(crate::combine_runtime::form_selected_bond(
             &mut structure,
             first_target,
