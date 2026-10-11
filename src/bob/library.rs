@@ -3761,12 +3761,7 @@ pub fn validate_formation(formation: &GeometryFormation, catalog: &[BaseResource
     true
 }
 
-/// A polygon edge expressed as the exact exposed parameter intervals that remain
-/// available for a future contact. Parameter 0 is the first vertex and 1 is
-/// the second vertex. Coincident boundary portions belonging to another
-/// constituent are removed; point contacts do not remove an interval.
-#[derive(Clone, Debug, PartialEq)]
-pub type AlignedExposedInterval = (
+type AlignedExposedInterval = (
     f64,
     f64,
     (usize, usize, f64, f64, (f64, f64), (f64, f64)),
@@ -3774,6 +3769,11 @@ pub type AlignedExposedInterval = (
     (f64, f64),
 );
 
+/// A polygon edge expressed as the exact exposed parameter intervals that remain
+/// available for a future contact. Parameter 0 is the first vertex and 1 is
+/// the second vertex. Coincident boundary portions belonging to another
+/// constituent are removed; point contacts do not remove an interval.
+#[derive(Clone, Debug, PartialEq)]
 struct ExposedEdgeInterval {
     pub edge: usize,
     pub start: f64,
