@@ -926,8 +926,9 @@ fn multi_contact_boundary_matches_constraints(
         if resource.physical_state == crate::resources::PhysicalState::Fluid {
             return false;
         }
-        let Some((local_start, local_end)) =
-            rigid_boundary_segments(&resource.shape.form).get(constraint.edge_index).copied()
+        let Some((local_start, local_end)) = rigid_boundary_segments(&resource.shape.form)
+            .get(constraint.edge_index)
+            .copied()
         else {
             return false;
         };
@@ -6469,9 +6470,12 @@ mod fluid_contact_constraint_schema_tests {
             .collect();
         formation.solved_boundary = Some(boundary.clone());
 
-        assert!(formation
-            .realize_against_parent(&parent, &catalog, true)
-            .is_none(), "boundary segments must match their referenced parent edges");
+        assert!(
+            formation
+                .realize_against_parent(&parent, &catalog, true)
+                .is_none(),
+            "boundary segments must match their referenced parent edges"
+        );
         assert_ne!(formation.signature(), {
             let mut legacy = formation.clone();
             legacy.solved_boundary = None;
