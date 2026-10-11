@@ -1577,3 +1577,8 @@ The Rust test run for checkpoint `0324e7cd` passed both targeted end-to-end regr
 ### Multi-contact endpoint hardening — 2026-10-11
 
 Exact fluid endpoint resolution now rejects coordinates farther than geometry tolerance from the solved boundary instead of silently projecting arbitrary points onto it. Added a negative construction regression for an incomplete target set: the multi-contact helper must fail closed without adding bonds or changing the caller's original structure/energy. The positive three-target test remains the main proof that all bonds can be staged together. Verification of these newest guards is pending.
+
+
+### Multi-contact catalogue instrumentation — 2026-10-11
+
+The Bob worker now reports multi-contact fluid formations separately from legacy fluid formations: generated candidates, persisted additions, and the difference (not inserted, including duplicates/rejections). Both per-frontier output and the bounded run-to-completion summary include these counters. This permits measuring whether exposed-edge clipping is producing useful persistent families before any broader catalogue run. The worker change is compile/test gated; do not start a large generation pass until exact-head Rust verification is available.
