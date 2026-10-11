@@ -957,7 +957,7 @@ mod shape_tests {
             boundary: None,
             arc_boundary: Some(arc),
             multi_contact_boundary: None,
-};
+        };
         let json = serde_json::to_string(&form).unwrap();
         let restored: Form = serde_json::from_str(&json).unwrap();
         assert_eq!(restored, form);
