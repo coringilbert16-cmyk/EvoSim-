@@ -48,7 +48,7 @@ pub fn run_to_completion(max_constituents: usize) -> std::io::Result<()> {
     if !(1..=MAX_LIBRARY_CONSTITUENTS).contains(&max_constituents) {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "Bob's maximum constituent count is fixed at 2",
+            "Bob's maximum constituent count is fixed at 3",
         ));
     }
 
@@ -259,7 +259,7 @@ fn process_one_frontier(
     if !(1..=MAX_LIBRARY_CONSTITUENTS).contains(&max_constituents) {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "Bob's maximum constituent count is fixed at 2",
+            "Bob's maximum constituent count is fixed at 3",
         ));
     }
 
