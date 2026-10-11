@@ -1765,12 +1765,12 @@ mod tests {
             assert!(origin.y.is_finite());
             assert!(origin.rotation_radians.is_finite());
             assert!(matches!(
-                shape.form,
+                &shape.form,
                 crate::resources::Form::Fluid {
                     nominal_area,
                     boundary: None,
                     arc_boundary: Some(_)
-                } if (nominal_area - crate::resources::NOMINAL_UNIT_AREA).abs() < 1e-9
+                } if (*nominal_area - crate::resources::NOMINAL_UNIT_AREA).abs() < 1e-9
             ));
 
             let material = crate::physical_material::PhysicalMaterial::realized(
