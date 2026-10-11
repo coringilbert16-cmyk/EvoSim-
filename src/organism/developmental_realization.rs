@@ -714,7 +714,8 @@ fn point_in_form(
         | crate::resources::Form::Polygon { .. }
         | crate::resources::Form::Fluid {
             multi_contact_boundary: None,
-            boundary: Some(_), ..
+            boundary: Some(_),
+            ..
         } => {
             let Some(local_vertices) = form.polygon_vertices() else {
                 return false;
