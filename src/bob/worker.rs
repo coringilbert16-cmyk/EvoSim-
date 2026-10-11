@@ -256,6 +256,13 @@ fn process_one_frontier(
     catalog: &[BaseResource],
     max_constituents: usize,
 ) -> std::io::Result<Option<WorkerPassMetrics>> {
+    if !(1..=MAX_LIBRARY_CONSTITUENTS).contains(&max_constituents) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Bob's maximum constituent count is fixed at 2",
+        ));
+    }
+
     // The library is already held in a BTreeMap keyed by canonical
     // signature. Do not clone and sort the entire catalogue on every worker
     // step; that turns catalogue growth itself into the hot path. We only
@@ -444,6 +451,22 @@ mod tests {
         );
         drop(library);
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn worker_rejects_constituent_limits_above_two() {
+        let error = run_to_completion(3).expect_err("Bob must reject wider catalogue limits");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+
+        let catalog = default_catalog();
+        let mut library = GeometryLibrary::open(
+            std::env::temp_dir().join(format!("evosim-bob-invalid-limit-{}", std::process::id())),
+            &catalog,
+        )
+        .unwrap();
+        let error = process_one_frontier(&mut library, &catalog, 3)
+            .expect_err("frontier processing must enforce the same hard limit");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
     }
 
     #[test]
