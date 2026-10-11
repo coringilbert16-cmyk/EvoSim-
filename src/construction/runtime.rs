@@ -296,6 +296,48 @@ fn composite_origin_for_constituent_pose(
     }
 }
 
+/// Query Bob for fluid formations against one exact rigid parent and transform
+/// each realized suggestion from the parent's canonical frame into live space.
+/// Returned shapes are proposals; the caller must restore and validate them.
+fn bob_fluid_origins_for_single_parent(
+    library: &crate::geometry_reference_library::GeometryLibrary,
+    anchor_material: &str,
+    anchor_placement: Placement,
+    fluid_resource: &BaseResource,
+    relative_part_placement: Placement,
+    catalog: &[BaseResource],
+) -> Vec<(Placement, crate::resources::Shape)> {
+    if fluid_resource.physical_state != PhysicalState::Fluid {
+        return Vec::new();
+    }
+    let parent =
+        crate::geometry_reference_library::GeometryFormation::single(anchor_material.to_owned());
+    let (s, c) = anchor_placement.rotation_radians.sin_cos();
+    let mut out = Vec::new();
+    for suggestion in
+        library.fluid_formations_for_parent(&parent.signature, &fluid_resource.name)
+    {
+        for bulge_left in [true, false] {
+            let Some((shape, canonical_pose)) =
+                suggestion.realize_against_parent(&parent, catalog, bulge_left)
+            else {
+                continue;
+            };
+            let live_pose = Placement {
+                x: anchor_placement.x + canonical_pose.x * c - canonical_pose.y * s,
+                y: anchor_placement.y + canonical_pose.x * s + canonical_pose.y * c,
+                rotation_radians: anchor_placement.rotation_radians
+                    + canonical_pose.rotation_radians,
+            };
+            out.push((
+                composite_origin_for_constituent_pose(live_pose, relative_part_placement),
+                shape,
+            ));
+        }
+    }
+    out
+}
+
 pub(crate) fn placed_unit_overlaps(
     structure: &OrganismStructure,
     candidate: &StructuralUnit,
@@ -899,43 +941,21 @@ fn realize_next_bond_driven(
                             .copied(),
                     ) {
                         if candidate_resource.physical_state == PhysicalState::Fluid {
-                            // Fluid suggestions are keyed by a canonical rigid
-                            // parent. Start with the exact single-unit parent;
-                            // both arc orientations are proposals and must still
-                            // survive live overlap/contact/transaction checks.
-                            let parent =
-                                crate::geometry_reference_library::GeometryFormation::single(
-                                    anchor_material.to_owned(),
-                                );
-                            for suggestion in library.fluid_formations_for_parent(
-                                &parent.signature,
-                                &candidate_resource.name,
-                            ) {
-                                for bulge_left in [true, false] {
-                                    let Some((shape, canonical_pose)) = suggestion
-                                        .realize_against_parent(&parent, catalog, bulge_left)
-                                    else {
-                                        continue;
-                                    };
-                                    let (s, c) = existing_unit.placement.rotation_radians.sin_cos();
-                                    let live_pose = Placement {
-                                        x: existing_unit.placement.x + canonical_pose.x * c
-                                            - canonical_pose.y * s,
-                                        y: existing_unit.placement.y
-                                            + canonical_pose.x * s
-                                            + canonical_pose.y * c,
-                                        rotation_radians: existing_unit.placement.rotation_radians
-                                            + canonical_pose.rotation_radians,
-                                    };
-                                    candidate_origins.push((
-                                        composite_origin_for_constituent_pose(
-                                            live_pose,
-                                            relative_part_placement,
-                                        ),
-                                        Some(shape),
-                                    ));
-                                }
-                            }
+                            // These exact-parent suggestions are still proposals;
+                            // restoration and the ordinary live transaction checks
+                            // remain authoritative.
+                            candidate_origins.extend(
+                                bob_fluid_origins_for_single_parent(
+                                    library,
+                                    anchor_material,
+                                    existing_unit.placement,
+                                    candidate_resource,
+                                    relative_part_placement,
+                                    catalog,
+                                )
+                                .into_iter()
+                                .map(|(origin, shape)| (origin, Some(shape))),
+                            );
                         } else {
                             candidate_origins.extend(
                                 library
@@ -1687,6 +1707,87 @@ mod tests {
 
         assert_eq!(structure.units.len(), 3);
         assert_eq!(structure.bonds.len(), 3);
+    }
+
+    #[test]
+    fn bob_fluid_suggestion_transforms_and_restores_as_exact_fluid_geometry() {
+        use crate::geometry_reference_library::{
+            fluid_formations_from_boundaries, generate_fluid_boundary_families_from_contact_families,
+            generate_water_contact_families_with_diagnostics, GeometryFormation, GeometryLibrary,
+        };
+        use crate::resources::Material;
+
+        let catalog = crate::resources::default_catalog();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-runtime-bob-fluid-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let parent = GeometryFormation::single("Carbon");
+        library.insert(parent.clone(), &catalog).unwrap();
+        let water = resource(&catalog, "Water").unwrap();
+        let (contacts, _) = generate_water_contact_families_with_diagnostics(
+            &parent,
+            water,
+            &catalog,
+        );
+        let boundaries = generate_fluid_boundary_families_from_contact_families(water, &contacts);
+        let fluid_formations = fluid_formations_from_boundaries(&boundaries);
+        assert!(!fluid_formations.is_empty());
+        library.insert_contact_families(contacts).unwrap();
+        library.insert_fluid_boundary_families(boundaries).unwrap();
+        library
+            .insert_fluid_formations(fluid_formations, &catalog)
+            .unwrap();
+
+        let anchor_pose = Placement {
+            x: 3.0,
+            y: -2.0,
+            rotation_radians: 0.37,
+        };
+        let relative_fluid_pose = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let suggestions = bob_fluid_origins_for_single_parent(
+            &library,
+            "Carbon",
+            anchor_pose,
+            water,
+            relative_fluid_pose,
+            &catalog,
+        );
+        assert!(!suggestions.is_empty());
+        for (origin, shape) in suggestions {
+            assert!(origin.x.is_finite());
+            assert!(origin.y.is_finite());
+            assert!(origin.rotation_radians.is_finite());
+            assert!(matches!(
+                shape.form,
+                crate::resources::Form::Fluid {
+                    nominal_area,
+                    boundary: None,
+                    arc_boundary: Some(_)
+                } if (nominal_area - 1.0).abs() < 1e-9
+            ));
+
+            let material = crate::physical_material::PhysicalMaterial::realized(
+                Material::free_base("Water", 1.0),
+                vec![relative_fluid_pose],
+                &catalog,
+            )
+            .expect("default Water material should have a valid physical realization")
+            .with_single_fluid_shape(shape.clone(), &catalog)
+            .expect("Bob's conserved-area arc should fit the physical Water material");
+            assert_eq!(
+                material.realized_shape_for_part(0, &catalog),
+                Some(shape)
+            );
+        }
+        drop(library);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
