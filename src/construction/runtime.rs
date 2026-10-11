@@ -1770,7 +1770,7 @@ mod tests {
                     nominal_area,
                     boundary: None,
                     arc_boundary: Some(_)
-                } if (nominal_area - 1.0).abs() < 1e-9
+                } if (nominal_area - crate::resources::NOMINAL_UNIT_AREA).abs() < 1e-9
             ));
 
             let material = crate::physical_material::PhysicalMaterial::realized(
