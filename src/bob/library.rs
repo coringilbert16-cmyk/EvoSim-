@@ -1152,8 +1152,8 @@ pub fn generate_collinear_multi_contact_formations(
 
     let mut generated = BTreeMap::<String, GeometryFluidFormation>::new();
     for seed in &exposed {
-        let seed_dx = seed.5.0 - seed.4.0;
-        let seed_dy = seed.5.1 - seed.4.1;
+        let seed_dx = seed.5 .0 - seed.4 .0;
+        let seed_dy = seed.5 .1 - seed.4 .1;
         let seed_length = seed_dx.hypot(seed_dy);
         if seed_length <= 1e-9 {
             continue;
@@ -1163,7 +1163,7 @@ pub fn generate_collinear_multi_contact_formations(
             direction = (-direction.0, -direction.1);
         }
         let normal = (-direction.1, direction.0);
-        let line_offset = seed.4.0 * normal.0 + seed.4.1 * normal.1;
+        let line_offset = seed.4 .0 * normal.0 + seed.4 .1 * normal.1;
         let seed_constituent = seed.0;
         let Some(seed_resource) = catalog.iter().find(|r| {
             r.name == parent.constituents[seed_constituent].resource
@@ -1180,29 +1180,35 @@ pub fn generate_collinear_multi_contact_formations(
         let mut aligned = exposed
             .iter()
             .filter_map(|edge| {
-                let dx = edge.5.0 - edge.4.0;
-                let dy = edge.5.1 - edge.4.1;
+                let dx = edge.5 .0 - edge.4 .0;
+                let dy = edge.5 .1 - edge.4 .1;
                 let length = dx.hypot(dy);
                 if length <= 1e-9 {
                     return None;
                 }
                 let parallel_error = (dx * direction.1 - dy * direction.0).abs() / length;
-                let offset_a = edge.4.0 * normal.0 + edge.4.1 * normal.1;
-                let offset_b = edge.5.0 * normal.0 + edge.5.1 * normal.1;
+                let offset_a = edge.4 .0 * normal.0 + edge.4 .1 * normal.1;
+                let offset_b = edge.5 .0 * normal.0 + edge.5 .1 * normal.1;
                 if parallel_error > 1e-8
                     || (offset_a - line_offset).abs() > 1e-7
                     || (offset_b - line_offset).abs() > 1e-7
                 {
                     return None;
                 }
-                let projection_a = edge.4.0 * direction.0 + edge.4.1 * direction.1;
-                let projection_b = edge.5.0 * direction.0 + edge.5.1 * direction.1;
+                let projection_a = edge.4 .0 * direction.0 + edge.4 .1 * direction.1;
+                let projection_b = edge.5 .0 * direction.0 + edge.5 .1 * direction.1;
                 let (start, end) = if projection_a <= projection_b {
                     (edge.4, edge.5)
                 } else {
                     (edge.5, edge.4)
                 };
-                Some((projection_a.min(projection_b), projection_a.max(projection_b), *edge, start, end))
+                Some((
+                    projection_a.min(projection_b),
+                    projection_a.max(projection_b),
+                    *edge,
+                    start,
+                    end,
+                ))
             })
             .collect::<Vec<_>>();
         aligned.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
@@ -1220,13 +1226,13 @@ pub fn generate_collinear_multi_contact_formations(
             for item in aligned.iter().skip(start_index) {
                 if let Some(previous) = chosen.last() {
                     let previous_end: (f64, f64) = previous.4;
-                    if (previous_end.0 - item.3.0).hypot(previous_end.1 - item.3.1) > 1e-7 {
+                    if (previous_end.0 - item.3 .0).hypot(previous_end.1 - item.3 .1) > 1e-7 {
                         break;
                     }
                 }
                 chosen.push(*item);
                 total_length += item.1 - item.0;
-                distinct_constituents.insert(item.2.0);
+                distinct_constituents.insert(item.2 .0);
                 if total_length
                     > seed_family.contact_length + 1e-8 * seed_family.contact_length.max(1.0)
                 {
@@ -1236,7 +1242,7 @@ pub fn generate_collinear_multi_contact_formations(
                     continue;
                 }
                 let Some(first_resource) = catalog.iter().find(|r| {
-                    r.name == parent.constituents[chosen[0].2.0].resource
+                    r.name == parent.constituents[chosen[0].2 .0].resource
                 }) else {
                     continue;
                 };
@@ -1254,7 +1260,7 @@ pub fn generate_collinear_multi_contact_formations(
                 let mut constraints = Vec::with_capacity(chosen.len());
                 let mut compatible = true;
                 for item in &chosen {
-                    let constituent_index = item.2.0;
+                    let constituent_index = item.2 .0;
                     let Some(resource) = catalog.iter().find(|r| {
                         r.name == parent.constituents[constituent_index].resource
                     }) else {
@@ -1277,16 +1283,19 @@ pub fn generate_collinear_multi_contact_formations(
                     }
                     constraints.push(GeometryFluidContactConstraint {
                         constituent_index,
-                        edge_index: item.2.1,
+                        edge_index: item.2 .1,
                         contact_length: item.1 - item.0,
-                        edge_parameter_start: item.2.2.min(item.2.3),
-                        edge_parameter_end: item.2.3.max(item.2.2),
+                        edge_parameter_start: item.2 .2.min(item.2 .3),
+                        edge_parameter_end: item.2 .3.max(item.2 .2),
                     });
                 }
                 if !compatible {
                     continue;
                 }
-                let segments = chosen.iter().map(|item| (item.3, item.4)).collect::<Vec<_>>();
+                let segments = chosen
+                    .iter()
+                    .map(|item| (item.3, item.4))
+                    .collect::<Vec<_>>();
                 if let Some(formation) = solve_collinear_multi_contact_formation(
                     parent,
                     fluid_resource,
