@@ -1543,3 +1543,10 @@ Added `generate_collinear_multi_contact_formations` to enumerate rigid boundary 
 The Bob worker's Water frontier now runs `generate_collinear_multi_contact_formations` alongside the existing single-anchor fluid-family path and submits both record types through the same persistent fluid-formation insertion/validation path. The automatic generator is now exercised by the three-surface regression, rather than existing only as an unused helper.
 
 Exact-head Rust verification for the worker integration is in progress. This remains a bounded first implementation: only complete exposed collinear intervals are considered, and the selected intervals must exactly sum to the solved chord length. Before allowing broad catalogue runs, confirm the new regression and worker build pass, then add first/last interval clipping, metrics for multi-contact outcomes, and a runtime lookup/atomic-commit regression. No claim of live construction support is made yet.
+
+
+### Runtime eligibility for multi-contact suggestions — 2026-10-11
+
+Updated `bob_fluid_origins_for_live_parent`: legacy fluid records remain keyed to their single anchor, while a record with simultaneous contact constraints can now be considered when construction is initiated from any constrained constituent in the canonical live parent. This removes the previous lookup bottleneck where a valid multi-contact record could only be proposed from its first anchor.
+
+This change only fixes suggestion eligibility. The runtime transaction still currently forms the selected bond through its normal single-neighbor path; it does **not yet atomically establish all bonds implied by a multi-contact boundary**. Do not count this as end-to-end multi-connection support. Next implementation must stage every intended fluid-to-rigid bond on a cloned trial structure, validate compatibility/energy for all, and publish the trial only if the entire set succeeds; otherwise discard the trial with no partial bonds.
