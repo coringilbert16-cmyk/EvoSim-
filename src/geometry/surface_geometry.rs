@@ -135,10 +135,12 @@ fn multi_contact_boundary_toward(
                 ))
             }
             crate::capillary_geometry::FluidBoundaryPiece::FreeArc(arc) => {
-                let (t, x, y) = arc.ray_intersection(0.0, 0.0, ux, uy)?;
-                let angle = (y - arc.center_y).atan2(x - arc.center_x);
-                let (normal_x, normal_y) = arc.normal_at_angle(angle)?;
-                Some((t, BoundaryPoint { x, y, normal_x, normal_y }))
+                arc.ray_intersection(0.0, 0.0, ux, uy)
+                    .and_then(|(t, x, y)| {
+                        let angle = (y - arc.center_y).atan2(x - arc.center_x);
+                        let (normal_x, normal_y) = arc.normal_at_angle(angle)?;
+                        Some((t, BoundaryPoint { x, y, normal_x, normal_y }))
+                    })
             }
         };
         if let Some((t, point)) = candidate {
