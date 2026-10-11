@@ -182,8 +182,8 @@ pub fn boundary_point_at_multi_contact(
                 if length_squared <= f64::EPSILON {
                     continue;
                 }
-                let t = (((x - start_x) * dx + (y - start_y) * dy) / length_squared)
-                    .clamp(0.0, 1.0);
+                let t =
+                    (((x - start_x) * dx + (y - start_y) * dy) / length_squared).clamp(0.0, 1.0);
                 let px = start_x + t * dx;
                 let py = start_y + t * dy;
                 let length = length_squared.sqrt();
