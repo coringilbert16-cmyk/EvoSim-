@@ -7,7 +7,8 @@
 
 use crate::capillary_geometry::{
     solve_water_against_collinear_contacts, solve_water_against_solid, CapillaryContactFamily,
-    CircularArcBoundary, ContactTranslationInterval, FluidBoundaryPiece, MultiContactFluidBoundary,
+    CircularArcBoundary, ContactSegment, ContactTranslationInterval, FluidBoundaryPiece,
+    MultiContactFluidBoundary,
 };
 use crate::material_geometry::{
     placed_forms_penetrate, placed_forms_rigid_contact, PlacedMaterialPart,
@@ -1002,7 +1003,7 @@ pub fn solve_collinear_multi_contact_formation(
     parent: &GeometryFormation,
     fluid_resource: &BaseResource,
     constraints: Vec<GeometryFluidContactConstraint>,
-    ordered_segments: &[((f64, f64), (f64, f64))],
+    ordered_segments: &[ContactSegment],
     catalog: &[BaseResource],
 ) -> Option<GeometryFluidFormation> {
     if !validate_formation(parent, catalog)
