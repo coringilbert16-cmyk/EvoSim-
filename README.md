@@ -27,6 +27,15 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 5. Keep PR #186 as the single integration target. Do not merge or change the default branch as a side effect of cleanup.
 6. All new decisions and handoffs go in this root README. Before adding a new audit note, update the current summary and avoid repeating obsolete checkpoints.
 
+## Latest Bob fluid-runtime regression status — 2026-10-11
+
+- Exact-head CI for the previous checkpoint `b0843f0f` passed formatting, source-size policy, COMBINE architecture, Bob compact-storage, empty-library reopen, focused chemical BREAK tests, and Windows runner validation.
+- The focused library regression `two_piece_multi_contact_record_survives_reopen_and_realizes_exact_area` passed.
+- The runtime regression `reopened_two_piece_bob_record_maps_into_transformed_live_parent` failed because its assertion incorrectly expected the fluid's origin to equal the rigid parent's center. The capillary solution offsets the fluid origin from that center; this was a test expectation defect, not evidence that live mapping itself was wrong.
+- Commit `9d8c2534` changes the regression to compare the returned pose against the exact canonical fluid poses transformed into the live parent frame, for either valid bulge orientation. This commit is not yet verified by exact-head CI.
+- The full suite remains red (372 passed, 29 failed, 1 ignored), including the runtime regression above plus broad existing constructor, cavity/genome, movement/contact, reproduction, COMBINE, and simulation failures. Clippy remains red on existing lint debt. Do not conflate these with the focused Bob persistence checks.
+- Next gate: run the focused runtime regression on the new head; then connect a reopened Bob record to the transactional multi-contact bond path and verify all contacts commit together with area/energy invariants. Catalogue generation remains paused.
+
 ## Current repository integrity checkpoint — 2026-10-11
 
 This checkpoint supersedes older repository-status and CI summaries later in this README. Those notes are retained as dated history, not as the current branch state.
