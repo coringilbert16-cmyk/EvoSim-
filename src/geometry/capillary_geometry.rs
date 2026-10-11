@@ -665,8 +665,8 @@ mod tests {
         assert!((tangent[0].1 - 1.0).abs() < 1e-12);
 
         let outside_sweep = CircularArcBoundary {
-            start_angle_radians: PI,
-            sweep_radians: PI * 0.5,
+            start_angle_radians: PI * 0.5,
+            sweep_radians: PI * 0.25,
             ..arc
         };
         assert!(outside_sweep
