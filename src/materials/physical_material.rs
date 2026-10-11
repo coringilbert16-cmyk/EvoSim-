@@ -251,7 +251,10 @@ impl PhysicalMaterial {
                 internal_connections: Some(internal_connections),
                 owner_relative_origin: self.owner_relative_origin,
                 realized_shapes: self.realized_shapes.as_ref().map(|shapes| {
-                    members.iter().map(|&old_index| shapes[old_index].clone()).collect()
+                    members
+                        .iter()
+                        .map(|&old_index| shapes[old_index].clone())
+                        .collect()
                 }),
             });
         }
