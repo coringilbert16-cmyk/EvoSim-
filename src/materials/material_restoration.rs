@@ -118,4 +118,59 @@ pub(crate) fn restore_material(
 
     *structure = trial;
     Some(indices)
+#[test]
+fn restoring_stored_water_preserves_exact_arc_geometry() {
+    let catalog = crate::resources::default_catalog();
+    let water = catalog
+        .iter()
+        .find(|resource| resource.name == "Water")
+        .unwrap();
+    let area = match &water.shape.form {
+        crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+        _ => panic!("default Water shape should have a measurable area"),
+    };
+    let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+        area,
+        std::f64::consts::FRAC_PI_2,
+    )
+    .unwrap();
+    let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
+    let shape = crate::resources::Shape {
+        form: crate::resources::Form::Fluid {
+            nominal_area: area,
+            boundary: None,
+            arc_boundary: Some(arc),
+        },
+    };
+    let instance = crate::physical_material::PhysicalMaterial::realized(
+        crate::resources::Material::free_base("Water", 1.0),
+        vec![Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        }],
+        &catalog,
+    )
+    .unwrap()
+    .with_single_fluid_shape(shape.clone(), &catalog)
+    .unwrap();
+    let mut structure = OrganismStructure::new();
+    let indices = restore_material(
+        &mut structure,
+        &instance,
+        Placement {
+            x: 10.0,
+            y: 20.0,
+            rotation_radians: 0.5,
+        },
+        &catalog,
+    )
+    .expect("stored exact fluid shape should restore");
+
+    assert_eq!(indices.len(), 1);
+    assert_eq!(structure.units[indices[0]].shape(&catalog), Some(&shape));
+    assert_eq!(structure.units[indices[0]].placement.x, 10.0);
+    assert_eq!(structure.units[indices[0]].placement.y, 20.0);
+}
+
 }
