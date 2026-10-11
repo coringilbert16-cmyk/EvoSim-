@@ -119,9 +119,7 @@ impl PhysicalMaterial {
         }
         let default_area = match &resource.shape.form {
             crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-            crate::resources::multi_contact_boundary: None,
-multi_contact_boundary: None,
-Form::Fluid { nominal_area, .. } => *nominal_area,
+            crate::resources::Form::Fluid { nominal_area, .. } => *nominal_area,
             _ => return None,
         };
         let shape_area = match &shape.form {
@@ -129,8 +127,7 @@ Form::Fluid { nominal_area, .. } => *nominal_area,
                 nominal_area,
                 boundary: None,
                 arc_boundary: Some(_),
-                multi_contact_boundary: None,
-} => *nominal_area,
+            } => *nominal_area,
             _ => return None,
         };
         if (shape_area - default_area).abs() > 1e-9 * default_area.max(1.0) {
@@ -163,22 +160,18 @@ Form::Fluid { nominal_area, .. } => *nominal_area,
             }
             let default_area = match &resource.shape.form {
                 crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-                crate::resources::multi_contact_boundary: None,
-multi_contact_boundary: None,
-Form::Fluid { nominal_area, .. } => *nominal_area,
+                crate::resources::Form::Fluid { nominal_area, .. } => *nominal_area,
                 _ => return None,
             };
             let shape_area = match &shape.form {
                 crate::resources::Form::Fluid {
                     nominal_area,
                     boundary: Some(_),
-                    multi_contact_boundary: None,
                     ..
                 }
                 | crate::resources::Form::Fluid {
                     nominal_area,
                     arc_boundary: Some(_),
-                    multi_contact_boundary: None,
                     ..
                 } => *nominal_area,
                 _ => return None,
@@ -397,8 +390,7 @@ mod tests {
                 nominal_area: area,
                 boundary: None,
                 arc_boundary: Some(arc),
-                multi_contact_boundary: None,
-},
+            },
         };
         let instance = PhysicalMaterial::realized(
             Material::free_base("Water", 1.0),
@@ -443,8 +435,7 @@ mod tests {
                 nominal_area: area,
                 boundary: None,
                 arc_boundary: Some(arc),
-                multi_contact_boundary: None,
-},
+            },
         };
         let instance = PhysicalMaterial::realized(
             Material::free_base("Water", 1.0),
