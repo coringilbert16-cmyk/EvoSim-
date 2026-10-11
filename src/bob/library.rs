@@ -6001,6 +6001,29 @@ mod compact_family_storage_tests {
             reopened.resolve_persistent_interface(&interface),
             LiveFamilyResolution::Unique
         );
+
+        // The persisted suggestion must remain directly realizable after the
+        // library is closed and reopened; a successful interface lookup alone
+        // is not enough to prove the constructor-facing geometry survived.
+        let reopened_realized = reopened
+            .fluid_formations_for_parent(&parent_signature, "Water")
+            .find_map(|suggestion| {
+                suggestion.realize_against_parent(&formation, &catalog, true)
+            })
+            .expect("reopened Bob fluid formation should reconstruct its exact shape and pose");
+        assert!(reopened_realized.0.is_valid());
+        assert!(reopened_realized.1.x.is_finite());
+        assert!(reopened_realized.1.y.is_finite());
+        assert!(reopened_realized.1.rotation_radians.is_finite());
+        assert!(matches!(
+            reopened_realized.0.form,
+            Form::Fluid {
+                nominal_area,
+                boundary: None,
+                arc_boundary: Some(_)
+            } if (nominal_area - area).abs() < 1e-10
+        ));
+
         let reopened_fluid_formations: BTreeMap<_, _> = reopened
             .fluid_formations()
             .map(|formation| (formation.signature(), formation.clone()))
