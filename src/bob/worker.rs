@@ -13,19 +13,19 @@ use std::time::{Duration, Instant};
 const IDLE_SLEEP: Duration = Duration::from_secs(1);
 
 /// Bob catalogs useful local assemblies, not whole organisms. Keep clean builds bounded.
-const MAX_LIBRARY_CONSTITUENTS: usize = 2;
+const MAX_LIBRARY_CONSTITUENTS: usize = 3;
 
 pub fn run() {
     run_continuously_with_limit(MAX_LIBRARY_CONSTITUENTS);
 }
 
 /// Run continuously while limiting generated formations to max_constituents.
-/// Bob is intentionally bounded to singleton and two-piece local formations.
+/// Bob is intentionally bounded to singleton, two-piece, and three-piece local formations.
 /// Reject wider limits rather than silently expanding repository storage.
 pub fn run_continuously_with_limit(max_constituents: usize) {
     assert!(
         (1..=MAX_LIBRARY_CONSTITUENTS).contains(&max_constituents),
-        "Bob's maximum constituent count is fixed at 2"
+        "Bob's maximum constituent count is fixed at 3"
     );
     let catalog = default_catalog();
     let mut library = open_default_library().expect("geometry library must open");
@@ -391,8 +391,7 @@ fn process_one_frontier(
                 metrics.added_formations += library.insert_many(candidates, catalog)?;
             } else {
                 // Still record local contact knowledge for formations at the
-                // limit, but do not create 21-constituent rows from a 20-unit
-                // library target. This makes a fresh catalogue finite.
+                // limit. This makes a fresh catalogue finite.
                 metrics.expansion_limit_reached = true;
             }
 
@@ -454,20 +453,55 @@ mod tests {
     }
 
     #[test]
-    fn worker_rejects_constituent_limits_above_two() {
-        let error = run_to_completion(3).expect_err("Bob must reject wider catalogue limits");
+    fn worker_accepts_three_piece_limit_and_rejects_wider_limits() {
+        let error = run_to_completion(4).err().expect("Bob must reject a four-piece limit");
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
 
         let catalog = default_catalog();
-        let mut library = GeometryLibrary::open(
-            std::env::temp_dir().join(format!("evosim-bob-invalid-limit-{}", std::process::id())),
-            &catalog,
-        )
-        .unwrap();
-        let error = process_one_frontier(&mut library, &catalog, 3)
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-three-piece-limit-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap();
+        let seed = GeometryFormation::single("Carbon");
+        let parent = expand_formation_candidates(&seed, carbon, &catalog)
+            .into_iter()
+            .find(|formation| formation.constituents.len() == 2)
+            .expect("Bob should produce a valid two-piece parent");
+        library.insert(parent, &catalog).unwrap();
+
+        let first_pass = process_one_frontier(&mut library, &catalog, 3)
+            .unwrap()
+            .expect("the two-piece parent should have work remaining");
+        assert!(first_pass.added_formations > 0);
+        assert!(library.formations().any(|formation| formation.constituents.len() == 3));
+        assert!(library.formations().all(|formation| formation.constituents.len() <= 3));
+
+        let three_piece = library
+            .formations()
+            .find(|formation| formation.constituents.len() == 3)
+            .expect("the first pass should create three-piece formations")
+            .signature
+            .clone();
+        let second_pass = process_one_frontier(&mut library, &catalog, 3)
+            .unwrap()
+            .expect("a three-piece formation should have its own contact frontier");
+        assert_eq!(second_pass.formation_size, 3);
+        assert!(second_pass.expansion_limit_reached);
+        assert!(library.get(&three_piece).is_some());
+        assert!(library.formations().all(|formation| formation.constituents.len() <= 3));
+
+        let error = process_one_frontier(&mut library, &catalog, 4)
             .err()
-            .expect("frontier processing must enforce the same hard limit");
+            .expect("frontier processing must reject a four-piece limit");
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+        drop(library);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
