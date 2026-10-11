@@ -1046,12 +1046,26 @@ impl GeometryFormation {
     }
 
     pub fn canonicalized(self, catalog: &[BaseResource]) -> Option<Self> {
+        self.canonicalized_with_mapping(catalog)
+            .map(|(formation, _)| formation)
+    }
+
+    /// Canonicalize a formation while preserving the mapping from each input
+    /// constituent index to its canonical index. If equally canonical poses
+    /// assign the same canonical slots to different input constituents, the
+    /// mapping is ambiguous and this method rejects it rather than guessing.
+    pub fn canonicalized_with_mapping(
+        self,
+        catalog: &[BaseResource],
+    ) -> Option<(Self, Vec<usize>)> {
         if !validate_formation(&self, catalog) {
             return None;
         }
 
+        let input_count = self.constituents.len();
         let candidates = canonical_pose_candidates(&self);
-        let mut best: Option<Self> = None;
+        let mut best: Option<(Self, Vec<usize>)> = None;
+        let mut ambiguous_best = false;
         for mut candidate in candidates {
             let mut indexed: Vec<(usize, GeometryConstituent)> =
                 candidate.constituents.into_iter().enumerate().collect();
@@ -1067,10 +1081,6 @@ impl GeometryFormation {
             });
             candidate.constituents = indexed.iter().map(|(_, c)| c.clone()).collect();
 
-            // Reduce each constituent's local rotation by the exact proper
-            // rotational symmetry of its physical shape. This removes only
-            // rotations that leave the shape itself unchanged; reflections
-            // remain distinct formations.
             for constituent in &mut candidate.constituents {
                 if let Some(resource) = catalog.iter().find(|r| r.name == constituent.resource) {
                     constituent.placement.rotation_radians = canonical_shape_rotation(
@@ -1080,7 +1090,7 @@ impl GeometryFormation {
                 }
             }
 
-            let mut remap = vec![0usize; indexed.len()];
+            let mut remap = vec![0usize; input_count];
             for (new_index, (old_index, _)) in indexed.iter().enumerate() {
                 remap[*old_index] = new_index;
             }
@@ -1095,24 +1105,33 @@ impl GeometryFormation {
                 .bonds
                 .sort_by_key(|b| (b.constituent_a, b.constituent_b));
 
-            // Canonicalization changes constituent order and normalizes
-            // symmetry-equivalent rotations. Treat the resulting pose as a
-            // new physical arrangement and validate it again before exposing
-            // or persisting it; the pre-canonical pose's validity is not enough.
             if !validate_formation(&candidate, catalog) {
                 continue;
             }
             candidate.signature = candidate.canonical_signature();
 
-            if best
-                .as_ref()
-                .map(|existing| candidate.signature < existing.signature)
-                .unwrap_or(true)
-            {
-                best = Some(candidate);
+            match best.as_ref() {
+                None => {
+                    best = Some((candidate, remap));
+                    ambiguous_best = false;
+                }
+                Some((existing, existing_mapping)) if candidate.signature < existing.signature => {
+                    best = Some((candidate, remap));
+                    ambiguous_best = false;
+                }
+                Some((existing, existing_mapping)) if candidate.signature == existing.signature => {
+                    if existing_mapping != &remap {
+                        ambiguous_best = true;
+                    }
+                }
+                _ => {}
             }
         }
-        best
+        if ambiguous_best {
+            None
+        } else {
+            best
+        }
     }
 
     pub fn canonical_signature(&self) -> String {
