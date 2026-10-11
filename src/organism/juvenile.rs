@@ -31,11 +31,11 @@ pub(crate) fn confirmed_seed_baseline(
     // structure. The declared poses are spatial preferences; the constructor's
     // realized physical graph remains authoritative.
     //
-    // The ten-carbon inner loop supplies a simple enclosed region. From one
+    // The six-carbon inner loop supplies a physically compatible enclosed region. From one
     // point on that loop, twenty additional carbon elements wind outward as a
     // loose spiral. Sulfur and methane provide a small amount of heterogeneous
     // peripheral material without defining an organism role or topology.
-    let ring_sides = 10usize;
+    let ring_sides = 6usize;
     let spiral_steps = 20usize;
     let carbon_radius = catalog
         .iter()
@@ -81,7 +81,7 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    for &i in &[0usize, 3, 6, 9] {
+    for &i in &[0usize, 1, 3, 4] {
         let angle = std::f64::consts::TAU * i as f64 / 10.0;
         let radius = ring_radius + 3.0;
         elements.push(BlueprintElement {
@@ -94,7 +94,7 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    for &i in &[2usize, 7] {
+    for &i in &[2usize, 5] {
         let angle = std::f64::consts::TAU * i as f64 / 10.0;
         let radius = ring_radius + 3.0;
         elements.push(BlueprintElement {
@@ -123,14 +123,14 @@ pub(crate) fn confirmed_seed_baseline(
     }
 
     let sulfur_start = ring_sides + spiral_steps;
-    for (offset, &i) in [0usize, 3, 6, 9].iter().enumerate() {
+    for (offset, &i) in [0usize, 1, 3, 4].iter().enumerate() {
         connections.push(BlueprintConnection {
             element_a: i,
             element_b: sulfur_start + offset,
         });
     }
     let methane_start = sulfur_start + 4;
-    for (offset, &i) in [2usize, 7].iter().enumerate() {
+    for (offset, &i) in [2usize, 5].iter().enumerate() {
         connections.push(BlueprintConnection {
             element_a: i,
             element_b: methane_start + offset,
@@ -281,4 +281,52 @@ pub(crate) fn confirmed_seed_scale_reference(
         return Err("confirmed seed scale reference is invalid".into());
     }
     Ok((mass, length))
+}
+
+
+#[cfg(test)]
+mod seed_geometry_tests {
+    use super::*;
+
+    #[test]
+    fn confirmed_seed_ring_uses_compatible_hexagonal_edge_spacing() {
+        let catalog = crate::resources::default_catalog();
+        let blueprint = confirmed_seed_baseline(&catalog).expect("seed baseline should be valid");
+        let ring_sides = 6usize;
+        let carbon_radius = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .and_then(|resource| match resource.shape.form {
+                crate::resources::Form::RegularPolygon { radius, .. } => Some(radius),
+                _ => None,
+            })
+            .expect("Carbon should be a regular polygon");
+        let expected_spacing = 3.0_f64.sqrt() * carbon_radius;
+
+        for index in 0..ring_sides {
+            let next = (index + 1) % ring_sides;
+            let a = blueprint.elements[index].placement;
+            let b = blueprint.elements[next].placement;
+            let distance = (a.x - b.x).hypot(a.y - b.y);
+            assert!(
+                (distance - expected_spacing).abs() < 1e-9,
+                "ring edge {index}-{next} has center spacing {distance}, expected {expected_spacing}"
+            );
+
+            let rotation_delta = (b.rotation_radians - a.rotation_radians)
+                .rem_euclid(std::f64::consts::TAU);
+            assert!(
+                (rotation_delta - std::f64::consts::TAU / ring_sides as f64).abs() < 1e-9,
+                "ring rotations should advance by one sixth-turn"
+            );
+
+            assert!(
+                blueprint.connections.iter().any(|connection| {
+                    (connection.element_a == index && connection.element_b == next)
+                        || (connection.element_a == next && connection.element_b == index)
+                }),
+                "ring edge {index}-{next} must be connected"
+            );
+        }
+    }
 }
