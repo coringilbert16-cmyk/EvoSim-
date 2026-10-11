@@ -687,12 +687,12 @@ fn bob_fluid_acquisition_candidate(
     };
     let mut had_records = false;
     for (anchor_index, anchor_unit) in structure.units.iter().enumerate() {
-        let Some(anchor_shape) = anchor_unit.shape(catalog) else {
+        let Some((anchor_name, _)) = anchor_unit.material.parts.first() else {
             continue;
         };
         let Some(anchor_resource) = catalog
             .iter()
-            .find(|resource| resource.name == anchor_unit.material.parts.first().map(|p| p.0.as_str()).unwrap_or(""))
+            .find(|resource| resource.name == *anchor_name)
         else {
             continue;
         };
@@ -800,7 +800,6 @@ fn bob_fluid_acquisition_candidate(
                 }
             }
         }
-        let _ = anchor_shape;
     }
     (None, had_records)
 }
@@ -809,7 +808,7 @@ fn valid_construction(
     structure: &crate::structure::OrganismStructure,
     catalog: &[BaseResource],
     acquisition_candidates: &[&BaseResource],
-, bob_library: Option<&crate::geometry_reference_library::GeometryLibrary>,
+    bob_library: Option<&crate::geometry_reference_library::GeometryLibrary>,
 ) -> Option<(Vec<(String, Placement)>, Vec<(String, Shape)>, FluidGeometryStatus)> {
     let cavity = crate::cavity::analyze_genome_cavity(structure, catalog)
         .ok()
