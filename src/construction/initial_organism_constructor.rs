@@ -859,12 +859,7 @@ fn bob_fluid_acquisition_candidate(
                         break;
                     }
                     if free_boundary_probes.iter().any(|&(x, y)| {
-                        rigid_form_contains_world_point(
-                            &other_shape.form,
-                            other_unit.placement,
-                            x,
-                            y,
-                        )
+                        rigid_form_contains_world_point(&other_shape.form, other_unit.placement, x, y)
                     }) || fluid_segment_contains_world_point(
                         &shape,
                         placement,
