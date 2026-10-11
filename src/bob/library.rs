@@ -3195,16 +3195,37 @@ impl GeometryLibrary {
         formations: Vec<GeometryFluidFormation>,
         catalog: &[BaseResource],
     ) -> std::io::Result<usize> {
+        self.insert_fluid_formations_with_multi_contact_counts(Vec::new(), formations, catalog)
+            .map(|(added, _)| added)
+    }
+
+    pub fn insert_fluid_formations_with_multi_contact_counts(
+        &mut self,
+        legacy_formations: Vec<GeometryFluidFormation>,
+        multi_contact_formations: Vec<GeometryFluidFormation>,
+        catalog: &[BaseResource],
+    ) -> std::io::Result<(usize, usize)> {
+        let multi_contact_signatures = multi_contact_formations
+            .iter()
+            .map(GeometryFluidFormation::signature)
+            .collect::<std::collections::BTreeSet<_>>();
         let mut unique = BTreeMap::new();
-        for formation in formations {
+        for formation in legacy_formations
+            .into_iter()
+            .chain(multi_contact_formations)
+        {
             if fluid_formation_is_valid(&formation, &self.entries, catalog) {
                 unique.entry(formation.signature()).or_insert(formation);
             }
         }
         unique.retain(|signature, _| !self.fluid_formations.contains_key(signature));
         if unique.is_empty() {
-            return Ok(0);
+            return Ok((0, 0));
         }
+        let multi_contact_added = unique
+            .keys()
+            .filter(|signature| multi_contact_signatures.contains(signature.as_str()))
+            .count();
         let path = self.root.join("fluid_formations.jsonl");
         let mut file = OpenOptions::new().create(true).append(true).open(path)?;
         for formation in unique.values() {
@@ -3215,7 +3236,7 @@ impl GeometryLibrary {
         file.sync_data()?;
         let added = unique.len();
         self.fluid_formations.extend(unique);
-        Ok(added)
+        Ok((added, multi_contact_added))
     }
 
     pub fn insert_fluid_boundary_families(
