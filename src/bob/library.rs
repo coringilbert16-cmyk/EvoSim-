@@ -5420,7 +5420,10 @@ mod compact_family_storage_tests {
         );
         let families =
             generate_fluid_boundary_families_from_contact_families(water, &contact_families);
-        assert!(!families.is_empty(), "expected fluid-boundary records from solved contacts");
+        assert!(
+            !families.is_empty(),
+            "expected fluid-boundary records from solved contacts"
+        );
         assert_eq!(
             library.insert_contact_families(contact_families).unwrap(),
             families.len(),
