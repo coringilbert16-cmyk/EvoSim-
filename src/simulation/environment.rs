@@ -317,17 +317,14 @@ impl ActiveMaterialField {
             if region.boundary.len() < 3 {
                 return false;
             }
-            let Some(world_arc) = arc.transformed(
-                placement.x,
-                placement.y,
-                placement.rotation_radians,
-            ) else {
+            let Some(world_arc) =
+                arc.transformed(placement.x, placement.y, placement.rotation_radians)
+            else {
                 return false;
             };
             let start = world_arc.start_point();
             let end = world_arc.end_point();
-            let midpoint_angle =
-                world_arc.start_angle_radians + world_arc.sweep_radians * 0.5;
+            let midpoint_angle = world_arc.start_angle_radians + world_arc.sweep_radians * 0.5;
             let midpoint = (
                 world_arc.center_x + world_arc.radius * midpoint_angle.cos(),
                 world_arc.center_y + world_arc.radius * midpoint_angle.sin(),
