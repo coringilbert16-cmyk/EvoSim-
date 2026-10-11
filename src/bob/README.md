@@ -106,3 +106,10 @@ The unresolved-resource counter is intentionally distinct from unsupported geome
 ### Exact-head CI follow-up — 2026-10-11
 
 At `1646969ebf7837186da6c7fc2496029341b7ff4d`, formatting, source-size policy, COMBINE architecture, Bob compact-storage tests, empty-library open/reopen, and Runner Validation passed. The full Rust suite reported **318 passed, 29 failed, 1 ignored**; failures span existing cross-subsystem construction/seed, chemistry, COMBINE, contact, cavity, movement/fluid-boundary, reproduction, and storage behavior. Strict Clippy remains red (52 application-target and 41 test-target diagnostics). The focused Water diagnostics and fluid persistence/query tests are present in the full run, but this overall suite is not green and fluid acceptance is not complete. Keep broad library generation gated.
+
+
+### Malformed fluid-boundary persistence checks — 2026-10-11
+
+At code head `4e5c922d0f5d9629f6a335fe8fb17e46a924ad3d`, the fluid-boundary persistence regression rejects an edge interval ending beyond 1.0 and a non-finite contact angle; the valid Water–Carbon persistence/reopen path passes. Rust workflow [#38151236466](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38151236466) passed formatting, source-size policy, COMBINE architecture, Bob compact-storage tests, and empty-library open/reopen without generation. The full suite reports **318 passed, 29 failed, 1 ignored**; unrelated/cross-subsystem failures include movement's fluid-boundary behavior. Strict Clippy remains red on project-wide lint and staged-API findings. Runner Validation [#38151236246](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38151236246) passed. This is a persistence-validation checkpoint, not end-to-end fluid acceptance; broad library generation remains gated and the library has not been regenerated.
+
+Next: add focused rejection tests for malformed fluid-formation anchor indices and non-finite contact parameters, then rerun Bob-focused checks. Do not start bounded two-constituent generation until persistence, reopen identity, and the fluid boundary's non-wall semantics have been separately assessed.
