@@ -1785,7 +1785,7 @@ mod tests {
             .expect("the Bob fluid shape should survive physical material restoration");
             assert_eq!(
                 restored.units[restored_indices[0]].shape(&catalog),
-                Some(shape.clone())
+                Some(&shape)
             );
             assert_eq!(material.realized_shape_for_part(0, &catalog), Some(shape));
         }
