@@ -681,6 +681,7 @@ fn point_in_form(
         }
         crate::resources::Form::Fluid {
             arc_boundary: Some(arc),
+            multi_contact_boundary: None,
             ..
         } => {
             let (local_x, local_y) =
@@ -704,6 +705,7 @@ fn point_in_form(
         | crate::resources::Form::RegularPolygon { .. }
         | crate::resources::Form::Polygon { .. }
         | crate::resources::Form::Fluid {
+            multi_contact_boundary: None,
             boundary: Some(_), ..
         } => {
             let Some(local_vertices) = form.polygon_vertices() else {
@@ -728,6 +730,7 @@ fn point_in_form(
         | crate::resources::Form::Fluid {
             boundary: None,
             arc_boundary: None,
+            multi_contact_boundary: None,
             ..
         } => false,
     }
@@ -757,7 +760,8 @@ mod fitted_water_tests {
                 nominal_area: 4.0,
                 boundary: Some(vec![(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]),
                 arc_boundary: None,
-            },
+                multi_contact_boundary: None,
+},
         };
         assert!(water.realize_fluid_geometry(fitted, &catalog));
         let index = structure.add_unit(water);
