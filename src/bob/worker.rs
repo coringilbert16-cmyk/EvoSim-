@@ -403,8 +403,8 @@ mod tests {
             .find(|formation| formation.constituents.len() == 2)
             .expect("Bob should produce at least one valid two-constituent Carbon parent");
         let signature = parent.signature.clone();
-        let root = std::env::temp_dir()
-            .join(format!("evosim-bob-fluid-at-limit-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("evosim-bob-fluid-at-limit-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
         library.insert(parent, &catalog).unwrap();
