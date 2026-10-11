@@ -118,7 +118,9 @@ impl PhysicalMaterial {
             return None;
         }
         let default_area = match &resource.shape.form {
-            crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+            crate::resources::Form::Circle { radius } => {
+                std::f64::consts::PI * radius * radius
+            }
             crate::resources::Form::Fluid { nominal_area, .. } => *nominal_area,
             _ => return None,
         };
@@ -438,19 +440,31 @@ mod tests {
             nominal_area: area,
             pieces: vec![
                 crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
-                    start_x: -half, start_y: -half, end_x: half, end_y: -half,
+                    start_x: -half,
+                    start_y: -half,
+                    end_x: half,
+                    end_y: -half,
                     contact_angle_radians: angle,
                 },
                 crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
-                    start_x: half, start_y: -half, end_x: half, end_y: half,
+                    start_x: half,
+                    start_y: -half,
+                    end_x: half,
+                    end_y: half,
                     contact_angle_radians: angle,
                 },
                 crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
-                    start_x: half, start_y: half, end_x: -half, end_y: half,
+                    start_x: half,
+                    start_y: half,
+                    end_x: -half,
+                    end_y: half,
                     contact_angle_radians: angle,
                 },
                 crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
-                    start_x: -half, start_y: half, end_x: -half, end_y: -half,
+                    start_x: -half,
+                    start_y: half,
+                    end_x: -half,
+                    end_y: -half,
                     contact_angle_radians: angle,
                 },
             ],
@@ -466,13 +480,20 @@ mod tests {
         assert!(shape.form.is_valid());
         let instance = PhysicalMaterial::realized(
             Material::free_base("Water", 1.0),
-            vec![Placement { x: 2.0, y: -1.0, rotation_radians: 0.4 }],
+            vec![Placement {
+                x: 2.0,
+                y: -1.0,
+                rotation_radians: 0.4,
+            }],
             &catalog,
         )
         .unwrap()
         .with_single_fluid_shape(shape.clone(), &catalog)
         .expect("multi-contact fluid shape should retain conserved area");
-        assert_eq!(instance.realized_shape_for_part(0, &catalog), Some(shape.clone()));
+        assert_eq!(
+            instance.realized_shape_for_part(0, &catalog),
+            Some(shape.clone())
+        );
         let encoded = serde_json::to_string(&instance).unwrap();
         let decoded: PhysicalMaterial = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded.realized_shape_for_part(0, &catalog), Some(shape));
