@@ -6,7 +6,8 @@
 //! process restarts.
 
 use crate::capillary_geometry::{
-    solve_water_against_solid, CapillaryContactFamily, ContactTranslationInterval,
+    solve_water_against_solid, CapillaryContactFamily, CircularArcBoundary,
+    ContactTranslationInterval,
 };
 use crate::material_geometry::{
     placed_forms_penetrate, placed_forms_rigid_contact, PlacedMaterialPart,
@@ -696,6 +697,18 @@ pub struct GeometryFluidFormation {
 }
 
 impl GeometryFluidFormation {
+    /// Reconstruct the exact free interface represented by this persisted record.
+    /// Invalid or internally inconsistent stored scalars produce a coverage miss.
+    pub fn exact_arc_boundary(&self) -> Option<CircularArcBoundary> {
+        CircularArcBoundary::from_persisted_solution(
+            self.area,
+            self.contact_angle_radians,
+            self.curvature_radius,
+            self.free_arc_angle_radians,
+            self.contact_length,
+        )
+    }
+
     pub fn signature(&self) -> String {
         format!(
             "fluid-v{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
@@ -3289,6 +3302,7 @@ fn fluid_formation_is_valid(
         && formation.edge_parameter_end <= 1.0
         && formation.edge_parameter_end >= formation.edge_parameter_start
         && fluid_boundary_state_is_self_consistent(&family)
+        && formation.exact_arc_boundary().is_some()
 }
 
 fn load_fluid_formations(
