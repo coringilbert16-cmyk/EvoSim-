@@ -1,5 +1,40 @@
 # EvoSim
 
+## Current repository integrity checkpoint — 2026-10-11
+
+This checkpoint supersedes older repository-status and CI summaries later in this README. Those notes are retained as dated history, not as the current branch state.
+
+### Authoritative branch state
+
+- GitHub default branch `main` is **not a runnable EvoSim checkout**. Its current head is `a30c14999a95f97a644f9927e8eb4546c57e285a`; its six tree entries contain only the chemistry-library data and `docs/bob-geometry-storage-audit.md`. It has no root `README.md`, `Cargo.toml`, `Cargo.lock`, Rust source, UI, or runner scripts.
+- The single integration target remains [PR #186](https://github.com/coringilbert16-cmyk/EvoSim-/pull/186), branch `integration/unified-source-and-catalogue`, head `8433a3185360f1eb1fe3f2b0a8cc2092a9bb7e32`. Its tree contains the Rust application, UI, scripts, README, audits, geometry-library implementation/documentation, and chemistry data.
+- The seven generated geometry data files were intentionally removed from both current branch trees. **Do not restore or commit generated geometry data as part of repository recovery.** The bounded two-piece generation run produced an artifact only; it did not repopulate the Git tree. The chemistry cache files remain tracked.
+- The integration branch and current `main` have diverged in commit ancestry (integration is 278 commits ahead and 7 behind the current main ref). The resulting tree already reflects the geometry-data deletion, but the ancestry difference must be reviewed before merge. Do not force-push, rewrite history, or merge PR #186 while the release gates below remain open.
+- `Cargo.lock` is currently absent from the integration tree. Because this is an application crate, dependency resolution is not fully pinned. Add and verify a committed lockfile as part of the reproducible clean-checkout gate.
+
+### Latest verified CI at the current integration head
+
+For commit `8433a3185360f1eb1fe3f2b0a8cc2092a9bb7e32`:
+
+- [Rust workflow run #38138063937](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38138063937): formatting, large-file policy, COMBINE architecture checks, Bob compact-storage tests, and the non-generative empty-library open/reopen test passed. Full test suite: **314 passed, 29 failed, 1 ignored**. Strict Clippy failed with 58 reported compilation/lint errors. This is an improvement over earlier recorded runs, but CI is not green.
+- [Runner validation run #38138063941](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38138063941) passed.
+- These are CI results for the recorded commit, not a fresh local build. Do not describe the project as stable or ready for a clean download yet.
+
+### Repository-integrity gates before changing the default branch
+
+1. Keep PR #186 as the single integration target and preserve source history.
+2. Reconcile its branch ancestry with the seven post-base `main` commits without restoring the deleted geometry catalogue or losing the chemistry data and audit trail.
+3. Keep one accurate current-status checkpoint; mark older test counts and source findings as historical when superseded.
+4. Commit `Cargo.lock` generated and validated by the Rust toolchain, and verify a fresh clone can resolve/build with the lockfile.
+5. Resolve compile/lint blockers without blanket suppressions, and maintain a current, reproducible CI result.
+6. Confirm the complete tree has no accidental build output, local runner state, or generated catalogue; retain the intended source, scripts, UI, documentation, and library implementation.
+7. Only after these checks pass should PR #186 be considered for merge and `main` be treated as the download target.
+
+Repository integrity is the current priority. Constructor, chemistry, and geometry behavior remain separate acceptance gates; passing repository checks alone does not claim the organism constructor is biologically viable.
+
+---
+
+
 EvoSim is an open-ended evolutionary organism simulation. Organisms are built from physical material and physical bonds; structure and behavior should emerge from general mechanisms rather than fixed predator/prey roles or a predefined organism-size progression.
 
 ## Repository unification gate — 2026-10-10
