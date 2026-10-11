@@ -1012,9 +1012,9 @@ pub fn solve_collinear_multi_contact_formation(
     {
         return None;
     }
-    let area = match fluid_resource.shape.form {
+    let area = match &fluid_resource.shape.form {
         Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-        Form::Fluid { nominal_area, .. } => nominal_area,
+        Form::Fluid { nominal_area, .. } => *nominal_area,
         _ => return None,
     };
     let first_constraint = constraints.first()?;
