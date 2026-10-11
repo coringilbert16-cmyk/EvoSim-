@@ -219,7 +219,7 @@ pub fn boundary_point_at_multi_contact(
         }
     }
     let (distance_squared, point) = best?;
-    let tolerance = 1e-7 * boundary.bounding_radius().max(1.0);
+    let tolerance = 1e-7;
     (distance_squared.sqrt() <= tolerance).then_some(point)
 }
 
