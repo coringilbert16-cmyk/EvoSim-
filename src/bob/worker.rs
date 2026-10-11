@@ -190,6 +190,7 @@ struct WorkerPassMetrics {
     water_families_added: usize,
     fluid_boundary_families: usize,
     fluid_boundary_families_added: usize,
+    water_frontiers_without_boundary_candidates: usize,
     fluid_formations: usize,
     fluid_formations_added: usize,
     elapsed: Duration,
@@ -201,7 +202,7 @@ impl std::fmt::Display for WorkerPassMetrics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "geometry worker pass: size={} generated={} added={} not_added={} edge_families={} edge_added={} point_families={} point_added={} vertex_families={} vertex_added={} water_families={} water_added={} fluid_boundary_families={} fluid_boundary_added={} fluid_formations={} fluid_formations_added={} total_formations={} expansion_limit_reached={} elapsed_ms={}",
+            "geometry worker pass: size={} generated={} added={} not_added={} edge_families={} edge_added={} point_families={} point_added={} vertex_families={} vertex_added={} water_families={} water_added={} fluid_boundary_families={} fluid_boundary_added={} water_frontiers_without_boundary_candidates={} fluid_formations={} fluid_formations_added={} total_formations={} expansion_limit_reached={} elapsed_ms={}",
             self.formation_size,
             self.generated_candidates,
             self.added_formations,
@@ -216,6 +217,7 @@ impl std::fmt::Display for WorkerPassMetrics {
             self.water_families_added,
             self.fluid_boundary_families,
             self.fluid_boundary_families_added,
+            self.water_frontiers_without_boundary_candidates,
             self.fluid_formations,
             self.fluid_formations_added,
             self.total_formations,
@@ -296,6 +298,9 @@ fn process_one_frontier(
                 let boundary_states =
                     generate_fluid_boundary_families_from_contact_families(resource, &families);
                 metrics.fluid_boundary_families += boundary_states.len();
+                if boundary_states.is_empty() {
+                    metrics.water_frontiers_without_boundary_candidates += 1;
+                }
                 let fluid_formations = if formation.constituents.len() < max_constituents {
                     fluid_formations_from_boundaries(&boundary_states)
                 } else {
@@ -388,12 +393,18 @@ mod tests {
         drop(library);
 
         let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
-        assert!(reopened.fluid_formations().count() > 0);
+        let persisted_count = reopened.fluid_formations().count();
+        assert!(persisted_count > 0);
         assert!(reopened.fluid_formations().all(|formation| {
             formation.parent_formation_signature == carbon_signature
                 && formation.fluid_resource == "Water"
         }));
-        drop(reopened);
+        let mut resumed = reopened;
+        assert!(process_one_frontier(&mut resumed, &catalog, 2)
+            .unwrap()
+            .is_none(), "a fully checkpointed frontier must resume idle without regenerating records");
+        assert_eq!(resumed.fluid_formations().count(), persisted_count);
+        drop(resumed);
         let _ = std::fs::remove_dir_all(root);
     }
 }
