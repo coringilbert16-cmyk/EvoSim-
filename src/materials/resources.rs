@@ -160,9 +160,9 @@ impl Form {
                 if !nominal_area.is_finite() || *nominal_area <= 0.0 {
                     return false;
                 }
-                if (boundary.is_some() as u8)
-                    + (arc_boundary.is_some() as u8)
-                    + (multi_contact_boundary.is_some() as u8)
+                if usize::from(boundary.is_some())
+                    + usize::from(arc_boundary.is_some())
+                    + usize::from(multi_contact_boundary.is_some())
                     > 1
                 {
                     return false;
@@ -190,9 +190,10 @@ impl Form {
             Form::Fluid {
                 boundary,
                 arc_boundary,
+                multi_contact_boundary,
                 ..
             } => {
-                if arc_boundary.is_some() {
+                if arc_boundary.is_some() || multi_contact_boundary.is_some() {
                     None
                 } else {
                     boundary.clone()
@@ -236,7 +237,9 @@ impl Form {
                 arc_boundary,
                 multi_contact_boundary,
             } => {
-                if let Some(arc) = arc_boundary {
+                if let Some(multi) = multi_contact_boundary {
+                    multi.bounding_radius()
+                } else if let Some(arc) = arc_boundary {
                     arc.center_x.hypot(arc.center_y) + arc.radius
                 } else {
                     boundary
