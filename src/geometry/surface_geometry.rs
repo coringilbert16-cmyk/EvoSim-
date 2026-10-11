@@ -195,9 +195,13 @@ pub fn boundary_point_at_multi_contact(
                 })
             }
             crate::capillary_geometry::FluidBoundaryPiece::FreeArc(arc) => {
-                let (px, py) = arc.closest_point(x, y)?;
+                let Some((px, py)) = arc.closest_point(x, y) else {
+                    continue;
+                };
                 let angle = (py - arc.center_y).atan2(px - arc.center_x);
-                let (normal_x, normal_y) = arc.normal_at_angle(angle)?;
+                let Some((normal_x, normal_y)) = arc.normal_at_angle(angle) else {
+                    continue;
+                };
                 Some(BoundaryPoint {
                     x: px,
                     y: py,
@@ -205,7 +209,10 @@ pub fn boundary_point_at_multi_contact(
                     normal_y,
                 })
             }
-        }?;
+        };
+        let Some(candidate) = candidate else {
+            continue;
+        };
         let distance_squared = (x - candidate.x).powi(2) + (y - candidate.y).powi(2);
         if best.is_none_or(|(best_distance, _)| distance_squared < best_distance) {
             best = Some((distance_squared, candidate));
@@ -293,6 +300,31 @@ mod tests {
             form: Form::Circle { radius: 2.0 },
         }
     }
+    #[test]
+    fn multi_contact_endpoint_resolution_preserves_exact_contact_point() {
+        use crate::capillary_geometry::{
+            solve_water_against_collinear_contacts, CapillaryContactFamily,
+        };
+
+        let area = 0.5;
+        let family = CapillaryContactFamily::solve(area, std::f64::consts::FRAC_PI_2).unwrap();
+        let third = family.contact_length / 3.0;
+        let segments = [
+            ((-family.contact_length * 0.5, 0.0), (-third, 0.0)),
+            ((-third, 0.0), (third, 0.0)),
+            ((third, 0.0), (family.contact_length * 0.5, 0.0)),
+        ];
+        let boundary =
+            solve_water_against_collinear_contacts(area, family.contact_angle_radians, &segments)
+                .unwrap();
+        let point = boundary_point_at_multi_contact(&boundary, -family.contact_length * 0.25, 0.0)
+            .unwrap();
+        assert!((point.x + family.contact_length * 0.25).abs() < 1e-12);
+        assert!(point.y.abs() < 1e-12);
+        assert!(point.normal_y < -0.99);
+        assert!(point.normal_x.abs() < 1e-12);
+    }
+
     #[test]
     fn circle_boundary_is_derived_from_requested_direction() {
         let p = boundary_point_toward(&circle(), 3.0, 4.0).unwrap();
