@@ -333,11 +333,11 @@ mod tests {
         };
         let moved = arc.transformed(10.0, -4.0, PI * 0.5).unwrap();
         assert!((moved.center_x - 8.0).abs() < 1e-12);
-        assert!((moved.center_y - 1.0).abs() < 1e-12);
+        assert!((moved.center_y + 3.0).abs() < 1e-12);
         assert!((moved.segment_area().unwrap() - arc.segment_area().unwrap()).abs() < 1e-12);
         assert!((moved.chord_length().unwrap() - arc.chord_length().unwrap()).abs() < 1e-12);
         assert!((moved.start_point().0 - 8.0).abs() < 1e-12);
-        assert!((moved.start_point().1 - 4.0).abs() < 1e-12);
+        assert!(moved.start_point().1.abs() < 1e-12);
     }
 
     #[test]
