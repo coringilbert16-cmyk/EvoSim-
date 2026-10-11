@@ -3534,7 +3534,7 @@ pub fn generate_water_contact_families_with_diagnostics(
                         continue;
                     };
                     let start = contact.edge_start_parameter.max(interval.start);
-                    let end = contact.edge_parameter_end.min(interval.end);
+                    let end = contact.edge_end_parameter.min(interval.end);
                     if end + 1e-10 < start {
                         invalid_overlap_for_anchor = true;
                         continue;
