@@ -296,7 +296,11 @@ fn process_one_frontier(
                 let boundary_states =
                     generate_fluid_boundary_families_from_contact_families(resource, &families);
                 metrics.fluid_boundary_families += boundary_states.len();
-                let fluid_formations = fluid_formations_from_boundaries(&boundary_states);
+                let fluid_formations = if formation.constituents.len() < max_constituents {
+                    fluid_formations_from_boundaries(&boundary_states)
+                } else {
+                    Vec::new()
+                };
                 metrics.fluid_formations += fluid_formations.len();
                 metrics.water_families_added += library.insert_contact_families(families)?;
                 metrics.fluid_boundary_families_added +=
