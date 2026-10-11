@@ -1065,7 +1065,6 @@ pub fn normalize_arc_parameter(angle: f64) -> Option<f64> {
 /// a union of independently solved pairwise contacts. The caller supplies the
 /// ordered solid intervals in the target coordinate frame and must associate
 /// each returned SolidContact piece with its parent edge before persistence.
-#[allow(dead_code)] // Bob's canonical parent-edge adapter is the next integration step.
 pub fn solve_water_against_collinear_contacts(
     area: f64,
     contact_angle_radians: f64,
