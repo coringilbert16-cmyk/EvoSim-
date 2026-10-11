@@ -5437,7 +5437,7 @@ mod bob_candidate_generation_contract_tests {
             .open(root.join("fluid_formations.jsonl"))
             .unwrap();
         serde_json::to_writer(&mut persisted_file, &malformed_persisted).unwrap();
-        persisted_file.write_all(b"\\n").unwrap();
+        persisted_file.write_all(b"\n").unwrap();
         persisted_file.sync_data().unwrap();
         drop(persisted_file);
 
