@@ -4744,14 +4744,25 @@ mod bob_lookup_contract_tests {
             constituents: vec![
                 GeometryConstituent {
                     resource: "Carbon".to_string(),
-                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                    placement: Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
                 },
                 GeometryConstituent {
                     resource: "Carbon".to_string(),
-                    placement: Placement { x: 3.0, y: 0.0, rotation_radians: 0.0 },
+                    placement: Placement {
+                        x: 3.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
                 },
             ],
-            bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
+            bonds: vec![GeometryBond {
+                constituent_a: 0,
+                constituent_b: 1,
+            }],
             signature: String::new(),
         };
         let (canonical, mapping) = formation
@@ -4759,8 +4770,16 @@ mod bob_lookup_contract_tests {
             .expect("asymmetric two-constituent parent has a unique canonical mapping");
         assert_eq!(mapping.len(), 2);
         assert_ne!(mapping[0], mapping[1]);
-        assert!(mapping.iter().all(|index| *index < canonical.constituents.len()));
-        assert_eq!(canonical.bonds, vec![GeometryBond { constituent_a: 0, constituent_b: 1 }]);
+        assert!(mapping
+            .iter()
+            .all(|index| *index < canonical.constituents.len()));
+        assert_eq!(
+            canonical.bonds,
+            vec![GeometryBond {
+                constituent_a: 0,
+                constituent_b: 1,
+            }]
+        );
     }
 
     #[test]
