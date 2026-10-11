@@ -772,6 +772,19 @@ fn candidate_contacts_all_realized_neighbors(
     })
 }
 
+#[derive(Default, Debug)]
+struct PlacementRejectionCounts {
+    generated_origins: usize,
+    deduplicated_origins: usize,
+    attempted_origins: usize,
+    restore_failures: usize,
+    overlap_rejections: usize,
+    neighbor_contact_rejections: usize,
+    no_bond_contact: usize,
+    candidate_evaluation_rejections: usize,
+    combine_rejections: usize,
+}
+
 fn realize_next_bond_driven(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
@@ -783,6 +796,7 @@ fn realize_next_bond_driven(
     anchor_declared: BlueprintPlacement,
     new_material: &crate::physical_material::PhysicalMaterial,
     nodes: &mut usize,
+    rejection_counts: &mut PlacementRejectionCounts,
     ledger: &EnergyLedger,
     available_energy: f64,
     bob_library: Option<&crate::geometry_reference_library::GeometryLibrary>,
@@ -896,6 +910,8 @@ fn realize_next_bond_driven(
                 candidate_origins.extend(angles.into_iter().map(|angle| {
                     placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle)
                 }));
+                let generated_origins = candidate_origins.len();
+                rejection_counts.generated_origins += generated_origins;
                 let mut seen_origins = std::collections::BTreeSet::<(i64, i64, i64)>::new();
                 candidate_origins.retain(|placement| {
                     let key = (
@@ -905,8 +921,11 @@ fn realize_next_bond_driven(
                     );
                     seen_origins.insert(key)
                 });
+                rejection_counts.deduplicated_origins +=
+                    generated_origins.saturating_sub(candidate_origins.len());
                 for candidate_origin in candidate_origins {
                     *nodes += 1;
+                    rejection_counts.attempted_origins += 1;
 
                     let mut trial = structure.clone();
                     let Some(indices) = crate::material_restoration::restore_material(
@@ -915,6 +934,7 @@ fn realize_next_bond_driven(
                         candidate_origin,
                         catalog,
                     ) else {
+                        rejection_counts.restore_failures += 1;
                         continue;
                     };
 
@@ -923,6 +943,7 @@ fn realize_next_bond_driven(
                     if indices.iter().any(|index| {
                         placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
                     }) {
+                        rejection_counts.overlap_rejections += 1;
                         continue;
                     }
                     if !candidate_contacts_all_realized_neighbors(
@@ -933,6 +954,7 @@ fn realize_next_bond_driven(
                         &indices,
                         catalog,
                     ) {
+                        rejection_counts.neighbor_contact_rejections += 1;
                         continue;
                     }
 
@@ -967,6 +989,7 @@ fn realize_next_bond_driven(
                                     .unwrap_or(std::cmp::Ordering::Equal)
                             })
                     }) else {
+                        rejection_counts.no_bond_contact += 1;
                         continue;
                     };
 
@@ -979,6 +1002,7 @@ fn realize_next_bond_driven(
                             catalog,
                         )
                     else {
+                        rejection_counts.candidate_evaluation_rejections += 1;
                         continue;
                     };
 
@@ -993,6 +1017,7 @@ fn realize_next_bond_driven(
                         &mut trial_ledger,
                         &mut trial_energy,
                     ) else {
+                        rejection_counts.combine_rejections += 1;
                         continue;
                     };
 
@@ -1264,6 +1289,7 @@ fn construct_blueprint_bond_driven_internal(
         }
 
         let mut attached = false;
+        let mut rejection_counts = PlacementRejectionCounts::default();
         // A not-yet-realized element may have more than one realized blueprint
         // neighbor. Each neighbor is an independently valid forward anchor;
         // failure against one must not strand the element when another neighbor
@@ -1314,6 +1340,7 @@ fn construct_blueprint_bond_driven_internal(
                     anchor_element.placement,
                     &candidate_instance,
                     &mut nodes,
+                    &mut rejection_counts,
                     &construction_ledger,
                     remaining_energy,
                     bob_library.as_ref(),
@@ -1358,6 +1385,17 @@ fn construct_blueprint_bond_driven_internal(
         }
 
         if !attached {
+            eprintln!(
+                "[construction-placement-diagnostics] element={index} attempts={nodes} generated={} deduplicated={} restore_failures={} overlap_rejections={} neighbor_contact_rejections={} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={}",
+                rejection_counts.generated_origins,
+                rejection_counts.deduplicated_origins,
+                rejection_counts.restore_failures,
+                rejection_counts.overlap_rejections,
+                rejection_counts.neighbor_contact_rejections,
+                rejection_counts.no_bond_contact,
+                rejection_counts.candidate_evaluation_rejections,
+                rejection_counts.combine_rejections,
+            );
             return Err(format!(
                 "no forward bond-driven placement found for blueprint element {index} after {nodes} placement attempts"
             ));
