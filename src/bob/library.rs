@@ -6697,10 +6697,7 @@ mod fluid_contact_constraint_schema_tests {
             .collect::<Vec<_>>();
         let first = edges.first().unwrap();
         let (_, first_start, first_end) = *first;
-        let mut direction = (
-            first_end.0 - first_start.0,
-            first_end.1 - first_start.1,
-        );
+        let mut direction = (first_end.0 - first_start.0, first_end.1 - first_start.1);
         if direction.0 < -1e-9 || (direction.0.abs() <= 1e-9 && direction.1 < 0.0) {
             direction = (-direction.0, -direction.1);
         }
