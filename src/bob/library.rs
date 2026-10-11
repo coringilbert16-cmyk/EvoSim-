@@ -7112,6 +7112,7 @@ mod fluid_contact_constraint_schema_tests {
                 boundary: None,
                 arc_boundary: None,
                 multi_contact_boundary: Some(_),
+                ..
             } if (*nominal_area - area).abs() <= 1e-9 * area.max(1.0)
         ));
         assert!(shape.is_valid());
