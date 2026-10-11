@@ -2160,7 +2160,7 @@ impl GeometryLibrary {
                 || !family.candidate_rotation_start_radians.is_finite()
                 || !family.candidate_rotation_end_radians.is_finite()
                 || family.anchor_parameter_start > family.anchor_parameter_end
-                || self.entries.get(&family.formation_signature).is_none()
+                || !self.entries.contains_key(&family.formation_signature)
                 || family.anchor_constituent
                     >= self
                         .entries
@@ -2214,7 +2214,7 @@ impl GeometryLibrary {
                 || !family.candidate_rotation_start_radians.is_finite()
                 || !family.candidate_rotation_end_radians.is_finite()
                 || family.anchor_parameter_start > family.anchor_parameter_end
-                || self.entries.get(&family.formation_signature).is_none()
+                || !self.entries.contains_key(&family.formation_signature)
                 || family.anchor_constituent
                     >= self
                         .entries
@@ -2268,7 +2268,7 @@ impl GeometryLibrary {
                 || family.anchor_parameter_start < 0.0
                 || family.anchor_parameter_end > 1.0
                 || family.anchor_parameter_start > family.anchor_parameter_end
-                || self.entries.get(&family.formation_signature).is_none()
+                || !self.entries.contains_key(&family.formation_signature)
                 || family.anchor_constituent
                     >= self
                         .entries
