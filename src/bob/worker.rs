@@ -62,6 +62,7 @@ pub fn run_to_completion(max_constituents: usize) -> std::io::Result<()> {
     let mut vertex_added = 0usize;
     let mut water_added = 0usize;
     let mut fluid_boundary_added = 0usize;
+    let mut fluid_formations_added = 0usize;
 
     while let Some(metrics) = process_one_frontier(&mut library, &catalog, max_constituents)? {
         eprintln!("{metrics}");
@@ -73,6 +74,7 @@ pub fn run_to_completion(max_constituents: usize) -> std::io::Result<()> {
         vertex_added += metrics.rigid_vertex_families_added;
         water_added += metrics.water_families_added;
         fluid_boundary_added += metrics.fluid_boundary_families_added;
+        fluid_formations_added += metrics.fluid_formations_added;
     }
 
     let formations_before_reopen = library.len();
@@ -96,7 +98,7 @@ pub fn run_to_completion(max_constituents: usize) -> std::io::Result<()> {
         .count();
 
     eprintln!(
-        "geometry worker complete: max_constituents={max_constituents} seeded={seeded} passes={processed} generated_candidates={generated} added_formations={added} not_added={} edge_families_added={edge_added} point_families_added={point_added} vertex_families_added={vertex_added} water_families_added={water_added} fluid_boundary_families_added={fluid_boundary_added} formations_before_reopen={formations_before_reopen} formations_after_reopen={} oversized_formations={oversized} unfinished_frontiers={unfinished} elapsed_ms={}",
+        "geometry worker complete: max_constituents={max_constituents} seeded={seeded} passes={processed} generated_candidates={generated} added_formations={added} not_added={} edge_families_added={edge_added} point_families_added={point_added} vertex_families_added={vertex_added} water_families_added={water_added} fluid_boundary_families_added={fluid_boundary_added} fluid_formations_added={fluid_formations_added} formations_before_reopen={formations_before_reopen} formations_after_reopen={} oversized_formations={oversized} unfinished_frontiers={unfinished} elapsed_ms={}",
         generated.saturating_sub(added),
         reopened.len(),
         started.elapsed().as_millis(),
