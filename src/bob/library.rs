@@ -6999,8 +6999,16 @@ mod fluid_contact_constraint_schema_tests {
         use crate::resources::Form;
 
         let mut catalog = crate::resources::default_catalog();
-        let water = catalog.iter().find(|item| item.name == "Water").unwrap().clone();
-        let carbon = catalog.iter().find(|item| item.name == "Carbon").unwrap().clone();
+        let water = catalog
+            .iter()
+            .find(|item| item.name == "Water")
+            .unwrap()
+            .clone();
+        let carbon = catalog
+            .iter()
+            .find(|item| item.name == "Carbon")
+            .unwrap()
+            .clone();
         let area = match &water.shape.form {
             Form::Circle { radius } => std::f64::consts::PI * radius * radius,
             Form::Fluid { nominal_area, .. } => *nominal_area,
@@ -7090,7 +7098,14 @@ mod fluid_contact_constraint_schema_tests {
         let (shape, pose) = stored
             .realize_against_parent(&parent, &catalog, true)
             .expect("persisted record must realize against its canonical parent");
-        assert_eq!(pose, Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
+        assert_eq!(
+            pose,
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }
+        );
         assert!(matches!(
             &shape.form,
             Form::Fluid {
