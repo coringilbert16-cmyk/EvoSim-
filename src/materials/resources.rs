@@ -184,7 +184,7 @@ impl Form {
                 } else {
                     boundary.clone()
                 }
-            },
+            }
             Form::Rectangle { width, height } => {
                 let hw = width / 2.0;
                 let hh = height / 2.0;
@@ -236,7 +236,7 @@ impl Form {
                         .filter(|radius| *radius > 0.0)
                         .unwrap_or_else(|| (nominal_area / std::f64::consts::PI).sqrt())
                 }
-            },
+            }
         }
     }
 }
