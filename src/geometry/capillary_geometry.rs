@@ -407,6 +407,136 @@ impl CircularArcBoundary {
     }
 }
 
+
+/// One exact piece of a closed fluid boundary. A straight piece is a solid-contact
+/// interval; a circular piece is a free interface. Pieces are ordered around the
+/// fluid region and share endpoints exactly within the boundary tolerance.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+pub enum FluidBoundaryPiece {
+    SolidContact {
+        start_x: f64,
+        start_y: f64,
+        end_x: f64,
+        end_y: f64,
+        contact_angle_radians: f64,
+    },
+    FreeArc(CircularArcBoundary),
+}
+
+impl FluidBoundaryPiece {
+    pub fn start_point(&self) -> Option<(f64, f64)> {
+        match self {
+            Self::SolidContact { start_x, start_y, .. } => {
+                (*start_x, *start_y).into()
+            }
+            Self::FreeArc(arc) if arc.is_valid() => Some(arc.start_point()),
+            Self::FreeArc(_) => None,
+        }
+    }
+
+    pub fn end_point(&self) -> Option<(f64, f64)> {
+        match self {
+            Self::SolidContact { end_x, end_y, .. } => Some((*end_x, *end_y)),
+            Self::FreeArc(arc) if arc.is_valid() => Some(arc.end_point()),
+            Self::FreeArc(_) => None,
+        }
+    }
+
+    fn signed_area_contribution(&self) -> Option<f64> {
+        match self {
+            Self::SolidContact { start_x, start_y, end_x, end_y, contact_angle_radians } => {
+                if ![start_x, start_y, end_x, end_y, contact_angle_radians]
+                    .into_iter().all(|v| v.is_finite())
+                    || !(0.0 < *contact_angle_radians && *contact_angle_radians < PI)
+                    || (end_x - start_x).hypot(end_y - start_y) <= EPS
+                {
+                    return None;
+                }
+                Some(0.5 * (start_x * end_y - end_x * start_y))
+            }
+            Self::FreeArc(arc) => {
+                if !arc.is_valid() {
+                    return None;
+                }
+                let start = arc.start_angle_radians;
+                let end = start + arc.sweep_radians;
+                let integral = arc.radius * arc.center_x * (end.sin() - start.sin())
+                    + arc.radius * arc.center_y * (start.cos() - end.cos())
+                    + arc.radius * arc.radius * arc.sweep_radians;
+                (integral.is_finite()).then_some(0.5 * integral)
+            }
+        }
+    }
+}
+
+/// Exact piecewise boundary for a fluid body with multiple simultaneous solid
+/// contacts. This is a geometry primitive, not a solver: callers must construct
+/// a complete, consistently oriented boundary and still validate live contacts.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct MultiContactFluidBoundary {
+    pub nominal_area: f64,
+    pub pieces: Vec<FluidBoundaryPiece>,
+}
+
+impl MultiContactFluidBoundary {
+    /// Validate closure, each analytic piece, and the area from Green's theorem.
+    /// No arc is tessellated or replaced with a polygon.
+    pub fn is_valid(&self) -> bool {
+        if !self.nominal_area.is_finite()
+            || self.nominal_area <= 0.0
+            || self.pieces.len() < 2
+        {
+            return false;
+        }
+        let points: Vec<_> = self.pieces.iter().map(FluidBoundaryPiece::start_point).collect();
+        if points.iter().any(Option::is_none) {
+            return false;
+        }
+        let scale = self
+            .pieces
+            .iter()
+            .filter_map(FluidBoundaryPiece::start_point)
+            .map(|(x, y)| x.hypot(y))
+            .fold(1.0_f64, f64::max);
+        let tolerance = 1e-9 * scale;
+        for index in 0..self.pieces.len() {
+            let Some(end) = self.pieces[index].end_point() else {
+                return false;
+            };
+            let Some(next_start) = self.pieces[(index + 1) % self.pieces.len()].start_point()
+            else {
+                return false;
+            };
+            if (end.0 - next_start.0).hypot(end.1 - next_start.1) > tolerance {
+                return false;
+            }
+        }
+        let Some(signed_area) = self.pieces.iter().try_fold(0.0, |sum, piece| {
+            piece.signed_area_contribution().map(|value| sum + value)
+        }) else {
+            return false;
+        };
+        signed_area.is_finite()
+            && signed_area > 0.0
+            && (signed_area - self.nominal_area).abs()
+                <= 1e-9 * self.nominal_area.max(1.0)
+    }
+
+    pub fn contact_count(&self) -> usize {
+        self.pieces
+            .iter()
+            .filter(|piece| matches!(piece, FluidBoundaryPiece::SolidContact { .. }))
+            .count()
+    }
+
+    pub fn free_arc_count(&self) -> usize {
+        self.pieces
+            .iter()
+            .filter(|piece| matches!(piece, FluidBoundaryPiece::FreeArc(_)))
+            .count()
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CapillaryContactFamily {
     /// Conserved 2-D fluid area.
