@@ -674,6 +674,64 @@ pub struct GeometryFluidBoundaryFamily {
     pub edge_parameter_end: f64,
 }
 
+/// A persistent fluid-inclusive arrangement: a rigid parent formation plus
+/// one solved, deformable fluid constituent. This is distinct from a rigid
+/// GeometryFormation because the fluid has conserved area, not a fixed pose.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct GeometryFluidFormation {
+    pub schema_version: u32,
+    pub parent_formation_signature: String,
+    pub fluid_resource: String,
+    pub anchor_constituent: usize,
+    pub anchor_edge: usize,
+    pub area: f64,
+    pub contact_angle_radians: f64,
+    pub curvature_radius: f64,
+    pub free_arc_angle_radians: f64,
+    pub contact_length: f64,
+    pub edge_parameter_start: f64,
+    pub edge_parameter_end: f64,
+}
+
+impl GeometryFluidFormation {
+    pub fn signature(&self) -> String {
+        format!(
+            "fluid-v{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+            self.schema_version,
+            self.parent_formation_signature,
+            self.fluid_resource,
+            self.anchor_constituent,
+            self.anchor_edge,
+            quantize(self.area),
+            quantize(self.contact_angle_radians),
+            quantize(self.curvature_radius),
+            quantize(self.free_arc_angle_radians),
+            quantize(self.contact_length),
+            quantize(self.edge_parameter_start),
+            quantize(self.edge_parameter_end),
+        )
+    }
+}
+
+pub fn fluid_formations_from_boundaries(
+    boundaries: &[GeometryFluidBoundaryFamily],
+) -> Vec<GeometryFluidFormation> {
+    boundaries.iter().map(|family| GeometryFluidFormation {
+        schema_version: family.schema_version,
+        parent_formation_signature: family.formation_signature.clone(),
+        fluid_resource: family.fluid_resource.clone(),
+        anchor_constituent: family.anchor_constituent,
+        anchor_edge: family.anchor_edge,
+        area: family.area,
+        contact_angle_radians: family.contact_angle_radians,
+        curvature_radius: family.curvature_radius,
+        free_arc_angle_radians: family.free_arc_angle_radians,
+        contact_length: family.contact_length,
+        edge_parameter_start: family.edge_parameter_start,
+        edge_parameter_end: family.edge_parameter_end,
+    }).collect()
+}
+
 fn fluid_boundary_state_is_self_consistent(family: &GeometryFluidBoundaryFamily) -> bool {
     if !(0.0 < family.contact_angle_radians && family.contact_angle_radians < std::f64::consts::PI)
     {
@@ -1021,6 +1079,7 @@ pub struct GeometryLibrary {
     frontier: GeometryFrontier,
     contact_families: BTreeMap<String, GeometryContactFamily>,
     fluid_boundary_families: BTreeMap<String, GeometryFluidBoundaryFamily>,
+    fluid_formations: BTreeMap<String, GeometryFluidFormation>,
     rigid_contact_families: BTreeMap<String, GeometryRigidContactFamily>,
     rigid_contact_index: HashMap<u64, Vec<String>>,
     rigid_point_contact_families: BTreeMap<String, GeometryRigidPointContactFamily>,
@@ -1473,6 +1532,7 @@ impl GeometryLibrary {
         let frontier_path = root.join("frontier.json");
         let contact_family_path = root.join("contact_families.jsonl");
         let fluid_boundary_family_path = root.join("fluid_boundary_families.jsonl");
+        let fluid_formation_path = root.join("fluid_formations.jsonl");
         let rigid_contact_family_path = root.join("rigid_contact_families.jsonl");
         let rigid_point_contact_family_path = root.join("rigid_point_contact_families.jsonl");
         let rigid_vertex_contact_family_path = root.join("rigid_vertex_contact_families.jsonl");
@@ -1671,6 +1731,7 @@ impl GeometryLibrary {
             catalog,
             &formation_ids,
         );
+        let fluid_formations = load_fluid_formations(&fluid_formation_path, &entries, catalog);
         let rigid_point_contact_families = load_rigid_point_contact_families(
             &rigid_point_contact_family_path,
             &entries,
@@ -1735,6 +1796,7 @@ impl GeometryLibrary {
             frontier,
             contact_families,
             fluid_boundary_families,
+            fluid_formations,
             rigid_contact_families,
             rigid_contact_index,
             rigid_point_contact_families,
@@ -1813,6 +1875,10 @@ impl GeometryLibrary {
 
     pub fn contact_families(&self) -> impl Iterator<Item = &GeometryContactFamily> {
         self.contact_families.values()
+    }
+
+    pub fn fluid_formations(&self) -> impl Iterator<Item = &GeometryFluidFormation> {
+        self.fluid_formations.values()
     }
 
     pub fn fluid_boundary_families(&self) -> impl Iterator<Item = &GeometryFluidBoundaryFamily> {
