@@ -966,6 +966,56 @@ mod shape_tests {
     }
 
     #[test]
+    fn multi_contact_fluid_form_round_trips_as_exact_geometry() {
+        let angle = std::f64::consts::FRAC_PI_2;
+        let boundary = crate::capillary_geometry::MultiContactFluidBoundary {
+            nominal_area: 4.0,
+            pieces: vec![
+                crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                    start_x: -1.0,
+                    start_y: -1.0,
+                    end_x: 1.0,
+                    end_y: -1.0,
+                    contact_angle_radians: angle,
+                },
+                crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                    start_x: 1.0,
+                    start_y: -1.0,
+                    end_x: 1.0,
+                    end_y: 1.0,
+                    contact_angle_radians: angle,
+                },
+                crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                    start_x: 1.0,
+                    start_y: 1.0,
+                    end_x: -1.0,
+                    end_y: 1.0,
+                    contact_angle_radians: angle,
+                },
+                crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                    start_x: -1.0,
+                    start_y: 1.0,
+                    end_x: -1.0,
+                    end_y: -1.0,
+                    contact_angle_radians: angle,
+                },
+            ],
+        };
+        let form = Form::Fluid {
+            nominal_area: 4.0,
+            boundary: None,
+            arc_boundary: None,
+            multi_contact_boundary: Some(boundary),
+        };
+        assert!(form.is_valid());
+        assert!(form.polygon_vertices().is_none());
+        assert!(form.bounding_radius() >= 2.0_f64.sqrt());
+        let restored: Form = serde_json::from_str(&serde_json::to_string(&form).unwrap()).unwrap();
+        assert_eq!(restored, form);
+        assert!(restored.is_valid());
+    }
+
+    #[test]
     fn serialization_round_trip_preserves_shape_and_state() {
         for resource in default_catalog() {
             let json = serde_json::to_string(&resource).unwrap();
