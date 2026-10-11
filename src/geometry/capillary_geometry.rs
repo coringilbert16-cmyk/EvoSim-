@@ -634,9 +634,7 @@ fn circular_arcs_intersect(
 
     let r1 = first.radius;
     let r2 = second.radius;
-    if distance > r1 + r2 + radius_tolerance
-        || distance < (r1 - r2).abs() - radius_tolerance
-    {
+    if distance > r1 + r2 + radius_tolerance || distance < (r1 - r2).abs() - radius_tolerance {
         return false;
     }
 
@@ -651,9 +649,12 @@ fn circular_arcs_intersect(
     let offset_x = -dy * height / distance;
     let offset_y = dx * height / distance;
 
-    [(base_x + offset_x, base_y + offset_y), (base_x - offset_x, base_y - offset_y)]
-        .into_iter()
-        .any(|(x, y)| {
+    [
+        (base_x + offset_x, base_y + offset_y),
+        (base_x - offset_x, base_y - offset_y),
+    ]
+    .into_iter()
+    .any(|(x, y)| {
             let first_angle = (y - first.center_y).atan2(x - first.center_x);
             let second_angle = (y - second.center_y).atan2(x - second.center_x);
             angle_lies_on_arc(first_angle, first, angular_tolerance(r1))
@@ -732,7 +733,13 @@ impl MultiContactFluidBoundary {
                         }
                     }
                     (
-                        FluidBoundaryPiece::SolidContact { start_x, start_y, end_x, end_y, .. },
+                        FluidBoundaryPiece::SolidContact {
+                            start_x,
+                            start_y,
+                            end_x,
+                            end_y,
+                            ..
+                        },
                         FluidBoundaryPiece::FreeArc(arc),
                     )
                     | (
@@ -748,7 +755,10 @@ impl MultiContactFluidBoundary {
                             return false;
                         }
                     }
-                    (FluidBoundaryPiece::FreeArc(first_arc), FluidBoundaryPiece::FreeArc(second_arc)) => {
+                    (
+                        FluidBoundaryPiece::FreeArc(first_arc),
+                        FluidBoundaryPiece::FreeArc(second_arc),
+                    ) => {
                         if circular_arcs_intersect(first_arc, second_arc, tolerance) {
                             return false;
                         }
@@ -1552,12 +1562,18 @@ mod tests {
     #[test]
     fn circular_arc_intersection_detects_nonconcentric_sweep_crossing() {
         let first = CircularArcBoundary {
-            center_x: 0.0, center_y: 0.0, radius: 2.0,
-            start_angle_radians: 0.0, sweep_radians: PI,
+            center_x: 0.0,
+            center_y: 0.0,
+            radius: 2.0,
+            start_angle_radians: 0.0,
+            sweep_radians: PI,
         };
         let second = CircularArcBoundary {
-            center_x: 1.0, center_y: 0.0, radius: 2.0,
-            start_angle_radians: 1.5, sweep_radians: 1.0,
+            center_x: 1.0,
+            center_y: 0.0,
+            radius: 2.0,
+            start_angle_radians: 1.5,
+            sweep_radians: 1.0,
         };
         assert!(circular_arcs_intersect(&first, &second, 1e-9));
     }
@@ -1566,15 +1582,18 @@ mod tests {
     fn concentric_arc_intersection_requires_overlapping_sweeps() {
         let first = CircularArcBoundary {
             center_x: 0.0, center_y: 0.0, radius: 2.0,
-            start_angle_radians: 0.0, sweep_radians: PI / 2.0,
+            start_angle_radians: 0.0,
+            sweep_radians: PI / 2.0,
         };
         let overlap = CircularArcBoundary {
             center_x: 0.0, center_y: 0.0, radius: 2.0,
-            start_angle_radians: PI / 4.0, sweep_radians: PI / 2.0,
+            start_angle_radians: PI / 4.0,
+            sweep_radians: PI / 2.0,
         };
         let separate = CircularArcBoundary {
             center_x: 0.0, center_y: 0.0, radius: 2.0,
-            start_angle_radians: PI, sweep_radians: PI / 4.0,
+            start_angle_radians: PI,
+            sweep_radians: PI / 4.0,
         };
         assert!(circular_arcs_intersect(&first, &overlap, 1e-9));
         assert!(!circular_arcs_intersect(&first, &separate, 1e-9));
