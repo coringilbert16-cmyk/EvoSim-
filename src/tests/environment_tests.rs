@@ -129,11 +129,9 @@ fn local_environment_revision_distinguishes_same_revision_totals_in_different_ce
 
 #[test]
 fn exact_fluid_arc_region_check_allows_chord_contact_but_rejects_curve_escape() {
-    let family = crate::capillary_geometry::CapillaryContactFamily::solve(
-        0.5,
-        std::f64::consts::FRAC_PI_2,
-    )
-    .unwrap();
+    let family =
+        crate::capillary_geometry::CapillaryContactFamily::solve(0.5, std::f64::consts::FRAC_PI_2)
+            .unwrap();
     let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
     let form = crate::resources::Form::Fluid {
         nominal_area: 0.5,
