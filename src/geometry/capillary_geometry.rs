@@ -581,9 +581,7 @@ impl MultiContactFluidBoundary {
                     end_x,
                     end_y,
                     ..
-                } => start_x
-                    .hypot(*start_y)
-                    .max(end_x.hypot(*end_y)),
+                } => start_x.hypot(*start_y).max(end_x.hypot(*end_y)),
                 FluidBoundaryPiece::FreeArc(arc) => arc.center_x.hypot(arc.center_y) + arc.radius,
             })
             .fold(0.0_f64, f64::max)
