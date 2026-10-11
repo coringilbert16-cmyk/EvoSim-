@@ -1433,3 +1433,8 @@ The live construction runtime now has a helper that builds a connected rigid par
 
 
 The arc-intersection regression tests were moved back inside their Rust test module after CI caught a misplaced module-closing brace. The non-concentric arc test fixture was also corrected so the two finite sweeps actually include a shared circle-intersection point. These corrections are committed; their new CI runs are pending.
+
+
+### Live parent mapping regression — 2026-10-11
+
+Added a construction-runtime regression that builds a two-constituent live Carbon parent, attaches its physical bond by stable IDs, canonicalizes the parent, and verifies both IDs resolve to distinct canonical slots. This covers the live graph → canonical Bob parent identity boundary. It does not yet transform suggestions back into live space or provide simultaneous multi-surface fluid boundaries; those remain the next integration steps.
