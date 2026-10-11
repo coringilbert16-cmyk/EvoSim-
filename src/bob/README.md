@@ -26,6 +26,24 @@ The previous generated geometry catalogue was intentionally removed from both cu
 - Family rows can use compact formation references on disk while runtime signatures remain canonical.
 - Frontier updates are batched at the end of a formation pass. If a pass is interrupted before checkpointing, unfinished work can be retried through idempotent insertion.
 - Water contact families are generated once per formation/resource pass and reused to derive fluid-boundary records.
+
+### Water-inclusive formation coverage — current gap
+
+**Important distinction:** the current worker records capillary contact families and `GeometryFluidBoundaryFamily` rows associated with an existing rigid formation. It does **not** yet store Water as a constituent in a `GeometryFormation`. Do not report this as complete water-inclusive formation generation.
+
+The next implementation step is a first-class, persistent fluid-inclusive formation representation that links (a) its rigid parent formation, (b) the Water constituent and conserved area, and (c) the solved fluid/solid interface geometry. The record must preserve the capillary solution (contact angle, curvature radius, free-arc angle, contact interval) rather than treating Water's default circle as an undeformed rigid shape. Its identity must be deterministic, deduplicated, and independent of incidental worker ordering.
+
+The generator must produce records only where the fluid solution and available exposed boundary are valid; it must report unsupported boundary classes explicitly rather than silently implying full coverage. Water–Water accumulation is not a two-constituent rigid formation and must remain excluded. Runtime construction still validates the actual live fluid shape and whole-structure interactions; Bob records reusable knowledge and does not authorize a physical mutation.
+
+Acceptance gates for this work:
+
+1. Generate a Water-inclusive record from a real eligible rigid formation and verify that Water is represented explicitly in the record.
+2. Persist, close, reopen, and resolve that record with identical canonical identity and geometry.
+3. Verify conserved area and capillary self-consistency, exposed-boundary interval bounds, valid parent references, and duplicate rejection.
+4. Cover each supported fluid/solid boundary class and report unsupported classes in metrics.
+5. Prove the worker resumes idempotently after interruption and that the existing rigid-only catalogue behavior remains unchanged.
+
+Do not run broad catalogue regeneration until these gates pass. Existing `fluid_boundary_families.jsonl` rows remain useful capillary knowledge, but they are not substitutes for the new fluid-inclusive formation records.
 - The worker reports generated and newly inserted family counts separately. Equal counts indicate no duplicate keys were rejected; they do not prove all records are geometrically unique.
 
 ## Worker commands
