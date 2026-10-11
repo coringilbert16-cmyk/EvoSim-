@@ -7083,9 +7083,13 @@ mod fluid_contact_constraint_schema_tests {
             library.insert(parent.clone(), &catalog).unwrap();
             assert_eq!(
                 library
-                    .insert_fluid_formations(vec![record.clone()], &catalog)
+                    .insert_fluid_formations_with_multi_contact_counts(
+                        Vec::new(),
+                        vec![record.clone()],
+                        &catalog,
+                    )
                     .unwrap(),
-                1
+                (1, 1)
             );
         }
         let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
