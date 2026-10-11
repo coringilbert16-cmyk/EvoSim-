@@ -750,7 +750,8 @@ impl GeometryFluidFormation {
                 nominal_area: self.area,
                 boundary: None,
                 arc_boundary: Some(arc),
-            },
+                        multi_contact_boundary: None,
+},
         };
         if !shape.is_valid() {
             return None;
@@ -5891,8 +5892,7 @@ mod compact_family_storage_tests {
             Form::Fluid {
                 nominal_area,
                 boundary: None,
-                arc_boundary: Some(_)
-            } if (nominal_area - area).abs() < 1e-10
+                arc_boundary: Some(_), ..} if (nominal_area - area).abs() < 1e-10
         ));
         assert_eq!(
             library
@@ -6018,8 +6018,7 @@ mod compact_family_storage_tests {
             Form::Fluid {
                 nominal_area,
                 boundary: None,
-                arc_boundary: Some(_)
-            } if (nominal_area - area).abs() < 1e-10
+                arc_boundary: Some(_), ..} if (nominal_area - area).abs() < 1e-10
         ));
 
         let reopened_fluid_formations: BTreeMap<_, _> = reopened
