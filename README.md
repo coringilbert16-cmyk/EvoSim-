@@ -646,10 +646,25 @@ The visualizer is deliberately separate from the catalogue worker and the live o
 # Replacement Initial Organism Constructor
 ## Authoritative architecture, library integration, migration, and validation plan
 
-**Status:** Approved design plan; implementation is not implied by this documentation.  
-**Scope:** Replace the current initial-organism construction architecture and remove superseded constructor plans and implementation paths.  
-**Primary objective:** Produce a physically valid, viable initial organism through the minimum necessary sequence of real construction decisions, without prescribing its final topology.  
-**Core principle:** The constructor coordinates established physical authorities. It does not become another geometry engine, chemistry engine, or organism-design script.
+**Status:** Approved design plan, amended 2026-10-11 to adopt the library-backed compositional planner and separate Bob library-expansion loop; implementation is not implied by this documentation.  
+**Scope:** Replace the current initial-organism construction architecture while preserving the valid physical and biological requirements in this plan. This is a marked revision of the existing plan, not a declaration that the plan itself is invalid.  
+**Primary objective:** Produce a physically valid, viable initial organism by composing known geometric arrangements and making the minimum necessary sequence of real construction decisions, without prescribing its final topology.  
+**Core principle:** The constructor plans over verified knowledge supplied by Bob and authoritative chemistry/physics systems. It does not invent arbitrary geometric candidates at runtime or become another geometry engine, chemistry engine, or organism-design script.
+
+> [!IMPORTANT]
+> ### Approved plan amendment — library-backed composition and separate discovery (2026-10-11)
+>
+> This amendment refines the existing architecture. It preserves milestone-driven construction, whole-structure validation, physical acquisition, atomic transactions, analyzer-confirmed genome discovery, and the other invariants below. It changes how geometric candidates are obtained and what happens when Bob lacks coverage.
+>
+> **Required direction:** the constructor may propose only placements supported by persisted, verified Bob formation/contact records. It may combine those known local arrangements into larger structures Bob has never catalogued as a whole. It must not generate arbitrary fallback poses, silently use scaffold coordinates, or treat an unrecorded in-memory suggestion as a library discovery.
+>
+> **Separate expansion loop:** if the planner cannot find a viable path using the current library, it must return a structured missing-coverage or contextual-blocker report. Bob's discovery worker runs separately, expands and verifies the library, and the planner retries against the resulting versioned data. Do not run open-ended geometry discovery inside a simulation tick.
+>
+> **Current bootstrap constraint:** the checked-in geometry catalogue is intentionally empty. Bob's persistence tests and prior bounded-generation run do not prove that this constructor works. Before strict library-backed construction can be accepted, run Bob's bounded worker to generate and validate singleton and two-constituent formations (maximum constituent count = 2), inspect the output and coverage, and make that library available to the constructor as generated runtime/artifact data. Do not commit generated catalogue files as source code or treat the temporary two-piece catalogue as complete coverage.
+>
+> **Evidence boundary:** successful library open/reopen, passing Bob tests, and successful two-piece generation prove library behavior only. Acceptance requires the live initial-organism constructor to build a viable organism using only known-library placements, with authoritative live physical/chemical validation and no unrecorded geometric fallback.
+>
+> **Marked changes in this revision:** Sections 3–6, 12, 13–17 are revised below to make candidate provenance, strict query semantics, composition, missing-coverage reporting, and bounded library expansion explicit. The existing physical and biological requirements remain in force.
 
 ## 1. Executive summary
 
@@ -657,11 +672,13 @@ EvoSim needs a constructor that can produce a viable organism from available mat
 
 The replacement will not assemble toward a fixed piece count and test viability afterward. It will propose individual physical changes or reusable local arrangements, validate them before commitment, commit only complete valid transactions, and check developmental milestones as construction proceeds.
 
-The geometry library will supply reusable knowledge about shapes, contact features, and physically plausible arrangements. The chemistry library and authoritative bond rules will determine material compatibility and chemical/energetic consequences. The constructor will coordinate these authorities, choose among viable candidates, and stop when the actual organism is viable.
+The geometry library will supply reusable, persisted knowledge about shapes, contact features, and verified local arrangements. The constructor will search combinations of these known arrangements; it will not manufacture an arbitrary placement when lookup fails. The chemistry library and authoritative bond rules will determine material compatibility and chemical/energetic consequences. The constructor will coordinate these authorities, choose among viable candidates, and stop when the actual organism is viable. When library coverage is insufficient, it will report the missing capability for a separate Bob expansion run.
 
 The replacement must:
 - Construct an initial organism without a prescribed blueprint or final shape.
 - Use existing geometry and chemistry knowledge instead of repeatedly rediscovering it.
+- Select geometric candidates only from persisted, verified Bob records; compose known local arrangements to create larger, previously unseen organisms.
+- Keep geometry discovery separate from runtime construction. Missing library coverage is an explicit planner result and triggers a separately run, bounded Bob expansion process.
 - Discover a genome cavity through the real cavity analyzer and require a qualifying bonded seal.
 - Stop treating enclosure as a goal immediately after genome qualification.
 - Physically acquire Water and at least three distinct non-Water resource categories.
@@ -701,7 +718,7 @@ The Geometry Reference Library provides reusable geometric knowledge. The Chemis
 
 ### 3.2 Candidate query and indexing
 
-Indexes narrow the search using material composition, exposed connection features, feature scale, arrangement size, shape, orientation, and validation status. Indexes are regenerable accelerators, not independent sources of physical truth.
+Indexes narrow the search using material composition, exposed connection features, feature scale, arrangement size, shape, orientation, and validation status. Indexes are regenerable accelerators, not independent sources of physical truth. Each returned geometric candidate must trace to a persisted formation/contact record with a stable record identity and library/schema version. An in-memory candidate generated on a query miss is not a Bob discovery and is not eligible for strict construction.
 
 ### 3.3 Authoritative validation
 
@@ -727,29 +744,29 @@ Inventory the files, schemas, versions, record counts, material combinations, sh
 
 ### 4.2 Separate stored knowledge from validation guarantees
 
-Track whether an entry is unverified, locally validated, compositionally validated, or validated in a particular context. An arrangement valid in isolation can still collide with a distant part of the organism when inserted into a larger structure.
+Track whether an entry is unverified, locally validated, compositionally validated, or validated in a particular context. Only records meeting the library's explicit verification contract may be used as constructor candidates. An arrangement valid in isolation can still collide with a distant part of the organism when inserted into a larger structure; library verification is candidate provenance, not permission to skip live validation.
 
 ### 4.3 Index for actual constructor queries
 
 Index by useful physical features: material composition, shape/constituent types, exposed connection feature, feature scale, orientation, local envelope, arrangement complexity, and validation status. Each index must answer a demonstrated query and be reproducible from authoritative data.
 
-### 4.4 Generate placements from features, not blind coordinate sweeps
+### 4.4 Instantiate known placements; do not invent runtime geometry
 
-When a connection feature is exposed, query plausible placements that align compatible features. Enforce the approved contact tolerance of 0.1 where applicable; touching is permitted, penetration is forbidden. Respect feature-scale compatibility and the specified bond-strength distinctions for edge, corner, and line-end contacts. Bounding boxes and spatial indexes may reject obviously irrelevant candidates, but cannot serve as final proof of contact or nonpenetration.
+When a connection feature is exposed, query Bob for persisted records that encode compatible contact features and relative placements. Instantiate/rebase those recorded arrangements against the current anchor using the record's defined coordinate frame and orientation rules. The strict constructor must not fall back to blind coordinate sweeps, locally generated unpersisted contact families, scaffold coordinates, or arbitrary pose generation when no record matches. Enforce the approved contact tolerance of 0.1 where applicable; touching is permitted, penetration is forbidden. Respect feature-scale compatibility and the specified bond-strength distinctions for edge, corner, and line-end contacts. Bounding boxes and spatial indexes may reject obviously irrelevant candidates, but cannot serve as final proof of contact or nonpenetration.
 
-Resolve the existing constructor's 0.05 tolerance against the approved 0.1 value at the shared authority; do not patch only one local constant.
+Resolve the existing constructor's 0.05 tolerance against the approved 0.1 value at the shared authority; do not patch only one local constant. Candidate diagnostics must identify the source formation/contact record and the live validation outcome.
 
-### 4.5 Reuse multi-piece arrangements as optional shortcuts
+### 4.5 Compose known arrangements into larger structures
 
-Validated local composites may reduce repeated search. They are candidate shortcuts, not mandatory building blocks or biological organs. Validate all external interfaces and the full contextual placement. The constructor must remain able to add individual pieces, reject a composite, and deviate from a reused arrangement later.
+Verified singleton and multi-constituent arrangements are reusable local building blocks, not mandatory biological organs. The planner may combine their recorded placements to create a larger structure that Bob has never seen as a complete formation. Each composition must reconcile the shared interfaces, constituent transforms, contact graph, and exposed features; validate every external interface and the full contextual placement. A composite is an optional planning shortcut: the planner can reject it, choose another known arrangement, or continue with smaller known records. Composition does not permit arbitrary new internal geometry; every constituent arrangement and placement relationship must be library-supported.
 
 ### 4.6 Query using current context
 
 Candidate lookup must account for actual exposed features, available materials, unmet milestones, existing structure, and feasible resource-acquisition paths. Do not scan the entire catalogue without regard to the current construction state.
 
-### 4.7 Preserve correctness when coverage is incomplete
+### 4.7 Treat missing coverage as a first-class result — no runtime fallback
 
-A missing catalogue entry may make construction slower or reduce success probability; it must never cause invalid geometry to be accepted. Keep a correct fallback candidate-generation path where necessary and measure when it is used.
+A missing catalogue entry must never cause the constructor to generate an unrecorded candidate or use a hard-coded placement. Return a structured result such as `MissingLibraryCoverage`, including the query/contact class, anchor feature, material/shape requirements, rejected record IDs, and library version. Distinguish this from `KnownCandidatesRejectedByLiveContext`, chemical incompatibility, and proven absence of a feasible path under the searched conditions. Record the coverage gap for the separate Bob expansion process. After Bob discovers, verifies, persists, and versions additional records, rerun planning against that library version. Do not run open-ended discovery inside a simulation tick.
 
 ## 5. Chemistry Library integration
 
@@ -783,9 +800,9 @@ Track the realized structure, constituent positions, valid bonds, exposed featur
 
 Begin with a valid physical starting condition. Discover a qualifying genome cavity. Then satisfy the remaining organism requirements. Milestones describe biological conditions, not piece counts or exact arrangements.
 
-### Step 3 — Generate candidates from both libraries
+### Step 3 — Query and compose only known geometry
 
-Generate candidate single-piece attachments, reusable local composites, compatible material combinations, and needed resource placements. Candidate generation is demand-driven: missing resource requirements should trigger relevant acquisition opportunities instead of endless unrelated growth.
+Query Bob for persisted, verified singleton or formation records matching the current exposed features, material/shape constraints, and outstanding milestone. Instantiate the recorded relative placements against the live anchor and compose compatible known arrangements into larger candidate growth steps. The constructor may enumerate combinations of known records, but it must not invent arbitrary coordinates, rotations, contact families, or scaffold fallbacks. Chemistry eligibility and material selection are evaluated through their authoritative systems. Candidate generation is demand-driven: missing resource requirements should trigger relevant known acquisition opportunities instead of unrelated growth. If no recorded candidate matches, return a missing-coverage result for the separate expansion loop.
 
 ### Step 4 — Validate before commitment
 
@@ -793,11 +810,11 @@ Geometry checks must confirm valid shapes, contact, scale compatibility, nonpene
 
 The existing `penetrates_local_neighborhood()` check against only the anchor and its direct bonded neighbors is not a sufficient whole-structure guarantee unless a proven invariant makes it complete. Use spatial indexing for efficiency, but preserve complete relevant collision detection.
 
-### Step 5 — Use bounded, physically grounded feasibility lookahead
+### Step 5 — Plan over known arrangements and backtrack before commitment
 
-Greedy local growth can block later completion. During genome discovery, avoid candidates that demonstrably eliminate all feasible enclosure paths. During resource acquisition, avoid blocking all feasible placements for required resources. Prefer a candidate with plausible continuation when otherwise comparable alternatives lead to dead ends.
+Greedy local growth can block later completion. Search a bounded, explicit planning space formed from Bob's known placement records and combinations of those records. During genome discovery, avoid candidates that demonstrably eliminate all feasible enclosure paths. During resource acquisition, avoid blocking all feasible placements for required resources. Preserve alternative branches and backtrack over uncommitted plans when a later constraint fails; do not undo already committed physical history unless a separately defined physical transaction explicitly supports rollback before visibility.
 
-Lookahead estimates feasibility; it does not know or prescribe the final organism. It must not be replaced by a fixed piece count, a hardcoded ring, a mandatory scaffold, or arbitrary attempt/node caps treated as biological facts. If an operational computation budget is exhausted, report that the search effort was exhausted; do not claim physical impossibility without proof.
+Lookahead estimates feasibility; it does not know or prescribe the final organism. It must not be replaced by a fixed piece count, a hardcoded ring, a mandatory scaffold, or arbitrary attempt/node caps treated as biological facts. If an operational computation budget is exhausted, report that the planning effort was exhausted. If the finite known-record search is exhausted, distinguish that result from proven physical impossibility and report whether the likely blocker is library coverage, context incompatibility, chemistry, or viability.
 
 ### Step 6 — Select without catalogue-order bias
 
@@ -891,15 +908,17 @@ Identify the intended source branch; inventory constructor, simulation integrati
 
 **Deliverable:** dependency map and removal checklist.
 
-### Phase 2 — Independent library validation
-On the approved GitHub practice branch, validate representative records, contact-feature and scale coverage, candidate lookup, rejection of invalid candidates, catalogue-order independence, schema/version consistency, and test isolation.
+### Phase 2 — Populate and independently validate a bounded bootstrap library
+The checked-in geometry catalogue is intentionally empty. Run Bob's bounded generation worker for singleton and two-constituent formations only (maximum constituent count = 2) in an isolated output location. Verify completion, deduplication/canonicalization, family coverage, no records above the limit, persistence/reopen, schema/version consistency, and artifact integrity. Measure generated candidates, canonical duplicates, geometry/topology rejections, family counts, elapsed time, and storage size. Keep generated records as a versioned runtime library or workflow artifact; do not commit the generated catalogue as source data. Treat this catalogue as a bootstrap baseline, not exhaustive geometric coverage.
 
-**Deliverable:** library quality/coverage report and repeatable tests.
+Then validate representative records, contact-feature and scale coverage, strict candidate lookup, rejection of invalid candidates, catalogue-order independence, and test isolation.
 
-### Phase 3 — Candidate and validation interfaces
-Implement narrow interfaces for geometry queries, chemistry eligibility, contextual validation, energy/accounting, atomic commit/rollback, and rejection diagnostics.
+**Deliverable:** reproducible two-constituent bootstrap artifact plus a library quality/coverage report and repeatable tests.
 
-**Deliverable:** candidates can be proposed and rejected without mutating the organism.
+### Phase 3 — Strict query and planning interfaces
+Implement narrow interfaces for verified-record geometry queries, composition of known arrangements, chemistry eligibility, contextual validation, energy/accounting, atomic commit/rollback, missing-coverage reporting, and rejection diagnostics. Make strict library-backed mode the only mode used by live construction; any geometry-generation APIs remain confined to Bob's separate discovery worker.
+
+**Deliverable:** every proposed placement has traceable library provenance and can be accepted/rejected without mutating the organism.
 
 ### Phase 4 — Transactional growth
 Prove atomic commits and rollback, bond/geometry consistency, and ledger reconciliation before full organism construction.
@@ -957,7 +976,7 @@ Distinguish proven impossibility under checked conditions from failure to find a
 ## 15. Risks and mitigations
 
 - **Greedy growth traps itself:** use bounded feasibility lookahead and maintain alternatives where useful.
-- **Incomplete or stale catalogue:** validate records, track coverage, and retain a correct fallback.
+- **Incomplete or stale catalogue:** validate records, track coverage, report missing knowledge, and expand the library in a separate bounded Bob run; do not permit runtime geometric fallback.
 - **Geometry/chemistry disagreement:** test cross-library combinations and resolve conflicts in authoritative definitions.
 - **Scoring favors one body plan:** keep scoring explainable; vary seeds, catalogue order, and materials.
 - **Whole-structure validation is expensive:** use spatial indexes without weakening collision completeness.
@@ -974,6 +993,11 @@ The repository has used separate branches for the geometry data and Rust source.
 
 - [ ] Geometry and chemistry schemas, coverage, and authoritative rules audited.
 - [ ] Library queries reuse valid arrangements without treating samples as universally valid.
+- [ ] Every construction candidate traces to a persisted, verified Bob record and its library/schema version.
+- [ ] The constructor composes known arrangements into larger structures without requiring Bob to have catalogued the whole organism.
+- [ ] Runtime construction has no unrecorded geometry-generation, scaffold-coordinate, or arbitrary-pose fallback.
+- [ ] Missing library coverage is a structured result that can trigger separate Bob discovery and a planner retry.
+- [ ] A reproducible isolated singleton/two-constituent bootstrap library has been generated and audited; its temporary nature and coverage limits are documented.
 - [ ] Candidate validation uses authoritative physical rules.
 - [ ] No fixed piece-count viability target.
 - [ ] No required final topology.
@@ -992,9 +1016,9 @@ The repository has used separate branches for the geometry data and Rust source.
 
 ## 18. Final design rule
 
-**Use the libraries to find physically possible next steps, authoritative rules to decide which steps are valid, and biological milestones to decide when construction is finished.**
+**Use Bob's verified library to propose known local arrangements, compose those arrangements into larger structures, use authoritative rules to decide which steps are physically valid, and use biological milestones to decide when construction is finished. When known coverage is insufficient, expand Bob's library separately rather than inventing geometry inside the live constructor.**
 
-The first implementation task is the library/dependency audit, followed by a small transactional growth prototype on the practice branch. Replace live construction only after the prototype demonstrates physical correctness, real library reuse, and repeatable viable construction without a prescribed shape or fixed-size assembly.
+The first implementation task is the library/dependency audit, followed by a fresh bounded singleton/two-constituent Bob generation run and strict-query contract tests. Then build a small compositional, transactional growth prototype. Replace live construction only after the prototype demonstrates that every candidate comes from known records, physical invariants are preserved, missing coverage is reported honestly, and viable organisms can be built repeatably without a prescribed shape or fixed-size assembly.
 
 ---
 
