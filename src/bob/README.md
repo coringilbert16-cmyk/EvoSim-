@@ -38,7 +38,7 @@ Run these commands from the repository root after building the executable:
 .\target\release\evosim.exe --geometry-worker-passes 25
 
 # Run continuously; the worker idles when no unfinished work is found
-.\target\evosim.exe --geometry-worker
+.\target\release\evosim.exe --geometry-worker
 ```
 
 The `--geometry-worker-passes N` value must be positive. A one-pass run or a successful persistence/reopen check validates only that narrow behavior; it does not establish full catalogue completion or constructor viability.
@@ -61,9 +61,7 @@ Initial construction and offspring construction should share one physical engine
 
 ## Verification status
 
-The latest completed source verification before lockfile pinning passed formatting, source-file-size checks, COMBINE architecture checks, focused compact-storage tests, and the non-generative empty-library persistence/reopen check. The full suite reported **314 passed, 29 failed, 1 ignored**; strict Clippy failed with 58 diagnostics/errors. [Rust run #38139759712](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38139759712). [Runner validation #38139763594](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38139763594) passed. These checks do not prove Bob or the constructor is fully verified or biologically viable.
-
-The integration branch is the current consolidation target: [PR #186](https://github.com/coringilbert16-cmyk/EvoSim-/pull/186). It remains draft-only until compile/lint blockers are resolved, focused physical contracts execute, the full suite is recorded, and the actual constructor is shown to produce a viable organism.
+Latest locked verification at code head `9dfed9e8744b9dd08e9a8a6a7763c2a7c49e1caa` passed formatting, source-file-size checks, COMBINE architecture checks, focused compact-storage tests, and the non-generative empty-library persistence/reopen check. The full suite reported **314 passed, 29 failed, 1 ignored**; strict Clippy failed with 58 diagnostics/errors. [Rust run #38139972441](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38139972441). [Runner validation #38139975142](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38139975142) passed. These checks do not prove Bob or the constructor is fully verified or biologically viable.
 
 ## Audit documents
 

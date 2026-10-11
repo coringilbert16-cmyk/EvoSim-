@@ -2,11 +2,13 @@ name: Runner Validation
 
 on:
   push:
+    branches: [main]
     paths:
       - "run_evosim.cmd"
       - "run_evosim.ps1"
       - ".github/workflows/runner.yml"
   pull_request:
+    branches: [main]
     paths:
       - "run_evosim.cmd"
       - "run_evosim.ps1"

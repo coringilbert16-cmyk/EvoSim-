@@ -1,11 +1,12 @@
 name: Rust
 
-# CI trigger: validate the default branch and the active integration branch.
+# CI trigger: validate main pushes and every pull request targeting main.
 
 on:
   push:
-    branches: [main, integration/unified-source-and-catalogue]
+    branches: [main]
   pull_request:
+    branches: [main]
 
 permissions:
   contents: read
