@@ -95,6 +95,32 @@ impl CircularArcBoundary {
         (area.is_finite() && area > 0.0).then_some(area)
     }
 
+    /// Rigidly transform this local descriptor into another coordinate frame.
+    /// Translation and rotation preserve radius, sweep, chord length, and area.
+    pub fn transformed(
+        &self,
+        translate_x: f64,
+        translate_y: f64,
+        rotation_radians: f64,
+    ) -> Option<Self> {
+        if !self.is_valid()
+            || !translate_x.is_finite()
+            || !translate_y.is_finite()
+            || !rotation_radians.is_finite()
+        {
+            return None;
+        }
+        let (sin, cos) = rotation_radians.sin_cos();
+        Some(Self {
+            center_x: translate_x + self.center_x * cos - self.center_y * sin,
+            center_y: translate_y + self.center_x * sin + self.center_y * cos,
+            radius: self.radius,
+            start_angle_radians: (self.start_angle_radians + rotation_radians)
+                .rem_euclid(TAU),
+            sweep_radians: self.sweep_radians,
+        })
+    }
+
     /// Exact outward normal at a point identified by arc parameter angle.
     pub fn normal_at_angle(&self, angle_radians: f64) -> Option<(f64, f64)> {
         if !self.is_finite_arc() || !angle_radians.is_finite() {
@@ -294,6 +320,24 @@ mod tests {
         assert!((arc.arc_length().unwrap() - family.curvature_radius * PI).abs() < 1e-12);
         assert!((arc.start_point().0 - family.curvature_radius).abs() < 1e-12);
         assert!((arc.end_point().0 + family.curvature_radius).abs() < 1e-12);
+    }
+
+    #[test]
+    fn circular_arc_rigid_transform_preserves_area_and_rebases_endpoints() {
+        let arc = CircularArcBoundary {
+            center_x: 1.0,
+            center_y: 2.0,
+            radius: 3.0,
+            start_angle_radians: 0.0,
+            sweep_radians: PI,
+        };
+        let moved = arc.transformed(10.0, -4.0, PI * 0.5).unwrap();
+        assert!((moved.center_x - 8.0).abs() < 1e-12);
+        assert!((moved.center_y - 1.0).abs() < 1e-12);
+        assert!((moved.segment_area().unwrap() - arc.segment_area().unwrap()).abs() < 1e-12);
+        assert!((moved.chord_length().unwrap() - arc.chord_length().unwrap()).abs() < 1e-12);
+        assert!((moved.start_point().0 - 8.0).abs() < 1e-12);
+        assert!((moved.start_point().1 - 4.0).abs() < 1e-12);
     }
 
     #[test]
