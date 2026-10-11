@@ -390,7 +390,7 @@ mod tests {
                 boundary: None,
                 arc_boundary: Some(arc),
                 multi_contact_boundary: None,
-},
+            },
         };
         let instance = PhysicalMaterial::realized(
             Material::free_base("Water", 1.0),
@@ -436,7 +436,7 @@ mod tests {
                 boundary: None,
                 arc_boundary: Some(arc),
                 multi_contact_boundary: None,
-},
+            },
         };
         let instance = PhysicalMaterial::realized(
             Material::free_base("Water", 1.0),
