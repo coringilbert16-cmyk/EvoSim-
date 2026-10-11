@@ -1793,6 +1793,98 @@ mod tests {
     }
 
     #[test]
+    fn restored_multi_contact_fluid_keeps_three_live_rigid_contacts() {
+        use crate::capillary_geometry::{FluidBoundaryPiece, MultiContactFluidBoundary};
+        use crate::material_geometry::{
+            placed_forms_boundary_contact, placed_forms_rigid_contact, PlacedMaterialPart,
+        };
+        use crate::resources::{Form, Material, NOMINAL_UNIT_AREA};
+
+        let catalog = crate::resources::default_catalog();
+        let half = NOMINAL_UNIT_AREA.sqrt() * 0.5;
+        let angle = std::f64::consts::FRAC_PI_2;
+        let boundary = MultiContactFluidBoundary {
+            nominal_area: NOMINAL_UNIT_AREA,
+            pieces: vec![
+                FluidBoundaryPiece::SolidContact {
+                    start_x: -half, start_y: -half, end_x: half, end_y: -half,
+                    contact_angle_radians: angle,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: half, start_y: -half, end_x: half, end_y: half,
+                    contact_angle_radians: angle,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: half, start_y: half, end_x: -half, end_y: half,
+                    contact_angle_radians: angle,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: -half, start_y: half, end_x: -half, end_y: -half,
+                    contact_angle_radians: angle,
+                },
+            ],
+        };
+        assert!(boundary.is_valid());
+        let shape = crate::resources::Shape {
+            form: Form::Fluid {
+                nominal_area: NOMINAL_UNIT_AREA,
+                boundary: None,
+                arc_boundary: None,
+                multi_contact_boundary: Some(boundary),
+            },
+        };
+        let material = crate::physical_material::PhysicalMaterial::realized(
+            Material::free_base("Water", 1.0),
+            vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            &catalog,
+        )
+        .unwrap()
+        .with_single_fluid_shape(shape.clone(), &catalog)
+        .unwrap();
+
+        let origin = Placement { x: 4.0, y: -3.0, rotation_radians: 0.41 };
+        let mut restored = OrganismStructure::new();
+        let indices = crate::material_restoration::restore_material(
+            &mut restored, &material, origin, &catalog,
+        ).expect("multi-contact fluid should restore");
+        let fluid_unit = &restored.units[indices[0]];
+        assert_eq!(fluid_unit.shape(&catalog), Some(&shape));
+
+        let world = |x: f64, y: f64| {
+            let (sin, cos) = origin.rotation_radians.sin_cos();
+            Placement {
+                x: origin.x + x * cos - y * sin,
+                y: origin.y + x * sin + y * cos,
+                rotation_radians: origin.rotation_radians,
+            }
+        };
+        let fluid = PlacedMaterialPart {
+            part_index: indices[0],
+            form: fluid_unit.shape(&catalog).unwrap().form.clone(),
+            placement: fluid_unit.placement,
+        };
+        let contacts = [
+            (world(0.0, -half), 0.0),
+            (world(half, 0.0), std::f64::consts::FRAC_PI_2),
+            (world(0.0, half), 0.0),
+        ];
+        for (pose, rotation) in contacts {
+            let rigid = PlacedMaterialPart {
+                part_index: 99,
+                form: Form::Line { length: half * 1.5 },
+                placement: Placement {
+                    x: pose.x,
+                    y: pose.y,
+                    rotation_radians: rotation + origin.rotation_radians,
+                },
+            };
+            assert!(placed_forms_boundary_contact(&fluid, &rigid, 1e-8));
+            assert!(placed_forms_rigid_contact(&fluid, &rigid, 1e-8));
+        }
+        assert!((fluid_unit.shape(&catalog).unwrap().form.bounding_radius() - shape.form.bounding_radius()).abs() < 1e-9);
+    }
+
+    #[test]
     fn restored_composite_overlap_is_rejected_against_existing_structure() {
         let catalog = crate::resources::default_catalog();
         let mut structure = OrganismStructure::new();
