@@ -288,11 +288,11 @@ fn process_one_frontier(
             }
 
             if resource.name == "Water" {
-                // Every currently supported Water/rigid case is represented
-                // symbolically as an exact capillary contact family. If no
-                // family exists, the current boundary geometry has no valid
-                // Water contact; it is exhausted rather than left in a
-                // permanently "pending" state.
+                // Persist all solved Water/rigid contact families. An empty
+                // result is currently counted, but the generator does not yet
+                // explain whether it reflects unsupported geometry, a failed
+                // capillary solve, or no exposed valid interval. Keep the
+                // frontier finite while that reason-level diagnostic is added.
                 let families = generate_water_contact_families(&formation, resource, catalog);
                 metrics.water_families += families.len();
                 let boundary_states =
