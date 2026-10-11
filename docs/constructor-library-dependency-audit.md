@@ -1,5 +1,8 @@
 # Replacement Constructor — Phase 1 Dependency Audit
 
+> **Historical snapshot notice — 2026-10-11:** This audit describes an earlier source branch and is not a current branch inventory. Its statement that the active constructor has no Bob integration is superseded by later integration commits. Use the current README and `docs/repository-stabilization-audit.md` for the current repository state; keep this document only for the specific source findings and unresolved questions that still apply.
+
+
 Status: **source inspection in progress; no implementation changes, compilation, or tests performed in this audit.**
 
 Audit target: `remove-library-auto-publisher` source branch at the time of inspection. This is not a claim about `main`, which has a different data-only snapshot. The geometry storage practice branch is an isolated data-format experiment, not a runnable Rust integration branch.

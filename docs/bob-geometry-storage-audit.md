@@ -1,5 +1,8 @@
 # Bob geometry storage audit and compact-format proposal
 
+> **Historical status notice — 2026-10-11:** The status below predates repository unification and the deliberate deletion of generated geometry data from GitHub. The generated geometry catalogue is intentionally absent from the current branch; this document is not authorization to restore it. Use the root README and `docs/repository-stabilization-audit.md` for current repository status.
+
+
 Status: source audit only. No compilation, tests, local-catalogue execution, or migration has been performed. This document deliberately does not authorize constructor integration or deleting/replacing existing data.
 
 ## Findings

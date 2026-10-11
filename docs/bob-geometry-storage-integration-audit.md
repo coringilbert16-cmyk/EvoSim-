@@ -1,5 +1,8 @@
 # Bob geometry storage audit and compact-format proposal
 
+> **Historical branch/status notice — 2026-10-11:** This document records an earlier storage-integration branch and dataset snapshot. Its statements about the active branch and the user's catalogue are not current repository state. The generated geometry files were intentionally removed from both current branch heads; do not restore them as part of repository recovery. The root README and `docs/repository-stabilization-audit.md` are authoritative for current status.
+
+
 Status: storage integration is implemented on the `bob-automatic-compact-storage` branch and has passed focused CI tests plus a fresh-library persistence smoke test. The full application test suite and Clippy remain red for broader existing issues. No user's existing catalogue has been migrated or rewritten. This document does not authorize constructor integration or deleting/replacing existing data.
 
 ### Validation scope and dataset location

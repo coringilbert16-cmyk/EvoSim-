@@ -1,5 +1,7 @@
 # Bob — Geometry Reference Library
 
+> **Current verification checkpoint — 2026-10-11:** The persistent Windows runner now uses `cargo build --locked` and `cargo test --locked`, and the stale exception for an untracked `Cargo.lock` was removed. See the root README and repository stabilization audit for current CI evidence.
+
 Bob stores reusable geometry knowledge for EvoSim. It is not live organism state and does not replace the physical validator.
 
 ## Responsibilities
