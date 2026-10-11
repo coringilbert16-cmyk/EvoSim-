@@ -6191,4 +6191,22 @@ mod fluid_contact_constraint_schema_tests {
 
         assert_ne!(legacy.signature(), constrained.signature());
     }
+
+    #[test]
+    fn unresolved_multi_contact_records_fail_closed() {
+        let parent = GeometryFormation::single("Carbon");
+        let mut constrained = legacy_fluid_formation();
+        constrained.parent_formation_signature = parent.signature.clone();
+        constrained.contact_constraints.push(GeometryFluidContactConstraint {
+            constituent_index: 0,
+            edge_index: 0,
+            contact_length: 0.5,
+            edge_parameter_start: 0.25,
+            edge_parameter_end: 0.75,
+        });
+
+        assert!(constrained
+            .realize_against_parent(&parent, &crate::resources::default_catalog(), true)
+            .is_none());
+    }
 }
