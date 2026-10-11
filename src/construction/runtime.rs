@@ -2276,6 +2276,69 @@ mod tests {
         )
         .is_some());
 
+        let fluid_unit = &structure.units[fluid_index];
+        let fluid_shape = fluid_unit.shape(&catalog).unwrap();
+        let fluid_part = crate::material_geometry::PlacedMaterialPart {
+            part_index: fluid_index,
+            form: fluid_shape.form.clone(),
+            placement: fluid_unit.placement,
+        };
+        let contact_targets = structure
+            .units
+            .iter()
+            .enumerate()
+            .filter_map(|(index, unit)| {
+                if index == fluid_index {
+                    return None;
+                }
+                let shape = unit.shape(&catalog)?;
+                let rigid_part = crate::material_geometry::PlacedMaterialPart {
+                    part_index: index,
+                    form: shape.form.clone(),
+                    placement: unit.placement,
+                };
+                crate::material_geometry::placed_forms_boundary_contact(
+                    &fluid_part,
+                    &rigid_part,
+                    crate::combine_runtime::COMBINE_CONTACT_TOLERANCE,
+                )
+                .then_some(index)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(contact_targets, vec![1, 2, 3]);
+        for target_index in [2, 3] {
+            let mut target_cache = crate::contact::ConnectionCompatibilityCache::new();
+            let candidates = crate::contact::connection_pair_candidates_cached(
+                &structure,
+                target_index,
+                fluid_index,
+                &catalog,
+                &mut target_cache,
+            )
+            .into_iter()
+            .filter(|candidate| {
+                candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                    && candidate.available_a
+                    && candidate.available_b
+            })
+            .collect::<Vec<_>>();
+            assert!(
+                !candidates.is_empty(),
+                "target {target_index} has no available fluid connection candidate"
+            );
+            assert!(
+                crate::combine_runtime::selected_candidate_evaluation(
+                    &structure,
+                    target_index,
+                    fluid_index,
+                    candidates[0],
+                    &catalog,
+                )
+                .is_some(),
+                "target {target_index} candidate failed bond evaluation"
+            );
+        }
+
         assert!(form_remaining_multi_contact_bonds(
             &mut structure,
             fluid_index,
