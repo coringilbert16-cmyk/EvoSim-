@@ -66,6 +66,11 @@ pub enum Form {
         #[serde(default)]
         arc_boundary: Option<crate::capillary_geometry::CircularArcBoundary>,
     },
+    /// Exact closed fluid boundary with multiple solid contacts and free arcs.
+    /// Geometry is analytic and must not be flattened to sampled polygon edges.
+    FluidMultiContact {
+        boundary: crate::capillary_geometry::MultiContactFluidBoundary,
+    },
 }
 
 fn polygon_geometry_is_valid(vertices: &[(f64, f64)]) -> bool {
@@ -148,6 +153,7 @@ impl Form {
                 *sides >= 3 && radius.is_finite() && *radius > 0.0
             }
             Form::Polygon { vertices } => polygon_geometry_is_valid(vertices),
+            Form::FluidMultiContact { boundary } => boundary.is_valid(),
             Form::Fluid {
                 nominal_area,
                 boundary,
@@ -173,7 +179,7 @@ impl Form {
 
     pub fn polygon_vertices(&self) -> Option<Vec<(f64, f64)>> {
         match self {
-            Form::Circle { .. } | Form::Line { .. } => None,
+            Form::Circle { .. } | Form::Line { .. } | Form::FluidMultiContact { .. } => None,
             Form::Fluid {
                 boundary,
                 arc_boundary,
@@ -217,6 +223,7 @@ impl Form {
                 .iter()
                 .map(|(x, y)| (x * x + y * y).sqrt())
                 .fold(0.0_f64, f64::max),
+            Form::FluidMultiContact { boundary } => boundary.bounding_radius(),
             Form::Fluid {
                 nominal_area,
                 boundary,
