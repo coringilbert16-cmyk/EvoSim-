@@ -126,3 +126,49 @@ fn local_environment_revision_distinguishes_same_revision_totals_in_different_ce
 
     assert_ne!(first_key, second_key);
 }
+
+#[test]
+fn exact_fluid_arc_region_check_allows_chord_contact_but_rejects_curve_escape() {
+    let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+        0.5,
+        std::f64::consts::FRAC_PI_2,
+    )
+    .unwrap();
+    let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
+    let form = crate::resources::Form::Fluid {
+        nominal_area: 0.5,
+        boundary: None,
+        arc_boundary: Some(arc),
+    };
+    let inside_region = crate::interior_geometry::EnclosedRegion {
+        area: 8.0,
+        boundary_units: vec![],
+        sample_point: (0.0, 1.0),
+        boundary: vec![(-2.0, 0.0), (2.0, 0.0), (2.0, 2.0), (-2.0, 2.0)],
+    };
+    assert!(ActiveMaterialField::realized_form_fully_inside_region(
+        &form,
+        crate::structure::Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        },
+        &inside_region,
+    ));
+
+    let too_shallow_region = crate::interior_geometry::EnclosedRegion {
+        area: 6.0,
+        boundary_units: vec![],
+        sample_point: (0.0, 0.0),
+        boundary: vec![(-2.0, -1.0), (2.0, -1.0), (2.0, 0.75), (-2.0, 0.75)],
+    };
+    assert!(!ActiveMaterialField::realized_form_fully_inside_region(
+        &form,
+        crate::structure::Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        },
+        &too_shallow_region,
+    ));
+}
