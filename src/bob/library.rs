@@ -1120,6 +1120,76 @@ pub fn solve_collinear_multi_contact_formation(
         .map(|_| formation)
 }
 
+fn clip_aligned_contact_window(
+    aligned: &[AlignedExposedInterval],
+    start_projection: f64,
+    contact_length: f64,
+    direction: (f64, f64),
+) -> Option<Vec<AlignedExposedInterval>> {
+    let end_projection = start_projection + contact_length;
+    let tolerance = 1e-8 * contact_length.max(1.0);
+    let mut cursor = start_projection;
+    let mut chosen = Vec::new();
+
+    for item in aligned {
+        if item.1 <= cursor + tolerance || item.0 >= end_projection - tolerance {
+            continue;
+        }
+        let natural_start = item.0.max(start_projection);
+        if natural_start > cursor + tolerance {
+            return None;
+        }
+        let clipped_start = cursor.max(natural_start);
+        let clipped_end = item.1.min(end_projection);
+        if clipped_end <= clipped_start + tolerance {
+            continue;
+        }
+
+        let source = item.2;
+        let source_projection_start =
+            source.4 .0 * direction.0 + source.4 .1 * direction.1;
+        let source_projection_end =
+            source.5 .0 * direction.0 + source.5 .1 * direction.1;
+        let projection_span = source_projection_end - source_projection_start;
+        if projection_span.abs() <= tolerance {
+            return None;
+        }
+        let start_ratio = (clipped_start - source_projection_start) / projection_span;
+        let end_ratio = (clipped_end - source_projection_start) / projection_span;
+        let start_parameter = source.2 + start_ratio * (source.3 - source.2);
+        let end_parameter = source.2 + end_ratio * (source.3 - source.2);
+        let start_point = (
+            source.4 .0 + start_ratio * (source.5 .0 - source.4 .0),
+            source.4 .1 + start_ratio * (source.5 .1 - source.4 .1),
+        );
+        let end_point = (
+            source.4 .0 + end_ratio * (source.5 .0 - source.4 .0),
+            source.4 .1 + end_ratio * (source.5 .1 - source.4 .1),
+        );
+        let clipped_source = (
+            source.0,
+            source.1,
+            start_parameter.min(end_parameter),
+            start_parameter.max(end_parameter),
+            source.4,
+            source.5,
+        );
+        chosen.push((
+            clipped_start,
+            clipped_end,
+            clipped_source,
+            start_point,
+            end_point,
+        ));
+        cursor = clipped_end;
+        if cursor >= end_projection - tolerance {
+            break;
+        }
+    }
+
+    (cursor >= end_projection - tolerance && !chosen.is_empty()).then_some(chosen)
+}
+
 /// Discover complete multi-contact Water formations from exposed rigid-edge
 /// intervals in a canonical parent. This first enumerator accepts exact
 /// contiguous intervals whose combined length equals the analytic contact
@@ -1247,94 +1317,100 @@ pub fn generate_collinear_multi_contact_formations(
             .collect::<Vec<_>>();
         aligned.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
 
-        for start_index in 0..aligned.len() {
-            let mut chosen: Vec<AlignedExposedInterval> = Vec::new();
-            let mut total_length = 0.0;
-            let mut distinct_constituents = std::collections::BTreeSet::new();
-            for item in aligned.iter().skip(start_index) {
-                if let Some(previous) = chosen.last() {
-                    let previous_end: (f64, f64) = previous.4;
-                    if (previous_end.0 - item.3 .0).hypot(previous_end.1 - item.3 .1) > 1e-7 {
-                        break;
-                    }
-                }
-                chosen.push(*item);
-                total_length += item.1 - item.0;
-                distinct_constituents.insert(item.2 .0);
-                if total_length
-                    > seed_family.contact_length + 1e-8 * seed_family.contact_length.max(1.0)
-                {
-                    break;
-                }
-                if distinct_constituents.len() < 2 || distinct_constituents.len() != chosen.len() {
-                    continue;
-                }
-                let Some(first_resource) = catalog
+        let contact_length = seed_family.contact_length;
+        let mut start_positions = Vec::new();
+        for item in &aligned {
+            start_positions.push(item.0);
+            start_positions.push(
+                (item.1 - contact_length * 0.5).clamp(item.0, item.1),
+            );
+            start_positions.push((item.1 - contact_length).clamp(item.0, item.1));
+        }
+        start_positions.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        start_positions.dedup_by(|a, b| (*a - *b).abs() <= 1e-8);
+
+        for start_projection in start_positions {
+            let Some(chosen) = clip_aligned_contact_window(
+                &aligned,
+                start_projection,
+                contact_length,
+                direction,
+            ) else {
+                continue;
+            };
+            let distinct_constituents = chosen
+                .iter()
+                .map(|item| item.2 .0)
+                .collect::<std::collections::BTreeSet<_>>();
+            if distinct_constituents.len() < 2 || distinct_constituents.len() != chosen.len() {
+                continue;
+            }
+            let Some(first_resource) = catalog
+                .iter()
+                .find(|r| r.name == parent.constituents[chosen[0].2 .0].resource)
+            else {
+                continue;
+            };
+            let Some(family) = solve_water_against_solid(
+                area,
+                fluid_resource.properties.cohesion,
+                first_resource.properties.cohesion,
+            ) else {
+                continue;
+            };
+            let length_tolerance = 1e-8 * family.contact_length.max(1.0);
+            if (contact_length - family.contact_length).abs() > length_tolerance {
+                continue;
+            }
+
+            let mut constraints = Vec::with_capacity(chosen.len());
+            let mut compatible = true;
+            for item in &chosen {
+                let constituent_index = item.2 .0;
+                let Some(resource) = catalog
                     .iter()
-                    .find(|r| r.name == parent.constituents[chosen[0].2 .0].resource)
+                    .find(|r| r.name == parent.constituents[constituent_index].resource)
                 else {
-                    continue;
+                    compatible = false;
+                    break;
                 };
-                let Some(family) = solve_water_against_solid(
+                let Some(other_family) = solve_water_against_solid(
                     area,
                     fluid_resource.properties.cohesion,
-                    first_resource.properties.cohesion,
+                    resource.properties.cohesion,
                 ) else {
-                    continue;
+                    compatible = false;
+                    break;
                 };
-                let length_tolerance = 1e-8 * family.contact_length.max(1.0);
-                if (total_length - family.contact_length).abs() > length_tolerance {
-                    continue;
+                if (other_family.contact_angle_radians - family.contact_angle_radians).abs()
+                    > 1e-9
+                {
+                    compatible = false;
+                    break;
                 }
-                let mut constraints = Vec::with_capacity(chosen.len());
-                let mut compatible = true;
-                for item in &chosen {
-                    let constituent_index = item.2 .0;
-                    let Some(resource) = catalog
-                        .iter()
-                        .find(|r| r.name == parent.constituents[constituent_index].resource)
-                    else {
-                        compatible = false;
-                        break;
-                    };
-                    let Some(other_family) = solve_water_against_solid(
-                        area,
-                        fluid_resource.properties.cohesion,
-                        resource.properties.cohesion,
-                    ) else {
-                        compatible = false;
-                        break;
-                    };
-                    if (other_family.contact_angle_radians - family.contact_angle_radians).abs()
-                        > 1e-9
-                    {
-                        compatible = false;
-                        break;
-                    }
-                    constraints.push(GeometryFluidContactConstraint {
-                        constituent_index,
-                        edge_index: item.2 .1,
-                        contact_length: item.1 - item.0,
-                        edge_parameter_start: item.2 .2.min(item.2 .3),
-                        edge_parameter_end: item.2 .3.max(item.2 .2),
-                    });
-                }
-                if !compatible {
-                    continue;
-                }
-                let segments = chosen
-                    .iter()
-                    .map(|item| (item.3, item.4))
-                    .collect::<Vec<_>>();
-                if let Some(formation) = solve_collinear_multi_contact_formation(
-                    parent,
-                    fluid_resource,
-                    constraints,
-                    &segments,
-                    catalog,
-                ) {
-                    generated.entry(formation.signature()).or_insert(formation);
-                }
+                constraints.push(GeometryFluidContactConstraint {
+                    constituent_index,
+                    edge_index: item.2 .1,
+                    contact_length: item.1 - item.0,
+                    edge_parameter_start: item.2 .2,
+                    edge_parameter_end: item.2 .3,
+                });
+            }
+            if !compatible {
+                continue;
+            }
+            let segments = chosen
+                .iter()
+                .map(|item| (item.3, item.4))
+                .collect::<Vec<_>>();
+            if let Some(formation) = solve_collinear_multi_contact_formation(
+                parent,
+                fluid_resource,
+                constraints,
+                &segments,
+                catalog,
+            ) {
+                generated.entry(formation.signature()).or_insert(formation);
             }
         }
     }
