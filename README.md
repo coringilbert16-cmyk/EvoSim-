@@ -14,18 +14,25 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 - `src/` currently contains contract/unit tests that exercise private crate internals. Do not move them into external integration-test targets without an explicit API-boundary plan.
 - Hydrogen is a finite-area rigid rectangle (1.0 × 0.1 units) with two primary end contact points. It is not a zero-thickness line.
 - Bob's 0.5-unit positional equivalence is a **catalogue deduplication** tolerance only. It does not replace the live geometry/contact tolerance or permit penetration.
-- **Hard catalogue size rule:** Bob may persist only singleton and two-constituent rigid formations (maximum `constituents.len() == 2`). The worker rejects configured limits above 2 and never expands beyond two pieces. Multi-contact fluid geometry may contact multiple surfaces of those same two constituents; contact count is not constituent count. Do not store 3+-constituent assemblies in Bob's catalogue.
-- Generated geometry stays outside Git. The last bounded two-piece artifact was about 48.3 MB uncompressed and was already an artifact rather than tracked source; monitor artifact size and family counts as generation changes.
+- **Hard catalogue size rule (updated 2026-10-12):** Bob may persist singleton, two-piece, and three-piece rigid formations (maximum `constituents.len() == 3`). The worker must reject configured limits above 3 and never expand beyond three pieces. Multi-contact fluid geometry may contact multiple surfaces of a parent formation; contact count is not constituent count.
+- Generated geometry stays outside Git. The last measured two-piece baseline was about 48.3 MB uncompressed; three-piece size is unknown and may grow substantially. Measure counts, runtime, and storage before treating a three-piece catalogue as complete.
 - Fluid knowledge is stored as symbolic capillary boundary/family records with conserved area and contact constraints—not sampled rigid poses. Current records have persistence validation and live-interface resolution; the active work is converting those records into a reproducible, area-preserving realized fluid boundary and proving it through physical validation.
 
 ### Operational gates
 
 1. Keep the geometry catalogue empty in the tracked tree. Never run the continuous worker or use the default catalogue directory for tests.
-2. Do not start bounded two-piece generation until construction has a tested fluid-realization/query path and live validation remains authoritative.
-3. Treat the existing two-piece workflow as the only approved generation path after that gate; the hard limit is two constituents, never three or more. Report formation/family counts, runtime, storage size, frontier completion, and reopen verification.
+2. Do not start three-piece generation until the persisted fluid-realization/query path and live transactional bond formation pass focused tests; live validation remains authoritative.
+3. The approved target is now up to three rigid constituents, but generation remains paused until that gate passes. Then run only in an isolated output root outside Git and report formation/family counts, runtime, storage size, frontier completion, and reopen verification.
 4. Do not divert the active geometry-library/fluid-formation sprint into the unrelated constructor-test backlog. Keep those failures visible, but prioritize fluid-record realization, interface-class coverage, and Bob's persisted-knowledge contract; never disable tests or weaken physical invariants.
 5. Keep PR #186 as the single integration target. Do not merge or change the default branch as a side effect of cleanup.
 6. All new decisions and handoffs go in this root README. Before adding a new audit note, update the current summary and avoid repeating obsolete checkpoints.
+
+## Bob catalogue cap change — 2026-10-12
+
+- Decision: raise the maximum persisted rigid formation size from 2 to 3 constituents. This changes the cap only; it does not authorize 4+ piece records or put generated catalogue data in Git.
+- Worker cap, error messages, and a targeted worker regression have been updated to allow expansion from a two-piece parent to three-piece candidates, verify the three-piece frontier is not expanded to four, and reject configured limits above 3.
+- The manual generation workflow will target three pieces only after focused worker and persisted-fluid-to-live-transaction tests pass. Do not trigger a full catalogue run before that gate.
+- No three-piece catalogue has been generated or measured yet. The existing 48.3 MB two-piece artifact is only a baseline, not a reliable estimate for three pieces.
 
 ## Latest Bob fluid-runtime regression status — 2026-10-11
 
