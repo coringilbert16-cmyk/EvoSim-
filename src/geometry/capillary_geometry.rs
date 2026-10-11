@@ -256,7 +256,8 @@ impl CircularArcBoundary {
         }
         let root = discriminant.max(0.0).sqrt();
         let mut parameters = [(-b - root) / (2.0 * a), (-b + root) / (2.0 * a)];
-        parameters.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
+        parameters
+            .sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
         let mut intersections = Vec::with_capacity(2);
         for t in parameters {
             if !(-EPS..=1.0 + EPS).contains(&t) {
