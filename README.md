@@ -30,8 +30,8 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 ## Bob catalogue cap change — 2026-10-12
 
 - Decision: raise the maximum persisted rigid formation size from 2 to 3 constituents. This changes the cap only; it does not authorize 4+ piece records or put generated catalogue data in Git.
-- Worker cap, error messages, and a targeted worker regression have been updated to allow expansion from a two-piece parent to three-piece candidates, verify the three-piece frontier is not expanded to four, and reject configured limits above 3.
-- The manual generation workflow will target three pieces only after focused worker and persisted-fluid-to-live-transaction tests pass. Do not trigger a full catalogue run before that gate.
+- Worker cap, error messages, and a targeted worker regression have been updated to allow expansion from a two-piece parent to three-piece candidates, verify the three-piece frontier is not expanded to four, and reject configured limits above 3. Exact-head CI for commit `43795406` is running; this change is not yet verified.
+- Renamed the manual workflow to `.github/workflows/bob-three-piece-generation.yml`. It runs the worker-cap regression and persisted-fluid-to-live-transaction regression before it will attempt three-piece generation. The generation step remains manual and gated; do not trigger or claim a full catalogue run until CI and both focused tests pass.
 - No three-piece catalogue has been generated or measured yet. The existing 48.3 MB two-piece artifact is only a baseline, not a reliable estimate for three pieces.
 
 ## Latest Bob fluid-runtime regression status — 2026-10-11
