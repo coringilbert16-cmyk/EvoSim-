@@ -1385,3 +1385,10 @@ This short sprint continued the multi-contact geometry foundation rather than wa
 **Not yet complete:** this is not proof of arbitrary-contact end-to-end construction. The boundary validator checks closure and signed area but does not yet establish global non-self-intersection; contact geometry must be checked against multiple distinct rigid surfaces in one integration fixture. Bob's current formation-generation cap is still a separate limit, and general multi-constituent parent matching remains unfinished. Do not report this capability as complete or run broad catalogue generation yet.
 
 **Next short sprint:** add a physically valid fixture for one fluid body simultaneously contacting at least three non-collinear rigid surfaces; test each contact through the live geometry query, verify points inside/outside, then trace the same shape through material restoration and the live construction validation path. Keep CI polling asynchronous: continue code inspection/implementation between status checks and do not spend a sprint waiting for a workflow.
+
+
+### Three-contact integration regression sprint — 2026-10-11
+
+Follow-up work added a regression in which one closed multi-contact fluid boundary is queried against three distinct rigid line surfaces (bottom, side, and top), and a material round-trip regression that verifies a conserved-area multi-contact shape survives PhysicalMaterial serialization/restoration. The rigid-contact predicate's unbounded-fluid guard was also corrected so a fluid with multi_contact_boundary: Some(...) is not incorrectly rejected merely because its legacy polygon and single-arc fields are empty.
+
+These are focused regressions, not a completed end-to-end organism growth proof. CI has been triggered by the recent commits and is not being treated as a reason to pause implementation. Next, check for any remaining paths that treat “no polygon and no single arc” as “no boundary” without considering the multi-contact field, then add a construction-level fixture that keeps all three live contacts and checks ordinary physical/chemical validation.
