@@ -1074,6 +1074,37 @@ mod tests {
     }
 
     #[test]
+    fn multi_contact_boundary_transform_preserves_exact_area_and_contacts() {
+        let angle = PI / 2.0;
+        let boundary = MultiContactFluidBoundary {
+            nominal_area: 4.0,
+            pieces: vec![
+                FluidBoundaryPiece::SolidContact {
+                    start_x: -1.0, start_y: -1.0, end_x: 1.0, end_y: -1.0,
+                    contact_angle_radians: angle,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: 1.0, start_y: -1.0, end_x: 1.0, end_y: 1.0,
+                    contact_angle_radians: angle,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: 1.0, start_y: 1.0, end_x: -1.0, end_y: 1.0,
+                    contact_angle_radians: angle,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: -1.0, start_y: 1.0, end_x: -1.0, end_y: -1.0,
+                    contact_angle_radians: angle,
+                },
+            ],
+        };
+        let transformed = boundary.transformed(3.0, -2.0, 0.37).unwrap();
+        assert!(transformed.is_valid());
+        assert_eq!(transformed.contact_count(), 4);
+        assert_eq!(transformed.free_arc_count(), 0);
+        assert!((transformed.nominal_area - boundary.nominal_area).abs() < 1e-12);
+    }
+
+    #[test]
     fn invalid_angles_and_areas_are_rejected() {
         assert!(CapillaryContactFamily::solve(0.0, PI / 2.0).is_none());
         assert!(CapillaryContactFamily::solve(1.0, 0.0).is_none());
