@@ -325,7 +325,13 @@ pub(crate) fn endpoint_world_point(
             ))
         }
         ConnectionEndpoint::Fluid { x, y } => {
-            let point = boundary_point_toward(shape, x, y)?;
+            let point = match &shape.form {
+                Form::Fluid {
+                    multi_contact_boundary: Some(boundary),
+                    ..
+                } => crate::surface_geometry::boundary_point_at_multi_contact(boundary, x, y)?,
+                _ => boundary_point_toward(shape, x, y)?,
+            };
             Some(crate::connection_geometry::transform_derived_point(
                 point.x,
                 point.y,
