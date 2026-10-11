@@ -407,7 +407,6 @@ impl CircularArcBoundary {
     }
 }
 
-
 /// One exact piece of a closed fluid boundary. A straight piece is a solid-contact
 /// interval; a circular piece is a free interface. Pieces are ordered around the
 /// fluid region and share endpoints exactly within the boundary tolerance.
@@ -591,7 +590,12 @@ impl MultiContactFluidBoundary {
     }
 
     /// Transform the complete boundary without sampling or changing its area.
-    pub fn transformed(&self, translate_x: f64, translate_y: f64, rotation_radians: f64) -> Option<Self> {
+    pub fn transformed(
+        &self,
+        translate_x: f64,
+        translate_y: f64,
+        rotation_radians: f64,
+    ) -> Option<Self> {
         let transformed = Self {
             nominal_area: self.nominal_area,
             pieces: self
@@ -1015,7 +1019,6 @@ mod tests {
         assert!((family.enclosed_area - 0.5).abs() < 1e-10);
     }
 
-
     #[test]
     fn exact_piecewise_boundary_preserves_single_arc_area_and_contact() {
         let family = CapillaryContactFamily::solve(0.5, PI / 2.0).unwrap();
@@ -1120,9 +1123,9 @@ mod tests {
         assert!(!boundary.is_valid());
         boundary.pieces[3] = FluidBoundaryPiece::SolidContact {
             start_x: -1.0,
-                    start_y: 1.0,
-                    end_x: -1.0,
-                    end_y: -1.0,
+            start_y: 1.0,
+            end_x: -1.0,
+            end_y: -1.0,
             contact_angle_radians: angle,
         };
         boundary.nominal_area = 5.0;
