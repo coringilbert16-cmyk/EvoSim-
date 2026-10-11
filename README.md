@@ -1188,3 +1188,10 @@ The runtime resource model distinguishes `PhysicalState::Fluid` from the default
 
 **Implementation gate:** add a small, independently tested fluid-realization/placement adapter using the existing capillary and physical-geometry authorities; define how a live rigid arrangement maps to the library's canonical parent-formation signature; then add a focused construction regression proving the stored fluid suggestion is actually queried and still rejected when live validation fails. Until that API exists, a direct consumer would be guesswork and could silently conflate legacy `Form::Fluid` geometry with current fluid-state behavior. Do not run broad two-constituent generation yet. The existing dispatch workflow remains available after this gate, but has not been run.
 
+
+
+### Single-README consolidation — 2026-10-11
+
+The root `README.md` is now the repository's sole README and central working authority. The subordinate files `chemistry_library/README.md`, `geometry_library/README.md`, `src/bob/README.md`, `src/infrastructure/README.md`, and `tests/README.md` have been removed after their operationally relevant content was consolidated here. Detailed files under `docs/` remain supporting audit evidence; they do not override the current decisions and status in this README. Generated geometry data remains absent from Git.
+
+**Fluid integration status remains open:** the source audit confirms that fluid sidecar records are stored and validated, and the physical structure API can accept a realized `Form::Fluid` boundary, but there is no verified end-to-end adapter from Bob's stored formation to that live realization. Do not report fluid suggestions as connected to construction until an exact parent-formation match, conserved-area boundary realization, and regression-tested live-validation path are implemented. The local container could not clone GitHub because network DNS was unavailable, so source changes must not be claimed tested locally on that basis.
