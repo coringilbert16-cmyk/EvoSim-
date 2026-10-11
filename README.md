@@ -1,5 +1,30 @@
 # EvoSim
 
+## Single working authority and directory boundaries
+
+This root `README.md` is the **only authoritative working README** for EvoSim. Subsystem READMEs are being retired; durable decisions, current status, test gates, and operational instructions belong here. Dated audit documents under `docs/` may hold detailed evidence, but they are supporting records—not competing authorities. When a detail conflicts, this README's latest explicit decision/status wins, and stale history must be labelled historical.
+
+### Source and data ownership
+
+- `src/`: executable simulation, physical geometry, chemistry, organism lifecycle, construction, Bob, and tests. Live physical/energy/chemistry transactions remain authoritative.
+- `src/bob/library.rs` and `src/bob/worker.rs`: geometry-library schema, validation, persistence, lookup, and generation. Bob records reusable knowledge; a record never authorizes a live bond or bypasses validation.
+- `geometry_library/data/`: generated geometry state. It is intentionally absent from Git. Use isolated output roots for generation and keep generated artifacts out of commits unless explicitly approved.
+- `src/chemistry/`: executable chemistry rules and transactions. `chemistry_library/data/` contains a small schema-3 interface cache (17 records at the last inventory), not the chemistry ruleset; the live chemistry implementation remains authoritative.
+- `src/infrastructure/library_sync.rs`: checkpoint publication infrastructure, not part of the physical model.
+- `src/` currently contains contract/unit tests that exercise private crate internals. Do not move them into external integration-test targets without an explicit API-boundary plan.
+- Hydrogen is a finite-area rigid rectangle (1.0 × 0.1 units) with two primary end contact points. It is not a zero-thickness line.
+- Bob's 0.5-unit positional equivalence is a **catalogue deduplication** tolerance only. It does not replace the live geometry/contact tolerance or permit penetration.
+- Fluid knowledge is stored as symbolic capillary boundary/family records with conserved area and contact constraints—not sampled rigid poses. Current records have persistence validation, but fluid-to-construction realization remains an open implementation gate; see the fluid integration contract below.
+
+### Operational gates
+
+1. Keep the geometry catalogue empty in the tracked tree. Never run the continuous worker or use the default catalogue directory for tests.
+2. Do not start bounded two-piece generation until construction has a tested fluid-realization/query path and live validation remains authoritative.
+3. Treat the existing two-piece workflow as the approved isolated generation path after that gate; report formation/family counts, runtime, storage size, frontier completion, and reopen verification.
+4. Constructor-related tests may remain failing while the shared seed-realization blocker is investigated, but do not disable tests, weaken physical invariants, or diagnose cascading failures as independent without evidence.
+5. Keep PR #186 as the single integration target. Do not merge or change the default branch as a side effect of cleanup.
+6. All new decisions and handoffs go in this root README. Before adding a new audit note, update the current summary and avoid repeating obsolete checkpoints.
+
 ## Current repository integrity checkpoint — 2026-10-11
 
 This checkpoint supersedes older repository-status and CI summaries later in this README. Those notes are retained as dated history, not as the current branch state.
@@ -15,7 +40,7 @@ This checkpoint supersedes older repository-status and CI summaries later in thi
 ### Fluid-geometry lookup implementation — 2026-10-11
 
 - Bob now has a `LiveGeometryQuery::FluidBoundary` identity containing fluid/solid material, solid edge, realized edge parameter, conserved fluid area, and capillary contact angle.
-- **Water-inclusive formation implementation:** Bob now derives and persists explicit `GeometryFluidFormation` sidecar records from solved fluid-boundary families, including parent formation, Water identity, conserved area, and capillary boundary parameters. This is an initial implementation, not yet verified coverage. Exact-head CI and persistence/reopen tests must pass before broad catalogue regeneration; see `src/bob/README.md` for acceptance gates.
+- **Water-inclusive formation implementation:** Bob now derives and persists explicit `GeometryFluidFormation` sidecar records from solved fluid-boundary families, including parent formation, Water identity, conserved area, and capillary boundary parameters. This is an initial implementation, not yet verified coverage. Exact-head CI and persistence/reopen tests must pass before broad catalogue regeneration; see the central **Geometry Reference Library** and **Bob-to-construction consumer audit** sections in this README.
 - **Fluid-frontier diagnostics follow-up:** the worker counts Water frontiers that yield no boundary candidates and now reports per-anchor reason counters for unsupported anchor geometry, capillary-solver failures, anchors without exposed intervals, invalid contact intervals, and exposed intervals without valid capillary overlap. Regression tests cover a valid Water/Carbon solution, unsupported-anchor reporting, persistence/reopen, and duplicate-free resumption. These counters do not establish complete fluid coverage; broad catalogue regeneration remains gated on exact-head CI and physical validation.
 - `resolve_live_contact_candidate` builds this query from the realized fluid endpoint and solid boundary; `GeometryLibrary::resolve_persistent_interface` now matches it against persisted fluid-boundary families and returns unresolved/unique/ambiguous based on canonical local-interface projections.
 - Equivalent local fluid interfaces are projected independently of their parent formation signature so the same reusable relationship in multiple formations does not create a false ambiguity.
