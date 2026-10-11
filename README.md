@@ -666,6 +666,18 @@ The visualizer is deliberately separate from the catalogue worker and the live o
 >
 > **Marked changes in this revision:** Sections 3–6, 12, 13–17 are revised below to make candidate provenance, strict query semantics, composition, missing-coverage reporting, and bounded library expansion explicit. The existing physical and biological requirements remain in force.
 
+> ### Approved plan amendment — fluid geometry is first-class Bob knowledge (2026-10-11)
+>
+> Bob's geometry library must calculate, validate, canonicalize, and persist **fluid geometry as well as rigid geometry**. Fluid handling is not a runtime-only exception, a visualization-only record, or a special case left for the constructor to invent. This is a required capability of the same durable geometry knowledge system.
+>
+> Fluid records must represent the *constraint and response*, not merely save one frozen outline: the fluid material and volume; the neighboring material/interface class; the boundary/contact configuration; the deformation or translation degrees of freedom; the solver inputs and relevant tolerances; and the validated result or feasible interval/region. A record must make clear which parts are invariant (for example, conserved volume) and which may vary with the contact constraints.
+>
+> Bob must cover fluid boundaries against rigid edges, corners/vertices, lines/points, and other fluid boundaries where the physics permits them. It must record valid fluid–rigid arrangements and fluid deformation/contact solutions, including infeasible cases as diagnostic outcomes when useful for discovery metrics—not as constructible formations. Canonicalization must avoid filling the catalogue with tiny numerical variations of the same relationship.
+>
+> The existing capillary/fluid solver remains the calculation authority; Bob should invoke it in the discovery worker, verify its output, and persist the reusable result and enough inputs/metadata to resolve and reproduce it. The live constructor may query and compose these persisted results, but must still revalidate the current physical state through authoritative runtime rules. A fluid query that lacks a matching persisted record is a coverage miss; it must not silently fall back to an unrecorded solve during construction.
+>
+> **Acceptance gate:** tests must prove fluid records are generated, persisted, reopened, canonicalized, queried by live fluid-boundary identity, and composed with rigid records; verify volume preservation, nonpenetration, boundary/contact tolerances, and rejection of invalid/infeasible solutions. The bounded two-constituent bootstrap must explicitly include fluid–rigid and applicable fluid–fluid cases and report coverage by interface class, rather than counting rigid formations alone.
+
 ## 1. Executive summary
 
 EvoSim needs a constructor that can produce a viable organism from available materials. It must discover a genome through the realized physical structure, acquire required materials through valid physical interactions, and satisfy the actual biological requirements.
@@ -911,7 +923,7 @@ Identify the intended source branch; inventory constructor, simulation integrati
 ### Phase 2 — Populate and independently validate a bounded bootstrap library
 The checked-in geometry catalogue is intentionally empty. Run Bob's bounded generation worker for singleton and two-constituent formations only (maximum constituent count = 2) in an isolated output location. Verify completion, deduplication/canonicalization, family coverage, no records above the limit, persistence/reopen, schema/version consistency, and artifact integrity. Measure generated candidates, canonical duplicates, geometry/topology rejections, family counts, elapsed time, and storage size. Keep generated records as a versioned runtime library or workflow artifact; do not commit the generated catalogue as source data. Treat this catalogue as a bootstrap baseline, not exhaustive geometric coverage.
 
-Then validate representative records, contact-feature and scale coverage, strict candidate lookup, rejection of invalid candidates, catalogue-order independence, and test isolation.
+Then validate representative records, contact-feature and scale coverage, strict candidate lookup, rejection of invalid candidates, catalogue-order independence, and test isolation. Include fluid-specific coverage: fluid-boundary solver outputs, persisted deformation/contact descriptors, feasible parameter ranges, conserved-volume checks, fluid–rigid and applicable fluid–fluid interface classes, and reopen/query round trips.
 
 **Deliverable:** reproducible two-constituent bootstrap artifact plus a library quality/coverage report and repeatable tests.
 
