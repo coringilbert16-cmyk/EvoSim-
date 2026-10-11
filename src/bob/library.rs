@@ -6007,9 +6007,7 @@ mod compact_family_storage_tests {
         // is not enough to prove the constructor-facing geometry survived.
         let reopened_realized = reopened
             .fluid_formations_for_parent(&parent_signature, "Water")
-            .find_map(|suggestion| {
-                suggestion.realize_against_parent(&formation, &catalog, true)
-            })
+            .find_map(|suggestion| suggestion.realize_against_parent(&formation, &catalog, true))
             .expect("reopened Bob fluid formation should reconstruct its exact shape and pose");
         assert!(reopened_realized.0.is_valid());
         assert!(reopened_realized.1.x.is_finite());
