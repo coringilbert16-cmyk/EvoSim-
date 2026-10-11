@@ -125,6 +125,96 @@ impl CircularArcBoundary {
         })
     }
 
+    /// Whether an angle lies on this arc's positive sweep.
+    pub fn contains_angle(&self, angle_radians: f64) -> bool {
+        if !self.is_finite_arc() || !angle_radians.is_finite() {
+            return false;
+        }
+        let offset = (angle_radians - self.start_angle_radians).rem_euclid(TAU);
+        offset <= self.sweep_radians + EPS
+    }
+
+    /// Exact nearest point on the finite arc to a query point.
+    ///
+    /// If the radial projection falls outside the arc sweep, the nearer
+    /// endpoint is returned. No tessellation or vertex search is involved.
+    pub fn closest_point(&self, x: f64, y: f64) -> Option<(f64, f64)> {
+        if !self.is_finite_arc() || !x.is_finite() || !y.is_finite() {
+            return None;
+        }
+        let dx = x - self.center_x;
+        let dy = y - self.center_y;
+        if dx.hypot(dy) > f64::EPSILON {
+            let angle = dy.atan2(dx);
+            if self.contains_angle(angle) {
+                let (sin, cos) = angle.sin_cos();
+                return Some((
+                    self.center_x + self.radius * cos,
+                    self.center_y + self.radius * sin,
+                ));
+            }
+        }
+        let start = self.start_point();
+        let end = self.end_point();
+        let start_distance = (x - start.0).hypot(y - start.1);
+        let end_distance = (x - end.0).hypot(y - end.1);
+        Some(if start_distance <= end_distance { start } else { end })
+    }
+
+    /// Exact first non-negative ray intersection with this finite arc.
+    ///
+    /// Direction need not be normalized. The result is (ray_parameter, x, y);
+    /// a circle intersection outside the recorded sweep is not a boundary hit.
+    pub fn ray_intersection(
+        &self,
+        origin_x: f64,
+        origin_y: f64,
+        direction_x: f64,
+        direction_y: f64,
+    ) -> Option<(f64, f64, f64)> {
+        if !self.is_finite_arc()
+            || !origin_x.is_finite()
+            || !origin_y.is_finite()
+            || !direction_x.is_finite()
+            || !direction_y.is_finite()
+        {
+            return None;
+        }
+        let a = direction_x * direction_x + direction_y * direction_y;
+        if a <= f64::EPSILON {
+            return None;
+        }
+        let ox = origin_x - self.center_x;
+        let oy = origin_y - self.center_y;
+        let b = 2.0 * (ox * direction_x + oy * direction_y);
+        let c = ox * ox + oy * oy - self.radius * self.radius;
+        let discriminant = b * b - 4.0 * a * c;
+        if !discriminant.is_finite() || discriminant < -EPS {
+            return None;
+        }
+        let root = discriminant.max(0.0).sqrt();
+        let mut candidates = [
+            (-b - root) / (2.0 * a),
+            (-b + root) / (2.0 * a),
+        ];
+        candidates.sort_by(|left, right| {
+            left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal)
+        });
+        for t in candidates {
+            if t < -EPS {
+                continue;
+            }
+            let t = t.max(0.0);
+            let x = origin_x + t * direction_x;
+            let y = origin_y + t * direction_y;
+            let angle = (y - self.center_y).atan2(x - self.center_x);
+            if self.contains_angle(angle) {
+                return Some((t, x, y));
+            }
+        }
+        None
+    }
+
     /// Exact outward normal at a point identified by arc parameter angle.
     pub fn normal_at_angle(&self, angle_radians: f64) -> Option<(f64, f64)> {
         if !self.is_finite_arc() || !angle_radians.is_finite() {
@@ -342,6 +432,25 @@ mod tests {
         assert!((moved.chord_length().unwrap() - arc.chord_length().unwrap()).abs() < 1e-12);
         assert!((moved.start_point().0 - 8.0).abs() < 1e-12);
         assert!(moved.start_point().1.abs() < 1e-12);
+    }
+
+    #[test]
+    fn circular_arc_exact_ray_and_closest_point_queries_respect_sweep() {
+        let arc = CircularArcBoundary {
+            center_x: 0.0,
+            center_y: -1.0,
+            radius: 1.0,
+            start_angle_radians: 0.0,
+            sweep_radians: PI,
+        };
+        let hit = arc.ray_intersection(-2.0, 0.0, 1.0, 0.0).unwrap();
+        assert!((hit.0 - 2.0).abs() < 1e-12);
+        assert!(hit.1.abs() < 1e-12);
+        assert!(hit.2.abs() < 1e-12);
+        let closest = arc.closest_point(0.0, 2.0).unwrap();
+        assert!(closest.0.abs() < 1e-12);
+        assert!(closest.1.abs() < 1e-12);
+        assert!(arc.ray_intersection(-2.0, -1.0, 1.0, 0.0).is_none());
     }
 
     #[test]
