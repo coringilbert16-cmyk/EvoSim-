@@ -297,8 +297,22 @@ mod tests {
             boundary: None,
             arc_boundary: Some(arc),
         };
-        assert!(form_contains_point(&form, 0.0, 0.0, 0.0, 0.0, arc.radius * 0.5));
-        assert!(!form_contains_point(&form, 0.0, 0.0, 0.0, 0.0, -arc.radius * 0.5));
+        assert!(form_contains_point(
+            &form,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            arc.radius * 0.5
+        ));
+        assert!(!form_contains_point(
+            &form,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            -arc.radius * 0.5
+        ));
     }
 
     #[test]
