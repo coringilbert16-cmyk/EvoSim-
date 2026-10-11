@@ -1459,3 +1459,19 @@ The current sprint updates both consumers. Structural realization now accepts a 
 **Verification:** these edits are committed on `integration/unified-source-and-catalogue` through `e11d9f5f`. Exact-head CI has not yet been confirmed for this checkpoint. The previous inspected Rust workflow failed before tests at formatting and also reported existing strict-Clippy diagnostics; runner validation passed. Do not describe these new regressions as passing until the exact-head Rust workflow reaches them.
 
 **Remaining in this thread:** audit further consumers for assumptions that only `boundary` or `arc_boundary` can define a finite fluid surface—especially endpoint/contact generation, overlap/penetration, parent restoration, and the construction transaction. Then add a construction-level fixture that installs one multi-contact Water body, verifies at least three distinct rigid contacts after restoration, and checks the normal live transaction path. Keep this in short implementation sprints and continue work while CI runs. The multi-contact boundary validator still needs its broader contact/transaction proof; Bob's persisted formation schema and simultaneous multi-constraint solver remain separate unfinished gates. Do not run broad catalogue generation yet.
+
+### Multi-contact consumer audit — 2026-10-11
+
+A follow-up pass traced the current piecewise fluid boundary through the live consumers:
+
+- `Form::Fluid` carries the optional `multi_contact_boundary`; shape validity and conserved-area restoration paths accept it.
+- `boundary_point_toward` now queries exact solid-contact segments and free arcs.
+- `placed_forms_boundary_contact` and `placed_forms_rigid_contact` dispatch to exact multi-contact boundary checks, including transformed boundaries.
+- Material restoration retains the realized shape; the runtime regression checks three distinct rigid-surface contacts after a translated/rotated round-trip.
+- Fluid interior is intentionally not treated as a rigid collision wall. This is consistent with the rule that fluid is traversable while its realized boundary remains physically queryable.
+
+**Remaining blocker:** these consumers can query a supplied multi-contact boundary, but Bob's persisted `GeometryFluidFormation` still stores one `anchor_constituent`, one `anchor_edge`, and one circular-arc solution. The constructor therefore has no Bob record that expresses a single fluid body constrained by several parent edges at once. The current three-contact test supplies a handcrafted boundary; it does not create a multi-bond growth transaction. This is a representation/solver gap, not a reason to relax collision or bond checks.
+
+**Next short sprint:** extend Bob's fluid-formation data model in a backward-compatible way to represent a list of contact constraints, then make validation/signatures/persistence account for the complete list before implementing simultaneous realization. Keep legacy single-anchor records readable as one-contact records. Do not claim multi-connection support or run broad catalogue generation until the simultaneous solver and live transaction gate exist.
+
+**CI snapshot:** PR #186 remains the draft-only integration target. At the inspected checkpoint `3ff2415d51d5991b4894e07244b49e904122cd1e`, Runner Validation succeeded and Rust workflow failed; the failure is not being treated as proof that the current unmodified source edits pass. Do not chase the known 29 baseline constructor/lifecycle failures as part of this sprint.
