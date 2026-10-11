@@ -3563,10 +3563,14 @@ fn fluid_formation_is_valid(
             || !boundary.is_valid()
             || (boundary.nominal_area - formation.area).abs() > 1e-9 * formation.area.max(1.0)
             || formation.contact_constraints.iter().any(|constraint| {
-                let Some(constituent) = parent.constituents.get(constraint.constituent_index) else {
+                let Some(constituent) = parent.constituents.get(constraint.constituent_index)
+                else {
                     return true;
                 };
-                let Some(resource) = catalog.iter().find(|item| item.name == constituent.resource) else {
+                let Some(resource) = catalog
+                    .iter()
+                    .find(|item| item.name == constituent.resource)
+                else {
                     return true;
                 };
                 resource.physical_state == crate::resources::PhysicalState::Fluid
