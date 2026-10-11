@@ -1587,3 +1587,8 @@ The Bob worker now reports multi-contact fluid formations separately from legacy
 ### Single-write multi-contact metrics — 2026-10-11
 
 The worker's separate multi-contact counters initially required two calls to the fluid-formation persistence API, which would cause two durable file syncs per Water frontier. Replaced that with `insert_fluid_formations_with_multi_contact_counts`: legacy and multi-contact records are validated/deduplicated together, written once, and the method returns total additions plus multi-contact additions. The existing insertion API remains as a compatibility wrapper. The persistence regression now asserts the `(total_added, multi_contact_added)` pair is `(1, 1)` for the multi-contact record.
+
+
+### Collinear family work deduplication — 2026-10-11
+
+The exposed-edge generator now keys already-processed line families by quantized direction, offset, and equilibrium contact angle. Edges sharing the same line family no longer repeat the same full exposed-interval alignment and chord-window enumeration. The key uses the library's existing (10^{-9}) geometry quantization, tighter than the candidate collinearity tolerances. This is a search-work reduction only; formation signatures and validation remain unchanged.
