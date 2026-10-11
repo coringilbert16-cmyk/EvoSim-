@@ -1116,3 +1116,10 @@ Water-contact generation now exposes reason-level counters for unsupported ancho
 ### Water diagnostics semantics correction — 2026-10-11
 
 A review found that an anchor whose resource name is absent from the catalog was being counted as unsupported geometry. That conflated resource-reference resolution with a known resource shape that the generator does not support. Bob now reports unresolved anchor resources separately from unsupported known-resource geometry. A focused regression asserts this distinction. The latest code needs exact-head CI; no geometry generation was run and the catalogue remains untouched.
+
+
+### Exact-head Water diagnostics CI follow-up — 2026-10-11
+
+On exact head `1646969ebf7837186da6c7fc2496029341b7ff4d`, Rust workflow [#38150859185](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38150859185) passed formatting, source-size policy, COMBINE architecture, Bob compact-storage tests, and empty-library open/reopen without generation. The full Rust suite reports **318 passed, 29 failed, 1 ignored**. The focused Bob compact-storage and empty-store checks passed; the Water–Carbon persistence/query regression and resource-resolution/unsupported-shape diagnostics are part of the Rust suite, but overall suite failures remain across construction/seed, chemistry, COMBINE, contact normals, cavity, movement/fluid boundary, reproduction, and storage contracts. Strict Clippy remains red with 52 application-target and 41 test-target diagnostics. Runner Validation [#38150859183](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38150859183) passed. This checkpoint is not fluid-geometry acceptance and does not justify broad catalogue generation.
+
+**Next focused step:** add controlled tests for the remaining reachable diagnostic branches and assert emitted records as well as counters. Avoid manufacturing invalid formations just to hit counters; if a branch cannot be reached through a physically valid fixture, document that as a coverage/design gap. Then validate fluid record invariants and reopen/query identity before the bounded two-constituent run.
