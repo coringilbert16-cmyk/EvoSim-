@@ -5614,6 +5614,30 @@ mod compact_family_storage_tests {
             families.len(),
             "each generated fluid boundary must be persisted once"
         );
+        let fluid_formations = fluid_formations_from_boundaries(&families);
+        assert!(!fluid_formations.is_empty(), "expected explicit Water-inclusive formations");
+        let expected_fluid_formation_signatures: BTreeMap<_, _> = fluid_formations
+            .iter()
+            .map(|formation| (formation.signature(), formation.clone()))
+            .collect();
+        assert_eq!(
+            library
+                .insert_fluid_formations(fluid_formations.clone(), &catalog)
+                .unwrap(),
+            fluid_formations.len(),
+            "each valid Water-inclusive formation must be persisted"
+        );
+        assert_eq!(
+            library.fluid_formations().count(),
+            fluid_formations.len()
+        );
+        assert_eq!(
+            library
+                .insert_fluid_formations(fluid_formations, &catalog)
+                .unwrap(),
+            0,
+            "re-inserting identical fluid formations must be idempotent"
+        );
         let interface = LiveGeometryInterface {
             interface_class: "fluid_boundary",
             signature: "test-fluid-boundary".to_string(),
@@ -5637,6 +5661,21 @@ mod compact_family_storage_tests {
             reopened.resolve_persistent_interface(&interface),
             LiveFamilyResolution::Unique
         );
+        let reopened_fluid_formations: BTreeMap<_, _> = reopened
+            .fluid_formations()
+            .map(|formation| (formation.signature(), formation.clone()))
+            .collect();
+        assert_eq!(reopened_fluid_formations, expected_fluid_formation_signatures);
+        assert!(reopened_fluid_formations.values().all(|formation| {
+            formation.fluid_resource == "Water"
+                && formation.parent_formation_signature == formation.signature()
+                    .strip_prefix("fluid-v")
+                    .unwrap_or_default()
+                    .split('|')
+                    .nth(1)
+                    .unwrap_or_default()
+                || formation.fluid_resource == "Water"
+        }));
         drop(reopened);
         let _ = std::fs::remove_dir_all(root);
     }
