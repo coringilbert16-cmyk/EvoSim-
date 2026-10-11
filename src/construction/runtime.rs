@@ -2262,15 +2262,14 @@ mod tests {
                 .unwrap_or(std::cmp::Ordering::Equal)
         })
         .expect("first rigid surface must have a valid fluid connection");
-        let (_, _, investment, _) =
-            crate::combine_runtime::selected_candidate_evaluation(
-                &structure,
-                first_target,
-                fluid_index,
-                candidate,
-                &catalog,
-            )
-            .expect("first fluid bond should be energetically admissible");
+        let (_, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
+            &structure,
+            first_target,
+            fluid_index,
+            candidate,
+            &catalog,
+        )
+        .expect("first fluid bond should be energetically admissible");
         let mut ledger = EnergyLedger::default();
         let mut energy = 100.0;
         assert!(crate::combine_runtime::form_selected_bond(
