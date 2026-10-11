@@ -60,6 +60,14 @@ impl Simulation {
         let construction = crate::initial_organism_constructor::construct_valid(&catalog)
             .expect("initial organism constructor must find a valid organism");
         let mut structure = construction.structure;
+        let acquired_resource_shapes = construction.acquired_resource_shapes;
+        let fluid_geometry_status = construction.fluid_geometry_status;
+        debug_assert_eq!(
+            fluid_geometry_status
+                == crate::initial_organism_constructor::FluidGeometryStatus::BobSuggestionAccepted,
+            !acquired_resource_shapes.is_empty(),
+            "only live-validated Bob suggestions may attach an acquired fluid shape"
+        );
 
         let anchor = Position { x: 500.0, y: 500.0 };
         for unit in &mut structure.units {
@@ -72,11 +80,20 @@ impl Simulation {
             placement.x += anchor.x;
             placement.y += anchor.y;
             let physical = crate::physical_material::PhysicalMaterial::realized(
-                crate::resources::Material::free_base(name, 1.0),
+                crate::resources::Material::free_base(name.clone(), 1.0),
                 vec![placement],
                 &catalog,
             )
             .expect("constructor-validated resource must have a physical realization");
+            let physical = match acquired_resource_shapes
+                .iter()
+                .find(|(shape_name, _)| shape_name == &name)
+            {
+                Some((_, shape)) => physical
+                    .with_single_fluid_shape(shape.clone(), &catalog)
+                    .expect("constructor-validated fluid shape must preserve resource area"),
+                None => physical,
+            };
             assert!(stored_material.store_physical_instance_at_owner_anchor(
                 physical,
                 Placement {
