@@ -779,7 +779,8 @@ mod shape_tests {
     fn polygon_vertices_resolve_correctly_per_form() {
         for resource in default_catalog() {
             match &resource.shape.form {
-                Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. } => {
+                Form::Circle { .. } | Form::Line { .. } | multi_contact_boundary: None,
+Form::Fluid { .. } => {
                     assert!(resource.shape.form.polygon_vertices().is_none())
                 }
                 Form::Rectangle { .. } => {
@@ -939,7 +940,8 @@ mod shape_tests {
                 nominal_area,
                 boundary: None,
                 arc_boundary: None
-            } if (*nominal_area - 0.5).abs() < f64::EPSILON
+                multi_contact_boundary: None,
+} if (*nominal_area - 0.5).abs() < f64::EPSILON
         ));
         assert!(form.is_valid());
     }
@@ -957,7 +959,8 @@ mod shape_tests {
             nominal_area: 0.5,
             boundary: None,
             arc_boundary: Some(arc),
-        };
+            multi_contact_boundary: None,
+};
         let json = serde_json::to_string(&form).unwrap();
         let restored: Form = serde_json::from_str(&json).unwrap();
         assert_eq!(restored, form);
