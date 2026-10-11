@@ -605,6 +605,74 @@ impl MultiContactFluidBoundary {
         transformed.is_valid().then_some(transformed)
     }
 
+    /// Exact point containment using analytic line and circular-arc crossings.
+    /// Points on the boundary count as contained within the geometry tolerance.
+    pub fn contains_point(&self, x: f64, y: f64) -> bool {
+        if !self.is_valid() || !x.is_finite() || !y.is_finite() {
+            return false;
+        }
+        let tolerance = 1e-9 * self.bounding_radius().max(1.0);
+        let mut crossings = 0_i32;
+        for piece in &self.pieces {
+            match piece {
+                FluidBoundaryPiece::SolidContact {
+                    start_x,
+                    start_y,
+                    end_x,
+                    end_y,
+                    ..
+                } => {
+                    let dx = end_x - start_x;
+                    let dy = end_y - start_y;
+                    let length_sq = dx * dx + dy * dy;
+                    let t = (((x - start_x) * dx + (y - start_y) * dy) / length_sq)
+                        .clamp(0.0, 1.0);
+                    let nearest_x = start_x + t * dx;
+                    let nearest_y = start_y + t * dy;
+                    if (x - nearest_x).hypot(y - nearest_y) <= tolerance {
+                        return true;
+                    }
+                    if (*start_y > y) != (*end_y > y) {
+                        let crossing_x = start_x + (y - start_y) * dx / dy;
+                        if crossing_x > x {
+                            crossings += 1;
+                        }
+                    }
+                }
+                FluidBoundaryPiece::FreeArc(arc) => {
+                    if arc.closest_point(x, y).is_some_and(|(px, py)| {
+                        (x - px).hypot(y - py) <= tolerance
+                    }) {
+                        return true;
+                    }
+                    let normalized_y = (y - arc.center_y) / arc.radius;
+                    if normalized_y.abs() > 1.0 {
+                        continue;
+                    }
+                    let principal = normalized_y.clamp(-1.0, 1.0).asin();
+                    for angle in [principal, PI - principal] {
+                        let mut normalized = angle.rem_euclid(TAU);
+                        if normalized < arc.start_angle_radians.rem_euclid(TAU) - EPS {
+                            normalized += TAU;
+                        }
+                        let start = arc.start_angle_radians;
+                        let end = start + arc.sweep_radians;
+                        if normalized <= start + EPS || normalized >= end - EPS {
+                            continue;
+                        }
+                        let crossing_x = arc.center_x + arc.radius * normalized.sin().cos();
+                        let crossing_x = arc.center_x + arc.radius * normalized.cos();
+                        let derivative = arc.radius * normalized.cos();
+                        if crossing_x > x && derivative.abs() > EPS {
+                            crossings += if derivative > 0.0 { 1 } else { -1 };
+                        }
+                    }
+                }
+            }
+        }
+        crossings != 0
+    }
+
     pub fn contact_count(&self) -> usize {
         self.pieces
             .iter()
