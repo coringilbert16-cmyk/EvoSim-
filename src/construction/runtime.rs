@@ -453,6 +453,7 @@ fn canonical_live_rigid_parent(
 fn bob_fluid_origins_for_live_parent(
     library: &crate::geometry_reference_library::GeometryLibrary,
     parent: &CanonicalLiveRigidParent,
+    anchor_id: crate::structure::PhysicalConstituentId,
     fluid_resource: &BaseResource,
     relative_part_placement: Placement,
     catalog: &[BaseResource],
@@ -460,16 +461,16 @@ fn bob_fluid_origins_for_live_parent(
     if fluid_resource.physical_state != PhysicalState::Fluid {
         return Vec::new();
     }
+    let Some(&anchor_canonical_index) = parent.canonical_index_by_id.get(&anchor_id) else {
+        return Vec::new();
+    };
     let (s, c) = parent.canonical_to_live_rotation.sin_cos();
     let mut out = Vec::new();
     for suggestion in library
         .fluid_formations_for_parent(&parent.formation.signature, &fluid_resource.name)
     {
-        // This mapping is the authoritative stable-ID-to-canonical-slot lookup
-        // for anchor constituent identity. Reject stale/inconsistent records.
-        if suggestion.anchor_constituent >= parent.formation.constituents.len()
-            || !parent.canonical_index_by_id.values().any(|index| *index == suggestion.anchor_constituent)
-        {
+        // The live stable ID selects the matching canonical anchor slot.
+        if suggestion.anchor_constituent != anchor_canonical_index {
             continue;
         }
         for bulge_left in [true, false] {
@@ -1020,6 +1021,8 @@ fn realize_next_bond_driven(
         return None;
     }
 
+    let bob_parent = bob_library.and_then(|_| canonical_live_rigid_parent(structure, catalog));
+
     for existing_index in existing_indices {
         let existing_unit = structure.units.get(existing_index)?;
         let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
@@ -1099,18 +1102,20 @@ fn realize_next_bond_driven(
                             // These exact-parent suggestions are still proposals;
                             // restoration and the ordinary live transaction checks
                             // remain authoritative.
-                            candidate_origins.extend(
-                                bob_fluid_origins_for_single_parent(
-                                    library,
-                                    anchor_material,
-                                    existing_unit.placement,
-                                    candidate_resource,
-                                    relative_part_placement,
-                                    catalog,
-                                )
-                                .into_iter()
-                                .map(|(origin, shape)| (origin, Some(shape))),
-                            );
+                            if let Some(parent) = bob_parent.as_ref() {
+                                candidate_origins.extend(
+                                    bob_fluid_origins_for_live_parent(
+                                        library,
+                                        parent,
+                                        existing_unit.physical_id,
+                                        candidate_resource,
+                                        relative_part_placement,
+                                        catalog,
+                                    )
+                                    .into_iter()
+                                    .map(|(origin, shape)| (origin, Some(shape))),
+                                );
+                            }
                         } else {
                             candidate_origins.extend(
                                 library
