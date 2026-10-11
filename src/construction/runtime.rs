@@ -2270,7 +2270,7 @@ mod tests {
         let mut ledger = EnergyLedger::default();
         let mut energy = 100.0;
         let mut incomplete_trial = structure.clone();
-        incomplete_trial.units.pop();
+        let _ = incomplete_trial.units.pop();
         let energy_before_failed_trial = energy;
         assert!(!form_remaining_multi_contact_bonds(
             &mut incomplete_trial,
