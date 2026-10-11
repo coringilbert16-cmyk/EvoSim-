@@ -1562,3 +1562,8 @@ Added `form_remaining_multi_contact_bonds` to the live construction transaction.
 ### Multi-contact persistence regression correction — 2026-10-11
 
 The first full Rust test run exercised the new positive persistence regression and found a genuine signature instability: raw JSON serialization of boundary floats differed by one ULP after reload, so the restored record's signature did not match the inserted record. Replaced raw serialized-boundary signature material with a deterministic quantized signature over every SolidContact and FreeArc field. This preserves geometry-level identity at the library's existing quantization resolution while making persistence/reload stable. The corrected regression and the new live three-target atomic-bond test still require exact-head verification.
+
+
+### Exact multi-contact connection endpoints — 2026-10-11
+
+The live three-target regression exposed a second real integration gap: ordinary fluid endpoint discovery projected target points radially from the fluid unit origin, so a line endpoint lying in the middle of a SolidContact interval could be represented by the wrong boundary point. Added exact-point resolution for `ConnectionEndpoint::Fluid` when the shape carries a `MultiContactFluidBoundary`, plus candidate generation from rigid endpoints lying on SolidContact pieces and verified surface points for circles/polygon edges. The atomic bond helper now tries alternate valid contact candidates before rejecting a target. A focused surface-geometry test verifies exact point and outward-normal preservation; exact-head runtime verification is pending.
