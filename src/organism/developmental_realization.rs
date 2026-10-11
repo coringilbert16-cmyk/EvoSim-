@@ -687,8 +687,8 @@ fn point_in_form(
                 developmental_point(x, y, (placement.x, placement.y), placement.rotation_radians);
             let start = arc.start_point();
             let end = arc.end_point();
-            let chord_side = (end.0 - start.0) * (local_y - start.1)
-                - (end.1 - start.1) * (local_x - start.0);
+            let chord_side =
+                (end.0 - start.0) * (local_y - start.1) - (end.1 - start.1) * (local_x - start.0);
             let midpoint_angle = arc.start_angle_radians + arc.sweep_radians * 0.5;
             let midpoint = (
                 arc.center_x + arc.radius * midpoint_angle.cos(),
