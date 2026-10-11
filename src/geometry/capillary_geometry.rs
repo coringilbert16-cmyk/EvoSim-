@@ -565,6 +565,47 @@ fn line_segments_intersect(
         || (o4.abs() <= area_tolerance && on_segment(b, c, d, tolerance))
 }
 
+fn angle_lies_on_arc(angle: f64, arc: &CircularArcBoundary, angular_tolerance: f64) -> bool {
+    let offset = (angle - arc.start_angle_radians).rem_euclid(TAU);
+    offset <= arc.sweep_radians + angular_tolerance
+        || TAU - offset <= angular_tolerance
+}
+
+fn line_segment_intersects_arc(
+    start: (f64, f64),
+    end: (f64, f64),
+    arc: &CircularArcBoundary,
+    tolerance: f64,
+) -> bool {
+    let dx = end.0 - start.0;
+    let dy = end.1 - start.1;
+    let fx = start.0 - arc.center_x;
+    let fy = start.1 - arc.center_y;
+    let a = dx * dx + dy * dy;
+    if a <= f64::EPSILON {
+        return false;
+    }
+    let b = 2.0 * (fx * dx + fy * dy);
+    let c = fx * fx + fy * fy - arc.radius * arc.radius;
+    let discriminant = b * b - 4.0 * a * c;
+    if discriminant < -tolerance * a.max(1.0) {
+        return false;
+    }
+    let root = discriminant.max(0.0).sqrt();
+    let parameter_tolerance = tolerance / a.sqrt().max(1.0);
+    [(-b - root) / (2.0 * a), (-b + root) / (2.0 * a)]
+        .into_iter()
+        .any(|t| {
+            if t < -parameter_tolerance || t > 1.0 + parameter_tolerance {
+                return false;
+            }
+            let x = start.0 + dx * t.clamp(0.0, 1.0);
+            let y = start.1 + dy * t.clamp(0.0, 1.0);
+            let angle = (y - arc.center_y).atan2(x - arc.center_x);
+            angle_lies_on_arc(angle, arc, parameter_tolerance)
+        })
+}
+
 impl MultiContactFluidBoundary {
     /// Validate closure, each analytic piece, and the area from Green's theorem.
     /// No arc is tessellated or replaced with a polygon.
@@ -638,6 +679,34 @@ impl MultiContactFluidBoundary {
                     tolerance,
                 ) {
                     return false;
+                }
+
+                // A non-neighboring solid segment may not cross a free arc.
+                // Use the analytic circle/segment intersection and then check
+                // whether each root lies within the arc's angular sweep.
+                let first_segment = ((*ax, *ay), (*bx, *by));
+                let second_segment = ((*cx, *cy), (*dx, *dy));
+                let first_arc = match &self.pieces[first] {
+                    FluidBoundaryPiece::FreeArc(arc) => Some(arc),
+                    _ => None,
+                };
+                let second_arc = match &self.pieces[second] {
+                    FluidBoundaryPiece::FreeArc(arc) => Some(arc),
+                    _ => None,
+                };
+                if let (Some(arc), FluidBoundaryPiece::SolidContact { .. }) =
+                    (first_arc, &self.pieces[second])
+                {
+                    if line_segment_intersects_arc(second_segment.0, second_segment.1, arc, tolerance) {
+                        return false;
+                    }
+                }
+                if let (FluidBoundaryPiece::SolidContact { .. }, Some(arc)) =
+                    (&self.pieces[first], second_arc)
+                {
+                    if line_segment_intersects_arc(first_segment.0, first_segment.1, arc, tolerance) {
+                        return false;
+                    }
                 }
             }
         }
