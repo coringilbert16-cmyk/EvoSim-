@@ -1230,3 +1230,8 @@ The root `README.md` is now the repository's sole README and central working aut
 3. Feed the resulting fluid shape to construction as an advisory candidate. The existing live physical geometry, contact compatibility, bond/energy transaction, and collision checks remain authoritative.
 4. Add a regression proving that construction actually queries a stored fluid suggestion, preserves the fluid's conserved area, and rejects a suggestion that fails live validation.
 5. Only after that regression passes, run the isolated bounded Bob workflow for formations up to two constituent pieces. Keep generated data out of the repository unless explicitly approved.
+
+
+## 2026-10-11 — Validate changes proposed against the integration branch
+
+The Rust workflow now runs for pull requests targeting both `main` and `integration/unified-source-and-catalogue`. The integration branch is the active source authority while the source-integration PR to `main` remains draft; changes targeting integration therefore need their own CI gate rather than waiting for a later main-bound PR. This changes only CI event selection, not test requirements or acceptance criteria.
