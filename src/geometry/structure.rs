@@ -772,6 +772,7 @@ mod tests {
             form: crate::resources::Form::Fluid {
                 nominal_area: 2.0,
                 boundary: Some(vec![(-1.0, 0.0), (0.0, 1.0), (1.0, 0.0), (0.0, -1.0)]),
+                arc_boundary: None,
             },
         };
         assert!(water.realize_fluid_geometry(fitted.clone(), &catalog));
