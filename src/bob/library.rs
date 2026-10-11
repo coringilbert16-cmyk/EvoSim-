@@ -6229,7 +6229,9 @@ mod fluid_contact_constraint_schema_tests {
     fn legacy_fluid_records_default_to_no_extra_constraints() {
         let formation = legacy_fluid_formation();
         let mut value = serde_json::to_value(&formation).unwrap();
-        value.as_object_mut().unwrap().remove("contact_constraints");
+        let object = value.as_object_mut().unwrap();
+        object.remove("contact_constraints");
+        object.remove("solved_boundary");
 
         let decoded: GeometryFluidFormation = serde_json::from_value(value).unwrap();
         assert!(decoded.contact_constraints.is_empty());
@@ -6271,5 +6273,69 @@ mod fluid_contact_constraint_schema_tests {
         assert!(constrained
             .realize_against_parent(&parent, &crate::resources::default_catalog(), true)
             .is_none());
+    }
+
+    #[test]
+    fn solved_multi_contact_boundary_is_restored_as_one_complete_shape() {
+        use crate::capillary_geometry::{FluidBoundaryPiece, MultiContactFluidBoundary};
+        use crate::resources::NOMINAL_UNIT_AREA;
+
+        let catalog = crate::resources::default_catalog();
+        let parent = GeometryFormation::single("Carbon");
+        let half = NOMINAL_UNIT_AREA.sqrt() * 0.5;
+        let angle = std::f64::consts::FRAC_PI_2;
+        let boundary = MultiContactFluidBoundary {
+            nominal_area: NOMINAL_UNIT_AREA,
+            pieces: vec![
+                FluidBoundaryPiece::SolidContact {
+                    start_x: -half, start_y: -half, end_x: half, end_y: -half,
+                    contact_angle_radians: angle,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: half, start_y: -half, end_x: half, end_y: half,
+                    contact_angle_radians: angle,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: half, start_y: half, end_x: -half, end_y: half,
+                    contact_angle_radians: angle,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: -half, start_y: half, end_x: -half, end_y: -half,
+                    contact_angle_radians: angle,
+                },
+            ],
+        };
+        let carbon = catalog.iter().find(|item| item.name == "Carbon").unwrap();
+        let edge_count = rigid_boundary_segments(&carbon.shape.form).len();
+        assert!(edge_count >= 1);
+        let mut formation = legacy_fluid_formation();
+        formation.parent_formation_signature = parent.signature.clone();
+        formation.area = NOMINAL_UNIT_AREA;
+        formation.contact_length = NOMINAL_UNIT_AREA.sqrt();
+        formation.contact_constraints = (0..4)
+            .map(|edge| GeometryFluidContactConstraint {
+                constituent_index: 0,
+                edge_index: edge % edge_count,
+                contact_length: NOMINAL_UNIT_AREA.sqrt(),
+                edge_parameter_start: 0.0,
+                edge_parameter_end: 1.0,
+            })
+            .collect();
+        formation.solved_boundary = Some(boundary.clone());
+
+        let (shape, pose) = formation
+            .realize_against_parent(&parent, &catalog, true)
+            .expect("a complete validated boundary must not fall back to one anchor arc");
+        assert_eq!(pose, Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
+        assert!(matches!(
+            shape.form,
+            Form::Fluid { nominal_area, multi_contact_boundary: Some(_), arc_boundary: None, .. }
+                if (nominal_area - NOMINAL_UNIT_AREA).abs() < 1e-9
+        ));
+        assert_ne!(formation.signature(), {
+            let mut legacy = formation.clone();
+            legacy.solved_boundary = None;
+            legacy.signature()
+        });
     }
 }
