@@ -704,7 +704,11 @@ fn point_in_form(
             inside
         }
         crate::resources::Form::Line { .. }
-        | crate::resources::Form::Fluid { boundary: None, .. } => false,
+        | crate::resources::Form::Fluid {
+            boundary: None,
+            arc_boundary: None,
+            ..
+        } => false,
     }
 }
 
@@ -731,6 +735,7 @@ mod fitted_water_tests {
             form: Form::Fluid {
                 nominal_area: 4.0,
                 boundary: Some(vec![(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]),
+                arc_boundary: None,
             },
         };
         assert!(water.realize_fluid_geometry(fitted, &catalog));
