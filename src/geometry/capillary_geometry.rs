@@ -934,6 +934,93 @@ mod tests {
         assert!((family.enclosed_area - 0.5).abs() < 1e-10);
     }
 
+
+    #[test]
+    fn exact_piecewise_boundary_preserves_single_arc_area_and_contact() {
+        let family = CapillaryContactFamily::solve(0.5, PI / 2.0).unwrap();
+        let arc = CircularArcBoundary::from_flat_contact(family).unwrap();
+        let (sx, sy) = arc.start_point();
+        let (ex, ey) = arc.end_point();
+        let boundary = MultiContactFluidBoundary {
+            nominal_area: family.area,
+            pieces: vec![
+                FluidBoundaryPiece::FreeArc(arc),
+                FluidBoundaryPiece::SolidContact {
+                    start_x: ex,
+                    start_y: ey,
+                    end_x: sx,
+                    end_y: sy,
+                    contact_angle_radians: family.contact_angle_radians,
+                },
+            ],
+        };
+        assert!(boundary.is_valid());
+        assert_eq!(boundary.contact_count(), 1);
+        assert_eq!(boundary.free_arc_count(), 1);
+    }
+
+    #[test]
+    fn exact_piecewise_boundary_accepts_multiple_simultaneous_contacts() {
+        let angle = PI / 2.0;
+        let boundary = MultiContactFluidBoundary {
+            nominal_area: 4.0,
+            pieces: vec![
+                FluidBoundaryPiece::SolidContact {
+                    start_x: -1.0, start_y: -1.0, end_x: 1.0, end_y: -1.0,
+                    contact_angle_radians: angle,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: 1.0, start_y: -1.0, end_x: 1.0, end_y: 1.0,
+                    contact_angle_radians: angle,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: 1.0, start_y: 1.0, end_x: -1.0, end_y: 1.0,
+                    contact_angle_radians: angle,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: -1.0, start_y: 1.0, end_x: -1.0, end_y: -1.0,
+                    contact_angle_radians: angle,
+                },
+            ],
+        };
+        assert!(boundary.is_valid());
+        assert_eq!(boundary.contact_count(), 4);
+        assert_eq!(boundary.free_arc_count(), 0);
+    }
+
+    #[test]
+    fn exact_piecewise_boundary_rejects_gaps_and_area_mismatch() {
+        let angle = PI / 2.0;
+        let mut boundary = MultiContactFluidBoundary {
+            nominal_area: 4.0,
+            pieces: vec![
+                FluidBoundaryPiece::SolidContact {
+                    start_x: -1.0, start_y: -1.0, end_x: 1.0, end_y: -1.0,
+                    contact_angle_radians: angle,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: 1.0, start_y: -1.0, end_x: 1.0, end_y: 1.0,
+                    contact_angle_radians: angle,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: 1.0, start_y: 1.0, end_x: -1.0, end_y: 1.0,
+                    contact_angle_radians: angle,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: -1.0, start_y: 1.0, end_x: -1.0, end_y: -0.9,
+                    contact_angle_radians: angle,
+                },
+            ],
+        };
+        assert!(!boundary.is_valid());
+        boundary.pieces[3] = FluidBoundaryPiece::SolidContact {
+            start_x: -1.0, start_y: 1.0, end_x: -1.0, end_y: -1.0,
+            contact_angle_radians: angle,
+        };
+        boundary.nominal_area = 5.0;
+        assert!(!boundary.is_valid());
+    }
+
     #[test]
     fn invalid_angles_and_areas_are_rejected() {
         assert!(CapillaryContactFamily::solve(0.0, PI / 2.0).is_none());
