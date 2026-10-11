@@ -50,13 +50,11 @@ impl CircularArcBoundary {
             || !family.curvature_radius.is_finite()
             || family.curvature_radius <= 0.0
             || !family.contact_angle_radians.is_finite()
-            || !(0.0 < family.contact_angle_radians
-                && family.contact_angle_radians < PI)
+            || !(0.0 < family.contact_angle_radians && family.contact_angle_radians < PI)
         {
             return None;
         }
-        let expected =
-            CapillaryContactFamily::solve(family.area, family.contact_angle_radians)?;
+        let expected = CapillaryContactFamily::solve(family.area, family.contact_angle_radians)?;
         let scale = family.curvature_radius.max(1.0);
         if (expected.curvature_radius - family.curvature_radius).abs() > EPS * scale
             || (expected.free_arc_angle_radians - family.free_arc_angle_radians).abs() > EPS
