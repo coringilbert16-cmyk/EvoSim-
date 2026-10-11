@@ -301,7 +301,8 @@ fn composite_origin_for_constituent_pose(
 #[derive(Clone, Debug)]
 struct CanonicalLiveRigidParent {
     formation: crate::geometry_reference_library::GeometryFormation,
-    canonical_index_by_id: std::collections::HashMap<crate::structure::PhysicalConstituentId, usize>,
+    canonical_index_by_id:
+        std::collections::HashMap<crate::structure::PhysicalConstituentId, usize>,
     canonical_to_live_rotation: f64,
     canonical_to_live_x: f64,
     canonical_to_live_y: f64,
@@ -1872,7 +1873,6 @@ mod tests {
         assert_eq!(structure.units.len(), 3);
         assert_eq!(structure.bonds.len(), 3);
     }
-
 
     #[test]
     fn canonical_live_rigid_parent_maps_stable_ids_to_bob_slots() {
