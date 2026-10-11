@@ -422,6 +422,27 @@ mod tests {
             formation.parent_formation_signature == carbon_signature
                 && formation.fluid_resource == "Water"
         }));
+
+        let parent = reopened
+            .get(&carbon_signature)
+            .expect("the canonical parent formation must survive reopening");
+        let (realized_shape, realized_pose) = reopened
+            .fluid_formations_for_parent(&carbon_signature, "Water")
+            .find_map(|suggestion| suggestion.realize_against_parent(parent, &catalog, true))
+            .expect("a generated, reopened Water formation must realize against its parent");
+        assert!(realized_shape.is_valid());
+        assert!(matches!(
+            realized_shape.form,
+            crate::resources::Form::Fluid {
+                nominal_area,
+                boundary: None,
+                arc_boundary: Some(_)
+            } if nominal_area.is_finite() && nominal_area > 0.0
+        ));
+        assert!(realized_pose.x.is_finite());
+        assert!(realized_pose.y.is_finite());
+        assert!(realized_pose.rotation_radians.is_finite());
+
         let mut resumed = reopened;
         let _ = process_one_frontier(&mut resumed, &catalog, 2).unwrap();
         let resumed_signatures = resumed
