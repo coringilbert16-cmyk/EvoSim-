@@ -621,31 +621,36 @@ fn resource_area(resource: &BaseResource) -> Option<f64> {
 }
 
 fn fluid_segment_contains_world_point(shape: &Shape, placement: Placement, x: f64, y: f64) -> bool {
-    let Form::Fluid {
-        arc_boundary: Some(arc),
-        ..
-    } = &shape.form
-    else {
-        return false;
-    };
     let dx = x - placement.x;
     let dy = y - placement.y;
     let (sin, cos) = placement.rotation_radians.sin_cos();
     let local_x = dx * cos + dy * sin;
     let local_y = -dx * sin + dy * cos;
-    let start = arc.start_point();
-    let end = arc.end_point();
-    let chord_side =
-        (end.0 - start.0) * (local_y - start.1) - (end.1 - start.1) * (local_x - start.0);
-    let midpoint_angle = arc.start_angle_radians + arc.sweep_radians * 0.5;
-    let midpoint = (
-        arc.center_x + arc.radius * midpoint_angle.cos(),
-        arc.center_y + arc.radius * midpoint_angle.sin(),
-    );
-    let arc_side =
-        (end.0 - start.0) * (midpoint.1 - start.1) - (end.1 - start.1) * (midpoint.0 - start.0);
-    chord_side * arc_side >= -1e-9
-        && (local_x - arc.center_x).hypot(local_y - arc.center_y) <= arc.radius + 1e-9
+    match &shape.form {
+        Form::Fluid {
+            multi_contact_boundary: Some(boundary),
+            ..
+        } => boundary.contains_point(local_x, local_y),
+        Form::Fluid {
+            arc_boundary: Some(arc),
+            ..
+        } => {
+            let start = arc.start_point();
+            let end = arc.end_point();
+            let chord_side = (end.0 - start.0) * (local_y - start.1)
+                - (end.1 - start.1) * (local_x - start.0);
+            let midpoint_angle = arc.start_angle_radians + arc.sweep_radians * 0.5;
+            let midpoint = (
+                arc.center_x + arc.radius * midpoint_angle.cos(),
+                arc.center_y + arc.radius * midpoint_angle.sin(),
+            );
+            let arc_side = (end.0 - start.0) * (midpoint.1 - start.1)
+                - (end.1 - start.1) * (midpoint.0 - start.0);
+            chord_side * arc_side >= -1e-9
+                && (local_x - arc.center_x).hypot(local_y - arc.center_y) <= arc.radius + 1e-9
+        }
+        _ => false,
+    }
 }
 
 fn rigid_form_contains_world_point(form: &Form, placement: Placement, x: f64, y: f64) -> bool {
