@@ -105,7 +105,7 @@ pub fn run_to_completion(max_constituents: usize) -> std::io::Result<()> {
         .count();
 
     eprintln!(
-        "geometry worker complete: max_constituents={max_constituents} seeded={seeded} passes={processed} generated_candidates={generated} added_formations={added} not_added={} edge_families_added={edge_added} point_families_added={point_added} vertex_families_added={vertex_added} water_families_added={water_added} fluid_boundary_families_added={fluid_boundary_added} fluid_formations_added={fluid_formations_added} fluid_formations_before_reopen={fluid_formations_before_reopen} fluid_formations_after_reopen={fluid_formations_after_reopen} formations_before_reopen={formations_before_reopen} formations_after_reopen={} oversized_formations={oversized} unfinished_frontiers={unfinished} elapsed_ms={}",
+        "geometry worker complete: max_constituents={max_constituents} seeded={seeded} passes={processed} generated_candidates={generated} added_formations={added} not_added={} edge_families_added={edge_added} point_families_added={point_added} vertex_families_added={vertex_added} water_families_added={water_added} fluid_boundary_families_added={fluid_boundary_added} fluid_formations_added={fluid_formations_added} multi_contact_fluid_formations={multi_contact_fluid_formations} multi_contact_fluid_formations_added={multi_contact_fluid_formations_added} fluid_formations_before_reopen={fluid_formations_before_reopen} fluid_formations_after_reopen={fluid_formations_after_reopen} formations_before_reopen={formations_before_reopen} formations_after_reopen={} oversized_formations={oversized} unfinished_frontiers={unfinished} elapsed_ms={}",
         generated.saturating_sub(added),
         reopened.len(),
         started.elapsed().as_millis(),
