@@ -118,13 +118,13 @@ impl PhysicalMaterial {
         if resource.physical_state != crate::resources::PhysicalState::Fluid {
             return None;
         }
-        let default_area = match resource.shape.form {
+        let default_area = match &resource.shape.form {
             crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-            crate::resources::Form::Fluid { nominal_area, .. } => nominal_area,
+            crate::resources::Form::Fluid { nominal_area, .. } => *nominal_area,
             _ => return None,
         };
-        let shape_area = match shape.form {
-            crate::resources::Form::Fluid { nominal_area, .. } => nominal_area,
+        let shape_area = match &shape.form {
+            crate::resources::Form::Fluid { nominal_area, .. } => *nominal_area,
             _ => return None,
         };
         if (shape_area - default_area).abs() > 1e-9 * default_area.max(1.0) {
@@ -155,13 +155,13 @@ impl PhysicalMaterial {
             if resource.physical_state != crate::resources::PhysicalState::Fluid {
                 return None;
             }
-            let default_area = match resource.shape.form {
+            let default_area = match &resource.shape.form {
                 crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-                crate::resources::Form::Fluid { nominal_area, .. } => nominal_area,
+                crate::resources::Form::Fluid { nominal_area, .. } => *nominal_area,
                 _ => return None,
             };
-            let shape_area = match shape.form {
-                crate::resources::Form::Fluid { nominal_area, .. } => nominal_area,
+            let shape_area = match &shape.form {
+                crate::resources::Form::Fluid { nominal_area, .. } => *nominal_area,
                 _ => return None,
             };
             if (shape_area - default_area).abs() > 1e-9 * default_area.max(1.0) {
@@ -176,6 +176,13 @@ impl PhysicalMaterial {
     pub(crate) fn break_internal_bond(&self, target: &PhysicalMaterialBond) -> Option<Vec<Self>> {
         let placements = self.placements.as_ref()?;
         let connections = self.internal_connections.as_ref()?;
+        if self
+            .realized_shapes
+            .as_ref()
+            .is_some_and(|shapes| shapes.len() != self.material.parts.len())
+        {
+            return None;
+        }
         let target_index = connections.iter().position(|bond| bond == target)?;
 
         let mut adjacency = vec![Vec::new(); self.material.parts.len()];
