@@ -1775,6 +1775,18 @@ mod tests {
             .expect("default Water material should have a valid physical realization")
             .with_single_fluid_shape(shape.clone(), &catalog)
             .expect("Bob's conserved-area arc should fit the physical Water material");
+            let mut restored = OrganismStructure::new();
+            let restored_indices = crate::material_restoration::restore_material(
+                &mut restored,
+                &material,
+                origin,
+                &catalog,
+            )
+            .expect("the Bob fluid shape should survive physical material restoration");
+            assert_eq!(
+                restored.units[restored_indices[0]].shape(&catalog),
+                Some(shape.clone())
+            );
             assert_eq!(material.realized_shape_for_part(0, &catalog), Some(shape));
         }
         drop(library);
