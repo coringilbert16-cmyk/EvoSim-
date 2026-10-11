@@ -14,7 +14,7 @@ This checkpoint supersedes older repository-status and CI summaries later in thi
 
 ### Latest locked CI verification
 
-At code head `9dfed9e8744b9dd08e9a8a6a7763c2a7c49e1caa`, [Rust workflow #38139972441](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38139972441) passed formatting, source-size policy, COMBINE architecture checks, Bob compact-storage tests, and the non-generative empty-library open/reopen test using the committed lockfile. The full suite reported **314 passed, 29 failed, 1 ignored**; strict Clippy failed with 58 diagnostics/errors. [Runner validation #38139975142](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38139975142) passed. These results validate the locked dependency setup, but do not make the application release-ready.
+At integration head `03b264d032135e47ce06b4b3229beac669d62379`, [Rust workflow #38140332317](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38140332317) completed. Formatting, source-size policy, COMBINE architecture checks, Bob compact-storage tests, and the non-generative empty-library open/reopen test passed. The full suite remains **314 passed, 29 failed, 1 ignored**; failures span construction, chemistry, geometry/contact, cavity/viability, movement, reproduction, and storage contracts. Strict Clippy failed with 48 diagnostics while compiling the test target and 58 while compiling the application. [Runner validation #38140332276](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38140332276) passed. These results verify the locked dependency setup and repository guards, not application correctness or release readiness.
 
 ### Remaining repository-integrity gates
 

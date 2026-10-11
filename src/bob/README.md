@@ -61,7 +61,7 @@ Initial construction and offspring construction should share one physical engine
 
 ## Verification status
 
-Latest locked verification at code head `9dfed9e8744b9dd08e9a8a6a7763c2a7c49e1caa` passed formatting, source-file-size checks, COMBINE architecture checks, focused compact-storage tests, and the non-generative empty-library persistence/reopen check. The full suite reported **314 passed, 29 failed, 1 ignored**; strict Clippy failed with 58 diagnostics/errors. [Rust run #38139972441](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38139972441). [Runner validation #38139975142](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38139975142) passed. These checks do not prove Bob or the constructor is fully verified or biologically viable.
+At integration head `03b264d032135e47ce06b4b3229beac669d62379`, [Rust workflow #38140332317](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38140332317) passed formatting, source-file-size checks, COMBINE architecture checks, compact-storage tests, and non-generative empty-library reopen checks. The full suite reported **314 passed, 29 failed, 1 ignored**. Strict Clippy failed with 48 test-target and 58 application-target diagnostics. [Runner validation #38140332276](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38140332276) passed. This does not prove the full Bob query path or constructor is biologically viable.
 
 ## Audit documents
 
