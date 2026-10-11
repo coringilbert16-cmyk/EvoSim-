@@ -547,15 +547,22 @@ fn line_segments_intersect(
     let o2 = cross(a, b, d);
     let o3 = cross(c, d, a);
     let o4 = cross(c, d, b);
-    if ((o1 > tolerance && o2 < -tolerance) || (o1 < -tolerance && o2 > tolerance))
-        && ((o3 > tolerance && o4 < -tolerance) || (o3 < -tolerance && o4 > tolerance))
+    let scale = (b.0 - a.0)
+        .hypot(b.1 - a.1)
+        .max((d.0 - c.0).hypot(d.1 - c.1))
+        .max(1.0);
+    let area_tolerance = tolerance * scale;
+    if ((o1 > area_tolerance && o2 < -area_tolerance)
+        || (o1 < -area_tolerance && o2 > area_tolerance))
+        && ((o3 > area_tolerance && o4 < -area_tolerance)
+            || (o3 < -area_tolerance && o4 > area_tolerance))
     {
         return true;
     }
-    (o1.abs() <= tolerance && on_segment(c, a, b, tolerance))
-        || (o2.abs() <= tolerance && on_segment(d, a, b, tolerance))
-        || (o3.abs() <= tolerance && on_segment(a, c, d, tolerance))
-        || (o4.abs() <= tolerance && on_segment(b, c, d, tolerance))
+    (o1.abs() <= area_tolerance && on_segment(c, a, b, tolerance))
+        || (o2.abs() <= area_tolerance && on_segment(d, a, b, tolerance))
+        || (o3.abs() <= area_tolerance && on_segment(a, c, d, tolerance))
+        || (o4.abs() <= area_tolerance && on_segment(b, c, d, tolerance))
 }
 
 impl MultiContactFluidBoundary {
