@@ -697,6 +697,74 @@ pub struct GeometryFluidFormation {
 }
 
 impl GeometryFluidFormation {
+    /// Realize this suggestion in its parent's coordinate frame.
+    ///
+    /// The stored edge parameters bound the allowed *contact-center* interval,
+    /// not the chord endpoints. The actual chord is derived from the conserved
+    /// area and must fit on the selected anchor edge. The caller must still
+    /// transform this pose to the live structure and revalidate it there.
+    pub fn realize_against_parent(
+        &self,
+        parent: &GeometryFormation,
+        catalog: &[BaseResource],
+        bulge_left: bool,
+    ) -> Option<(crate::resources::Shape, Placement)> {
+        if parent.signature != self.parent_formation_signature
+            || !validate_formation(parent, catalog)
+            || self.anchor_constituent >= parent.constituents.len()
+            || !self.edge_parameter_start.is_finite()
+            || !self.edge_parameter_end.is_finite()
+            || self.edge_parameter_start < 0.0
+            || self.edge_parameter_end > 1.0
+            || self.edge_parameter_end < self.edge_parameter_start
+        {
+            return None;
+        }
+        let anchor = parent.constituents.get(self.anchor_constituent)?;
+        let resource = catalog.iter().find(|item| item.name == anchor.resource)?;
+        if resource.physical_state == crate::resources::PhysicalState::Fluid {
+            return None;
+        }
+        let (edge_start, edge_end) = *rigid_boundary_segments(&resource.shape.form).get(self.anchor_edge)?;
+        let edge_start = world_point(edge_start, anchor.placement);
+        let edge_end = world_point(edge_end, anchor.placement);
+        let dx = edge_end.0 - edge_start.0;
+        let dy = edge_end.1 - edge_start.1;
+        let edge_length = dx.hypot(dy);
+        if !edge_length.is_finite() || edge_length <= f64::EPSILON {
+            return None;
+        }
+        let arc = self.exact_arc_boundary()?;
+        let half_fraction = (self.contact_length * 0.5) / edge_length;
+        let center_parameter = (self.edge_parameter_start + self.edge_parameter_end) * 0.5;
+        let interval_tolerance = 1e-9;
+        if half_fraction > 0.5 + interval_tolerance
+            || center_parameter < half_fraction - interval_tolerance
+            || center_parameter > 1.0 - half_fraction + interval_tolerance
+        {
+            return None;
+        }
+        let shape = crate::resources::Shape {
+            form: Form::Fluid {
+                nominal_area: self.area,
+                boundary: None,
+                arc_boundary: Some(arc),
+            },
+        };
+        if !shape.is_valid() {
+            return None;
+        }
+        Some((
+            shape,
+            Placement {
+                x: edge_start.0 + dx * center_parameter,
+                y: edge_start.1 + dy * center_parameter,
+                rotation_radians: dy.atan2(dx)
+                    + if bulge_left { 0.0 } else { std::f64::consts::PI },
+            },
+        ))
+    }
+
     /// Reconstruct the exact free interface represented by this persisted record.
     /// Invalid or internally inconsistent stored scalars produce a coverage miss.
     pub fn exact_arc_boundary(&self) -> Option<CircularArcBoundary> {
@@ -3302,7 +3370,9 @@ fn fluid_formation_is_valid(
         && formation.edge_parameter_end <= 1.0
         && formation.edge_parameter_end >= formation.edge_parameter_start
         && fluid_boundary_state_is_self_consistent(&family)
-        && formation.exact_arc_boundary().is_some()
+        && formation
+            .realize_against_parent(parent, catalog, true)
+            .is_some()
 }
 
 fn load_fluid_formations(
