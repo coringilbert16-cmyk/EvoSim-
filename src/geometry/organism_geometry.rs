@@ -284,6 +284,58 @@ mod tests {
     }
 
     #[test]
+    fn exact_fluid_arc_contains_only_the_circular_segment() {
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            0.5,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .unwrap();
+        let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family)
+            .unwrap();
+        let form = Form::Fluid {
+            nominal_area: 0.5,
+            boundary: None,
+            arc_boundary: Some(arc),
+        };
+        assert!(form_contains_point(&form, 0.0, 0.0, 0.0, 0.0, arc.radius * 0.5));
+        assert!(!form_contains_point(&form, 0.0, 0.0, 0.0, 0.0, -arc.radius * 0.5));
+    }
+
+    #[test]
+    fn exact_fluid_arc_containment_respects_world_rotation_and_translation() {
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            0.5,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .unwrap();
+        let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family)
+            .unwrap();
+        let form = Form::Fluid {
+            nominal_area: 0.5,
+            boundary: None,
+            arc_boundary: Some(arc),
+        };
+        let inside = form_contains_point(
+            &form,
+            2.0,
+            3.0,
+            std::f64::consts::FRAC_PI_2,
+            2.0 - arc.radius * 0.5,
+            3.0,
+        );
+        let outside = form_contains_point(
+            &form,
+            2.0,
+            3.0,
+            std::f64::consts::FRAC_PI_2,
+            2.0 + arc.radius * 0.5,
+            3.0,
+        );
+        assert!(inside);
+        assert!(!outside);
+    }
+
+    #[test]
     fn non_area_line_does_not_create_containment() {
         let geometry = body(Form::Line { length: 4.0 });
         assert!(!geometry.contains_point(0.0, 0.0));
