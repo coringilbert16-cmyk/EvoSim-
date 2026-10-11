@@ -1501,3 +1501,15 @@ For multi-contact records, `realize_against_parent` now requires a persisted com
 The exact-head Rust workflow for `4da264c7` reached formatting successfully but failed compilation because the new parent-edge alignment validator referenced `FluidBoundaryPiece::SolidContact` without importing `FluidBoundaryPiece`. The import is now added in `src/bob/library.rs` (commit `454d2c2d`). Runner Validation had passed on `4da264c7`; that result does not validate the import correction, so inspect the new exact-head workflow before claiming compilation is green.
 
 The implementation gate remains unchanged: current worker generation still creates only single-anchor fluid records. Do not try to pass this gate by assembling independent pairwise arcs. The next code sprint must implement one simultaneous solve over a canonical rigid parent, persist its complete boundary and constraints, and add a positive solver-produced persistence/reload regression before connecting atomic multi-bond realization in live construction.
+
+
+### Exact-head verification and multi-contact audit — 2026-10-11
+
+**Verified integration head:** `7261fa6a2bed68b5a51f31416d85282eff4be47f` on `integration/unified-source-and-catalogue` (PR #186 remains draft and unmerged).
+
+- **Runner Validation:** passed.
+- **Rust test stage:** compiled and ran the suite, then failed with 359 passed, 32 failed, and 1 ignored. The 29 previously tracked constructor/lifecycle failures remain out of scope for the Bob/fluid sprint; the three additional failures in this run must be classified separately rather than silently counted as baseline.
+- **Strict Clippy stage:** failed on 62 diagnostics under warnings-as-errors, including existing unused/dead-code and style lints. Do not use this broad lint backlog to derail the current multi-contact geometry work; do not claim Rust CI is green.
+- **Focused multi-contact checks passed in that run:** exact boundary transform/area preservation, line/arc containment, rejection of crossing boundaries, three distinct live rigid-surface contacts after restoration, schema compatibility for legacy fluid records, fail-closed unresolved constraints, rejection of misaligned records before persistence, material round-trip preservation, and exact surface queries/outward normals.
+
+These results establish that the current boundary representation and runtime consumers are exercised by the suite. They do **not** establish a simultaneous Bob solver or a successful multi-bond growth transaction. The next implementation gate remains a solver-generated boundary constrained against one canonical rigid parent, with every contact and the conserved area validated as one whole boundary. Do not combine pairwise solutions, weaken contact checks, or start broad catalogue generation before that gate exists.
