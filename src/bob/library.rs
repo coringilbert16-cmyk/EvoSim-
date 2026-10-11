@@ -6406,7 +6406,7 @@ mod fluid_contact_constraint_schema_tests {
     }
 
     #[test]
-    fn solved_multi_contact_boundary_is_restored_as_one_complete_shape() {
+    fn misaligned_multi_contact_boundary_is_rejected_before_persistence() {
         use crate::capillary_geometry::{FluidBoundaryPiece, MultiContactFluidBoundary};
         use crate::resources::NOMINAL_UNIT_AREA;
 
@@ -6465,26 +6465,9 @@ mod fluid_contact_constraint_schema_tests {
             .collect();
         formation.solved_boundary = Some(boundary.clone());
 
-        let (shape, pose) = formation
+        assert!(formation
             .realize_against_parent(&parent, &catalog, true)
-            .expect("a complete validated boundary must not fall back to one anchor arc");
-        assert_eq!(
-            pose,
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0
-            }
-        );
-        assert!(matches!(
-            shape.form,
-            Form::Fluid {
-                nominal_area,
-                multi_contact_boundary: Some(_),
-                arc_boundary: None,
-                ..
-            } if (nominal_area - NOMINAL_UNIT_AREA).abs() < 1e-9
-        ));
+            .is_none(), "boundary segments must match their referenced parent edges");
         assert_ne!(formation.signature(), {
             let mut legacy = formation.clone();
             legacy.solved_boundary = None;
@@ -6503,19 +6486,17 @@ mod fluid_contact_constraint_schema_tests {
                 library
                     .insert_fluid_formations(vec![formation.clone()], &catalog)
                     .unwrap(),
-                1,
-                "a complete solved boundary should pass Bob's persistence validator"
+                0,
+                "Bob must not persist a boundary that misses its referenced rigid edges"
             );
         }
         let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
-        let persisted = reopened
-            .fluid_formations_for_parent(&parent.signature, "Water")
-            .find(|candidate| candidate.signature() == formation.signature())
-            .expect("complete multi-contact boundary should survive persistence");
-        assert_eq!(persisted.solved_boundary.as_ref(), Some(&boundary));
-        assert!(persisted
-            .realize_against_parent(&parent, &catalog, true)
-            .is_some());
+        assert_eq!(
+            reopened
+                .fluid_formations_for_parent(&parent.signature, "Water")
+                .count(),
+            0
+        );
         drop(reopened);
         let _ = std::fs::remove_dir_all(root);
     }
