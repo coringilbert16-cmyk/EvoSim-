@@ -130,6 +130,9 @@ impl StructuralUnit {
             crate::resources::Form::Fluid {
                 boundary: Some(_),
                 ..
+            } | crate::resources::Form::Fluid {
+                arc_boundary: Some(_),
+                ..
             }
         ) {
             return false;
