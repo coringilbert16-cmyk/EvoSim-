@@ -635,7 +635,7 @@ impl MultiContactFluidBoundary {
                     if (*start_y > y) != (*end_y > y) {
                         let crossing_x = start_x + (y - start_y) * dx / dy;
                         if crossing_x > x {
-                            crossings += 1;
+                            crossings += if dy > 0.0 { 1 } else { -1 };
                         }
                     }
                 }
@@ -660,7 +660,6 @@ impl MultiContactFluidBoundary {
                         if normalized <= start + EPS || normalized >= end - EPS {
                             continue;
                         }
-                        let crossing_x = arc.center_x + arc.radius * normalized.sin().cos();
                         let crossing_x = arc.center_x + arc.radius * normalized.cos();
                         let derivative = arc.radius * normalized.cos();
                         if crossing_x > x && derivative.abs() > EPS {
