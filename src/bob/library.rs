@@ -3426,7 +3426,10 @@ pub fn generate_water_contact_families_with_diagnostics(
     formation: &GeometryFormation,
     candidate_resource: &BaseResource,
     catalog: &[BaseResource],
-) -> (Vec<GeometryContactFamily>, WaterContactGenerationDiagnostics) {
+) -> (
+    Vec<GeometryContactFamily>,
+    WaterContactGenerationDiagnostics,
+) {
     let mut diagnostics = WaterContactGenerationDiagnostics::default();
     if candidate_resource.name != "Water"
         || candidate_resource.physical_state != crate::resources::PhysicalState::Fluid
@@ -5624,7 +5627,10 @@ mod compact_family_storage_tests {
     fn water_generator_reports_unsupported_anchor_geometry() {
         let catalog = default_catalog();
         let formation = GeometryFormation::single("UnknownResource");
-        let water = catalog.iter().find(|resource| resource.name == "Water").unwrap();
+        let water = catalog
+            .iter()
+            .find(|resource| resource.name == "Water")
+            .unwrap();
 
         let (families, diagnostics) =
             generate_water_contact_families_with_diagnostics(&formation, water, &catalog);
