@@ -1371,6 +1371,44 @@ mod tests {
     }
 
     #[test]
+    fn multi_contact_boundary_rejects_nonadjacent_line_crossing_free_arc() {
+        let boundary = MultiContactFluidBoundary {
+            nominal_area: 1.0,
+            pieces: vec![
+                FluidBoundaryPiece::FreeArc(CircularArcBoundary {
+                    center_x: 0.0,
+                    center_y: 0.0,
+                    radius: 1.0,
+                    start_angle_radians: 0.0,
+                    sweep_radians: PI,
+                }),
+                FluidBoundaryPiece::SolidContact {
+                    start_x: -1.0,
+                    start_y: 0.0,
+                    end_x: -2.0,
+                    end_y: 1.0,
+                    contact_angle_radians: PI / 2.0,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: -2.0,
+                    start_y: 1.0,
+                    end_x: 2.0,
+                    end_y: 1.0,
+                    contact_angle_radians: PI / 2.0,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: 2.0,
+                    start_y: 1.0,
+                    end_x: 1.0,
+                    end_y: 0.0,
+                    contact_angle_radians: PI / 2.0,
+                },
+            ],
+        };
+        assert!(!boundary.is_valid());
+    }
+
+    #[test]
     fn multi_contact_containment_handles_mixed_line_and_arc_with_rotation() {
         let boundary = MultiContactFluidBoundary {
             nominal_area: std::f64::consts::FRAC_PI_2,
