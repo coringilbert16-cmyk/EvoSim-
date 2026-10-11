@@ -7014,17 +7014,16 @@ mod fluid_contact_constraint_schema_tests {
             Form::Fluid { nominal_area, .. } => *nominal_area,
             _ => panic!("Water must expose a conserved fluid area"),
         };
-        let family = solve_water_against_solid(
-            area,
-            water.properties.cohesion,
-            carbon.properties.cohesion,
-        )
-        .unwrap();
+        let family =
+            solve_water_against_solid(area, water.properties.cohesion, carbon.properties.cohesion)
+                .unwrap();
         let wall_length = family.contact_length * 0.5;
         for name in ["TestWallA", "TestWallB"] {
             let mut wall = carbon.clone();
             wall.name = name.to_string();
-            wall.shape.form = Form::Line { length: wall_length };
+            wall.shape.form = Form::Line {
+                length: wall_length,
+            };
             catalog.push(wall);
         }
 
