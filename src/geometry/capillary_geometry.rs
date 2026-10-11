@@ -1731,6 +1731,33 @@ mod tests {
     }
 
     #[test]
+    fn simultaneous_collinear_solver_supports_rotated_translated_parent_edges() {
+        let area = 0.5;
+        let angle = PI / 2.0;
+        let family = CapillaryContactFamily::solve(area, angle).unwrap();
+        let direction: f64 = 0.73;
+        let (sin, cos) = direction.sin_cos();
+        let origin = (3.25, -1.75);
+        let point = |distance: f64| {
+            (origin.0 + distance * cos, origin.1 + distance * sin)
+        };
+        let third = family.contact_length / 3.0;
+        let segments = [
+            (point(0.0), point(third)),
+            (point(third), point(2.0 * third)),
+            (point(2.0 * third), point(family.contact_length)),
+        ];
+        let boundary = solve_water_against_collinear_contacts(area, angle, &segments).unwrap();
+        assert!(boundary.is_valid());
+        assert_eq!(boundary.contact_count(), 3);
+        assert!((boundary.nominal_area - area).abs() < 1e-12);
+        let first = boundary.pieces[0].start_point().unwrap();
+        let arc_end = boundary.pieces.last().unwrap().end_point().unwrap();
+        assert!((first.0 - arc_end.0).abs() < 1e-9);
+        assert!((first.1 - arc_end.1).abs() < 1e-9);
+    }
+
+    #[test]
     fn simultaneous_collinear_solver_rejects_gaps_and_wrong_total_contact_length() {
         let family = CapillaryContactFamily::solve(0.5, PI / 2.0).unwrap();
         let segments = [
