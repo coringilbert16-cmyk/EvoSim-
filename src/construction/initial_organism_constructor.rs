@@ -207,7 +207,7 @@ fn add_unit(
     resource: &BaseResource,
     center: (f64, f64),
     anchor_index: Option<usize>,
-    bob_library: Option<&crate::geometry_reference_library::GeometryLibrary>,
+    bob_library: &crate::geometry_reference_library::GeometryLibrary,
     catalog: &[BaseResource],
 ) -> Result<usize, String> {
     let material = Material::free_base(resource.name.clone(), 1.0);
@@ -910,23 +910,22 @@ fn valid_construction(
 
     let mut acquired = find_acquisition_set(acquisition_candidates, &regions, catalog)?;
     let water = catalog.iter().find(|resource| resource.name == "Water")?;
-    let bob_result = bob_library.map(|library| {
-        bob_fluid_acquisition_candidate(structure, &regions, water, library, catalog)
-    });
-    let (water_shape, water_placement, fluid_geometry_status) = match bob_result {
-        Some((Some((shape, placement)), _)) => (
+    let (water_candidate, had_bob_records) =
+        bob_fluid_acquisition_candidate(structure, &regions, water, bob_library, catalog);
+    let (water_shape, water_placement, fluid_geometry_status) = match (water_candidate, had_bob_records) {
+        (Some((shape, placement)), _) => (
             Some(shape),
             placement,
             FluidGeometryStatus::BobSuggestionAccepted,
         ),
-        Some((None, true)) => (
+        (None, true) => (
             None,
             regions
                 .iter()
                 .find_map(|region| placement_fits_resource(water, region, catalog))?,
             FluidGeometryStatus::CandidatesRejected,
         ),
-        _ => (
+        (None, false) => (
             None,
             regions
                 .iter()
@@ -951,13 +950,14 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
     }
 
     let (structure, _ledger, energy) = construct_scaffold(catalog)?;
-    let bob_library = crate::geometry_reference_library::open_default_library().ok();
+    let bob_library = crate::geometry_reference_library::open_default_library()
+        .map_err(|error| format!("failed to open persistent Bob geometry library: {error}"))?;
     let (acquired_resource_placements, acquired_resource_shapes, fluid_geometry_status) =
         valid_construction(
             &structure,
             catalog,
             &acquisition_candidates,
-            bob_library.as_ref(),
+            &bob_library,
         )
         .ok_or_else(|| {
             "deterministic construction scaffold did not satisfy viability".to_string()
