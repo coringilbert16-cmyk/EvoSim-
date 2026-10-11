@@ -543,9 +543,14 @@ fn form_remaining_multi_contact_bonds(
         let Some(shape) = unit.shape(catalog) else {
             return false;
         };
-        if resource(catalog, unit.material.parts.first()?.0.as_str())
-            .is_some_and(|item| item.physical_state == PhysicalState::Fluid)
-        {
+        let Some(material_name) = unit.material.parts.first().map(|part| part.0.as_str())
+        else {
+            return false;
+        };
+        let Some(material_resource) = resource(catalog, material_name) else {
+            return false;
+        };
+        if material_resource.physical_state == PhysicalState::Fluid {
             continue;
         }
         let rigid_part = crate::material_geometry::PlacedMaterialPart {
