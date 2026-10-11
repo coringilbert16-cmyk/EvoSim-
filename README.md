@@ -1360,3 +1360,15 @@ Scope correction from the user: fluid operations must support **multiple simulta
 - Keep the bounded two-constituent generation workflow as a diagnostic benchmark only. Once the multi-contact model is correct, extend generation by measured growth and topology, not by treating two pieces as a permanent maximum.
 
 **Gate:** do not describe fluid support as multi-connection-capable until the boundary representation, simultaneous constraint solver, runtime mapping, and live transaction tests all pass. This is now a prerequisite to claiming general multi-constituent fluid integration.
+
+### Multi-contact fluid geometry foundation — 2026-10-11
+
+Implemented in `src/geometry/capillary_geometry.rs`:
+- `FluidBoundaryPiece` represents either an exact straight solid-contact interval with a contact angle or an exact circular free arc.
+- `MultiContactFluidBoundary` stores an ordered piecewise boundary, checks closure and valid contact angles, and verifies signed enclosed area using Green's theorem without arc tessellation.
+- Rigid translation/rotation transforms every piece and revalidates closure and conserved area.
+- Focused tests cover the current one-arc-plus-one-contact case, four simultaneous contact intervals, gap rejection, area mismatch rejection, and rigid-transform preservation.
+
+**Scope limitation:** this is a geometry foundation only. It is not yet carried by `Form::Fluid`, persisted as a multi-contact Bob formation, or consumed by collision/contact/containment/restoration and live construction transactions. The boundary validator also does not yet prove global non-self-intersection or solve contact constraints from parent geometry. Do not claim the requested multi-connection fluid operations are complete until those integration and solver gates pass.
+
+The implementation must continue beyond the current two-constituent Bob benchmark. Multi-connection tests need to involve one connected fluid boundary contacting multiple non-collinear rigid surfaces, including three or more contacts, rather than merely several independent single-contact suggestions.
