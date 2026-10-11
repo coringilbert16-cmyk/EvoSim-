@@ -620,6 +620,49 @@ fn resource_area(resource: &BaseResource) -> Option<f64> {
     }
 }
 
+fn fluid_free_boundary_probe_points(shape: &Shape, placement: Placement) -> Vec<(f64, f64)> {
+    let local_points: Vec<(f64, f64)> = match &shape.form {
+        Form::Fluid {
+            multi_contact_boundary: Some(boundary),
+            ..
+        } => boundary
+            .pieces
+            .iter()
+            .filter_map(|piece| match piece {
+                crate::capillary_geometry::FluidBoundaryPiece::FreeArc(arc) => {
+                    let angle = arc.start_angle_radians + arc.sweep_radians * 0.5;
+                    Some((
+                        arc.center_x + arc.radius * angle.cos(),
+                        arc.center_y + arc.radius * angle.sin(),
+                    ))
+                }
+                crate::capillary_geometry::FluidBoundaryPiece::SolidContact { .. } => None,
+            })
+            .collect(),
+        Form::Fluid {
+            arc_boundary: Some(arc),
+            ..
+        } => {
+            let angle = arc.start_angle_radians + arc.sweep_radians * 0.5;
+            vec![(
+                arc.center_x + arc.radius * angle.cos(),
+                arc.center_y + arc.radius * angle.sin(),
+            )]
+        }
+        _ => Vec::new(),
+    };
+    let (sin, cos) = placement.rotation_radians.sin_cos();
+    local_points
+        .into_iter()
+        .map(|(x, y)| {
+            (
+                placement.x + x * cos - y * sin,
+                placement.y + x * sin + y * cos,
+            )
+        })
+        .collect()
+}
+
 fn fluid_segment_contains_world_point(shape: &Shape, placement: Placement, x: f64, y: f64) -> bool {
     let dx = x - placement.x;
     let dy = y - placement.y;
@@ -809,33 +852,20 @@ fn bob_fluid_acquisition_candidate(
                     };
                     let rigid_points =
                         rigid_part_world_points(&other_shape.form, other_unit.placement);
-                    let Form::Fluid {
-                        arc_boundary: Some(arc),
-                        ..
-                    } = &shape.form
-                    else {
+                    let free_boundary_probes =
+                        fluid_free_boundary_probe_points(&shape, placement);
+                    if free_boundary_probes.is_empty() {
                         valid = false;
                         break;
-                    };
-                    let midpoint_angle = arc.start_angle_radians + arc.sweep_radians * 0.5;
-                    let (fluid_sin, fluid_cos) = placement.rotation_radians.sin_cos();
-                    let arc_midpoint_local = (
-                        arc.center_x + arc.radius * midpoint_angle.cos(),
-                        arc.center_y + arc.radius * midpoint_angle.sin(),
-                    );
-                    let arc_midpoint_world = (
-                        placement.x + arc_midpoint_local.0 * fluid_cos
-                            - arc_midpoint_local.1 * fluid_sin,
-                        placement.y
-                            + arc_midpoint_local.0 * fluid_sin
-                            + arc_midpoint_local.1 * fluid_cos,
-                    );
-                    if rigid_form_contains_world_point(
-                        &other_shape.form,
-                        other_unit.placement,
-                        arc_midpoint_world.0,
-                        arc_midpoint_world.1,
-                    ) || fluid_segment_contains_world_point(
+                    }
+                    if free_boundary_probes.iter().any(|&(x, y)| {
+                        rigid_form_contains_world_point(
+                            &other_shape.form,
+                            other_unit.placement,
+                            x,
+                            y,
+                        )
+                    }) || fluid_segment_contains_world_point(
                         &shape,
                         placement,
                         other_unit.placement.x,
