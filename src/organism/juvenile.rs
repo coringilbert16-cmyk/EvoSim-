@@ -283,7 +283,6 @@ pub(crate) fn confirmed_seed_scale_reference(
     Ok((mass, length))
 }
 
-
 #[cfg(test)]
 mod seed_geometry_tests {
     use super::*;
@@ -313,8 +312,8 @@ mod seed_geometry_tests {
                 "ring edge {index}-{next} has center spacing {distance}, expected {expected_spacing}"
             );
 
-            let rotation_delta = (b.rotation_radians - a.rotation_radians)
-                .rem_euclid(std::f64::consts::TAU);
+            let rotation_delta =
+                (b.rotation_radians - a.rotation_radians).rem_euclid(std::f64::consts::TAU);
             assert!(
                 (rotation_delta - std::f64::consts::TAU / ring_sides as f64).abs() < 1e-9,
                 "ring rotations should advance by one sixth-turn"
