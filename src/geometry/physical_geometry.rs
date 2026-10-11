@@ -76,7 +76,7 @@ mod tests {
                 nominal_area: 1.0,
                 boundary: Some(vec![(-1.0, 0.0), (0.0, 1.0), (1.0, 0.0), (0.0, -1.0)]),
                 arc_boundary: None,
-                        multi_contact_boundary: None,
+                multi_contact_boundary: None,
 },
         };
         assert!(geometry.replace_fluid_realization(fitted.clone()));
@@ -94,7 +94,7 @@ mod tests {
                 nominal_area: 1.0,
                 boundary: Some(vec![(0.0, 0.0), (1.0, 0.0)]),
                 arc_boundary: None,
-                        multi_contact_boundary: None,
+                multi_contact_boundary: None,
 },
         }));
         assert_eq!(geometry.shape(), &default_shape);
