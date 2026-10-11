@@ -124,11 +124,11 @@ pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Opt
                     normal_y,
                 })
             } else {
-                boundary
-                    .as_ref()
-                    .and_then(|vertices| polygon_boundary_toward(vertices.as_slice(), target_x, target_y))
+                boundary.as_ref().and_then(|vertices| {
+                    polygon_boundary_toward(vertices.as_slice(), target_x, target_y)
+                })
             }
-        },
+        }
     }
 }
 #[allow(dead_code)]
@@ -227,8 +227,8 @@ mod tests {
             std::f64::consts::FRAC_PI_2,
         )
         .unwrap();
-        let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family)
-            .unwrap();
+        let arc =
+            crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
         let shape = Shape {
             form: Form::Fluid {
                 nominal_area: 0.5,
