@@ -468,5 +468,4 @@ mod tests {
         assert_eq!(structure.units[indices[0]].placement.x, 10.0);
         assert_eq!(structure.units[indices[0]].placement.y, 20.0);
     }
-
 }
