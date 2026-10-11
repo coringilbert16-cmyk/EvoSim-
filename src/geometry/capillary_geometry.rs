@@ -1059,13 +1059,13 @@ pub fn normalize_arc_parameter(angle: f64) -> Option<f64> {
     Some(angle.rem_euclid(TAU))
 }
 
-
 /// Solve one constant-curvature water boundary whose straight contact chord is
 /// split across multiple contiguous, collinear solid surfaces. This is one
 /// simultaneous capillary solution (one conserved area and one free arc), not
 /// a union of independently solved pairwise contacts. The caller supplies the
 /// ordered solid intervals in the target coordinate frame and must associate
 /// each returned SolidContact piece with its parent edge before persistence.
+#[allow(dead_code)] // Bob's canonical parent-edge adapter is the next integration step.
 pub fn solve_water_against_collinear_contacts(
     area: f64,
     contact_angle_radians: f64,
@@ -1784,6 +1784,4 @@ mod tests {
         ];
         assert!(solve_water_against_collinear_contacts(0.5, PI / 2.0, &short).is_none());
     }
-
-
 }
