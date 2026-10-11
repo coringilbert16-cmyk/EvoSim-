@@ -340,17 +340,19 @@ pub fn resolve_live_contact_candidate(
         }
         "fluid_boundary" => {
             let parsed = if sides[0].1.starts_with("fluid:") {
-                parse_edge_descriptor(sides[1].0, &sides[1].1)
-                    .map(|edge| (sides[0].0, edge))
+                parse_edge_descriptor(sides[1].0, &sides[1].1).map(|edge| (sides[0].0, edge))
             } else if sides[1].1.starts_with("fluid:") {
-                parse_edge_descriptor(sides[0].0, &sides[0].1)
-                    .map(|edge| (sides[1].0, edge))
+                parse_edge_descriptor(sides[0].0, &sides[0].1).map(|edge| (sides[1].0, edge))
             } else {
                 None
             };
             parsed.and_then(|(fluid_material, edge)| {
-                let fluid = catalog.iter().find(|resource| resource.name == fluid_material)?;
-                let solid = catalog.iter().find(|resource| resource.name == edge.material)?;
+                let fluid = catalog
+                    .iter()
+                    .find(|resource| resource.name == fluid_material)?;
+                let solid = catalog
+                    .iter()
+                    .find(|resource| resource.name == edge.material)?;
                 let area = match &fluid.shape.form {
                     Form::Circle { radius } => std::f64::consts::PI * radius * radius,
                     Form::Fluid { nominal_area, .. } => *nominal_area,
@@ -2269,16 +2271,13 @@ impl GeometryLibrary {
                     let anchor_material = self
                         .entries
                         .get(&family.formation_signature)
-                        .and_then(|formation| {
-                            formation.constituents.get(family.anchor_constituent)
-                        })
+                        .and_then(|formation| formation.constituents.get(family.anchor_constituent))
                         .map(|constituent| constituent.resource.as_str());
                     if family.fluid_resource.as_str() == fluid_material.as_str()
                         && anchor_material == Some(solid_material.as_str())
                         && family.anchor_edge == *solid_edge
                         && (family.area - area).abs() <= QUANTUM * area.max(1.0)
-                        && (family.contact_angle_radians - angle).abs()
-                    <= QUANTUM * angle.max(1.0)
+                        && (family.contact_angle_radians - angle).abs() <= QUANTUM * angle.max(1.0)
                         && parameter >= family.edge_parameter_start - QUANTUM
                         && parameter <= family.edge_parameter_end + QUANTUM
                     {
@@ -5577,19 +5576,22 @@ mod compact_family_storage_tests {
         let formation = GeometryFormation::single("Carbon");
         library.insert(formation.clone(), &catalog).unwrap();
 
-        let water = catalog.iter().find(|resource| resource.name == "Water").unwrap();
-        let carbon = catalog.iter().find(|resource| resource.name == "Carbon").unwrap();
+        let water = catalog
+            .iter()
+            .find(|resource| resource.name == "Water")
+            .unwrap();
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap();
         let area = match &water.shape.form {
             Form::Circle { radius } => std::f64::consts::PI * radius * radius,
             Form::Fluid { nominal_area, .. } => *nominal_area,
             _ => panic!("water must have a fluid-compatible shape"),
         };
-        let equilibrium = solve_water_against_solid(
-            area,
-            water.properties.cohesion,
-            carbon.properties.cohesion,
-        )
-        .unwrap();
+        let equilibrium =
+            solve_water_against_solid(area, water.properties.cohesion, carbon.properties.cohesion)
+                .unwrap();
         // Exercise Bob's real fluid-contact calculation rather than manually
         // fabricating a persistence row. The Water/Carbon capillary solution
         // must produce an exposed-edge family before it can be stored.
@@ -5605,7 +5607,10 @@ mod compact_family_storage_tests {
         );
         let families =
             generate_fluid_boundary_families_from_contact_families(water, &contact_families);
-        assert!(!families.is_empty(), "expected fluid-boundary records from solved contacts");
+        assert!(
+            !families.is_empty(),
+            "expected fluid-boundary records from solved contacts"
+        );
         assert_eq!(
             library.insert_contact_families(contact_families).unwrap(),
             families.len(),
@@ -5619,7 +5624,10 @@ mod compact_family_storage_tests {
             "each generated fluid boundary must be persisted once"
         );
         let fluid_formations = fluid_formations_from_boundaries(&families);
-        assert!(!fluid_formations.is_empty(), "expected explicit Water-inclusive formations");
+        assert!(
+            !fluid_formations.is_empty(),
+            "expected explicit Water-inclusive formations"
+        );
         let expected_fluid_formation_signatures: BTreeMap<_, _> = fluid_formations
             .iter()
             .map(|formation| (formation.signature(), formation.clone()))
@@ -5631,10 +5639,7 @@ mod compact_family_storage_tests {
             fluid_formations.len(),
             "each valid Water-inclusive formation must be persisted"
         );
-        assert_eq!(
-            library.fluid_formations().count(),
-            fluid_formations.len()
-        );
+        assert_eq!(library.fluid_formations().count(), fluid_formations.len());
         assert_eq!(
             library
                 .insert_fluid_formations(fluid_formations, &catalog)
@@ -5695,7 +5700,10 @@ mod compact_family_storage_tests {
             .fluid_formations()
             .map(|formation| (formation.signature(), formation.clone()))
             .collect();
-        assert_eq!(reopened_fluid_formations, expected_fluid_formation_signatures);
+        assert_eq!(
+            reopened_fluid_formations,
+            expected_fluid_formation_signatures
+        );
         assert!(reopened_fluid_formations.values().all(|formation| {
             formation.fluid_resource == "Water"
                 && formation.parent_formation_signature
