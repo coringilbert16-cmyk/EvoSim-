@@ -7,7 +7,7 @@
 
 use crate::capillary_geometry::{
     solve_water_against_solid, CapillaryContactFamily, CircularArcBoundary,
-    ContactTranslationInterval, MultiContactFluidBoundary,
+    ContactTranslationInterval, FluidBoundaryPiece, MultiContactFluidBoundary,
 };
 use crate::material_geometry::{
     placed_forms_penetrate, placed_forms_rigid_contact, PlacedMaterialPart,
