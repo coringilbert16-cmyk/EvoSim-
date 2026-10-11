@@ -1601,7 +1601,9 @@ mod tests {
             sweep_radians: PI / 2.0,
         };
         let separate = CircularArcBoundary {
-            center_x: 0.0, center_y: 0.0, radius: 2.0,
+            center_x: 0.0,
+            center_y: 0.0,
+            radius: 2.0,
             start_angle_radians: PI,
             sweep_radians: PI / 4.0,
         };
