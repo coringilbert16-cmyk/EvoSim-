@@ -9,16 +9,12 @@ This checkpoint supersedes older repository-status and CI summaries later in thi
 - GitHub default branch `main` is **not a runnable EvoSim checkout**. Its current head is `a30c14999a95f97a644f9927e8eb4546c57e285a`; its six tree entries contain only the chemistry-library data and `docs/bob-geometry-storage-audit.md`. It has no root `README.md`, `Cargo.toml`, `Cargo.lock`, Rust source, UI, or runner scripts.
 - The single integration target remains [PR #186](https://github.com/coringilbert16-cmyk/EvoSim-/pull/186), branch `integration/unified-source-and-catalogue`, head `8433a3185360f1eb1fe3f2b0a8cc2092a9bb7e32`. Its tree contains the Rust application, UI, scripts, README, audits, geometry-library implementation/documentation, and chemistry data.
 - The seven generated geometry data files were intentionally removed from both current branch trees. **Do not restore or commit generated geometry data as part of repository recovery.** The bounded two-piece generation run produced an artifact only; it did not repopulate the Git tree. The chemistry cache files remain tracked.
-- The integration branch and current `main` have diverged in commit ancestry (integration is 278 commits ahead and 7 behind the current main ref). The resulting tree already reflects the geometry-data deletion, but the ancestry difference must be reviewed before merge. Do not force-push, rewrite history, or merge PR #186 while the release gates below remain open.
+- The integration branch ancestry has now been reconciled with current `main` by merge commit `7041785ded5efb6d91b3fae1f663aada38a27324`: it is 281 commits ahead and 0 behind `main`. The merge commit preserved the integration tree while joining the seven geometry-data deletion commits; it did not restore generated data or change application files. Do not merge PR #186 into `main` while the remaining release gates below are open.
 - `Cargo.lock` is currently absent from the integration tree. Because this is an application crate, dependency resolution is not fully pinned. Add and verify a committed lockfile as part of the reproducible clean-checkout gate.
 
 ### Latest verified CI at the current integration head
 
-For commit `8433a3185360f1eb1fe3f2b0a8cc2092a9bb7e32`:
-
-- [Rust workflow run #38138063937](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38138063937): formatting, large-file policy, COMBINE architecture checks, Bob compact-storage tests, and the non-generative empty-library open/reopen test passed. Full test suite: **314 passed, 29 failed, 1 ignored**. Strict Clippy failed with 58 reported compilation/lint errors. This is an improvement over earlier recorded runs, but CI is not green.
-- [Runner validation run #38138063941](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38138063941) passed.
-- These are CI results for the recorded commit, not a fresh local build. Do not describe the project as stable or ready for a clean download yet.
+Latest completed source verification is [Rust workflow #38139483467](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38139483467) on the ancestry-reconciled tree: formatting, large-file policy, COMBINE architecture checks, Bob compact-storage tests, and the non-generative empty-library open/reopen test passed. Full test suite: **314 passed, 29 failed, 1 ignored**. Strict Clippy failed with 58 reported compilation/lint errors. [Runner validation #38139483250](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38139483250) passed. This is CI evidence, not a fresh local build; do not describe the project as stable or ready for a clean download yet.
 
 ### Repository-integrity gates before changing the default branch
 

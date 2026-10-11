@@ -5,19 +5,15 @@
 ## Current repository facts
 
 - Default branch `main` is at `a30c14999a95f97a644f9927e8eb4546c57e285a` and has only six tree entries: the chemistry-library JSONL and manifest, plus `docs/bob-geometry-storage-audit.md` and their directories. It is not a runnable application tree.
-- The single integration target is PR #186, branch `integration/unified-source-and-catalogue`, current audited head `8433a3185360f1eb1fe3f2b0a8cc2092a9bb7e32`. It contains 130 tree entries including Rust source, `Cargo.toml`, README, UI, runner scripts, documentation, Bob implementation, geometry-library README, and chemistry data.
+- The single integration target is PR #186, branch `integration/unified-source-and-catalogue`, source/lineage baseline `7041785ded5efb6d91b3fae1f663aada38a27324`. It contains 130 tree entries including Rust source, `Cargo.toml`, README, UI, runner scripts, documentation, Bob implementation, geometry-library README, and chemistry data.
 - No generated geometry data files are present in either current branch tree. Their deletion is intentional and must not be undone during repository recovery. The bounded two-piece worker output exists as a workflow artifact, not as committed library data.
-- The integration branch is 278 commits ahead and 7 commits behind the current `main` ref by GitHub's compare endpoint. Its tree reflects the geometry-data deletion, but its commit ancestry does not include the seven post-base main commits. Inspect the exact merge-base/ancestry before merge; do not force-push or rewrite history.
+- The ancestry difference has been reconciled by merge commit `7041785ded5efb6d91b3fae1f663aada38a27324`, which has integration and current `main` as parents and preserves the integration tree. The branch is now 281 commits ahead and 0 behind `main`. This joined the seven geometry-data deletion commits without restoring data or changing application source. Do not merge PR #186 into `main` until remaining release gates pass.
 - `Cargo.lock` is absent from the integration tree. Dependency resolution for the application is therefore not pinned. Generate and commit it using the Rust toolchain, then verify the lockfile from a clean checkout.
 - The PR description and some older audit statements still describe preserving the old generated geometry catalogue. That is inaccurate; update those statements before considering the PR mergeable from a documentation/integrity perspective.
 
 ## Latest CI evidence at the current integration head
 
-For `8433a3185360f1eb1fe3f2b0a8cc2092a9bb7e32`:
-
-- [Rust workflow #38138063937](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38138063937): formatting, source-size guard, COMBINE architecture guard, Bob compact-storage tests, and empty-library open/reopen test passed. The full suite reported **314 passed, 29 failed, 1 ignored**. Strict Clippy failed with 58 reported diagnostics/errors.
-- [Runner validation #38138063941](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38138063941) passed.
-- This is current CI evidence, not a fresh local build and not a green release gate.
+Latest completed source verification is [Rust workflow #38139483467](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38139483467): formatting, source-size guard, COMBINE architecture guard, Bob compact-storage tests, and empty-library open/reopen test passed. The full suite reported **314 passed, 29 failed, 1 ignored**. Strict Clippy failed with 58 reported diagnostics/errors. [Runner validation #38139483250](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38139483250) passed. This is current CI evidence, not a fresh local build and not a green release gate.
 
 ## Repository-integrity work order
 

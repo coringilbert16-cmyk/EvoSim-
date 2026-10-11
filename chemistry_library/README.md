@@ -16,4 +16,4 @@ Persistence rules:
 - Tests use isolated temporary stores.
 - Library data never becomes a second source of simulation rules.
 
-The concrete record/index layout will be added when the chemistry persistence boundary is wired; this establishes ownership without inventing storage schema prematurely.
+Current tracked seed/cache data: `data/chemistry.jsonl` and `data/manifest.json` contain 17 schema-3 interface records. The source loader uses schema 3 as current and retains an explicit schema-2 compatibility reader. The loader rejects unknown schemas, malformed or semantically invalid records, duplicate keys, and manifest-count mismatches. These rows are static interface-cache records, not a complete chemistry ruleset; live chemistry equations and transitions remain authoritative in `src/chemistry/`. Runtime hit/miss coverage and cache usefulness must be measured before adding more records.

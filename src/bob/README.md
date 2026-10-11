@@ -7,7 +7,7 @@ Bob stores reusable geometry knowledge for EvoSim. It is not live organism state
 - `src/bob/library.rs`: persistent formations, contact-family records, canonical identities, storage schemas, and indexed read paths.
 - `src/bob/worker.rs`: discovers formations and contact families, persists results, and reports generation metrics.
 - `src/bob/server.rs`: read-only geometry-library viewer.
-- `src/construction/initial_organism_constructor.rs`: the live initial-organism constructor. Its current scaffold-based implementation is **not yet the approved library-driven replacement**.
+- `src/construction/initial_organism_constructor.rs`: the active blueprint-free initial-organism path now queries Bob for advisory rigid-edge placement candidates, which still undergo live physical and COMBINE validation. The path remains transitional: Bob integration has begun, but the approved milestone-driven, free-form replacement and viable-organism acceptance gate are not yet complete.
 
 A library result is reusable knowledge or a candidate, not permission to mutate a live organism. Live placement must still obey authoritative geometry, contact, nonpenetration, chemistry, bonding, energy, and ledger rules.
 
@@ -15,7 +15,7 @@ A library result is reusable knowledge or a candidate, not permission to mutate 
 
 Set `EVOSIM_GEOMETRY_LIBRARY_DIR` to choose the persistent library root. If unset, Bob uses `geometry_library/data` relative to the process working directory. An explicit override must point to a valid library; Bob must not silently replace a missing explicitly configured library with a new empty one.
 
-Generated data is rebuildable only when the generation rules and required lookup coverage are preserved. Keep source definitions, generator code, schemas, validation rules, and the commands needed to regenerate it. Do not delete the only useful catalogue until a clean rebuild has demonstrated the coverage the live constructor needs.
+The previous generated geometry catalogue was intentionally removed from both current branch heads. Do not restore that obsolete data. Preserve the source definitions, generator code, schemas, validation rules, and regeneration commands. Generate replacement data only after constructor-facing query coverage and correctness gates are validated; generated output remains a workflow artifact or local runtime state unless explicitly approved for tracking.
 
 ## Storage behavior
 
@@ -35,7 +35,7 @@ Run these commands from the repository root after building the executable:
 .\target\release\evosim.exe --geometry-worker-once
 
 # Process at most N passes in one process
-.\target\revosim.exe --geometry-worker-passes 25
+.\target\release\evosim.exe --geometry-worker-passes 25
 
 # Run continuously; the worker idles when no unfinished work is found
 .\target\evosim.exe --geometry-worker
