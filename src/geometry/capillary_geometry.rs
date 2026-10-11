@@ -1097,7 +1097,10 @@ pub fn solve_water_against_collinear_contacts(
     let mut previous_end = None;
     let mut pieces = Vec::with_capacity(ordered_segments.len() + 1);
     for (start, end) in ordered_segments {
-        if ![start.0, start.1, end.0, end.1].into_iter().all(f64::is_finite) {
+        if ![start.0, start.1, end.0, end.1]
+            .into_iter()
+            .all(f64::is_finite)
+        {
             return None;
         }
         if let Some(previous) = previous_end {
@@ -1144,10 +1147,7 @@ pub fn solve_water_against_collinear_contacts(
     {
         return None;
     }
-    let midpoint = (
-        (first_x + last.0) * 0.5,
-        (first_y + last.1) * 0.5,
-    );
+    let midpoint = ((first_x + last.0) * 0.5, (first_y + last.1) * 0.5);
     let arc = CircularArcBoundary::from_flat_contact(family)?
         .transformed(midpoint.0, midpoint.1, direction)?;
     pieces.push(FluidBoundaryPiece::FreeArc(arc));
@@ -1725,9 +1725,18 @@ mod tests {
         assert_eq!(boundary.contact_count(), 3);
         assert_eq!(boundary.free_arc_count(), 1);
         assert!((boundary.nominal_area - area).abs() < 1e-12);
-        assert!((boundary.pieces.iter().try_fold(0.0, |sum, piece| {
-            piece.signed_area_contribution().map(|value| sum + value)
-        }).unwrap() - area).abs() < 1e-9);
+        assert!(
+            (boundary
+                .pieces
+                .iter()
+                .try_fold(0.0, |sum, piece| {
+                    piece.signed_area_contribution().map(|value| sum + value)
+                })
+                .unwrap()
+                - area)
+                .abs()
+                < 1e-9
+        );
     }
 
     #[test]
@@ -1738,9 +1747,7 @@ mod tests {
         let direction: f64 = 0.73;
         let (sin, cos) = direction.sin_cos();
         let origin = (3.25, -1.75);
-        let point = |distance: f64| {
-            (origin.0 + distance * cos, origin.1 + distance * sin)
-        };
+        let point = |distance: f64| (origin.0 + distance * cos, origin.1 + distance * sin);
         let third = family.contact_length / 3.0;
         let segments = [
             (point(0.0), point(third)),
@@ -1762,12 +1769,18 @@ mod tests {
         let family = CapillaryContactFamily::solve(0.5, PI / 2.0).unwrap();
         let segments = [
             ((0.0, 0.0), (family.contact_length * 0.4, 0.0)),
-            ((family.contact_length * 0.4 + 0.01, 0.0), (family.contact_length, 0.0)),
+            (
+                (family.contact_length * 0.4 + 0.01, 0.0),
+                (family.contact_length, 0.0),
+            ),
         ];
         assert!(solve_water_against_collinear_contacts(0.5, PI / 2.0, &segments).is_none());
         let short = [
             ((0.0, 0.0), (family.contact_length * 0.25, 0.0)),
-            ((family.contact_length * 0.25, 0.0), (family.contact_length * 0.5, 0.0)),
+            (
+                (family.contact_length * 0.25, 0.0),
+                (family.contact_length * 0.5, 0.0),
+            ),
         ];
         assert!(solve_water_against_collinear_contacts(0.5, PI / 2.0, &short).is_none());
     }
