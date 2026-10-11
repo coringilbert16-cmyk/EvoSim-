@@ -1020,7 +1020,7 @@ mod tests {
                 nominal_area: 4.0,
                 boundary: None,
                 arc_boundary: None,
-                multi_contact_boundary: Some(boundary),
+                multi_contact_boundary: Some(boundary.clone()),
             },
             0.0,
             0.0,
