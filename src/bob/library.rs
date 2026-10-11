@@ -6,8 +6,8 @@
 //! process restarts.
 
 use crate::capillary_geometry::{
-    solve_water_against_solid, CapillaryContactFamily, CircularArcBoundary,
-    ContactTranslationInterval, FluidBoundaryPiece, MultiContactFluidBoundary,
+    solve_water_against_collinear_contacts, solve_water_against_solid, CapillaryContactFamily,
+    CircularArcBoundary, ContactTranslationInterval, FluidBoundaryPiece, MultiContactFluidBoundary,
 };
 use crate::material_geometry::{
     placed_forms_penetrate, placed_forms_rigid_contact, PlacedMaterialPart,
@@ -991,6 +991,94 @@ fn multi_contact_boundary_matches_constraints(
     }
 
     matched_pieces.len() == boundary.contact_count()
+}
+
+/// Build one persisted Bob record from a simultaneous collinear capillary
+/// solution and the exact parent-edge constraints corresponding to its ordered
+/// contact pieces. Candidate edge selection remains the caller's job; this
+/// adapter verifies the entire solution before returning it.
+pub fn solve_collinear_multi_contact_formation(
+    parent: &GeometryFormation,
+    fluid_resource: &BaseResource,
+    constraints: Vec<GeometryFluidContactConstraint>,
+    ordered_segments: &[((f64, f64), (f64, f64))],
+    catalog: &[BaseResource],
+) -> Option<GeometryFluidFormation> {
+    if !validate_formation(parent, catalog)
+        || fluid_resource.name != "Water"
+        || fluid_resource.physical_state != crate::resources::PhysicalState::Fluid
+        || constraints.len() < 2
+        || constraints.len() != ordered_segments.len()
+    {
+        return None;
+    }
+    let area = match fluid_resource.shape.form {
+        Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+        Form::Fluid { nominal_area, .. } => nominal_area,
+        _ => return None,
+    };
+    let first_constraint = constraints.first()?;
+    let first_constituent = parent.constituents.get(first_constraint.constituent_index)?;
+    let first_solid = catalog
+        .iter()
+        .find(|resource| resource.name == first_constituent.resource)?;
+    if first_solid.physical_state == crate::resources::PhysicalState::Fluid {
+        return None;
+    }
+    let family = solve_water_against_solid(
+        area,
+        fluid_resource.properties.cohesion,
+        first_solid.properties.cohesion,
+    )?;
+    let mut distinct_constituents = std::collections::BTreeSet::new();
+    for constraint in &constraints {
+        let constituent = parent.constituents.get(constraint.constituent_index)?;
+        let solid = catalog
+            .iter()
+            .find(|resource| resource.name == constituent.resource)?;
+        if solid.physical_state == crate::resources::PhysicalState::Fluid {
+            return None;
+        }
+        let compatible = solve_water_against_solid(
+            area,
+            fluid_resource.properties.cohesion,
+            solid.properties.cohesion,
+        )?;
+        if (compatible.contact_angle_radians - family.contact_angle_radians).abs() > 1e-9 {
+            return None;
+        }
+        distinct_constituents.insert(constraint.constituent_index);
+    }
+    if distinct_constituents.len() < 2 {
+        return None;
+    }
+    let boundary =
+        solve_water_against_collinear_contacts(area, family.contact_angle_radians, ordered_segments)?;
+    if boundary.contact_count() != constraints.len()
+        || !multi_contact_boundary_matches_constraints(&boundary, parent, &constraints, catalog)
+    {
+        return None;
+    }
+    let anchor = first_constraint;
+    let formation = GeometryFluidFormation {
+        schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+        parent_formation_signature: parent.signature.clone(),
+        fluid_resource: fluid_resource.name.clone(),
+        anchor_constituent: anchor.constituent_index,
+        anchor_edge: anchor.edge_index,
+        area,
+        contact_angle_radians: family.contact_angle_radians,
+        curvature_radius: family.curvature_radius,
+        free_arc_angle_radians: family.free_arc_angle_radians,
+        contact_length: family.contact_length,
+        edge_parameter_start: anchor.edge_parameter_start,
+        edge_parameter_end: anchor.edge_parameter_end,
+        contact_constraints: constraints,
+        solved_boundary: Some(boundary),
+    };
+    formation
+        .realize_against_parent(parent, catalog, true)
+        .map(|_| formation)
 }
 
 pub fn fluid_formations_from_boundaries(
