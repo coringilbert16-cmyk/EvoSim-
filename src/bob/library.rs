@@ -1239,7 +1239,9 @@ pub fn generate_collinear_multi_contact_formations(
                 {
                     break;
                 }
-                if distinct_constituents.len() < 2 {
+                if distinct_constituents.len() < 2
+                    || distinct_constituents.len() != chosen.len()
+                {
                     continue;
                 }
                 let Some(first_resource) = catalog
