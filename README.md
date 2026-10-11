@@ -1582,3 +1582,8 @@ Exact fluid endpoint resolution now rejects coordinates farther than geometry to
 ### Multi-contact catalogue instrumentation — 2026-10-11
 
 The Bob worker now reports multi-contact fluid formations separately from legacy fluid formations: generated candidates, persisted additions, and the difference (not inserted, including duplicates/rejections). Both per-frontier output and the bounded run-to-completion summary include these counters. This permits measuring whether exposed-edge clipping is producing useful persistent families before any broader catalogue run. The worker change is compile/test gated; do not start a large generation pass until exact-head Rust verification is available.
+
+
+### Single-write multi-contact metrics — 2026-10-11
+
+The worker's separate multi-contact counters initially required two calls to the fluid-formation persistence API, which would cause two durable file syncs per Water frontier. Replaced that with `insert_fluid_formations_with_multi_contact_counts`: legacy and multi-contact records are validated/deduplicated together, written once, and the method returns total additions plus multi-contact additions. The existing insertion API remains as a compatibility wrapper. The persistence regression now asserts the `(total_added, multi_contact_added)` pair is `(1, 1)` for the multi-contact record.
