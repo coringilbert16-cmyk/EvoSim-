@@ -1515,22 +1515,6 @@ The implementation gate remains unchanged: current worker generation still creat
 These results establish that the current boundary representation and runtime consumers are exercised by the suite. They do **not** establish a simultaneous Bob solver or a successful multi-bond growth transaction. The next implementation gate remains a solver-generated boundary constrained against one canonical rigid parent, with every contact and the conserved area validated as one whole boundary. Do not combine pairwise solutions, weaken contact checks, or start broad catalogue generation before that gate exists.
 
 
-### First simultaneous capillary solver primitive — 2026-10-11
-
-Added `solve_water_against_collinear_contacts` in `src/geometry/capillary_geometry.rs`. It solves one conserved-area Young–Laplace family and constructs one ordered boundary containing a single free circular arc plus two or more contiguous solid-contact pieces. It rejects gaps, reversed/out-of-order intervals, off-line segments, degenerate edges, and contact runs whose combined length does not match the analytic contact length. Focused tests cover three contact pieces, exact area, translated/rotated coordinates, and invalid contact runs.
-
-**Scope is intentionally narrow:** this proves a simultaneous multi-piece contact chord can be constructed without combining pairwise capillary solutions. It is not yet wired to Bob's canonical parent-edge enumeration, does not yet produce persisted `GeometryFluidFormation` records, and does not solve non-collinear contacts. It therefore does not satisfy the multi-connection construction gate. Next sprint: enumerate exposed collinear edge intervals across distinct parent constituents, map each boundary piece to its exact parent edge/constraint, persist/reload the resulting record, and connect only after whole-boundary plus live transaction validation. Non-collinear simultaneous equilibrium remains a separate solver expansion; do not approximate it with pairwise solutions.
-
-The code commits for this primitive and its rotated-coordinate regression are `6c7ba70f` and `783cb02b`. Exact-head Rust and Runner Validation workflows for `783cb02b` were in progress at the time of this note; no result is claimed yet.
-
-
-### Bob adapter for simultaneous collinear contacts — 2026-10-11
-
-The collinear capillary primitive now has a Bob adapter, `solve_collinear_multi_contact_formation`, that takes a canonical rigid parent plus ordered contact segments and their edge constraints, checks that all contacted materials yield the same equilibrium contact angle, validates every segment against its referenced parent edge, and returns a complete `GeometryFluidFormation` with the solved boundary and constraints. A positive test now constructs a parent made from three bonded collinear rigid surfaces, asks the solver/adapter for one Water boundary, validates the resulting record, persists it through `GeometryLibrary`, reopens the library, and compares the restored record signature.
-
-This is still a **bounded first case**: caller-supplied collinear contact segments only. Bob does not yet enumerate those segments automatically from every canonical parent, and non-collinear simultaneous equilibrium is not solved. The test and adapter have been committed, but exact-head Rust verification is pending; do not call the positive persistence regression green until CI confirms it.
-
-
 ### Automatic exposed-edge discovery for collinear multi-contact Water — 2026-10-11
 
 Added `generate_collinear_multi_contact_formations` to enumerate rigid boundary intervals exposed by a canonical parent, group intervals on the same line, order contiguous intervals, require at least two distinct parent constituents, check compatible equilibrium contact angles, and send complete candidate runs through the whole-boundary solver and Bob record validator. The persistence regression now also asserts that this automatic discovery path finds the three-surface test arrangement without caller-supplied segments.
@@ -1540,33 +1524,33 @@ Added `generate_collinear_multi_contact_formations` to enumerate rigid boundary 
 
 ### Bob worker integration for bounded multi-contact discovery — 2026-10-11
 
-The Bob worker's Water frontier now runs `generate_collinear_multi_contact_formations` alongside the existing single-anchor fluid-family path and submits both record types through the same persistent fluid-formation insertion/validation path. The automatic generator is now exercised by the three-surface regression, rather than existing only as an unused helper.
+The Bob worker's Water frontier runs `generate_collinear_multi_contact_formations` alongside the existing single-anchor fluid-family path. It uses clipped exposed intervals, routes legacy and multi-contact records through one validated durable write, and reports multi-contact candidates, additions, and non-inserted counts separately. Collinear line-family deduplication avoids repeating equivalent candidate-window searches.
 
-Exact-head Rust verification for the worker integration is in progress. This remains a bounded first implementation: only complete exposed collinear intervals are considered, and the selected intervals must exactly sum to the solved chord length. Before allowing broad catalogue runs, confirm the new regression and worker build pass, then add first/last interval clipping, metrics for multi-contact outcomes, and a runtime lookup/atomic-commit regression. No claim of live construction support is made yet.
+The three-target live transaction and clipped persistence regressions passed at checkpoint `f11d63a4`. Broad catalogue generation remains gated on the exact-head Rust run for the newest endpoint guard, rollback test, and worker metrics. Non-collinear simultaneous equilibrium remains unsupported; do not approximate it by merging pairwise solutions.
 
 
 ### Runtime eligibility for multi-contact suggestions — 2026-10-11
 
 Updated `bob_fluid_origins_for_live_parent`: legacy fluid records remain keyed to their single anchor, while a record with simultaneous contact constraints can now be considered when construction is initiated from any constrained constituent in the canonical live parent. This removes the previous lookup bottleneck where a valid multi-contact record could only be proposed from its first anchor.
 
-This change only fixes suggestion eligibility. The runtime transaction still currently forms the selected bond through its normal single-neighbor path; it does **not yet atomically establish all bonds implied by a multi-contact boundary**. Do not count this as end-to-end multi-connection support. Next implementation must stage every intended fluid-to-rigid bond on a cloned trial structure, validate compatibility/energy for all, and publish the trial only if the entire set succeeds; otherwise discard the trial with no partial bonds.
+This lookup change is now paired with the atomic multi-contact bond staging and exact-point endpoint handling documented below. The bounded three-target transaction regression passed at checkpoint `f11d63a4`; newest endpoint hardening and worker instrumentation remain pending exact-head verification.
 
 
 ### Atomic multi-contact bond staging — 2026-10-11
 
 Added `form_remaining_multi_contact_bonds` to the live construction transaction. For a realized multi-contact fluid shape it discovers the rigid units physically touched by the solved boundary, requires the number of distinct rigid targets to match the boundary's solid-contact piece count, then stages the remaining bonds on the already-isolated trial structure. Each target must have a compatible available connection pair within the normal contact tolerance, and each bond must pass the normal energy/compatibility path. Any missing target or failed bond rejects the candidate; the caller discards the trial clone, so no partial set is committed. The Bob enumerator now also rejects candidate runs with more than one contact piece for the same constituent, matching this first transaction contract.
 
-**Verification pending:** the exact-head Rust workflow has not yet confirmed this path. The helper currently supports the bounded catalogue shape—one solid-contact piece per distinct rigid unit—and fails closed if the live contact set differs. A dedicated transaction regression must still prove that three or more rigid targets bond successfully together and that failure on a later target leaves the original structure and ledger unchanged. Do not treat this as green until those tests pass.
+**Verified at checkpoint `f11d63a4`:** the three-target regression passes, and the incomplete-target trial fails closed without mutating the original structure or energy. The implementation supports the bounded catalogue shape—one solid-contact piece per distinct rigid unit—and rejects a live contact set that differs. The full suite still has the documented baseline failure backlog; newest strict endpoint guard and worker counter changes remain under verification.
 
 
 ### Multi-contact persistence regression correction — 2026-10-11
 
-The first full Rust test run exercised the new positive persistence regression and found a genuine signature instability: raw JSON serialization of boundary floats differed by one ULP after reload, so the restored record's signature did not match the inserted record. Replaced raw serialized-boundary signature material with a deterministic quantized signature over every SolidContact and FreeArc field. This preserves geometry-level identity at the library's existing quantization resolution while making persistence/reload stable. The corrected regression and the new live three-target atomic-bond test still require exact-head verification.
+The first full Rust test run exercised the new positive persistence regression and found a genuine signature instability: raw JSON serialization of boundary floats differed by one ULP after reload, so the restored record's signature did not match the inserted record. Replaced raw serialized-boundary signature material with a deterministic quantized signature over every SolidContact and FreeArc field. This preserves geometry-level identity at the library's existing quantization resolution while making persistence/reload stable. The corrected persistence regression passed at checkpoint `f11d63a4`, including automatic clipped discovery and a reload-stable signature.
 
 
 ### Exact multi-contact connection endpoints — 2026-10-11
 
-The live three-target regression exposed a second real integration gap: ordinary fluid endpoint discovery projected target points radially from the fluid unit origin, so a line endpoint lying in the middle of a SolidContact interval could be represented by the wrong boundary point. Added exact-point resolution for `ConnectionEndpoint::Fluid` when the shape carries a `MultiContactFluidBoundary`, plus candidate generation from rigid endpoints lying on SolidContact pieces and verified surface points for circles/polygon edges. The atomic bond helper now tries alternate valid contact candidates before rejecting a target. A focused surface-geometry test verifies exact point and outward-normal preservation; exact-head runtime verification is pending.
+The live three-target regression exposed a second real integration gap: ordinary fluid endpoint discovery projected target points radially from the fluid unit origin, so a line endpoint lying in the middle of a SolidContact interval could be represented by the wrong boundary point. Added exact-point resolution for `ConnectionEndpoint::Fluid` when the shape carries a `MultiContactFluidBoundary`, plus candidate generation from rigid endpoints lying on SolidContact pieces and verified surface points for circles/polygon edges. The atomic bond helper now tries alternate valid contact candidates before rejecting a target. A focused surface-geometry test verifies exact point and outward-normal preservation and passed at checkpoint `f11d63a4`. The newer strict off-boundary rejection guard is still pending exact-head verification.
 
 
 ### Multi-contact positive gates passed at checkpoint — 2026-10-11
