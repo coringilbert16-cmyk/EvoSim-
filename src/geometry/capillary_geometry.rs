@@ -1,5 +1,4 @@
 //! Capillary equilibrium geometry for deformable fluids.
-#![expect(dead_code, reason = "Exact circular-arc boundary API staged for physical geometry integration")]
 //!
 //! This module uses the zero-gravity Young–Laplace model rather than sampling
 //! placements of a circular fluid primitive. In 2-D, a constant-pressure,
@@ -27,6 +26,7 @@ const EPS: f64 = 1e-12;
 /// in radians, and the sweep follows the positive angular direction from the
 /// start angle. This type is deliberately separate from the legacy polygon
 /// boundary so consumers cannot accidentally mistake an arc for sampled edges.
+#[allow(dead_code)] // Staged until exact arc queries are wired into physical geometry.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct CircularArcBoundary {
     pub center_x: f64,
@@ -36,6 +36,7 @@ pub struct CircularArcBoundary {
     pub sweep_radians: f64,
 }
 
+#[allow(dead_code)] // Keep the exact primitive available to the integration sprint.
 impl CircularArcBoundary {
     /// Validate the descriptor and its finite, non-degenerate circular segment.
     pub fn is_valid(&self) -> bool {
