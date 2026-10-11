@@ -410,13 +410,11 @@ mod tests {
         let metrics = process_one_frontier(&mut library, &catalog, 2)
             .unwrap()
             .expect("the two-constituent parent should have an unfinished frontier");
-        assert!(
-            library.fluid_formations().any(|formation| {
-                formation.parent_formation_signature == signature
-                    && formation.fluid_resource == "Water"
-            }),
-            "the parent at the rigid-constituent limit must still receive fluid formations; metrics={metrics:?}"
-        );
+        assert!(metrics.fluid_formations > 0);
+        assert!(library.fluid_formations().any(|formation| {
+            formation.parent_formation_signature == signature
+                && formation.fluid_resource == "Water"
+        }), "the parent at the rigid-constituent limit must still receive fluid formations");
         drop(library);
         let _ = std::fs::remove_dir_all(root);
     }
