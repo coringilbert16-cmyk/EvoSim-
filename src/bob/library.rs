@@ -5370,4 +5370,77 @@ mod compact_family_storage_tests {
         drop(reopened);
         let _ = std::fs::remove_dir_all(root);
     }
+
+    #[test]
+    fn fluid_boundary_interface_resolves_persisted_family_after_reopen() {
+        let catalog = default_catalog();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-fluid-query-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let formation = GeometryFormation::single("Carbon");
+        library.insert(formation.clone(), &catalog).unwrap();
+
+        let water = catalog.iter().find(|resource| resource.name == "Water").unwrap();
+        let carbon = catalog.iter().find(|resource| resource.name == "Carbon").unwrap();
+        let area = match &water.shape.form {
+            Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+            Form::Fluid { nominal_area, .. } => *nominal_area,
+            _ => panic!("water must have a fluid-compatible shape"),
+        };
+        let equilibrium = solve_water_against_solid(
+            area,
+            water.properties.cohesion,
+            carbon.properties.cohesion,
+        )
+        .unwrap();
+        let family = GeometryFluidBoundaryFamily {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            formation_signature: formation.signature,
+            fluid_resource: "Water".to_string(),
+            anchor_constituent: 0,
+            anchor_edge: 0,
+            area,
+            contact_angle_radians: equilibrium.contact_angle_radians,
+            curvature_radius: equilibrium.curvature_radius,
+            free_arc_angle_radians: equilibrium.free_arc_angle_radians,
+            contact_length: equilibrium.contact_length,
+            edge_parameter_start: 0.0,
+            edge_parameter_end: 1.0,
+        };
+        assert_eq!(
+            library
+                .insert_fluid_boundary_families(vec![family.clone()])
+                .unwrap(),
+            1
+        );
+
+        let interface = LiveGeometryInterface {
+            interface_class: "fluid_boundary",
+            signature: "test-fluid-boundary".to_string(),
+            query: Some(LiveGeometryQuery::FluidBoundary {
+                fluid_material: "Water".to_string(),
+                solid_material: "Carbon".to_string(),
+                solid_edge: 0,
+                edge_parameter: quantize(0.5),
+                fluid_area: quantize(area),
+                contact_angle: quantize(equilibrium.contact_angle_radians),
+            }),
+        };
+        assert_eq!(
+            library.resolve_persistent_interface(&interface),
+            LiveFamilyResolution::Unique
+        );
+        drop(library);
+
+        let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
+        assert_eq!(
+            reopened.resolve_persistent_interface(&interface),
+            LiveFamilyResolution::Unique
+        );
+        drop(reopened);
+        let _ = std::fs::remove_dir_all(root);
+    }
 }
