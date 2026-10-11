@@ -63,7 +63,7 @@ Run these commands from the repository root after building the executable:
 
 The `--geometry-worker-passes N` value must be positive. A one-pass run or a successful persistence/reopen check validates only that narrow behavior; it does not establish full catalogue completion or constructor viability.
 
-The worker enforces `MAX_LIBRARY_CONSTITUENTS = 20`: formations below the limit may be expanded, and formations at the limit may still contribute local contact-family knowledge but are not expanded into 21-constituent formations. This is a bounded-library policy, not a guarantee of small storage or quick completion. Combinatorial growth below the limit remains a known risk and must be measured.
+The worker enforces `MAX_LIBRARY_CONSTITUENTS = 20`: rigid formations below the limit may be expanded, and formations at the limit may still contribute local contact-family knowledge but are not expanded into 21-constituent formations. Fluid-inclusive records are emitted only when adding their fluid constituent keeps the total within the same limit. This is a bounded-library policy, not a guarantee of small storage or quick completion. Combinatorial growth below the limit remains a known risk and must be measured.
 
 ## Constructor integration contract
 
