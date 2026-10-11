@@ -378,8 +378,7 @@ pub(crate) fn try_start_environmental_break(
     let candidates = environment
         .field
         .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
-    let selected = if candidates.contains(&cell_index)
-    {
+    let selected = if candidates.contains(&cell_index) {
         let cell = environment.field.cells.get(cell_index)?;
         let mut selected = None;
         for (material_index, instance) in cell.physical_materials.iter().enumerate() {
