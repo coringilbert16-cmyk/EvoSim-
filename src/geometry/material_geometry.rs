@@ -110,7 +110,9 @@ pub fn placed_forms_overlap(
         }
         (Form::Line { .. }, polygon) => line_polygon_overlap(a, b, polygon, tolerance),
         (polygon, Form::Line { .. }) => line_polygon_overlap(b, a, polygon, tolerance),
-        (Form::Fluid { .. }, _) | (_, Form::Fluid { .. }) => false,
+        (multi_contact_boundary: None,
+Form::Fluid { .. }, _) | (_, multi_contact_boundary: None,
+Form::Fluid { .. }) => false,
         _ => polygons_overlap(a, b, tolerance),
     }
 }
@@ -121,12 +123,14 @@ fn exact_fluid_arc_touches_part(
 ) -> bool {
     let Form::Fluid {
         arc_boundary: Some(local_arc),
+        multi_contact_boundary: None,
         ..
     } = &fluid.form
     else {
         return false;
     };
-    if matches!(other.form, Form::Fluid { .. }) {
+    if matches!(other.form, multi_contact_boundary: None,
+Form::Fluid { .. }) {
         return false;
     }
     let Some(arc) = local_arc.transformed(
@@ -202,6 +206,7 @@ pub fn placed_forms_boundary_contact(
     fn fluid_boundary_part(part: &PlacedMaterialPart) -> Option<PlacedMaterialPart> {
         let Form::Fluid {
             boundary: Some(vertices),
+            multi_contact_boundary: None,
             ..
         } = &part.form
         else {
@@ -250,6 +255,7 @@ pub fn placed_forms_rigid_contact(
         Form::Fluid {
             boundary: None,
             arc_boundary: None,
+            multi_contact_boundary: None,
             ..
         }
     ) || matches!(
@@ -257,6 +263,7 @@ pub fn placed_forms_rigid_contact(
         Form::Fluid {
             boundary: None,
             arc_boundary: None,
+            multi_contact_boundary: None,
             ..
         }
     ) {
@@ -268,13 +275,16 @@ pub fn placed_forms_rigid_contact(
         return true;
     }
 
-    if !matches!(a.form, Form::Fluid { .. }) && !matches!(b.form, Form::Fluid { .. }) {
+    if !matches!(a.form, multi_contact_boundary: None,
+Form::Fluid { .. }) && !matches!(b.form, multi_contact_boundary: None,
+Form::Fluid { .. }) {
         return placed_forms_overlap(a, b, tolerance) && !placed_forms_penetrate(a, b, tolerance);
     }
 
     fn fluid_boundary_part(part: &PlacedMaterialPart) -> Option<PlacedMaterialPart> {
         let Form::Fluid {
             boundary: Some(vertices),
+            multi_contact_boundary: None,
             ..
         } = &part.form
         else {
@@ -289,7 +299,8 @@ pub fn placed_forms_rigid_contact(
         })
     }
 
-    let boundary = if matches!(a.form, Form::Fluid { .. }) {
+    let boundary = if matches!(a.form, multi_contact_boundary: None,
+Form::Fluid { .. }) {
         fluid_boundary_part(a)
     } else {
         fluid_boundary_part(b)
@@ -297,7 +308,8 @@ pub fn placed_forms_rigid_contact(
     let Some(boundary) = boundary else {
         return false;
     };
-    let other = if matches!(a.form, Form::Fluid { .. }) {
+    let other = if matches!(a.form, multi_contact_boundary: None,
+Form::Fluid { .. }) {
         b
     } else {
         a
@@ -343,7 +355,9 @@ pub fn placed_forms_penetrate(
             circle_polygon_penetration(b, *radius, a, polygon, tolerance)
         }
         (Form::Line { .. }, _) | (_, Form::Line { .. }) => false,
-        (Form::Fluid { .. }, _) | (_, Form::Fluid { .. }) => false,
+        (multi_contact_boundary: None,
+Form::Fluid { .. }, _) | (_, multi_contact_boundary: None,
+Form::Fluid { .. }) => false,
         _ => polygons_penetrate(a, b, tolerance),
     }
 }
@@ -795,7 +809,8 @@ mod tests {
                 nominal_area: 0.5,
                 boundary: None,
                 arc_boundary: Some(arc),
-            },
+                multi_contact_boundary: None,
+},
             0.0,
             0.0,
             0.0,
@@ -820,7 +835,8 @@ mod tests {
                 nominal_area: 0.5,
                 boundary: None,
                 arc_boundary: Some(arc),
-            },
+                multi_contact_boundary: None,
+},
             2.0,
             3.0,
             std::f64::consts::FRAC_PI_2,
@@ -841,7 +857,8 @@ mod tests {
                 nominal_area: 100.0,
                 boundary: None,
                 arc_boundary: None,
-            },
+                multi_contact_boundary: None,
+},
             0.0,
             0.0,
             0.0,
