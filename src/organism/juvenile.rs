@@ -304,7 +304,11 @@ mod seed_geometry_tests {
 
         let spiral_start = ring_sides;
         for step in 1..=20 {
-            let previous = if step == 1 { 0 } else { spiral_start + step - 2 };
+            let previous = if step == 1 {
+                0
+            } else {
+                spiral_start + step - 2
+            };
             let current = spiral_start + step - 1;
             let a = blueprint.elements[previous].placement;
             let b = blueprint.elements[current].placement;
