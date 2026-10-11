@@ -3451,12 +3451,43 @@ fn fluid_formation_is_valid(
         || formation.anchor_constituent >= parent.constituents.len()
         || !formation.area.is_finite()
         || formation.area <= 0.0
-        // The current single-arc solver cannot validate simultaneous contacts.
-        // Reject constrained records instead of persisting a misleading partial solve.
-        || !formation.contact_constraints.is_empty()
     {
         return false;
     }
+
+    if !formation.contact_constraints.is_empty() || formation.solved_boundary.is_some() {
+        let Some(boundary) = formation.solved_boundary.as_ref() else {
+            return false;
+        };
+        if formation.contact_constraints.len() < 2
+            || boundary.contact_count() != formation.contact_constraints.len()
+            || !boundary.is_valid()
+            || (boundary.nominal_area - formation.area).abs() > 1e-9 * formation.area.max(1.0)
+            || formation.contact_constraints.iter().any(|constraint| {
+                let Some(constituent) = parent.constituents.get(constraint.constituent_index) else {
+                    return true;
+                };
+                let Some(resource) = catalog.iter().find(|item| item.name == constituent.resource) else {
+                    return true;
+                };
+                resource.physical_state == crate::resources::PhysicalState::Fluid
+                    || constraint.edge_index >= rigid_boundary_segments(&resource.shape.form).len()
+                    || !constraint.contact_length.is_finite()
+                    || constraint.contact_length <= 0.0
+                    || !constraint.edge_parameter_start.is_finite()
+                    || !constraint.edge_parameter_end.is_finite()
+                    || constraint.edge_parameter_start < 0.0
+                    || constraint.edge_parameter_end > 1.0
+                    || constraint.edge_parameter_end <= constraint.edge_parameter_start
+            })
+        {
+            return false;
+        }
+        return formation
+            .realize_against_parent(parent, catalog, true)
+            .is_some();
+    }
+
     let Some(anchor) = catalog.iter().find(|resource| {
         resource.name == parent.constituents[formation.anchor_constituent].resource
     }) else {
