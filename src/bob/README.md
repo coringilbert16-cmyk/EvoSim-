@@ -29,9 +29,9 @@ The previous generated geometry catalogue was intentionally removed from both cu
 
 ### Water-inclusive formation coverage — current gap
 
-**Important distinction:** the current worker records capillary contact families and `GeometryFluidBoundaryFamily` rows associated with an existing rigid formation. It does **not** yet store Water as a constituent in a `GeometryFormation`. Do not report this as complete water-inclusive formation generation.
+**Implementation status — first pass added, verification pending:** the worker now derives `GeometryFluidFormation` records from solved fluid-boundary families and persists them in `fluid_formations.jsonl`. These are explicit fluid-inclusive arrangement records, separate from rigid `GeometryFormation` rows because a fluid constituent is defined by conserved area and a solved boundary, not a fixed rigid pose. Each record retains its rigid parent, fluid resource, anchor interface, area, contact angle, curvature radius, free-arc angle, contact length, and contact interval. Canonical signatures deduplicate equivalent records, and the worker reports generated versus newly inserted fluid formations.
 
-The next implementation step is a first-class, persistent fluid-inclusive formation representation that links (a) its rigid parent formation, (b) the Water constituent and conserved area, and (c) the solved fluid/solid interface geometry. The record must preserve the capillary solution (contact angle, curvature radius, free-arc angle, contact interval) rather than treating Water's default circle as an undeformed rigid shape. Its identity must be deterministic, deduplicated, and independent of incidental worker ordering.
+This is an initial sidecar representation, **not yet proof of complete fluid geometry coverage or constructor readiness**. Its tests and exact-head CI must pass before the library is regenerated broadly.
 
 The generator must produce records only where the fluid solution and available exposed boundary are valid; it must report unsupported boundary classes explicitly rather than silently implying full coverage. Water–Water accumulation is not a two-constituent rigid formation and must remain excluded. Runtime construction still validates the actual live fluid shape and whole-structure interactions; Bob records reusable knowledge and does not authorize a physical mutation.
 
