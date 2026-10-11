@@ -5439,7 +5439,8 @@ mod bob_lookup_contract_tests {
                 GeometryConstituent {
                     resource: "Carbon".to_string(),
                     placement: Placement {
-                        x: 3.0,
+                        // Two radius-1 Carbon hexagons meet at their tips.
+                        x: 2.0,
                         y: 0.0,
                         rotation_radians: 0.0,
                     },
