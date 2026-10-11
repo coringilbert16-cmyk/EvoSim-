@@ -1,6 +1,7 @@
 use crate::geometry_reference_library::{
     expand_formation_candidates, fluid_formations_from_boundaries,
-    generate_fluid_boundary_families_from_contact_families, generate_rigid_contact_families,
+    generate_collinear_multi_contact_formations, generate_fluid_boundary_families_from_contact_families,
+    generate_rigid_contact_families,
     generate_rigid_point_contact_families, generate_rigid_vertex_contact_families,
     generate_water_contact_families_with_diagnostics, open_default_library, seed_base_catalogue,
     GeometryFrontierState, GeometryLibrary,
@@ -325,8 +326,12 @@ fn process_one_frontier(
                 // additional deformable fluid body. Generate fluid records for
                 // every eligible parent at or below the limit, including parents
                 // exactly at max_constituents.
-                let fluid_formations = fluid_formations_from_boundaries(&boundary_states);
-                metrics.fluid_formations += fluid_formations.len();
+                let mut fluid_formations = fluid_formations_from_boundaries(&boundary_states);
+                let multi_contact_formations =
+                    generate_collinear_multi_contact_formations(&formation, resource, catalog);
+                metrics.fluid_formations +=
+                    fluid_formations.len() + multi_contact_formations.len();
+                fluid_formations.extend(multi_contact_formations);
                 metrics.water_families_added += library.insert_contact_families(families)?;
                 metrics.fluid_boundary_families_added +=
                     library.insert_fluid_boundary_families(boundary_states)?;
