@@ -502,6 +502,131 @@ fn bob_fluid_origins_for_live_parent(
     out
 }
 
+/// Complete every rigid connection represented by a multi-contact fluid
+/// boundary on the isolated trial structure. Any missing/invalid bond rejects
+/// the whole candidate; the caller discards this clone, so no partial set leaks.
+fn form_remaining_multi_contact_bonds(
+    structure: &mut OrganismStructure,
+    fluid_unit_index: usize,
+    first_target_index: usize,
+    catalog: &[BaseResource],
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> bool {
+    let Some(fluid_unit) = structure.units.get(fluid_unit_index) else {
+        return false;
+    };
+    let Some(fluid_shape) = fluid_unit.shape(catalog) else {
+        return false;
+    };
+    let Form::Fluid {
+        multi_contact_boundary: Some(boundary),
+        ..
+    } = &fluid_shape.form
+    else {
+        return true;
+    };
+    let expected_contacts = boundary.contact_count();
+    if expected_contacts < 2 {
+        return false;
+    }
+    let fluid_part = crate::material_geometry::PlacedMaterialPart {
+        part_index: fluid_unit_index,
+        form: fluid_shape.form.clone(),
+        placement: fluid_unit.placement,
+    };
+    let mut targets = Vec::new();
+    for (unit_index, unit) in structure.units.iter().enumerate() {
+        if unit_index == fluid_unit_index {
+            continue;
+        }
+        let Some(shape) = unit.shape(catalog) else {
+            return false;
+        };
+        if resource(catalog, unit.material.parts.first()?.0.as_str())
+            .is_some_and(|item| item.physical_state == PhysicalState::Fluid)
+        {
+            continue;
+        }
+        let rigid_part = crate::material_geometry::PlacedMaterialPart {
+            part_index: unit_index,
+            form: shape.form.clone(),
+            placement: unit.placement,
+        };
+        if crate::material_geometry::placed_forms_boundary_contact(
+            &fluid_part,
+            &rigid_part,
+            crate::combine_runtime::COMBINE_CONTACT_TOLERANCE,
+        ) {
+            targets.push(unit_index);
+        }
+    }
+    targets.sort_unstable();
+    targets.dedup();
+    if targets.len() != expected_contacts || !targets.contains(&first_target_index) {
+        return false;
+    }
+
+    for target_index in targets {
+        if target_index == first_target_index {
+            continue;
+        }
+        let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
+        let Some(candidate) = crate::contact::connection_pair_candidates_cached(
+            structure,
+            target_index,
+            fluid_unit_index,
+            catalog,
+            &mut bond_cache,
+        )
+        .into_iter()
+        .filter(|candidate| {
+            candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                && candidate.available_a
+                && candidate.available_b
+        })
+        .min_by(|a, b| {
+            a.distance
+                .partial_cmp(&b.distance)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    b.facing
+                        .partial_cmp(&a.facing)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+        }) else {
+            return false;
+        };
+        let Some((_, _, investment, _required_energy)) =
+            crate::combine_runtime::selected_candidate_evaluation(
+                structure,
+                target_index,
+                fluid_unit_index,
+                candidate,
+                catalog,
+            )
+        else {
+            return false;
+        };
+        if crate::combine_runtime::form_selected_bond(
+            structure,
+            target_index,
+            fluid_unit_index,
+            candidate,
+            investment,
+            catalog,
+            &mut bond_cache,
+            ledger,
+            energy,
+        )
+        .is_none()
+        {
+            return false;
+        }
+    }
+    true
+}
+
 pub(crate) fn placed_unit_overlaps(
     structure: &OrganismStructure,
     candidate: &StructuralUnit,
@@ -1294,6 +1419,18 @@ fn realize_next_bond_driven(
                         rejection_counts.combine_rejections += 1;
                         continue;
                     };
+
+                    if !form_remaining_multi_contact_bonds(
+                        &mut trial,
+                        new_unit_index,
+                        existing_index,
+                        catalog,
+                        &mut trial_ledger,
+                        &mut trial_energy,
+                    ) {
+                        rejection_counts.combine_rejections += 1;
+                        continue;
+                    }
 
                     // The first exact, physically admissible continuation wins.
                     // Construction is forward-only: do not continue searching for a
