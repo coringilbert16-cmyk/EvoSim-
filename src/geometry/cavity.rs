@@ -1,4 +1,3 @@
-#![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 //! Physical genome-cavity qualification from realized rigid geometry.
 
 use crate::resources::{BaseResource, Form};
