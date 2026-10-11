@@ -938,8 +938,7 @@ mod shape_tests {
             Form::Fluid {
                 nominal_area,
                 boundary: None,
-                arc_boundary: None
-            } if (*nominal_area - 0.5).abs() < f64::EPSILON
+                arc_boundary: None, ..} if (*nominal_area - 0.5).abs() < f64::EPSILON
         ));
         assert!(form.is_valid());
     }
@@ -957,7 +956,8 @@ mod shape_tests {
             nominal_area: 0.5,
             boundary: None,
             arc_boundary: Some(arc),
-        };
+                multi_contact_boundary: None,
+};
         let json = serde_json::to_string(&form).unwrap();
         let restored: Form = serde_json::from_str(&json).unwrap();
         assert_eq!(restored, form);
