@@ -207,7 +207,7 @@ fn add_unit(
     resource: &BaseResource,
     center: (f64, f64),
     anchor_index: Option<usize>,
-    bob_library: &crate::geometry_reference_library::GeometryLibrary,
+    bob_library: Option<&crate::geometry_reference_library::GeometryLibrary>,
     catalog: &[BaseResource],
 ) -> Result<usize, String> {
     let material = Material::free_base(resource.name.clone(), 1.0);
@@ -889,7 +889,7 @@ fn valid_construction(
     structure: &crate::structure::OrganismStructure,
     catalog: &[BaseResource],
     acquisition_candidates: &[&BaseResource],
-    bob_library: Option<&crate::geometry_reference_library::GeometryLibrary>,
+    bob_library: &crate::geometry_reference_library::GeometryLibrary,
 ) -> Option<(
     Vec<(String, Placement)>,
     Vec<(String, Shape)>,
