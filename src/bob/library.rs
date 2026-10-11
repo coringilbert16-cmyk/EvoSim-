@@ -1164,6 +1164,19 @@ pub fn generate_collinear_multi_contact_formations(
         }
         let normal = (-direction.1, direction.0);
         let line_offset = seed.4.0 * normal.0 + seed.4.1 * normal.1;
+        let seed_constituent = seed.0;
+        let Some(seed_resource) = catalog.iter().find(|r| {
+            r.name == parent.constituents[seed_constituent].resource
+        }) else {
+            continue;
+        };
+        let Some(seed_family) = solve_water_against_solid(
+            area,
+            fluid_resource.properties.cohesion,
+            seed_resource.properties.cohesion,
+        ) else {
+            continue;
+        };
         let mut aligned = exposed
             .iter()
             .filter_map(|edge| {
@@ -1208,7 +1221,9 @@ pub fn generate_collinear_multi_contact_formations(
                 chosen.push(*item);
                 total_length += item.1 - item.0;
                 distinct_constituents.insert(item.2.0);
-                if total_length > 1e-9 + area.sqrt() * 100.0 {
+                if total_length
+                    > seed_family.contact_length + 1e-8 * seed_family.contact_length.max(1.0)
+                {
                     break;
                 }
                 if distinct_constituents.len() < 2 {
