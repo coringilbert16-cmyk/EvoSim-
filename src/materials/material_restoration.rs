@@ -46,15 +46,24 @@ pub(crate) fn restore_material(
 
     let mut trial = structure.clone();
     let mut indices = Vec::with_capacity(material.parts.len());
-    for ((name, amount), placement) in material.parts.iter().zip(relative.iter()) {
+    for (part_index, ((name, amount), placement)) in
+        material.parts.iter().zip(relative.iter()).enumerate()
+    {
         if amount.fract().abs() > EPSILON || (*amount - 1.0).abs() > EPSILON {
             return None;
         }
+        let resource = catalog.iter().find(|resource| resource.name == *name)?;
         let mut unit = StructuralUnit::from_material(
             crate::resources::Material::free_base(name.clone(), *amount),
             transform_relative(origin, *placement),
         )?;
         if !unit.realize_default_geometry(catalog) {
+            return None;
+        }
+        let realized_shape = instance.realized_shape_for_part(part_index, catalog)?;
+        if realized_shape != resource.shape
+            && !unit.realize_fluid_geometry(realized_shape, catalog)
+        {
             return None;
         }
         indices.push(trial.add_unit(unit));
