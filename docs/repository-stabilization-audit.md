@@ -12,7 +12,7 @@
 
 ## Latest locked CI evidence
 
-At prior code head `03b264d032135e47ce06b4b3229beac669d62379`, before the persistent runner was changed to require `--locked`, [Rust workflow #38140332317](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38140332317) completed. Formatting, source-size guard, COMBINE architecture guard, Bob compact-storage tests, and empty-library open/reopen tests passed. The full suite reported **314 passed, 29 failed, 1 ignored**, with failures across multiple subsystems. Strict Clippy failed with 48 diagnostics on the test target and 58 on the application target. [Runner validation #38140332276](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38140332276) passed. This is current locked-CI evidence, not a green release gate.
+At code head `18f9fd896bd8a2de21b63ba78a2b5225a7f9ab40`, [Rust workflow #38140828445](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38140828445) completed with a failure result. Formatting, source-size policy, COMBINE architecture checks, Bob compact-storage tests, and the non-generative empty-library open/reopen test passed. The full suite reported **314 passed, 29 failed, 1 ignored**. A major shared failure cluster is blueprint/initial-seed realization: multiple cavity, harmonics, viability, decomposition, and simulation integration tests fail because the forward bond-driven placer cannot place blueprint element 9 after 13,877 attempts. Other failures cover composite-material construction, chemical-break threshold, COMBINE candidate selection/heat accounting, contact normals, fluid-boundary assumptions, movement history, reproduction waiting/material resumption, and missing line-form resource shape coverage. Strict Clippy failed with 48 diagnostics for the test target and 58 for the application target, including unfulfilled `dead_code` expectations and unused staged APIs; do not silence these globally. [Runner validation #38140828400](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38140828400) passed. These checks validate the repository/lockfile guards, not application correctness or release readiness.
 
 ## Repository-integrity work order
 
@@ -27,7 +27,7 @@ At prior code head `03b264d032135e47ce06b4b3229beac669d62379`, before the persis
 
 - Any earlier statement that PR #186 is preserving the old generated geometry catalogue is superseded. The seven generated geometry files were deliberately removed from both branch heads; source generation code and geometry documentation remain.
 - The earlier claim that the *current catalog* has L-shaped phosphorus is obsolete. No generated geometry catalogue is checked in. The current source definition is the approved trapezoid (bottom 1.5, top 1.0, sides 0.5); validate source geometry independently of generated data.
-- Older test counts (253/75, 262/75, 266/75, 311/32, 313/30) are historical checkpoints. The latest locked test count is 314/29/1 at code head `03b264d032135e47ce06b4b3229beac669d62379`.
+- Older test counts (253/75, 262/75, 266/75, 311/32, 313/30) are historical checkpoints. The latest locked test count is 314/29/1 at code head `18f9fd896bd8a2de21b63ba78a2b5225a7f9ab40`.
 - Historical notes saying Bob is not wired to any constructor path are superseded by later commits: Bob suggestions have been integrated into the blueprint-driven construction runtime and into the active initial-constructor path. This does not by itself prove full biological viability or make CI green.
 
 ---
