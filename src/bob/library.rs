@@ -895,11 +895,43 @@ impl GeometryFluidFormation {
             signature.push_str(&format!(
                 "|solved-boundary:{}:{}",
                 quantize(boundary.nominal_area),
-                serde_json::to_string(boundary).unwrap_or_default(),
+                multi_contact_boundary_signature(boundary),
             ));
         }
         signature
     }
+}
+
+fn multi_contact_boundary_signature(boundary: &MultiContactFluidBoundary) -> String {
+    boundary
+        .pieces
+        .iter()
+        .map(|piece| match piece {
+            FluidBoundaryPiece::SolidContact {
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+                contact_angle_radians,
+            } => format!(
+                "S:{},{},{},{},{}",
+                quantize(*start_x),
+                quantize(*start_y),
+                quantize(*end_x),
+                quantize(*end_y),
+                quantize(*contact_angle_radians),
+            ),
+            FluidBoundaryPiece::FreeArc(arc) => format!(
+                "A:{},{},{},{},{}",
+                quantize(arc.center_x),
+                quantize(arc.center_y),
+                quantize(arc.radius),
+                quantize(arc.start_angle_radians),
+                quantize(arc.sweep_radians),
+            ),
+        })
+        .collect::<Vec<_>>()
+        .join(";")
 }
 
 fn multi_contact_boundary_matches_constraints(
