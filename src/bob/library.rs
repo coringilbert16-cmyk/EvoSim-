@@ -5424,23 +5424,6 @@ mod bob_candidate_generation_contract_tests {
         );
         drop(library);
 
-        // A corrupted persisted row must not poison valid records on reopen.
-        // Exercise the loader's validation independently of the insertion API.
-        let mut malformed_persisted = expected_fluid_formation_signatures
-            .values()
-            .next()
-            .unwrap()
-            .clone();
-        malformed_persisted.anchor_edge = usize::MAX;
-        let mut persisted_file = OpenOptions::new()
-            .append(true)
-            .open(root.join("fluid_formations.jsonl"))
-            .unwrap();
-        serde_json::to_writer(&mut persisted_file, &malformed_persisted).unwrap();
-        persisted_file.write_all(b"\n").unwrap();
-        persisted_file.sync_data().unwrap();
-        drop(persisted_file);
-
         let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
         assert_eq!(
             reopened.rigid_contact_families().count(),
@@ -5862,6 +5845,23 @@ mod compact_family_storage_tests {
             LiveFamilyResolution::Unique
         );
         drop(library);
+
+        // A corrupted persisted row must not poison valid records on reopen.
+        // Exercise the loader's validation independently of the insertion API.
+        let mut malformed_persisted = expected_fluid_formation_signatures
+            .values()
+            .next()
+            .unwrap()
+            .clone();
+        malformed_persisted.anchor_edge = usize::MAX;
+        let mut persisted_file = OpenOptions::new()
+            .append(true)
+            .open(root.join("fluid_formations.jsonl"))
+            .unwrap();
+        serde_json::to_writer(&mut persisted_file, &malformed_persisted).unwrap();
+        persisted_file.write_all(b"\n").unwrap();
+        persisted_file.sync_data().unwrap();
+        drop(persisted_file);
 
         let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
         assert_eq!(
