@@ -7092,13 +7092,13 @@ mod fluid_contact_constraint_schema_tests {
             .expect("persisted record must realize against its canonical parent");
         assert_eq!(pose, Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
         assert!(matches!(
-            shape.form,
+            &shape.form,
             Form::Fluid {
                 nominal_area,
                 boundary: None,
                 arc_boundary: None,
                 multi_contact_boundary: Some(_),
-            } if (nominal_area - area).abs() <= 1e-9 * area.max(1.0)
+            } if (*nominal_area - area).abs() <= 1e-9 * area.max(1.0)
         ));
         assert!(shape.is_valid());
         drop(reopened);
