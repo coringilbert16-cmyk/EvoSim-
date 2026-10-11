@@ -913,6 +913,42 @@ mod shape_tests {
     }
 
     #[test]
+    fn legacy_fluid_serialization_defaults_the_exact_arc_field() {
+        let form: Form =
+            serde_json::from_str(r#"{"Fluid":{"nominal_area":0.5,"boundary":null}}"#).unwrap();
+        assert!(matches!(
+            form,
+            Form::Fluid {
+                nominal_area,
+                boundary: None,
+                arc_boundary: None
+            } if (nominal_area - 0.5).abs() < f64::EPSILON
+        ));
+        assert!(form.is_valid());
+    }
+
+    #[test]
+    fn exact_fluid_arc_round_trips_without_polygon_approximation() {
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            0.5,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .unwrap();
+        let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family)
+            .unwrap();
+        let form = Form::Fluid {
+            nominal_area: 0.5,
+            boundary: None,
+            arc_boundary: Some(arc),
+        };
+        let json = serde_json::to_string(&form).unwrap();
+        let restored: Form = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored, form);
+        assert!(restored.polygon_vertices().is_none());
+        assert!(restored.is_valid());
+    }
+
+    #[test]
     fn serialization_round_trip_preserves_shape_and_state() {
         for resource in default_catalog() {
             let json = serde_json::to_string(&resource).unwrap();
