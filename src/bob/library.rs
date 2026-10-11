@@ -7003,5 +7003,4 @@ mod fluid_contact_constraint_schema_tests {
         drop(reopened);
         let _ = std::fs::remove_dir_all(root);
     }
-
 }
