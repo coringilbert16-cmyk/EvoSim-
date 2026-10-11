@@ -776,7 +776,8 @@ mod tests {
                 nominal_area: 2.0,
                 boundary: Some(vec![(-1.0, 0.0), (0.0, 1.0), (1.0, 0.0), (0.0, -1.0)]),
                 arc_boundary: None,
-            },
+                        multi_contact_boundary: None,
+},
         };
         assert!(water.realize_fluid_geometry(fitted.clone(), &catalog));
         assert_eq!(water.geometry.as_ref().unwrap().shape(), &fitted);
