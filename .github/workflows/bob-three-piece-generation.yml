@@ -1,0 +1,59 @@
+name: Bob Three-Piece Geometry Generation (Gated)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: integration/unified-source-and-catalogue
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Create isolated persistent output root
+        run: mkdir -p "$RUNNER_TEMP/evosim-bob-three-piece"
+      - name: Run focused worker cap regression
+        env:
+          EVOSIM_GEOMETRY_LIBRARY_DIR: ${{ runner.temp }}/evosim-bob-three-piece
+        run: |
+          set -euo pipefail
+          cargo test worker_accepts_three_piece_limit_and_rejects_wider_limits -- --nocapture
+      - name: Verify persisted fluid record reaches live transaction
+        run: cargo test reopened_two_piece_bob_record_maps_into_transformed_live_parent -- --nocapture
+      - name: Run Bob to completion for formations up to three constituents
+        env:
+          EVOSIM_GEOMETRY_LIBRARY_DIR: ${{ runner.temp }}/evosim-bob-three-piece
+        run: |
+          set -euo pipefail
+          cargo run --release -- --geometry-worker-complete-up-to 3 2>&1 | tee "$RUNNER_TEMP/bob-three-piece-generation.log"
+      - name: Record generated library footprint
+        if: always()
+        run: |
+          set -euo pipefail
+          echo "=== Persistent geometry library files (up to 3 pieces) ==="
+          find "$RUNNER_TEMP/evosim-bob-three-piece" -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
+          echo "=== Total bytes ==="
+          du -sb "$RUNNER_TEMP/evosim-bob-three-piece" || true
+          echo "=== Record counts ==="
+          for file in "$RUNNER_TEMP"/evosim-bob-three-piece/*.jsonl; do
+            [ -f "$file" ] || continue
+            printf '%s ' "$(basename "$file")"
+            wc -l < "$file"
+          done
+      - name: Upload generated library and run log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bob-three-piece-geometry-library
+          path: |
+            ${{ runner.temp }}/evosim-bob-three-piece/
+            ${{ runner.temp }}/bob-three-piece-generation.log
+          if-no-files-found: error
+          retention-days: 30
