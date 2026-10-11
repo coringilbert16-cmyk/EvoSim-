@@ -1,4 +1,5 @@
 //! Capillary equilibrium geometry for deformable fluids.
+#![expect(dead_code, reason = "Exact circular-arc boundary API staged for physical geometry integration")]
 //!
 //! This module uses the zero-gravity Young–Laplace model rather than sampling
 //! placements of a circular fluid primitive. In 2-D, a constant-pressure,
