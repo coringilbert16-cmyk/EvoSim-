@@ -750,7 +750,7 @@ impl GeometryFluidFormation {
                 nominal_area: self.area,
                 boundary: None,
                 arc_boundary: Some(arc),
-                        multi_contact_boundary: None,
+                multi_contact_boundary: None,
 },
         };
         if !shape.is_valid() {
