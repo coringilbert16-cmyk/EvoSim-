@@ -1274,3 +1274,19 @@ The root `README.md` is now the repository's sole README and central working aut
 ## 2026-10-11 — Validate changes proposed against the integration branch
 
 The Rust workflow now runs for pull requests targeting both `main` and `integration/unified-source-and-catalogue`. The integration branch is the active source authority while the source-integration PR to `main` remains draft; changes targeting integration therefore need their own CI gate rather than waiting for a later main-bound PR. This changes only CI event selection, not test requirements or acceptance criteria.
+
+
+## Fluid geometry realization sprint checkpoint — 2026-10-11
+
+### Implemented in source
+- `CircularArcBoundary::from_flat_contact` converts a solved `CapillaryContactFamily` into an exact circular-arc descriptor in an explicitly defined edge-local frame. The chord is centered on local `y = 0`; the free arc bulges toward positive `y`. The caller must apply the actual anchor-edge transform.
+- The adapter validates persisted scalar consistency and verifies that the realized descriptor preserves the solved area and contact length. It rejects inconsistent or invalid capillary records rather than producing a guessed shape.
+- Focused tests cover five contact angles, exact area/contact-length preservation, chord endpoint placement, and rejection of inconsistent stored scalars.
+
+### Integration status — still not end-to-end
+This change is a realization primitive, not a construction bridge. The descriptor is not yet represented in `Form`, exact arc-aware overlap/contact/containment are not yet wired into the physical geometry authority, and construction does not yet consume Bob's fluid formation suggestions. The legacy polygon boundary remains unchanged; do not sample the arc into polygon vertices or treat the new primitive as proof that a live fluid placement is valid.
+
+### Validation and next gate
+- Latest Rust workflow run `38159849420` failed; its Clippy log reports unfulfilled `dead_code` lint expectations across staged APIs under `-D warnings`. Windows Runner Validation run `38159849405` passed. This is not evidence that the full Rust test suite passed; do not conflate this lint failure with the known constructor test backlog.
+- Next, define a backwards-compatible exact arc boundary representation that can coexist with the legacy serialized fluid polygon, then route physical queries through exact arc operations without silently approximating the curve. Add regression coverage for collision, boundary contact, containment, translation/rotation, serialization compatibility, and area conservation.
+- Only after the physical-query path and Bob-to-construction live-validation regression pass should the isolated two-constituent Bob catalogue expansion be rerun. Keep generated catalogue data out of Git.
