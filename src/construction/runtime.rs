@@ -314,9 +314,7 @@ fn bob_fluid_origins_for_single_parent(
         crate::geometry_reference_library::GeometryFormation::single(anchor_material.to_owned());
     let (s, c) = anchor_placement.rotation_radians.sin_cos();
     let mut out = Vec::new();
-    for suggestion in
-        library.fluid_formations_for_parent(&parent.signature, &fluid_resource.name)
-    {
+    for suggestion in library.fluid_formations_for_parent(&parent.signature, &fluid_resource.name) {
         for bulge_left in [true, false] {
             let Some((shape, canonical_pose)) =
                 suggestion.realize_against_parent(&parent, catalog, bulge_left)
@@ -1712,26 +1710,22 @@ mod tests {
     #[test]
     fn bob_fluid_suggestion_transforms_and_restores_as_exact_fluid_geometry() {
         use crate::geometry_reference_library::{
-            fluid_formations_from_boundaries, generate_fluid_boundary_families_from_contact_families,
+            fluid_formations_from_boundaries,
+            generate_fluid_boundary_families_from_contact_families,
             generate_water_contact_families_with_diagnostics, GeometryFormation, GeometryLibrary,
         };
         use crate::resources::Material;
 
         let catalog = crate::resources::default_catalog();
-        let root = std::env::temp_dir().join(format!(
-            "evosim-runtime-bob-fluid-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("evosim-runtime-bob-fluid-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
         let parent = GeometryFormation::single("Carbon");
         library.insert(parent.clone(), &catalog).unwrap();
         let water = resource(&catalog, "Water").unwrap();
-        let (contacts, _) = generate_water_contact_families_with_diagnostics(
-            &parent,
-            water,
-            &catalog,
-        );
+        let (contacts, _) =
+            generate_water_contact_families_with_diagnostics(&parent, water, &catalog);
         let boundaries = generate_fluid_boundary_families_from_contact_families(water, &contacts);
         let fluid_formations = fluid_formations_from_boundaries(&boundaries);
         assert!(!fluid_formations.is_empty());
@@ -1781,10 +1775,7 @@ mod tests {
             .expect("default Water material should have a valid physical realization")
             .with_single_fluid_shape(shape.clone(), &catalog)
             .expect("Bob's conserved-area arc should fit the physical Water material");
-            assert_eq!(
-                material.realized_shape_for_part(0, &catalog),
-                Some(shape)
-            );
+            assert_eq!(material.realized_shape_for_part(0, &catalog), Some(shape));
         }
         drop(library);
         let _ = std::fs::remove_dir_all(root);
