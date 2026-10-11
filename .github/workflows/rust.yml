@@ -31,6 +31,10 @@ jobs:
         run: cargo test --locked compact_family_storage_tests
       - name: Verify empty Bob library open and reopen without generation
         run: cargo test --locked fresh_empty_library_opens_and_reopens_without_seeding_geometry
+      # Keep the chemistry BREAK energy gate visible independently of the
+      # repository's known unrelated baseline failures.
+      - name: Run focused chemical BREAK tests
+        run: cargo test --locked chemical_break_
       # Expensive headless multigeneration validation is paused while the seed
       # topology is being finalized. Keep the normal Rust/Clippy gates active.
       - name: Run Rust tests
