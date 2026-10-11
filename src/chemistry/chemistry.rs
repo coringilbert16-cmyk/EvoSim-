@@ -181,8 +181,13 @@ pub fn chemical_break_surplus(reaction_energy: f64, disruption_cost: f64) -> Opt
 /// Equality is sufficient: the reaction does not need an arbitrary probability
 /// or extra threshold once the physical disruption requirement has been met.
 pub fn can_chemical_break(reaction_energy: f64, disruption_cost: f64) -> bool {
-    chemical_break_surplus(reaction_energy, disruption_cost)
-        .is_some_and(|surplus| reaction_energy > 0.0 && surplus >= 0.0)
+    // Do not infer sufficiency from chemical_break_surplus: that reporting
+    // function clamps an insufficient (negative) surplus to zero.
+    reaction_energy.is_finite()
+        && disruption_cost.is_finite()
+        && reaction_energy > 0.0
+        && disruption_cost >= 0.0
+        && reaction_energy >= disruption_cost
 }
 
 /// Whether accumulated interaction has reached the calculated activation
@@ -291,6 +296,8 @@ mod tests {
         assert_eq!(chemical_break_surplus(4.0, 5.0), Some(0.0));
         assert!(!can_chemical_break(4.0, 5.0));
         assert!(can_chemical_break(5.0, 5.0));
+        assert!(!can_chemical_break(0.0, 0.0));
+        assert!(!can_chemical_break(f64::NAN, 1.0));
         assert_eq!(chemical_break_surplus(8.0, 5.0), Some(3.0));
     }
 
