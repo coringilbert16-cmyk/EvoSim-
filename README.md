@@ -1483,3 +1483,4 @@ This is deliberately **schema groundwork, not multi-contact realization**. The c
 
 No compile/test result is claimed for these edits yet. Keep the active focus on this bounded fluid solver/transaction work; do not run broad catalogue generation.
 **Schema regression coverage added:** tests verify that a legacy serialized fluid record without `contact_constraints` deserializes to an empty list with an unchanged legacy signature, and that adding a contact constraint changes the record signature. These tests have been authored but have not yet been confirmed green on CI.
+The schema tests also assert that a non-empty, unresolved constraint list is rejected by `realize_against_parent` rather than silently returning the legacy one-edge arc. This is the intended temporary behavior until a true simultaneous solver is implemented.
