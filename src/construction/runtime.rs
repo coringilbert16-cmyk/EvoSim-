@@ -1953,10 +1953,15 @@ mod tests {
             y: 0.0,
             rotation_radians: 0.0,
         };
-        let suggestions = bob_fluid_origins_for_single_parent(
+        let mut live_structure = OrganismStructure::new();
+        let anchor_index = live_structure.add_unit(StructuralUnit::new("Carbon", anchor_pose));
+        let anchor_id = live_structure.physical_id(anchor_index).unwrap();
+        let live_parent = canonical_live_rigid_parent(&live_structure, &catalog)
+            .expect("single rigid parent should map into Bob's canonical frame");
+        let suggestions = bob_fluid_origins_for_live_parent(
             &library,
-            "Carbon",
-            anchor_pose,
+            &live_parent,
+            anchor_id,
             water,
             relative_fluid_pose,
             &catalog,
