@@ -2168,6 +2168,145 @@ mod tests {
     }
 
     #[test]
+    fn reopened_two_piece_bob_record_maps_into_transformed_live_parent() {
+        use crate::geometry_reference_library::{
+            generate_collinear_multi_contact_formations, GeometryLibrary,
+        };
+        use crate::resources::{Form, Material};
+        use crate::structure::{Bond, BondEndpoint, StructuralUnit};
+
+        let mut catalog = crate::resources::default_catalog();
+        let water = resource(&catalog, "Water").unwrap().clone();
+        let carbon = resource(&catalog, "Carbon").unwrap().clone();
+        let area = match &water.shape.form {
+            Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+            Form::Fluid { nominal_area, .. } => *nominal_area,
+            _ => panic!("Water must expose a conserved fluid area"),
+        };
+        let family = crate::capillary_geometry::solve_water_against_solid(
+            area,
+            water.properties.cohesion,
+            carbon.properties.cohesion,
+        )
+        .expect("default Water and Carbon should have an equilibrium contact family");
+        let wall_length = family.contact_length * 0.5;
+        for name in ["TestWallA", "TestWallB"] {
+            let mut wall = carbon.clone();
+            wall.name = name.to_string();
+            wall.shape.form = Form::Line {
+                length: wall_length,
+            };
+            catalog.push(wall);
+        }
+
+        let root = std::env::temp_dir().join(format!(
+            "evosim-runtime-bob-two-piece-reopen-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+
+        let rotation: f64 = 0.37;
+        let (sin, cos) = rotation.sin_cos();
+        let live_center = |canonical_x: f64| Placement {
+            x: 3.0 + canonical_x * cos,
+            y: -2.0 + canonical_x * sin,
+            rotation_radians: rotation,
+        };
+        let mut live = OrganismStructure::new();
+        let left = live.add_unit(StructuralUnit::new(
+            "TestWallA",
+            live_center(-wall_length * 0.5),
+        ));
+        let right = live.add_unit(StructuralUnit::new(
+            "TestWallB",
+            live_center(wall_length * 0.5),
+        ));
+        let left_id = live.physical_id(left).unwrap();
+        let right_id = live.physical_id(right).unwrap();
+        live.bonds.push(Bond {
+            endpoint_a: BondEndpoint::new(
+                left_id,
+                ConnectionEndpoint::LineEndpoint { point_index: 1 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                right_id,
+                ConnectionEndpoint::LineEndpoint { point_index: 0 },
+            ),
+            strength: 1.0,
+            bond_energy: 0.0,
+        });
+
+        let live_parent = canonical_live_rigid_parent(&live, &catalog)
+            .expect("bonded two-piece line parent should map into Bob's canonical frame");
+        assert_eq!(live_parent.formation.constituents.len(), 2);
+        let generated =
+            generate_collinear_multi_contact_formations(&live_parent.formation, &water, &catalog);
+        let record = generated
+            .into_iter()
+            .find(|candidate| candidate.contact_constraints.len() == 2)
+            .expect("two-piece parent should yield a two-contact Water record");
+
+        {
+            let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+            library
+                .insert(live_parent.formation.clone(), &catalog)
+                .unwrap();
+            assert_eq!(
+                library
+                    .insert_fluid_formations_with_multi_contact_counts(
+                        Vec::new(),
+                        vec![record],
+                        &catalog,
+                    )
+                    .unwrap(),
+                (1, 1)
+            );
+        }
+        let library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let suggestions = bob_fluid_origins_for_live_parent(
+            &library,
+            &live_parent,
+            left_id,
+            &water,
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        );
+        let (origin, shape) = suggestions
+            .into_iter()
+            .find(|(_, shape)| {
+                matches!(
+                    &shape.form,
+                    Form::Fluid {
+                        multi_contact_boundary: Some(boundary),
+                        ..
+                    } if boundary.contact_count() == 2
+                )
+            })
+            .expect("runtime query should retrieve the reopened two-contact record");
+        assert!((origin.x - 3.0).abs() < 1e-7);
+        assert!((origin.y + 2.0).abs() < 1e-7);
+        assert!((origin.rotation_radians - rotation).abs() < 1e-7);
+        assert!(shape.is_valid());
+        match &shape.form {
+            Form::Fluid {
+                nominal_area,
+                multi_contact_boundary: Some(boundary),
+                ..
+            } => {
+                assert!((*nominal_area - area).abs() <= 1e-9 * area.max(1.0));
+                assert_eq!(boundary.contact_count(), 2);
+            }
+            _ => panic!("runtime must preserve the exact multi-contact fluid boundary"),
+        }
+        drop(library);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn multi_contact_fluid_commits_all_three_rigid_bonds_together() {
         use crate::capillary_geometry::{
             solve_water_against_collinear_contacts, CapillaryContactFamily,
