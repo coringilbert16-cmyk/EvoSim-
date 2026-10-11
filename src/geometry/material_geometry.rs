@@ -978,6 +978,70 @@ mod tests {
     }
 
     #[test]
+    fn one_multi_contact_fluid_boundary_contacts_three_rigid_surfaces() {
+        let angle = std::f64::consts::FRAC_PI_2;
+        let boundary = crate::capillary_geometry::MultiContactFluidBoundary {
+            nominal_area: 4.0,
+            pieces: vec![
+                crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                    start_x: -1.0,
+                    start_y: -1.0,
+                    end_x: 1.0,
+                    end_y: -1.0,
+                    contact_angle_radians: angle,
+                },
+                crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                    start_x: 1.0,
+                    start_y: -1.0,
+                    end_x: 1.0,
+                    end_y: 1.0,
+                    contact_angle_radians: angle,
+                },
+                crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                    start_x: 1.0,
+                    start_y: 1.0,
+                    end_x: -1.0,
+                    end_y: 1.0,
+                    contact_angle_radians: angle,
+                },
+                crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                    start_x: -1.0,
+                    start_y: 1.0,
+                    end_x: -1.0,
+                    end_y: -1.0,
+                    contact_angle_radians: angle,
+                },
+            ],
+        };
+        let fluid = part(
+            Form::Fluid {
+                nominal_area: 4.0,
+                boundary: None,
+                arc_boundary: None,
+                multi_contact_boundary: Some(boundary),
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
+        let contacts = [
+            part(Form::Line { length: 1.0 }, 0.0, -1.0, 0.0),
+            part(
+                Form::Line { length: 1.0 },
+                1.0,
+                0.0,
+                std::f64::consts::FRAC_PI_2,
+            ),
+            part(Form::Line { length: 1.0 }, 0.0, 1.0, 0.0),
+        ];
+        assert!(boundary.is_valid());
+        for rigid in &contacts {
+            assert!(placed_forms_boundary_contact(&fluid, rigid, 1e-9));
+            assert!(placed_forms_rigid_contact(&fluid, rigid, 1e-9));
+        }
+    }
+
+    #[test]
     fn fluid_has_no_invented_spatial_boundary() {
         let fluid = part(
             Form::Fluid {
