@@ -2478,7 +2478,7 @@ impl GeometryLibrary {
         for formation in unique.values() {
             serde_json::to_writer(&mut file, formation)
                 .map_err(|error| invalid_storage_data(error.to_string()))?;
-            file.write_all(b"\\n")?;
+            file.write_all(b"\n")?;
         }
         file.sync_data()?;
         let added = unique.len();
