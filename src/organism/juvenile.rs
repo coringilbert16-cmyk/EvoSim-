@@ -63,26 +63,26 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    // Continue from the first ring element into an outward spiral. The
-    // constructor may rotate/translate each piece as needed to obtain a valid
-    // physical bond; these coordinates express the requested spatial tendency.
-    let spiral_angle_step = 0.35_f64;
-    let spiral_radius_step = 0.10_f64;
+    // Continue from the first ring element with a physically spaced outward
+    // chain. A tightly wound polar spiral would put successive declared centers
+    // closer than the rigid Carbon geometry allows and encourage greedy growth
+    // to trap itself. These coordinates are preferences; live geometry and bond
+    // transactions still determine the realized poses.
+    let chain_heading = std::f64::consts::FRAC_PI_6;
     for step in 1..=spiral_steps {
-        let angle = spiral_angle_step * step as f64;
-        let radius = ring_radius + spiral_radius_step * step as f64;
+        let distance = carbon_edge_center_spacing * step as f64;
         elements.push(BlueprintElement {
             material: Material::free_base("Carbon", 1.0),
             placement: BlueprintPlacement {
-                x: radius * angle.cos(),
-                y: radius * angle.sin(),
-                rotation_radians: angle,
+                x: elements[0].placement.x + distance * chain_heading.cos(),
+                y: elements[0].placement.y + distance * chain_heading.sin(),
+                rotation_radians: 0.0,
             },
         });
     }
 
     for &i in &[0usize, 1, 3, 4] {
-        let angle = std::f64::consts::TAU * i as f64 / 10.0;
+        let angle = std::f64::consts::TAU * i as f64 / ring_sides as f64;
         let radius = ring_radius + 3.0;
         elements.push(BlueprintElement {
             material: Material::free_base("Sulfur", 1.0),
@@ -301,6 +301,19 @@ mod seed_geometry_tests {
             })
             .expect("Carbon should be a regular polygon");
         let expected_spacing = 3.0_f64.sqrt() * carbon_radius;
+
+        let spiral_start = ring_sides;
+        for step in 1..=20 {
+            let previous = if step == 1 { 0 } else { spiral_start + step - 2 };
+            let current = spiral_start + step - 1;
+            let a = blueprint.elements[previous].placement;
+            let b = blueprint.elements[current].placement;
+            let distance = (a.x - b.x).hypot(a.y - b.y);
+            assert!(
+                (distance - expected_spacing).abs() < 1e-9,
+                "outward chain step {step} has center spacing {distance}, expected {expected_spacing}"
+            );
+        }
 
         for index in 0..ring_sides {
             let next = (index + 1) % ring_sides;
