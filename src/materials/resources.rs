@@ -62,6 +62,9 @@ pub enum Form {
         nominal_area: f64,
         #[serde(default)]
         boundary: Option<Vec<(f64, f64)>>,
+        /// Exact free interface. Mutually exclusive with the legacy polygon boundary.
+        #[serde(default)]
+        arc_boundary: Option<crate::capillary_geometry::CircularArcBoundary>,
     },
 }
 
@@ -148,9 +151,18 @@ impl Form {
             Form::Fluid {
                 nominal_area,
                 boundary,
+                arc_boundary,
             } => {
                 if !nominal_area.is_finite() || *nominal_area <= 0.0 {
                     return false;
+                }
+                if boundary.is_some() && arc_boundary.is_some() {
+                    return false;
+                }
+                if let Some(arc) = arc_boundary {
+                    return arc.is_valid()
+                        && (arc.segment_area().unwrap_or(f64::NAN) - nominal_area).abs()
+                            <= 1e-10 * nominal_area.max(1.0);
                 }
                 boundary
                     .as_ref()
@@ -162,7 +174,17 @@ impl Form {
     pub fn polygon_vertices(&self) -> Option<Vec<(f64, f64)>> {
         match self {
             Form::Circle { .. } | Form::Line { .. } => None,
-            Form::Fluid { boundary, .. } => boundary.clone(),
+            Form::Fluid {
+                boundary,
+                arc_boundary,
+                ..
+            } => {
+                if arc_boundary.is_some() {
+                    None
+                } else {
+                    boundary.clone()
+                }
+            },
             Form::Rectangle { width, height } => {
                 let hw = width / 2.0;
                 let hh = height / 2.0;
@@ -198,16 +220,23 @@ impl Form {
             Form::Fluid {
                 nominal_area,
                 boundary,
-            } => boundary
-                .as_ref()
-                .map(|vertices| {
-                    vertices
-                        .iter()
-                        .map(|(x, y)| x.hypot(*y))
-                        .fold(0.0_f64, f64::max)
-                })
-                .filter(|radius| *radius > 0.0)
-                .unwrap_or_else(|| (nominal_area / std::f64::consts::PI).sqrt()),
+                arc_boundary,
+            } => {
+                if let Some(arc) = arc_boundary {
+                    arc.center_x.hypot(arc.center_y) + arc.radius
+                } else {
+                    boundary
+                        .as_ref()
+                        .map(|vertices| {
+                            vertices
+                                .iter()
+                                .map(|(x, y)| x.hypot(*y))
+                                .fold(0.0_f64, f64::max)
+                        })
+                        .filter(|radius| *radius > 0.0)
+                        .unwrap_or_else(|| (nominal_area / std::f64::consts::PI).sqrt())
+                }
+            },
         }
     }
 }
