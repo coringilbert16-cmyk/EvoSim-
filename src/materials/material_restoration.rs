@@ -61,7 +61,8 @@ pub(crate) fn restore_material(
             return None;
         }
         let realized_shape = instance.realized_shape_for_part(part_index, catalog)?;
-        if realized_shape != resource.shape && !unit.realize_fluid_geometry(realized_shape, catalog) {
+        if realized_shape != resource.shape && !unit.realize_fluid_geometry(realized_shape, catalog)
+        {
             return None;
         }
         indices.push(trial.add_unit(unit));
