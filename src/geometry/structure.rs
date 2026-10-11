@@ -125,19 +125,33 @@ impl StructuralUnit {
         if resource.physical_state != crate::resources::PhysicalState::Fluid {
             return false;
         }
-        if !matches!(
-            shape.form,
+        let default_area = match &resource.shape.form {
+            crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+            crate::resources::Form::Fluid { nominal_area, .. } => *nominal_area,
+            _ => return false,
+        };
+        let realized_area = match &shape.form {
             crate::resources::Form::Fluid {
+                nominal_area,
                 boundary: Some(_),
                 ..
-            } | crate::resources::Form::Fluid {
+            }
+            | crate::resources::Form::Fluid {
+                nominal_area,
                 arc_boundary: Some(_),
                 ..
-            } | crate::resources::Form::Fluid {
+            }
+            | crate::resources::Form::Fluid {
+                nominal_area,
                 multi_contact_boundary: Some(_),
                 ..
-            }
-        ) {
+            } => *nominal_area,
+            _ => return false,
+        };
+        let expected_area = default_area * amount;
+        if !expected_area.is_finite()
+            || (realized_area - expected_area).abs() > 1e-9 * expected_area.max(1.0)
+        {
             return false;
         }
         if self.geometry.is_none() {
@@ -776,16 +790,14 @@ mod tests {
         assert!(water.realize_default_geometry(&catalog));
         let fitted = crate::resources::Shape {
             form: crate::resources::Form::Fluid {
-                nominal_area: 2.0,
-                boundary: Some(vec![(-1.0, 0.0), (0.0, 1.0), (1.0, 0.0), (0.0, -1.0)]),
+                nominal_area: crate::resources::NOMINAL_UNIT_AREA,
+                boundary: Some(vec![(-0.5, 0.0), (0.0, 0.5), (0.5, 0.0), (0.0, -0.5)]),
                 arc_boundary: None,
                 multi_contact_boundary: None,
             },
         };
         assert!(water.realize_fluid_geometry(fitted.clone(), &catalog));
         assert_eq!(water.geometry.as_ref().unwrap().shape(), &fitted);
-
-
 
         let mut bulk_water = StructuralUnit::from_material(
             Material::free_base("Water", 4.0),
@@ -796,8 +808,16 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(bulk_water.realize_fluid_geometry(fitted.clone(), &catalog));
-        assert_eq!(bulk_water.geometry.as_ref().unwrap().shape(), &fitted);
+        let bulk_fitted = crate::resources::Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: 2.0,
+                boundary: Some(vec![(-1.0, 0.0), (0.0, 1.0), (1.0, 0.0), (0.0, -1.0)]),
+                arc_boundary: None,
+                multi_contact_boundary: None,
+            },
+        };
+        assert!(bulk_water.realize_fluid_geometry(bulk_fitted.clone(), &catalog));
+        assert_eq!(bulk_water.geometry.as_ref().unwrap().shape(), &bulk_fitted);
 
         let half = 2.0_f64.sqrt() / 2.0;
         let multi_contact = crate::resources::Shape {
