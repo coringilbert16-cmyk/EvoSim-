@@ -13,18 +13,19 @@ use std::time::{Duration, Instant};
 const IDLE_SLEEP: Duration = Duration::from_secs(1);
 
 /// Bob catalogs useful local assemblies, not whole organisms. Keep clean builds bounded.
-const MAX_LIBRARY_CONSTITUENTS: usize = 20;
+const MAX_LIBRARY_CONSTITUENTS: usize = 2;
 
 pub fn run() {
     run_continuously_with_limit(MAX_LIBRARY_CONSTITUENTS);
 }
 
 /// Run continuously while limiting generated formations to max_constituents.
-/// Existing worker invocations preserve the historical 20-constituent default.
+/// Bob is intentionally bounded to singleton and two-piece local formations.
+/// Reject wider limits rather than silently expanding repository storage.
 pub fn run_continuously_with_limit(max_constituents: usize) {
     assert!(
-        max_constituents > 0,
-        "maximum constituents must be positive"
+        (1..=MAX_LIBRARY_CONSTITUENTS).contains(&max_constituents),
+        "Bob's maximum constituent count is fixed at 2"
     );
     let catalog = default_catalog();
     let mut library = open_default_library().expect("geometry library must open");
@@ -44,10 +45,10 @@ pub fn run_continuously_with_limit(max_constituents: usize) {
 /// the store and verify that generation stayed within the requested bound.
 /// Unlike run_passes, this terminates only when no eligible frontier remains.
 pub fn run_to_completion(max_constituents: usize) -> std::io::Result<()> {
-    if max_constituents == 0 {
+    if !(1..=MAX_LIBRARY_CONSTITUENTS).contains(&max_constituents) {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "maximum constituents must be positive",
+            "Bob's maximum constituent count is fixed at 2",
         ));
     }
 
@@ -262,6 +263,7 @@ fn process_one_frontier(
     // its complete seven-resource row, then return so the next pass advances.
     let Some(formation) = library
         .formations()
+        .filter(|formation| formation.constituents.len() <= max_constituents)
         .filter(|formation| {
             catalog.iter().any(|resource| {
                 !matches!(
