@@ -1475,3 +1475,10 @@ A follow-up pass traced the current piecewise fluid boundary through the live co
 **Next short sprint:** extend Bob's fluid-formation data model in a backward-compatible way to represent a list of contact constraints, then make validation/signatures/persistence account for the complete list before implementing simultaneous realization. Keep legacy single-anchor records readable as one-contact records. Do not claim multi-connection support or run broad catalogue generation until the simultaneous solver and live transaction gate exist.
 
 **CI snapshot:** PR #186 remains the draft-only integration target. At the inspected checkpoint `3ff2415d51d5991b4894e07244b49e904122cd1e`, Runner Validation succeeded and Rust workflow failed; the failure is not being treated as proof that the current unmodified source edits pass. Do not chase the known 29 baseline constructor/lifecycle failures as part of this sprint.
+### Bob fluid schema groundwork — 2026-10-11
+
+The persistent `GeometryFluidFormation` model now has a `contact_constraints` list with a serde default, so older stored records that omit the field remain readable. Each entry identifies a canonical parent constituent/edge and its contact interval. The existing legacy anchor/scalar fields are retained during migration.
+
+This is deliberately **schema groundwork, not multi-contact realization**. The current single circular-arc solver does not yet solve the constraints list. Therefore, both `realize_against_parent` and fluid-record validation fail closed when the list is non-empty; they must not silently realize only the legacy anchor while ignoring additional constraints. Current generation still emits legacy single-contact records. The next implementation step is to define and validate the simultaneous boundary solution representation, then teach the solver and persistence path to populate/consume it as one complete record.
+
+No compile/test result is claimed for these edits yet. Keep the active focus on this bounded fluid solver/transaction work; do not run broad catalogue generation.
