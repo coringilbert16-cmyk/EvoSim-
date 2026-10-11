@@ -304,7 +304,8 @@ fn process_one_frontier(
                 // per-anchor outcomes so empty results are actionable.
                 let (families, diagnostics) =
                     generate_water_contact_families_with_diagnostics(&formation, resource, catalog);
-                metrics.water_unresolved_anchor_resources += diagnostics.unresolved_anchor_resources;
+                metrics.water_unresolved_anchor_resources +=
+                    diagnostics.unresolved_anchor_resources;
                 metrics.water_unsupported_anchor_geometry +=
                     diagnostics.unsupported_anchor_geometry;
                 metrics.water_capillary_solver_failures += diagnostics.capillary_solver_failures;
