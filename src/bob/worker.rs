@@ -2,7 +2,7 @@ use crate::geometry_reference_library::{
     expand_formation_candidates, fluid_formations_from_boundaries,
     generate_fluid_boundary_families_from_contact_families, generate_rigid_contact_families,
     generate_rigid_point_contact_families, generate_rigid_vertex_contact_families,
-    generate_water_contact_families, open_default_library, seed_base_catalogue,
+    generate_water_contact_families_with_diagnostics, open_default_library, seed_base_catalogue,
     GeometryFrontierState, GeometryLibrary,
 };
 use crate::resources::{default_catalog, BaseResource};
@@ -191,6 +191,11 @@ struct WorkerPassMetrics {
     fluid_boundary_families: usize,
     fluid_boundary_families_added: usize,
     water_frontiers_without_boundary_candidates: usize,
+    water_unsupported_anchor_geometry: usize,
+    water_capillary_solver_failures: usize,
+    water_anchors_without_exposed_intervals: usize,
+    water_invalid_contact_intervals: usize,
+    water_anchors_without_valid_contact_overlap: usize,
     fluid_formations: usize,
     fluid_formations_added: usize,
     elapsed: Duration,
@@ -202,7 +207,7 @@ impl std::fmt::Display for WorkerPassMetrics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "geometry worker pass: size={} generated={} added={} not_added={} edge_families={} edge_added={} point_families={} point_added={} vertex_families={} vertex_added={} water_families={} water_added={} fluid_boundary_families={} fluid_boundary_added={} water_frontiers_without_boundary_candidates={} fluid_formations={} fluid_formations_added={} total_formations={} expansion_limit_reached={} elapsed_ms={}",
+            "geometry worker pass: size={} generated={} added={} not_added={} edge_families={} edge_added={} point_families={} point_added={} vertex_families={} vertex_added={} water_families={} water_added={} fluid_boundary_families={} fluid_boundary_added={} water_frontiers_without_boundary_candidates={} water_unsupported_anchor_geometry={} water_capillary_solver_failures={} water_anchors_without_exposed_intervals={} water_invalid_contact_intervals={} water_anchors_without_valid_contact_overlap={} fluid_formations={} fluid_formations_added={} total_formations={} expansion_limit_reached={} elapsed_ms={}",
             self.formation_size,
             self.generated_candidates,
             self.added_formations,
@@ -218,6 +223,11 @@ impl std::fmt::Display for WorkerPassMetrics {
             self.fluid_boundary_families,
             self.fluid_boundary_families_added,
             self.water_frontiers_without_boundary_candidates,
+            self.water_unsupported_anchor_geometry,
+            self.water_capillary_solver_failures,
+            self.water_anchors_without_exposed_intervals,
+            self.water_invalid_contact_intervals,
+            self.water_anchors_without_valid_contact_overlap,
             self.fluid_formations,
             self.fluid_formations_added,
             self.total_formations,
@@ -288,12 +298,17 @@ fn process_one_frontier(
             }
 
             if resource.name == "Water" {
-                // Persist all solved Water/rigid contact families. An empty
-                // result is currently counted, but the generator does not yet
-                // explain whether it reflects unsupported geometry, a failed
-                // capillary solve, or no exposed valid interval. Keep the
-                // frontier finite while that reason-level diagnostic is added.
-                let families = generate_water_contact_families(&formation, resource, catalog);
+                // Persist solved Water/rigid contact families and aggregate
+                // per-anchor outcomes so empty results are actionable.
+                let (families, diagnostics) =
+                    generate_water_contact_families_with_diagnostics(&formation, resource, catalog);
+                metrics.water_unsupported_anchor_geometry += diagnostics.unsupported_anchor_geometry;
+                metrics.water_capillary_solver_failures += diagnostics.capillary_solver_failures;
+                metrics.water_anchors_without_exposed_intervals +=
+                    diagnostics.anchors_without_exposed_intervals;
+                metrics.water_invalid_contact_intervals += diagnostics.invalid_contact_intervals;
+                metrics.water_anchors_without_valid_contact_overlap +=
+                    diagnostics.anchors_without_valid_contact_overlap;
                 metrics.water_families += families.len();
                 let boundary_states =
                     generate_fluid_boundary_families_from_contact_families(resource, &families);
