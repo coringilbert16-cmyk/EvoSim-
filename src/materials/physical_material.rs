@@ -354,4 +354,49 @@ mod tests {
             2
         );
     }
+    #[test]
+    fn exact_fluid_shape_override_survives_physical_material_serialization() {
+        let catalog = crate::resources::default_catalog();
+        let water = catalog
+            .iter()
+            .find(|resource| resource.name == "Water")
+            .unwrap();
+        let area = match &water.shape.form {
+            crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+            _ => panic!("default Water shape should have a measurable area"),
+        };
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            area,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .unwrap();
+        let arc =
+            crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
+        let shape = crate::resources::Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: area,
+                boundary: None,
+                arc_boundary: Some(arc),
+            },
+        };
+        let instance = PhysicalMaterial::realized(
+            Material::free_base("Water", 1.0),
+            vec![Placement {
+                x: 4.0,
+                y: 5.0,
+                rotation_radians: 0.3,
+            }],
+            &catalog,
+        )
+        .unwrap()
+        .with_single_fluid_shape(shape.clone(), &catalog)
+        .expect("a conserved-area exact fluid shape should be storable");
+
+        assert_eq!(instance.realized_shape_for_part(0, &catalog), Some(shape));
+        let encoded = serde_json::to_string(&instance).unwrap();
+        let decoded: PhysicalMaterial = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded, instance);
+        assert!(decoded.realized_shape_for_part(0, &catalog).is_some());
+    }
+
 }
