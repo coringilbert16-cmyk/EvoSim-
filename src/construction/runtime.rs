@@ -446,9 +446,9 @@ fn canonical_live_rigid_parent(
 }
 
 /// Query Bob for fluid suggestions against the complete connected rigid parent.
-/// Each record still represents one stored anchor contact; live placement and
-/// transaction validation remain authoritative, and simultaneous multi-contact
-/// boundary generation is a separate unfinished capability.
+/// Legacy records are keyed by one anchor; multi-contact records are eligible
+/// from any constituent they explicitly contact. Live placement and transaction
+/// validation remain authoritative.
 fn bob_fluid_origins_for_live_parent(
     library: &crate::geometry_reference_library::GeometryLibrary,
     parent: &CanonicalLiveRigidParent,
@@ -468,8 +468,17 @@ fn bob_fluid_origins_for_live_parent(
     for suggestion in
         library.fluid_formations_for_parent(&parent.formation.signature, &fluid_resource.name)
     {
-        // The live stable ID selects the matching canonical anchor slot.
-        if suggestion.anchor_constituent != anchor_canonical_index {
+        // Legacy records are anchored to one constituent. A simultaneous
+        // boundary can be discovered from any of its constrained contacts.
+        let matches_requested_anchor = if suggestion.contact_constraints.is_empty() {
+            suggestion.anchor_constituent == anchor_canonical_index
+        } else {
+            suggestion
+                .contact_constraints
+                .iter()
+                .any(|constraint| constraint.constituent_index == anchor_canonical_index)
+        };
+        if !matches_requested_anchor {
             continue;
         }
         for bulge_left in [true, false] {
