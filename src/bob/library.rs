@@ -192,6 +192,14 @@ pub enum LiveGeometryQuery {
         edge_parameter: i64,
         candidate_rotation: Option<i64>,
     },
+    FluidBoundary {
+        fluid_material: String,
+        solid_material: String,
+        solid_edge: usize,
+        edge_parameter: i64,
+        fluid_area: i64,
+        contact_angle: i64,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -328,6 +336,39 @@ pub fn resolve_live_contact_candidate(
                 edge: edge.edge,
                 edge_parameter: quantize(edge.parameter),
                 candidate_rotation,
+            })
+        }
+        "fluid_boundary" => {
+            let parsed = if sides[0].1.starts_with("fluid:") {
+                parse_edge_descriptor(sides[1].0, &sides[1].1)
+                    .map(|edge| (sides[0].0, edge))
+            } else if sides[1].1.starts_with("fluid:") {
+                parse_edge_descriptor(sides[0].0, &sides[0].1)
+                    .map(|edge| (sides[1].0, edge))
+            } else {
+                None
+            };
+            parsed.and_then(|(fluid_material, edge)| {
+                let fluid = catalog.iter().find(|resource| resource.name == fluid_material)?;
+                let solid = catalog.iter().find(|resource| resource.name == edge.material)?;
+                let area = match &fluid.shape.form {
+                    Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+                    Form::Fluid { nominal_area, .. } => *nominal_area,
+                    _ => return None,
+                };
+                let equilibrium = solve_water_against_solid(
+                    area,
+                    fluid.properties.cohesion,
+                    solid.properties.cohesion,
+                )?;
+                Some(LiveGeometryQuery::FluidBoundary {
+                    fluid_material: fluid_material.to_string(),
+                    solid_material: edge.material,
+                    solid_edge: edge.edge,
+                    edge_parameter: quantize(edge.parameter),
+                    fluid_area: quantize(area),
+                    contact_angle: quantize(equilibrium.contact_angle_radians),
+                })
             })
         }
         _ => None,
@@ -2141,6 +2182,37 @@ impl GeometryLibrary {
                                 projections.insert(vertex_family_projection(family), ());
                             }
                         }
+                    }
+                }
+            }
+            Some(LiveGeometryQuery::FluidBoundary {
+                fluid_material,
+                solid_material,
+                solid_edge,
+                edge_parameter,
+                fluid_area,
+                contact_angle,
+            }) => {
+                let parameter = *edge_parameter as f64 / 1e9;
+                let area = *fluid_area as f64 / 1e9;
+                let angle = *contact_angle as f64 / 1e9;
+                for family in self.fluid_boundary_families.values() {
+                    let anchor_material = self
+                        .entries
+                        .get(&family.formation_signature)
+                        .and_then(|formation| {
+                            formation.constituents.get(family.anchor_constituent)
+                        })
+                        .map(|constituent| constituent.resource.as_str());
+                    if family.fluid_resource == *fluid_material
+                        && anchor_material == Some(solid_material.as_str())
+                        && family.anchor_edge == *solid_edge
+                        && (family.area - area).abs() <= QUANTUM * area.max(1.0)
+                        && (family.contact_angle_radians - angle).abs() <= QUANTUM * angle.max(1.0)
+                        && parameter >= family.edge_parameter_start - QUANTUM
+                        && parameter <= family.edge_parameter_end + QUANTUM
+                    {
+                        projections.insert(family.signature(), ());
                     }
                 }
             }
