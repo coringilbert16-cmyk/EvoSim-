@@ -315,6 +315,9 @@ impl ActiveMaterialField {
             ..
         } = form
         {
+            if region.boundary.len() < 3 {
+                return false;
+            }
             let Some(world_arc) = arc.transformed(
                 placement.x,
                 placement.y,
