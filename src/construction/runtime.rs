@@ -543,8 +543,7 @@ fn form_remaining_multi_contact_bonds(
         let Some(shape) = unit.shape(catalog) else {
             return false;
         };
-        let Some(material_name) = unit.material.parts.first().map(|part| part.0.as_str())
-        else {
+        let Some(material_name) = unit.material.parts.first().map(|part| part.0.as_str()) else {
             return false;
         };
         let Some(material_resource) = resource(catalog, material_name) else {
