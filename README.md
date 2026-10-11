@@ -1230,3 +1230,40 @@ The root `README.md` is now the repository's sole README and central working aut
 3. Feed the resulting fluid shape to construction as an advisory candidate. The existing live physical geometry, contact compatibility, bond/energy transaction, and collision checks remain authoritative.
 4. Add a regression proving that construction actually queries a stored fluid suggestion, preserves the fluid's conserved area, and rejects a suggestion that fails live validation.
 5. Only after that regression passes, run the isolated bounded Bob workflow for formations up to two constituent pieces. Keep generated data out of the repository unless explicitly approved.
+
+
+## 2026-10-11 — Element-9 placement failure: seed ring geometry diagnosis
+
+### Evidence from exact-head CI
+
+Rust CI for integration commit `92a289e2f30d03bfe9ffd6b3f3e44d776a6be671` reports **318 passed, 29 failed, 1 ignored**. The common blueprint placement failure reports:
+
+- failing element: 9;
+- generated origins: 16,752;
+- deduplicated origins: 2,961;
+- restore failures: 0;
+- overlap rejections: 7,333;
+- multi-neighbor contact rejections: 6,458;
+- missing contacts split evenly between already-realized neighbors 0 and 8;
+- no-bond-contact, candidate-evaluation, and COMBINE rejections: 0.
+
+This localizes the failure before bond admission: candidate materials restore successfully, but no candidate pose generated from the chosen anchor satisfies both already-realized neighbors.
+
+### Root-cause hypothesis and targeted correction
+
+The confirmed-seed calibration baseline built a **10-element ring of rigid regular hexagons**. Its center spacing was set to the hexagon flat-to-flat distance, but the ring rotated each hexagon by 36 degrees. That is incompatible with the six-fold edge orientation of a regular hexagon and makes the closing edge geometrically inconsistent with the two already-realized neighbors. This explains why the failure is concentrated at the ring closure and why relaxing COMBINE or contact tolerances would be the wrong fix.
+
+A focused fix is being tested on branch `fix/seed-ring-closure-geometry`:
+
+- use a six-element hexagonal ring, whose adjacent centers are separated by the Carbon hexagon's flat-to-flat distance;
+- preserve the ring's actual closed connection graph;
+- move the four Sulfur and two Methane attachment indices onto valid ring vertices;
+- add a regression test for ring center spacing, 60-degree rotational symmetry, and all six ring connections.
+
+This changes only the confirmed-seed calibration blueprint; it does not change the general construction rules, permit overlaps, relax contact tolerances, or make the blueprint a required final organism topology.
+
+### Validation gate
+
+The change is **not yet verified**. Wait for CI on the fix branch. If the seed-construction and cavity tests pass, compare the full suite by failure name and counts. If element 9 is no longer the failing location but a later independent failure remains, diagnose that new failure separately. If the ring closure still fails, retain the physical rules and instrument actual realized center poses and contact-feature candidates before making another change.
+
+Do not run Bob generation or begin fluid-boundary implementation during this diagnostic sprint. The two-piece catalogue's prior generation/reopen result remains a separate completed task.
