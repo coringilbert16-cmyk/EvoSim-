@@ -1244,3 +1244,10 @@ Exact-head Rust CI for `92a289e2f30d03bfe9ffd6b3f3e44d776a6be671` reports **318 
 The confirmed-seed calibration blueprint used a 10-element ring of regular hexagons. Its center spacing was the Carbon hexagon's flat-to-flat distance, but each successive unit rotated by 36 degrees, inconsistent with the hexagon's 60-degree edge symmetry. The targeted correction on `fix/seed-ring-closure-geometry-v2` uses a six-element hexagonal ring, moves the Sulfur/Methane attachment indices to valid vertices, and adds a regression for ring spacing, rotational symmetry, and all six ring connections.
 
 This changes only the confirmed-seed calibration blueprint. It does not relax collision/contact tolerances or alter the general construction rules. It is a root-cause hypothesis until CI verifies that the ring closes and the shared placement failures disappear. If the failure moves or remains, inspect actual realized poses and contact features; do not weaken physical rules. No Bob generation or fluid-boundary work is part of this sprint.
+
+
+### Follow-up after the six-ring change
+
+The first CI run with the six-piece ring passed formatting and Bob storage checks, and the prior element-9 closure failure disappeared. The full suite still reported 319 passed / 29 failed / 1 ignored, but the shared seed failure moved to element 20: all 6,876 candidate origins were rejected for overlap, with no missing-neighbor or bond-admission rejections. The seed therefore had a second, independent geometry defect: its declared 20-piece polar spiral increased radius by only 0.1 while turning 0.35 radians per step, so the requested path wound back through occupied space.
+
+The follow-up changes the calibration path to a physically spaced outward Carbon chain using the Carbon flat-to-flat spacing, and corrects the Sulfur/Methane target-angle denominator to use the six ring sides instead of the old value 10. The regression now checks spacing across the ring and all 20 chain steps. This remains a calibration-fixture correction, not a live-physics relaxation. Validate the new head before deciding whether the general constructor needs bounded backtracking or candidate ranking.
