@@ -160,7 +160,7 @@ fn exact_fluid_arc_region_check_allows_chord_contact_but_rejects_curve_escape() 
         area: 6.0,
         boundary_units: vec![],
         sample_point: (0.0, 0.0),
-        boundary: vec![(-2.0, -1.0), (2.0, -1.0), (2.0, 0.75), (-2.0, 0.75)],
+        boundary: vec![(-2.0, -1.0), (2.0, -1.0), (2.0, 0.4), (-2.0, 0.4)],
     };
     assert!(!ActiveMaterialField::realized_form_fully_inside_region(
         &form,
