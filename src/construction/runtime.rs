@@ -1805,6 +1805,44 @@ mod tests {
         assert_eq!(structure.bonds.len(), 3);
     }
 
+
+    #[test]
+    fn canonical_live_rigid_parent_maps_stable_ids_to_bob_slots() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let a = structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+        ));
+        let b = structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement { x: 3.0, y: 0.0, rotation_radians: 0.0 },
+        ));
+        let id_a = structure.physical_id(a).unwrap();
+        let id_b = structure.physical_id(b).unwrap();
+        structure.bonds.push(crate::structure::Bond {
+            endpoint_a: crate::structure::BondEndpoint::new(
+                id_a,
+                ConnectionEndpoint::Corner { point_index: 0 },
+            ),
+            endpoint_b: crate::structure::BondEndpoint::new(
+                id_b,
+                ConnectionEndpoint::Corner { point_index: 0 },
+            ),
+            strength: 1.0,
+            bond_energy: 0.0,
+        });
+
+        let parent = canonical_live_rigid_parent(&structure, &catalog)
+            .expect("connected rigid parent should canonicalize");
+        assert_eq!(parent.formation.constituents.len(), 2);
+        assert_eq!(parent.canonical_index_by_id.len(), 2);
+        let slot_a = parent.canonical_index_by_id[&id_a];
+        let slot_b = parent.canonical_index_by_id[&id_b];
+        assert_ne!(slot_a, slot_b);
+        assert!(slot_a < 2 && slot_b < 2);
+    }
+
     #[test]
     fn bob_fluid_suggestion_transforms_and_restores_as_exact_fluid_geometry() {
         use crate::geometry_reference_library::{
