@@ -748,7 +748,7 @@ fn point_in_form(
 #[cfg(test)]
 mod fitted_water_tests {
     use super::*;
-    use crate::resources::{default_catalog, Form, Shape};
+    use crate::resources::{default_catalog, Form, Shape, NOMINAL_UNIT_AREA};
     use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
     #[test]
@@ -764,10 +764,18 @@ mod fitted_water_tests {
             },
         );
         assert!(water.realize_default_geometry(&catalog));
+        // Keep the fitted boundary consistent with one Water unit's nominal
+        // area instead of assigning four square units to half a unit of Water.
+        let half_side = NOMINAL_UNIT_AREA.sqrt() / 2.0;
         let fitted = Shape {
             form: Form::Fluid {
-                nominal_area: 4.0,
-                boundary: Some(vec![(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]),
+                nominal_area: NOMINAL_UNIT_AREA,
+                boundary: Some(vec![
+                    (-half_side, -half_side),
+                    (half_side, -half_side),
+                    (half_side, half_side),
+                    (-half_side, half_side),
+                ]),
                 arc_boundary: None,
                 multi_contact_boundary: None,
             },
@@ -783,8 +791,8 @@ mod fitted_water_tests {
         assert!(point_in_form(
             form,
             structure.units[index].placement,
-            0.5,
-            0.5
+            0.1,
+            0.1
         ));
     }
 }
