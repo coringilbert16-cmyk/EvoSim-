@@ -389,7 +389,7 @@ mod tests {
                 nominal_area: area,
                 boundary: None,
                 arc_boundary: Some(arc),
-                        multi_contact_boundary: None,
+                multi_contact_boundary: None,
 },
         };
         let instance = PhysicalMaterial::realized(
@@ -435,7 +435,7 @@ mod tests {
                 nominal_area: area,
                 boundary: None,
                 arc_boundary: Some(arc),
-                        multi_contact_boundary: None,
+                multi_contact_boundary: None,
 },
         };
         let instance = PhysicalMaterial::realized(
