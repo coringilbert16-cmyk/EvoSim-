@@ -3205,7 +3205,7 @@ impl GeometryLibrary {
         formations: Vec<GeometryFluidFormation>,
         catalog: &[BaseResource],
     ) -> std::io::Result<usize> {
-        self.insert_fluid_formations_with_multi_contact_counts(Vec::new(), formations, catalog)
+        self.insert_fluid_formations_with_multi_contact_counts(formations, Vec::new(), catalog)
             .map(|(added, _)| added)
     }
 
