@@ -811,7 +811,11 @@ fn valid_construction(
     catalog: &[BaseResource],
     acquisition_candidates: &[&BaseResource],
     bob_library: Option<&crate::geometry_reference_library::GeometryLibrary>,
-) -> Option<(Vec<(String, Placement)>, Vec<(String, Shape)>, FluidGeometryStatus)> {
+) -> Option<(
+    Vec<(String, Placement)>,
+    Vec<(String, Shape)>,
+    FluidGeometryStatus,
+)> {
     let cavity = crate::cavity::analyze_genome_cavity(structure, catalog)
         .ok()
         .flatten()?;
