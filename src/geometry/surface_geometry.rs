@@ -196,6 +196,7 @@ mod tests {
             form: Form::Fluid {
                 nominal_area: 0.5,
                 boundary: None,
+                arc_boundary: None,
             },
         };
         assert!(boundary_point_toward(&s, 1.0, 0.0).is_none())
