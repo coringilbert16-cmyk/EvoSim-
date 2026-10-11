@@ -107,9 +107,28 @@ pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Opt
                 target_y,
             )
         }
-        Form::Fluid { boundary, .. } => boundary
-            .as_ref()
-            .and_then(|vertices| polygon_boundary_toward(vertices.as_slice(), target_x, target_y)),
+        Form::Fluid {
+            boundary,
+            arc_boundary,
+            ..
+        } => {
+            if let Some(arc) = arc_boundary {
+                let (ux, uy) = normalized(target_x, target_y)?;
+                let (_, x, y) = arc.ray_intersection(0.0, 0.0, ux, uy)?;
+                let angle = (y - arc.center_y).atan2(x - arc.center_x);
+                let (normal_x, normal_y) = arc.normal_at_angle(angle)?;
+                Some(BoundaryPoint {
+                    x,
+                    y,
+                    normal_x,
+                    normal_y,
+                })
+            } else {
+                boundary
+                    .as_ref()
+                    .and_then(|vertices| polygon_boundary_toward(vertices.as_slice(), target_x, target_y))
+            }
+        },
     }
 }
 #[allow(dead_code)]
