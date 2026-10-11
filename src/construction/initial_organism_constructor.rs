@@ -995,10 +995,8 @@ mod tests {
     #[test]
     fn persisted_bob_fluid_suggestion_reaches_live_constructor_validation() {
         let catalog = crate::resources::default_catalog();
-        let root = std::env::temp_dir().join(format!(
-            "evosim-constructor-fluid-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("evosim-constructor-fluid-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let mut library = crate::geometry_reference_library::GeometryLibrary::open(&root, &catalog)
             .expect("isolated Bob library should open");
@@ -1051,9 +1049,12 @@ mod tests {
             &library,
             &catalog,
         );
-        assert!(had_records, "construction must query the persisted Bob fluid records");
-        let (shape, placement) = candidate
-            .expect("at least one exact fluid suggestion should pass live validation");
+        assert!(
+            had_records,
+            "construction must query the persisted Bob fluid records"
+        );
+        let (shape, placement) =
+            candidate.expect("at least one exact fluid suggestion should pass live validation");
         assert!(shape.is_valid());
         let expected_area = match &water.shape.form {
             Form::Circle { radius } => std::f64::consts::PI * radius * radius,
