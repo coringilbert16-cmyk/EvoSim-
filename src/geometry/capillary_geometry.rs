@@ -647,66 +647,33 @@ impl MultiContactFluidBoundary {
         // handled separately by exact arc operations when that solver lands.
         let count = self.pieces.len();
         for first in 0..count {
-            let FluidBoundaryPiece::SolidContact {
-                start_x: ax,
-                start_y: ay,
-                end_x: bx,
-                end_y: by,
-                ..
-            } = &self.pieces[first]
-            else {
-                continue;
-            };
             for second in (first + 1)..count {
                 if second == first + 1 || (first == 0 && second == count - 1) {
                     continue;
                 }
-                let FluidBoundaryPiece::SolidContact {
-                    start_x: cx,
-                    start_y: cy,
-                    end_x: dx,
-                    end_y: dy,
-                    ..
-                } = &self.pieces[second]
-                else {
-                    continue;
-                };
-                if line_segments_intersect(
-                    (*ax, *ay),
-                    (*bx, *by),
-                    (*cx, *cy),
-                    (*dx, *dy),
-                    tolerance,
-                ) {
-                    return false;
-                }
-
-                // A non-neighboring solid segment may not cross a free arc.
-                // Use the analytic circle/segment intersection and then check
-                // whether each root lies within the arc's angular sweep.
-                let first_segment = ((*ax, *ay), (*bx, *by));
-                let second_segment = ((*cx, *cy), (*dx, *dy));
-                let first_arc = match &self.pieces[first] {
-                    FluidBoundaryPiece::FreeArc(arc) => Some(arc),
-                    _ => None,
-                };
-                let second_arc = match &self.pieces[second] {
-                    FluidBoundaryPiece::FreeArc(arc) => Some(arc),
-                    _ => None,
-                };
-                if let (Some(arc), FluidBoundaryPiece::SolidContact { .. }) =
-                    (first_arc, &self.pieces[second])
-                {
-                    if line_segment_intersects_arc(second_segment.0, second_segment.1, arc, tolerance) {
-                        return false;
+                match (&self.pieces[first], &self.pieces[second]) {
+                    (
+                        FluidBoundaryPiece::SolidContact { start_x: ax, start_y: ay, end_x: bx, end_y: by, .. },
+                        FluidBoundaryPiece::SolidContact { start_x: cx, start_y: cy, end_x: dx, end_y: dy, .. },
+                    ) => {
+                        if line_segments_intersect((*ax, *ay), (*bx, *by), (*cx, *cy), (*dx, *dy), tolerance) {
+                            return false;
+                        }
                     }
-                }
-                if let (FluidBoundaryPiece::SolidContact { .. }, Some(arc)) =
-                    (&self.pieces[first], second_arc)
-                {
-                    if line_segment_intersects_arc(first_segment.0, first_segment.1, arc, tolerance) {
-                        return false;
+                    (
+                        FluidBoundaryPiece::SolidContact { start_x, start_y, end_x, end_y, .. },
+                        FluidBoundaryPiece::FreeArc(arc),
+                    )
+                    | (
+                        FluidBoundaryPiece::FreeArc(arc),
+                        FluidBoundaryPiece::SolidContact { start_x, start_y, end_x, end_y, .. },
+                    ) => {
+                        if line_segment_intersects_arc((*start_x, *start_y), (*end_x, *end_y), arc, tolerance) {
+                            return false;
+                        }
                     }
+                    // Arc-arc intersection requires its own exact pair solver.
+                    (FluidBoundaryPiece::FreeArc(_), FluidBoundaryPiece::FreeArc(_)) => {}
                 }
             }
         }
