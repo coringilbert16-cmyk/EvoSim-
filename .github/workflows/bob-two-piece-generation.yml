@@ -21,7 +21,7 @@ jobs:
         run: mkdir -p "$RUNNER_TEMP/evosim-bob-three-piece"
       - name: Run focused worker cap regression
         env:
-          EVOSIM_GEOMETRY_LIBRARY_DIR: ${{ runner.temp }}/evosim-bob-two-piece
+          EVOSIM_GEOMETRY_LIBRARY_DIR: ${{ runner.temp }}/evosim-bob-three-piece
         run: |
           set -euo pipefail
           cargo test worker_accepts_three_piece_limit_and_rejects_wider_limits -- --nocapture
@@ -38,9 +38,9 @@ jobs:
         run: |
           set -euo pipefail
           echo "=== Persistent geometry library files (up to 3 pieces) ==="
-          find "$RUNNER_TEMP/evosim-bob-two-piece" -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
+          find "$RUNNER_TEMP/evosim-bob-three-piece" -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
           echo "=== Total bytes ==="
-          du -sb "$RUNNER_TEMP/evosim-bob-two-piece" || true
+          du -sb "$RUNNER_TEMP/evosim-bob-three-piece" || true
           echo "=== Record counts ==="
           for file in "$RUNNER_TEMP"/evosim-bob-three-piece/*.jsonl; do
             [ -f "$file" ] || continue
@@ -53,7 +53,7 @@ jobs:
         with:
           name: bob-three-piece-geometry-library
           path: |
-            ${{ runner.temp }}/evosim-bob-two-piece/
+            ${{ runner.temp }}/evosim-bob-three-piece/
             ${{ runner.temp }}/bob-three-piece-generation.log
           if-no-files-found: error
           retention-days: 30
