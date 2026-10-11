@@ -520,8 +520,8 @@ mod tests {
             assert!((arc.chord_length().unwrap() - family.contact_length).abs() < 1e-10);
             assert!(start.1.abs() < 1e-10);
             assert!(end.1.abs() < 1e-10);
-            assert!((start.0 + family.half_contact_length()).abs() < 1e-10);
-            assert!((end.0 - family.half_contact_length()).abs() < 1e-10);
+            assert!((start.0 - family.half_contact_length()).abs() < 1e-10);
+            assert!((end.0 + family.half_contact_length()).abs() < 1e-10);
             let midpoint = arc.start_angle_radians + arc.sweep_radians * 0.5;
             assert!((arc.center_y + arc.radius * midpoint.sin()).abs() > 0.0);
             assert!(arc.center_y + arc.radius * midpoint.sin() > 0.0);
