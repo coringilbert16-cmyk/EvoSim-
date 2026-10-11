@@ -301,10 +301,7 @@ fn composite_origin_for_constituent_pose(
 #[derive(Clone, Debug)]
 struct CanonicalLiveRigidParent {
     formation: crate::geometry_reference_library::GeometryFormation,
-    canonical_index_by_id: std::collections::HashMap<
-        crate::structure::PhysicalConstituentId,
-        usize,
-    >,
+    canonical_index_by_id: std::collections::HashMap<crate::structure::PhysicalConstituentId, usize>,
 }
 
 /// Build a connected rigid parent from the live physical graph and preserve
@@ -314,8 +311,9 @@ fn canonical_live_rigid_parent(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
 ) -> Option<CanonicalLiveRigidParent> {
-    use crate::geometry_reference_library::{GeometryBond, GeometryConstituent, GeometryFormation,
-        GEOMETRY_LIBRARY_SCHEMA_VERSION};
+    use crate::geometry_reference_library::{
+        GeometryBond, GeometryConstituent, GeometryFormation, GEOMETRY_LIBRARY_SCHEMA_VERSION,
+    };
     use crate::structure::PhysicalConstituentId;
     use std::collections::{BTreeSet, HashMap};
 
@@ -331,7 +329,9 @@ fn canonical_live_rigid_parent(
         {
             continue;
         }
-        let resource = catalog.iter().find(|resource| resource.name == *resource_name)?;
+        let resource = catalog
+            .iter()
+            .find(|resource| resource.name == *resource_name)?;
         if resource.physical_state == PhysicalState::Fluid {
             continue;
         }
@@ -367,7 +367,10 @@ fn canonical_live_rigid_parent(
 
     let formation = GeometryFormation {
         schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
-        constituents: live_units.iter().map(|(_, constituent)| constituent.clone()).collect(),
+        constituents: live_units
+            .iter()
+            .map(|(_, constituent)| constituent.clone())
+            .collect(),
         bonds: bonds
             .into_iter()
             .map(|(constituent_a, constituent_b)| GeometryBond {
@@ -386,7 +389,6 @@ fn canonical_live_rigid_parent(
         .enumerate()
         .map(|(input_index, (id, _))| (*id, input_to_canonical[input_index]))
         .collect();
-    // Keep this explicit type to make the stable-ID boundary obvious at call sites.
     let canonical_index_by_id: HashMap<PhysicalConstituentId, usize> = canonical_index_by_id;
     Some(CanonicalLiveRigidParent {
         formation,
@@ -1812,11 +1814,19 @@ mod tests {
         let mut structure = OrganismStructure::new();
         let a = structure.add_unit(StructuralUnit::new(
             "Carbon",
-            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         ));
         let b = structure.add_unit(StructuralUnit::new(
             "Carbon",
-            Placement { x: 3.0, y: 0.0, rotation_radians: 0.0 },
+            Placement {
+                x: 3.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         ));
         let id_a = structure.physical_id(a).unwrap();
         let id_b = structure.physical_id(b).unwrap();
