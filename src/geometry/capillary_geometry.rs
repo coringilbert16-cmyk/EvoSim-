@@ -158,7 +158,11 @@ impl CircularArcBoundary {
         let end = self.end_point();
         let start_distance = (x - start.0).hypot(y - start.1);
         let end_distance = (x - end.0).hypot(y - end.1);
-        Some(if start_distance <= end_distance { start } else { end })
+        Some(if start_distance <= end_distance {
+            start
+        } else {
+            end
+        })
     }
 
     /// Exact first non-negative ray intersection with this finite arc.
@@ -193,13 +197,9 @@ impl CircularArcBoundary {
             return None;
         }
         let root = discriminant.max(0.0).sqrt();
-        let mut candidates = [
-            (-b - root) / (2.0 * a),
-            (-b + root) / (2.0 * a),
-        ];
-        candidates.sort_by(|left, right| {
-            left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        let mut candidates = [(-b - root) / (2.0 * a), (-b + root) / (2.0 * a)];
+        candidates
+            .sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
         for t in candidates {
             if t < -EPS {
                 continue;
