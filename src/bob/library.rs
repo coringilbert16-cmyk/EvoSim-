@@ -1165,9 +1165,10 @@ pub fn generate_collinear_multi_contact_formations(
         let normal = (-direction.1, direction.0);
         let line_offset = seed.4 .0 * normal.0 + seed.4 .1 * normal.1;
         let seed_constituent = seed.0;
-        let Some(seed_resource) = catalog.iter().find(|r| {
-            r.name == parent.constituents[seed_constituent].resource
-        }) else {
+        let Some(seed_resource) = catalog
+            .iter()
+            .find(|r| r.name == parent.constituents[seed_constituent].resource)
+        else {
             continue;
         };
         let Some(seed_family) = solve_water_against_solid(
@@ -1241,9 +1242,10 @@ pub fn generate_collinear_multi_contact_formations(
                 if distinct_constituents.len() < 2 {
                     continue;
                 }
-                let Some(first_resource) = catalog.iter().find(|r| {
-                    r.name == parent.constituents[chosen[0].2 .0].resource
-                }) else {
+                let Some(first_resource) = catalog
+                    .iter()
+                    .find(|r| r.name == parent.constituents[chosen[0].2 .0].resource)
+                else {
                     continue;
                 };
                 let Some(family) = solve_water_against_solid(
@@ -1261,9 +1263,10 @@ pub fn generate_collinear_multi_contact_formations(
                 let mut compatible = true;
                 for item in &chosen {
                     let constituent_index = item.2 .0;
-                    let Some(resource) = catalog.iter().find(|r| {
-                        r.name == parent.constituents[constituent_index].resource
-                    }) else {
+                    let Some(resource) = catalog
+                        .iter()
+                        .find(|r| r.name == parent.constituents[constituent_index].resource)
+                    else {
                         compatible = false;
                         break;
                     };
