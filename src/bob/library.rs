@@ -749,12 +749,16 @@ impl GeometryFluidFormation {
                 || (boundary.nominal_area - self.area).abs() > 1e-9 * self.area.max(1.0)
                 || self.contact_constraints.iter().any(|constraint| {
                     constraint.constituent_index >= parent.constituents.len()
-                        || constraint.edge_index
-                            >= parent.constituents.get(constraint.constituent_index)
-                                .and_then(|constituent| catalog.iter().find(|item| item.name == constituent.resource))
-                                .and_then(|resource| rigid_boundary_segments(&resource.shape.form).get(constraint.edge_index))
-                                .map(|_| usize::MAX)
-                                .unwrap_or(0)
+                        || !parent
+                        .constituents
+                        .get(constraint.constituent_index)
+                        .and_then(|constituent| {
+                            catalog.iter().find(|item| item.name == constituent.resource)
+                        })
+                        .is_some_and(|resource| {
+                            constraint.edge_index
+                                < rigid_boundary_segments(&resource.shape.form).len()
+                        })
                         || !constraint.contact_length.is_finite()
                         || constraint.contact_length <= 0.0
                         || !constraint.edge_parameter_start.is_finite()
