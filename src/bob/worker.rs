@@ -105,8 +105,9 @@ pub fn run_to_completion(max_constituents: usize) -> std::io::Result<()> {
         .count();
 
     eprintln!(
-        "geometry worker complete: max_constituents={max_constituents} seeded={seeded} passes={processed} generated_candidates={generated} added_formations={added} not_added={} edge_families_added={edge_added} point_families_added={point_added} vertex_families_added={vertex_added} water_families_added={water_added} fluid_boundary_families_added={fluid_boundary_added} fluid_formations_added={fluid_formations_added} multi_contact_fluid_formations={multi_contact_fluid_formations} multi_contact_fluid_formations_added={multi_contact_fluid_formations_added} fluid_formations_before_reopen={fluid_formations_before_reopen} fluid_formations_after_reopen={fluid_formations_after_reopen} formations_before_reopen={formations_before_reopen} formations_after_reopen={} oversized_formations={oversized} unfinished_frontiers={unfinished} elapsed_ms={}",
+        "geometry worker complete: max_constituents={max_constituents} seeded={seeded} passes={processed} generated_candidates={generated} added_formations={added} not_added={} edge_families_added={edge_added} point_families_added={point_added} vertex_families_added={vertex_added} water_families_added={water_added} fluid_boundary_families_added={fluid_boundary_added} fluid_formations_added={fluid_formations_added} multi_contact_fluid_formations={multi_contact_fluid_formations} multi_contact_fluid_formations_added={multi_contact_fluid_formations_added} multi_contact_not_added={} fluid_formations_before_reopen={fluid_formations_before_reopen} fluid_formations_after_reopen={fluid_formations_after_reopen} formations_before_reopen={formations_before_reopen} formations_after_reopen={} oversized_formations={oversized} unfinished_frontiers={unfinished} elapsed_ms={}",
         generated.saturating_sub(added),
+        multi_contact_fluid_formations.saturating_sub(multi_contact_fluid_formations_added),
         reopened.len(),
         started.elapsed().as_millis(),
     );
@@ -215,7 +216,7 @@ impl std::fmt::Display for WorkerPassMetrics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "geometry worker pass: size={} generated={} added={} not_added={} edge_families={} edge_added={} point_families={} point_added={} vertex_families={} vertex_added={} water_families={} water_added={} fluid_boundary_families={} fluid_boundary_added={} water_frontiers_without_boundary_candidates={} water_unresolved_anchor_resources={} water_unsupported_anchor_geometry={} water_capillary_solver_failures={} water_anchors_without_exposed_intervals={} water_invalid_contact_intervals={} water_anchors_without_valid_contact_overlap={} fluid_formations={} fluid_formations_added={} multi_contact_fluid_formations={} multi_contact_fluid_formations_added={} total_formations={} expansion_limit_reached={} elapsed_ms={}",
+            "geometry worker pass: size={} generated={} added={} not_added={} edge_families={} edge_added={} point_families={} point_added={} vertex_families={} vertex_added={} water_families={} water_added={} fluid_boundary_families={} fluid_boundary_added={} water_frontiers_without_boundary_candidates={} water_unresolved_anchor_resources={} water_unsupported_anchor_geometry={} water_capillary_solver_failures={} water_anchors_without_exposed_intervals={} water_invalid_contact_intervals={} water_anchors_without_valid_contact_overlap={} fluid_formations={} fluid_formations_added={} multi_contact_fluid_formations={} multi_contact_fluid_formations_added={} multi_contact_fluid_formations_not_added={} total_formations={} expansion_limit_reached={} elapsed_ms={}",
             self.formation_size,
             self.generated_candidates,
             self.added_formations,
@@ -241,6 +242,7 @@ impl std::fmt::Display for WorkerPassMetrics {
             self.fluid_formations_added,
             self.multi_contact_fluid_formations,
             self.multi_contact_fluid_formations_added,
+            self.multi_contact_fluid_formations.saturating_sub(self.multi_contact_fluid_formations_added),
             self.total_formations,
             self.expansion_limit_reached,
             self.elapsed.as_millis(),
