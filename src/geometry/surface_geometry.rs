@@ -218,7 +218,9 @@ pub fn boundary_point_at_multi_contact(
             best = Some((distance_squared, candidate));
         }
     }
-    best.map(|(_, point)| point)
+    let (distance_squared, point) = best?;
+    let tolerance = 1e-7 * boundary.bounding_radius().max(1.0);
+    (distance_squared.sqrt() <= tolerance).then_some(point)
 }
 
 pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Option<BoundaryPoint> {
