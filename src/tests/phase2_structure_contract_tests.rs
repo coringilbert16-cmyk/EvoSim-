@@ -21,7 +21,10 @@ fn thin_rectangle_catalog() -> Vec<BaseResource> {
             },
             physical_state: PhysicalState::Rigid,
             shape: Shape {
-                form: Form::Rectangle { width: 2.0, height: 0.1 },
+                form: Form::Rectangle {
+                    width: 2.0,
+                    height: 0.1,
+                },
             },
         },
         BaseResource {
@@ -35,7 +38,10 @@ fn thin_rectangle_catalog() -> Vec<BaseResource> {
             },
             physical_state: PhysicalState::Rigid,
             shape: Shape {
-                form: Form::Rectangle { width: 2.0, height: 0.1 },
+                form: Form::Rectangle {
+                    width: 2.0,
+                    height: 0.1,
+                },
             },
         },
     ]
