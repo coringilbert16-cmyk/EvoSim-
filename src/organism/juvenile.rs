@@ -371,8 +371,7 @@ mod seed_geometry_tests {
         for (offset, ring_index) in [2usize, 5].into_iter().enumerate() {
             let methane = blueprint.elements[methane_start + offset].placement;
             let actual_angle = methane.y.atan2(methane.x);
-            let expected_angle =
-                std::f64::consts::TAU * ring_index as f64 / ring_sides as f64;
+            let expected_angle = std::f64::consts::TAU * ring_index as f64 / ring_sides as f64;
             let angular_error = (actual_angle - expected_angle)
                 .rem_euclid(std::f64::consts::TAU)
                 .min((expected_angle - actual_angle).rem_euclid(std::f64::consts::TAU));
