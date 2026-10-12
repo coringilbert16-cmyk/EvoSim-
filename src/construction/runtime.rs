@@ -1307,10 +1307,7 @@ fn realize_next_bond_driven(
     for existing_index in existing_indices {
         let existing_unit = structure.units.get(existing_index)?;
         let anchor_material = existing_unit.material.parts.first()?.0.as_str();
-        for part_index in 0..new_material.material.parts.len() {
-            let Some((candidate_name, _)) = new_material.material.parts.get(part_index) else {
-                continue;
-            };
+        for (part_index, (candidate_name, _)) in new_material.material.parts.iter().enumerate() {
             let Some(candidate_resource) = resource(catalog, candidate_name) else {
                 continue;
             };
@@ -1695,7 +1692,6 @@ fn construct_blueprint_bond_driven_internal(
         .ok_or_else(|| "construction anchor restored no physical units".to_string())?;
     realized[anchor_index] = true;
     realized_units[anchor_index] = Some(anchor_indices.clone());
-    let genome_anchor = structure.units[anchor_unit_index].placement;
     while !realized.iter().all(|value| *value) {
         // Select the next element only from its currently realized neighbors.
         // Total blueprint degree is deliberately not a tie-breaker: that would
