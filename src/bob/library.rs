@@ -22,6 +22,24 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+
+/// Return a per-process, per-write temporary path so concurrent library opens
+/// never contend for the same `.tmp` file while atomically replacing metadata.
+fn unique_temp_path(path: &Path) -> PathBuf {
+    static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
+    let sequence = NEXT_TEMP_ID.fetch_add(1, Ordering::Relaxed);
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("bob-library-file");
+    path.with_file_name(format!(
+        "{file_name}.{}.{}.tmp",
+        std::process::id(),
+        sequence
+    ))
+}
 
 pub const GEOMETRY_LIBRARY_SCHEMA_VERSION: u32 = 2;
 /// Version for the live-interface cache-key format, independent of persisted Bob records.
@@ -2012,7 +2030,7 @@ fn write_storage_manifest(root: &Path, version: u32) -> std::io::Result<()> {
         })
     };
     let path = root.join("storage_manifest.json");
-    let temp = root.join("storage_manifest.json.tmp");
+    let temp = unique_temp_path(&path);
     {
         let mut file = File::create(&temp)?;
         serde_json::to_writer(&mut file, &value)
@@ -3504,7 +3522,7 @@ impl GeometryLibrary {
 
     fn write_frontier(&self) -> std::io::Result<()> {
         let path = self.root.join("frontier.json");
-        let temp = self.root.join("frontier.json.tmp");
+        let temp = unique_temp_path(&path);
         let bytes = serde_json::to_vec_pretty(&self.frontier)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         fs::write(&temp, bytes)?;
@@ -3514,7 +3532,7 @@ impl GeometryLibrary {
 
     fn write_manifest(&self) -> std::io::Result<()> {
         let path = self.root.join("manifest.json");
-        let temp = self.root.join("manifest.json.tmp");
+        let temp = unique_temp_path(&path);
         let bytes = serde_json::to_vec_pretty(&self.manifest)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         fs::write(&temp, bytes)?;
@@ -5332,6 +5350,42 @@ pub fn open_default_library() -> std::io::Result<GeometryLibrary> {
 #[cfg(test)]
 mod bob_lookup_contract_tests {
     use super::*;
+
+    #[test]
+    fn concurrent_default_store_initialization_does_not_race_on_temp_files() {
+        use std::sync::{Arc, Barrier};
+        use std::thread;
+
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-concurrent-open-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let root = Arc::new(root);
+        let workers = 8;
+        let barrier = Arc::new(Barrier::new(workers));
+        let mut handles = Vec::new();
+
+        for _ in 0..workers {
+            let root = Arc::clone(&root);
+            let barrier = Arc::clone(&barrier);
+            handles.push(thread::spawn(move || {
+                barrier.wait();
+                GeometryLibrary::open(&*root, &default_catalog())
+                    .map(|library| (library.len(), library.manifest.entries))
+            }));
+        }
+
+        for handle in handles {
+            assert_eq!(
+                handle.join().expect("library-open thread must not panic")
+                    .expect("concurrent empty-store initialization must succeed"),
+                (0, 0)
+            );
+        }
+
+        std::fs::remove_dir_all(&*root).expect("remove isolated concurrent-open store");
+    }
 
     #[test]
     fn fresh_empty_library_opens_and_reopens_without_seeding_geometry() {
