@@ -1996,8 +1996,21 @@ fn construct_blueprint_bond_driven_internal(
         }
 
         if !attached {
+            let target_pose = blueprint.elements[index].placement;
+            let overlap_blockers = rejection_counts
+                .overlap_rejections_by_existing_index
+                .keys()
+                .filter_map(|unit_index| {
+                    structure.units.get(*unit_index).map(|unit| {
+                        format!(
+                            "index={unit_index} id={:?} material={:?} pose={:?}",
+                            unit.physical_id, unit.material.parts, unit.placement
+                        )
+                    })
+                })
+                .collect::<Vec<_>>();
             eprintln!(
-                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} overlap_rejections={} first_overlap={:?} overlap_rejections_by_existing_index={:?} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={}",
+                "[construction-placement-diagnostics] element={index} target_pose={target_pose:?} realized_neighbor_indices={neighbors:?} overlap_blockers={overlap_blockers:?} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} overlap_rejections={} first_overlap={:?} overlap_rejections_by_existing_index={:?} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={}",
                 rejection_counts.attempted_origins,
                 rejection_counts.generated_origins,
                 rejection_counts.deduplicated_origins,
