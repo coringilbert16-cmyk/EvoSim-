@@ -37,6 +37,13 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 - The explicit focused gate in `.github/workflows/rust.yml` passed again on latest code head `a6c6a8919bf0f0b5e96165ffed74e1bddf901cea` (run `38241761417`), including the strengthened rollback assertions, persisted Bob record realization, restored fluid contact, three-piece worker cap, and area-conservation solver. The full suite and Clippy remain red as documented above.
 - Generation is still paused on the integration branch until this PR's changes are integrated there. Then run the existing gated workflow with isolated output; do not add generated catalogue data to Git or weaken live validation.
 
+## Bob interface-coverage audit — 2026-10-12
+
+- Source audit of `src/bob/worker.rs`: each eligible rigid formation is processed for rigid edge, point, and vertex contact families. The Water-specific branch persists Water/rigid capillary contact families, fluid-boundary families, fluid formations, and collinear multi-contact fluid formations; the new transaction/persistence focused gate passes on PR #193.
+- **Known coverage gap:** there is no separate fluid–fluid family-generation path in the worker. The Water branch is generated against rigid parent formations; multi-contact fluid generation currently calls the collinear-contact generator. Do not imply that Bob's current catalogue covers arbitrary fluid–fluid interfaces or all multi-contact arrangements.
+- Before a three-piece production run, retain the isolated artifact workflow and report coverage by interface class: rigid edge/point/vertex; Water–rigid capillary contacts; multi-contact Water boundaries; unsupported/missing fluid–fluid cases; and persistence/reopen outcomes. A zero generated count is not proof of coverage—report eligible cases, attempted cases, rejects, and missing classes separately.
+- Do not add synthetic fluid–fluid records or relax physical validation to make coverage counts look complete. Implement that family only after defining a conserved geometry representation and a live transaction path that can validate it.
+
 ## Bob catalogue cap change — 2026-10-12
 
 - Decision: raise the maximum persisted rigid formation size from 2 to 3 constituents. This changes the cap only; it does not authorize 4+ piece records or put generated catalogue data in Git.
