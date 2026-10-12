@@ -1522,8 +1522,12 @@ fn realize_next_bond_driven(
                     }) {
                         rejection_counts.overlap_rejections += 1;
                         if rejection_counts.first_overlap_diagnostic.is_none() {
-                            rejection_counts.first_overlap_diagnostic =
-                                first_overlapping_unit_pair(&trial, &indices, &ignored_units, catalog);
+                            rejection_counts.first_overlap_diagnostic = first_overlapping_unit_pair(
+                                &trial,
+                                &indices,
+                                &ignored_units,
+                                catalog,
+                            );
                         }
                         continue;
                     }
