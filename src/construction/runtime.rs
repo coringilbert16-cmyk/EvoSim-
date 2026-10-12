@@ -584,22 +584,20 @@ fn form_remaining_multi_contact_bonds_in_place(
         if length_squared <= f64::EPSILON {
             return f64::INFINITY;
         }
-        let t = (((point.0 - sx) * dx + (point.1 - sy) * dy) / length_squared)
-            .clamp(0.0, 1.0);
+        let t = (((point.0 - sx) * dx + (point.1 - sy) * dy) / length_squared).clamp(0.0, 1.0);
         (point.0 - (sx + t * dx)).hypot(point.1 - (sy + t * dy))
     };
-    let fluid_endpoint_on_segment = |endpoint: crate::structure::ConnectionEndpoint,
-                                     segment: ((f64, f64), (f64, f64))| {
-        match endpoint {
-            crate::structure::ConnectionEndpoint::Fluid { x, y } => {
-                point_segment_distance((x, y), segment) <= tolerance
+    let fluid_endpoint_on_segment =
+        |endpoint: crate::structure::ConnectionEndpoint, segment: ((f64, f64), (f64, f64))| {
+            match endpoint {
+                crate::structure::ConnectionEndpoint::Fluid { x, y } => {
+                    point_segment_distance((x, y), segment) <= tolerance
+                }
+                _ => false,
             }
-            _ => false,
-        }
-    };
+        };
     let bond_connects_fluid = |bond: &crate::structure::Bond, target_id| {
-        (bond.endpoint_a.constituent_id == fluid_id
-            && bond.endpoint_b.constituent_id == target_id)
+        (bond.endpoint_a.constituent_id == fluid_id && bond.endpoint_b.constituent_id == target_id)
             || (bond.endpoint_b.constituent_id == fluid_id
                 && bond.endpoint_a.constituent_id == target_id)
     };
@@ -636,8 +634,7 @@ fn form_remaining_multi_contact_bonds_in_place(
     // bonds at different positions.
     let mut covered = vec![false; contact_segments.len()];
     for bond in &structure.bonds {
-        if bond.endpoint_a.constituent_id != fluid_id
-            && bond.endpoint_b.constituent_id != fluid_id
+        if bond.endpoint_a.constituent_id != fluid_id && bond.endpoint_b.constituent_id != fluid_id
         {
             continue;
         }
