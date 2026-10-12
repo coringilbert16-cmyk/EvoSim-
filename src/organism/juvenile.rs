@@ -53,8 +53,7 @@ pub(crate) fn confirmed_seed_baseline(
 
     for i in 0..ring_sides {
         let angle = std::f64::consts::TAU * i as f64 / ring_sides as f64;
-        let next_angle =
-            std::f64::consts::TAU * (i + 1) as f64 / ring_sides as f64;
+        let next_angle = std::f64::consts::TAU * (i + 1) as f64 / ring_sides as f64;
         let position_angle = angle - std::f64::consts::FRAC_PI_6;
         let next_position_angle = next_angle - std::f64::consts::FRAC_PI_6;
         let vertex = (
@@ -137,7 +136,11 @@ pub(crate) fn confirmed_seed_baseline(
     // The first chain element attaches to the ring's vertex at element 0.
     for step in 1..=chain_steps {
         connections.push(BlueprintConnection {
-            element_a: if step == 1 { 0 } else { ring_piece_count + step - 2 },
+            element_a: if step == 1 {
+                0
+            } else {
+                ring_piece_count + step - 2
+            },
             element_b: ring_piece_count + step - 1,
         });
     }
