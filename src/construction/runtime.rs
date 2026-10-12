@@ -644,14 +644,13 @@ fn form_remaining_multi_contact_bonds_in_place(
             continue;
         };
         let point = (x, y);
-        if let Some((index, distance)) = contact_segments
+        if let Some((index, _distance)) = contact_segments
             .iter()
             .enumerate()
             .map(|(index, segment)| (index, point_segment_distance(point, *segment)))
             .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
             .filter(|(_, distance)| *distance <= tolerance)
         {
-            let _ = distance;
             covered[index] = true;
         }
     }
