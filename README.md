@@ -21,8 +21,8 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 ### Operational gates
 
 1. Keep the geometry catalogue empty in the tracked tree. Never run the continuous worker or use the default catalogue directory for tests.
-2. Do not start three-piece generation until the persisted fluid-realization/query path and live transactional bond formation pass focused tests; live validation remains authoritative.
-3. The approved target is now up to three rigid constituents, but generation remains paused until that gate passes. Then run only in an isolated output root outside Git and report formation/family counts, runtime, storage size, frontier completion, and reopen verification.
+2. The focused Bob fluid transaction gate now passes on PR #193: same-rigid-unit multi-contact, existing multi-contact rollback, persisted-record realization, restored fluid contacts, three-piece cap, and area-conservation solver tests are explicit in `.github/workflows/rust.yml`. Live validation remains authoritative.
+3. Do not run production three-piece generation from the integration branch until these changes are incorporated into `integration/unified-source-and-catalogue`. Then use the manual `.github/workflows/bob-three-piece-generation.yml` workflow, which writes to an isolated runner-temporary output root and uploads the result as an artifact. Keep generated data out of Git and report formation/family counts, runtime, storage size, frontier completion, and reopen verification.
 4. Do not divert the active geometry-library/fluid-formation sprint into the unrelated constructor-test backlog. Keep those failures visible, but prioritize fluid-record realization, interface-class coverage, and Bob's persisted-knowledge contract; never disable tests or weaken physical invariants.
 5. Keep PR #186 as the single integration target. Do not merge or change the default branch as a side effect of cleanup.
 6. All new decisions and handoffs go in this root README. Before adding a new audit note, update the current summary and avoid repeating obsolete checkpoints.
@@ -34,7 +34,8 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 - Fixes for same-unit contacts: (1) stage structure, energy ledger, and usable energy transactionally and commit only if all segments receive bonds; (2) match candidates to each segment's local fluid endpoint and assign existing bonds to one nearest segment; (3) allow continuous endpoint candidates along rigid polygon edges; and (4) resolve `ConnectionEndpoint::Boundary` world points for polygonal as well as circular shapes.
 - Full Rust suite remains red: **374 passed, 28 failed, 1 ignored**. This is the same failure count as the prior baseline (with the new same-unit test adding one passing test). Remaining failures span constructor/cavity/genome/contact/movement/reproduction/simulation contracts, including cases where the persistent Bob geometry library is absent in the test environment. Do not describe the full suite as green.
 - Clippy remains red on broad existing lint debt (dead code, type complexity, indexing/loop style, and other warnings promoted to errors). The transaction helper and generic boundary-point conversion did not appear among the reported Clippy diagnostics in this run.
-- Three-piece catalogue generation remains paused until focused persistence, rollback, and live-transaction gates are all confirmed independently. Do not add generated catalogue data or weaken live validation.
+- The explicit focused gate in `.github/workflows/rust.yml` passed on code head `215cbfbd90d32e848fdb383fd04785b9160ae312` (run `38240397409`): the same-unit regression, rollback regression, persisted Bob record realization, restored fluid contact, three-piece worker cap, and area-conservation solver all passed. The full suite and Clippy remain red as documented above.
+- Generation is still paused on the integration branch until this PR's changes are integrated there. Then run the existing gated workflow with isolated output; do not add generated catalogue data to Git or weaken live validation.
 
 ## Bob catalogue cap change — 2026-10-12
 
