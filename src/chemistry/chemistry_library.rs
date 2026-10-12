@@ -309,18 +309,48 @@ impl ChemistryLibrary {
         if self.entries.contains_key(&key) {
             return Ok(false);
         }
+        let data_path = self.root.join("chemistry.jsonl");
         let mut file = OpenOptions::new()
             .create(true)
+            .read(true)
             .append(true)
-            .open(self.root.join("chemistry.jsonl"))?;
-        serde_json::to_writer(&mut file, &record)
+            .open(&data_path)?;
+        let original_len = file.metadata()?.len();
+        let mut row = serde_json::to_vec(&record)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        file.write_all(b"\n")?;
-        file.sync_data()?;
+        row.push(b'\\n');
+
+        if let Err(write_error) = file.write_all(&row).and_then(|()| file.sync_data()) {
+            return Err(rollback_appended_record(&mut file, original_len, write_error));
+        }
+
+        let mut next_manifest = self.manifest.clone();
+        next_manifest.entries = (self.entries.len() + 1) as u64;
+        if let Err(manifest_error) = persist_manifest_atomically(&self.root, &next_manifest) {
+            return Err(rollback_appended_record(&mut file, original_len, manifest_error));
+        }
+
+        // Publish the new in-memory state only after both persisted updates succeed.
         self.entries.insert(key, record);
-        self.manifest.entries = self.entries.len() as u64;
-        persist_manifest_atomically(&self.root, &self.manifest)?;
+        self.manifest = next_manifest;
         Ok(true)
+    }
+}
+
+
+fn rollback_appended_record(
+    file: &mut File,
+    original_len: u64,
+    original_error: std::io::Error,
+) -> std::io::Error {
+    match file.set_len(original_len).and_then(|()| file.sync_data()) {
+        Ok(()) => original_error,
+        Err(rollback_error) => std::io::Error::new(
+            rollback_error.kind(),
+            format!(
+                "chemistry persistence failed ({original_error}); additionally failed to roll back appended data ({rollback_error})"
+            ),
+        ),
     }
 }
 
@@ -353,8 +383,9 @@ fn persist_manifest_atomically(
         file.sync_all()?;
         drop(file);
         fs::rename(&temp_path, &manifest_path)?;
-        // Persist the directory entry update where directory syncing is supported.
-        File::open(root)?.sync_all()?;
+        // The rename is the commit point. Directory syncing is best-effort because
+        // reporting failure after rename would falsely imply the manifest was unchanged.
+        let _ = File::open(root).and_then(|directory| directory.sync_all());
         Ok(())
     })();
     if write_result.is_err() {
