@@ -1400,7 +1400,8 @@ fn realize_next_bond_driven(
                 };
                 let Some(candidate_material) = candidate_material else {
                     rejection_counts.restore_failures += 1;
-                    *rejection_counts.restore_failure_reasons
+                    *rejection_counts
+                        .restore_failure_reasons
                         .entry("stored fluid shape candidate rejected")
                         .or_default() += 1;
                     continue;
@@ -1414,7 +1415,10 @@ fn realize_next_bond_driven(
                     Ok(indices) => indices,
                     Err(reason) => {
                         rejection_counts.restore_failures += 1;
-                        *rejection_counts.restore_failure_reasons.entry(reason).or_default() += 1;
+                        *rejection_counts
+                            .restore_failure_reasons
+                            .entry(reason)
+                            .or_default() += 1;
                         continue;
                     }
                 };
@@ -1875,8 +1879,8 @@ fn construct_blueprint_bond_driven_internal(
                         && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_some()
                     {
                         *ledger = construction_ledger;
-                            *energy = remaining_energy;
-                            return Ok((structure, total_heat));
+                        *energy = remaining_energy;
+                        return Ok((structure, total_heat));
                     }
 
                     break 'neighbors;
@@ -1997,8 +2001,8 @@ fn construct_blueprint_bond_driven_internal(
                             && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_some()
                         {
                             *ledger = construction_ledger;
-                            *energy = remaining_energy;
-                            return Ok((structure, total_heat));
+                        *energy = remaining_energy;
+                        return Ok((structure, total_heat));
                         }
 
                         break 'unit_pairs;
