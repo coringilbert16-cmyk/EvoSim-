@@ -1649,3 +1649,10 @@ The worker's separate multi-contact counters initially required two calls to the
 ### Collinear family work deduplication — 2026-10-11
 
 The exposed-edge generator now keys already-processed line families by quantized direction, offset, and equilibrium contact angle. Edges sharing the same line family no longer repeat the same full exposed-interval alignment and chord-window enumeration. The key uses the library's existing (10^{-9}) geometry quantization, tighter than the candidate collinearity tolerances. This is a search-work reduction only; formation signatures and validation remain unchanged.
+
+
+### Consolidation verification and stacked-fix CI — 2026-10-12
+
+The current Bob/fluid consolidation branch removes the unused `eligible_candidates` bounds-check bindings and replaces them with direct index-range validation. The Rust workflow now also runs for pull requests targeting `fix/**` branches, so stacked fix PRs can receive the same formatting, architecture, focused-test, full-suite, and Clippy gates instead of silently receiving no run.
+
+**Exact-head run `38256031760`**: formatting, source-size policy, COMBINE architecture, Bob compact-storage tests, empty-library reopen, the focused Bob fluid transaction/three-piece tests, and focused chemical BREAK tests all passed. The full Rust suite reported **375 passed, 29 failed, 1 ignored**; strict Clippy remains red on a broad existing lint backlog (62 errors in the binary target and 39 in the test target at this checkpoint). This is a better result than the preceding 374/30/1 run, but not a green full suite. Do not conflate the focused Bob/fluid gates with full-suite success.
