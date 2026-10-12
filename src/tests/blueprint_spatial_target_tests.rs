@@ -36,50 +36,78 @@ mod tests {
     #[test]
     fn diagnostic_swapping_sulfur_and_first_chain_element_reports_order_effect() {
         let catalog = default_catalog();
-        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
-        let baseline_error = match crate::juvenile::realize_initial(&blueprint, &catalog) {
-            Err(error) => error,
-            Ok((structure, _, _)) => panic!(
-                "baseline unexpectedly succeeded with {} physical units",
-                structure.units.len()
-            ),
-        };
-        assert!(baseline_error.contains("element 26"), "{baseline_error}");
-        eprintln!("[constructor-order-diagnostic] baseline={baseline_error}");
+        let seed = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
 
-        // Swap the first chain constituent (6) with the first Sulfur branch
-        // constituent (26), preserving the graph by remapping every endpoint.
-        let mut reordered = blueprint.clone();
-        let mut new_index_for_old = (0..blueprint.elements.len()).collect::<Vec<_>>();
-        new_index_for_old.swap(6, 26);
-        for old_index in 0..blueprint.elements.len() {
-            reordered.elements[new_index_for_old[old_index]] =
-                blueprint.elements[old_index].clone();
+        // Keep only the six Carbon ring elements, its first chain Carbon, and
+        // the first Sulfur branch. This preserves the local obstruction while
+        // avoiding the full 32-element calibration's long runtime.
+        let selected_old_indices = [0usize, 1, 2, 3, 4, 5, 6, 26];
+        let mut new_index_for_old = vec![usize::MAX; seed.elements.len()];
+        for (new_index, old_index) in selected_old_indices.iter().copied().enumerate() {
+            new_index_for_old[old_index] = new_index;
         }
-        for connection in &mut reordered.connections {
-            connection.element_a = new_index_for_old[connection.element_a];
-            connection.element_b = new_index_for_old[connection.element_b];
-        }
-        for anchor in &mut reordered.anchor_elements {
-            *anchor = new_index_for_old[*anchor];
-        }
-        reordered.connections = reordered
+        let elements = selected_old_indices
+            .iter()
+            .map(|old_index| seed.elements[*old_index].clone())
+            .collect::<Vec<_>>();
+        let connections = seed
             .connections
             .iter()
-            .copied()
-            .map(BlueprintConnection::canonical)
-            .collect();
+            .filter(|connection| {
+                new_index_for_old[connection.element_a] != usize::MAX
+                    && new_index_for_old[connection.element_b] != usize::MAX
+            })
+            .map(|connection| BlueprintConnection {
+                element_a: new_index_for_old[connection.element_a],
+                element_b: new_index_for_old[connection.element_b],
+            })
+            .collect::<Vec<_>>();
+        let baseline =
+            StructuralBlueprint::with_anchor_elements(elements, connections, vec![0]);
 
-        reordered
-            .validate()
-            .expect("reordered diagnostic blueprint must remain structurally valid");
-        let outcome = match crate::juvenile::realize_initial(&reordered, &catalog) {
-            Ok((structure, _, _)) => format!("success; physical_units={}", structure.units.len()),
-            Err(error) => format!("failure; {error}"),
+        let mut reordered_elements = baseline.elements.clone();
+        reordered_elements.swap(6, 7);
+        let remapped_connections = baseline
+            .connections
+            .iter()
+            .map(|connection| {
+                let remap = |index| match index {
+                    6 => 7,
+                    7 => 6,
+                    other => other,
+                };
+                BlueprintConnection {
+                    element_a: remap(connection.element_a),
+                    element_b: remap(connection.element_b),
+                }
+            })
+            .collect::<Vec<_>>();
+        let reordered = StructuralBlueprint::with_anchor_elements(
+            reordered_elements,
+            remapped_connections,
+            vec![0],
+        );
+
+        let construct_once = |candidate: &StructuralBlueprint| {
+            let mut ledger = crate::state::EnergyLedger::default();
+            let mut energy = 1.0e6;
+            crate::construction_runtime::construct_blueprint_bond_driven(
+                candidate,
+                &catalog,
+                &mut ledger,
+                &mut energy,
+            )
+            .map(|(structure, _)| structure.units.len())
         };
+        let baseline_result = construct_once(&baseline);
+        let reordered_result = construct_once(&reordered);
         assert!(
-            outcome.starts_with("success;"),
-            "reordered constructor result: {outcome}"
+            baseline_result.is_err(),
+            "baseline local obstruction unexpectedly succeeded: {baseline_result:?}"
+        );
+        assert!(
+            reordered_result.is_ok(),
+            "placing Sulfur before the first chain Carbon did not resolve the local obstruction: {reordered_result:?}"
         );
     }
 
