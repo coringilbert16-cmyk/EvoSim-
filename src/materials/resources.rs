@@ -924,9 +924,9 @@ mod shape_tests {
         assert!(catalog
             .iter()
             .any(|r| matches!(r.shape.form, Form::RegularPolygon { sides, .. } if sides != 6)));
-        assert!(catalog
-            .iter()
-            .any(|r| matches!(r.shape.form, Form::Line { .. })));
+        // Physical resources use finite-area geometry; Hydrogen is the line-like
+        // resource and is represented by its thin rectangle.
+        assert!(catalog.iter().any(|r| matches!(r.shape.form, Form::Rectangle { .. })));
     }
 
     #[test]
