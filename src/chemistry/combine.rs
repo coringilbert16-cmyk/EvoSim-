@@ -482,8 +482,15 @@ mod tests {
             !candidates.is_empty(),
             "touching water may be evaluated for a bond; it is not connected until the bond transaction succeeds"
         );
-        assert!(s.bonds.is_empty(), "candidate generation must not create a bond or merge fluid");
-        assert_eq!(s.units.len(), 2, "candidate generation must not coalesce fluid units");
+        assert!(
+            s.bonds.is_empty(),
+            "candidate generation must not create a bond or merge fluid"
+        );
+        assert_eq!(
+            s.units.len(),
+            2,
+            "candidate generation must not coalesce fluid units"
+        );
     }
 
     #[test]
