@@ -61,14 +61,17 @@ pub(crate) fn continuous_endpoint(
     let shape = unit.shape(catalog)?;
     let point = boundary_point_toward(shape, lx, ly)?;
     match &shape.form {
-        Form::Circle { .. } => Some(ConnectionEndpoint::Boundary {
+        Form::Circle { .. }
+        | Form::Rectangle { .. }
+        | Form::RegularPolygon { .. }
+        | Form::Polygon { .. } => Some(ConnectionEndpoint::Boundary {
             angle_radians: point.y.atan2(point.x),
         }),
         Form::Fluid { .. } => Some(ConnectionEndpoint::Fluid {
             x: point.x,
             y: point.y,
         }),
-        _ => None,
+        Form::Line { .. } => None,
     }
 }
 
