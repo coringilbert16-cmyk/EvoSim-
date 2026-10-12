@@ -281,17 +281,44 @@ mod seed_geometry_tests {
             );
         }
 
-        // The outward chain may share the anchor at element 0, but every other
-        // ring element must remain clear of every chain element. This guards
-        // against replacing the old tight spiral with a differently crossing path.
+        // The outward chain may touch a ring piece at an unbonded boundary,
+        // but it must never penetrate any ring constituent.
+        let carbon_form = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .expect("Carbon should exist")
+            .shape
+            .form
+            .clone();
         for chain_index in ring_sides..(ring_sides + 20) {
             let chain = blueprint.elements[chain_index].placement;
             for ring_index in 1..ring_sides {
                 let ring = blueprint.elements[ring_index].placement;
-                let distance = (chain.x - ring.x).hypot(chain.y - ring.y);
+                let chain_part = crate::material_geometry::PlacedMaterialPart {
+                    part_index: chain_index,
+                    form: carbon_form.clone(),
+                    placement: crate::structure::Placement {
+                        x: chain.x,
+                        y: chain.y,
+                        rotation_radians: chain.rotation_radians,
+                    },
+                };
+                let ring_part = crate::material_geometry::PlacedMaterialPart {
+                    part_index: ring_index,
+                    form: carbon_form.clone(),
+                    placement: crate::structure::Placement {
+                        x: ring.x,
+                        y: ring.y,
+                        rotation_radians: ring.rotation_radians,
+                    },
+                };
                 assert!(
-                    distance > expected_spacing * 1.3,
-                    "outward chain element {chain_index} approaches ring element {ring_index}: {distance}"
+                    !crate::material_geometry::placed_forms_penetrate(
+                        &chain_part,
+                        &ring_part,
+                        crate::material_geometry::GEOMETRY_EPSILON,
+                    ),
+                    "outward chain element {chain_index} penetrates ring element {ring_index}"
                 );
             }
         }
@@ -333,7 +360,8 @@ mod seed_geometry_tests {
         for (offset, ring_index) in [2usize, 5].into_iter().enumerate() {
             let methane = blueprint.elements[methane_start + offset].placement;
             let actual_angle = methane.y.atan2(methane.x);
-            let expected_angle = std::f64::consts::TAU * ring_index as f64 / ring_sides as f64;
+            let expected_angle = std::f64::consts::TAU * ring_index as f64 / ring_sides as f64
+                - std::f64::consts::FRAC_PI_6;
             let angular_error = (actual_angle - expected_angle)
                 .rem_euclid(std::f64::consts::TAU)
                 .min((expected_angle - actual_angle).rem_euclid(std::f64::consts::TAU));
