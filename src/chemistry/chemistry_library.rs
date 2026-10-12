@@ -318,7 +318,7 @@ impl ChemistryLibrary {
         let original_len = file.metadata()?.len();
         let mut row = serde_json::to_vec(&record)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        row.push(b'\\n');
+        row.push(b'\n');
 
         if let Err(write_error) = file.write_all(&row).and_then(|()| file.sync_data()) {
             return Err(rollback_appended_record(&mut file, original_len, write_error));
