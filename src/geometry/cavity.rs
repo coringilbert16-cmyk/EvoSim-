@@ -322,7 +322,8 @@ mod tests {
 
     #[test]
     fn carbon_capacity_reference_is_not_a_hard_threshold() {
-        let cavity = GenomeCavity::test_fixture(1.0, 100.0);
+        let mut cavity = GenomeCavity::test_fixture(1.0, 100.0);
+        cavity.boundary_units = vec![0, 1, 2];
         assert!(
             cavity.qualifies(),
             "a positive-area sealed cavity must not fail solely for being below the Carbon reference"
