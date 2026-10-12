@@ -1739,3 +1739,10 @@ The placement loop also no longer cross-products every existing endpoint with ev
 **Current boundary:** the initial-organism constructor still uses the fixed Carbon scaffold, lattice snapping, coordinate fallback, and artificial construction-energy allowance. Those are not removed yet because the initial constructor has no replacement milestone-driven coordinator to report missing coverage and build from persisted local formations. The strict runtime may expose tests that previously depended on analytic fallback or an empty Bob catalogue; those must be migrated to explicit persisted fixtures or asserted as coverage misses, not fixed by restoring silent fallbacks.
 
 **Verification:** Rust CI was triggered for this branch and is still running at this checkpoint. No pass/fail conclusion is claimed for the newest runtime refactor.
+
+
+### Constructor stripping sprint 3 — missing-coverage diagnostics (2026-10-12)
+
+The bond-driven placement diagnostics now collect rigid anchor/candidate material pairs for which strict persisted Bob lookup returns no placements. If an element has no candidate origins at all and at least one rigid lookup missed, the runtime reports `missing Bob library coverage` rather than the generic no-placement message. This keeps library coverage distinct from cases where recorded candidates were found but rejected by live overlap/contact/COMBINE checks.
+
+Fluid-query coverage misses are not yet fully distinguished from fluid records that exist but fail live realization; that remains an explicit follow-up rather than an assumed equivalence.
