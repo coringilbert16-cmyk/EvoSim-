@@ -1,7 +1,5 @@
 //! Physical contact and structural connection candidates.
-use crate::connection_geometry::{
-    facing_compatibility, point_distance, rigid_endpoint_world_point,
-};
+use crate::connection_geometry::{facing_compatibility, point_distance};
 use crate::resources::Form;
 use crate::structure::{Bond, ConnectionEndpoint, OrganismStructure, StructuralUnit};
 use crate::surface_geometry::boundary_point_toward;
