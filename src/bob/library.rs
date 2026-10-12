@@ -7121,8 +7121,9 @@ mod fluid_contact_constraint_schema_tests {
         for name in ["TestWallA", "TestWallB"] {
             let mut wall = carbon.clone();
             wall.name = name.to_string();
-            wall.shape.form = Form::Line {
-                length: wall_length,
+            wall.shape.form = Form::Rectangle {
+                width: wall_length,
+                height: 0.1,
             };
             catalog.push(wall);
         }
@@ -7134,7 +7135,7 @@ mod fluid_contact_constraint_schema_tests {
                     resource: "TestWallA".to_string(),
                     placement: Placement {
                         x: -wall_length * 0.5,
-                        y: 0.0,
+                        y: -0.05,
                         rotation_radians: 0.0,
                     },
                 },
@@ -7142,7 +7143,7 @@ mod fluid_contact_constraint_schema_tests {
                     resource: "TestWallB".to_string(),
                     placement: Placement {
                         x: wall_length * 0.5,
-                        y: 0.0,
+                        y: -0.05,
                         rotation_radians: 0.0,
                     },
                 },
@@ -7247,8 +7248,9 @@ mod fluid_contact_constraint_schema_tests {
         for name in ["TestWallA", "TestWallB", "TestWallC"] {
             let mut wall = carbon.clone();
             wall.name = name.to_string();
-            wall.shape.form = Form::Line {
-                length: wall_length,
+            wall.shape.form = Form::Rectangle {
+                width: wall_length,
+                height: 0.1,
             };
             catalog.push(wall);
         }
@@ -7260,7 +7262,7 @@ mod fluid_contact_constraint_schema_tests {
                     resource: "TestWallA".to_string(),
                     placement: Placement {
                         x: -wall_length,
-                        y: 0.0,
+                        y: -0.05,
                         rotation_radians: 0.0,
                     },
                 },
@@ -7268,7 +7270,7 @@ mod fluid_contact_constraint_schema_tests {
                     resource: "TestWallB".to_string(),
                     placement: Placement {
                         x: 0.0,
-                        y: 0.0,
+                        y: -0.05,
                         rotation_radians: 0.0,
                     },
                 },
@@ -7276,7 +7278,7 @@ mod fluid_contact_constraint_schema_tests {
                     resource: "TestWallC".to_string(),
                     placement: Placement {
                         x: wall_length,
-                        y: 0.0,
+                        y: -0.05,
                         rotation_radians: 0.0,
                     },
                 },
