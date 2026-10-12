@@ -371,7 +371,8 @@ mod seed_geometry_tests {
         for (offset, ring_index) in [2usize, 5].into_iter().enumerate() {
             let methane = blueprint.elements[methane_start + offset].placement;
             let actual_angle = methane.y.atan2(methane.x);
-            let expected_angle = std::f64::consts::TAU * ring_index as f64 / ring_sides as f64;
+            let expected_angle =
+                std::f64::consts::TAU * ring_index as f64 / ring_sides as f64;
             let angular_error = (actual_angle - expected_angle)
                 .rem_euclid(std::f64::consts::TAU)
                 .min((expected_angle - actual_angle).rem_euclid(std::f64::consts::TAU));
@@ -379,10 +380,15 @@ mod seed_geometry_tests {
                 angular_error < 1e-9,
                 "methane attachment at ring index {ring_index} has angle {actual_angle}, expected {expected_angle}"
             );
-            assert!(blueprint.connections.iter().any(|connection| {
-                (connection.element_a == ring_index && connection.element_b == methane_start + offset)
-                    || (connection.element_b == ring_index && connection.element_a == methane_start + offset)
-            }), "methane attachment must connect to ring element {ring_index}");
+            assert!(
+                blueprint.connections.iter().any(|connection| {
+                    (connection.element_a == ring_index
+                        && connection.element_b == methane_start + offset)
+                        || (connection.element_b == ring_index
+                            && connection.element_a == methane_start + offset)
+                }),
+                "methane attachment must connect to ring element {ring_index}"
+            );
         }
     }
 }
