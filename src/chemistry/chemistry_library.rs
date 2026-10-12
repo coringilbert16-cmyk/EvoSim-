@@ -294,11 +294,11 @@ impl ChemistryLibrary {
             return Ok(Some(record.static_potential));
         }
         let record = ChemistryRecord {
-            key,
+            key: key.clone(),
             static_potential,
         };
         self.insert(record)?;
-        Ok(Some(static_potential))
+        Ok(self.get(&key).map(|record| record.static_potential))
     }
     pub fn len(&self) -> usize {
         self.entries.len()
@@ -308,6 +308,17 @@ impl ChemistryLibrary {
     }
 
     pub fn insert(&mut self, record: ChemistryRecord) -> std::io::Result<bool> {
+        self.insert_with_manifest_persistence(record, persist_manifest_atomically)
+    }
+
+    fn insert_with_manifest_persistence<F>(
+        &mut self,
+        record: ChemistryRecord,
+        persist_manifest: F,
+    ) -> std::io::Result<bool>
+    where
+        F: FnOnce(&Path, &ChemistryLibraryManifest) -> std::io::Result<()>,
+    {
         if !record.is_valid() {
             return Ok(false);
         }
@@ -339,7 +350,7 @@ impl ChemistryLibrary {
 
         let mut next_manifest = self.manifest.clone();
         next_manifest.entries = (self.entries.len() + 1) as u64;
-        if let Err(manifest_error) = persist_manifest_atomically(&self.root, &next_manifest) {
+        if let Err(manifest_error) = persist_manifest(&self.root, &next_manifest) {
             return Err(rollback_appended_record(&mut file, original_len, manifest_error));
         }
 
@@ -537,6 +548,37 @@ mod tests {
         assert!(!lib.insert(record).unwrap());
         assert!(lib.get(&key).is_some());
         assert_eq!(ChemistryLibrary::open(&root).unwrap().len(), 1);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn manifest_failure_rolls_back_appended_record_and_reopens_cleanly() {
+        let root = test_root("manifest-failure");
+        let _ = fs::remove_dir_all(&root);
+        let mut library = ChemistryLibrary::open(&root).unwrap();
+        let record = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "rollback"),
+            static_potential: 0.55,
+        };
+        let original_manifest = fs::read(root.join("manifest.json")).unwrap();
+        let error = library
+            .insert_with_manifest_persistence(record, |_, _| {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "injected manifest replacement failure",
+                ))
+            })
+            .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+        assert_eq!(library.len(), 0);
+        assert_eq!(library.manifest.entries, 0);
+        assert_eq!(fs::metadata(root.join("chemistry.jsonl")).unwrap().len(), 0);
+        assert_eq!(fs::read(root.join("manifest.json")).unwrap(), original_manifest);
+
+        let reopened = ChemistryLibrary::open(&root).unwrap();
+        assert!(reopened.is_empty());
+        assert_eq!(reopened.manifest.entries, 0);
+        drop(reopened);
         let _ = fs::remove_dir_all(root);
     }
 
