@@ -36,7 +36,7 @@ pub(crate) fn confirmed_seed_baseline(
     // physically spaced outward chain. Sulfur and methane provide heterogeneous
     // peripheral material without defining an organism role or topology.
     let ring_sides = 6usize;
-    let spiral_steps = 20usize;
+    let chain_steps = 20usize;
     let carbon_radius = catalog
         .iter()
         .find(|resource| resource.name == "Carbon")
@@ -49,7 +49,7 @@ pub(crate) fn confirmed_seed_baseline(
     let ring_radius =
         carbon_edge_center_spacing / (2.0 * (std::f64::consts::PI / ring_sides as f64).sin());
 
-    let mut elements = Vec::with_capacity(ring_sides + spiral_steps + 6);
+    let mut elements = Vec::with_capacity(ring_sides + chain_steps + 6);
 
     for i in 0..ring_sides {
         let angle = std::f64::consts::TAU * i as f64 / ring_sides as f64;
@@ -69,7 +69,7 @@ pub(crate) fn confirmed_seed_baseline(
     // to trap itself. These coordinates are preferences; live geometry and bond
     // transactions still determine the realized poses.
     let chain_heading = std::f64::consts::FRAC_PI_6;
-    for step in 1..=spiral_steps {
+    for step in 1..=chain_steps {
         let distance = carbon_edge_center_spacing * step as f64;
         elements.push(BlueprintElement {
             material: Material::free_base("Carbon", 1.0),
@@ -107,7 +107,7 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    let mut connections = Vec::with_capacity(ring_sides + spiral_steps + 6);
+    let mut connections = Vec::with_capacity(ring_sides + chain_steps + 6);
     for i in 0..ring_sides {
         connections.push(BlueprintConnection {
             element_a: i,
@@ -115,14 +115,14 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
     // The first spiral element is the existing ring anchor (element 0).
-    for step in 1..=spiral_steps {
+    for step in 1..=chain_steps {
         connections.push(BlueprintConnection {
             element_a: if step == 1 { 0 } else { ring_sides + step - 2 },
             element_b: ring_sides + step - 1,
         });
     }
 
-    let sulfur_start = ring_sides + spiral_steps;
+    let sulfur_start = ring_sides + chain_steps;
     for (offset, &i) in [0usize, 1, 3, 4].iter().enumerate() {
         connections.push(BlueprintConnection {
             element_a: i,
@@ -262,14 +262,14 @@ mod seed_geometry_tests {
             .expect("Carbon should be a regular polygon");
         let expected_spacing = 3.0_f64.sqrt() * carbon_radius;
 
-        let spiral_start = ring_sides;
+        let chain_start = ring_sides;
         for step in 1..=20 {
             let previous = if step == 1 {
                 0
             } else {
-                spiral_start + step - 2
+                chain_start + step - 2
             };
-            let current = spiral_start + step - 1;
+            let current = chain_start + step - 1;
             let a = blueprint.elements[previous].placement;
             let b = blueprint.elements[current].placement;
             let distance = (a.x - b.x).hypot(a.y - b.y);
