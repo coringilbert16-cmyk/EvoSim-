@@ -5377,11 +5377,11 @@ mod bob_lookup_contract_tests {
         }
 
         for handle in handles {
-            assert_eq!(
-                handle.join().expect("library-open thread must not panic")
-                    .expect("concurrent empty-store initialization must succeed"),
-                (0, 0)
-            );
+            let result = handle
+                .join()
+                .expect("library-open thread must not panic")
+                .expect("concurrent empty-store initialization must succeed");
+            assert_eq!(result, (0, 0));
         }
 
         std::fs::remove_dir_all(&*root).expect("remove isolated concurrent-open store");
