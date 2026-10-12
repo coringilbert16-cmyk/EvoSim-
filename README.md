@@ -54,7 +54,7 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 
 ### First-sprint decision
 
-Do not simply replace the fixed scaffold with `confirmed_seed_baseline`: that would exchange one prescribed layout for another and route startup directly through the already-failing forward-only placement path. The first source-changing sprint must instead isolate the element-26 placement rejection and prove a valid, minimal construction transaction can succeed. Then remove the scaffold in a separate reversible change. No test is disabled and no physical invariant is weakened.
+Do not simply replace the fixed scaffold with `confirmed_seed_baseline`: that would exchange one prescribed layout for another and route startup directly through the already-failing forward-only placement path. The first source-changing sprint therefore adds the first overlapping constituent pair, stable IDs, materials, and poses to the existing element-26 placement diagnostics. This is instrumentation only; the next step is to reproduce the failure and classify the actual overlap before changing search behavior. Then remove the scaffold in a separate reversible change. No test is disabled and no physical invariant is weakened.
 
 ### Short sprint sequence
 
@@ -64,7 +64,7 @@ Do not simply replace the fixed scaffold with `confirmed_seed_baseline`: that wo
 4. Replace the fixed startup scaffold only once the general construction route has a verified minimal viable path.
 5. Replace the artificial energy allowance only alongside an explicit initial-energy source and ledger invariant.
 
-No constructor runtime code has been changed as part of this inventory checkpoint. Keep the branch isolated and draft; do not merge or change the integration target as a side effect.
+Constructor runtime behavior is unchanged; the only source change so far enriches failure diagnostics. Keep the branch isolated and draft; do not merge or change the integration target as a side effect.
 
 ## Fluid coalescence transaction sprint — 2026-10-12
 
