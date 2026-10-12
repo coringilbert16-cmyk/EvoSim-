@@ -6,7 +6,8 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main, integration/unified-source-and-catalogue]
+    # Also validate stacked fix branches against their parent fix branch.
+    branches: [main, integration/unified-source-and-catalogue, 'fix/**']
 
 permissions:
   contents: read
