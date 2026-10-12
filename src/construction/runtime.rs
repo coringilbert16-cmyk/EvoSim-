@@ -767,38 +767,59 @@ fn form_remaining_multi_contact_bonds_in_place(
     covered.into_iter().all(|is_covered| is_covered)
 }
 
-pub(crate) fn placed_unit_overlaps(
+fn overlapping_unit_indices(
     structure: &OrganismStructure,
     candidate: &StructuralUnit,
     ignored_units: &[usize],
     catalog: &[BaseResource],
-) -> bool {
+) -> Vec<usize> {
     let Some(candidate_shape) = candidate.shape(catalog) else {
-        return true;
+        return structure
+            .units
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !ignored_units.contains(index))
+            .map(|(index, _)| index)
+            .collect();
     };
     let candidate_part = crate::material_geometry::PlacedMaterialPart {
         part_index: 0,
         form: candidate_shape.form.clone(),
         placement: candidate.placement,
     };
-    structure.units.iter().enumerate().any(|(index, unit)| {
-        if ignored_units.contains(&index) {
-            return false;
-        }
-        let Some(shape) = unit.shape(catalog) else {
-            return true;
-        };
-        let existing_part = crate::material_geometry::PlacedMaterialPart {
-            part_index: index + 1,
-            form: shape.form.clone(),
-            placement: unit.placement,
-        };
-        crate::material_geometry::placed_forms_penetrate(
-            &candidate_part,
-            &existing_part,
-            crate::material_geometry::GEOMETRY_EPSILON,
-        )
-    })
+    structure
+        .units
+        .iter()
+        .enumerate()
+        .filter_map(|(index, unit)| {
+            if ignored_units.contains(&index) {
+                return None;
+            }
+            let Some(shape) = unit.shape(catalog) else {
+                return Some(index);
+            };
+            let existing_part = crate::material_geometry::PlacedMaterialPart {
+                part_index: index + 1,
+                form: shape.form.clone(),
+                placement: unit.placement,
+            };
+            crate::material_geometry::placed_forms_penetrate(
+                &candidate_part,
+                &existing_part,
+                crate::material_geometry::GEOMETRY_EPSILON,
+            )
+            .then_some(index)
+        })
+        .collect()
+}
+
+pub(crate) fn placed_unit_overlaps(
+    structure: &OrganismStructure,
+    candidate: &StructuralUnit,
+    ignored_units: &[usize],
+    catalog: &[BaseResource],
+) -> bool {
+    !overlapping_unit_indices(structure, candidate, ignored_units, catalog).is_empty()
 }
 
 fn point_in_triangle(point: (f64, f64), triangle: &[(f64, f64); 3]) -> bool {
@@ -1258,6 +1279,7 @@ struct PlacementRejectionCounts {
     restore_failures: usize,
     restore_failure_reasons: std::collections::BTreeMap<&'static str, usize>,
     overlap_rejections: usize,
+    overlap_rejections_by_unit: std::collections::BTreeMap<usize, usize>,
     neighbor_contact_rejections: usize,
     no_bond_contact: usize,
     candidate_evaluation_rejections: usize,
@@ -1425,10 +1447,25 @@ fn realize_next_bond_driven(
 
                 let new_unit_index = *indices.get(part_index)?;
                 let ignored_units = indices.clone();
-                if indices.iter().any(|index| {
-                    placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
-                }) {
+                let overlapping_units = indices
+                    .iter()
+                    .flat_map(|index| {
+                        overlapping_unit_indices(
+                            &trial,
+                            &trial.units[*index],
+                            &ignored_units,
+                            catalog,
+                        )
+                    })
+                    .collect::<std::collections::BTreeSet<_>>();
+                if !overlapping_units.is_empty() {
                     rejection_counts.overlap_rejections += 1;
+                    for overlap_index in overlapping_units {
+                        *rejection_counts
+                            .overlap_rejections_by_unit
+                            .entry(overlap_index)
+                            .or_default() += 1;
+                    }
                     continue;
                 }
                 let missing_neighbors = missing_realized_neighbor_contacts(
@@ -1890,13 +1927,14 @@ fn construct_blueprint_bond_driven_internal(
 
         if !attached {
             eprintln!(
-                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} restore_failure_reasons={:?} overlap_rejections={} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} bob_coverage_misses={:?}",
+                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} restore_failure_reasons={:?} overlap_rejections={} overlap_rejections_by_unit={:?} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} bob_coverage_misses={:?}",
                 rejection_counts.attempted_origins,
                 rejection_counts.generated_origins,
                 rejection_counts.deduplicated_origins,
                 rejection_counts.restore_failures,
                 rejection_counts.restore_failure_reasons,
                 rejection_counts.overlap_rejections,
+                rejection_counts.overlap_rejections_by_unit,
                 rejection_counts.neighbor_contact_rejections,
                 rejection_counts.neighbor_rejections_by_index,
                 rejection_counts.no_bond_contact,
