@@ -2557,6 +2557,154 @@ mod tests {
     }
 
     #[test]
+    fn multi_contact_fluid_forms_multiple_bonds_to_one_rigid_edge() {
+        use crate::capillary_geometry::{
+            solve_water_against_collinear_contacts, CapillaryContactFamily,
+        };
+        use crate::resources::{Form, Material, NOMINAL_UNIT_AREA};
+        use crate::structure::StructuralUnit;
+
+        let mut catalog = crate::resources::default_catalog();
+        let carbon_index = catalog
+            .iter()
+            .position(|resource| resource.name == "Carbon")
+            .unwrap();
+        let area = NOMINAL_UNIT_AREA;
+        let angle = std::f64::consts::FRAC_PI_2;
+        let family = CapillaryContactFamily::solve(area, angle).unwrap();
+        let third = family.contact_length / 3.0;
+        let segments = [
+            ((-family.contact_length * 0.5, 0.0), (-third, 0.0)),
+            ((-third, 0.0), (third, 0.0)),
+            ((third, 0.0), (family.contact_length * 0.5, 0.0)),
+        ];
+        let boundary = solve_water_against_collinear_contacts(area, angle, &segments)
+            .expect("three collinear segments should form one conserved boundary");
+        let shape = crate::resources::Shape {
+            form: Form::Fluid {
+                nominal_area: area,
+                boundary: None,
+                arc_boundary: None,
+                multi_contact_boundary: Some(boundary),
+            },
+        };
+        let material = crate::physical_material::PhysicalMaterial::realized(
+            Material::free_base("Water", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .unwrap()
+        .with_single_fluid_shape(shape, &catalog)
+        .unwrap();
+        let mut structure = OrganismStructure::new();
+        let fluid_index = crate::material_restoration::restore_material(
+            &mut structure,
+            &material,
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        )
+        .unwrap()[0];
+        let half_height = 0.05;
+        catalog[carbon_index].shape.form = Form::Polygon {
+            vertices: vec![
+                (-family.contact_length * 0.5, -half_height),
+                (family.contact_length * 0.5, -half_height),
+                (family.contact_length * 0.5, half_height),
+                (-family.contact_length * 0.5, half_height),
+            ],
+        };
+        structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: -half_height,
+                rotation_radians: 0.0,
+            },
+        ));
+        let on_segment = |endpoint: crate::structure::ConnectionEndpoint,
+                          segment: ((f64, f64), (f64, f64))| {
+            let crate::structure::ConnectionEndpoint::Fluid { x, y } = endpoint else {
+                return false;
+            };
+            let ((sx, sy), (ex, ey)) = segment;
+            let dx = ex - sx;
+            let dy = ey - sy;
+            let length_squared = dx * dx + dy * dy;
+            let t = (((x - sx) * dx + (y - sy) * dy) / length_squared).clamp(0.0, 1.0);
+            (x - (sx + t * dx)).hypot(y - (sy + t * dy))
+                <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+        };
+        let first_target = 1;
+        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+        let candidate = crate::contact::connection_pair_candidates_cached(
+            &structure,
+            first_target,
+            fluid_index,
+            &catalog,
+            &mut cache,
+        )
+        .into_iter()
+        .filter(|candidate| {
+            candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                && candidate.available_a
+                && candidate.available_b
+                && segments
+                    .iter()
+                    .any(|segment| on_segment(candidate.endpoint_b, *segment))
+        })
+        .min_by(|a, b| {
+            a.distance
+                .partial_cmp(&b.distance)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .expect("the first edge contact should have a live candidate");
+        let (_, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
+            &structure,
+            first_target,
+            fluid_index,
+            candidate,
+            &catalog,
+        )
+        .expect("the first contact should be energetically admissible");
+        let mut ledger = EnergyLedger::default();
+        let mut energy = 100.0;
+        assert!(crate::combine_runtime::form_selected_bond(
+            &mut structure,
+            first_target,
+            fluid_index,
+            candidate,
+            investment,
+            &catalog,
+            &mut cache,
+            &mut ledger,
+            &mut energy,
+        )
+        .is_some());
+        assert!(
+            form_remaining_multi_contact_bonds(
+                &mut structure,
+                fluid_index,
+                first_target,
+                &catalog,
+                &mut ledger,
+                &mut energy,
+            ),
+            "all three contact segments on the same rigid unit must bond"
+        );
+        assert_eq!(structure.units.len(), 2);
+        assert_eq!(structure.bonds.len(), 3);
+        assert!(energy.is_finite());
+    }
+
+    #[test]
     fn multi_contact_fluid_commits_all_three_rigid_bonds_together() {
         use crate::capillary_geometry::{
             solve_water_against_collinear_contacts, CapillaryContactFamily,
