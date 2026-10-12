@@ -1728,3 +1728,14 @@ The scaffold and artificial-energy allowance are confirmed wrong by the current 
 Added `GeometryLibrary::suggest_persisted_rigid_edge_placements` as a strict construction-facing query. It shares the rigid-edge resolver with the existing exploratory API but disables ephemeral geometry-family generation on a lookup miss. The existing `suggest_rigid_edge_placements` retains its exploratory empty-library behavior for discovery/diagnostics and compatibility; strict construction can now distinguish "no persisted candidate" from "candidate generated on demand". A regression assertion covers both behaviors against an empty library.
 
 **Not yet wired into live construction.** The initial constructor still uses its fixed scaffold and fallback coordinates at this checkpoint. Do not claim the strict-construction contract is enforced end to end yet. The next code gate is a structured placement result that preserves missing-coverage diagnostics, then routing construction through the strict query and live transaction before removing the scaffold/energy path. Focused CI has not yet been run for this branch.
+
+
+### Constructor stripping sprint 2 — strict runtime lookup and duplicate-search removal (2026-10-12)
+
+The blueprint-driven construction runtime now fails explicitly if the configured Bob store cannot be opened, uses the persisted-only rigid-edge query for rigid placement proposals, and no longer appends analytic endpoint poses when the live constructor has Bob available. The fluid path continues to query persisted fluid formations and uses the same live restoration/contact/COMBINE validation.
+
+The placement loop also no longer cross-products every existing endpoint with every candidate-material endpoint just to regenerate the same Bob pose. It queries per live anchor and physical constituent, then discovers the actual contact pair from the restored trial structure. This removes a source of repeated candidate work without relaxing overlap, contact, neighbor, energy, or COMBINE checks.
+
+**Current boundary:** the initial-organism constructor still uses the fixed Carbon scaffold, lattice snapping, coordinate fallback, and artificial construction-energy allowance. Those are not removed yet because the initial constructor has no replacement milestone-driven coordinator to report missing coverage and build from persisted local formations. The strict runtime may expose tests that previously depended on analytic fallback or an empty Bob catalogue; those must be migrated to explicit persisted fixtures or asserted as coverage misses, not fixed by restoring silent fallbacks.
+
+**Verification:** Rust CI was triggered for this branch and is still running at this checkpoint. No pass/fail conclusion is claimed for the newest runtime refactor.
