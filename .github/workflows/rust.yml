@@ -62,6 +62,12 @@ jobs:
       # repository's known unrelated baseline failures.
       - name: Run focused chemical BREAK tests
         run: cargo test --locked chemical_break_
+      # Constructor placement now intentionally requires persisted Bob records.
+      # Build a small, disposable local library in the CI workspace so constructor
+      # tests exercise the real persisted-query path instead of silently relying
+      # on an absent/empty default store. Generated library files are not committed.
+      - name: Seed Bob and generate one persisted geometry frontier
+        run: cargo run --locked -- --geometry-worker-once
       # Expensive headless multigeneration validation is paused while the seed
       # topology is being finalized. Keep the normal Rust/Clippy gates active.
       - name: Run Rust tests
