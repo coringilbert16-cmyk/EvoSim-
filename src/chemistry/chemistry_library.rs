@@ -6,8 +6,8 @@ use crate::geometry_reference_library::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::io::{BufRead, BufReader, Write};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::path::{Path, PathBuf};
 
 pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 3;
@@ -345,13 +345,21 @@ impl ChemistryLibrary {
         row.push(b'\n');
 
         if let Err(write_error) = file.write_all(&row).and_then(|()| file.sync_data()) {
-            return Err(rollback_appended_record(&mut file, original_len, write_error));
+            return Err(rollback_appended_record(
+                &mut file,
+                original_len,
+                write_error,
+            ));
         }
 
         let mut next_manifest = self.manifest.clone();
         next_manifest.entries = (self.entries.len() + 1) as u64;
         if let Err(manifest_error) = persist_manifest(&self.root, &next_manifest) {
-            return Err(rollback_appended_record(&mut file, original_len, manifest_error));
+            return Err(rollback_appended_record(
+                &mut file,
+                original_len,
+                manifest_error,
+            ));
         }
 
         // Publish the new in-memory state only after both persisted updates succeed.
@@ -360,7 +368,6 @@ impl ChemistryLibrary {
         Ok(true)
     }
 }
-
 
 fn rollback_appended_record(
     file: &mut File,
@@ -407,7 +414,11 @@ fn persist_manifest_atomically(
             ".manifest.json.tmp-{}-{sequence}",
             std::process::id()
         ));
-        match OpenOptions::new().write(true).create_new(true).open(&candidate) {
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
             Ok(file) => break (candidate, file),
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(error) => return Err(error),
@@ -573,7 +584,10 @@ mod tests {
         assert_eq!(library.len(), 0);
         assert_eq!(library.manifest.entries, 0);
         assert_eq!(fs::metadata(root.join("chemistry.jsonl")).unwrap().len(), 0);
-        assert_eq!(fs::read(root.join("manifest.json")).unwrap(), original_manifest);
+        assert_eq!(
+            fs::read(root.join("manifest.json")).unwrap(),
+            original_manifest
+        );
 
         let reopened = ChemistryLibrary::open(&root).unwrap();
         assert!(reopened.is_empty());
@@ -628,7 +642,10 @@ mod tests {
             let mut library = fourth;
             library.insert(duplicate)
         });
-        let inserted = [third_thread.join().unwrap().unwrap(), fourth_thread.join().unwrap().unwrap()];
+        let inserted = [
+            third_thread.join().unwrap().unwrap(),
+            fourth_thread.join().unwrap().unwrap(),
+        ];
         assert_eq!(inserted.into_iter().filter(|value| *value).count(), 1);
         let reopened = ChemistryLibrary::open(&root).unwrap();
         assert_eq!(reopened.len(), 3);
