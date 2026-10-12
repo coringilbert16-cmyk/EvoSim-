@@ -852,7 +852,8 @@ fn reversed_edge_counterfactual_placement(
     let anchor_vertices = form_vertices_world(anchor_form, anchor_pose);
     let candidate_local_vertices = candidate_form.polygon_vertices()?;
     let candidate_vertices = form_vertices_world(candidate_form, candidate_pose);
-    if anchor_vertices.len() < 2 || candidate_local_vertices.len() < 2
+    if anchor_vertices.len() < 2
+        || candidate_local_vertices.len() < 2
         || candidate_vertices.len() != candidate_local_vertices.len()
     {
         return None;
@@ -867,7 +868,9 @@ fn reversed_edge_counterfactual_placement(
             let d = candidate_vertices[(ci + 1) % candidate_vertices.len()];
             let cm = ((c.0 + d.0) * 0.5, (c.1 + d.1) * 0.5);
             let distance = (am.0 - cm.0).hypot(am.1 - cm.1);
-            if nearest.is_none_or(|(_, _, _, best): (usize, usize, (f64, f64), f64)| distance < best) {
+            if nearest
+                .is_none_or(|(_, _, _, best): (usize, usize, (f64, f64), f64)| distance < best)
+            {
                 nearest = Some((ai, ci, cm, distance));
             }
         }
