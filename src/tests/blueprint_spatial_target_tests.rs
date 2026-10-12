@@ -37,8 +37,14 @@ mod tests {
     fn diagnostic_swapping_sulfur_and_first_chain_element_reports_order_effect() {
         let catalog = default_catalog();
         let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
-        let baseline_error = crate::juvenile::realize_initial(&blueprint, &catalog)
-            .expect_err("baseline diagnostic expects the known element-26 failure");
+        let baseline_error = match crate::juvenile::realize_initial(&blueprint, &catalog) {
+            Err(error) => error,
+            Ok((structure, _, _)) => panic!(
+                "baseline unexpectedly succeeded with {} physical units",
+                structure.units.len()
+            ),
+        };
+        assert!(baseline_error.contains("element 26"), "{baseline_error}");
         eprintln!("[constructor-order-diagnostic] baseline={baseline_error}");
 
         // Swap the first chain constituent (6) with the first Sulfur branch
