@@ -268,10 +268,11 @@ mod seed_geometry_tests {
     use super::*;
 
     #[test]
-    fn confirmed_seed_ring_uses_compatible_hexagonal_edge_spacing() {
+    fn confirmed_seed_ring_uses_two_face_to_face_carbon_pieces_per_side() {
         let catalog = crate::resources::default_catalog();
         let blueprint = confirmed_seed_baseline(&catalog).expect("seed baseline should be valid");
         let ring_sides = 6usize;
+        let ring_piece_count = ring_sides * 2;
         let carbon_radius = catalog
             .iter()
             .find(|resource| resource.name == "Carbon")
@@ -282,7 +283,29 @@ mod seed_geometry_tests {
             .expect("Carbon should be a regular polygon");
         let expected_spacing = 3.0_f64.sqrt() * carbon_radius;
 
-        let chain_start = ring_sides;
+        for index in 0..ring_piece_count {
+            let next = (index + 1) % ring_piece_count;
+            let a = blueprint.elements[index].placement;
+            let b = blueprint.elements[next].placement;
+            let distance = (a.x - b.x).hypot(a.y - b.y);
+            assert!(
+                (distance - expected_spacing).abs() < 1e-9,
+                "ring edge {index}-{next} has center spacing {distance}, expected {expected_spacing}"
+            );
+            assert!(
+                (a.rotation_radians - b.rotation_radians).abs() < 1e-9,
+                "edge-adjacent Carbon pieces should have aligned rotations"
+            );
+            assert!(
+                blueprint.connections.iter().any(|connection| {
+                    (connection.element_a == index && connection.element_b == next)
+                        || (connection.element_a == next && connection.element_b == index)
+                }),
+                "ring edge {index}-{next} must be connected"
+            );
+        }
+
+        let chain_start = ring_piece_count;
         for step in 1..=20 {
             let previous = if step == 1 { 0 } else { chain_start + step - 2 };
             let current = chain_start + step - 1;
@@ -304,9 +327,9 @@ mod seed_geometry_tests {
             .shape
             .form
             .clone();
-        for chain_index in ring_sides..(ring_sides + 20) {
+        for chain_index in ring_piece_count..(ring_piece_count + 20) {
             let chain = blueprint.elements[chain_index].placement;
-            for ring_index in 1..ring_sides {
+            for ring_index in 1..ring_piece_count {
                 let ring = blueprint.elements[ring_index].placement;
                 let chain_part = crate::material_geometry::PlacedMaterialPart {
                     part_index: chain_index,
@@ -336,40 +359,16 @@ mod seed_geometry_tests {
                 );
             }
         }
-
-        for index in 0..ring_sides {
-            let next = (index + 1) % ring_sides;
-            let a = blueprint.elements[index].placement;
-            let b = blueprint.elements[next].placement;
-            let distance = (a.x - b.x).hypot(a.y - b.y);
-            assert!(
-                (distance - expected_spacing).abs() < 1e-9,
-                "ring edge {index}-{next} has center spacing {distance}, expected {expected_spacing}"
-            );
-
-            let rotation_delta =
-                (b.rotation_radians - a.rotation_radians).rem_euclid(std::f64::consts::TAU);
-            assert!(
-                (rotation_delta - std::f64::consts::TAU / ring_sides as f64).abs() < 1e-9,
-                "ring rotations should advance by one sixth-turn"
-            );
-
-            assert!(
-                blueprint.connections.iter().any(|connection| {
-                    (connection.element_a == index && connection.element_b == next)
-                        || (connection.element_a == next && connection.element_b == index)
-                }),
-                "ring edge {index}-{next} must be connected"
-            );
-        }
     }
 
     #[test]
-    fn methane_attachments_follow_the_six_piece_ring_angles() {
+    fn methane_attachments_follow_the_six_hexagon_vertex_angles() {
         let catalog = crate::resources::default_catalog();
         let blueprint = confirmed_seed_baseline(&catalog).expect("seed baseline should be valid");
         let ring_sides = 6usize;
-        let methane_start = ring_sides + 20 + 4;
+        let ring_pieces_per_side = 2usize;
+        let ring_piece_count = ring_sides * ring_pieces_per_side;
+        let methane_start = ring_piece_count + 20 + 4;
 
         for (offset, ring_index) in [2usize, 5].into_iter().enumerate() {
             let methane = blueprint.elements[methane_start + offset].placement;
@@ -383,14 +382,15 @@ mod seed_geometry_tests {
                 angular_error < 1e-9,
                 "methane attachment at ring index {ring_index} has angle {actual_angle}, expected {expected_angle}"
             );
+            let ring_anchor_index = ring_index * ring_pieces_per_side;
             assert!(
                 blueprint.connections.iter().any(|connection| {
-                    (connection.element_a == ring_index
+                    (connection.element_a == ring_anchor_index
                         && connection.element_b == methane_start + offset)
-                        || (connection.element_b == ring_index
+                        || (connection.element_b == ring_anchor_index
                             && connection.element_a == methane_start + offset)
                 }),
-                "methane attachment must connect to ring element {ring_index}"
+                "methane attachment must connect to ring vertex {ring_anchor_index}"
             );
         }
     }
