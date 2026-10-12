@@ -233,12 +233,9 @@ pub fn eligible_candidates(
     catalog: &[BaseResource],
     cache: &mut ConnectionCompatibilityCache,
 ) -> Vec<ConnectionPairCandidate> {
-    let Some(a) = structure.units.get(unit_a) else {
+    if unit_a >= structure.units.len() || unit_b >= structure.units.len() {
         return Vec::new();
-    };
-    let Some(b) = structure.units.get(unit_b) else {
-        return Vec::new();
-    };
+    }
     // Fluid-fluid contacts remain eligible for ordinary chemical/physical bond
     // evaluation. Contact alone is not a bond and must not trigger coalescence;
     // the successful bond transaction is the only event allowed to do that.
