@@ -1370,168 +1370,168 @@ fn realize_next_bond_driven(
                     }));
                 }
             }
-                let generated_origins = candidate_origins.len();
-                rejection_counts.generated_origins += generated_origins;
-                let mut seen_origins =
-                    Vec::<((i64, i64, i64), Option<crate::resources::Shape>)>::new();
-                candidate_origins.retain(|(placement, shape)| {
-                    let key = (
-                        (placement.x * 1e8).round() as i64,
-                        (placement.y * 1e8).round() as i64,
-                        (placement.rotation_radians * 1e8).round() as i64,
-                    );
-                    if seen_origins
-                        .iter()
-                        .any(|(seen_key, seen_shape)| *seen_key == key && seen_shape == shape)
-                    {
-                        false
-                    } else {
-                        seen_origins.push((key, shape.clone()));
-                        true
-                    }
-                });
-                rejection_counts.deduplicated_origins +=
-                    generated_origins.saturating_sub(candidate_origins.len());
-                for (candidate_origin, fluid_shape) in candidate_origins {
-                    *nodes += 1;
-                    rejection_counts.attempted_origins += 1;
+            let generated_origins = candidate_origins.len();
+            rejection_counts.generated_origins += generated_origins;
+            let mut seen_origins =
+                Vec::<((i64, i64, i64), Option<crate::resources::Shape>)>::new();
+            candidate_origins.retain(|(placement, shape)| {
+                let key = (
+                    (placement.x * 1e8).round() as i64,
+                    (placement.y * 1e8).round() as i64,
+                    (placement.rotation_radians * 1e8).round() as i64,
+                );
+                if seen_origins
+                    .iter()
+                    .any(|(seen_key, seen_shape)| *seen_key == key && seen_shape == shape)
+                {
+                    false
+                } else {
+                    seen_origins.push((key, shape.clone()));
+                    true
+                }
+            });
+            rejection_counts.deduplicated_origins +=
+                generated_origins.saturating_sub(candidate_origins.len());
+            for (candidate_origin, fluid_shape) in candidate_origins {
+                *nodes += 1;
+                rejection_counts.attempted_origins += 1;
 
-                    let mut trial = structure.clone();
-                    let candidate_material = if let Some(shape) = fluid_shape {
-                        new_material.clone().with_single_fluid_shape(shape, catalog)
-                    } else {
-                        Some(new_material.clone())
-                    };
-                    let Some(candidate_material) = candidate_material else {
-                        rejection_counts.restore_failures += 1;
-                        continue;
-                    };
-                    let Some(indices) = crate::material_restoration::restore_material(
-                        &mut trial,
-                        &candidate_material,
-                        candidate_origin,
-                        catalog,
-                    ) else {
-                        rejection_counts.restore_failures += 1;
-                        continue;
-                    };
+                let mut trial = structure.clone();
+                let candidate_material = if let Some(shape) = fluid_shape {
+                    new_material.clone().with_single_fluid_shape(shape, catalog)
+                } else {
+                    Some(new_material.clone())
+                };
+                let Some(candidate_material) = candidate_material else {
+                    rejection_counts.restore_failures += 1;
+                    continue;
+                };
+                let Some(indices) = crate::material_restoration::restore_material(
+                    &mut trial,
+                    &candidate_material,
+                    candidate_origin,
+                    catalog,
+                ) else {
+                    rejection_counts.restore_failures += 1;
+                    continue;
+                };
 
-                    let new_unit_index = *indices.get(part_index)?;
-                    let ignored_units = indices.clone();
-                    if indices.iter().any(|index| {
-                        placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
-                    }) {
-                        rejection_counts.overlap_rejections += 1;
-                        continue;
+                let new_unit_index = *indices.get(part_index)?;
+                let ignored_units = indices.clone();
+                if indices.iter().any(|index| {
+                    placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
+                }) {
+                    rejection_counts.overlap_rejections += 1;
+                    continue;
+                }
+                let missing_neighbors = missing_realized_neighbor_contacts(
+                    blueprint,
+                    _index,
+                    realized_units,
+                    &trial,
+                    &indices,
+                    catalog,
+                );
+                if !missing_neighbors.is_empty() {
+                    rejection_counts.neighbor_contact_rejections += 1;
+                    for neighbor in missing_neighbors {
+                        *rejection_counts
+                            .neighbor_rejections_by_index
+                            .entry(neighbor)
+                            .or_default() += 1;
                     }
-                    let missing_neighbors = missing_realized_neighbor_contacts(
-                        blueprint,
-                        _index,
-                        realized_units,
+                    continue;
+                }
+
+                let mut trial_ledger = *ledger;
+                let mut trial_energy = available_energy;
+                let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
+
+                // The official connection points determine where the
+                // constructor works from and how the new material is placed.
+                // Once the material is physically placed, the actual bond may
+                // land anywhere on the touching boundaries.
+                let Some(candidate) = crate::contact::connection_pair_candidates_cached(
+                    &trial,
+                    existing_index,
+                    new_unit_index,
+                    catalog,
+                    &mut bond_cache,
+                )
+                .into_iter()
+                .filter(|candidate| {
+                    candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        && candidate.available_a
+                        && candidate.available_b
+                })
+                .min_by(|a, b| {
+                    a.distance
+                        .partial_cmp(&b.distance)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then_with(|| {
+                            b.facing
+                                .partial_cmp(&a.facing)
+                                .unwrap_or(std::cmp::Ordering::Equal)
+                        })
+                }) else {
+                    rejection_counts.no_bond_contact += 1;
+                    continue;
+                };
+
+                let Some((_, _, investment, _required_energy)) =
+                    crate::combine_runtime::selected_candidate_evaluation(
                         &trial,
-                        &indices,
-                        catalog,
-                    );
-                    if !missing_neighbors.is_empty() {
-                        rejection_counts.neighbor_contact_rejections += 1;
-                        for neighbor in missing_neighbors {
-                            *rejection_counts
-                                .neighbor_rejections_by_index
-                                .entry(neighbor)
-                                .or_default() += 1;
-                        }
-                        continue;
-                    }
-
-                    let mut trial_ledger = *ledger;
-                    let mut trial_energy = available_energy;
-                    let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
-
-                    // The official connection points determine where the
-                    // constructor works from and how the new material is placed.
-                    // Once the material is physically placed, the actual bond may
-                    // land anywhere on the touching boundaries.
-                    let Some(candidate) = crate::contact::connection_pair_candidates_cached(
-                        &trial,
-                        existing_index,
-                        new_unit_index,
-                        catalog,
-                        &mut bond_cache,
-                    )
-                    .into_iter()
-                    .filter(|candidate| {
-                        candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                            && candidate.available_a
-                            && candidate.available_b
-                    })
-                    .min_by(|a, b| {
-                        a.distance
-                            .partial_cmp(&b.distance)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                            .then_with(|| {
-                                b.facing
-                                    .partial_cmp(&a.facing)
-                                    .unwrap_or(std::cmp::Ordering::Equal)
-                            })
-                    }) else {
-                        rejection_counts.no_bond_contact += 1;
-                        continue;
-                    };
-
-                    let Some((_, _, investment, _required_energy)) =
-                        crate::combine_runtime::selected_candidate_evaluation(
-                            &trial,
-                            existing_index,
-                            new_unit_index,
-                            candidate,
-                            catalog,
-                        )
-                    else {
-                        rejection_counts.candidate_evaluation_rejections += 1;
-                        continue;
-                    };
-
-                    let Some(attempt) = crate::combine_runtime::form_selected_bond(
-                        &mut trial,
                         existing_index,
                         new_unit_index,
                         candidate,
-                        investment,
                         catalog,
-                        &mut bond_cache,
-                        &mut trial_ledger,
-                        &mut trial_energy,
-                    ) else {
-                        rejection_counts.combine_rejections += 1;
-                        continue;
-                    };
+                    )
+                else {
+                    rejection_counts.candidate_evaluation_rejections += 1;
+                    continue;
+                };
 
-                    if !form_remaining_multi_contact_bonds(
-                        &mut trial,
-                        new_unit_index,
-                        existing_index,
-                        catalog,
-                        &mut trial_ledger,
-                        &mut trial_energy,
-                    ) {
-                        rejection_counts.combine_rejections += 1;
-                        continue;
-                    }
+                let Some(attempt) = crate::combine_runtime::form_selected_bond(
+                    &mut trial,
+                    existing_index,
+                    new_unit_index,
+                    candidate,
+                    investment,
+                    catalog,
+                    &mut bond_cache,
+                    &mut trial_ledger,
+                    &mut trial_energy,
+                ) else {
+                    rejection_counts.combine_rejections += 1;
+                    continue;
+                };
 
-                    // The first exact, physically admissible continuation wins.
-                    // Construction is forward-only: do not continue searching for a
-                    // "better" pose after a permanent bond can already be formed.
-                    return Some((
-                        trial,
-                        indices,
-                        part_index,
-                        attempt,
-                        trial_ledger,
-                        trial_energy,
-                    ));
+                if !form_remaining_multi_contact_bonds(
+                    &mut trial,
+                    new_unit_index,
+                    existing_index,
+                    catalog,
+                    &mut trial_ledger,
+                    &mut trial_energy,
+                ) {
+                    rejection_counts.combine_rejections += 1;
+                    continue;
                 }
+
+                // The first exact, physically admissible continuation wins.
+                // Construction is forward-only: do not continue searching for a
+                // "better" pose after a permanent bond can already be formed.
+                return Some((
+                    trial,
+                    indices,
+                    part_index,
+                    attempt,
+                    trial_ledger,
+                    trial_energy,
+                ));
             }
         }
+    }
 
     None
 }
