@@ -32,8 +32,8 @@ pub(crate) fn confirmed_seed_baseline(
     // realized physical graph remains authoritative.
     //
     // The six-carbon inner loop supplies a physically compatible enclosed region. From one
-    // point on that loop, twenty additional carbon elements wind outward as a
-    // loose spiral. Sulfur and methane provide a small amount of heterogeneous
+    // point on that loop, twenty additional carbon elements extend along a
+    // physically spaced outward chain. Sulfur and methane provide heterogeneous
     // peripheral material without defining an organism role or topology.
     let ring_sides = 6usize;
     let spiral_steps = 20usize;
