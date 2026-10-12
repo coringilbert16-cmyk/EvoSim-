@@ -2725,7 +2725,9 @@ mod tests {
                 "each segment needs a distinct fluid bond endpoint"
             );
             assert!(
-                segments.iter().any(|segment| on_segment(*location, *segment)),
+                segments
+                    .iter()
+                    .any(|segment| on_segment(*location, *segment)),
                 "each bond endpoint must lie on a persisted contact segment"
             );
         }
