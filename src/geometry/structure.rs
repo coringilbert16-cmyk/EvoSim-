@@ -534,8 +534,12 @@ impl PhysicalConstituentGraph {
         let Some(d) = self.endpoint_index(b.endpoint_b) else {
             return false;
         };
-        if !self.units[a].shape(c).is_some_and(|shape| shape.is_valid_physical_shape())
-            || !self.units[d].shape(c).is_some_and(|shape| shape.is_valid_physical_shape())
+        if !self.units[a]
+            .shape(c)
+            .is_some_and(|shape| shape.is_valid_physical_shape())
+            || !self.units[d]
+                .shape(c)
+                .is_some_and(|shape| shape.is_valid_physical_shape())
         {
             return false;
         }

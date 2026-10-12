@@ -69,8 +69,9 @@ pub fn transform_line_endpoint(
 ) -> Option<WorldConnectionPoint> {
     let length = match &shape.form {
         crate::resources::Form::Line { length } => *length,
-        crate::resources::Form::Rectangle { width, height }
-            if *height <= *width * 0.1 + 1e-12 => *width,
+        crate::resources::Form::Rectangle { width, height } if *height <= *width * 0.1 + 1e-12 => {
+            *width
+        }
         _ => return None,
     };
     let x = if endpoint == 0 {

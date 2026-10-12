@@ -779,11 +779,15 @@ mod shape_tests {
 
     #[test]
     fn zero_area_line_is_not_a_physical_resource_shape() {
-        let line = Shape { form: Form::Line { length: 1.0 } };
+        let line = Shape {
+            form: Form::Line { length: 1.0 },
+        };
         assert!(line.is_valid(), "line remains a geometry primitive");
         assert!(!line.is_valid_physical_shape());
-        let hydrogen = default_catalog().into_iter()
-            .find(|resource| resource.name == "Hydrogen").unwrap();
+        let hydrogen = default_catalog()
+            .into_iter()
+            .find(|resource| resource.name == "Hydrogen")
+            .unwrap();
         assert!(hydrogen.shape.is_valid_physical_shape());
     }
 
