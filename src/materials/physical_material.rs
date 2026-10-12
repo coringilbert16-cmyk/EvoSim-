@@ -150,7 +150,10 @@ impl PhysicalMaterial {
         part_index: usize,
         catalog: &[BaseResource],
     ) -> Option<crate::resources::Shape> {
-        let (name, _) = self.material.parts.get(part_index)?;
+        let (name, amount) = self.material.parts.get(part_index)?;
+        if !amount.is_finite() || *amount <= 0.0 {
+            return None;
+        }
         let resource = catalog.iter().find(|resource| resource.name == *name)?;
         let shape = match self.realized_shapes.as_ref() {
             Some(shapes) if shapes.len() == self.material.parts.len() => shapes.get(part_index)?,
@@ -187,7 +190,14 @@ impl PhysicalMaterial {
                 } => *nominal_area,
                 _ => return None,
             };
-            if (shape_area - default_area).abs() > 1e-9 * default_area.max(1.0) {
+            // A realized fluid boundary represents the full material amount,
+            // not just one catalog unit. Keep this invariant aligned with
+            // StructuralUnit::realize_fluid_geometry so merged fluid bodies can
+            // be validated without silently shrinking their conserved area.
+            let expected_area = default_area * *amount;
+            if !expected_area.is_finite()
+                || (shape_area - expected_area).abs() > 1e-9 * expected_area.max(1.0)
+            {
                 return None;
             }
         }
@@ -336,6 +346,76 @@ impl PhysicalMaterial {
 mod tests {
     use super::*;
     use crate::resources::{InternalBond, Material};
+
+    #[test]
+    fn realized_fluid_shape_area_scales_with_material_amount() {
+        let catalog = crate::resources::default_catalog();
+        let water = catalog
+            .iter()
+            .find(|resource| resource.name == "Water")
+            .unwrap();
+        let unit_area = match &water.shape.form {
+            crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+            _ => panic!("default Water shape should have a measurable area"),
+        };
+        let merged_area = 2.0 * unit_area;
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            merged_area,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .unwrap();
+        let arc =
+            crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
+        let shape = crate::resources::Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: merged_area,
+                boundary: None,
+                arc_boundary: Some(arc),
+                multi_contact_boundary: None,
+            },
+        };
+        let physical = PhysicalMaterial {
+            material: Material::free_base("Water", 2.0),
+            placements: Some(vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }]),
+            internal_connections: Some(Vec::new()),
+            owner_relative_origin: None,
+            realized_shapes: Some(vec![shape.clone()]),
+        };
+
+        assert_eq!(physical.realized_shape_for_part(0, &catalog), Some(shape));
+
+        let unit_family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            unit_area,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .unwrap();
+        let unit_arc =
+            crate::capillary_geometry::CircularArcBoundary::from_flat_contact(unit_family).unwrap();
+        let underfilled_shape = crate::resources::Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: unit_area,
+                boundary: None,
+                arc_boundary: Some(unit_arc),
+                multi_contact_boundary: None,
+            },
+        };
+        let underfilled = PhysicalMaterial {
+            material: Material::free_base("Water", 2.0),
+            placements: Some(vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }]),
+            internal_connections: Some(Vec::new()),
+            owner_relative_origin: None,
+            realized_shapes: Some(vec![underfilled_shape]),
+        };
+        assert_eq!(underfilled.realized_shape_for_part(0, &catalog), None);
+    }
 
     #[test]
     fn breaking_internal_bond_splits_only_the_stored_material() {
