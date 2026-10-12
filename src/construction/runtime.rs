@@ -1320,8 +1320,7 @@ fn realize_next_bond_driven(
                 continue;
             };
 
-            let mut candidate_origins =
-                Vec::<(Placement, Option<crate::resources::Shape>)>::new();
+            let mut candidate_origins = Vec::<(Placement, Option<crate::resources::Shape>)>::new();
             if let Some(library) = bob_library {
                 if candidate_resource.physical_state == PhysicalState::Fluid {
                     // Exact-parent fluid records remain proposals only; the
@@ -1369,8 +1368,7 @@ fn realize_next_bond_driven(
             }
             let generated_origins = candidate_origins.len();
             rejection_counts.generated_origins += generated_origins;
-            let mut seen_origins =
-                Vec::<((i64, i64, i64), Option<crate::resources::Shape>)>::new();
+            let mut seen_origins = Vec::<((i64, i64, i64), Option<crate::resources::Shape>)>::new();
             candidate_origins.retain(|(placement, shape)| {
                 let key = (
                     (placement.x * 1e8).round() as i64,
@@ -1687,9 +1685,9 @@ fn construct_blueprint_bond_driven_internal(
         }
         reserved_storage_indices.push(storage_index);
     }
-    let anchor_unit_index = *anchor_indices
-        .first()
-        .ok_or_else(|| "construction anchor restored no physical units".to_string())?;
+    if anchor_indices.is_empty() {
+        return Err("construction anchor restored no physical units".to_string());
+    }
     realized[anchor_index] = true;
     realized_units[anchor_index] = Some(anchor_indices.clone());
     while !realized.iter().all(|value| *value) {
