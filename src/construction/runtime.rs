@@ -1525,7 +1525,8 @@ fn realize_next_bond_driven(
                             let Some(probe_anchor_index) = probe_trial.unit_index(anchor_id) else {
                                 continue;
                             };
-                            let Some(probe_new_unit_index) = probe_trial.unit_index(candidate_id) else {
+                            let Some(probe_new_unit_index) = probe_trial.unit_index(candidate_id)
+                            else {
                                 continue;
                             };
                             let probe_indices = indices
