@@ -1280,6 +1280,8 @@ struct PlacementRejectionCounts {
     restore_failure_reasons: std::collections::BTreeMap<&'static str, usize>,
     overlap_rejections: usize,
     overlap_rejections_by_unit: std::collections::BTreeMap<usize, usize>,
+    overlap_clear_if_omit_unit: std::collections::BTreeMap<usize, usize>,
+    overlap_still_rejected_if_omit_unit: std::collections::BTreeMap<usize, usize>,
     neighbor_contact_rejections: usize,
     no_bond_contact: usize,
     candidate_evaluation_rejections: usize,
@@ -1460,11 +1462,33 @@ fn realize_next_bond_driven(
                     .collect::<std::collections::BTreeSet<_>>();
                 if !overlapping_units.is_empty() {
                     rejection_counts.overlap_rejections += 1;
-                    for overlap_index in overlapping_units {
+                    for &overlap_index in &overlapping_units {
                         *rejection_counts
                             .overlap_rejections_by_unit
                             .entry(overlap_index)
                             .or_default() += 1;
+
+                        // Diagnostic-only leave-one-out experiment: preserve the
+                        // exact candidate pose and overlap rule, but temporarily
+                        // ignore one colliding pre-existing unit. This does not
+                        // mutate the trial or authorize the candidate.
+                        let mut ignored_for_probe = ignored_units.clone();
+                        ignored_for_probe.push(overlap_index);
+                        let still_overlapping = indices.iter().any(|index| {
+                            !overlapping_unit_indices(
+                                &trial,
+                                &trial.units[*index],
+                                &ignored_for_probe,
+                                catalog,
+                            )
+                            .is_empty()
+                        });
+                        let counter = if still_overlapping {
+                            &mut rejection_counts.overlap_still_rejected_if_omit_unit
+                        } else {
+                            &mut rejection_counts.overlap_clear_if_omit_unit
+                        };
+                        *counter.entry(overlap_index).or_default() += 1;
                     }
                     continue;
                 }
@@ -1927,7 +1951,7 @@ fn construct_blueprint_bond_driven_internal(
 
         if !attached {
             eprintln!(
-                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} restore_failure_reasons={:?} overlap_rejections={} overlap_rejections_by_unit={:?} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} bob_coverage_misses={:?}",
+                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} restore_failure_reasons={:?} overlap_rejections={} overlap_rejections_by_unit={:?} overlap_clear_if_omit_unit={:?} overlap_still_rejected_if_omit_unit={:?} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} bob_coverage_misses={:?}",
                 rejection_counts.attempted_origins,
                 rejection_counts.generated_origins,
                 rejection_counts.deduplicated_origins,
@@ -1935,6 +1959,8 @@ fn construct_blueprint_bond_driven_internal(
                 rejection_counts.restore_failure_reasons,
                 rejection_counts.overlap_rejections,
                 rejection_counts.overlap_rejections_by_unit,
+                rejection_counts.overlap_clear_if_omit_unit,
+                rejection_counts.overlap_still_rejected_if_omit_unit,
                 rejection_counts.neighbor_contact_rejections,
                 rejection_counts.neighbor_rejections_by_index,
                 rejection_counts.no_bond_contact,
