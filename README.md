@@ -27,6 +27,19 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 5. Keep PR #186 as the single integration target. Do not merge or change the default branch as a side effect of cleanup.
 6. All new decisions and handoffs go in this root README. Before adding a new audit note, update the current summary and avoid repeating obsolete checkpoints.
 
+## Pull-request lineage audit — 2026-10-12
+
+The current branch ancestry and unfinished PRs were audited; details and evidence are in [docs/pr-lineage-audit-2026-10-12.md](docs/pr-lineage-audit-2026-10-12.md).
+
+- PRs #181–#185 are closed without merge, but their branch tips are ancestors of `integration/unified-source-and-catalogue`; their changes are carried in the integration history. Do not cherry-pick them blindly.
+- PRs #187–#188 are not integrated. #188 is the better seed-calibration recovery starting point because it replaces the overlapping spiral with a physically spaced chain, but its Methane attachment angle still uses denominator 10 despite the six-piece ring. Recover with that correction and verify; do not loosen geometry tolerances.
+- PR #179 remains a separate practice-only storage-format experiment. Its conversion results are promising, but production adapter, compatibility, persistence, coverage, and performance gates remain.
+- PR #189's formatting-only edits overlap the tree changes in #190; avoid duplicate integration. #190's exact-head CI run 38190208645 failed at Rust tests and Clippy compilation/linting, although the focused pre-suite checks passed.
+- PR #190 remains a partial viability-contract change, not a completed free-form constructor. The fixed scaffold, resource-category gate, and arbitrary construction-energy budget remain.
+- Keep #186 as the sole integration target and draft-only until the documented fluid-realization and repository-integrity gates pass.
+
+**Next sequence:** recover and verify #188's seed fixture in a focused change; continue the persisted-fluid-to-live-transaction proof on #186; then continue #190's functional chemistry, reserve accounting, integrity-over-cycle, and free-form replacement work. The audit itself did not merge, close, or force-update any PR.
+
 ## Bob catalogue cap change — 2026-10-12
 
 - Decision: raise the maximum persisted rigid formation size from 2 to 3 constituents. This changes the cap only; it does not authorize 4+ piece records or put generated catalogue data in Git.
