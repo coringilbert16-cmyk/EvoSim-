@@ -2001,8 +2001,8 @@ fn construct_blueprint_bond_driven_internal(
                             && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_some()
                         {
                             *ledger = construction_ledger;
-                        *energy = remaining_energy;
-                        return Ok((structure, total_heat));
+                            *energy = remaining_energy;
+                            return Ok((structure, total_heat));
                         }
 
                         break 'unit_pairs;
