@@ -1352,6 +1352,7 @@ fn realize_next_bond_driven(
     for existing_index in existing_indices {
         let existing_unit = structure.units.get(existing_index)?;
         let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
+        let mut target_pose_attempted_for_existing = false;
         for endpoint_a in existing_endpoints {
             let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
             for (part_index, endpoint_b) in new_endpoints.iter().copied() {
@@ -1373,6 +1374,10 @@ fn realize_next_bond_driven(
                     genome_anchor.y
                         + (target.x - anchor_declared.x) * s
                         + (target.y - anchor_declared.y) * c,
+                );
+                let target_world_rotation = normalize_construction_angle(
+                    genome_anchor.rotation_radians + target.rotation_radians
+                        - anchor_declared.rotation_radians,
                 );
                 let ideal_angle = (joint.y - target_world.1).atan2(joint.x - target_world.0)
                     - local_b.y.atan2(local_b.x);
@@ -1409,6 +1414,20 @@ fn realize_next_bond_driven(
                 // compatibility, and energy transaction checks below.
                 let mut candidate_origins =
                     Vec::<(Placement, Option<crate::resources::Shape>)>::new();
+                // Try the blueprint's complete world pose before derived
+                // endpoint alignments. It is only a proposal: overlap, live
+                // contact, and COMBINE must still admit it.
+                if !target_pose_attempted_for_existing {
+                    candidate_origins.push((
+                        Placement {
+                            x: target_world.0,
+                            y: target_world.1,
+                            rotation_radians: target_world_rotation,
+                        },
+                        None,
+                    ));
+                    target_pose_attempted_for_existing = true;
+                }
                 if let Some(library) = bob_library {
                     let anchor_material = existing_unit.material.parts.first()?.0.as_str();
                     let candidate_resource = new_material
