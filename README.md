@@ -27,6 +27,14 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 5. Keep PR #186 as the single integration target. Do not merge or change the default branch as a side effect of cleanup.
 6. All new decisions and handoffs go in this root README. Before adding a new audit note, update the current summary and avoid repeating obsolete checkpoints.
 
+## Bob fluid transaction gate — 2026-10-12 update
+
+- PR #193 head `b74ea15131f30d1dfe9eaa97974ae0427fcaf003` now has an exact-head CI run (`38237744379`). Formatting, source-file-size policy, COMBINE architecture, Bob compact-storage tests, empty-library reopen, and focused chemical BREAK tests all passed.
+- The persisted fluid-to-live-transaction regression and three-piece worker cap regression ran as part of the Rust suite, but the overall suite remains red: **373 passed, 28 failed, 1 ignored**. Failures span existing constructor, cavity/genome, contact/COMBINE, movement, reproduction, and simulation contracts; do not treat them as passed or as evidence that the same-rigid-unit multi-contact case works.
+- Clippy remains red on broader lint debt (including needless lifetimes/type complexity/dead code and an `err_expect` lint in the new worker cap test). Do not broaden this sprint into unrelated lint cleanup.
+- The current transaction helper still counts distinct rigid targets and forms at most one bond per target. Do not simply relax the target-count check or repeatedly choose arbitrary candidate bonds: the next implementation needs to associate each persisted `SolidContact` segment, in the transformed live frame, with the exact rigid boundary edge/endpoint and then stage the corresponding bond set atomically. Preserve area, no-penetration/contact validation, energy-ledger atomicity, and source-structure immutability.
+- Three-piece catalogue generation remains paused. The next gate is a focused same-rigid-unit multi-contact regression plus passing focused transaction/cap tests; the full-suite backlog stays visible but does not block library work by itself.
+
 ## Bob catalogue cap change — 2026-10-12
 
 - Decision: raise the maximum persisted rigid formation size from 2 to 3 constituents. This changes the cap only; it does not authorize 4+ piece records or put generated catalogue data in Git.
