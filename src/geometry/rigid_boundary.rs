@@ -128,10 +128,10 @@ pub fn corner_normal(shape: &Shape, vertex: usize) -> Option<(f64, f64)> {
 
 /// Outward direction of a rigid line endpoint.
 pub fn line_endpoint_normal(shape: &Shape, endpoint: usize) -> Option<(f64, f64)> {
-    match shape.form {
+    match &shape.form {
         Form::Line { .. } => {}
         Form::Rectangle { width, height }
-            if height <= width * 0.1 + 1e-12 => {}
+            if *height <= *width * 0.1 + 1e-12 => {}
         _ => return None,
     }
     match endpoint {
