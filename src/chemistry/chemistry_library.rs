@@ -6,6 +6,7 @@ use crate::geometry_reference_library::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
@@ -318,11 +319,48 @@ impl ChemistryLibrary {
         file.sync_data()?;
         self.entries.insert(key, record);
         self.manifest.entries = self.entries.len() as u64;
-        let bytes = serde_json::to_vec_pretty(&self.manifest)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        fs::write(self.root.join("manifest.json"), bytes)?;
+        persist_manifest_atomically(&self.root, &self.manifest)?;
         Ok(true)
     }
+}
+
+// Unique names prevent independent library instances from colliding on a temporary
+// manifest file. Atomic rename keeps readers from observing a partially-written JSON.
+static MANIFEST_TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn persist_manifest_atomically(
+    root: &Path,
+    manifest: &ChemistryLibraryManifest,
+) -> std::io::Result<()> {
+    let bytes = serde_json::to_vec_pretty(manifest)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    let manifest_path = root.join("manifest.json");
+    let (temp_path, mut file) = loop {
+        let sequence = MANIFEST_TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let candidate = root.join(format!(
+            ".manifest.json.tmp-{}-{sequence}",
+            std::process::id()
+        ));
+        match OpenOptions::new().write(true).create_new(true).open(&candidate) {
+            Ok(file) => break (candidate, file),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    };
+
+    let write_result = (|| {
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temp_path, &manifest_path)?;
+        // Persist the directory entry update where directory syncing is supported.
+        File::open(root)?.sync_all()?;
+        Ok(())
+    })();
+    if write_result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    write_result
 }
 
 pub fn open_default_library() -> std::io::Result<ChemistryLibrary> {
