@@ -64,6 +64,9 @@ mod tests {
             *anchor = new_index_for_old[*anchor];
         }
 
+        reordered
+            .validate()
+            .expect("reordered diagnostic blueprint must remain structurally valid");
         let outcome = match crate::juvenile::realize_initial(&reordered, &catalog) {
             Ok((structure, _, _)) => format!("success; physical_units={}", structure.units.len()),
             Err(error) => format!("failure; {error}"),
