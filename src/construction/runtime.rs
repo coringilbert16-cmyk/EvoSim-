@@ -1282,6 +1282,10 @@ struct PlacementRejectionCounts {
     overlap_rejections_by_unit: std::collections::BTreeMap<usize, usize>,
     overlap_clear_if_omit_unit: std::collections::BTreeMap<usize, usize>,
     overlap_still_rejected_if_omit_unit: std::collections::BTreeMap<usize, usize>,
+    overlap_counterfactual_contact_by_unit: std::collections::BTreeMap<usize, usize>,
+    overlap_counterfactual_evaluation_by_unit: std::collections::BTreeMap<usize, usize>,
+    overlap_counterfactual_combine_by_unit: std::collections::BTreeMap<usize, usize>,
+    overlap_counterfactual_anchor_removed_by_unit: std::collections::BTreeMap<usize, usize>,
     neighbor_contact_rejections: usize,
     no_bond_contact: usize,
     candidate_evaluation_rejections: usize,
@@ -1489,6 +1493,90 @@ fn realize_next_bond_driven(
                             &mut rejection_counts.overlap_clear_if_omit_unit
                         };
                         *counter.entry(overlap_index).or_default() += 1;
+
+                        // For a sole blocker, test the unchanged Bob pose against
+                        // the same live anchor/contact/energy/bond authority on a
+                        // disposable clone. The colliding unit is ignored only
+                        // for this counterfactual overlap check; no state commits.
+                        if !still_overlapping && overlapping_units.len() == 1 {
+                            if overlap_index == existing_index {
+                                *rejection_counts
+                                    .overlap_counterfactual_anchor_removed_by_unit
+                                    .entry(overlap_index)
+                                    .or_default() += 1;
+                                continue;
+                            }
+                            let mut probe_cache =
+                                crate::contact::ConnectionCompatibilityCache::new();
+                            let probe_candidate =
+                                crate::contact::connection_pair_candidates_cached(
+                                    &trial,
+                                    existing_index,
+                                    new_unit_index,
+                                    catalog,
+                                    &mut probe_cache,
+                                )
+                                .into_iter()
+                                .filter(|candidate| {
+                                    candidate.distance
+                                        <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                                        && candidate.available_a
+                                        && candidate.available_b
+                                })
+                                .min_by(|a, b| {
+                                    a.distance
+                                        .partial_cmp(&b.distance)
+                                        .unwrap_or(std::cmp::Ordering::Equal)
+                                        .then_with(|| {
+                                            b.facing
+                                                .partial_cmp(&a.facing)
+                                                .unwrap_or(std::cmp::Ordering::Equal)
+                                        })
+                                });
+                            if let Some(probe_candidate) = probe_candidate {
+                                *rejection_counts
+                                    .overlap_counterfactual_contact_by_unit
+                                    .entry(overlap_index)
+                                    .or_default() += 1;
+                                if let Some((_, _, investment, _)) =
+                                    crate::combine_runtime::selected_candidate_evaluation(
+                                        &trial,
+                                        existing_index,
+                                        new_unit_index,
+                                        probe_candidate,
+                                        catalog,
+                                    )
+                                {
+                                    *rejection_counts
+                                        .overlap_counterfactual_evaluation_by_unit
+                                        .entry(overlap_index)
+                                        .or_default() += 1;
+                                    let mut probe_trial = trial.clone();
+                                    let mut probe_ledger = *ledger;
+                                    let mut probe_energy = available_energy;
+                                    let mut probe_cache =
+                                        crate::contact::ConnectionCompatibilityCache::new();
+                                    if crate::combine_runtime::form_selected_bond(
+                                        &mut probe_trial,
+                                        existing_index,
+                                        new_unit_index,
+                                        probe_candidate,
+                                        investment,
+                                        catalog,
+                                        &mut probe_cache,
+                                        &mut probe_ledger,
+                                        &mut probe_energy,
+                                    )
+                                    .is_some()
+                                    {
+                                        *rejection_counts
+                                            .overlap_counterfactual_combine_by_unit
+                                            .entry(overlap_index)
+                                            .or_default() += 1;
+                                    }
+                                }
+                            }
+                        }
                     }
                     continue;
                 }
@@ -1951,7 +2039,7 @@ fn construct_blueprint_bond_driven_internal(
 
         if !attached {
             eprintln!(
-                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} restore_failure_reasons={:?} overlap_rejections={} overlap_rejections_by_unit={:?} overlap_clear_if_omit_unit={:?} overlap_still_rejected_if_omit_unit={:?} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} bob_coverage_misses={:?}",
+                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} restore_failure_reasons={:?} overlap_rejections={} overlap_rejections_by_unit={:?} overlap_clear_if_omit_unit={:?} overlap_still_rejected_if_omit_unit={:?} overlap_counterfactual_contact_by_unit={:?} overlap_counterfactual_evaluation_by_unit={:?} overlap_counterfactual_combine_by_unit={:?} overlap_counterfactual_anchor_removed_by_unit={:?} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} bob_coverage_misses={:?}",
                 rejection_counts.attempted_origins,
                 rejection_counts.generated_origins,
                 rejection_counts.deduplicated_origins,
@@ -1961,6 +2049,10 @@ fn construct_blueprint_bond_driven_internal(
                 rejection_counts.overlap_rejections_by_unit,
                 rejection_counts.overlap_clear_if_omit_unit,
                 rejection_counts.overlap_still_rejected_if_omit_unit,
+                rejection_counts.overlap_counterfactual_contact_by_unit,
+                rejection_counts.overlap_counterfactual_evaluation_by_unit,
+                rejection_counts.overlap_counterfactual_combine_by_unit,
+                rejection_counts.overlap_counterfactual_anchor_removed_by_unit,
                 rejection_counts.neighbor_contact_rejections,
                 rejection_counts.neighbor_rejections_by_index,
                 rejection_counts.no_bond_contact,
