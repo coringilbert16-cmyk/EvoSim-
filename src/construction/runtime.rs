@@ -2324,9 +2324,7 @@ mod tests {
         live.bonds.push(Bond {
             endpoint_a: BondEndpoint::new(
                 left_id,
-                ConnectionEndpoint::Boundary {
-                    angle_radians: 0.0,
-                },
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
             ),
             endpoint_b: BondEndpoint::new(
                 right_id,
