@@ -323,13 +323,22 @@ mod tests {
     }
 
     #[test]
+    fn carbon_capacity_reference_is_not_a_hard_threshold() {
+        let cavity = GenomeCavity::test_fixture(1.0, 100.0);
+        assert!(
+            cavity.qualifies(),
+            "a positive-area sealed cavity must not fail solely for being below the Carbon reference"
+        );
+    }
+
+    #[test]
     fn realized_structure_cavity_qualifies_without_a_predefined_core() {
         let catalog = default_catalog();
         let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
         let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
         let cavity = analyze_genome_cavity(&structure, &catalog)
             .unwrap()
-             .expect("realized structure must contain a sealed positive-area cavity");
+            .expect("realized structure must contain a sealed positive-area cavity");
         assert!(cavity.qualifies(), "cavity={cavity:?}");
         assert!(!cavity.boundary_units.is_empty());
     }
