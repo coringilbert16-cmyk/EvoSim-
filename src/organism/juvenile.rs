@@ -31,11 +31,11 @@ pub(crate) fn confirmed_seed_baseline(
     // structure. The declared poses are spatial preferences; the constructor's
     // realized physical graph remains authoritative.
     //
-    // The ten-carbon inner loop supplies a simple enclosed region. From one
+    // The six-carbon inner loop supplies a physically compatible enclosed region. From one
     // point on that loop, twenty additional carbon elements wind outward as a
     // loose spiral. Sulfur and methane provide a small amount of heterogeneous
     // peripheral material without defining an organism role or topology.
-    let ring_sides = 10usize;
+    let ring_sides = 6usize;
     let spiral_steps = 20usize;
     let carbon_radius = catalog
         .iter()
@@ -63,26 +63,26 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    // Continue from the first ring element into an outward spiral. The
-    // constructor may rotate/translate each piece as needed to obtain a valid
-    // physical bond; these coordinates express the requested spatial tendency.
-    let spiral_angle_step = 0.35_f64;
-    let spiral_radius_step = 0.10_f64;
+    // Continue from the first ring element with a physically spaced outward
+    // chain. A tightly wound polar spiral would put successive declared centers
+    // closer than the rigid Carbon geometry allows and encourage greedy growth
+    // to trap itself. These coordinates are preferences; live geometry and bond
+    // transactions still determine the realized poses.
+    let chain_heading = std::f64::consts::FRAC_PI_6;
     for step in 1..=spiral_steps {
-        let angle = spiral_angle_step * step as f64;
-        let radius = ring_radius + spiral_radius_step * step as f64;
+        let distance = carbon_edge_center_spacing * step as f64;
         elements.push(BlueprintElement {
             material: Material::free_base("Carbon", 1.0),
             placement: BlueprintPlacement {
-                x: radius * angle.cos(),
-                y: radius * angle.sin(),
-                rotation_radians: angle,
+                x: elements[0].placement.x + distance * chain_heading.cos(),
+                y: elements[0].placement.y + distance * chain_heading.sin(),
+                rotation_radians: 0.0,
             },
         });
     }
 
-    for &i in &[0usize, 3, 6, 9] {
-        let angle = std::f64::consts::TAU * i as f64 / 10.0;
+    for &i in &[0usize, 1, 3, 4] {
+        let angle = std::f64::consts::TAU * i as f64 / ring_sides as f64;
         let radius = ring_radius + 3.0;
         elements.push(BlueprintElement {
             material: Material::free_base("Sulfur", 1.0),
@@ -94,8 +94,8 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    for &i in &[2usize, 7] {
-        let angle = std::f64::consts::TAU * i as f64 / 10.0;
+    for &i in &[2usize, 5] {
+        let angle = std::f64::consts::TAU * i as f64 / ring_sides as f64;
         let radius = ring_radius + 3.0;
         elements.push(BlueprintElement {
             material: Material::free_base("Methane", 1.0),
@@ -123,14 +123,14 @@ pub(crate) fn confirmed_seed_baseline(
     }
 
     let sulfur_start = ring_sides + spiral_steps;
-    for (offset, &i) in [0usize, 3, 6, 9].iter().enumerate() {
+    for (offset, &i) in [0usize, 1, 3, 4].iter().enumerate() {
         connections.push(BlueprintConnection {
             element_a: i,
             element_b: sulfur_start + offset,
         });
     }
     let methane_start = sulfur_start + 4;
-    for (offset, &i) in [2usize, 7].iter().enumerate() {
+    for (offset, &i) in [2usize, 5].iter().enumerate() {
         connections.push(BlueprintConnection {
             element_a: i,
             element_b: methane_start + offset,
@@ -281,4 +281,108 @@ pub(crate) fn confirmed_seed_scale_reference(
         return Err("confirmed seed scale reference is invalid".into());
     }
     Ok((mass, length))
+}
+
+#[cfg(test)]
+mod seed_geometry_tests {
+    use super::*;
+
+    #[test]
+    fn confirmed_seed_ring_uses_compatible_hexagonal_edge_spacing() {
+        let catalog = crate::resources::default_catalog();
+        let blueprint = confirmed_seed_baseline(&catalog).expect("seed baseline should be valid");
+        let ring_sides = 6usize;
+        let carbon_radius = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .and_then(|resource| match resource.shape.form {
+                crate::resources::Form::RegularPolygon { radius, .. } => Some(radius),
+                _ => None,
+            })
+            .expect("Carbon should be a regular polygon");
+        let expected_spacing = 3.0_f64.sqrt() * carbon_radius;
+
+        let spiral_start = ring_sides;
+        for step in 1..=20 {
+            let previous = if step == 1 {
+                0
+            } else {
+                spiral_start + step - 2
+            };
+            let current = spiral_start + step - 1;
+            let a = blueprint.elements[previous].placement;
+            let b = blueprint.elements[current].placement;
+            let distance = (a.x - b.x).hypot(a.y - b.y);
+            assert!(
+                (distance - expected_spacing).abs() < 1e-9,
+                "outward chain step {step} has center spacing {distance}, expected {expected_spacing}"
+            );
+        }
+
+        // The outward chain may share the anchor at element 0, but every other
+        // ring element must remain clear of every chain element. This guards
+        // against replacing the old tight spiral with a differently crossing path.
+        for chain_index in ring_sides..(ring_sides + 20) {
+            let chain = blueprint.elements[chain_index].placement;
+            for ring_index in 1..ring_sides {
+                let ring = blueprint.elements[ring_index].placement;
+                let distance = (chain.x - ring.x).hypot(chain.y - ring.y);
+                assert!(
+                    distance > expected_spacing * 1.3,
+                    "outward chain element {chain_index} approaches ring element {ring_index}: {distance}"
+                );
+            }
+        }
+
+        for index in 0..ring_sides {
+            let next = (index + 1) % ring_sides;
+            let a = blueprint.elements[index].placement;
+            let b = blueprint.elements[next].placement;
+            let distance = (a.x - b.x).hypot(a.y - b.y);
+            assert!(
+                (distance - expected_spacing).abs() < 1e-9,
+                "ring edge {index}-{next} has center spacing {distance}, expected {expected_spacing}"
+            );
+
+            let rotation_delta =
+                (b.rotation_radians - a.rotation_radians).rem_euclid(std::f64::consts::TAU);
+            assert!(
+                (rotation_delta - std::f64::consts::TAU / ring_sides as f64).abs() < 1e-9,
+                "ring rotations should advance by one sixth-turn"
+            );
+
+            assert!(
+                blueprint.connections.iter().any(|connection| {
+                    (connection.element_a == index && connection.element_b == next)
+                        || (connection.element_a == next && connection.element_b == index)
+                }),
+                "ring edge {index}-{next} must be connected"
+            );
+        }
+    }
+
+    #[test]
+    fn methane_attachments_follow_the_six_piece_ring_angles() {
+        let catalog = crate::resources::default_catalog();
+        let blueprint = confirmed_seed_baseline(&catalog).expect("seed baseline should be valid");
+        let ring_sides = 6usize;
+        let methane_start = ring_sides + 20 + 4;
+
+        for (offset, ring_index) in [2usize, 5].into_iter().enumerate() {
+            let methane = blueprint.elements[methane_start + offset].placement;
+            let actual_angle = methane.y.atan2(methane.x);
+            let expected_angle = std::f64::consts::TAU * ring_index as f64 / ring_sides as f64;
+            let angular_error = (actual_angle - expected_angle)
+                .rem_euclid(std::f64::consts::TAU)
+                .min((expected_angle - actual_angle).rem_euclid(std::f64::consts::TAU));
+            assert!(
+                angular_error < 1e-9,
+                "methane attachment at ring index {ring_index} has angle {actual_angle}, expected {expected_angle}"
+            );
+            assert!(blueprint.connections.iter().any(|connection| {
+                (connection.element_a == ring_index && connection.element_b == methane_start + offset)
+                    || (connection.element_b == ring_index && connection.element_a == methane_start + offset)
+            }), "methane attachment must connect to ring element {ring_index}");
+        }
+    }
 }
