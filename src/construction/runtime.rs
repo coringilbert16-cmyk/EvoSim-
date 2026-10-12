@@ -843,6 +843,49 @@ fn form_vertices_world(form: &Form, placement: Placement) -> Vec<(f64, f64)> {
         .collect()
 }
 
+fn reversed_edge_counterfactual_placement(
+    anchor_form: &Form,
+    anchor_pose: Placement,
+    candidate_form: &Form,
+    candidate_pose: Placement,
+) -> Option<(Placement, usize, usize, f64)> {
+    let anchor_vertices = form_vertices_world(anchor_form, anchor_pose);
+    let candidate_local_vertices = candidate_form.polygon_vertices()?;
+    let candidate_vertices = form_vertices_world(candidate_form, candidate_pose);
+    if anchor_vertices.len() < 2 || candidate_local_vertices.len() < 2
+        || candidate_vertices.len() != candidate_local_vertices.len()
+    {
+        return None;
+    }
+    let mut nearest = None;
+    for ai in 0..anchor_vertices.len() {
+        let a = anchor_vertices[ai];
+        let b = anchor_vertices[(ai + 1) % anchor_vertices.len()];
+        let am = ((a.0 + b.0) * 0.5, (a.1 + b.1) * 0.5);
+        for ci in 0..candidate_vertices.len() {
+            let c = candidate_vertices[ci];
+            let d = candidate_vertices[(ci + 1) % candidate_vertices.len()];
+            let cm = ((c.0 + d.0) * 0.5, (c.1 + d.1) * 0.5);
+            let distance = (am.0 - cm.0).hypot(am.1 - cm.1);
+            if nearest.is_none_or(|(_, _, _, best): (usize, usize, (f64, f64), f64)| distance < best) {
+                nearest = Some((ai, ci, cm, distance));
+            }
+        }
+    }
+    let (anchor_edge, candidate_edge, old_midpoint, gap) = nearest?;
+    let local_a = candidate_local_vertices[candidate_edge];
+    let local_b = candidate_local_vertices[(candidate_edge + 1) % candidate_local_vertices.len()];
+    let local_midpoint = ((local_a.0 + local_b.0) * 0.5, (local_a.1 + local_b.1) * 0.5);
+    let rotation_radians = candidate_pose.rotation_radians + std::f64::consts::PI;
+    let (sin, cos) = rotation_radians.sin_cos();
+    let placement = Placement {
+        x: old_midpoint.0 - (local_midpoint.0 * cos - local_midpoint.1 * sin),
+        y: old_midpoint.1 - (local_midpoint.0 * sin + local_midpoint.1 * cos),
+        rotation_radians,
+    };
+    Some((placement, anchor_edge, candidate_edge, gap))
+}
+
 fn point_inside_form(form: &Form, placement: Placement, x: f64, y: f64) -> bool {
     match form {
         Form::Circle { radius } => (x - placement.x).hypot(y - placement.y) <= *radius,
@@ -1515,8 +1558,39 @@ fn realize_next_bond_driven(
                                     )
                                 })
                                 .collect::<Vec<_>>();
+                            let flip_summary = anchor.shape(catalog).and_then(|anchor_shape| {
+                                candidate.shape(catalog).and_then(|candidate_shape| {
+                                    reversed_edge_counterfactual_placement(
+                                        &anchor_shape.form,
+                                        anchor.placement,
+                                        &candidate_shape.form,
+                                        candidate.placement,
+                                    ).map(|(flipped_pose, anchor_edge, candidate_edge, midpoint_gap)| {
+                                        let mut flipped_trial = trial.clone();
+                                        flipped_trial.units[new_unit_index].placement = flipped_pose;
+                                        let blockers = overlapping_unit_indices(
+                                            &flipped_trial,
+                                            &flipped_trial.units[new_unit_index],
+                                            &ignored_units,
+                                            catalog,
+                                        );
+                                        let flipped_contacts = crate::contact::connection_pair_candidates_cached(
+                                            &flipped_trial,
+                                            existing_index,
+                                            new_unit_index,
+                                            catalog,
+                                            &mut crate::contact::ConnectionCompatibilityCache::new(),
+                                        );
+                                        format!(
+                                            "flip_pose=({:.9},{:.9},{:.9}) edge_pair=({}, {}) midpoint_gap={:.9} flip_blockers={:?} flip_contact_candidates={}",
+                                            flipped_pose.x, flipped_pose.y, flipped_pose.rotation_radians,
+                                            anchor_edge, candidate_edge, midpoint_gap, blockers, flipped_contacts.len()
+                                        )
+                                    })
+                                })
+                            }).unwrap_or_else(|| "flip_counterfactual=unavailable".to_string());
                             rejection_counts.anchor_overlap_samples.push(format!(
-                                "anchor_index={} anchor_material={:?} anchor_form={} anchor_pose=({:.9},{:.9},{:.9}) candidate_material={:?} candidate_form={} candidate_pose=({:.9},{:.9},{:.9}) relative_delta=({:.9},{:.9}) relative_rotation={:.9} penetration=true contact_candidate_count={} nearest_contacts={:?}",
+                                "anchor_index={} anchor_material={:?} anchor_form={} anchor_pose=({:.9},{:.9},{:.9}) candidate_material={:?} candidate_form={} candidate_pose=({:.9},{:.9},{:.9}) relative_delta=({:.9},{:.9}) relative_rotation={:.9} penetration=true contact_candidate_count={} nearest_contacts={:?} {}",
                                 existing_index,
                                 anchor.material,
                                 anchor_form,
@@ -1532,7 +1606,8 @@ fn realize_next_bond_driven(
                                 candidate.placement.y - anchor.placement.y,
                                 candidate.placement.rotation_radians - anchor.placement.rotation_radians,
                                 contact_candidates.len(),
-                                contact_summary
+                                contact_summary,
+                                flip_summary
                             ));
                         }
 
