@@ -63,6 +63,12 @@ mod tests {
         for anchor in &mut reordered.anchor_elements {
             *anchor = new_index_for_old[*anchor];
         }
+        reordered.connections = reordered
+            .connections
+            .iter()
+            .copied()
+            .map(BlueprintConnection::canonical)
+            .collect();
 
         reordered
             .validate()
