@@ -1398,7 +1398,7 @@ fn realize_next_bond_driven(
                         } else {
                             candidate_origins.extend(
                                 library
-                                    .suggest_rigid_edge_placements(
+                                    .suggest_persisted_rigid_edge_placements(
                                         anchor_material,
                                         existing_unit.placement,
                                         candidate_resource,
@@ -1418,12 +1418,18 @@ fn realize_next_bond_driven(
                         }
                     }
                 }
-                candidate_origins.extend(angles.into_iter().map(|angle| {
-                    (
-                        placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle),
-                        None,
-                    )
-                }));
+                // Analytic endpoint poses are retained only for callers that
+                // explicitly opt out of Bob (for isolated diagnostics/tests).
+                // The live blueprint constructor always opens Bob strictly and
+                // therefore cannot manufacture an unrecorded placement on a miss.
+                if bob_library.is_none() {
+                    candidate_origins.extend(angles.into_iter().map(|angle| {
+                        (
+                            placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle),
+                            None,
+                        )
+                    }));
+                }
                 let generated_origins = candidate_origins.len();
                 rejection_counts.generated_origins += generated_origins;
                 let mut seen_origins =
@@ -1671,9 +1677,11 @@ fn construct_blueprint_bond_driven_internal(
         .ok_or_else(|| "construction anchor references a missing element".to_string())?;
     let anchor_preferred = anchor_element.material.parts[0].0.clone();
 
-    // Load Bob once per construction, not once per candidate. If no persistent
-    // store is configured yet, the constructor keeps its analytic fallback.
-    let bob_library = crate::geometry_reference_library::open_default_library().ok();
+    // Strict live construction requires a readable Bob store. A missing or
+    // invalid store is an infrastructure/coverage error, not permission to
+    // silently switch to analytic pose generation.
+    let bob_library = crate::geometry_reference_library::open_default_library()
+        .map_err(|error| format!("failed to open persistent Bob geometry library: {error}"))?;
 
     let mut structure = OrganismStructure::new();
     let mut realized = vec![false; blueprint.elements.len()];
@@ -1894,7 +1902,7 @@ fn construct_blueprint_bond_driven_internal(
                     &mut rejection_counts,
                     &construction_ledger,
                     remaining_energy,
-                    bob_library.as_ref(),
+                    Some(&bob_library),
                 ) {
                     construction_ledger = trial_ledger;
                     remaining_energy = trial_energy;
