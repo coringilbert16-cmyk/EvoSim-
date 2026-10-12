@@ -1721,3 +1721,10 @@ This is the active constructor-cleanup checkpoint. It supplements the constructi
 ### First code-removal gate
 
 The scaffold and artificial-energy allowance are confirmed wrong by the current source and the construction specification, but they cannot safely be deleted in isolation: both currently provide the only complete startup path. The replacement coordinator and its explicit missing-coverage result must be introduced first. The next implementation sprint is therefore to establish that narrow coordinator and test its first persisted-record placement/COMBINE transaction; then remove the scaffold and artificial-energy conversion in the same controlled migration rather than leaving a silent fallback or a knowingly nonfunctional startup path.
+
+
+### Constructor stripping sprint 1 implementation checkpoint — 2026-10-12
+
+Added `GeometryLibrary::suggest_persisted_rigid_edge_placements` as a strict construction-facing query. It shares the rigid-edge resolver with the existing exploratory API but disables ephemeral geometry-family generation on a lookup miss. The existing `suggest_rigid_edge_placements` retains its exploratory empty-library behavior for discovery/diagnostics and compatibility; strict construction can now distinguish "no persisted candidate" from "candidate generated on demand". A regression assertion covers both behaviors against an empty library.
+
+**Not yet wired into live construction.** The initial constructor still uses its fixed scaffold and fallback coordinates at this checkpoint. Do not claim the strict-construction contract is enforced end to end yet. The next code gate is a structured placement result that preserves missing-coverage diagnostics, then routing construction through the strict query and live transaction before removing the scaffold/energy path. Focused CI has not yet been run for this branch.
