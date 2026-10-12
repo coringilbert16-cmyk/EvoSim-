@@ -2909,7 +2909,10 @@ mod tests {
             ledger_before_failed_trial.total_usable_energy_held
         );
         assert_eq!(failed_energy, energy_before_failed_trial);
-        assert!(structure.bonds.is_empty(), "the untouched source stays unchanged");
+        assert!(
+            structure.bonds.is_empty(),
+            "the untouched source stays unchanged"
+        );
 
         assert!(crate::combine_runtime::form_selected_bond(
             &mut structure,
