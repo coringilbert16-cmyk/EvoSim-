@@ -2016,6 +2016,8 @@ fn construct_blueprint_bond_driven_internal(
                     if stop_at_genome
                         && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_some()
                     {
+                        *ledger = construction_ledger;
+                        *energy = remaining_energy;
                         return Ok((structure, total_heat));
                     }
 
@@ -2143,6 +2145,8 @@ fn construct_blueprint_bond_driven_internal(
                         if stop_at_genome
                             && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_some()
                         {
+                            *ledger = construction_ledger;
+                            *energy = remaining_energy;
                             return Ok((structure, total_heat));
                         }
 
@@ -2187,6 +2191,8 @@ fn construct_blueprint_bond_driven_internal(
         }
     }
 
+    *ledger = construction_ledger;
+    *energy = remaining_energy;
     Ok((structure, total_heat))
 }
 
@@ -2264,6 +2270,10 @@ mod tests {
 
         assert_eq!(structure.units.len(), 3);
         assert_eq!(structure.bonds.len(), 3);
+        assert!(
+            energy < 1.0e6,
+            "successful construction must commit its energy expenditure"
+        );
     }
 
     #[test]
