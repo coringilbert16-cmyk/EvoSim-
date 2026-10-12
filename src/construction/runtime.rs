@@ -2290,8 +2290,9 @@ mod tests {
         for name in ["TestWallA", "TestWallB"] {
             let mut wall = carbon.clone();
             wall.name = name.to_string();
-            wall.shape.form = Form::Line {
-                length: wall_length,
+            wall.shape.form = Form::Rectangle {
+                width: wall_length,
+                height: 0.1,
             };
             catalog.push(wall);
         }
@@ -2323,11 +2324,15 @@ mod tests {
         live.bonds.push(Bond {
             endpoint_a: BondEndpoint::new(
                 left_id,
-                ConnectionEndpoint::LineEndpoint { point_index: 1 },
+                ConnectionEndpoint::Boundary {
+                    angle_radians: 0.0,
+                },
             ),
             endpoint_b: BondEndpoint::new(
                 right_id,
-                ConnectionEndpoint::LineEndpoint { point_index: 0 },
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::PI,
+                },
             ),
             strength: 1.0,
             bond_energy: 0.0,
