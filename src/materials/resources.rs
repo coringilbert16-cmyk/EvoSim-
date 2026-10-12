@@ -42,6 +42,8 @@ pub enum Form {
     Circle {
         radius: f64,
     },
+    /// Zero-thickness segment primitive for computational geometry only.
+    /// Physical resources require finite area; Hydrogen uses a thin rectangle.
     Line {
         length: f64,
     },
@@ -271,7 +273,7 @@ impl Shape {
     /// Physical resources must occupy finite area. Form::Line remains a
     /// geometry primitive, but cannot represent a physical resource.
     pub fn is_valid_physical_shape(&self) -> bool {
-        self.is_valid() && !matches!(self.form, Form::Line { .. })
+        self.is_valid() && !matches!(&self.form, Form::Line { .. })
     }
 }
 
