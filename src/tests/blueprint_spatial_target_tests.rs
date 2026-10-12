@@ -68,7 +68,10 @@ mod tests {
             Ok((structure, _, _)) => format!("success; physical_units={}", structure.units.len()),
             Err(error) => format!("failure; {error}"),
         };
-        eprintln!("[constructor-order-diagnostic] sulfur-before-chain={outcome}");
+        assert!(
+            outcome.starts_with("success;"),
+            "reordered constructor result: {outcome}"
+        );
     }
 
     #[test]
