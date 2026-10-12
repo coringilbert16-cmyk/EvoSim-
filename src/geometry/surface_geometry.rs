@@ -163,12 +163,7 @@ pub fn boundary_point_at_multi_contact(
     x: f64,
     y: f64,
 ) -> Option<BoundaryPoint> {
-    if boundary.pieces.is_empty()
-        || !boundary.nominal_area.is_finite()
-        || boundary.nominal_area <= 0.0
-        || !x.is_finite()
-        || !y.is_finite()
-    {
+    if !boundary.is_valid() || !x.is_finite() || !y.is_finite() {
         return None;
     }
     let mut best: Option<(f64, BoundaryPoint)> = None;
@@ -471,6 +466,24 @@ mod tests {
         assert!((top.y - 1.0).abs() < 1e-12);
         assert!(top.normal_y > 0.99);
         assert!(top.normal_x.abs() < 1e-12);
+    }
+
+    #[test]
+    fn exact_multi_contact_point_query_rejects_invalid_open_boundary() {
+        let boundary = crate::capillary_geometry::MultiContactFluidBoundary {
+            nominal_area: 1.0,
+            pieces: vec![
+                crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                    start_x: -1.0,
+                    start_y: 0.0,
+                    end_x: 1.0,
+                    end_y: 0.0,
+                    contact_angle_radians: std::f64::consts::FRAC_PI_2,
+                },
+            ],
+        };
+        assert!(!boundary.is_valid());
+        assert!(boundary_point_at_multi_contact(&boundary, 0.0, 0.0).is_none());
     }
 
     #[test]
