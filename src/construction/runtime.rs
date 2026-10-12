@@ -2400,8 +2400,8 @@ mod tests {
                 break;
             }
         }
-        let (first_target, mut ledger, mut energy) = first_bond
-            .expect("the first persisted fluid contact should be bondable");
+        let (first_target, mut ledger, mut energy) =
+            first_bond.expect("the first persisted fluid contact should be bondable");
         assert!(
             form_remaining_multi_contact_bonds(
                 &mut trial,
@@ -2416,7 +2416,11 @@ mod tests {
         assert_eq!(trial.bonds.len(), live.bonds.len() + 2);
         assert!(energy.is_finite());
         assert!(trial.units[fluid_index].shape(&catalog).unwrap().is_valid());
-        assert_eq!(live.bonds.len(), 1, "the source structure must remain unchanged");
+        assert_eq!(
+            live.bonds.len(),
+            1,
+            "the source structure must remain unchanged"
+        );
         drop(library);
         let _ = std::fs::remove_dir_all(root);
     }
