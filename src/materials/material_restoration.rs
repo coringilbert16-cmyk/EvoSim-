@@ -35,8 +35,14 @@ pub(crate) fn restore_material_diagnostic(
     origin: Placement,
     catalog: &[BaseResource],
 ) -> Result<Vec<usize>, &'static str> {
-    let relative = instance.placements.as_ref().ok_or("missing stored constituent placements")?;
-    let connections = instance.internal_connections.as_ref().ok_or("missing stored internal connections")?;
+    let relative = instance
+        .placements
+        .as_ref()
+        .ok_or("missing stored constituent placements")?;
+    let connections = instance
+        .internal_connections
+        .as_ref()
+        .ok_or("missing stored internal connections")?;
     let material = &instance.material;
     if !material.is_valid() || material.parts.is_empty() || relative.len() != material.parts.len() {
         return Err("invalid material or constituent-placement count");
@@ -57,16 +63,20 @@ pub(crate) fn restore_material_diagnostic(
         if amount.fract().abs() > EPSILON || (*amount - 1.0).abs() > EPSILON {
             return Err("constituent amount is not one whole physical unit");
         }
-        let resource = catalog.iter().find(|resource| resource.name == *name)
+        let resource = catalog
+            .iter()
+            .find(|resource| resource.name == *name)
             .ok_or("constituent resource missing from catalog")?;
         let mut unit = StructuralUnit::from_material(
             crate::resources::Material::free_base(name.clone(), *amount),
             transform_relative(origin, *placement),
-        ).ok_or("could not create structural unit from stored constituent")?;
+        )
+        .ok_or("could not create structural unit from stored constituent")?;
         if !unit.realize_default_geometry(catalog) {
             return Err("could not realize constituent default geometry");
         }
-        let realized_shape = instance.realized_shape_for_part(part_index, catalog)
+        let realized_shape = instance
+            .realized_shape_for_part(part_index, catalog)
             .ok_or("stored realized shape is invalid for constituent")?;
         if realized_shape != resource.shape && !unit.realize_fluid_geometry(realized_shape, catalog)
         {
@@ -79,7 +89,8 @@ pub(crate) fn restore_material_diagnostic(
     // geometrically self-consistent when restored. Bonded contact is allowed;
     // physical penetration is not.
     for left in 0..indices.len() {
-        let left_shape = trial.units[indices[left]].shape(catalog)
+        let left_shape = trial.units[indices[left]]
+            .shape(catalog)
             .ok_or("restored constituent has no physical shape")?;
         let left_part = crate::material_geometry::PlacedMaterialPart {
             part_index: left,
@@ -87,7 +98,8 @@ pub(crate) fn restore_material_diagnostic(
             placement: trial.units[indices[left]].placement,
         };
         for right in (left + 1)..indices.len() {
-            let right_shape = trial.units[indices[right]].shape(catalog)
+            let right_shape = trial.units[indices[right]]
+                .shape(catalog)
                 .ok_or("restored constituent has no physical shape")?;
             let right_part = crate::material_geometry::PlacedMaterialPart {
                 part_index: right,
@@ -101,12 +113,24 @@ pub(crate) fn restore_material_diagnostic(
     }
 
     for connection in connections {
-        let unit_a = *indices.get(connection.part_a).ok_or("internal bond part A is missing")?;
-        let unit_b = *indices.get(connection.part_b).ok_or("internal bond part B is missing")?;
-        let id_a = trial.physical_id(unit_a).ok_or("internal bond part A has no physical ID")?;
-        let id_b = trial.physical_id(unit_b).ok_or("internal bond part B has no physical ID")?;
-        let a = trial.units[unit_a].properties(catalog).ok_or("internal bond part A has no properties")?;
-        let b = trial.units[unit_b].properties(catalog).ok_or("internal bond part B has no properties")?;
+        let unit_a = *indices
+            .get(connection.part_a)
+            .ok_or("internal bond part A is missing")?;
+        let unit_b = *indices
+            .get(connection.part_b)
+            .ok_or("internal bond part B is missing")?;
+        let id_a = trial
+            .physical_id(unit_a)
+            .ok_or("internal bond part A has no physical ID")?;
+        let id_b = trial
+            .physical_id(unit_b)
+            .ok_or("internal bond part B has no physical ID")?;
+        let a = trial.units[unit_a]
+            .properties(catalog)
+            .ok_or("internal bond part A has no properties")?;
+        let b = trial.units[unit_b]
+            .properties(catalog)
+            .ok_or("internal bond part B has no properties")?;
         let strength = crate::combine::bond_strength(a, b);
         if !strength.is_finite() {
             return Err("restored internal bond has non-finite strength");
