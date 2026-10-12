@@ -500,7 +500,9 @@ mod tests {
         assert_eq!(second_pass.formation_size, 3);
         assert!(second_pass.expansion_limit_reached);
         assert!(library.get(&three_piece).is_some());
-        assert!(library.formations().all(|formation| formation.constituents.len() <= 3));
+        assert!(library
+            .formations()
+            .all(|formation| formation.constituents.len() <= 3));
 
         let error = process_one_frontier(&mut library, &catalog, 4)
             .err()
