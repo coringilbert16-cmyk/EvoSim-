@@ -664,7 +664,339 @@ fn circular_arcs_intersect(
     })
 }
 
+/// Result of a supported exact multi-contact fluid union, with source-piece provenance.
+/// `None` in a source map marks the shared internal segment consumed by the union.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CoalescedMultiContactBoundary {
+    pub boundary: MultiContactFluidBoundary,
+    pub first_piece_to_merged: Vec<Option<usize>>,
+    pub second_piece_to_merged: Vec<Option<usize>>,
+}
+
+/// Merge two exact multi-contact fluid boundaries across one complete shared
+/// solid-contact segment and preserve a mapping from every retained source piece
+/// to its index in the merged boundary. Inputs must already share one frame.
+/// Free arcs are retained verbatim; no sampling or geometric approximation occurs.
+/// Returns None for ambiguous contacts, unsupported interfaces, or invalid output.
+pub fn coalesce_multi_contact_boundaries_with_mapping(
+    first: &MultiContactFluidBoundary,
+    second: &MultiContactFluidBoundary,
+) -> Option<CoalescedMultiContactBoundary> {
+    const TOL: f64 = 1e-9;
+
+    if !first.is_valid() || !second.is_valid() {
+        return None;
+    }
+    let expected_area = first.nominal_area + second.nominal_area;
+    if !expected_area.is_finite() || expected_area <= 0.0 {
+        return None;
+    }
+
+    fn close(a: (f64, f64), b: (f64, f64)) -> bool {
+        (a.0 - b.0).hypot(a.1 - b.1) <= TOL
+    }
+    fn reversed_shared_segment(a: &FluidBoundaryPiece, b: &FluidBoundaryPiece) -> bool {
+        match (a, b) {
+            (
+                FluidBoundaryPiece::SolidContact {
+                    start_x: ax,
+                    start_y: ay,
+                    end_x: bx,
+                    end_y: by,
+                    ..
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: cx,
+                    start_y: cy,
+                    end_x: dx,
+                    end_y: dy,
+                    ..
+                },
+            ) => close((*ax, *ay), (*dx, *dy)) && close((*bx, *by), (*cx, *cy)),
+            _ => false,
+        }
+    }
+
+    let mut shared: Option<(usize, usize)> = None;
+    for (i, a) in first.pieces.iter().enumerate() {
+        for (j, b) in second.pieces.iter().enumerate() {
+            if reversed_shared_segment(a, b) && shared.replace((i, j)).is_some() {
+                return None;
+            }
+        }
+    }
+    let (shared_first, shared_second) = shared?;
+
+    // Keep provenance attached while stitching; a geometry-only output would
+    // force bond-remapping code to guess which source contact survived.
+    let mut remaining: Vec<(bool, usize, FluidBoundaryPiece)> =
+        Vec::with_capacity(first.pieces.len() + second.pieces.len() - 2);
+    remaining.extend(
+        first
+            .pieces
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != shared_first)
+            .map(|(i, piece)| (false, i, *piece)),
+    );
+    remaining.extend(
+        second
+            .pieces
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != shared_second)
+            .map(|(i, piece)| (true, i, *piece)),
+    );
+    if remaining.len() < 2 {
+        return None;
+    }
+
+    // Stitch whole analytic pieces by endpoint identity. Each step must have
+    // exactly one unused successor; branch points and ambiguous seams reject.
+    let mut ordered: Vec<(bool, usize, FluidBoundaryPiece)> = Vec::with_capacity(remaining.len());
+    let mut used = vec![false; remaining.len()];
+    used[0] = true;
+    ordered.push(remaining[0]);
+    let start = remaining[0].2.start_point()?;
+    let mut current = remaining[0].2.end_point()?;
+
+    for _ in 1..remaining.len() {
+        if close(current, start) {
+            return None; // closed too early: disconnected leftover pieces
+        }
+        let candidates: Vec<usize> = remaining
+            .iter()
+            .enumerate()
+            .filter(|(i, tagged)| {
+                !used[*i]
+                    && tagged
+                        .2
+                        .start_point()
+                        .is_some_and(|point| close(point, current))
+            })
+            .map(|(i, _)| i)
+            .collect();
+        if candidates.len() != 1 {
+            return None;
+        }
+        let next = candidates[0];
+        used[next] = true;
+        current = remaining[next].2.end_point()?;
+        ordered.push(remaining[next]);
+    }
+    if !close(current, start) {
+        return None;
+    }
+
+    let mut first_map = vec![None; first.pieces.len()];
+    let mut second_map = vec![None; second.pieces.len()];
+    let pieces: Vec<FluidBoundaryPiece> = ordered
+        .iter()
+        .enumerate()
+        .map(|(merged_index, (from_second, source_index, piece))| {
+            if *from_second {
+                second_map[*source_index] = Some(merged_index);
+            } else {
+                first_map[*source_index] = Some(merged_index);
+            }
+            *piece
+        })
+        .collect();
+    let boundary = MultiContactFluidBoundary {
+        nominal_area: expected_area,
+        pieces,
+    };
+    if !boundary.is_valid() {
+        return None;
+    }
+    Some(CoalescedMultiContactBoundary {
+        boundary,
+        first_piece_to_merged: first_map,
+        second_piece_to_merged: second_map,
+    })
+}
+
+/// A source boundary point resolved to one retained piece of the merged boundary.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MappedFluidBoundaryPoint {
+    pub merged_piece_index: usize,
+    pub x: f64,
+    pub y: f64,
+}
+
+/// Resolve an existing local boundary endpoint through source-piece provenance.
+/// The point must lie on exactly one source piece within `tolerance`, and that
+/// piece must survive coalescence. Ambiguous corners and consumed-interface
+/// endpoints reject rather than silently moving a bond to a different surface.
+/// Inputs must use the same coordinate frame as the coalescence result.
+pub fn map_boundary_point_through_coalescence(
+    x: f64,
+    y: f64,
+    source: &MultiContactFluidBoundary,
+    source_piece_to_merged: &[Option<usize>],
+    merged: &MultiContactFluidBoundary,
+    tolerance: f64,
+) -> Option<MappedFluidBoundaryPoint> {
+    if !x.is_finite()
+        || !y.is_finite()
+        || !tolerance.is_finite()
+        || tolerance < 0.0
+        || !source.is_valid()
+        || !merged.is_valid()
+        || source_piece_to_merged.len() != source.pieces.len()
+    {
+        return None;
+    }
+
+    fn closest_point(piece: &FluidBoundaryPiece, x: f64, y: f64) -> Option<(f64, f64)> {
+        match piece {
+            FluidBoundaryPiece::SolidContact {
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+                ..
+            } => {
+                let dx = end_x - start_x;
+                let dy = end_y - start_y;
+                let length_squared = dx * dx + dy * dy;
+                if !length_squared.is_finite() || length_squared <= EPS * EPS {
+                    return None;
+                }
+                let t =
+                    (((x - start_x) * dx + (y - start_y) * dy) / length_squared).clamp(0.0, 1.0);
+                Some((start_x + t * dx, start_y + t * dy))
+            }
+            FluidBoundaryPiece::FreeArc(arc) => arc.closest_point(x, y),
+        }
+    }
+
+    let mut match_found: Option<(usize, (f64, f64))> = None;
+    for (source_index, piece) in source.pieces.iter().enumerate() {
+        let Some(point) = closest_point(piece, x, y) else {
+            continue;
+        };
+        if (point.0 - x).hypot(point.1 - y) > tolerance {
+            continue;
+        }
+        // A point on two pieces (typically a corner) has no unique provenance.
+        if match_found.is_some() || source_piece_to_merged[source_index].is_none() {
+            return None;
+        }
+        match_found = Some((source_index, point));
+    }
+
+    let (source_index, point) = match_found?;
+    let merged_piece_index = source_piece_to_merged[source_index]?;
+    let merged_piece = merged.pieces.get(merged_piece_index)?;
+    let merged_point = closest_point(merged_piece, point.0, point.1)?;
+    if (merged_point.0 - point.0).hypot(merged_point.1 - point.1) > tolerance {
+        return None;
+    }
+    Some(MappedFluidBoundaryPoint {
+        merged_piece_index,
+        x: merged_point.0,
+        y: merged_point.1,
+    })
+}
+
+/// Placement-aware coalescence result.
+///
+/// Source boundaries and the merged boundary are provided in world coordinates
+/// for endpoint provenance checks; the merged boundary is also expressed in the
+/// first constituent's local frame so it can be installed on that survivor.
+/// Piece indices are invariant under rigid transforms, so the provenance maps
+/// apply to the corresponding world-frame source boundaries.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlacedFluidCoalescence {
+    pub first_world: MultiContactFluidBoundary,
+    pub second_world: MultiContactFluidBoundary,
+    pub merged_world: MultiContactFluidBoundary,
+    pub merged_in_first_frame: MultiContactFluidBoundary,
+    pub first_piece_to_merged: Vec<Option<usize>>,
+    pub second_piece_to_merged: Vec<Option<usize>>,
+}
+
+/// Transform two constituent-local boundaries into world coordinates, coalesce
+/// only if a complete reversed shared contact segment exists, and return the
+/// exact union in both world and first-constituent-local coordinates.
+///
+/// This is a geometry-stage transaction primitive; it does not mutate live
+/// structure, bonds, energy, or ledgers. Callers must still remap every retained
+/// endpoint and stage all state changes before committing.
+pub fn coalesce_placed_multi_contact_boundaries(
+    first: &MultiContactFluidBoundary,
+    first_placement: (f64, f64, f64),
+    second: &MultiContactFluidBoundary,
+    second_placement: (f64, f64, f64),
+) -> Option<PlacedFluidCoalescence> {
+    let first_world = first.transformed(first_placement.0, first_placement.1, first_placement.2)?;
+    let second_world =
+        second.transformed(second_placement.0, second_placement.1, second_placement.2)?;
+    let coalesced = coalesce_multi_contact_boundaries_with_mapping(&first_world, &second_world)?;
+
+    // Invert the first constituent's rigid transform to store the merged
+    // boundary in its own local frame without changing the ordered piece IDs.
+    let (sin, cos) = first_placement.2.sin_cos();
+    let inverse_x = -first_placement.0 * cos - first_placement.1 * sin;
+    let inverse_y = first_placement.0 * sin - first_placement.1 * cos;
+    let merged_in_first_frame =
+        coalesced
+            .boundary
+            .transformed(inverse_x, inverse_y, -first_placement.2)?;
+
+    Some(PlacedFluidCoalescence {
+        first_world,
+        second_world,
+        merged_world: coalesced.boundary,
+        merged_in_first_frame,
+        first_piece_to_merged: coalesced.first_piece_to_merged,
+        second_piece_to_merged: coalesced.second_piece_to_merged,
+    })
+}
+
+/// Compatibility wrapper for callers that need only the merged geometry.
+/// Transaction code should use the provenance-returning variant and explicitly
+/// validate/remap every retained bond endpoint before committing.
+// This convenience wrapper is retained for pure geometry callers; live COMBINE uses provenance mapping.
+#[allow(dead_code)]
+pub fn coalesce_multi_contact_boundaries(
+    first: &MultiContactFluidBoundary,
+    second: &MultiContactFluidBoundary,
+) -> Option<MultiContactFluidBoundary> {
+    coalesce_multi_contact_boundaries_with_mapping(first, second).map(|result| result.boundary)
+}
+
 impl MultiContactFluidBoundary {
+    /// Rigidly transform every boundary piece while preserving analytic arcs and area.
+    ///
+    /// This is the explicit bridge between a constituent-local boundary and a
+    /// shared geometry frame. Callers must supply the constituent's actual
+    /// placement; this helper never infers alignment from contact alone.
+    pub fn transformed(
+        &self,
+        translate_x: f64,
+        translate_y: f64,
+        rotation_radians: f64,
+    ) -> Option<Self> {
+        if !self.is_valid()
+            || !translate_x.is_finite()
+            || !translate_y.is_finite()
+            || !rotation_radians.is_finite()
+        {
+            return None;
+        }
+        let transformed = Self {
+            nominal_area: self.nominal_area,
+            pieces: self
+                .pieces
+                .iter()
+                .map(|piece| piece.transformed(translate_x, translate_y, rotation_radians))
+                .collect::<Option<Vec<_>>>()?,
+        };
+        transformed.is_valid().then_some(transformed)
+    }
+
     /// Validate closure, each analytic piece, and the area from Green's theorem.
     /// No arc is tessellated or replaced with a polygon.
     pub fn is_valid(&self) -> bool {
@@ -800,24 +1132,6 @@ impl MultiContactFluidBoundary {
                 FluidBoundaryPiece::FreeArc(arc) => arc.center_x.hypot(arc.center_y) + arc.radius,
             })
             .fold(0.0_f64, f64::max)
-    }
-
-    /// Transform the complete boundary without sampling or changing its area.
-    pub fn transformed(
-        &self,
-        translate_x: f64,
-        translate_y: f64,
-        rotation_radians: f64,
-    ) -> Option<Self> {
-        let transformed = Self {
-            nominal_area: self.nominal_area,
-            pieces: self
-                .pieces
-                .iter()
-                .map(|piece| piece.transformed(translate_x, translate_y, rotation_radians))
-                .collect::<Option<Vec<_>>>()?,
-        };
-        transformed.is_valid().then_some(transformed)
     }
 
     /// Exact point containment using analytic line and circular-arc crossings.
@@ -1160,9 +1474,595 @@ pub fn solve_water_against_collinear_contacts(
     boundary.is_valid().then_some(boundary)
 }
 
+/// Exact polygon-only fluid coalescence for two simple boundaries that share
+/// one complete edge. Coordinates must already be in the same world frame.
+/// Curved boundaries and partial-edge/vertex-only contacts are deliberately
+/// unsupported here; callers must fail closed rather than approximate them.
+// Reusable polygon-only primitive; current live COMBINE accepts exact multi-contact fluid boundaries.
+#[allow(dead_code)]
+pub fn coalesce_adjacent_polygon_boundaries(
+    first: &[(f64, f64)],
+    second: &[(f64, f64)],
+) -> Option<Vec<(f64, f64)>> {
+    const TOL: f64 = 1e-9;
+
+    fn close(a: (f64, f64), b: (f64, f64)) -> bool {
+        (a.0 - b.0).hypot(a.1 - b.1) <= TOL
+    }
+    fn cross(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> f64 {
+        (b.0 - a.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0)
+    }
+    fn area2(points: &[(f64, f64)]) -> f64 {
+        (0..points.len())
+            .map(|i| {
+                let a = points[i];
+                let b = points[(i + 1) % points.len()];
+                a.0 * b.1 - b.0 * a.1
+            })
+            .sum()
+    }
+    fn on_segment(a: (f64, f64), b: (f64, f64), p: (f64, f64)) -> bool {
+        cross(a, b, p).abs() <= TOL
+            && p.0 >= a.0.min(b.0) - TOL
+            && p.0 <= a.0.max(b.0) + TOL
+            && p.1 >= a.1.min(b.1) - TOL
+            && p.1 <= a.1.max(b.1) + TOL
+    }
+    fn intersects(a: (f64, f64), b: (f64, f64), c: (f64, f64), d: (f64, f64)) -> bool {
+        let ab_c = cross(a, b, c);
+        let ab_d = cross(a, b, d);
+        let cd_a = cross(c, d, a);
+        let cd_b = cross(c, d, b);
+        if ((ab_c > TOL && ab_d < -TOL) || (ab_c < -TOL && ab_d > TOL))
+            && ((cd_a > TOL && cd_b < -TOL) || (cd_a < -TOL && cd_b > TOL))
+        {
+            return true;
+        }
+        (ab_c.abs() <= TOL && on_segment(a, b, c))
+            || (ab_d.abs() <= TOL && on_segment(a, b, d))
+            || (cd_a.abs() <= TOL && on_segment(c, d, a))
+            || (cd_b.abs() <= TOL && on_segment(c, d, b))
+    }
+    fn simple_polygon(points: &[(f64, f64)]) -> bool {
+        if points.len() < 3
+            || points.iter().any(|(x, y)| !x.is_finite() || !y.is_finite())
+            || area2(points).abs() <= TOL
+        {
+            return false;
+        }
+        for i in 0..points.len() {
+            let a = points[i];
+            let b = points[(i + 1) % points.len()];
+            if close(a, b) {
+                return false;
+            }
+            for j in (i + 1)..points.len() {
+                if j == i + 1 || (i == 0 && j == points.len() - 1) {
+                    continue;
+                }
+                if intersects(a, b, points[j], points[(j + 1) % points.len()]) {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    if !simple_polygon(first) || !simple_polygon(second) {
+        return None;
+    }
+    let mut a = first.to_vec();
+    let mut b = second.to_vec();
+    if area2(&a) < 0.0 {
+        a.reverse();
+    }
+    if area2(&b) < 0.0 {
+        b.reverse();
+    }
+    let area_a = area2(&a).abs() * 0.5;
+    let area_b = area2(&b).abs() * 0.5;
+
+    let mut shared: Option<(usize, usize)> = None;
+    for i in 0..a.len() {
+        let a0 = a[i];
+        let a1 = a[(i + 1) % a.len()];
+        for j in 0..b.len() {
+            let b0 = b[j];
+            let b1 = b[(j + 1) % b.len()];
+            if close(a0, b1) && close(a1, b0) && shared.replace((i, j)).is_some() {
+                return None;
+            }
+        }
+    }
+    let (shared_a, shared_b) = shared?;
+
+    // Any other crossing/overlap is outside this deliberately narrow union
+    // operation. Endpoint meetings at either end of the shared edge are valid.
+    let shared_start = a[shared_a];
+    let shared_end = a[(shared_a + 1) % a.len()];
+    for i in 0..a.len() {
+        for j in 0..b.len() {
+            if i == shared_a && j == shared_b {
+                continue;
+            }
+            let p = a[i];
+            let q = a[(i + 1) % a.len()];
+            let r = b[j];
+            let s = b[(j + 1) % b.len()];
+            if !intersects(p, q, r, s) {
+                continue;
+            }
+            let collinear = cross(p, q, r).abs() <= TOL && cross(p, q, s).abs() <= TOL;
+            let endpoint_meeting = [(p, r), (p, s), (q, r), (q, s)]
+                .into_iter()
+                .any(|(x, y)| close(x, y) && (close(x, shared_start) || close(x, shared_end)));
+            let positive_collinear_overlap = if collinear {
+                let use_x = (q.0 - p.0).abs() >= (q.1 - p.1).abs();
+                let (p0, p1, r0, r1) = if use_x {
+                    (p.0, q.0, r.0, s.0)
+                } else {
+                    (p.1, q.1, r.1, s.1)
+                };
+                p0.max(p1).min(r0.max(r1)) - p0.min(p1).max(r0.min(r1)) > TOL
+            } else {
+                false
+            };
+            // The exterior edges of two adjacent polygons may continue along
+            // the same straight line at a shared corner. Permit a point-only
+            // meeting, but reject any positive-length collinear overlap.
+            if !endpoint_meeting || positive_collinear_overlap {
+                return None;
+            }
+        }
+    }
+
+    let mut edges: Vec<((f64, f64), (f64, f64))> = Vec::new();
+    for (points, omitted) in [(&a, shared_a), (&b, shared_b)] {
+        for i in 0..points.len() {
+            if i != omitted {
+                edges.push((points[i], points[(i + 1) % points.len()]));
+            }
+        }
+    }
+    if edges.len() < 3 {
+        return None;
+    }
+
+    let start = edges[0].0;
+    let mut current = start;
+    let mut used = vec![false; edges.len()];
+    let mut output = Vec::with_capacity(edges.len());
+    for _ in 0..edges.len() {
+        let candidates: Vec<usize> = edges
+            .iter()
+            .enumerate()
+            .filter(|(i, (edge_start, _))| !used[*i] && close(*edge_start, current))
+            .map(|(i, _)| i)
+            .collect();
+        if candidates.len() != 1 {
+            return None;
+        }
+        let index = candidates[0];
+        used[index] = true;
+        output.push(edges[index].0);
+        current = edges[index].1;
+        if close(current, start) {
+            break;
+        }
+    }
+    if used.iter().any(|used_edge| !*used_edge)
+        || !close(current, start)
+        || !simple_polygon(&output)
+    {
+        return None;
+    }
+
+    // Positive-area overlap violates the conserved-area rule. Requiring the
+    // stitched loop's area to equal the sum rejects such cases and bad topology.
+    let merged_area = area2(&output).abs() * 0.5;
+    let expected_area = area_a + area_b;
+    if !merged_area.is_finite()
+        || (merged_area - expected_area).abs() > 1e-8 * expected_area.max(TOL * TOL)
+    {
+        return None;
+    }
+    Some(output)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn placed_coalescence_transforms_to_world_and_returns_survivor_local_boundary() {
+        let upper = MultiContactFluidBoundary {
+            nominal_area: PI * 0.5,
+            pieces: vec![
+                FluidBoundaryPiece::FreeArc(CircularArcBoundary {
+                    center_x: 0.0,
+                    center_y: 0.0,
+                    radius: 1.0,
+                    start_angle_radians: 0.0,
+                    sweep_radians: PI,
+                }),
+                FluidBoundaryPiece::SolidContact {
+                    start_x: -1.0,
+                    start_y: 0.0,
+                    end_x: 1.0,
+                    end_y: 0.0,
+                    contact_angle_radians: PI * 0.5,
+                },
+            ],
+        };
+        let lower = MultiContactFluidBoundary {
+            nominal_area: PI * 0.5,
+            pieces: vec![
+                FluidBoundaryPiece::FreeArc(CircularArcBoundary {
+                    center_x: 0.0,
+                    center_y: 0.0,
+                    radius: 1.0,
+                    start_angle_radians: PI,
+                    sweep_radians: PI,
+                }),
+                FluidBoundaryPiece::SolidContact {
+                    start_x: 1.0,
+                    start_y: 0.0,
+                    end_x: -1.0,
+                    end_y: 0.0,
+                    contact_angle_radians: PI * 0.5,
+                },
+            ],
+        };
+        let placed = coalesce_placed_multi_contact_boundaries(
+            &upper,
+            (10.0, -3.0, PI * 0.5),
+            &lower,
+            (10.0, -3.0, PI * 0.5),
+        )
+        .unwrap();
+
+        assert!(placed.first_world.is_valid());
+        assert!(placed.second_world.is_valid());
+        assert!(placed.merged_world.is_valid());
+        assert!(placed.merged_in_first_frame.is_valid());
+        assert!((placed.merged_world.nominal_area - PI).abs() < 1e-9);
+        assert!((placed.merged_in_first_frame.nominal_area - PI).abs() < 1e-9);
+        assert_eq!(placed.first_piece_to_merged, vec![Some(0), None]);
+        assert_eq!(placed.second_piece_to_merged, vec![Some(1), None]);
+        let arcs: Vec<_> = placed
+            .merged_in_first_frame
+            .pieces
+            .iter()
+            .filter_map(|piece| {
+                if let FluidBoundaryPiece::FreeArc(arc) = piece {
+                    Some(*arc)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(arcs.len(), 2);
+        assert!(arcs.iter().any(|arc| (arc.center_x).abs() < 1e-9
+            && (arc.center_y).abs() < 1e-9
+            && (arc.start_angle_radians).abs() < 1e-9
+            && (arc.sweep_radians - PI).abs() < 1e-9));
+        assert!(arcs.iter().any(|arc| (arc.center_x).abs() < 1e-9
+            && (arc.center_y).abs() < 1e-9
+            && (arc.start_angle_radians - PI).abs() < 1e-9
+            && (arc.sweep_radians - PI).abs() < 1e-9));
+
+        // The helper must reject separated bodies; touch or nearby placement
+        // is not enough to authorize a volume merge.
+        assert!(coalesce_placed_multi_contact_boundaries(
+            &upper,
+            (0.0, 0.0, 0.0),
+            &lower,
+            (4.0, 0.0, 0.0),
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn multi_contact_coalescence_preserves_exact_arcs_and_conserves_area() {
+        let upper_arc = CircularArcBoundary {
+            center_x: 0.0,
+            center_y: 0.0,
+            radius: 1.0,
+            start_angle_radians: 0.0,
+            sweep_radians: PI,
+        };
+        let lower_arc = CircularArcBoundary {
+            center_x: 0.0,
+            center_y: 0.0,
+            radius: 1.0,
+            start_angle_radians: PI,
+            sweep_radians: PI,
+        };
+        let upper = MultiContactFluidBoundary {
+            nominal_area: PI * 0.5,
+            pieces: vec![
+                FluidBoundaryPiece::FreeArc(upper_arc),
+                FluidBoundaryPiece::SolidContact {
+                    start_x: -1.0,
+                    start_y: 0.0,
+                    end_x: 1.0,
+                    end_y: 0.0,
+                    contact_angle_radians: PI * 0.5,
+                },
+            ],
+        };
+        let lower = MultiContactFluidBoundary {
+            nominal_area: PI * 0.5,
+            pieces: vec![
+                FluidBoundaryPiece::FreeArc(lower_arc),
+                FluidBoundaryPiece::SolidContact {
+                    start_x: 1.0,
+                    start_y: 0.0,
+                    end_x: -1.0,
+                    end_y: 0.0,
+                    contact_angle_radians: PI * 0.5,
+                },
+            ],
+        };
+
+        assert!(upper.is_valid());
+        assert!(lower.is_valid());
+        let result = coalesce_multi_contact_boundaries_with_mapping(&upper, &lower).unwrap();
+        let merged = &result.boundary;
+        assert_eq!(result.first_piece_to_merged, vec![Some(0), None]);
+        assert_eq!(result.second_piece_to_merged, vec![Some(1), None]);
+        assert_eq!(merged.pieces.len(), 2);
+        assert!(merged
+            .pieces
+            .iter()
+            .all(|piece| matches!(piece, FluidBoundaryPiece::FreeArc(_))));
+        assert!((merged.nominal_area - PI).abs() < 1e-9);
+        assert!(merged.is_valid());
+        let arc_count = merged
+            .pieces
+            .iter()
+            .filter(|piece| matches!(piece, FluidBoundaryPiece::FreeArc(_)))
+            .count();
+        assert_eq!(arc_count, 2);
+    }
+
+    #[test]
+    fn coalescence_endpoint_mapping_keeps_retained_contacts_and_rejects_internal_interface() {
+        let upper_arc = CircularArcBoundary {
+            center_x: 0.0,
+            center_y: 0.0,
+            radius: 1.0,
+            start_angle_radians: 0.0,
+            sweep_radians: PI,
+        };
+        let lower_arc = CircularArcBoundary {
+            center_x: 0.0,
+            center_y: 0.0,
+            radius: 1.0,
+            start_angle_radians: PI,
+            sweep_radians: PI,
+        };
+        let upper = MultiContactFluidBoundary {
+            nominal_area: PI / 2.0,
+            pieces: vec![
+                FluidBoundaryPiece::FreeArc(upper_arc),
+                FluidBoundaryPiece::SolidContact {
+                    start_x: -1.0,
+                    start_y: 0.0,
+                    end_x: 1.0,
+                    end_y: 0.0,
+                    contact_angle_radians: PI / 2.0,
+                },
+            ],
+        };
+        let lower = MultiContactFluidBoundary {
+            nominal_area: PI / 2.0,
+            pieces: vec![
+                FluidBoundaryPiece::FreeArc(lower_arc),
+                FluidBoundaryPiece::SolidContact {
+                    start_x: 1.0,
+                    start_y: 0.0,
+                    end_x: -1.0,
+                    end_y: 0.0,
+                    contact_angle_radians: PI / 2.0,
+                },
+            ],
+        };
+        let result = coalesce_multi_contact_boundaries_with_mapping(&upper, &lower).unwrap();
+
+        let retained = map_boundary_point_through_coalescence(
+            0.0,
+            1.0,
+            &upper,
+            &result.first_piece_to_merged,
+            &result.boundary,
+            1e-9,
+        )
+        .unwrap();
+        assert_eq!(retained.merged_piece_index, 0);
+        assert!((retained.x).abs() < 1e-9);
+        assert!((retained.y - 1.0).abs() < 1e-9);
+
+        assert!(map_boundary_point_through_coalescence(
+            0.0,
+            0.0,
+            &upper,
+            &result.first_piece_to_merged,
+            &result.boundary,
+            1e-9,
+        )
+        .is_none());
+        // A shared endpoint belongs to both the retained arc and consumed
+        // interface; without unique provenance it must not be reassigned.
+        assert!(map_boundary_point_through_coalescence(
+            1.0,
+            0.0,
+            &upper,
+            &result.first_piece_to_merged,
+            &result.boundary,
+            1e-9,
+        )
+        .is_none());
+        assert!(map_boundary_point_through_coalescence(
+            0.0,
+            1.1,
+            &upper,
+            &result.first_piece_to_merged,
+            &result.boundary,
+            1e-3,
+        )
+        .is_none());
+        assert!(map_boundary_point_through_coalescence(
+            0.0,
+            1.0,
+            &upper,
+            &[],
+            &result.boundary,
+            1e-9,
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn multi_contact_coalescence_rejects_touch_without_shared_segment() {
+        let boundary = |x: f64, y: f64| MultiContactFluidBoundary {
+            nominal_area: 1.0,
+            pieces: vec![
+                FluidBoundaryPiece::SolidContact {
+                    start_x: x,
+                    start_y: y,
+                    end_x: x + 1.0,
+                    end_y: y,
+                    contact_angle_radians: PI * 0.5,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: x + 1.0,
+                    start_y: y,
+                    end_x: x + 1.0,
+                    end_y: y + 1.0,
+                    contact_angle_radians: PI * 0.5,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: x + 1.0,
+                    start_y: y + 1.0,
+                    end_x: x,
+                    end_y: y + 1.0,
+                    contact_angle_radians: PI * 0.5,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: x,
+                    start_y: y + 1.0,
+                    end_x: x,
+                    end_y: y,
+                    contact_angle_radians: PI * 0.5,
+                },
+            ],
+        };
+        let first = boundary(0.0, 0.0);
+        let merely_touching_at_vertex = boundary(1.0, 1.0);
+        assert!(coalesce_multi_contact_boundaries(&first, &merely_touching_at_vertex).is_none());
+    }
+
+    #[test]
+    fn multi_contact_coalescence_rejects_partial_shared_segment() {
+        let rectangle = |x: f64, y: f64, width: f64, height: f64| MultiContactFluidBoundary {
+            nominal_area: width * height,
+            pieces: vec![
+                FluidBoundaryPiece::SolidContact {
+                    start_x: x,
+                    start_y: y,
+                    end_x: x + width,
+                    end_y: y,
+                    contact_angle_radians: PI * 0.5,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: x + width,
+                    start_y: y,
+                    end_x: x + width,
+                    end_y: y + height,
+                    contact_angle_radians: PI * 0.5,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: x + width,
+                    start_y: y + height,
+                    end_x: x,
+                    end_y: y + height,
+                    contact_angle_radians: PI * 0.5,
+                },
+                FluidBoundaryPiece::SolidContact {
+                    start_x: x,
+                    start_y: y + height,
+                    end_x: x,
+                    end_y: y,
+                    contact_angle_radians: PI * 0.5,
+                },
+            ],
+        };
+        let first = rectangle(0.0, 0.0, 1.0, 1.0);
+        let partial_neighbor = rectangle(1.0, 0.25, 1.0, 0.5);
+        assert!(first.is_valid());
+        assert!(partial_neighbor.is_valid());
+        assert!(coalesce_multi_contact_boundaries(&first, &partial_neighbor).is_none());
+    }
+
+    #[test]
+    fn polygon_coalescence_merges_full_shared_edge_and_conserves_area() {
+        let left = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)];
+        let right = [(1.0, 0.0), (2.0, 0.0), (2.0, 1.0), (1.0, 1.0)];
+        let merged = coalesce_adjacent_polygon_boundaries(&left, &right).unwrap();
+        assert_eq!(merged.len(), 6);
+        assert!((area2_test(&merged) - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn polygon_coalescence_rejects_vertex_touch_and_positive_overlap() {
+        let first = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)];
+        let vertex_touch = [(1.0, 1.0), (2.0, 1.0), (2.0, 2.0), (1.0, 2.0)];
+        let overlap = [(0.5, 0.0), (1.5, 0.0), (1.5, 1.0), (0.5, 1.0)];
+        // This pair has one complete reversed shared edge, but also shares a
+        // positive-length segment along the first polygon's bottom boundary.
+        let extra_collinear_overlap = [
+            (1.0, 0.0),
+            (0.5, 0.0),
+            (0.5, -1.0),
+            (2.0, -1.0),
+            (2.0, 1.0),
+            (1.0, 1.0),
+        ];
+        assert!(coalesce_adjacent_polygon_boundaries(&first, &vertex_touch).is_none());
+        assert!(coalesce_adjacent_polygon_boundaries(&first, &overlap).is_none());
+        assert!(coalesce_adjacent_polygon_boundaries(&first, &extra_collinear_overlap).is_none());
+    }
+
+    #[test]
+    fn polygon_coalescence_is_invariant_to_input_winding_and_order() {
+        let first = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)];
+        let second = [(1.0, 0.0), (2.0, 0.0), (2.0, 1.0), (1.0, 1.0)];
+        let reversed_first = [(0.0, 1.0), (1.0, 1.0), (1.0, 0.0), (0.0, 0.0)];
+        let reversed_second = [(1.0, 1.0), (2.0, 1.0), (2.0, 0.0), (1.0, 0.0)];
+
+        let baseline = coalesce_adjacent_polygon_boundaries(&first, &second).unwrap();
+        let swapped = coalesce_adjacent_polygon_boundaries(&second, &first).unwrap();
+        let reversed =
+            coalesce_adjacent_polygon_boundaries(&reversed_first, &reversed_second).unwrap();
+
+        for merged in [&baseline, &swapped, &reversed] {
+            assert_eq!(merged.len(), 6);
+            assert!((area2_test(merged) - 2.0).abs() < 1e-9);
+        }
+    }
+
+    fn area2_test(points: &[(f64, f64)]) -> f64 {
+        (0..points.len())
+            .map(|i| {
+                let a = points[i];
+                let b = points[(i + 1) % points.len()];
+                a.0 * b.1 - b.0 * a.1
+            })
+            .sum::<f64>()
+            .abs()
+            * 0.5
+    }
 
     #[test]
     fn flat_contact_solver_realizes_exact_edge_local_arcs_for_varied_angles() {
@@ -1785,5 +2685,69 @@ mod tests {
             ),
         ];
         assert!(solve_water_against_collinear_contacts(0.5, PI / 2.0, &short).is_none());
+    }
+
+    #[test]
+    fn multi_contact_boundary_transform_preserves_area_and_exact_arc_geometry() {
+        let area = 0.5;
+        let family = CapillaryContactFamily::solve(area, PI / 2.0).unwrap();
+        let midpoint = family.contact_length * 0.5;
+        let boundary = solve_water_against_collinear_contacts(
+            area,
+            PI / 2.0,
+            &[
+                ((0.0, 0.0), (midpoint, 0.0)),
+                ((midpoint, 0.0), (family.contact_length, 0.0)),
+            ],
+        )
+        .unwrap();
+        let translated = boundary.transformed(3.0, -2.0, 0.37).unwrap();
+        assert!(translated.is_valid());
+        assert_eq!(translated.nominal_area, boundary.nominal_area);
+        assert_eq!(translated.pieces.len(), boundary.pieces.len());
+
+        for (before, after) in boundary.pieces.iter().zip(&translated.pieces) {
+            match (before, after) {
+                (FluidBoundaryPiece::FreeArc(a), FluidBoundaryPiece::FreeArc(b)) => {
+                    assert_eq!(a.radius, b.radius);
+                    assert_eq!(a.sweep_radians, b.sweep_radians);
+                    let (sin, cos) = 0.37_f64.sin_cos();
+                    let expected_center = (
+                        3.0 + a.center_x * cos - a.center_y * sin,
+                        -2.0 + a.center_x * sin + a.center_y * cos,
+                    );
+                    assert!((b.center_x - expected_center.0).abs() < 1e-12);
+                    assert!((b.center_y - expected_center.1).abs() < 1e-12);
+                }
+                (
+                    FluidBoundaryPiece::SolidContact { .. },
+                    FluidBoundaryPiece::SolidContact { .. },
+                ) => {}
+                _ => panic!("rigid transform must preserve piece kinds"),
+            }
+        }
+        assert!((translated.nominal_area - family.area).abs() < 1e-12);
+    }
+
+    #[test]
+    fn multi_contact_boundary_transform_rejects_invalid_transforms_and_source() {
+        let family = CapillaryContactFamily::solve(0.5, PI / 2.0).unwrap();
+        let midpoint = family.contact_length * 0.5;
+        let boundary = solve_water_against_collinear_contacts(
+            0.5,
+            PI / 2.0,
+            &[
+                ((0.0, 0.0), (midpoint, 0.0)),
+                ((midpoint, 0.0), (family.contact_length, 0.0)),
+            ],
+        )
+        .unwrap();
+        assert!(boundary.transformed(f64::NAN, 0.0, 0.0).is_none());
+        assert!(boundary.transformed(0.0, 0.0, f64::INFINITY).is_none());
+        let invalid = MultiContactFluidBoundary {
+            nominal_area: -1.0,
+            pieces: boundary.pieces.clone(),
+        };
+        assert!(invalid.transformed(0.0, 0.0, 0.0).is_none());
     }
 }
