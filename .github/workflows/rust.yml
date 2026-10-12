@@ -66,8 +66,8 @@ jobs:
       # Build a small, disposable local library in the CI workspace so constructor
       # tests exercise the real persisted-query path instead of silently relying
       # on an absent/empty default store. Generated library files are not committed.
-      - name: Seed Bob and generate one persisted geometry frontier
-        run: cargo run --locked -- --geometry-worker-once
+      - name: Seed Bob and generate all singleton geometry frontiers
+        run: cargo run --locked -- --geometry-worker-passes 7
       # Expensive headless multigeneration validation is paused while the seed
       # topology is being finalized. Keep the normal Rust/Clippy gates active.
       - name: Run Rust tests
