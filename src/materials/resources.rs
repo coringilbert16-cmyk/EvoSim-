@@ -267,6 +267,12 @@ impl Shape {
     pub fn is_valid(&self) -> bool {
         self.form.is_valid()
     }
+
+    /// Physical resources must occupy finite area. Form::Line remains a
+    /// geometry primitive, but cannot represent a physical resource.
+    pub fn is_valid_physical_shape(&self) -> bool {
+        self.is_valid() && !matches!(self.form, Form::Line { .. })
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
@@ -762,10 +768,21 @@ mod shape_tests {
     }
 
     #[test]
-    fn every_catalog_resource_has_a_valid_shape() {
+    fn every_catalog_resource_has_a_valid_physical_shape() {
         for resource in default_catalog() {
             assert!(resource.shape.is_valid());
+            assert!(resource.shape.is_valid_physical_shape());
         }
+    }
+
+    #[test]
+    fn zero_area_line_is_not_a_physical_resource_shape() {
+        let line = Shape { form: Form::Line { length: 1.0 } };
+        assert!(line.is_valid(), "line remains a geometry primitive");
+        assert!(!line.is_valid_physical_shape());
+        let hydrogen = default_catalog().into_iter()
+            .find(|resource| resource.name == "Hydrogen").unwrap();
+        assert!(hydrogen.shape.is_valid_physical_shape());
     }
 
     #[test]

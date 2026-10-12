@@ -8,7 +8,7 @@ use crate::resources::{
 use crate::state::{EnergyLedger, Simulation};
 use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
 
-fn line_catalog() -> Vec<BaseResource> {
+fn thin_rectangle_catalog() -> Vec<BaseResource> {
     vec![
         BaseResource {
             name: "A".into(),
@@ -21,7 +21,7 @@ fn line_catalog() -> Vec<BaseResource> {
             },
             physical_state: PhysicalState::Rigid,
             shape: Shape {
-                form: Form::Line { length: 2.0 },
+                form: Form::Rectangle { width: 2.0, height: 0.1 },
             },
         },
         BaseResource {
@@ -35,7 +35,7 @@ fn line_catalog() -> Vec<BaseResource> {
             },
             physical_state: PhysicalState::Rigid,
             shape: Shape {
-                form: Form::Line { length: 2.0 },
+                form: Form::Rectangle { width: 2.0, height: 0.1 },
             },
         },
     ]
@@ -53,7 +53,7 @@ fn bonded_material() -> Material {
 
 #[test]
 fn realized_material_carries_exact_internal_connection_and_restores_without_combine() {
-    let catalog = line_catalog();
+    let catalog = thin_rectangle_catalog();
     let material = bonded_material();
     let placements = vec![
         Placement {
@@ -127,7 +127,7 @@ fn realized_material_carries_exact_internal_connection_and_restores_without_comb
 
 #[test]
 fn new_structure_bond_is_formed_only_through_combine() {
-    let catalog = line_catalog();
+    let catalog = thin_rectangle_catalog();
     let mut structure = OrganismStructure::new();
     let mut a = StructuralUnit::new(
         "A",

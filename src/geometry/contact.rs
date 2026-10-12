@@ -453,14 +453,16 @@ pub(crate) fn endpoint_world_point(
 ) -> Option<crate::connection_geometry::WorldConnectionPoint> {
     let shape = unit.shape(catalog)?;
     match endpoint {
-        ConnectionEndpoint::Corner { point_index }
-        | ConnectionEndpoint::LineEndpoint { point_index } => rigid_endpoint_world_point(
-            shape,
-            point_index,
-            unit.placement.x,
-            unit.placement.y,
-            unit.placement.rotation_radians,
-        ),
+        ConnectionEndpoint::Corner { point_index } =>
+            crate::connection_geometry::transform_polygon_vertex(
+                shape, point_index, unit.placement.x, unit.placement.y,
+                unit.placement.rotation_radians,
+            ),
+        ConnectionEndpoint::LineEndpoint { point_index } =>
+            crate::connection_geometry::transform_line_endpoint(
+                shape, point_index, unit.placement.x, unit.placement.y,
+                unit.placement.rotation_radians,
+            ),
         ConnectionEndpoint::Boundary { angle_radians } => {
             let (s, c) = angle_radians.sin_cos();
             let point = boundary_point_toward(shape, c, s)?;

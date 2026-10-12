@@ -3794,7 +3794,7 @@ pub fn validate_formation(formation: &GeometryFormation, catalog: &[BaseResource
         let Some(resource) = catalog.iter().find(|r| r.name == constituent.resource) else {
             return false;
         };
-        if !resource.shape.is_valid() {
+        if !resource.shape.is_valid_physical_shape() {
             return false;
         }
     }

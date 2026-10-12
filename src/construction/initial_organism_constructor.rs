@@ -352,7 +352,7 @@ fn construct_scaffold(
         .find(|resource| {
             resource.name == "Carbon"
                 && resource.physical_state == PhysicalState::Rigid
-                && resource.shape.is_valid()
+                && resource.shape.is_valid_physical_shape()
         })
         .ok_or_else(|| "catalog lacks valid rigid Carbon geometry".to_string())?;
 
@@ -578,7 +578,7 @@ fn available_acquisition_resources<'a>(catalog: &'a [BaseResource]) -> Vec<&'a B
     catalog
         .iter()
         .filter(|resource| resource.name != "Water")
-        .filter(|resource| resource.shape.is_valid())
+        .filter(|resource| resource.shape.is_valid_physical_shape())
         .collect()
 }
 
@@ -807,7 +807,7 @@ fn bob_fluid_acquisition_candidate(
                     rotation_radians: anchor_unit.placement.rotation_radians
                         + relative_pose.rotation_radians,
                 };
-                if !shape.is_valid() {
+                if !shape.is_valid_physical_shape() {
                     continue;
                 }
 
