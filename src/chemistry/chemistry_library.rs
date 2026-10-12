@@ -571,7 +571,12 @@ mod tests {
             key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "rollback"),
             static_potential: 0.55,
         };
-        let original_manifest = fs::read(root.join("manifest.json")).unwrap();
+        let manifest_path = root.join("manifest.json");
+        let original_manifest = match fs::read(&manifest_path) {
+            Ok(bytes) => Some(bytes),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => panic!("failed to read original manifest: {error}"),
+        };
         let error = library
             .insert_with_manifest_persistence(record, |_, _| {
                 Err(std::io::Error::new(
@@ -584,10 +589,12 @@ mod tests {
         assert_eq!(library.len(), 0);
         assert_eq!(library.manifest.entries, 0);
         assert_eq!(fs::metadata(root.join("chemistry.jsonl")).unwrap().len(), 0);
-        assert_eq!(
-            fs::read(root.join("manifest.json")).unwrap(),
-            original_manifest
-        );
+        let manifest_after_failure = match fs::read(&manifest_path) {
+            Ok(bytes) => Some(bytes),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => panic!("failed to read manifest after failed insert: {error}"),
+        };
+        assert_eq!(manifest_after_failure, original_manifest);
 
         let reopened = ChemistryLibrary::open(&root).unwrap();
         assert!(reopened.is_empty());
