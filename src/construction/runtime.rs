@@ -1271,8 +1271,6 @@ fn realize_next_bond_driven(
     realized_units: &[Option<Vec<usize>>],
     _index: usize,
     neighbor: usize,
-    genome_anchor: Placement,
-    anchor_declared: BlueprintPlacement,
     new_material: &crate::physical_material::PhysicalMaterial,
     nodes: &mut usize,
     rejection_counts: &mut PlacementRejectionCounts,
@@ -1288,9 +1286,7 @@ fn realize_next_bond_driven(
     f64,
 )> {
     let existing_indices = realized_units[neighbor].as_ref()?.clone();
-    let new_endpoints = physical_material_endpoint_options(new_material, catalog);
-
-    if existing_indices.is_empty() || new_endpoints.is_empty() {
+    if existing_indices.is_empty() {
         return None;
     }
 
@@ -1302,134 +1298,72 @@ fn realize_next_bond_driven(
         .then(|| bob_library.and_then(|_| canonical_live_rigid_parent(structure, catalog)))
         .flatten();
 
+    // Query once per anchor/physical constituent pair. The previous endpoint
+    // cross-product repeatedly generated the same pose for every endpoint pair,
+    // multiplying work before the candidate even reached collision validation.
+    // The persisted formation proposes a pose; live contact discovery below
+    // determines the actual bond endpoint.
     for existing_index in existing_indices {
         let existing_unit = structure.units.get(existing_index)?;
-        let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
-        for endpoint_a in existing_endpoints {
-            let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
-            for (part_index, endpoint_b) in new_endpoints.iter().copied() {
-                let local_b = physical_material_endpoint_local_point(
-                    new_material,
-                    part_index,
-                    endpoint_b,
-                    catalog,
-                )?;
+        let anchor_material = existing_unit.material.parts.first()?.0.as_str();
+        for part_index in 0..new_material.material.parts.len() {
+            let Some((candidate_name, _)) = new_material.material.parts.get(part_index) else {
+                continue;
+            };
+            let Some(candidate_resource) = resource(catalog, candidate_name) else {
+                continue;
+            };
+            let Some(relative_part_placement) = new_material
+                .placements
+                .as_ref()
+                .and_then(|placements| placements.get(part_index))
+                .copied()
+            else {
+                continue;
+            };
 
-                // The blueprint pose is a preference, not a placement command.
-                // The analytic target angle is followed by exact boundary alignments
-                // and a small coarse fallback rather than a blind 360-degree sweep.
-                let target = blueprint.elements[_index].placement;
-                let (s, c) = genome_anchor.rotation_radians.sin_cos();
-                let target_world = (
-                    genome_anchor.x + (target.x - anchor_declared.x) * c
-                        - (target.y - anchor_declared.y) * s,
-                    genome_anchor.y
-                        + (target.x - anchor_declared.x) * s
-                        + (target.y - anchor_declared.y) * c,
-                );
-                let ideal_angle = (joint.y - target_world.1).atan2(joint.x - target_world.0)
-                    - local_b.y.atan2(local_b.x);
-
-                let Some(existing_shape) = existing_unit.shape(catalog) else {
-                    continue;
-                };
-                let Some(candidate_shape) = new_material
-                    .material
-                    .parts
-                    .get(part_index)
-                    .and_then(|(name, _)| resource(catalog, name))
-                    .map(|resource| &resource.shape)
-                else {
-                    continue;
-                };
-                let angles = construction_angle_candidates(
-                    existing_shape,
-                    endpoint_a,
-                    existing_unit.placement.rotation_radians,
-                    candidate_shape,
-                    endpoint_b,
-                    new_material
-                        .placements
-                        .as_ref()
-                        .and_then(|placements| placements.get(part_index))
-                        .map(|placement| placement.rotation_radians)
-                        .unwrap_or(0.0),
-                    ideal_angle,
-                );
-                // Bob's stored contact families provide real candidate poses.
-                // They are tried before analytic endpoint alignments, but all
-                // suggestions pass through the same live overlap, contact,
-                // compatibility, and energy transaction checks below.
-                let mut candidate_origins =
-                    Vec::<(Placement, Option<crate::resources::Shape>)>::new();
-                if let Some(library) = bob_library {
-                    let anchor_material = existing_unit.material.parts.first()?.0.as_str();
-                    let candidate_resource = new_material
-                        .material
-                        .parts
-                        .get(part_index)
-                        .and_then(|(name, _)| resource(catalog, name));
-                    if let (Some(candidate_resource), Some(relative_part_placement)) = (
-                        candidate_resource,
-                        new_material
-                            .placements
-                            .as_ref()
-                            .and_then(|placements| placements.get(part_index))
-                            .copied(),
-                    ) {
-                        if candidate_resource.physical_state == PhysicalState::Fluid {
-                            // These exact-parent suggestions are still proposals;
-                            // restoration and the ordinary live transaction checks
-                            // remain authoritative.
-                            if let Some(parent) = bob_parent.as_ref() {
-                                candidate_origins.extend(
-                                    bob_fluid_origins_for_live_parent(
-                                        library,
-                                        parent,
-                                        existing_unit.physical_id,
-                                        candidate_resource,
-                                        relative_part_placement,
-                                        catalog,
-                                    )
-                                    .into_iter()
-                                    .map(|(origin, shape)| (origin, Some(shape))),
-                                );
-                            }
-                        } else {
-                            candidate_origins.extend(
-                                library
-                                    .suggest_persisted_rigid_edge_placements(
-                                        anchor_material,
-                                        existing_unit.placement,
-                                        candidate_resource,
-                                        catalog,
-                                    )
-                                    .into_iter()
-                                    .map(|suggestion| {
-                                        (
-                                            composite_origin_for_constituent_pose(
-                                                suggestion.placement,
-                                                relative_part_placement,
-                                            ),
-                                            None,
-                                        )
-                                    }),
-                            );
-                        }
+            let mut candidate_origins =
+                Vec::<(Placement, Option<crate::resources::Shape>)>::new();
+            if let Some(library) = bob_library {
+                if candidate_resource.physical_state == PhysicalState::Fluid {
+                    // Exact-parent fluid records remain proposals only; the
+                    // restored shape must pass live geometry and bond checks.
+                    if let Some(parent) = bob_parent.as_ref() {
+                        candidate_origins.extend(
+                            bob_fluid_origins_for_live_parent(
+                                library,
+                                parent,
+                                existing_unit.physical_id,
+                                candidate_resource,
+                                relative_part_placement,
+                                catalog,
+                            )
+                            .into_iter()
+                            .map(|(origin, shape)| (origin, Some(shape))),
+                        );
                     }
+                } else {
+                    candidate_origins.extend(
+                        library
+                            .suggest_persisted_rigid_edge_placements(
+                                anchor_material,
+                                existing_unit.placement,
+                                candidate_resource,
+                                catalog,
+                            )
+                            .into_iter()
+                            .map(|suggestion| {
+                                (
+                                    composite_origin_for_constituent_pose(
+                                        suggestion.placement,
+                                        relative_part_placement,
+                                    ),
+                                    None,
+                                )
+                            }),
+                    );
                 }
-                // Analytic endpoint poses are retained only for callers that
-                // explicitly opt out of Bob (for isolated diagnostics/tests).
-                // The live blueprint constructor always opens Bob strictly and
-                // therefore cannot manufacture an unrecorded placement on a miss.
-                if bob_library.is_none() {
-                    candidate_origins.extend(angles.into_iter().map(|angle| {
-                        (
-                            placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle),
-                            None,
-                        )
-                    }));
-                }
+            }
                 let generated_origins = candidate_origins.len();
                 rejection_counts.generated_origins += generated_origins;
                 let mut seen_origins =
@@ -1592,7 +1526,6 @@ fn realize_next_bond_driven(
                 }
             }
         }
-    }
 
     None
 }
@@ -1895,8 +1828,6 @@ fn construct_blueprint_bond_driven_internal(
                     &realized_units,
                     index,
                     neighbor,
-                    genome_anchor,
-                    anchor_element.placement,
                     &candidate_instance,
                     &mut nodes,
                     &mut rejection_counts,
