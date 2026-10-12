@@ -2862,7 +2862,18 @@ mod tests {
         )
         .is_some());
         let _ = incomplete_trial.units.pop();
+        // Snapshot every transaction-visible effect after the deliberately
+        // incomplete setup. A failed completion must preserve the already
+        // staged trial exactly, including unit identities, bonds, ledger and
+        // spendable energy; the caller can then discard the whole trial.
+        let units_before_failed_trial = incomplete_trial
+            .units
+            .iter()
+            .map(|unit| (unit.physical_id, unit.placement))
+            .collect::<Vec<_>>();
+        let bonds_before_failed_trial = incomplete_trial.bonds.len();
         let energy_before_failed_trial = failed_energy;
+        let ledger_before_failed_trial = failed_ledger;
         assert!(!form_remaining_multi_contact_bonds(
             &mut incomplete_trial,
             fluid_index,
@@ -2871,9 +2882,34 @@ mod tests {
             &mut failed_ledger,
             &mut failed_energy,
         ));
-        assert_eq!(incomplete_trial.bonds.len(), 1);
-        assert!(structure.bonds.is_empty());
+        assert_eq!(incomplete_trial.bonds.len(), bonds_before_failed_trial);
+        assert_eq!(
+            incomplete_trial
+                .units
+                .iter()
+                .map(|unit| (unit.physical_id, unit.placement))
+                .collect::<Vec<_>>(),
+            units_before_failed_trial,
+            "failed completion must not mutate trial unit identities or poses"
+        );
+        assert_eq!(
+            failed_ledger.total_potential_energy_released,
+            ledger_before_failed_trial.total_potential_energy_released
+        );
+        assert_eq!(
+            failed_ledger.total_usable_energy_gained,
+            ledger_before_failed_trial.total_usable_energy_gained
+        );
+        assert_eq!(
+            failed_ledger.total_heat_dissipated,
+            ledger_before_failed_trial.total_heat_dissipated
+        );
+        assert_eq!(
+            failed_ledger.total_usable_energy_held,
+            ledger_before_failed_trial.total_usable_energy_held
+        );
         assert_eq!(failed_energy, energy_before_failed_trial);
+        assert!(structure.bonds.is_empty(), "the untouched source stays unchanged");
 
         assert!(crate::combine_runtime::form_selected_bond(
             &mut structure,
