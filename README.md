@@ -1756,4 +1756,4 @@ The active constructor work is consolidated on `refactor/constructor-strip-2026-
 - Material restoration exposes stable rejection reasons while preserving the compatibility wrapper for callers that only need `Option`.
 - Placement diagnostics count restoration failures by reason, distinguishing restoration from overlap/contact/COMBINE rejection.
 - Fixed seed topology, lattice snapping, scaffold-coordinate fallback, and artificial construction-energy allowances remain legacy and must be removed only with a working milestone-driven replacement.
-- Verification is required on this consolidated head before closing the superseded constructor PRs. The constructor is not considered fixed based on these changes alone.
+- Verification is required on the consolidated head before treating these changes as sound. The superseded constructor PRs are closed to keep one workstream; their branches remain available for historical comparison. The constructor is not considered fixed based on these changes alone.
