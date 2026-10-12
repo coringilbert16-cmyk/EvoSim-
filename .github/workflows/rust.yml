@@ -32,6 +32,8 @@ jobs:
         run: cargo test --locked compact_family_storage_tests
       - name: Verify empty Bob library open and reopen without generation
         run: cargo test --locked fresh_empty_library_opens_and_reopens_without_seeding_geometry
+      - name: Verify concurrent Bob library initialization
+        run: cargo test --locked concurrent_default_store_initialization_does_not_race_on_temp_files
       # Keep the fluid transaction and three-piece generation gate visible apart
       # from the known constructor-dependent full-suite backlog.
       - name: Run focused Bob fluid transaction and three-piece cap tests
