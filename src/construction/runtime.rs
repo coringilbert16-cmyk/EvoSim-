@@ -2725,8 +2725,9 @@ mod tests {
         let angle = std::f64::consts::FRAC_PI_2;
         let family = CapillaryContactFamily::solve(area, angle).unwrap();
         let segment_length = family.contact_length / 3.0;
-        catalog[carbon_index].shape.form = Form::Line {
-            length: segment_length,
+        catalog[carbon_index].shape.form = Form::Rectangle {
+            width: segment_length,
+            height: 0.1,
         };
 
         let third = family.contact_length / 3.0;
@@ -2775,7 +2776,7 @@ mod tests {
                 "Carbon",
                 Placement {
                     x,
-                    y: 0.0,
+                    y: -0.05,
                     rotation_radians: 0.0,
                 },
             ));
