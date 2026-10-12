@@ -53,11 +53,15 @@ pub(crate) fn confirmed_seed_baseline(
 
     for i in 0..ring_sides {
         let angle = std::f64::consts::TAU * i as f64 / ring_sides as f64;
+        // A regular hexagon's face normals are offset 30 degrees from its
+        // vertex directions. Shift ring centers by -30 degrees while keeping
+        // each piece's authored rotation aligned with its ring index.
+        let position_angle = angle - std::f64::consts::FRAC_PI_6;
         elements.push(BlueprintElement {
             material: Material::free_base("Carbon", 1.0),
             placement: BlueprintPlacement {
-                x: ring_radius * angle.cos(),
-                y: ring_radius * angle.sin(),
+                x: ring_radius * position_angle.cos(),
+                y: ring_radius * position_angle.sin(),
                 rotation_radians: angle,
             },
         });
@@ -83,12 +87,13 @@ pub(crate) fn confirmed_seed_baseline(
 
     for &i in &[0usize, 1, 3, 4] {
         let angle = std::f64::consts::TAU * i as f64 / ring_sides as f64;
+        let position_angle = angle - std::f64::consts::FRAC_PI_6;
         let radius = ring_radius + 3.0;
         elements.push(BlueprintElement {
             material: Material::free_base("Sulfur", 1.0),
             placement: BlueprintPlacement {
-                x: radius * angle.cos(),
-                y: radius * angle.sin(),
+                x: radius * position_angle.cos(),
+                y: radius * position_angle.sin(),
                 rotation_radians: angle,
             },
         });
@@ -96,12 +101,13 @@ pub(crate) fn confirmed_seed_baseline(
 
     for &i in &[2usize, 5] {
         let angle = std::f64::consts::TAU * i as f64 / ring_sides as f64;
+        let position_angle = angle - std::f64::consts::FRAC_PI_6;
         let radius = ring_radius + 3.0;
         elements.push(BlueprintElement {
             material: Material::free_base("Methane", 1.0),
             placement: BlueprintPlacement {
-                x: radius * angle.cos(),
-                y: radius * angle.sin(),
+                x: radius * position_angle.cos(),
+                y: radius * position_angle.sin(),
                 rotation_radians: angle,
             },
         });
