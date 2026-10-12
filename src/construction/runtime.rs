@@ -513,6 +513,35 @@ fn form_remaining_multi_contact_bonds(
     ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) -> bool {
+    // Treat this as one transaction: if any segment cannot be realized as a
+    // distinct live bond, leave the caller's structure and energy untouched.
+    let mut staged_structure = structure.clone();
+    let mut staged_ledger = ledger.clone();
+    let mut staged_energy = *energy;
+    if !form_remaining_multi_contact_bonds_in_place(
+        &mut staged_structure,
+        fluid_unit_index,
+        first_target_index,
+        catalog,
+        &mut staged_ledger,
+        &mut staged_energy,
+    ) {
+        return false;
+    }
+    *structure = staged_structure;
+    *ledger = staged_ledger;
+    *energy = staged_energy;
+    true
+}
+
+fn form_remaining_multi_contact_bonds_in_place(
+    structure: &mut OrganismStructure,
+    fluid_unit_index: usize,
+    first_target_index: usize,
+    catalog: &[BaseResource],
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> bool {
     let Some(fluid_unit) = structure.units.get(fluid_unit_index) else {
         return false;
     };
@@ -526,93 +555,188 @@ fn form_remaining_multi_contact_bonds(
     else {
         return true;
     };
-    let expected_contacts = boundary.contact_count();
-    if expected_contacts < 2 {
-        return false;
-    }
-    let fluid_part = crate::material_geometry::PlacedMaterialPart {
-        part_index: fluid_unit_index,
-        form: fluid_shape.form.clone(),
-        placement: fluid_unit.placement,
-    };
-    let mut targets = Vec::new();
-    for (unit_index, unit) in structure.units.iter().enumerate() {
-        if unit_index == fluid_unit_index {
-            continue;
-        }
-        let Some(shape) = unit.shape(catalog) else {
-            return false;
-        };
-        let Some(material_name) = unit.material.parts.first().map(|part| part.0.as_str()) else {
-            return false;
-        };
-        let Some(material_resource) = resource(catalog, material_name) else {
-            return false;
-        };
-        if material_resource.physical_state == PhysicalState::Fluid {
-            continue;
-        }
-        let rigid_part = crate::material_geometry::PlacedMaterialPart {
-            part_index: unit_index,
-            form: shape.form.clone(),
-            placement: unit.placement,
-        };
-        if crate::material_geometry::placed_forms_boundary_contact(
-            &fluid_part,
-            &rigid_part,
-            crate::combine_runtime::COMBINE_CONTACT_TOLERANCE,
-        ) {
-            targets.push(unit_index);
-        }
-    }
-    targets.sort_unstable();
-    targets.dedup();
-    if targets.len() != expected_contacts || !targets.contains(&first_target_index) {
+    let boundary = boundary.clone();
+    let contact_segments = boundary
+        .pieces
+        .iter()
+        .filter_map(|piece| match piece {
+            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+                ..
+            } => Some(((*start_x, *start_y), (*end_x, *end_y))),
+            crate::capillary_geometry::FluidBoundaryPiece::FreeArc(_) => None,
+        })
+        .collect::<Vec<_>>();
+    if contact_segments.len() < 2 || first_target_index == fluid_unit_index {
         return false;
     }
 
-    for target_index in targets {
-        if target_index == first_target_index {
+    let fluid_id = structure.units[fluid_unit_index].physical_id;
+    let tolerance = crate::combine_runtime::COMBINE_CONTACT_TOLERANCE;
+    let point_segment_distance = |point: (f64, f64), segment: ((f64, f64), (f64, f64))| {
+        let ((sx, sy), (ex, ey)) = segment;
+        let dx = ex - sx;
+        let dy = ey - sy;
+        let length_squared = dx * dx + dy * dy;
+        if length_squared <= f64::EPSILON {
+            return f64::INFINITY;
+        }
+        let t = (((point.0 - sx) * dx + (point.1 - sy) * dy) / length_squared)
+            .clamp(0.0, 1.0);
+        (point.0 - (sx + t * dx)).hypot(point.1 - (sy + t * dy))
+    };
+    let fluid_endpoint_on_segment = |endpoint: crate::structure::ConnectionEndpoint,
+                                     segment: ((f64, f64), (f64, f64))| {
+        match endpoint {
+            crate::structure::ConnectionEndpoint::Fluid { x, y } => {
+                point_segment_distance((x, y), segment) <= tolerance
+            }
+            _ => false,
+        }
+    };
+    let bond_connects_fluid = |bond: &crate::structure::Bond, target_id| {
+        (bond.endpoint_a.constituent_id == fluid_id
+            && bond.endpoint_b.constituent_id == target_id)
+            || (bond.endpoint_b.constituent_id == fluid_id
+                && bond.endpoint_a.constituent_id == target_id)
+    };
+    let fluid_location_for_bond = |bond: &crate::structure::Bond| {
+        if bond.endpoint_a.constituent_id == fluid_id {
+            Some(bond.endpoint_a.location)
+        } else if bond.endpoint_b.constituent_id == fluid_id {
+            Some(bond.endpoint_b.location)
+        } else {
+            None
+        }
+    };
+
+    // The first bond was formed by the caller. It must correspond to one of
+    // the persisted solid-contact segments; arbitrary nearby contacts cannot
+    // be used as a substitute for the catalogue's boundary contract.
+    let Some(first_target) = structure.units.get(first_target_index) else {
+        return false;
+    };
+    if !structure.bonds.iter().any(|bond| {
+        bond_connects_fluid(bond, first_target.physical_id)
+            && fluid_location_for_bond(bond).is_some_and(|location| {
+                contact_segments
+                    .iter()
+                    .any(|segment| fluid_endpoint_on_segment(location, *segment))
+            })
+    }) {
+        return false;
+    }
+
+    // Mark segments already bonded by the initial COMBINE operation. This is
+    // based on the fluid endpoint's actual local position, not the number of
+    // distinct rigid units: one rigid unit may legitimately receive multiple
+    // bonds at different positions.
+    let mut covered = vec![false; contact_segments.len()];
+    for bond in &structure.bonds {
+        if bond.endpoint_a.constituent_id != fluid_id
+            && bond.endpoint_b.constituent_id != fluid_id
+        {
             continue;
         }
-        let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
-        let mut candidates = crate::contact::connection_pair_candidates_cached(
-            structure,
-            target_index,
-            fluid_unit_index,
-            catalog,
-            &mut bond_cache,
-        )
-        .into_iter()
-        .filter(|candidate| {
-            candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                && candidate.available_a
-                && candidate.available_b
-        })
-        .collect::<Vec<_>>();
-        candidates.sort_by(|a, b| {
-            a.distance
-                .partial_cmp(&b.distance)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| {
-                    b.facing
-                        .partial_cmp(&a.facing)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
-        });
-        let mut bonded = false;
-        for candidate in candidates {
-            let Some((_, _, investment, _required_energy)) =
-                crate::combine_runtime::selected_candidate_evaluation(
-                    structure,
-                    target_index,
-                    fluid_unit_index,
-                    candidate,
-                    catalog,
-                )
-            else {
+        let Some(location) = fluid_location_for_bond(bond) else {
+            continue;
+        };
+        for (index, segment) in contact_segments.iter().enumerate() {
+            if fluid_endpoint_on_segment(location, *segment) {
+                covered[index] = true;
+            }
+        }
+    }
+
+    for (segment_index, segment) in contact_segments.iter().copied().enumerate() {
+        if covered[segment_index] {
+            continue;
+        }
+
+        let mut choices = Vec::new();
+        for target_index in 0..structure.units.len() {
+            if target_index == fluid_unit_index {
                 continue;
+            }
+            let Some(target) = structure.units.get(target_index) else {
+                return false;
             };
+            let Some(target_shape) = target.shape(catalog) else {
+                return false;
+            };
+            let Some(material_name) = target.material.parts.first().map(|part| part.0.as_str())
+            else {
+                return false;
+            };
+            let Some(material_resource) = resource(catalog, material_name) else {
+                return false;
+            };
+            if material_resource.physical_state == PhysicalState::Fluid {
+                continue;
+            }
+
+            let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
+            let mut candidates = crate::contact::connection_pair_candidates_cached(
+                structure,
+                target_index,
+                fluid_unit_index,
+                catalog,
+                &mut bond_cache,
+            )
+            .into_iter()
+            .filter(|candidate| {
+                candidate.distance <= tolerance
+                    && candidate.available_a
+                    && candidate.available_b
+                    && fluid_endpoint_on_segment(candidate.endpoint_b, segment)
+            })
+            .collect::<Vec<_>>();
+            candidates.sort_by(|a, b| {
+                a.distance
+                    .partial_cmp(&b.distance)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| {
+                        b.facing
+                            .partial_cmp(&a.facing)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    })
+            });
+            for candidate in candidates {
+                let Some((_, _, investment, _required_energy)) =
+                    crate::combine_runtime::selected_candidate_evaluation(
+                        structure,
+                        target_index,
+                        fluid_unit_index,
+                        candidate,
+                        catalog,
+                    )
+                else {
+                    continue;
+                };
+                choices.push((
+                    candidate.distance,
+                    -candidate.facing,
+                    target_index,
+                    candidate,
+                    investment,
+                ));
+            }
+            let _ = target_shape;
+        }
+
+        choices.sort_by(|a, b| {
+            a.0.partial_cmp(&b.0)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+                .then_with(|| a.2.cmp(&b.2))
+        });
+
+        let mut bonded = false;
+        for (_, _, target_index, candidate, investment) in choices {
+            let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
             if crate::combine_runtime::form_selected_bond(
                 structure,
                 target_index,
@@ -634,7 +758,15 @@ fn form_remaining_multi_contact_bonds(
             return false;
         }
     }
-    true
+
+    // Every persisted solid-contact segment must now have a realized fluid
+    // endpoint bond. A successful return cannot silently omit a segment.
+    contact_segments.iter().all(|segment| {
+        structure.bonds.iter().any(|bond| {
+            fluid_location_for_bond(bond)
+                .is_some_and(|location| fluid_endpoint_on_segment(location, *segment))
+        })
+    })
 }
 
 pub(crate) fn placed_unit_overlaps(
