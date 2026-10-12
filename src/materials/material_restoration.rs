@@ -19,11 +19,6 @@ fn transform_relative(origin: Placement, relative: Placement) -> Placement {
     }
 }
 
-/// Restore an intact stored physical material into `structure` at `origin`.
-///
-/// The stored constituent arrangement and stored internal bond endpoints are
-/// authoritative. If either is absent, restoration fails rather than deriving
-/// a new physical connection from composition and geometry.
 /// Restore an intact stored physical material into `structure` at `origin`,
 /// returning a stable rejection reason for constructor diagnostics.
 ///
