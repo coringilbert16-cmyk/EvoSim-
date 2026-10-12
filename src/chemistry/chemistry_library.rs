@@ -201,6 +201,12 @@ impl ChemistryLibrary {
     pub fn open(root: impl AsRef<Path>) -> std::io::Result<Self> {
         let root = root.as_ref().to_path_buf();
         fs::create_dir_all(&root)?;
+        let _lock = lock_chemistry_store(&root)?;
+        Self::open_unlocked(root)
+    }
+
+    fn open_unlocked(root: PathBuf) -> std::io::Result<Self> {
+        fs::create_dir_all(&root)?;
         let data = root.join("chemistry.jsonl");
         let manifest_path = root.join("manifest.json");
         let mut entries = HashMap::new();
@@ -305,6 +311,13 @@ impl ChemistryLibrary {
         if !record.is_valid() {
             return Ok(false);
         }
+        let _lock = lock_chemistry_store(&self.root)?;
+        // Another instance may have changed the store since this instance opened.
+        // Refresh under the lock before duplicate detection or manifest counting.
+        let current = Self::open_unlocked(self.root.clone())?;
+        self.entries = current.entries;
+        self.manifest = current.manifest;
+
         let key = record.key.clone();
         if self.entries.contains_key(&key) {
             return Ok(false);
@@ -352,6 +365,18 @@ fn rollback_appended_record(
             ),
         ),
     }
+}
+
+// Advisory file locking coordinates independent ChemistryLibrary instances and
+// separate processes that use the same store path.
+fn lock_chemistry_store(root: &Path) -> std::io::Result<File> {
+    let lock_file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(root.join(".chemistry.lock"))?;
+    lock_file.lock()?;
+    Ok(lock_file)
 }
 
 // Unique names prevent independent library instances from colliding on a temporary
@@ -512,6 +537,65 @@ mod tests {
         assert!(!lib.insert(record).unwrap());
         assert!(lib.get(&key).is_some());
         assert_eq!(ChemistryLibrary::open(&root).unwrap().len(), 1);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn independent_instances_serialize_writes_and_refresh_stale_state() {
+        let root = test_root("concurrent-writers");
+        let _ = fs::remove_dir_all(&root);
+        let first = ChemistryLibrary::open(&root).unwrap();
+        let second = ChemistryLibrary::open(&root).unwrap();
+        let first_record = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "concurrent-a"),
+            static_potential: 0.4,
+        };
+        let second_record = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "concurrent-b"),
+            static_potential: 0.6,
+        };
+
+        let first_thread = std::thread::spawn(move || {
+            let mut library = first;
+            library.insert(first_record)
+        });
+        let second_thread = std::thread::spawn(move || {
+            let mut library = second;
+            library.insert(second_record)
+        });
+        assert!(first_thread.join().unwrap().unwrap());
+        assert!(second_thread.join().unwrap().unwrap());
+        assert_eq!(ChemistryLibrary::open(&root).unwrap().len(), 2);
+
+        // Two stale instances racing to insert the same key must not create a
+        // duplicate persisted row or inflate the manifest count.
+        let third = ChemistryLibrary::open(&root).unwrap();
+        let fourth = ChemistryLibrary::open(&root).unwrap();
+        let duplicate = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "concurrent-duplicate"),
+            static_potential: 0.7,
+        };
+        let third_thread = std::thread::spawn({
+            let duplicate = duplicate.clone();
+            move || {
+                let mut library = third;
+                library.insert(duplicate)
+            }
+        });
+        let fourth_thread = std::thread::spawn(move || {
+            let mut library = fourth;
+            library.insert(duplicate)
+        });
+        let inserted = [third_thread.join().unwrap().unwrap(), fourth_thread.join().unwrap().unwrap()];
+        assert_eq!(inserted.into_iter().filter(|value| *value).count(), 1);
+        let reopened = ChemistryLibrary::open(&root).unwrap();
+        assert_eq!(reopened.len(), 3);
+        let rows = BufReader::new(File::open(root.join("chemistry.jsonl")).unwrap())
+            .lines()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(rows.len(), 3);
+        drop(reopened);
         let _ = fs::remove_dir_all(root);
     }
 
