@@ -1746,3 +1746,14 @@ The placement loop also no longer cross-products every existing endpoint with ev
 The bond-driven placement diagnostics now collect rigid anchor/candidate material pairs for which strict persisted Bob lookup returns no placements. If an element has no candidate origins at all and at least one rigid lookup missed, the runtime reports `missing Bob library coverage` rather than the generic no-placement message. This keeps library coverage distinct from cases where recorded candidates were found but rejected by live overlap/contact/COMBINE checks.
 
 Fluid-query coverage misses are not yet fully distinguished from fluid records that exist but fail live realization; that remains an explicit follow-up rather than an assumed equivalence.
+
+
+### Constructor consolidation checkpoint — 2026-10-12
+
+The active constructor work is consolidated on `refactor/constructor-strip-2026-10-12` (PR #196). PR #197's seed-ring geometry correction is not carried forward as an architectural fix because that prescribed calibration topology is legacy and slated for removal; its independently useful energy-ledger correction and diagnostics are being ported into the strict persisted-Bob runtime instead. PR #198's restoration rejection reasons are also being ported here. Do not create parallel constructor branches or PRs.
+
+- Successful exits from bond-driven construction must commit both the trial energy ledger and remaining energy to the caller, including early genome-milestone exits.
+- Material restoration exposes stable rejection reasons while preserving the compatibility wrapper for callers that only need `Option`.
+- Placement diagnostics count restoration failures by reason, distinguishing restoration from overlap/contact/COMBINE rejection.
+- Fixed seed topology, lattice snapping, scaffold-coordinate fallback, and artificial construction-energy allowances remain legacy and must be removed only with a working milestone-driven replacement.
+- Verification is required on this consolidated head before closing the superseded constructor PRs. The constructor is not considered fixed based on these changes alone.
