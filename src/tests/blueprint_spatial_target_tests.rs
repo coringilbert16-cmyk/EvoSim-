@@ -34,6 +34,38 @@ mod tests {
     }
 
     #[test]
+    fn diagnostic_swapping_sulfur_and_first_chain_element_reports_order_effect() {
+        let catalog = default_catalog();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
+        let baseline_error = crate::juvenile::realize_initial(&blueprint, &catalog)
+            .expect_err("baseline diagnostic expects the known element-26 failure");
+        eprintln!("[constructor-order-diagnostic] baseline={baseline_error}");
+
+        // Swap the first chain constituent (6) with the first Sulfur branch
+        // constituent (26), preserving the graph by remapping every endpoint.
+        let mut reordered = blueprint.clone();
+        let mut new_index_for_old = (0..blueprint.elements.len()).collect::<Vec<_>>();
+        new_index_for_old.swap(6, 26);
+        for old_index in 0..blueprint.elements.len() {
+            reordered.elements[new_index_for_old[old_index]] =
+                blueprint.elements[old_index].clone();
+        }
+        for connection in &mut reordered.connections {
+            connection.element_a = new_index_for_old[connection.element_a];
+            connection.element_b = new_index_for_old[connection.element_b];
+        }
+        for anchor in &mut reordered.anchor_elements {
+            *anchor = new_index_for_old[*anchor];
+        }
+
+        let outcome = match crate::juvenile::realize_initial(&reordered, &catalog) {
+            Ok((structure, _, _)) => format!("success; physical_units={}", structure.units.len()),
+            Err(error) => format!("failure; {error}"),
+        };
+        eprintln!("[constructor-order-diagnostic] sulfur-before-chain={outcome}");
+    }
+
+    #[test]
     fn physically_valid_divergence_is_allowed_when_anchor_is_impossible() {
         let blueprint = StructuralBlueprint::new(
             vec![nitrogen_wall(0.0, 0.0, 0.0), nitrogen_wall(0.0, 0.0, 0.0)],
