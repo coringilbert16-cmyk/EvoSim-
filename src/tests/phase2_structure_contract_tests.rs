@@ -78,11 +78,11 @@ fn realized_material_carries_exact_internal_connection_and_restores_without_comb
     assert_eq!(connections[0].part_b, 1);
     assert_eq!(
         connections[0].endpoint_a,
-        ConnectionEndpoint::LineEndpoint { point_index: 1 }
+        ConnectionEndpoint::Corner { point_index: 1 }
     );
     assert_eq!(
         connections[0].endpoint_b,
-        ConnectionEndpoint::LineEndpoint { point_index: 0 }
+        ConnectionEndpoint::Corner { point_index: 0 }
     );
 
     let mut structure = OrganismStructure::new();
