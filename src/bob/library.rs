@@ -5872,9 +5872,23 @@ mod bob_lookup_contract_tests {
             y: -4.0,
             rotation_radians: 0.37,
         };
+        let strict_suggestions = library.suggest_persisted_rigid_edge_placements(
+            "Carbon",
+            live_anchor,
+            &carbon,
+            &catalog,
+        );
+        assert!(
+            strict_suggestions.is_empty(),
+            "strict construction lookup must report a coverage miss for an empty library"
+        );
+
         let suggestions =
             library.suggest_rigid_edge_placements("Carbon", live_anchor, &carbon, &catalog);
-        assert!(!suggestions.is_empty());
+        assert!(
+            !suggestions.is_empty(),
+            "exploratory lookup may still derive ephemeral suggestions"
+        );
         let water = catalog
             .iter()
             .find(|resource| resource.name == "Water")
