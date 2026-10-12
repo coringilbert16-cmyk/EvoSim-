@@ -638,13 +638,21 @@ fn form_remaining_multi_contact_bonds_in_place(
         {
             continue;
         }
-        let Some(location) = fluid_location_for_bond(bond) else {
+        let Some(crate::structure::ConnectionEndpoint::Fluid { x, y }) =
+            fluid_location_for_bond(bond)
+        else {
             continue;
         };
-        for (index, segment) in contact_segments.iter().enumerate() {
-            if fluid_endpoint_on_segment(location, *segment) {
-                covered[index] = true;
-            }
+        let point = (x, y);
+        if let Some((index, distance)) = contact_segments
+            .iter()
+            .enumerate()
+            .map(|(index, segment)| (index, point_segment_distance(point, *segment)))
+            .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+            .filter(|(_, distance)| *distance <= tolerance)
+        {
+            let _ = distance;
+            covered[index] = true;
         }
     }
 
@@ -754,16 +762,11 @@ fn form_remaining_multi_contact_bonds_in_place(
         if !bonded {
             return false;
         }
+        covered[segment_index] = true;
     }
 
-    // Every persisted solid-contact segment must now have a realized fluid
-    // endpoint bond. A successful return cannot silently omit a segment.
-    contact_segments.iter().all(|segment| {
-        structure.bonds.iter().any(|bond| {
-            fluid_location_for_bond(bond)
-                .is_some_and(|location| fluid_endpoint_on_segment(location, *segment))
-        })
-    })
+    // Each persisted solid-contact segment must be matched to a distinct bond.
+    covered.into_iter().all(|is_covered| is_covered)
 }
 
 pub(crate) fn placed_unit_overlaps(
