@@ -1525,12 +1525,9 @@ fn realize_next_bond_driven(
                         placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
                     }) {
                         rejection_counts.overlap_rejections += 1;
-                        if let Some((overlapped_index, diagnostic)) = first_overlapping_unit_pair(
-                            &trial,
-                            &indices,
-                            &ignored_units,
-                            catalog,
-                        ) {
+                        if let Some((overlapped_index, diagnostic)) =
+                            first_overlapping_unit_pair(&trial, &indices, &ignored_units, catalog)
+                        {
                             *rejection_counts
                                 .overlap_rejections_by_existing_index
                                 .entry(overlapped_index)
