@@ -24,7 +24,6 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-
 /// Return a per-process, per-write temporary path so concurrent library opens
 /// never contend for the same `.tmp` file while atomically replacing metadata.
 fn unique_temp_path(path: &Path) -> PathBuf {
@@ -5356,10 +5355,8 @@ mod bob_lookup_contract_tests {
         use std::sync::{Arc, Barrier};
         use std::thread;
 
-        let root = std::env::temp_dir().join(format!(
-            "evosim-bob-concurrent-open-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("evosim-bob-concurrent-open-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let root = Arc::new(root);
         let workers = 8;
