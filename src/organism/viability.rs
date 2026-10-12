@@ -51,6 +51,22 @@ pub fn validate_realized_organism(
                 "organism has no realized structure outside its genome cavity boundary".into(),
             );
         }
+
+        // A unit-count comparison alone does not establish processing space.
+        // Require a second, physically enclosed region outside the genome
+        // cavity. This is a spatial function check, not a prescribed size,
+        // material, or topology requirement.
+        let processing_regions =
+            crate::interior_geometry::find_accessible_interior_regions(structure, catalog)?;
+        if !processing_regions
+            .iter()
+            .any(|region| region.area.is_finite() && region.area > 1e-8)
+        {
+            return Err(
+                "organism has no positive-area accessible processing space outside its genome cavity"
+                    .into(),
+            );
+        }
     }
     Ok(())
 }
