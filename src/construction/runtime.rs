@@ -668,7 +668,7 @@ fn form_remaining_multi_contact_bonds_in_place(
             let Some(target) = structure.units.get(target_index) else {
                 return false;
             };
-            let Some(target_shape) = target.shape(catalog) else {
+            let Some(_target_shape) = target.shape(catalog) else {
                 return false;
             };
             let Some(material_name) = target.material.parts.first().map(|part| part.0.as_str())
@@ -728,7 +728,6 @@ fn form_remaining_multi_contact_bonds_in_place(
                     investment,
                 ));
             }
-            let _ = target_shape;
         }
 
         choices.sort_by(|a, b| {
@@ -2702,6 +2701,42 @@ mod tests {
         assert_eq!(structure.units.len(), 2);
         assert_eq!(structure.bonds.len(), 3);
         assert!(energy.is_finite());
+
+        let fluid_id = structure.units[fluid_index].physical_id;
+        let fluid_locations = structure
+            .bonds
+            .iter()
+            .filter_map(|bond| {
+                if bond.endpoint_a.constituent_id == fluid_id {
+                    Some(bond.endpoint_a.location)
+                } else if bond.endpoint_b.constituent_id == fluid_id {
+                    Some(bond.endpoint_b.location)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(fluid_locations.len(), segments.len());
+        for (index, location) in fluid_locations.iter().enumerate() {
+            assert!(
+                fluid_locations[index + 1..]
+                    .iter()
+                    .all(|other| !location.same_location(*other)),
+                "each segment needs a distinct fluid bond endpoint"
+            );
+            assert!(
+                segments.iter().any(|segment| on_segment(*location, *segment)),
+                "each bond endpoint must lie on a persisted contact segment"
+            );
+        }
+        let realized_shape = structure.units[fluid_index].shape(&catalog).unwrap();
+        assert!(realized_shape.is_valid());
+        match &realized_shape.form {
+            Form::Fluid { nominal_area, .. } => {
+                assert!((*nominal_area - area).abs() <= 1e-9);
+            }
+            _ => panic!("the bonded fluid must retain its fluid shape"),
+        }
     }
 
     #[test]
