@@ -2039,7 +2039,8 @@ fn construct_blueprint_bond_driven_internal(
                 })
                 .collect::<Vec<_>>();
             eprintln!(
-                "[construction-placement-diagnostics] element={index} target_pose={target_pose:?} realized_neighbor_indices={neighbors:?} overlap_blockers={overlap_blockers:?} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} overlap_rejections={} first_overlap={:?} overlap_rejections_by_existing_index={:?} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} combine_rejection_reasons={:?}",
+                "[construction-placement-diagnostics] element={index} target_pose={target_pose:?} realized_neighbor_indices={neighbors:?} overlap_blockers={overlap_blockers:?} energy_remaining={remaining_energy} energy_consumed={} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} overlap_rejections={} first_overlap={:?} overlap_rejections_by_existing_index={:?} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} combine_rejection_reasons={:?}",
+                *energy - remaining_energy,
                 rejection_counts.attempted_origins,
                 rejection_counts.generated_origins,
                 rejection_counts.deduplicated_origins,
