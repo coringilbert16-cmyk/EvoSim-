@@ -1289,6 +1289,7 @@ struct PlacementRejectionCounts {
     overlap_counterfactual_still_overlapping_by_unit: std::collections::BTreeMap<usize, usize>,
     overlap_counterfactual_full_accept_by_unit: std::collections::BTreeMap<usize, usize>,
     overlap_counterfactual_anchor_removed_by_unit: std::collections::BTreeMap<usize, usize>,
+    anchor_overlap_samples: Vec<String>,
     neighbor_contact_rejections: usize,
     no_bond_contact: usize,
     candidate_evaluation_rejections: usize,
@@ -1474,6 +1475,66 @@ fn realize_next_bond_driven(
                             .overlap_rejections_by_unit
                             .entry(overlap_index)
                             .or_default() += 1;
+
+                        // Keep the intended anchor fixed and record a small,
+                        // reproducible sample of its rejected Sulfur poses.
+                        // The geometry authority currently exposes penetration
+                        // as a boolean, so record that exact result plus shapes,
+                        // poses, relative transform, and ordinary contact candidates.
+                        if overlap_index == existing_index
+                            && rejection_counts.anchor_overlap_samples.len() < 8
+                        {
+                            let anchor = &trial.units[existing_index];
+                            let candidate = &trial.units[new_unit_index];
+                            let anchor_form = anchor
+                                .shape(catalog)
+                                .map(|shape| format!("{:?}", shape.form))
+                                .unwrap_or_else(|| "<unavailable>".to_string());
+                            let candidate_form = candidate
+                                .shape(catalog)
+                                .map(|shape| format!("{:?}", shape.form))
+                                .unwrap_or_else(|| "<unavailable>".to_string());
+                            let contact_candidates =
+                                crate::contact::connection_pair_candidates_cached(
+                                    &trial,
+                                    existing_index,
+                                    new_unit_index,
+                                    catalog,
+                                    &mut crate::contact::ConnectionCompatibilityCache::new(),
+                                );
+                            let contact_summary = contact_candidates
+                                .iter()
+                                .take(6)
+                                .map(|candidate| {
+                                    format!(
+                                        "(distance={:.6}, facing={:.6}, available_a={}, available_b={})",
+                                        candidate.distance,
+                                        candidate.facing,
+                                        candidate.available_a,
+                                        candidate.available_b
+                                    )
+                                })
+                                .collect::<Vec<_>>();
+                            rejection_counts.anchor_overlap_samples.push(format!(
+                                "anchor_index={} anchor_material={:?} anchor_form={} anchor_pose=({:.9},{:.9},{:.9}) candidate_material={:?} candidate_form={} candidate_pose=({:.9},{:.9},{:.9}) relative_delta=({:.9},{:.9}) relative_rotation={:.9} penetration=true contact_candidate_count={} nearest_contacts={:?}",
+                                existing_index,
+                                anchor.material,
+                                anchor_form,
+                                anchor.placement.x,
+                                anchor.placement.y,
+                                anchor.placement.rotation_radians,
+                                candidate.material,
+                                candidate_form,
+                                candidate.placement.x,
+                                candidate.placement.y,
+                                candidate.placement.rotation_radians,
+                                candidate.placement.x - anchor.placement.x,
+                                candidate.placement.y - anchor.placement.y,
+                                candidate.placement.rotation_radians - anchor.placement.rotation_radians,
+                                contact_candidates.len(),
+                                contact_summary
+                            ));
+                        }
 
                         // Diagnostic-only leave-one-out experiment: preserve the
                         // exact candidate pose and overlap rule, but temporarily
@@ -2134,7 +2195,7 @@ fn construct_blueprint_bond_driven_internal(
 
         if !attached {
             eprintln!(
-                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} restore_failure_reasons={:?} overlap_rejections={} overlap_rejections_by_unit={:?} overlap_clear_if_omit_unit={:?} overlap_still_rejected_if_omit_unit={:?} overlap_counterfactual_contact_by_unit={:?} overlap_counterfactual_evaluation_by_unit={:?} overlap_counterfactual_combine_by_unit={:?} overlap_counterfactual_neighbor_rejection_by_unit={:?} overlap_counterfactual_still_overlapping_by_unit={:?} overlap_counterfactual_full_accept_by_unit={:?} overlap_counterfactual_anchor_removed_by_unit={:?} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} bob_coverage_misses={:?}",
+                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} restore_failure_reasons={:?} overlap_rejections={} overlap_rejections_by_unit={:?} overlap_clear_if_omit_unit={:?} overlap_still_rejected_if_omit_unit={:?} overlap_counterfactual_contact_by_unit={:?} overlap_counterfactual_evaluation_by_unit={:?} overlap_counterfactual_combine_by_unit={:?} overlap_counterfactual_neighbor_rejection_by_unit={:?} overlap_counterfactual_still_overlapping_by_unit={:?} overlap_counterfactual_full_accept_by_unit={:?} overlap_counterfactual_anchor_removed_by_unit={:?} anchor_overlap_samples={:?} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} bob_coverage_misses={:?}",
                 rejection_counts.attempted_origins,
                 rejection_counts.generated_origins,
                 rejection_counts.deduplicated_origins,
@@ -2151,6 +2212,7 @@ fn construct_blueprint_bond_driven_internal(
                 rejection_counts.overlap_counterfactual_still_overlapping_by_unit,
                 rejection_counts.overlap_counterfactual_full_accept_by_unit,
                 rejection_counts.overlap_counterfactual_anchor_removed_by_unit,
+                rejection_counts.anchor_overlap_samples,
                 rejection_counts.neighbor_contact_rejections,
                 rejection_counts.neighbor_rejections_by_index,
                 rejection_counts.no_bond_contact,
