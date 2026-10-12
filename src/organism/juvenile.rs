@@ -31,11 +31,12 @@ pub(crate) fn confirmed_seed_baseline(
     // structure. The declared poses are spatial preferences; the constructor's
     // realized physical graph remains authoritative.
     //
-    // The six-carbon inner loop supplies a physically compatible enclosed region. From one
-    // point on that loop, twenty additional carbon elements extend along a
-    // physically spaced outward chain. Sulfur and methane provide heterogeneous
-    // peripheral material without defining an organism role or topology.
+    // Two Carbon pieces per side form a sealed hexagonal wall large enough
+    // for the established three-Carbon cavity reference. The chain and
+    // heterogeneous peripheral materials remain independent branches.
     let ring_sides = 6usize;
+    let ring_pieces_per_side = 2usize;
+    let ring_piece_count = ring_sides * ring_pieces_per_side;
     let chain_steps = 20usize;
     let carbon_radius = catalog
         .iter()
@@ -46,25 +47,38 @@ pub(crate) fn confirmed_seed_baseline(
         })
         .ok_or_else(|| "Carbon seed geometry is not a regular polygon".to_string())?;
     let carbon_edge_center_spacing = (3.0_f64).sqrt() * carbon_radius;
-    let ring_radius =
-        carbon_edge_center_spacing / (2.0 * (std::f64::consts::PI / ring_sides as f64).sin());
+    let ring_radius = carbon_edge_center_spacing * ring_pieces_per_side as f64;
 
-    let mut elements = Vec::with_capacity(ring_sides + chain_steps + 6);
+    let mut elements = Vec::with_capacity(ring_piece_count + chain_steps + 6);
 
     for i in 0..ring_sides {
         let angle = std::f64::consts::TAU * i as f64 / ring_sides as f64;
-        // A regular hexagon's face normals are offset 30 degrees from its
-        // vertex directions. Shift ring centers by -30 degrees while keeping
-        // each piece's authored rotation aligned with its ring index.
+        let next_angle =
+            std::f64::consts::TAU * (i + 1) as f64 / ring_sides as f64;
         let position_angle = angle - std::f64::consts::FRAC_PI_6;
-        elements.push(BlueprintElement {
-            material: Material::free_base("Carbon", 1.0),
-            placement: BlueprintPlacement {
-                x: ring_radius * position_angle.cos(),
-                y: ring_radius * position_angle.sin(),
-                rotation_radians: angle,
-            },
-        });
+        let next_position_angle = next_angle - std::f64::consts::FRAC_PI_6;
+        let vertex = (
+            ring_radius * position_angle.cos(),
+            ring_radius * position_angle.sin(),
+        );
+        let next_vertex = (
+            ring_radius * next_position_angle.cos(),
+            ring_radius * next_position_angle.sin(),
+        );
+        let midpoint = (
+            (vertex.0 + next_vertex.0) * 0.5,
+            (vertex.1 + next_vertex.1) * 0.5,
+        );
+        for (x, y) in [vertex, midpoint] {
+            elements.push(BlueprintElement {
+                material: Material::free_base("Carbon", 1.0),
+                placement: BlueprintPlacement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                },
+            });
+        }
     }
 
     // Continue from the first ring element with a physically spaced outward
@@ -113,32 +127,32 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    let mut connections = Vec::with_capacity(ring_sides + chain_steps + 6);
-    for i in 0..ring_sides {
+    let mut connections = Vec::with_capacity(ring_piece_count + chain_steps + 6);
+    for i in 0..ring_piece_count {
         connections.push(BlueprintConnection {
             element_a: i,
-            element_b: (i + 1) % ring_sides,
+            element_b: (i + 1) % ring_piece_count,
         });
     }
-    // The first spiral element is the existing ring anchor (element 0).
+    // The first chain element attaches to the ring's vertex at element 0.
     for step in 1..=chain_steps {
         connections.push(BlueprintConnection {
-            element_a: if step == 1 { 0 } else { ring_sides + step - 2 },
-            element_b: ring_sides + step - 1,
+            element_a: if step == 1 { 0 } else { ring_piece_count + step - 2 },
+            element_b: ring_piece_count + step - 1,
         });
     }
 
-    let sulfur_start = ring_sides + chain_steps;
-    for (offset, &i) in [0usize, 1, 3, 4].iter().enumerate() {
+    let sulfur_start = ring_piece_count + chain_steps;
+    for (offset, &ring_side_index) in [0usize, 1, 3, 4].iter().enumerate() {
         connections.push(BlueprintConnection {
-            element_a: i,
+            element_a: ring_side_index * ring_pieces_per_side,
             element_b: sulfur_start + offset,
         });
     }
     let methane_start = sulfur_start + 4;
-    for (offset, &i) in [2usize, 5].iter().enumerate() {
+    for (offset, &ring_side_index) in [2usize, 5].iter().enumerate() {
         connections.push(BlueprintConnection {
-            element_a: i,
+            element_a: ring_side_index * ring_pieces_per_side,
             element_b: methane_start + offset,
         });
     }
