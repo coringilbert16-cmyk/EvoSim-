@@ -220,46 +220,6 @@ pub(crate) fn realize_initial_with_reserve(
 
     Ok((structure, ledger, remaining_energy))
 }
-fn largest_rigid_connection_span(catalog: &[BaseResource]) -> f64 {
-    let mut points = Vec::<(f64, f64)>::new();
-
-    for resource in catalog {
-        if resource.physical_state == crate::resources::PhysicalState::Fluid {
-            continue;
-        }
-        match &resource.shape.form {
-            crate::resources::Form::Line { length } => {
-                points.push((-length / 2.0, 0.0));
-                points.push((length / 2.0, 0.0));
-            }
-            crate::resources::Form::Rectangle { width, height } => {
-                let hw = width / 2.0;
-                let hh = height / 2.0;
-                points.extend([(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)]);
-            }
-            crate::resources::Form::RegularPolygon { sides, radius } => {
-                for i in 0..*sides as usize {
-                    let angle = i as f64 * std::f64::consts::TAU / *sides as f64;
-                    points.push((radius * angle.cos(), radius * angle.sin()));
-                }
-            }
-            crate::resources::Form::Polygon { vertices } => points.extend(vertices.iter().copied()),
-            crate::resources::Form::Circle { .. } | crate::resources::Form::Fluid { .. } => {}
-        }
-    }
-
-    points
-        .iter()
-        .enumerate()
-        .flat_map(|(i, &(ax, ay))| {
-            points
-                .iter()
-                .skip(i + 1)
-                .map(move |&(bx, by)| (ax - bx).hypot(ay - by))
-        })
-        .fold(0.0, f64::max)
-}
-
 // This is a deterministic calibration constant for the current resource catalog.
 // Callers on the simulation hot path should compute it once and reuse it.
 pub(crate) fn confirmed_seed_scale_reference(
