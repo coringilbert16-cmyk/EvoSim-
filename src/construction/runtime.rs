@@ -767,6 +767,50 @@ fn form_remaining_multi_contact_bonds_in_place(
     covered.into_iter().all(|is_covered| is_covered)
 }
 
+fn first_overlapping_unit_pair(
+    structure: &OrganismStructure,
+    candidate_indices: &[usize],
+    ignored_units: &[usize],
+    catalog: &[BaseResource],
+) -> Option<String> {
+    for &candidate_index in candidate_indices {
+        let candidate = structure.units.get(candidate_index)?;
+        let candidate_shape = candidate.shape(catalog)?;
+        let candidate_part = crate::material_geometry::PlacedMaterialPart {
+            part_index: candidate_index,
+            form: candidate_shape.form.clone(),
+            placement: candidate.placement,
+        };
+        for (other_index, other) in structure.units.iter().enumerate() {
+            if ignored_units.contains(&other_index) {
+                continue;
+            }
+            let other_shape = other.shape(catalog)?;
+            let other_part = crate::material_geometry::PlacedMaterialPart {
+                part_index: other_index,
+                form: other_shape.form.clone(),
+                placement: other.placement,
+            };
+            if crate::material_geometry::placed_forms_penetrate(
+                &candidate_part,
+                &other_part,
+                crate::material_geometry::GEOMETRY_EPSILON,
+            ) {
+                return Some(format!(
+                    "candidate_index={candidate_index} candidate_id={:?} material={:?} pose={:?} overlaps_index={other_index} overlaps_id={:?} material={:?} pose={:?}",
+                    candidate.physical_id,
+                    candidate.material.parts,
+                    candidate.placement,
+                    other.physical_id,
+                    other.material.parts,
+                    other.placement,
+                ));
+            }
+        }
+    }
+    None
+}
+
 pub(crate) fn placed_unit_overlaps(
     structure: &OrganismStructure,
     candidate: &StructuralUnit,
@@ -1257,6 +1301,7 @@ struct PlacementRejectionCounts {
     attempted_origins: usize,
     restore_failures: usize,
     overlap_rejections: usize,
+    first_overlap_diagnostic: Option<String>,
     neighbor_contact_rejections: usize,
     no_bond_contact: usize,
     candidate_evaluation_rejections: usize,
@@ -1476,6 +1521,10 @@ fn realize_next_bond_driven(
                         placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
                     }) {
                         rejection_counts.overlap_rejections += 1;
+                        if rejection_counts.first_overlap_diagnostic.is_none() {
+                            rejection_counts.first_overlap_diagnostic =
+                                first_overlapping_unit_pair(&trial, &indices, &ignored_units, catalog);
+                        }
                         continue;
                     }
                     let missing_neighbors = missing_realized_neighbor_contacts(
@@ -1937,12 +1986,13 @@ fn construct_blueprint_bond_driven_internal(
 
         if !attached {
             eprintln!(
-                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} overlap_rejections={} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={}",
+                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} overlap_rejections={} first_overlap={:?} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={}",
                 rejection_counts.attempted_origins,
                 rejection_counts.generated_origins,
                 rejection_counts.deduplicated_origins,
                 rejection_counts.restore_failures,
                 rejection_counts.overlap_rejections,
+                rejection_counts.first_overlap_diagnostic,
                 rejection_counts.neighbor_contact_rejections,
                 rejection_counts.neighbor_rejections_by_index,
                 rejection_counts.no_bond_contact,
