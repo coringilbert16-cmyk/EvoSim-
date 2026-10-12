@@ -516,7 +516,7 @@ fn form_remaining_multi_contact_bonds(
     // Treat this as one transaction: if any segment cannot be realized as a
     // distinct live bond, leave the caller's structure and energy untouched.
     let mut staged_structure = structure.clone();
-    let mut staged_ledger = ledger.clone();
+    let mut staged_ledger = *ledger;
     let mut staged_energy = *energy;
     if !form_remaining_multi_contact_bonds_in_place(
         &mut staged_structure,
