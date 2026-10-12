@@ -56,9 +56,7 @@ impl GenomeCavity {
     /// is diagnostic reference data, not a biological threshold. Functional
     /// viability is decided by the organism viability contract.
     pub fn qualifies(&self) -> bool {
-        self.area.is_finite()
-            && self.area > EPS
-            && self.boundary_units.len() >= 3
+        self.area.is_finite() && self.area > EPS && self.boundary_units.len() >= 3
     }
 
     /// Expose the realized cavity boundary geometry to harmonic reception.
