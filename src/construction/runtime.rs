@@ -1261,6 +1261,7 @@ struct PlacementRejectionCounts {
     no_bond_contact: usize,
     candidate_evaluation_rejections: usize,
     combine_rejections: usize,
+    bob_coverage_misses: Vec<String>,
     neighbor_rejections_by_index: std::collections::BTreeMap<usize, usize>,
 }
 
@@ -1343,25 +1344,30 @@ fn realize_next_bond_driven(
                         );
                     }
                 } else {
-                    candidate_origins.extend(
-                        library
-                            .suggest_persisted_rigid_edge_placements(
-                                anchor_material,
-                                existing_unit.placement,
-                                candidate_resource,
-                                catalog,
-                            )
-                            .into_iter()
-                            .map(|suggestion| {
-                                (
-                                    composite_origin_for_constituent_pose(
-                                        suggestion.placement,
-                                        relative_part_placement,
-                                    ),
-                                    None,
-                                )
-                            }),
+                    let suggestions = library.suggest_persisted_rigid_edge_placements(
+                        anchor_material,
+                        existing_unit.placement,
+                        candidate_resource,
+                        catalog,
                     );
+                    if suggestions.is_empty() {
+                        let miss = format!(
+                            "anchor={} candidate={}",
+                            anchor_material, candidate_resource.name
+                        );
+                        if !rejection_counts.bob_coverage_misses.contains(&miss) {
+                            rejection_counts.bob_coverage_misses.push(miss);
+                        }
+                    }
+                    candidate_origins.extend(suggestions.into_iter().map(|suggestion| {
+                        (
+                            composite_origin_for_constituent_pose(
+                                suggestion.placement,
+                                relative_part_placement,
+                            ),
+                            None,
+                        )
+                    }));
                 }
             }
                 let generated_origins = candidate_origins.len();
@@ -1876,7 +1882,7 @@ fn construct_blueprint_bond_driven_internal(
 
         if !attached {
             eprintln!(
-                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} overlap_rejections={} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={}",
+                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} overlap_rejections={} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} bob_coverage_misses={:?}",
                 rejection_counts.attempted_origins,
                 rejection_counts.generated_origins,
                 rejection_counts.deduplicated_origins,
@@ -1887,7 +1893,16 @@ fn construct_blueprint_bond_driven_internal(
                 rejection_counts.no_bond_contact,
                 rejection_counts.candidate_evaluation_rejections,
                 rejection_counts.combine_rejections,
+                rejection_counts.bob_coverage_misses,
             );
+            if rejection_counts.generated_origins == 0
+                && !rejection_counts.bob_coverage_misses.is_empty()
+            {
+                return Err(format!(
+                    "missing Bob library coverage for blueprint element {index}: {:?}",
+                    rejection_counts.bob_coverage_misses
+                ));
+            }
             return Err(format!(
                 "no forward bond-driven placement found for blueprint element {index} after {nodes} placement attempts"
             ));
