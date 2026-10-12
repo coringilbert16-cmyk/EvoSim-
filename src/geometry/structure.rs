@@ -281,15 +281,14 @@ impl ConnectionEndpoint {
                 )
             }
             Self::Boundary { angle_radians } => {
-                let crate::resources::Form::Circle { radius } = unit.shape(catalog)?.form else {
-                    return None;
-                };
+                let shape = unit.shape(catalog)?;
                 let (nx, ny) = (angle_radians.cos(), angle_radians.sin());
+                let point = crate::surface_geometry::boundary_point_toward(shape, nx, ny)?;
                 Some(crate::connection_geometry::transform_derived_point(
-                    radius * nx,
-                    radius * ny,
-                    nx,
-                    ny,
+                    point.x,
+                    point.y,
+                    point.normal_x,
+                    point.normal_y,
                     unit.placement.x,
                     unit.placement.y,
                     unit.placement.rotation_radians,
