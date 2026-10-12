@@ -1256,6 +1256,7 @@ struct PlacementRejectionCounts {
     deduplicated_origins: usize,
     attempted_origins: usize,
     restore_failures: usize,
+    restore_failure_reasons: std::collections::BTreeMap<&'static str, usize>,
     overlap_rejections: usize,
     neighbor_contact_rejections: usize,
     no_bond_contact: usize,
@@ -1399,16 +1400,23 @@ fn realize_next_bond_driven(
                 };
                 let Some(candidate_material) = candidate_material else {
                     rejection_counts.restore_failures += 1;
+                    *rejection_counts.restore_failure_reasons
+                        .entry("stored fluid shape candidate rejected")
+                        .or_default() += 1;
                     continue;
                 };
-                let Some(indices) = crate::material_restoration::restore_material(
+                let indices = match crate::material_restoration::restore_material_diagnostic(
                     &mut trial,
                     &candidate_material,
                     candidate_origin,
                     catalog,
-                ) else {
-                    rejection_counts.restore_failures += 1;
-                    continue;
+                ) {
+                    Ok(indices) => indices,
+                    Err(reason) => {
+                        rejection_counts.restore_failures += 1;
+                        *rejection_counts.restore_failure_reasons.entry(reason).or_default() += 1;
+                        continue;
+                    }
                 };
 
                 let new_unit_index = *indices.get(part_index)?;
@@ -1866,7 +1874,9 @@ fn construct_blueprint_bond_driven_internal(
                     if stop_at_genome
                         && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_some()
                     {
-                        return Ok((structure, total_heat));
+                        *ledger = construction_ledger;
+                            *energy = remaining_energy;
+                            return Ok((structure, total_heat));
                     }
 
                     break 'neighbors;
@@ -1876,11 +1886,12 @@ fn construct_blueprint_bond_driven_internal(
 
         if !attached {
             eprintln!(
-                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} overlap_rejections={} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} bob_coverage_misses={:?}",
+                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} restore_failure_reasons={:?} overlap_rejections={} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} bob_coverage_misses={:?}",
                 rejection_counts.attempted_origins,
                 rejection_counts.generated_origins,
                 rejection_counts.deduplicated_origins,
                 rejection_counts.restore_failures,
+                rejection_counts.restore_failure_reasons,
                 rejection_counts.overlap_rejections,
                 rejection_counts.neighbor_contact_rejections,
                 rejection_counts.neighbor_rejections_by_index,
@@ -1985,6 +1996,8 @@ fn construct_blueprint_bond_driven_internal(
                         if stop_at_genome
                             && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_some()
                         {
+                            *ledger = construction_ledger;
+                            *energy = remaining_energy;
                             return Ok((structure, total_heat));
                         }
 
@@ -2029,6 +2042,8 @@ fn construct_blueprint_bond_driven_internal(
         }
     }
 
+    *ledger = construction_ledger;
+    *energy = remaining_energy;
     Ok((structure, total_heat))
 }
 
