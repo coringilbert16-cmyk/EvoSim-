@@ -23,9 +23,26 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 1. Keep the geometry catalogue empty in the tracked tree. Never run the continuous worker or use the default catalogue directory for tests.
 2. Do not start three-piece generation until the persisted fluid-realization/query path and live transactional bond formation pass focused tests; live validation remains authoritative.
 3. The approved target is now up to three rigid constituents, but generation remains paused until that gate passes. Then run only in an isolated output root outside Git and report formation/family counts, runtime, storage size, frontier completion, and reopen verification.
-4. Do not divert the active geometry-library/fluid-formation sprint into the unrelated constructor-test backlog. Keep those failures visible, but prioritize fluid-record realization, interface-class coverage, and Bob's persisted-knowledge contract; never disable tests or weaken physical invariants.
+4. **Current priority override (2026-10-12):** the user has explicitly approved the free-form constructor viability review and implementation. Prioritize the viability contract and constructor replacement alongside preserving Bob/chemistry-library correctness. Keep unrelated failures visible; never disable tests or weaken physical invariants.
 5. Keep PR #186 as the single integration target. Do not merge or change the default branch as a side effect of cleanup.
 6. All new decisions and handoffs go in this root README. Before adding a new audit note, update the current summary and avoid repeating obsolete checkpoints.
+
+## Approved free-form constructor viability contract — 2026-10-12
+
+This user-approved contract supersedes older fixed-resource-count and fixed-capacity statements in the active constructor plan. Historical checkpoints remain historical only.
+
+1. **Functional genome cavity:** discover a sealed, bonded cavity from realized physical geometry. The three-Carbon-equivalent capacity is a reference, not a hard minimum. Functional sufficiency must be decided by the actual cavity/processing requirements, not area alone.
+2. **Functional chemistry, not category count:** resource diversity is whatever the organism's realized material interfaces and authoritative chemistry require to perform the minimum useful function. There is no fixed count of distinct resource categories. Water is not a universal constructor gate unless a defined required function demonstrates that need.
+3. **Finite reconciled reserve:** qualification requires a finite reserve that can cover a defined minimum functional period or processing cycle. Derive demand from actual chemistry/energy transactions and existing maintenance semantics; do not use an arbitrary constructor-energy budget or substitute another unexplained constant.
+4. **Processing space and outer boundary:** require real accessible processing space outside the protected genome cavity, enclosed by the realized organism boundary. Do not infer this from piece count alone.
+5. **Physical integrity:** every constituent and bond must be admitted by live geometry, chemistry, and transaction authorities. Viability must establish that the minimum functional period can be completed without unpaid maintenance or destructive structural failure.
+6. **Free-form construction:** no mandatory ring, lattice, scaffold, fixed topology, fixed piece count, or prescribed resource recipe. Bob supplies candidate suggestions only; live validation and the viability contract remain authoritative. Construction responds to physically available material and unmet functional needs.
+
+### Implementation status at this checkpoint
+
+- **Implemented in this branch:** the cavity analyzer no longer filters enclosed regions by the three-Carbon reference area; GenomeCavity qualification treats positive-area sealed geometry as a candidate rather than enforcing that reference; a regression asserts a sub-reference cavity is not rejected by area alone. The viability validator now requires a positive-area accessible enclosed processing region outside the genome cavity, in addition to outside structure.
+- **Still outstanding:** functional chemistry qualification; a defined minimum functional cycle and reserve calculation against reconciled energy; integrity over that cycle; replacing the fixed Carbon scaffold and lattice-constrained placement; removing the fixed Water-plus-three-category gate and 1.0e12 construction-energy budget.
+- Do not describe the constructor as free-form or viability-complete until those outstanding items are implemented and tested. The first source changes are a partial contract correction, not end-to-end acceptance.
 
 ## Bob catalogue cap change — 2026-10-12
 
@@ -801,13 +818,14 @@ The replacement will not assemble toward a fixed piece count and test viability 
 The geometry library will supply reusable, persisted knowledge about shapes, contact features, and verified local arrangements. The constructor will search combinations of these known arrangements; it will not manufacture an arbitrary placement when lookup fails. The chemistry library and authoritative bond rules will determine material compatibility and chemical/energetic consequences. The constructor will coordinate these authorities, choose among viable candidates, and stop when the actual organism is viable. When library coverage is insufficient, it will report the missing capability for a separate Bob expansion run.
 
 The replacement must:
-- Construct an initial organism without a prescribed blueprint or final shape.
+- Construct an initial organism without a prescribed blueprint, fixed topology, or final shape.
 - Use existing geometry and chemistry knowledge instead of repeatedly rediscovering it.
-- Select geometric candidates only from persisted, verified Bob records; compose known local arrangements to create larger, previously unseen organisms.
+- Treat Bob records as candidate suggestions only; compose known local arrangements, then validate through live physical and chemical authorities.
 - Keep geometry discovery separate from runtime construction. Missing library coverage is an explicit planner result and triggers a separately run, bounded Bob expansion process.
-- Discover a genome cavity through the real cavity analyzer and require a qualifying bonded seal.
+- Discover a sealed genome cavity through realized geometry; treat the three-Carbon-equivalent capacity as a reference and let functional cavity/processing checks decide sufficiency.
 - Stop treating enclosure as a goal immediately after genome qualification.
-- Physically acquire Water and at least three distinct non-Water resource categories.
+- Evaluate resource diversity from realized functional chemistry; do not impose a fixed category count or unconditional Water-plus-three recipe.
+- Require a finite reconciled reserve sufficient for the defined minimum functional period/cycle and verify structural integrity over that period.
 - Enforce geometry, bonding, material, energy, and ledger invariants.
 - Permit multiple viable outcomes, with deterministic reproducibility and seed-driven diversity.
 - Share its physical engine with offspring construction while allowing a different policy and limited inventory.
@@ -910,7 +928,7 @@ The old `ASSEMBLY_ENERGY = 1.0e12` pattern and deriving initial organism energy 
 
 ### 5.4 Preserve physical acquisition
 
-Environmental abundance does not permit direct insertion of logical resource labels. Resource acquisition must use the actual physical acquisition semantics and placement checks. Water and at least three distinct non-Water categories must be acquired and accounted for.
+Environmental abundance does not permit direct insertion of logical resource labels. Resource acquisition must use actual physical acquisition semantics and placement checks. The materials acquired must support the organism's required functional chemistry; no fixed resource-category count is permitted.
 
 ### 5.5 Distinguish availability from suitability
 
@@ -966,7 +984,7 @@ Run or refresh analysis when geometry or bonding changes can affect qualificatio
 
 ## 8. Physical resource acquisition
 
-Track which required categories are available, attempted, acquired, and currently represented. Use the authoritative placement and contact rules, not sampled bounding-box positions as final proof. Confirm Water and at least three distinct non-Water resource categories are physically acquired.
+Track which materials are available, attempted, acquired, and currently represented. Use authoritative placement and contact rules, not sampled bounding-box positions as final proof. Confirm the realized interfaces support the minimum useful chemical function; do not assume a fixed category count.
 
 Respect the existing fluid rules: Water is logically abundant but physically represented as required; it remains permeable rather than a rigid wall; the genome cavity interior is exempt from water fill; and water-only sequences must not count as valid structural connections where a non-water connection is required. These rules belong to shared physical authorities, not constructor-specific exceptions.
 
@@ -1056,10 +1074,10 @@ Implement blueprint-free growth using the real cavity analyzer. Switch the objec
 
 **Deliverable:** logs identify the physical change that created the qualifying genome and confirm the policy transition.
 
-### Phase 6 — Acquisition and viability
-Integrate Water and three distinct non-Water categories through real acquisition and verify placements and accounting.
+### Phase 6 — Functional acquisition and viability
+Acquire only the materials needed by the current functional requirements through real physical interactions. Evaluate cavity/processing sufficiency, realized chemistry, reconciled reserve for the defined minimum functional cycle, and structural integrity over that cycle.
 
-**Deliverable:** an explicit record of satisfied and outstanding viability requirements.
+**Deliverable:** an explicit record of satisfied and outstanding viability requirements, with the basis for each functional and energy decision.
 
 ### Phase 7 — Comparative benchmark
 Compare the prototype against the old implementation over multiple seeds, material conditions, and catalogue orderings. Measure correctness, success, time, candidate work, diversity, and failure reasons.
