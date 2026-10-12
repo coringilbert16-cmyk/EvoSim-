@@ -1301,6 +1301,7 @@ struct PlacementRejectionCounts {
     deduplicated_origins: usize,
     attempted_origins: usize,
     restore_failures: usize,
+    restore_failure_reasons: std::collections::BTreeMap<&'static str, usize>,
     overlap_rejections: usize,
     first_overlap_diagnostic: Option<String>,
     overlap_rejections_by_existing_index: std::collections::BTreeMap<usize, usize>,
@@ -1525,16 +1526,24 @@ fn realize_next_bond_driven(
                     };
                     let Some(candidate_material) = candidate_material else {
                         rejection_counts.restore_failures += 1;
+                        *rejection_counts
+                            .restore_failure_reasons
+                            .entry("stored fluid shape candidate rejected")
+                            .or_default() += 1;
                         continue;
                     };
-                    let Some(indices) = crate::material_restoration::restore_material(
+                    let indices = match crate::material_restoration::restore_material_diagnostic(
                         &mut trial,
                         &candidate_material,
                         candidate_origin,
                         catalog,
-                    ) else {
-                        rejection_counts.restore_failures += 1;
-                        continue;
+                    ) {
+                        Ok(indices) => indices,
+                        Err(reason) => {
+                            rejection_counts.restore_failures += 1;
+                            *rejection_counts.restore_failure_reasons.entry(reason).or_default() += 1;
+                            continue;
+                        }
                     };
 
                     let new_unit_index = *indices.get(part_index)?;
@@ -2041,12 +2050,13 @@ fn construct_blueprint_bond_driven_internal(
                 })
                 .collect::<Vec<_>>();
             eprintln!(
-                "[construction-placement-diagnostics] element={index} target_pose={target_pose:?} realized_neighbor_indices={neighbors:?} overlap_blockers={overlap_blockers:?} energy_remaining={remaining_energy} energy_consumed={} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} overlap_rejections={} first_overlap={:?} overlap_rejections_by_existing_index={:?} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} combine_rejection_reasons={:?}",
+                "[construction-placement-diagnostics] element={index} target_pose={target_pose:?} realized_neighbor_indices={neighbors:?} overlap_blockers={overlap_blockers:?} energy_remaining={remaining_energy} energy_consumed={} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} restore_failure_reasons={:?} overlap_rejections={} first_overlap={:?} overlap_rejections_by_existing_index={:?} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} combine_rejection_reasons={:?}",
                 *energy - remaining_energy,
                 rejection_counts.attempted_origins,
                 rejection_counts.generated_origins,
                 rejection_counts.deduplicated_origins,
                 rejection_counts.restore_failures,
+                rejection_counts.restore_failure_reasons,
                 rejection_counts.overlap_rejections,
                 rejection_counts.first_overlap_diagnostic,
                 rejection_counts.overlap_rejections_by_existing_index,
