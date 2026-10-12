@@ -1285,6 +1285,9 @@ struct PlacementRejectionCounts {
     overlap_counterfactual_contact_by_unit: std::collections::BTreeMap<usize, usize>,
     overlap_counterfactual_evaluation_by_unit: std::collections::BTreeMap<usize, usize>,
     overlap_counterfactual_combine_by_unit: std::collections::BTreeMap<usize, usize>,
+    overlap_counterfactual_neighbor_rejection_by_unit: std::collections::BTreeMap<usize, usize>,
+    overlap_counterfactual_still_overlapping_by_unit: std::collections::BTreeMap<usize, usize>,
+    overlap_counterfactual_full_accept_by_unit: std::collections::BTreeMap<usize, usize>,
     overlap_counterfactual_anchor_removed_by_unit: std::collections::BTreeMap<usize, usize>,
     neighbor_contact_rejections: usize,
     no_bond_contact: usize,
@@ -1494,25 +1497,99 @@ fn realize_next_bond_driven(
                         };
                         *counter.entry(overlap_index).or_default() += 1;
 
-                        // For a sole blocker, test the unchanged Bob pose against
-                        // the same live anchor/contact/energy/bond authority on a
-                        // disposable clone. The colliding unit is ignored only
-                        // for this counterfactual overlap check; no state commits.
+                        // True leave-one-out replay: remove the suspected blocker
+                        // from a disposable physical graph, including all incident
+                        // bonds, then remap by stable constituent IDs and run the
+                        // ordinary acceptance stages without bypassing overlap checks.
+                        // The original trial and all live state remain untouched.
                         if !still_overlapping && overlapping_units.len() == 1 {
-                            if overlap_index == existing_index {
+                            let Some(blocker_id) = trial.physical_id(overlap_index) else {
+                                continue;
+                            };
+                            let Some(anchor_id) = trial.physical_id(existing_index) else {
+                                continue;
+                            };
+                            let Some(candidate_id) = trial.physical_id(new_unit_index) else {
+                                continue;
+                            };
+                            if blocker_id == anchor_id {
                                 *rejection_counts
                                     .overlap_counterfactual_anchor_removed_by_unit
                                     .entry(overlap_index)
                                     .or_default() += 1;
                                 continue;
                             }
+
+                            let mut probe_trial = trial.clone();
+                            probe_trial.remove_units_by_physical_ids(&[blocker_id]);
+                            let Some(probe_anchor_index) = probe_trial.unit_index(anchor_id) else {
+                                continue;
+                            };
+                            let Some(probe_new_unit_index) = probe_trial.unit_index(candidate_id) else {
+                                continue;
+                            };
+                            let probe_indices = indices
+                                .iter()
+                                .filter_map(|index| trial.physical_id(*index))
+                                .filter_map(|id| probe_trial.unit_index(id))
+                                .collect::<Vec<_>>();
+                            if probe_indices.len() != indices.len() {
+                                continue;
+                            }
+
+                            let probe_still_overlapping = probe_indices.iter().any(|index| {
+                                !overlapping_unit_indices(
+                                    &probe_trial,
+                                    &probe_trial.units[*index],
+                                    &probe_indices,
+                                    catalog,
+                                )
+                                .is_empty()
+                            });
+                            if probe_still_overlapping {
+                                *rejection_counts
+                                    .overlap_counterfactual_still_overlapping_by_unit
+                                    .entry(overlap_index)
+                                    .or_default() += 1;
+                                continue;
+                            }
+
+                            let probe_realized_units = realized_units
+                                .iter()
+                                .map(|element_units| {
+                                    element_units.as_ref().map(|unit_indices| {
+                                        unit_indices
+                                            .iter()
+                                            .filter_map(|index| trial.physical_id(*index))
+                                            .filter_map(|id| probe_trial.unit_index(id))
+                                            .collect::<Vec<_>>()
+                                    })
+                                })
+                                .collect::<Vec<_>>();
+                            if !missing_realized_neighbor_contacts(
+                                blueprint,
+                                _index,
+                                &probe_realized_units,
+                                &probe_trial,
+                                &probe_indices,
+                                catalog,
+                            )
+                            .is_empty()
+                            {
+                                *rejection_counts
+                                    .overlap_counterfactual_neighbor_rejection_by_unit
+                                    .entry(overlap_index)
+                                    .or_default() += 1;
+                                continue;
+                            }
+
                             let mut probe_cache =
                                 crate::contact::ConnectionCompatibilityCache::new();
                             let probe_candidate =
                                 crate::contact::connection_pair_candidates_cached(
-                                    &trial,
-                                    existing_index,
-                                    new_unit_index,
+                                    &probe_trial,
+                                    probe_anchor_index,
+                                    probe_new_unit_index,
                                     catalog,
                                     &mut probe_cache,
                                 )
@@ -1533,49 +1610,66 @@ fn realize_next_bond_driven(
                                                 .unwrap_or(std::cmp::Ordering::Equal)
                                         })
                                 });
-                            if let Some(probe_candidate) = probe_candidate {
-                                *rejection_counts
-                                    .overlap_counterfactual_contact_by_unit
-                                    .entry(overlap_index)
-                                    .or_default() += 1;
-                                if let Some((_, _, investment, _)) =
-                                    crate::combine_runtime::selected_candidate_evaluation(
-                                        &trial,
-                                        existing_index,
-                                        new_unit_index,
-                                        probe_candidate,
-                                        catalog,
-                                    )
-                                {
-                                    *rejection_counts
-                                        .overlap_counterfactual_evaluation_by_unit
-                                        .entry(overlap_index)
-                                        .or_default() += 1;
-                                    let mut probe_trial = trial.clone();
-                                    let mut probe_ledger = *ledger;
-                                    let mut probe_energy = available_energy;
-                                    let mut probe_cache =
-                                        crate::contact::ConnectionCompatibilityCache::new();
-                                    if crate::combine_runtime::form_selected_bond(
-                                        &mut probe_trial,
-                                        existing_index,
-                                        new_unit_index,
-                                        probe_candidate,
-                                        investment,
-                                        catalog,
-                                        &mut probe_cache,
-                                        &mut probe_ledger,
-                                        &mut probe_energy,
-                                    )
-                                    .is_some()
-                                    {
-                                        *rejection_counts
-                                            .overlap_counterfactual_combine_by_unit
-                                            .entry(overlap_index)
-                                            .or_default() += 1;
-                                    }
-                                }
+                            let Some(probe_candidate) = probe_candidate else {
+                                continue;
+                            };
+                            *rejection_counts
+                                .overlap_counterfactual_contact_by_unit
+                                .entry(overlap_index)
+                                .or_default() += 1;
+                            let Some((_, _, investment, _)) =
+                                crate::combine_runtime::selected_candidate_evaluation(
+                                    &probe_trial,
+                                    probe_anchor_index,
+                                    probe_new_unit_index,
+                                    probe_candidate,
+                                    catalog,
+                                )
+                            else {
+                                continue;
+                            };
+                            *rejection_counts
+                                .overlap_counterfactual_evaluation_by_unit
+                                .entry(overlap_index)
+                                .or_default() += 1;
+
+                            let mut probe_ledger = *ledger;
+                            let mut probe_energy = available_energy;
+                            let mut probe_cache =
+                                crate::contact::ConnectionCompatibilityCache::new();
+                            if crate::combine_runtime::form_selected_bond(
+                                &mut probe_trial,
+                                probe_anchor_index,
+                                probe_new_unit_index,
+                                probe_candidate,
+                                investment,
+                                catalog,
+                                &mut probe_cache,
+                                &mut probe_ledger,
+                                &mut probe_energy,
+                            )
+                            .is_none()
+                            {
+                                continue;
                             }
+                            *rejection_counts
+                                .overlap_counterfactual_combine_by_unit
+                                .entry(overlap_index)
+                                .or_default() += 1;
+                            if !form_remaining_multi_contact_bonds(
+                                &mut probe_trial,
+                                probe_new_unit_index,
+                                probe_anchor_index,
+                                catalog,
+                                &mut probe_ledger,
+                                &mut probe_energy,
+                            ) {
+                                continue;
+                            }
+                            *rejection_counts
+                                .overlap_counterfactual_full_accept_by_unit
+                                .entry(overlap_index)
+                                .or_default() += 1;
                         }
                     }
                     continue;
@@ -2039,7 +2133,7 @@ fn construct_blueprint_bond_driven_internal(
 
         if !attached {
             eprintln!(
-                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} restore_failure_reasons={:?} overlap_rejections={} overlap_rejections_by_unit={:?} overlap_clear_if_omit_unit={:?} overlap_still_rejected_if_omit_unit={:?} overlap_counterfactual_contact_by_unit={:?} overlap_counterfactual_evaluation_by_unit={:?} overlap_counterfactual_combine_by_unit={:?} overlap_counterfactual_anchor_removed_by_unit={:?} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} bob_coverage_misses={:?}",
+                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} restore_failure_reasons={:?} overlap_rejections={} overlap_rejections_by_unit={:?} overlap_clear_if_omit_unit={:?} overlap_still_rejected_if_omit_unit={:?} overlap_counterfactual_contact_by_unit={:?} overlap_counterfactual_evaluation_by_unit={:?} overlap_counterfactual_combine_by_unit={:?} overlap_counterfactual_neighbor_rejection_by_unit={:?} overlap_counterfactual_still_overlapping_by_unit={:?} overlap_counterfactual_full_accept_by_unit={:?} overlap_counterfactual_anchor_removed_by_unit={:?} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} bob_coverage_misses={:?}",
                 rejection_counts.attempted_origins,
                 rejection_counts.generated_origins,
                 rejection_counts.deduplicated_origins,
@@ -2052,6 +2146,9 @@ fn construct_blueprint_bond_driven_internal(
                 rejection_counts.overlap_counterfactual_contact_by_unit,
                 rejection_counts.overlap_counterfactual_evaluation_by_unit,
                 rejection_counts.overlap_counterfactual_combine_by_unit,
+                rejection_counts.overlap_counterfactual_neighbor_rejection_by_unit,
+                rejection_counts.overlap_counterfactual_still_overlapping_by_unit,
+                rejection_counts.overlap_counterfactual_full_accept_by_unit,
                 rejection_counts.overlap_counterfactual_anchor_removed_by_unit,
                 rejection_counts.neighbor_contact_rejections,
                 rejection_counts.neighbor_rejections_by_index,
