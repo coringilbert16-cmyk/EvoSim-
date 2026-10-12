@@ -27,6 +27,45 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 5. Keep PR #186 as the single integration target. Do not merge or change the default branch as a side effect of cleanup.
 6. All new decisions and handoffs go in this root README. Before adding a new audit note, update the current summary and avoid repeating obsolete checkpoints.
 
+## Constructor cleanup sprint — 2026-10-12
+
+**Active branch:** `refactor/constructor-cleanup-2026-10-12`, based on the current chemistry-persistence checkpoint. This sprint is intentionally short and does not modify the constructor's runtime behavior yet.
+
+### First-pass keep / remove / investigate inventory
+
+**Remove from the target design (confirmed conflicts):**
+- The prescribed Carbon inner ring, six radial spokes, and outer ring in `src/construction/initial_organism_constructor.rs`. This fixed topology is explicitly described in code as a temporary scaffold and is not the intended open-ended organism constructor.
+- The `CONSTRUCTION_ENERGY = 1.0e12` construction allowance and simulation bookkeeping that derives starting energy by subtracting the remaining balance from that constant. Replace it only after defining the initial energy source and accounting contract; do not swap in another arbitrary large constant.
+- The initial constructor's restriction of Bob's rigid placement suggestions to a hard-coded lattice point and canonical zero rotation. Bob should propose reusable geometry; live physics validates the actual proposed pose.
+
+**Keep as authoritative mechanisms:**
+- Live nonpenetration and physical-contact validation.
+- Physical-material restoration and intact composite identity.
+- COMBINE as the authority for actual bond formation.
+- Transactional energy/material accounting and rollback.
+- Realized, bonded genome-cavity qualification and viability validation.
+- Bob's persisted geometry knowledge, while keeping every live transaction authoritative.
+
+**Investigate before removal or consolidation:**
+- `src/organism/juvenile.rs`'s `confirmed_seed_baseline` and `realize_initial`: this is a second construction route, but it still encodes a calibration blueprint and uses `TRIAL_ENERGY = 1.0e6`. It is not yet a clean, energy-grounded replacement.
+- The live startup path (`create_initial_organism` → `initial_organism_constructor::construct_valid`) versus juvenile-baseline tests. Verify which path each test actually exercises before treating results as equivalent.
+- Candidate generation in `src/construction/runtime.rs`: the latest supplied diagnostic for blueprint element 26 reports 7,014 attempts, 8,364 generated candidates, 1,499 deduplications, and 6,865 overlap rejections, with zero restoration failures and zero COMBINE rejections. Instrument the actual overlap pair/pose before altering geometry safeguards.
+- Acquisition and Water-fluid placement: retain external acquisition, area conservation, and live validation, but remove any fallback only after proving it changes the contract rather than safely handling a catalogue coverage miss.
+
+### First-sprint decision
+
+Do not simply replace the fixed scaffold with `confirmed_seed_baseline`: that would exchange one prescribed layout for another and route startup directly through the already-failing forward-only placement path. The first source-changing sprint must instead isolate the element-26 placement rejection and prove a valid, minimal construction transaction can succeed. Then remove the scaffold in a separate reversible change. No test is disabled and no physical invariant is weakened.
+
+### Short sprint sequence
+
+1. Add a deterministic diagnostic for the first placement failure: candidate pose, candidate material, overlapped constituent(s), and rejection stage.
+2. Reproduce element 26 and determine whether the failure is caused by candidate pose generation, transform conventions, or a genuinely blocked target.
+3. Use that evidence to remove redundant/overconstrained search logic; keep live overlap checks.
+4. Replace the fixed startup scaffold only once the general construction route has a verified minimal viable path.
+5. Replace the artificial energy allowance only alongside an explicit initial-energy source and ledger invariant.
+
+No constructor runtime code has been changed as part of this inventory checkpoint. Keep the branch isolated and draft; do not merge or change the integration target as a side effect.
+
 ## Fluid coalescence transaction sprint — 2026-10-12
 
 - Active isolated branch: `fix/fluid-coalescence-transaction-2026-10-12`, based on `fix/bob-fluid-transaction-gate-2026-10-12`. The branch contains the coalescence contract in `docs/fluid-coalescence-transaction.md` and a focused material-area validation correction in `src/materials/physical_material.rs`.
