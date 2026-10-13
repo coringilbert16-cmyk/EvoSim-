@@ -538,8 +538,7 @@ fn construct_persisted_bob_structure(
                 acquired_resource_placements,
                 acquired_resource_shapes,
                 fluid_geometry_status,
-            )) =
-                valid_construction(&state.structure, catalog, acquisition_candidates, library)
+            )) = valid_construction(&state.structure, catalog, acquisition_candidates, library)
             {
                 return Ok(ValidConstruction {
                     structure: state.structure,
@@ -1088,6 +1087,7 @@ fn valid_construction(
     Some((acquired, acquired_shapes, fluid_geometry_status))
 }
 
+#[cfg(test)]
 pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruction, String> {
     construct_valid_with_energy(
         catalog,
