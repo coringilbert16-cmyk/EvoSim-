@@ -3617,6 +3617,31 @@ fn resource_catalog_signature(catalog: &[BaseResource]) -> String {
     out
 }
 
+#[cfg(test)]
+mod resource_catalog_signature_tests {
+    use super::*;
+
+    #[test]
+    fn changing_sulfur_outline_invalidates_the_geometry_catalog_signature() {
+        let original = default_catalog();
+        let mut previous_shape_catalog = original.clone();
+        let sulfur = previous_shape_catalog
+            .iter_mut()
+            .find(|resource| resource.name == "Sulfur")
+            .expect("default catalog contains sulfur");
+        sulfur.shape.form = Form::RegularPolygon {
+            sides: 5,
+            radius: 0.850_650_808_352_039_9,
+        };
+
+        assert_ne!(
+            resource_catalog_signature(&original),
+            resource_catalog_signature(&previous_shape_catalog),
+            "Bob must reject a catalogue generated for the previous sulfur outline"
+        );
+    }
+}
+
 fn quantize(value: f64) -> i64 {
     (value / QUANTUM).round() as i64
 }
