@@ -140,6 +140,7 @@ fn try_persisted_bob_attachments(
             no_bond_contact: 0,
             evaluation_rejections: 0,
             combine_rejections: 0,
+            energy_rejections: 0,
             last_combine_rejection: None,
         });
     };
