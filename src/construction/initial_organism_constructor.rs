@@ -1267,7 +1267,9 @@ mod tests {
         .expect(
             "persisted Bob proposal should pass live restoration, overlap, contact, and COMBINE",
         );
-        let attached = attachments.first().expect("at least one attachment should succeed");
+        let attached = attachments
+            .first()
+            .expect("at least one attachment should succeed");
         assert_eq!(attached.structure.units.len(), 2);
         assert_eq!(attached.new_unit_index, 1);
         assert!(!attached.structure.bonds.is_empty());
