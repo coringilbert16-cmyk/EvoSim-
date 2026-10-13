@@ -198,9 +198,15 @@ pub(crate) fn form_selected_bond(
 /// Free-form assembly has unlimited construction energy. Keep physical formation
 /// checks but do not debit the organism's real energy ledger.
 pub(crate) fn form_selected_bond_for_freeform_construction(
-    structure: &mut crate::structure::OrganismStructure, unit_a: usize, unit_b: usize,
-    candidate: crate::contact::ConnectionPairCandidate, investment: f64, catalog: &[BaseResource],
-    cache: &mut ConnectionCompatibilityCache, ledger: &mut EnergyLedger, energy: &mut f64,
+    structure: &mut crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    candidate: crate::contact::ConnectionPairCandidate,
+    investment: f64,
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
 ) -> Result<CombineAttempt, &'static str> {
     if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b { return Err("invalid unit indices"); }
     if candidate.distance > COMBINE_CONTACT_TOLERANCE || !candidate.available_a || !candidate.available_b { return Err("candidate contact is outside tolerance or an endpoint is unavailable"); }
@@ -405,7 +411,11 @@ fn form_bond_from_candidate_diagnostic(
         endpoint_a,
         endpoint_b,
         work_cost: work,
-        energy_invested: if settle_energy { investment + bond_energy } else { 0.0 },
+        energy_invested: if settle_energy {
+            investment + bond_energy
+        } else {
+            0.0
+        },
         formation_threshold: threshold,
         net_energy_change: net,
         bond_strength: strength,
