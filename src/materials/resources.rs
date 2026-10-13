@@ -872,8 +872,58 @@ mod shape_tests {
         assert!((sulfur_lengths[1] - 0.5).abs() < 1e-9);
         assert!((sulfur_lengths[2] - 1.0).abs() < 1e-9);
         assert!((sulfur_lengths[3] - 0.5).abs() < 1e-9);
-        assert!((sulfur[0].1 - sulfur[1].1).abs() < 1e-9);
-        assert!((sulfur[2].1 - sulfur[3].1).abs() < 1e-9);
+
+        // The two long edges are parallel to each other, as are the two short
+        // edges. Their shared acute/obtuse angles are 60°/120°.
+        let cross = |a: (f64, f64), b: (f64, f64)| a.0 * b.1 - a.1 * b.0;
+        let dot = |a: (f64, f64), b: (f64, f64)| a.0 * b.0 + a.1 * b.1;
+        let edge = |i: usize| {
+            (
+                sulfur[(i + 1) % 4].0 - sulfur[i].0,
+                sulfur[(i + 1) % 4].1 - sulfur[i].1,
+            )
+        };
+        assert!(cross(edge(0), edge(2)).abs() < 1e-9);
+        assert!(cross(edge(1), edge(3)).abs() < 1e-9);
+        for (a, b, expected) in [(0, 1, 120.0_f64), (1, 2, 60.0_f64)] {
+            let incoming = (-edge(a).0, -edge(a).1);
+            let outgoing = edge(b);
+            let angle = dot(incoming, outgoing)
+                .atan2(cross(incoming, outgoing))
+                .to_degrees()
+                .abs();
+            let interior = if angle > 180.0 { 360.0 - angle } else { angle };
+            assert!((interior - expected).abs() < 1e-7);
+        }
+
+        // Centering is a geometry contract: the centroid and bounding-box
+        // center are both at the origin.
+        let centroid = (
+            sulfur.iter().map(|p| p.0).sum::<f64>() / 4.0,
+            sulfur.iter().map(|p| p.1).sum::<f64>() / 4.0,
+        );
+        assert!(centroid.0.abs() < 1e-12 && centroid.1.abs() < 1e-12);
+        assert!((sulfur.iter().map(|p| p.0).fold(f64::NEG_INFINITY, f64::max)
+            + sulfur.iter().map(|p| p.0).fold(f64::INFINITY, f64::min)).abs() < 1e-12);
+        assert!((sulfur.iter().map(|p| p.1).fold(f64::NEG_INFINITY, f64::max)
+            + sulfur.iter().map(|p| p.1).fold(f64::INFINITY, f64::min)).abs() < 1e-12);
+
+        let doubled_area = (0..4)
+            .map(|i| {
+                sulfur[i].0 * sulfur[(i + 1) % 4].1
+                    - sulfur[(i + 1) % 4].0 * sulfur[i].1
+            })
+            .sum::<f64>()
+            .abs();
+        assert!((doubled_area / 2.0 - 3.0_f64.sqrt() / 4.0).abs() < 1e-9);
+
+        // Shape-only experiment: all non-geometric sulfur properties stay fixed.
+        let sulfur_resource = find("Sulfur");
+        assert!((sulfur_resource.properties.mass - 1.50).abs() < 1e-12);
+        assert!((sulfur_resource.properties.potential_energy - 8.0).abs() < 1e-12);
+        assert!((sulfur_resource.properties.reactivity - 2.0).abs() < 1e-12);
+        assert_eq!(sulfur_resource.properties.chemical_position, Some(3.5));
+        assert!((sulfur_resource.properties.cohesion - 0.45).abs() < 1e-12);
 
         let hydrogen = find("Hydrogen").shape.form.clone();
         assert!(matches!(
