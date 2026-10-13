@@ -201,7 +201,7 @@ fn try_persisted_bob_attachments(
                 &mut committed_energy,
             ) {
                 combine_rejections += 1;
-                last_combine_rejection = Some(reason);
+                last_combine_rejection = Some(reason.to_owned());
                 continue;
             }
             successful.push(PersistedAttachment {
