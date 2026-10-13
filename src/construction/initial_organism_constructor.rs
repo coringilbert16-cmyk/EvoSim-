@@ -56,34 +56,6 @@ enum PersistedAttachmentFailure {
     },
 }
 
-fn candidate_pose_overlaps_structure(
-    structure: &crate::structure::OrganismStructure,
-    resource: &BaseResource,
-    placement: Placement,
-    catalog: &[BaseResource],
-) -> bool {
-    let candidate_part = crate::material_geometry::PlacedMaterialPart {
-        part_index: 0,
-        form: resource.shape.form.clone(),
-        placement,
-    };
-    structure.units.iter().enumerate().any(|(index, unit)| {
-        let Some(shape) = unit.shape(catalog) else {
-            return true;
-        };
-        let existing_part = crate::material_geometry::PlacedMaterialPart {
-            part_index: index + 1,
-            form: shape.form.clone(),
-            placement: unit.placement,
-        };
-        crate::material_geometry::placed_forms_penetrate(
-            &candidate_part,
-            &existing_part,
-            crate::material_geometry::GEOMETRY_EPSILON,
-        )
-    })
-}
-
 fn select_diverse_placements(placements: Vec<Placement>, limit: usize) -> Vec<Placement> {
     if placements.len() <= limit || limit == 0 {
         return if limit == 0 { Vec::new() } else { placements };
@@ -280,24 +252,13 @@ fn try_persisted_bob_attachments(
     let mut candidate_placements =
         persisted_pair_formation_placements(anchor_material, anchor.placement, resource, library);
     let raw_pair_placements = candidate_placements.len();
-    // Filter obvious context collisions before they consume the bounded
-    // diversity-selection slots. The later restored-structure check remains
-    // authoritative and is deliberately retained.
-    let mut pair_pose_overlap_drops = 0usize;
-    candidate_placements.retain(|placement| {
-        let overlaps = candidate_pose_overlaps_structure(structure, resource, *placement, catalog);
-        if overlaps {
-            pair_pose_overlap_drops += 1;
-        }
-        !overlaps
-    });
-    let pair_placements_after_overlap_filter = candidate_placements.len();
-    // Keep the pair-formation proposals diverse and bounded, then fill any
-    // remaining slots from persisted edge families. Both sources are Bob data;
-    // neither source bypasses the live physical transaction.
+    // Keep persisted pair proposals diverse and bounded. Do not pre-reject
+    // proposals using a separate geometry path: restoration followed by the
+    // authoritative live overlap/contact/COMBINE checks decides validity.
+    let pair_pose_overlap_drops = 0usize;
     candidate_placements = select_diverse_placements(candidate_placements, 6);
     let pair_placements_dropped_by_cap =
-        pair_placements_after_overlap_filter.saturating_sub(candidate_placements.len());
+        raw_pair_placements.saturating_sub(candidate_placements.len());
     let mut seen_placements = candidate_placements
         .iter()
         .copied()
@@ -321,10 +282,7 @@ fn try_persisted_bob_attachments(
             duplicate_placements += 1;
             continue;
         }
-        if candidate_pose_overlaps_structure(structure, resource, suggestion.placement, catalog) {
-            edge_pose_overlap_drops += 1;
-            continue;
-        }
+        // Keep edge suggestions for the same live validation as pair poses.
         candidate_placements.push(suggestion.placement);
         edge_placements_added += 1;
     }
