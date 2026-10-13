@@ -940,6 +940,37 @@ fn already_realized_neighbors(
         .collect()
 }
 
+/// Select the next reachable element that has not already failed against the
+/// current structure. Blocked elements are retried after a successful change.
+fn next_unblocked_element(
+    blueprint: &crate::structural_blueprint::StructuralBlueprint,
+    realized: &[bool],
+    blocked: &[bool],
+) -> Option<(usize, Vec<usize>)> {
+    let mut next: Option<(usize, Vec<usize>)> = None;
+    for index in 0..blueprint.elements.len() {
+        if realized.get(index).copied().unwrap_or(false)
+            || blocked.get(index).copied().unwrap_or(false)
+        {
+            continue;
+        }
+        let neighbors = already_realized_neighbors(blueprint, index, realized);
+        if neighbors.is_empty() {
+            continue;
+        }
+        if next
+            .as_ref()
+            .is_none_or(|(current_index, current_neighbors)| {
+                neighbors.len() > current_neighbors.len()
+                    || (neighbors.len() == current_neighbors.len() && index < *current_index)
+            })
+        {
+            next = Some((index, neighbors));
+        }
+    }
+    next
+}
+
 /// Sequential developmental constructor: choose A.x and B.y, rotate B about
 /// that exact joint, and keep searching all available endpoint pairs and
 /// orientations until a physically valid joint is found. In particular, when
@@ -2121,27 +2152,9 @@ fn construct_blueprint_bond_driven_internal(
         // use knowledge of future connections to choose which bond gets formed
         // first. If several elements are equally ready, blueprint index provides
         // a deterministic order.
-        let mut next: Option<(usize, Vec<usize>)> = None;
-        for index in 0..blueprint.elements.len() {
-            if realized[index] || blocked_elements[index] {
-                continue;
-            }
-            let neighbors = already_realized_neighbors(blueprint, index, &realized);
-            if neighbors.is_empty() {
-                continue;
-            }
-            if next
-                .as_ref()
-                .is_none_or(|(current_index, current_neighbors)| {
-                    neighbors.len() > current_neighbors.len()
-                        || (neighbors.len() == current_neighbors.len() && index < *current_index)
-                })
-            {
-                next = Some((index, neighbors));
-            }
-        }
-
-        let Some((index, neighbors)) = next else {
+        let Some((index, neighbors)) =
+            next_unblocked_element(blueprint, &realized, &blocked_elements)
+        else {
             return Err(last_blocked_diagnostic.unwrap_or_else(|| {
                 "bond-driven constructor reached an unrealized disconnected element".into()
             }));
@@ -2484,6 +2497,48 @@ fn construct_blueprint_bond_driven_internal(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn blocked_reachable_element_is_deferred_until_structure_changes() {
+        use crate::resources::Material;
+        use crate::structural_blueprint::{
+            BlueprintConnection, BlueprintElement, BlueprintPlacement, StructuralBlueprint,
+        };
+
+        let element = || BlueprintElement {
+            material: Material::free_base("Carbon", 1.0),
+            placement: BlueprintPlacement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        };
+        let blueprint = StructuralBlueprint::with_anchor_elements(
+            vec![element(), element(), element(), element()],
+            vec![
+                BlueprintConnection { element_a: 0, element_b: 1 },
+                BlueprintConnection { element_a: 0, element_b: 2 },
+                BlueprintConnection { element_a: 2, element_b: 3 },
+            ],
+            vec![0],
+        );
+        let realized = [true, false, false, false];
+        let mut blocked = [false, true, false, false];
+
+        let (next, neighbors) =
+            next_unblocked_element(&blueprint, &realized, &blocked)
+                .expect("another reachable element should be attempted");
+        assert_eq!(next, 2);
+        assert_eq!(neighbors, vec![0]);
+
+        // A successful structural change invalidates previous placement failures.
+        blocked.fill(false);
+        let (retried, retried_neighbors) =
+            next_unblocked_element(&blueprint, &realized, &blocked)
+                .expect("the formerly blocked element should be retried");
+        assert_eq!(retried, 1);
+        assert_eq!(retried_neighbors, vec![0]);
+    }
 
     #[test]
     fn bond_driven_triangle_commits_all_realized_neighbor_bonds() {
