@@ -123,5 +123,6 @@ PR #200 merged into #194 at `412a2e8b795e9a2b107455eb899a25cba1a6a4ec`. The sulf
 ### Next safe action
 
 1. Keep #186 draft-only; do not merge to `main`. The stack is integrated for continued validation, not release approval.
-2. Keep constructor feature work frozen. The 69-failure constructor suite is unchanged; diagnose that independently after integration settles.
-3. Do not start broad catalogue generation until the README's persisted-fluid-realization and live-transaction gates are satisfied. Track the known 28 full-suite failures and Clippy findings separately rather than treating the integration as green.
+2. The focused worker-cap and persisted-fluid-to-live-transaction gates passed on integration head [#7390](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38477917672). Run the manual workflow `.github/workflows/bob-three-piece-generation.yml` next; it uses an isolated output root and must not write catalogue data into Git.
+3. Audit the resulting formation/family counts, runtime, storage size, frontier completion, and reopen verification. The known unsupported multi-contact topology remains fail-closed; do not claim general topology coverage from the generated artifact.
+4. Keep constructor feature work frozen. The 69-failure constructor suite is unchanged; diagnose it separately. Track the known 28 full-suite failures and Clippy findings separately rather than treating integration as green.
