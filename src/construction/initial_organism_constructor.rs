@@ -1388,6 +1388,40 @@ mod tests {
     use super::*;
 
     #[test]
+    fn pair_pose_selection_preserves_geometric_diversity() {
+        let placements = (0..6)
+            .map(|index| Placement {
+                x: index as f64 * 0.1,
+                y: 0.0,
+                rotation_radians: 0.0,
+            })
+            .chain((0..6).map(|index| Placement {
+                x: 10.0 + index as f64 * 0.1,
+                y: 0.0,
+                rotation_radians: std::f64::consts::PI,
+            }))
+            .collect::<Vec<_>>();
+
+        let selected = select_diverse_placements(placements.clone(), 6);
+        let repeated = select_diverse_placements(placements, 6);
+
+        assert_eq!(selected.len(), 6);
+        assert_eq!(selected, repeated);
+        let min_x = selected
+            .iter()
+            .map(|placement| placement.x)
+            .fold(f64::INFINITY, f64::min);
+        let max_x = selected
+            .iter()
+            .map(|placement| placement.x)
+            .fold(f64::NEG_INFINITY, f64::max);
+        assert!(
+            max_x - min_x > 10.0,
+            "selection should retain candidates from both spatial clusters"
+        );
+    }
+
+    #[test]
     fn production_constructor_builds_a_bob_formed_cavity_with_supplied_energy() {
         let catalog = crate::resources::default_catalog();
         let supplied_energy = crate::genome::initial_genome().reproductive_energy_allocation;
