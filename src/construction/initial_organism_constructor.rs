@@ -615,6 +615,10 @@ fn construct_persisted_bob_structure(
     let mut energy_rejections = 0usize;
     let mut last_combine_rejection = None;
     let mut queue_budget_drops = 0usize;
+    let mut placement_queries_total = 0usize;
+    let mut placement_query_budget_exhaustions = 0usize;
+    let mut anchors_considered_total = 0usize;
+    let mut candidate_states_generated_total = 0usize;
 
     while explored_states < state_budget && !queue.is_empty() {
         let best_index = queue
@@ -657,14 +661,22 @@ fn construct_persisted_bob_structure(
         let mut placement_queries_examined = 0usize;
         let mut candidates_examined = 0usize;
         'anchors: for anchor_index in 0..state.structure.units.len() {
+            anchors_considered_total += 1;
             if state.energy <= 0.0 || placement_queries_examined >= 12 {
+                if placement_queries_examined >= 12 {
+                    placement_query_budget_exhaustions += 1;
+                }
                 break;
             }
             for resource in &structural_resources {
                 if state.energy <= 0.0 || placement_queries_examined >= 12 {
+                    if placement_queries_examined >= 12 {
+                        placement_query_budget_exhaustions += 1;
+                    }
                     break 'anchors;
                 }
                 placement_queries_examined += 1;
+                placement_queries_total += 1;
                 match try_persisted_bob_attachments(
                     &state.structure,
                     anchor_index,
@@ -680,6 +692,7 @@ fn construct_persisted_bob_structure(
                                 break 'anchors;
                             }
                             candidates_examined += 1;
+                            candidate_states_generated_total += 1;
                             debug_assert!(
                                 attachment.new_unit_index < attachment.structure.units.len()
                             );
@@ -769,7 +782,7 @@ fn construct_persisted_bob_structure(
     }
 
     Err(format!(
-        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, energy_rejections={energy_rejections}, last_combine_rejection={last_combine_rejection:?}, rigid_contact_records={contact_records}",
+        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, placement_queries_total={placement_queries_total}, placement_query_budget_exhaustions={placement_query_budget_exhaustions}, anchors_considered_total={anchors_considered_total}, candidate_states_generated_total={candidate_states_generated_total}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, energy_rejections={energy_rejections}, last_combine_rejection={last_combine_rejection:?}, rigid_contact_records={contact_records}",
         queue.len()
     ))
 }
