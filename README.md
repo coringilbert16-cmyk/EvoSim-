@@ -13,7 +13,6 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 - `src/infrastructure/library_sync.rs`: checkpoint publication infrastructure, not part of the physical model.
 - `src/` currently contains contract/unit tests that exercise private crate internals. Do not move them into external integration-test targets without an explicit API-boundary plan.
 - Hydrogen is a finite-area rigid rectangle (1.0 × 0.1 units) with two primary end contact points. It is not a zero-thickness line.
-
 - Bob's 0.5-unit positional equivalence is a **catalogue deduplication** tolerance only. It does not replace the live geometry/contact tolerance or permit penetration.
 - **Hard catalogue size rule (updated 2026-10-12):** Bob may persist singleton, two-piece, and three-piece rigid formations (maximum `constituents.len() == 3`). The worker must reject configured limits above 3 and never expand beyond three pieces. Multi-contact fluid geometry may contact multiple surfaces of a parent formation; contact count is not constituent count.
 - Generated geometry stays outside Git. The last measured two-piece baseline was about 48.3 MB uncompressed; three-piece size is unknown and may grow substantially. Measure counts, runtime, and storage before treating a three-piece catalogue as complete.
@@ -37,6 +36,7 @@ All non-geometric sulfur properties remain unchanged in this experiment: mass 1.
 Construction-material similarity treats `Form::RegularPolygon` and `Form::Polygon` as one broad polygon family. This prevents the implementation representation change from introducing an artificial family-score penalty; exact geometry still governs actual contact and placement. Bob's catalogue signature includes serialized resource shapes, so the sulfur change invalidates a catalogue built for the previous shape. Regenerate and reopen Bob in an isolated output directory before using the new catalogue. Do not commit generated catalogue data. The small chemistry interface cache remains chemistry-derived; verify unchanged chemistry behavior rather than deleting or regenerating it solely because the outline changed.
 
 The sulfur change is not accepted on catalogue counts alone. The experiment workflow must compare baseline and variant under the same two-piece generation limit, run formatting and Rust tests, and identify any additional failing test names relative to the known base-branch backlog. More stored records are a coverage signal, not proof of more useful or valid construction options.
+
 ### Operational gates
 
 1. Keep the geometry catalogue empty in the tracked tree. Never run the continuous worker or use the default catalogue directory for tests.
