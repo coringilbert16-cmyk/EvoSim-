@@ -183,13 +183,26 @@ jobs:
                               if "Sulfur" in json.dumps(record, ensure_ascii=False):
                                   sulfur_records += 1
                               if filename == "formations.jsonl":
-                                  resources = [
-                                      item.get("resource")
-                                      for item in record.get("constituents", [])
-                                      if isinstance(item, dict)
-                                  ]
+                                  # Formation JSON schema has varied across stored-record
+                                  # versions. Collect material names recursively instead of
+                                  # assuming a top-level "constituents" field.
+                                  material_names = {
+                                      "Water", "Nitrogen", "Phosphorus", "Carbon",
+                                      "Sulfur", "Hydrogen", "Methane",
+                                  }
+                                  resources = set()
+                                  def collect_materials(value):
+                                      if isinstance(value, dict):
+                                          for nested in value.values():
+                                              collect_materials(nested)
+                                      elif isinstance(value, list):
+                                          for nested in value:
+                                              collect_materials(nested)
+                                      elif isinstance(value, str) and value in material_names:
+                                          resources.add(value)
+                                  collect_materials(record)
                                   if "Sulfur" in resources:
-                                      for partner in sorted(set(resources) - {"Sulfur"}):
+                                      for partner in sorted(resources - {"Sulfur"}):
                                           sulfur_partner_counts[partner] += 1
                           except json.JSONDecodeError:
                               if "Sulfur" in line:
