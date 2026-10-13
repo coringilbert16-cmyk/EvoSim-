@@ -1634,8 +1634,7 @@ mod tests {
             "free-form construction must not debit the organism's real energy"
         );
         assert_eq!(
-            attached.ledger.total_heat_dissipated,
-            0.0,
+            attached.ledger.total_heat_dissipated, 0.0,
             "free-form construction must not settle a real COMBINE energy transaction"
         );
         assert!(attached.ledger.total_heat_dissipated.is_finite());
