@@ -49,10 +49,6 @@ enum PersistedAttachmentFailure {
 /// The returned structure and energy are committed together only after the
 /// ordinary live COMBINE transaction succeeds. No intended lattice pose,
 /// snapping, or analytic fallback is available in this path.
-#[expect(
-    dead_code,
-    reason = "Consumed by the pending formation-driven startup coordinator"
-)]
 fn try_persisted_bob_attachments(
     structure: &crate::structure::OrganismStructure,
     anchor_index: usize,
@@ -545,6 +541,9 @@ fn construct_persisted_bob_structure(
                 ) {
                     Ok(attachments) => {
                         for attachment in attachments {
+                            debug_assert!(
+                                attachment.new_unit_index < attachment.structure.units.len()
+                            );
                             let mut next = ConstructionSearchState {
                                 structure: attachment.structure,
                                 ledger: attachment.ledger,
@@ -569,8 +568,22 @@ fn construct_persisted_bob_structure(
                     Err(PersistedAttachmentFailure::CoverageMiss) => {
                         coverage_misses += 1;
                     }
-                    Err(PersistedAttachmentFailure::CandidatesRejected { suggestions, .. }) => {
+                    Err(PersistedAttachmentFailure::CandidatesRejected {
+                        suggestions,
+                        restoration_failures,
+                        overlap_rejections,
+                        no_bond_contact,
+                        evaluation_rejections,
+                        combine_rejections,
+                    }) => {
                         rejected_placements += suggestions;
+                        let _rejections_by_cause = (
+                            restoration_failures,
+                            overlap_rejections,
+                            no_bond_contact,
+                            evaluation_rejections,
+                            combine_rejections,
+                        );
                     }
                 }
             }
