@@ -10,14 +10,16 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 
 PR [#200](https://github.com/coringilbert16-cmyk/EvoSim-/pull/200) is merged into the fluid-coalescence branch at `412a2e8b795e9a2b107455eb899a25cba1a6a4ec`. The merge has now been carried into the downstream stack through two explicit merge commits:
 
-- #195: [`22b7da1c`](https://github.com/coringilbert16-cmyk/EvoSim-/commit/22b7da1cbc740c65e43937ea62f43d792b473db2), with its prior transactional-chemistry head as first parent and #194's sulfur merge as second parent.
-- #196: [`b0d51d89`](https://github.com/coringilbert16-cmyk/EvoSim-/commit/b0d51d899fd027ce609fc38d71d248968fcc9872), with the prior constructor head as first parent and reconciled #195 as second parent. The constructor changes remain intact; overlapping resource/Bob/README changes were merged selectively rather than overwritten wholesale.
+- #194 head: [`af223a90`](https://github.com/coringilbert16-cmyk/EvoSim-/commit/af223a901404b61bc4ad6de1eeebead4db0fd8fa), which corrects the experiment workflow trigger and pins its pre-sulfur baseline.
+- #195: [`3418cc0c`](https://github.com/coringilbert16-cmyk/EvoSim-/commit/3418cc0c251162d4cd9e508ed9aecf8a81a13ba0), with its prior transactional-chemistry head as first parent and updated #194 as second parent.
+- #196: [`d4f81741`](https://github.com/coringilbert16-cmyk/EvoSim-/commit/d4f817414fa7b2c8b8cd2dddc50994e05720f966), with the prior constructor head as first parent and reconciled #195 as second parent. The constructor changes remain intact; overlapping resource/Bob/README changes were merged selectively rather than overwritten wholesale.
 
 **Verification status:**
 
 - Reconciled #195 full Rust suite: **405 passed, 28 failed, 1 ignored**. Its 28 failing test names match the previous #195 run exactly; no new named failures. Focused Bob/fluid/chemistry gates passed. Strict Clippy still fails.
-- Reconciled #195's isolated two-piece Bob catalogue comparison is still running; do not claim updated catalogue parity yet.
-- Reconciled #196 exact-head run [#7377](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38476203144): **367 passed, 69 failed, 1 ignored**. A direct comparison shows exactly the same 69 failing test names as its pre-merge run, with no new named failures. Sulfur geometry, Bob-signature, and chemistry-cache regressions pass; strict Clippy still fails.
+- Valid pre-merge sulfur experiment [run #30](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38474765699) used baseline `b3bc66eb`: 264 baseline formations / 46,112,052 bytes versus 281 parallelogram formations / 47,271,092 bytes; all 15 multi-contact fluid formations were retained and both catalogues reopened with no oversized formations or unfinished frontiers. This is a coverage signal, not proof of constructor recovery.
+- Follow-up [run #31](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38475883030) was not a valid new comparison: its baseline checkout was `412a2e8b`, already containing sulfur, so both sides produced 281 formations and 47,271,092 bytes. The workflow is corrected to pin the pre-sulfur baseline and run only for the dedicated sulfur experiment branch; it is skipped on #195.
+- The last completed #195 full suite remains **405 passed, 28 failed, 1 ignored**, with the same 28 failing names as its previous run. The last completed #196 suite remains **367 passed, 69 failed, 1 ignored**, with exactly the same 69 failing names as its pre-merge run. Both have focused sulfur tests passing; strict Clippy remains red. New exact-head Rust checks are running on the workflow-correction commits.
 - #186 remains draft-only and does not yet contain the sulfur merge. Do not promote to `main`, start broad catalogue generation, or weaken physical invariants while the new exact-head checks run.
 
 The dated audit sections below are retained as historical evidence where they predate this reconciliation. This current section supersedes their earlier statement that #200 was excluded and their earlier description of #195/#196 as un-reconciled.
