@@ -1858,3 +1858,14 @@ The soft-cushion whole-blueprint probe has been retired. It optimized the coordi
 Historical entries above that describe the probe or fixed seed topology are retained as chronology, not as active constructor requirements or current CI gates. Do not remove other failing tests simply to lower the failure count: first classify whether each test protects a still-required physical/biological contract or only an obsolete implementation detail.
 
 **Next gate:** run CI on this cleanup commit and inspect the production-constructor failure and the full-suite regression increase before making further test deletions or constructor changes.
+
+
+### Sprint 1 exact-head CI result after obsolete-test cleanup — 2026-10-13
+
+Workflow run [#7294](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38409735027), exact commit `aa9cac4969e2d7029b4a86a71e4dd0820421c55d`, completed. Formatting, source-size guard, COMBINE architecture guard, all focused Bob persistence/concurrency/fluid checks, focused fluid restoration/coalescence checks, focused chemical BREAK checks, and singleton geometry generation passed.
+
+The full suite reported **361 passed, 69 failed, 1 ignored** after removing three obsolete tests. The production-constructor test fails because the persisted-Bob search exhausts **64/64 states** without a qualifying cavity: `coverage_misses=0`, `rejected_placements=7920`, `overlap_rejections=7876`, `energy_rejections=314`, `queue_budget_drops=16`. The last recorded COMBINE rejection required **1.529983** energy with only **0.355218** available. Restoration, no-bond-contact, candidate-evaluation, and COMBINE rejection counters were zero at the aggregate diagnostic level, apart from the recorded energy insufficiency. This points to a bounded-search/placement-diversity and energy-budget problem, not missing Bob records. Many full-suite failures are cascading: `Simulation::new` panics when its initial organism cannot be constructed, so tests of unrelated runtime behavior fail before reaching their own assertions. Do not treat all 69 as independent regressions.
+
+Clippy remains red under `-D warnings`: **65 application-target errors and 37 test-target errors**. The cleanup removed the obsolete experiment and fixed-seed topology tests; it did not make the constructor viable or resolve the pre-existing lint backlog.
+
+**Sprint 1 conclusion:** the exact-head workflow is reconciled and the obsolete experiment gates are removed. Next work should isolate the constructor failure: determine how search scoring, the 64-state cap, candidate truncation, and real available energy interact. Do not increase the budget blindly, reintroduce synthetic energy, weaken overlap checks, or delete remaining physical-contract tests to lower the failure count.
