@@ -1113,6 +1113,43 @@ mod tests {
     use super::*;
 
     #[test]
+    fn production_constructor_builds_a_bob_formed_cavity_with_supplied_energy() {
+        let catalog = crate::resources::default_catalog();
+        let supplied_energy = crate::genome::initial_genome().reproductive_energy_allocation;
+        let construction = construct_valid_with_energy(&catalog, supplied_energy)
+            .expect("persisted-Bob constructor should realize the initial organism");
+
+        let cavity = crate::cavity::analyze_genome_cavity(&construction.structure, &catalog)
+            .expect("cavity analysis should succeed")
+            .expect("constructed organism must contain a genome cavity");
+        assert!(cavity.qualifies());
+        assert!(!construction.structure.bonds.is_empty());
+        assert!(construction.energy.is_finite());
+        assert!(construction.energy >= 0.0);
+        assert!(
+            construction.energy <= supplied_energy,
+            "construction must not create or refund energy"
+        );
+
+        let acquired_names = construction
+            .acquired_resource_placements
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert!(acquired_names.contains("Water"));
+        assert!(
+            acquired_names.iter().filter(|name| **name != "Water").count() >= 3,
+            "the initial organism must acquire at least three non-water resource types"
+        );
+        assert!(
+            construction
+                .acquired_resource_placements
+                .iter()
+                .any(|(name, _)| name == "Water")
+        );
+    }
+
+    #[test]
     fn persisted_bob_attachment_reports_missing_coverage_without_fallback() {
         let catalog = crate::resources::default_catalog();
         let carbon = catalog
