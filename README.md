@@ -17,7 +17,7 @@ PR [#200](https://github.com/coringilbert16-cmyk/EvoSim-/pull/200) is merged int
 
 - Reconciled #195 full Rust suite: **405 passed, 28 failed, 1 ignored**. Its 28 failing test names match the previous #195 run exactly; no new named failures. Focused Bob/fluid/chemistry gates passed. Strict Clippy still fails.
 - Reconciled #195's isolated two-piece Bob catalogue comparison is still running; do not claim updated catalogue parity yet.
-- Reconciled #196 exact-head Rust run is in progress. Its pre-merge baseline was **364 passed, 69 failed, 1 ignored**; assess the new run against that failure set before drawing conclusions.
+- Reconciled #196 exact-head run [#7377](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38476203144): **367 passed, 69 failed, 1 ignored**. A direct comparison shows exactly the same 69 failing test names as its pre-merge run, with no new named failures. Sulfur geometry, Bob-signature, and chemistry-cache regressions pass; strict Clippy still fails.
 - #186 remains draft-only and does not yet contain the sulfur merge. Do not promote to `main`, start broad catalogue generation, or weaken physical invariants while the new exact-head checks run.
 
 The dated audit sections below are retained as historical evidence where they predate this reconciliation. This current section supersedes their earlier statement that #200 was excluded and their earlier description of #195/#196 as un-reconciled.
