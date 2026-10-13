@@ -58,10 +58,7 @@ fn select_diverse_placements(placements: Vec<Placement>, limit: usize) -> Vec<Pl
         return if limit == 0 { Vec::new() } else { placements };
     }
 
-    let min_x = placements
-        .iter()
-        .map(|p| p.x)
-        .fold(f64::INFINITY, f64::min);
+    let min_x = placements.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
     let max_x = placements
         .iter()
         .map(|p| p.x)
