@@ -964,7 +964,6 @@ mod tests {
             &mut parent.usable_energy,
             &mut simulation.rng,
             &body,
-            None,
         )
         .0;
 
