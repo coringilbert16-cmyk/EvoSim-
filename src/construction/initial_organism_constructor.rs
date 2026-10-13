@@ -169,7 +169,8 @@ fn try_persisted_bob_attachments(
     // remaining slots from persisted edge families. Both sources are Bob data;
     // neither source bypasses the live physical transaction.
     candidate_placements.truncate(6);
-    let pair_placements_dropped_by_cap = raw_pair_placements.saturating_sub(candidate_placements.len());
+    let pair_placements_dropped_by_cap =
+        raw_pair_placements.saturating_sub(candidate_placements.len());
     let mut seen_placements = candidate_placements
         .iter()
         .copied()
