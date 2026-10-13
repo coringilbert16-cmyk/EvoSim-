@@ -920,7 +920,7 @@ mod shape_tests {
             "sulfur's parallelogram must remain distinct from phosphorus's trapezoid"
         );
 
-        // Shape-only experiment: all non-geometric sulfur properties stay fixed.
+        // Shape-only replacement: all non-geometric sulfur properties stay fixed.
         let sulfur_resource = find("Sulfur");
         assert!((sulfur_resource.properties.mass - 1.50).abs() < 1e-12);
         assert!((sulfur_resource.properties.potential_energy - 8.0).abs() < 1e-12);
