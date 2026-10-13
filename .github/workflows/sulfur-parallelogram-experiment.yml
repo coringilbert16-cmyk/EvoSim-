@@ -26,7 +26,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           # Pin the known pre-sulfur baseline; the PR base advances after merge.
-          ref: b3bc66eb17c3ae4b107455eb899a25cba1a6a4ec
+          ref: b3bc66eb17c3ae4b51c1a49bf1febbcdae7ad46d
           path: baseline
 
       - name: Check out sulfur-parallelogram variant
