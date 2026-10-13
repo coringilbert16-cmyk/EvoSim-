@@ -195,6 +195,21 @@ pub(crate) fn form_selected_bond(
     .ok()
 }
 
+/// Free-form assembly has unlimited construction energy. Keep physical formation
+/// checks but do not debit the organism's real energy ledger.
+pub(crate) fn form_selected_bond_for_freeform_construction(
+    structure: &mut crate::structure::OrganismStructure, unit_a: usize, unit_b: usize,
+    candidate: crate::contact::ConnectionPairCandidate, investment: f64, catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache, ledger: &mut EnergyLedger, energy: &mut f64,
+) -> Result<CombineAttempt, &'static str> {
+    if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b { return Err("invalid unit indices"); }
+    if candidate.distance > COMBINE_CONTACT_TOLERANCE || !candidate.available_a || !candidate.available_b { return Err("candidate contact is outside tolerance or an endpoint is unavailable"); }
+    let a = candidate.endpoint_a.world_point(&structure.units[unit_a], catalog).ok_or("candidate endpoint A has no world point")?;
+    let b = candidate.endpoint_b.world_point(&structure.units[unit_b], catalog).ok_or("candidate endpoint B has no world point")?;
+    if (a.x-b.x).hypot(a.y-b.y) > COMBINE_CONTACT_TOLERANCE { return Err("candidate endpoint world points exceed contact tolerance"); }
+    form_bond_from_candidate_diagnostic(structure, BondFormationRequest { unit_a, unit_b, endpoint_a: candidate.endpoint_a, endpoint_b: candidate.endpoint_b, investment }, candidate, catalog, cache, ledger, energy, false)
+}
+
 /// Same transaction authority as the optional-return wrapper, but preserves the
 /// first rejection reason for constructor diagnostics. Failure semantics remain
 /// atomic: no structure mutation is committed on rejection.
@@ -243,6 +258,7 @@ pub(crate) fn form_selected_bond_diagnostic(
         cache,
         ledger,
         energy,
+        true,
     )
 }
 
@@ -299,7 +315,7 @@ fn form_bond_from_candidate(
     energy: &mut f64,
 ) -> Option<CombineAttempt> {
     form_bond_from_candidate_diagnostic(
-        structure, request, candidate, catalog, cache, ledger, energy,
+        structure, request, candidate, catalog, cache, ledger, energy, true,
     )
     .ok()
 }
@@ -312,6 +328,7 @@ fn form_bond_from_candidate_diagnostic(
     _cache: &mut ConnectionCompatibilityCache,
     ledger: &mut EnergyLedger,
     energy: &mut f64,
+    settle_energy: bool,
 ) -> Result<CombineAttempt, &'static str> {
     let BondFormationRequest {
         unit_a: ua,
@@ -372,11 +389,13 @@ fn form_bond_from_candidate_diagnostic(
                 resource.physical_state == crate::resources::PhysicalState::Fluid
             })
     });
-    let transaction = combine_energy_transaction(investment, bond_energy, work, fluid_pair)
-        .ok_or("COMBINE energy transaction could not be constructed")?;
-    if !ledger.settle_transaction(energy, transaction) {
-        *energy = before;
-        return Err("energy ledger rejected COMBINE expenditure");
+    if settle_energy {
+        let transaction = combine_energy_transaction(investment, bond_energy, work, fluid_pair)
+            .ok_or("COMBINE energy transaction could not be constructed")?;
+        if !ledger.settle_transaction(energy, transaction) {
+            *energy = before;
+            return Err("energy ledger rejected COMBINE expenditure");
+        }
     }
     let net = *energy - before;
     *structure = trial_structure;
@@ -386,7 +405,7 @@ fn form_bond_from_candidate_diagnostic(
         endpoint_a,
         endpoint_b,
         work_cost: work,
-        energy_invested: investment + bond_energy,
+        energy_invested: if settle_energy { investment + bond_energy } else { 0.0 },
         formation_threshold: threshold,
         net_energy_change: net,
         bond_strength: strength,

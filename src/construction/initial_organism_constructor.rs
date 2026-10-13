@@ -472,18 +472,12 @@ fn try_persisted_bob_attachments(
                 evaluation_rejections += 1;
                 continue;
             };
-            if required_energy > available_energy + 1e-9 {
-                energy_rejections += 1;
-                last_combine_rejection = Some(format!(
-                    "required energy {required_energy:.6} exceeds available {available_energy:.6}"
-                ));
-                continue;
-            }
+            let _ = required_energy;
             let mut committed_structure = trial.clone();
             let mut committed_ledger = *ledger;
             let mut committed_energy = available_energy;
             let mut transaction_cache = crate::contact::ConnectionCompatibilityCache::new();
-            if let Err(reason) = crate::combine_runtime::form_selected_bond_diagnostic(
+            if let Err(reason) = crate::combine_runtime::form_selected_bond_for_freeform_construction(
                 &mut committed_structure,
                 anchor_index,
                 new_unit_index,
@@ -644,7 +638,7 @@ fn bond_units(
 
         // Recompute candidates on the next iteration after this transaction
         // changes endpoint availability.
-        crate::combine_runtime::form_selected_bond_diagnostic(
+        crate::combine_runtime::form_selected_bond_for_freeform_construction(
             structure, unit_a, unit_b, candidate, investment, catalog, &mut cache, ledger, energy,
         )
         .map_err(|reason| {
@@ -761,13 +755,10 @@ fn close_touching_bonds(
     }
 }
 
-fn construction_state_score(state: &ConstructionSearchState) -> (usize, usize, u64, usize) {
+fn construction_state_score(state: &ConstructionSearchState) -> (usize, usize, usize) {
     let units = state.structure.units.len();
     let bonds = state.structure.bonds.len();
-    let cycle_rank = bonds.saturating_add(1).saturating_sub(units);
-    // Prefer actual closed connectivity, then enough constituents to form a
-    // cavity, then the most remaining real energy among equally sized states.
-    (cycle_rank, units, state.energy.to_bits(), bonds)
+    (bonds.saturating_add(1).saturating_sub(units), units, bonds)
 }
 
 /// Search local arrangements from persisted Bob edge families. Every added
@@ -800,7 +791,7 @@ fn construct_persisted_bob_structure(
         + library.rigid_vertex_contact_families().count();
     let state_budget = contact_records.saturating_mul(2).clamp(16, 64);
     let mut queue = Vec::new();
-    let mut visited = std::collections::BTreeMap::<String, f64>::new();
+    let mut visited = std::collections::BTreeSet::<String>::new();
     for resource in &structural_resources {
         let mut structure = crate::structure::OrganismStructure::new();
         add_unit(&mut structure, resource, (0.0, 0.0), catalog)?;
@@ -810,9 +801,7 @@ fn construct_persisted_bob_structure(
             energy: initial_energy,
         };
         let signature = construction_state_signature(&state.structure);
-        if visited.insert(signature, state.energy).is_none() {
-            queue.push(state);
-        }
+        if visited.insert(signature) { queue.push(state); }
     }
 
     let mut explored_states = 0usize;
@@ -849,12 +838,6 @@ fn construct_persisted_bob_structure(
             .expect("non-empty construction queue has a best state");
         let state = queue.swap_remove(best_index);
         let signature = construction_state_signature(&state.structure);
-        if visited
-            .get(&signature)
-            .is_some_and(|best_energy| state.energy + 1e-9 < *best_energy)
-        {
-            continue;
-        }
         explored_states += 1;
 
         let cavity = crate::cavity::analyze_genome_cavity(&state.structure, catalog)
@@ -882,7 +865,7 @@ fn construct_persisted_bob_structure(
         let mut candidates_examined = 0usize;
         'anchors: for anchor_index in 0..state.structure.units.len() {
             anchors_considered_total += 1;
-            if state.energy <= 0.0 || placement_queries_examined >= 12 {
+            if placement_queries_examined >= 12 {
                 if placement_queries_examined >= 12 {
                     placement_query_budget_exhaustions += 1;
                 }
@@ -930,13 +913,7 @@ fn construct_persisted_bob_structure(
                                 &mut next.energy,
                             );
                             let signature = construction_state_signature(&next.structure);
-                            if visited
-                                .get(&signature)
-                                .is_some_and(|best_energy| *best_energy >= next.energy - 1e-9)
-                            {
-                                continue;
-                            }
-                            visited.insert(signature, next.energy);
+                            if !visited.insert(signature) { continue; }
 
                             let cavity =
                                 crate::cavity::analyze_genome_cavity(&next.structure, catalog)
@@ -1537,10 +1514,7 @@ mod tests {
         assert!(!construction.structure.bonds.is_empty());
         assert!(construction.energy.is_finite());
         assert!(construction.energy >= 0.0);
-        assert!(
-            construction.energy <= supplied_energy,
-            "construction must not create or refund energy"
-        );
+        assert_eq!(construction.energy, supplied_energy, "free-form construction must not debit real starting energy");
 
         let acquired_names = construction
             .acquired_resource_placements

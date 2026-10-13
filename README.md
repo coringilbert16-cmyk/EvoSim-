@@ -1890,3 +1890,12 @@ The selector changed search behavior but did not find a qualifying cavity within
 
 
 **Selector test verification — exact-head workflow [#7305](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38418697472), commit `7df4e2e9a3ebb8db8034eacbb947177381d0fb91`:** the new deterministic spatial-cluster/diversity test passed. Formatting, source-size, COMBINE architecture, and all focused Bob/fluid/chemistry gates passed. Full suite: **362 passed, 69 failed, 1 ignored** (one additional passing test is the new selector test). The production constructor still fails with the same 64-state exhaustion and overlap-dominated pattern; strict Clippy remains red with the repository's existing lint backlog. The selector change is verified as a deterministic bounded-selection improvement, but not as a constructor-viability fix.
+
+
+## Constructor resource modes — governing contract (2026-10-13)
+
+**Free-form construction:** unlimited construction-time energy and unlimited supply of every resource type. Resource shortages must never block structural exploration. Persisted Bob poses remain proposals; live restoration, nonpenetration, contact, bond-formation criteria, and genome-cavity qualification remain mandatory. Free-form bonds use the shared physical/formation authority but do not debit the resulting organism's real energy balance or ledger. Ranking and duplicate-state pruning are structural, never energy-based. Unlimited construction supply does not create infinite stored inventory or organism energy.
+
+**Blueprint-bound construction:** only physically acquired/transferred materials and actual available energy. If a valid next step lacks material or energy, wait, raise the relevant need, preserve the unfinished structure, and resume when the resource arrives. A shortage is temporary, not proof of structural impossibility. Ordinary simulation COMBINE remains energy-gated and ledger-settled; only free-form assembly skips energy settlement.
+
+Regression expectations: free-form assembly must not stop for zero energy and must return its unchanged real energy balance; blueprint-bound material/energy shortages wait and resume; neither mode bypasses live physical validation or fabricates stored inventory/energy.
