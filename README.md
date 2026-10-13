@@ -1748,6 +1748,14 @@ The bond-driven placement diagnostics now collect rigid anchor/candidate materia
 Fluid-query coverage misses are not yet fully distinguished from fluid records that exist but fail live realization; that remains an explicit follow-up rather than an assumed equivalence.
 
 
+### Constructor stripping sprint 5 — remove seed scaling from developmental realization (2026-10-13)
+
+The developmental-field scale no longer depends on the fixed juvenile calibration structure. `DevelopmentalFieldBlueprint::preferred_developmental_length` now maps positive preferred mass to characteristic 2-D length with `sqrt(preferred_mass)`, following the area/mass scaling relationship in two dimensions. The public realization path and organism cache use that same mapping, and budding eligibility no longer requires the seed-scale reference just to calculate developmental realization. Added a focused unit test for the square-root relationship and invalid mass values.
+
+**Scope boundary:** the legacy seed reference still exists for other reproduction/construction call sites. This sprint does not claim `juvenile.rs` can be deleted yet. It also does not replace the initial scaffold, alter the physical bond authority, or claim that this first-pass scale mapping solves constructor viability. The current mapping is intentionally dimensionally grounded but still needs calibration against current resource geometry and realized organisms before it should be treated as biologically calibrated.
+
+**Verification:** source edits are committed on the active branch. GitHub Actions Rust workflow was observed running at run #7223 for an earlier code commit while this sprint was underway; the latest changes need their own completed CI result before any pass/fail claim.
+
 ### Constructor stripping sprint 4 — juvenile/seed dependency audit (2026-10-13)
 
 The source-level audit corrects the earlier inventory row: `src/organism/juvenile.rs` is present and is imported by `src/main.rs`. Its dependencies are active, not merely historical:
