@@ -93,7 +93,7 @@ mod tests {
 
     fn boundary_gap(a: &Form, pa: Placement, b: &Form, pb: Placement) -> f64 {
         if let (Form::Circle { radius: ar }, Form::Circle { radius: br }) = (a, b) {
-            return ((pa.x - pb.x).hypot(pa.y - pb.y) - ar - br).max(0.0);
+            return ((pa.x - pb.x).hypot(pa.y - pb.y) - *ar - *br).max(0.0);
         }
         if let (Form::Circle { radius }, Some(vertices)) = (a, world_vertices(b, pb)) {
             if point_in_polygon((pa.x, pa.y), &vertices) {
@@ -107,7 +107,7 @@ mod tests {
                     vertices[(i + 1) % vertices.len()],
                 ));
             }
-            return (distance - radius).max(0.0);
+            return (distance - *radius).max(0.0);
         }
         if let (Some(vertices), Form::Circle { radius }) = (world_vertices(a, pa), b) {
             if point_in_polygon((pb.x, pb.y), &vertices) {
