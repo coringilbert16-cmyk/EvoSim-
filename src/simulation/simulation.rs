@@ -54,8 +54,11 @@ impl Simulation {
     pub(crate) fn create_initial_organism() -> Organism {
         let genome = initial_genome();
         let catalog = crate::resources::default_catalog();
-        let construction = crate::initial_organism_constructor::construct_valid(&catalog)
-            .expect("initial organism constructor must find a valid organism");
+        let construction = crate::initial_organism_constructor::construct_valid_with_energy(
+            &catalog,
+            genome.reproductive_energy_allocation,
+        )
+        .expect("initial organism constructor must find a valid organism");
         let mut structure = construction.structure;
         let acquired_resource_shapes = construction.acquired_resource_shapes;
         let fluid_geometry_status = construction.fluid_geometry_status;
@@ -101,8 +104,9 @@ impl Simulation {
             ));
         }
 
-        let construction_cost = (1.0e12 - construction.energy).max(0.0);
-        let initial_energy = construction_cost + genome.reproductive_energy_allocation;
+        // Construction spent only the genome's supplied starting allocation.
+        // Do not refund its costs or synthesize energy to compensate for geometry.
+        let initial_energy = construction.energy;
 
         Organism {
             id: "1".into(),
