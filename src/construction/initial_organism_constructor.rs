@@ -1530,6 +1530,93 @@ mod tests {
         );
     }
 
+
+    #[test]
+    fn rejected_hydrogen_phosphorus_pose_is_valid_as_a_pair_but_hits_existing_methane() {
+        let catalog = crate::resources::default_catalog();
+        let resource = |name: &str| {
+            catalog
+                .iter()
+                .find(|resource| resource.name == name)
+                .unwrap_or_else(|| panic!("{name} exists in catalog"))
+        };
+        let hydrogen = resource("Hydrogen");
+        let phosphorus = resource("Phosphorus");
+        let methane = resource("Methane");
+        let anchor_pose = Placement {
+            x: 1.25,
+            y: -0.2665,
+            rotation_radians: 0.0,
+        };
+        let phosphorus_pose = Placement {
+            x: 2.5,
+            y: -0.433013,
+            rotation_radians: -std::f64::consts::PI,
+        };
+        let methane_pose = Placement {
+            x: 2.0387,
+            y: -0.7165,
+            rotation_radians: -2.0944,
+        };
+
+        let mut isolated_pair = crate::structure::OrganismStructure::new();
+        let anchor_index = add_unit(
+            &mut isolated_pair,
+            hydrogen,
+            (anchor_pose.x, anchor_pose.y),
+            &catalog,
+        )
+        .expect("Hydrogen anchor should realize");
+        isolated_pair.units[anchor_index].placement = anchor_pose;
+        let phosphorus_index = add_unit(
+            &mut isolated_pair,
+            phosphorus,
+            (phosphorus_pose.x, phosphorus_pose.y),
+            &catalog,
+        )
+        .expect("Phosphorus candidate should realize");
+        isolated_pair.units[phosphorus_index].placement = phosphorus_pose;
+        let pair_overlaps = crate::construction_runtime::overlapping_unit_indices(
+            &isolated_pair,
+            &isolated_pair.units[phosphorus_index],
+            &[phosphorus_index],
+            &catalog,
+        );
+        assert!(
+            pair_overlaps.is_empty(),
+            "the reported Hydrogen-Phosphorus pair should be non-penetrating in isolation; overlaps={pair_overlaps:?}"
+        );
+
+        let mut methane_collision = crate::structure::OrganismStructure::new();
+        let methane_index = add_unit(
+            &mut methane_collision,
+            methane,
+            (methane_pose.x, methane_pose.y),
+            &catalog,
+        )
+        .expect("Methane neighbor should realize");
+        methane_collision.units[methane_index].placement = methane_pose;
+        let phosphorus_index = add_unit(
+            &mut methane_collision,
+            phosphorus,
+            (phosphorus_pose.x, phosphorus_pose.y),
+            &catalog,
+        )
+        .expect("Phosphorus candidate should realize");
+        methane_collision.units[phosphorus_index].placement = phosphorus_pose;
+        let methane_overlaps = crate::construction_runtime::overlapping_unit_indices(
+            &methane_collision,
+            &methane_collision.units[phosphorus_index],
+            &[phosphorus_index],
+            &catalog,
+        );
+        assert_eq!(
+            methane_overlaps,
+            vec![methane_index],
+            "the same Phosphorus pose should collide with the reported existing Methane"
+        );
+    }
+
     #[test]
     fn persisted_pair_replay_preserves_relative_pose_at_a_rotated_live_anchor() {
         let catalog = crate::resources::default_catalog();
