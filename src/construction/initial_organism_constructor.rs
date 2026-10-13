@@ -240,6 +240,8 @@ fn try_persisted_bob_attachments(
             last_overlap_rejection: None,
             restoration_failures: 0,
             overlap_rejections: 0,
+            pair_overlap_rejections: 0,
+            edge_overlap_rejections: 0,
             no_bond_contact: 0,
             evaluation_rejections: 0,
             combine_rejections: 0,
