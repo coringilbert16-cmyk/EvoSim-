@@ -436,15 +436,14 @@ fn close_touching_bonds(
             (new_unit_index, other_index)
         };
         let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-        let touches = crate::contact::connection_pair_candidates_cached(
-            structure, a, b, catalog, &mut cache,
-        )
-        .into_iter()
-        .any(|candidate| {
-            candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                && candidate.available_a
-                && candidate.available_b
-        });
+        let touches =
+            crate::contact::connection_pair_candidates_cached(structure, a, b, catalog, &mut cache)
+                .into_iter()
+                .any(|candidate| {
+                    candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        && candidate.available_a
+                        && candidate.available_b
+                });
         if touches {
             let _ = bond_units(structure, a, b, catalog, ledger, energy);
         }
@@ -588,19 +587,20 @@ fn construct_persisted_bob_structure(
                                 continue;
                             }
 
-                            let cavity = crate::cavity::analyze_genome_cavity(
-                                &next.structure,
-                                catalog,
-                            )
-                            .ok()
-                            .flatten();
+                            let cavity =
+                                crate::cavity::analyze_genome_cavity(&next.structure, catalog)
+                                    .ok()
+                                    .flatten();
                             if cavity.as_ref().is_some_and(|cavity| cavity.qualifies()) {
                                 if let Some((
                                     acquired_resource_placements,
                                     acquired_resource_shapes,
                                     fluid_geometry_status,
                                 )) = valid_construction(
-                                    &next.structure, catalog, acquisition_candidates, library,
+                                    &next.structure,
+                                    catalog,
+                                    acquisition_candidates,
+                                    library,
                                 ) {
                                     return Ok(ValidConstruction {
                                         structure: next.structure,
@@ -1138,15 +1138,17 @@ mod tests {
             .collect::<std::collections::BTreeSet<_>>();
         assert!(acquired_names.contains("Water"));
         assert!(
-            acquired_names.iter().filter(|name| **name != "Water").count() >= 3,
+            acquired_names
+                .iter()
+                .filter(|name| **name != "Water")
+                .count()
+                >= 3,
             "the initial organism must acquire at least three non-water resource types"
         );
-        assert!(
-            construction
-                .acquired_resource_placements
-                .iter()
-                .any(|(name, _)| name == "Water")
-        );
+        assert!(construction
+            .acquired_resource_placements
+            .iter()
+            .any(|(name, _)| name == "Water"));
     }
 
     #[test]
