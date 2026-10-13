@@ -208,12 +208,42 @@ pub(crate) fn form_selected_bond_for_freeform_construction(
     ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) -> Result<CombineAttempt, &'static str> {
-    if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b { return Err("invalid unit indices"); }
-    if candidate.distance > COMBINE_CONTACT_TOLERANCE || !candidate.available_a || !candidate.available_b { return Err("candidate contact is outside tolerance or an endpoint is unavailable"); }
-    let a = candidate.endpoint_a.world_point(&structure.units[unit_a], catalog).ok_or("candidate endpoint A has no world point")?;
-    let b = candidate.endpoint_b.world_point(&structure.units[unit_b], catalog).ok_or("candidate endpoint B has no world point")?;
-    if (a.x-b.x).hypot(a.y-b.y) > COMBINE_CONTACT_TOLERANCE { return Err("candidate endpoint world points exceed contact tolerance"); }
-    form_bond_from_candidate_diagnostic(structure, BondFormationRequest { unit_a, unit_b, endpoint_a: candidate.endpoint_a, endpoint_b: candidate.endpoint_b, investment }, candidate, catalog, cache, ledger, energy, false)
+    if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b {
+        return Err("invalid unit indices");
+    }
+    if candidate.distance > COMBINE_CONTACT_TOLERANCE
+        || !candidate.available_a
+        || !candidate.available_b
+    {
+        return Err("candidate contact is outside tolerance or an endpoint is unavailable");
+    }
+    let a = candidate
+        .endpoint_a
+        .world_point(&structure.units[unit_a], catalog)
+        .ok_or("candidate endpoint A has no world point")?;
+    let b = candidate
+        .endpoint_b
+        .world_point(&structure.units[unit_b], catalog)
+        .ok_or("candidate endpoint B has no world point")?;
+    if (a.x - b.x).hypot(a.y - b.y) > COMBINE_CONTACT_TOLERANCE {
+        return Err("candidate endpoint world points exceed contact tolerance");
+    }
+    form_bond_from_candidate_diagnostic(
+        structure,
+        BondFormationRequest {
+            unit_a,
+            unit_b,
+            endpoint_a: candidate.endpoint_a,
+            endpoint_b: candidate.endpoint_b,
+            investment,
+        },
+        candidate,
+        catalog,
+        cache,
+        ledger,
+        energy,
+        false,
+    )
 }
 
 /// Same transaction authority as the optional-return wrapper, but preserves the
