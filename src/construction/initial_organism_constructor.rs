@@ -575,7 +575,6 @@ fn construct_persisted_bob_structure(
                                 structure: attachment.structure,
                                 ledger: attachment.ledger,
                                 energy: attachment.energy,
-                                score: (0, 0, 0),
                             };
                             close_touching_bonds(
                                 &mut next.structure,
