@@ -6,10 +6,21 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 
 ## PR audit and consolidation — 2026-10-13
 
+### Post-sulfur merge reconciliation — 2026-10-13
+
+PR [#200](https://github.com/coringilbert16-cmyk/EvoSim-/pull/200) was merged into the fluid-coalescence branch at `412a2e8b795e9a2b107455eb899a25cba1a6a4ec`. The merge is real and verified, but it has **not** yet been incorporated into the integration branch `integration/unified-source-and-catalogue` (current audited head `2fe1e649278c965572c57a2c7ef64b761a8ffc2e`) or the chemistry-persistence/constructor branch ancestry.
+
+- #194 now points at the sulfur merge commit. Its post-merge Rust run [#7373](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38474817384) reports **403 passed, 28 failed, 1 ignored**; Clippy fails. The known 28-failure baseline remains, so this is no-regression evidence, not green CI.
+- #195 remains on its earlier head `728e455b`, and #196 remains on `095fbc34`. The commit comparison shows #195 and the updated #194 head diverge by the sulfur merge commit; the PRs must be reconciled and reverified before merge decisions. Do not force-update branches or blindly cherry-pick overlapping chemistry/library files.
+- #186 remains draft-only and does not yet contain the sulfur change. Its latest audited head remains `2fe1e649`; do not promote to `main`.
+- Constructor #196 remains frozen pending a controlled baseline/regression isolation. Do not expand constructor features during the Bob/fluid/chemistry reconciliation sprint.
+- Next gate: reconcile the #193 → #194 → #195 lineage without losing transactional chemistry changes, rerun the focused Bob/fluid/chemistry gates on the resulting exact heads, and update this README with those results before considering integration.
+
+This current post-merge status supersedes the older audit text below where it conflicts. The dated sections that follow preserve historical evidence; their former statement that #200 was excluded is no longer current.
 
 ## Exact-head follow-up — 2026-10-13
 
-Current exact-head Rust results for the stacked Bob/fluid/chemistry PRs are **#193: 377 passed / 28 failed / 1 ignored** ([run #7143](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38270282801)); **#194: 400 / 28 / 1** ([run #7144](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38270352595)); and **#195: 402 / 28 / 1** ([run #7148](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38272687270)). Strict Clippy fails on all three. Focused gates passing and a stable count of 28 full-suite failures are not a green build or merge approval.
+Historical exact-head Rust results before the sulfur merge were **#193: 377 passed / 28 failed / 1 ignored** ([run #7143](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38270282801)); **#194: 400 / 28 / 1** ([run #7144](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38270352595)); and **#195: 402 / 28 / 1** ([run #7148](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38272687270)). After #200 merged into #194, the latest #194 run reports **403 passed / 28 failed / 1 ignored** ([run #7373](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38474817384)). Strict Clippy fails. Focused gates passing and a stable count of 28 full-suite failures are not a green build or merge approval.
 
 The #193 source review found its multi-contact transaction spans construction runtime, contact endpoint discovery, structure endpoint mapping, and fluid–fluid candidate eligibility; those parts should not be separated casually. Its juvenile seed-ring/chain calibration and constructor's fail-closed behavior when the persistent Bob library cannot open are separate concerns. Because #196 is stacked downstream and edits overlapping files, no blind revert or file-level split is safe. Keep the stack draft and unchanged until a commit/hunk dependency map and targeted regression plan prove a clean split. No source code changed in this follow-up.
 
@@ -20,7 +31,7 @@ Current PR evidence and the consolidation map are recorded in [docs/pr-audit-con
 - Constructor PR #196 is not healthy: latest run [#7338](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38438644278) reports 364 passed, 69 failed, 1 ignored; Rust tests and Clippy fail. Freeze constructor changes until the earlier 28-failure comparison point is reproduced and the regression boundary is isolated.
 - PR #190 has unique partial viability-contract changes not yet verified in the production constructor. Consolidate them deliberately into #196; do not develop two constructor PRs in parallel.
 - Keep #193 → #194 → #195 stacked. Keep #186 as the sole integration target and draft-only. Keep #179 isolated as a practice-only storage experiment.
-- PR #200 (sulfur parallelogram) was explicitly excluded and was not inspected or changed.
+- PR #200 (sulfur parallelogram) is now merged into #194 at `412a2e8b`; the post-merge stack and integration branch still need ancestry reconciliation and exact-head verification.
 
 ### Source and data ownership
 
