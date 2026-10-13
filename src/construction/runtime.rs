@@ -2346,18 +2346,20 @@ fn construct_blueprint_bond_driven_internal(
                 rejection_counts.bob_coverage_misses,
             );
             blocked_elements[index] = true;
-            last_blocked_diagnostic = Some(if rejection_counts.generated_origins == 0
-                && !rejection_counts.bob_coverage_misses.is_empty()
-            {
-                format!(
-                    "missing Bob library coverage for blueprint element {index}: {:?}",
-                    rejection_counts.bob_coverage_misses
-                )
-            } else {
-                format!(
-                    "no forward bond-driven placement found for blueprint element {index} after {nodes} placement attempts"
-                )
-            });
+            last_blocked_diagnostic = Some(
+                if rejection_counts.generated_origins == 0
+                    && !rejection_counts.bob_coverage_misses.is_empty()
+                {
+                    format!(
+                        "missing Bob library coverage for blueprint element {index}: {:?}",
+                        rejection_counts.bob_coverage_misses
+                    )
+                } else {
+                    format!(
+                        "no forward bond-driven placement found for blueprint element {index} after {nodes} placement attempts"
+                    )
+                },
+            );
         }
     }
 
@@ -2516,26 +2518,33 @@ mod tests {
         let blueprint = StructuralBlueprint::with_anchor_elements(
             vec![element(), element(), element(), element()],
             vec![
-                BlueprintConnection { element_a: 0, element_b: 1 },
-                BlueprintConnection { element_a: 0, element_b: 2 },
-                BlueprintConnection { element_a: 2, element_b: 3 },
+                BlueprintConnection {
+                    element_a: 0,
+                    element_b: 1,
+                },
+                BlueprintConnection {
+                    element_a: 0,
+                    element_b: 2,
+                },
+                BlueprintConnection {
+                    element_a: 2,
+                    element_b: 3,
+                },
             ],
             vec![0],
         );
         let realized = [true, false, false, false];
         let mut blocked = [false, true, false, false];
 
-        let (next, neighbors) =
-            next_unblocked_element(&blueprint, &realized, &blocked)
-                .expect("another reachable element should be attempted");
+        let (next, neighbors) = next_unblocked_element(&blueprint, &realized, &blocked)
+            .expect("another reachable element should be attempted");
         assert_eq!(next, 2);
         assert_eq!(neighbors, vec![0]);
 
         // A successful structural change invalidates previous placement failures.
         blocked.fill(false);
-        let (retried, retried_neighbors) =
-            next_unblocked_element(&blueprint, &realized, &blocked)
-                .expect("the formerly blocked element should be retried");
+        let (retried, retried_neighbors) = next_unblocked_element(&blueprint, &realized, &blocked)
+            .expect("the formerly blocked element should be retried");
         assert_eq!(retried, 1);
         assert_eq!(retried_neighbors, vec![0]);
     }
