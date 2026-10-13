@@ -903,10 +903,12 @@ mod shape_tests {
             sulfur.iter().map(|p| p.1).sum::<f64>() / 4.0,
         );
         assert!(centroid.0.abs() < 1e-12 && centroid.1.abs() < 1e-12);
-        assert!((sulfur.iter().map(|p| p.0).fold(f64::NEG_INFINITY, f64::max)
-            + sulfur.iter().map(|p| p.0).fold(f64::INFINITY, f64::min)).abs() < 1e-12);
-        assert!((sulfur.iter().map(|p| p.1).fold(f64::NEG_INFINITY, f64::max)
-            + sulfur.iter().map(|p| p.1).fold(f64::INFINITY, f64::min)).abs() < 1e-12);
+        let min_x = sulfur.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
+        let max_x = sulfur.iter().map(|p| p.0).fold(f64::NEG_INFINITY, f64::max);
+        let min_y = sulfur.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
+        let max_y = sulfur.iter().map(|p| p.1).fold(f64::NEG_INFINITY, f64::max);
+        assert!((min_x + max_x).abs() < 1e-12);
+        assert!((min_y + max_y).abs() < 1e-12);
 
         let doubled_area = (0..4)
             .map(|i| {
