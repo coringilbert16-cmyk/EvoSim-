@@ -4,6 +4,16 @@
 
 This root `README.md` is the **only authoritative working README** for EvoSim. Subsystem READMEs are being retired; durable decisions, current status, test gates, and operational instructions belong here. Dated audit documents under `docs/` may hold detailed evidence, but they are supporting records—not competing authorities. When a detail conflicts, this README's latest explicit decision/status wins, and stale history must be labelled historical.
 
+## PR audit and consolidation — 2026-10-13
+
+Current PR evidence and the consolidation map are recorded in [docs/pr-audit-consolidation-2026-10-13.md](docs/pr-audit-consolidation-2026-10-13.md). This current status supersedes older PR-status snapshots, while retaining their useful lineage history.
+
+- Recent stacked Bob/fluid/chemistry focused gates pass, including tested chemistry-library rollback/concurrent-writer cases. The recorded full Rust suite still has 28 failures (402 passed, 28 failed, 1 ignored); Clippy remains red.
+- Constructor PR #196 is not healthy: latest run [#7338](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38438644278) reports 364 passed, 69 failed, 1 ignored; Rust tests and Clippy fail. Freeze constructor changes until the earlier 28-failure comparison point is reproduced and the regression boundary is isolated.
+- PR #190 has unique partial viability-contract changes not yet verified in the production constructor. Consolidate them deliberately into #196; do not develop two constructor PRs in parallel.
+- Keep #193 → #194 → #195 stacked. Keep #186 as the sole integration target and draft-only. Keep #179 isolated as a practice-only storage experiment.
+- PR #200 (sulfur parallelogram) was explicitly excluded and was not inspected or changed.
+
 ### Source and data ownership
 
 - `src/`: executable simulation, physical geometry, chemistry, organism lifecycle, construction, Bob, and tests. Live physical/energy/chemistry transactions remain authoritative.
