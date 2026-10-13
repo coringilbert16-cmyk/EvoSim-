@@ -223,12 +223,12 @@ mod tests {
         assert_eq!(
             form_family(&find("Carbon").shape.form),
             form_family(&find("Sulfur").shape.form),
-            "polygon representation must not change the shape-family component of material similarity"
+            "polygon representation must not change the shape family"
         );
         assert_eq!(
             form_family(&find("Phosphorus").shape.form),
             form_family(&find("Sulfur").shape.form),
-            "irregular polygons must remain in the same broad construction family"
+            "irregular polygons share the polygon family"
         );
     }
 
