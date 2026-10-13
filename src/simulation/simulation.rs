@@ -564,10 +564,6 @@ impl Simulation {
             }
         }
         let decision_parameters = self.decision_parameters;
-        // The confirmed seed scale is deterministic for the catalog. Compute it
-        // once per simulation tick instead of rebuilding the calibration
-        // structure for every organism.
-        let seed_reference = self.seed_scale_reference;
         for organism in &mut self.organisms {
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
             crate::harmonics::update_organism_harmonics(organism, &self.environment);
