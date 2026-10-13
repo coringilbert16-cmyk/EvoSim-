@@ -1899,3 +1899,30 @@ The selector changed search behavior but did not find a qualifying cavity within
 **Blueprint-bound construction:** only physically acquired/transferred materials and actual available energy. If a valid next step lacks material or energy, wait, raise the relevant need, preserve the unfinished structure, and resume when the resource arrives. A shortage is temporary, not proof of structural impossibility. Ordinary simulation COMBINE remains energy-gated and ledger-settled; only free-form assembly skips energy settlement.
 
 Regression expectations: free-form assembly must not stop for zero energy and must return its unchanged real energy balance; blueprint-bound material/energy shortages wait and resume; neither mode bypasses live physical validation or fabricates stored inventory/energy.
+
+
+### Recovery checkpoint and test-regression ledger — 2026-10-13 (authoritative)
+
+This section supersedes earlier shorthand that grouped all current failures together. Counts below come from the exact workflow logs and test names, not estimates.
+
+**Preserved comparison checkpoint:** branch `recovery/baseline-407-pass-2026-10-13`, commit `e1e68eae3dcb96cfa84181a7976df2a1c4543ef1`. Exact-head CI workflow [#7231](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38397101953) reported **407 passed, 26 failed, 1 ignored**. This is a comparison checkpoint, not a green/release-ready state. It retains the then-working startup path and its known developmental-blueprint/geometry failures.
+
+**Current constructor branch:** `refactor/constructor-strip-2026-10-12`, exact head `62e5360190f2412e5342bcc50cff61c4c5701998). Exact-head CI [#7309](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38429538041) reported **362 passed, 69 failed, 1 ignored**. Formatting, source-size policy, COMBINE architecture checks, focused Bob persistence/concurrency/fluid checks, fluid restoration/coalescence checks, chemical BREAK checks, and singleton geometry generation passed. The full Rust suite and Clippy failed.
+
+**Test-name comparison against the preserved checkpoint:**
+
+- All 26 previously failing test names still fail in the current run; none is resolved by test-name comparison.
+- There are 43 additional failing test names in the current run. One is the new production-constructor acceptance test. The other 42 now fail before exercising their intended behavior because `Simulation::new` panics when the new initial-organism constructor cannot find a qualifying organism.
+- Two tests present in the earlier suite are absent after test cleanup, so raw pass/fail totals should not be interpreted without test-identity comparison.
+- The current constructor diagnostic exhausts 64/64 search states without a qualifying cavity. Bob coverage misses are zero; the latest recorded selector experiment remains overlap-dominated. Do not treat higher candidate diversity or passing library checks as constructor viability.
+- The baseline's 26 failures are pre-existing work, not a clean baseline. Keep them explicitly tracked rather than hiding/removing them.
+
+**Lint status:** Clippy is still failing under `-D warnings`. The latest inspected log reports 68 application-target errors and 40 test-target errors, including ordinary style findings and dead-code expectations. Do not suppress the lint policy globally; classify and fix findings by ownership after startup/test reachability is restored.
+
+**Recovery operating rules:**
+
+1. Treat `recovery/baseline-407-pass-2026-10-13` as an immutable comparison pointer. Do not force-push, reset, or repurpose it.
+2. Continue constructor work only on this PR's existing branch; do not open a parallel constructor PR.
+3. Preserve the approved removal of the fixed scaffold in the active workstream. Do not use the scaffold as a hidden fallback.
+4. Do not weaken live overlap, contact, restoration, COMBINE, or energy authority to make a candidate pass.
+5. The next implementation gate is to restore a viable free-form construction path, then verify the 42 startup-cascading tests become reachable. Re-run exact-head CI and compare failures by test identity. Only after that, address the baseline failures and Clippy in separate bounded sprints.
