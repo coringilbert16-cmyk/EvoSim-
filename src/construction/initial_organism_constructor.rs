@@ -329,7 +329,10 @@ fn try_persisted_bob_attachments(
         candidate_placements.push(suggestion.placement);
         edge_placements_added += 1;
     }
-    if candidate_placements.is_empty() {
+    if candidate_placements.is_empty()
+        && raw_pair_placements == 0
+        && edge_placements_examined == 0
+    {
         return Err(PersistedAttachmentFailure::CoverageMiss);
     }
     let mut placement_attempts = 0usize;
