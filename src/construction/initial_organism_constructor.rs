@@ -194,6 +194,62 @@ fn persisted_pair_formation_placements(
     placements.into_values().collect()
 }
 
+
+/// Return the persisted two-piece formation that reproduces a rejected world-space pose.
+/// This is diagnostic-only: it does not influence candidate ordering or acceptance.
+fn persisted_pair_pose_provenance(
+    anchor_material: &str,
+    anchor_placement: Placement,
+    candidate_resource: &BaseResource,
+    target_placement: Placement,
+    library: &crate::geometry_reference_library::GeometryLibrary,
+) -> Option<String> {
+    for formation in library.formations() {
+        if formation.constituents.len() != 2
+            || !formation.bonds.iter().any(|bond| {
+                (bond.constituent_a == 0 && bond.constituent_b == 1)
+                    || (bond.constituent_a == 1 && bond.constituent_b == 0)
+            })
+        {
+            continue;
+        }
+        for (anchor_index, candidate_index) in [(0, 1), (1, 0)] {
+            let stored_anchor = &formation.constituents[anchor_index];
+            let stored_candidate = &formation.constituents[candidate_index];
+            if stored_anchor.resource.as_str() != anchor_material
+                || stored_candidate.resource.as_str() != candidate_resource.name.as_str()
+            {
+                continue;
+            }
+            let rotation_delta =
+                anchor_placement.rotation_radians - stored_anchor.placement.rotation_radians;
+            let (sin, cos) = rotation_delta.sin_cos();
+            let dx = stored_candidate.placement.x - stored_anchor.placement.x;
+            let dy = stored_candidate.placement.y - stored_anchor.placement.y;
+            let replayed = Placement {
+                x: anchor_placement.x + dx * cos - dy * sin,
+                y: anchor_placement.y + dx * sin + dy * cos,
+                rotation_radians: stored_candidate.placement.rotation_radians + rotation_delta,
+            };
+            if placement_signature(replayed) == placement_signature(target_placement) {
+                return Some(format!(
+                    "stored_anchor_index={anchor_index}; stored_anchor=({}, {}, {}); stored_candidate_index={candidate_index}; stored_candidate=({}, {}, {}); rotation_delta={rotation_delta:.6}; replayed=({}, {}, {})",
+                    stored_anchor.placement.x,
+                    stored_anchor.placement.y,
+                    stored_anchor.placement.rotation_radians,
+                    stored_candidate.placement.x,
+                    stored_candidate.placement.y,
+                    stored_candidate.placement.rotation_radians,
+                    replayed.x,
+                    replayed.y,
+                    replayed.rotation_radians,
+                ));
+            }
+        }
+    }
+    None
+}
+
 /// Try one local growth step using only persisted pair formations and rigid-edge poses from Bob.
 /// The returned structure and energy are committed together only after the
 /// ordinary live COMBINE transaction succeeds. No intended lattice pose,
@@ -384,8 +440,19 @@ fn try_persisted_bob_attachments(
                 .first()
                 .map(|part| part.0.as_str())
                 .unwrap_or("unknown");
+            let pair_provenance = if source == "pair-formation" {
+                persisted_pair_pose_provenance(
+                    anchor_material,
+                    anchor.placement,
+                    resource,
+                    candidate_pose,
+                    library,
+                )
+            } else {
+                None
+            };
             last_overlap_rejection.get_or_insert_with(|| format!(
-                "source={source}; anchor={anchor_index}:{anchor_material}@({:.4},{:.4},{:.4}); candidate={}:{}@({:.4},{:.4},{:.4}); overlaps={existing_unit_index}:{existing_material}@({:.4},{:.4},{:.4})",
+                "source={source}; anchor={anchor_index}:{anchor_material}@({:.4},{:.4},{:.4}); candidate={}:{}@({:.4},{:.4},{:.4}); overlaps={existing_unit_index}:{existing_material}@({:.4},{:.4},{:.4}); pair_provenance={pair_provenance:?}",
                 anchor.placement.x,
                 anchor.placement.y,
                 anchor.placement.rotation_radians,
