@@ -113,11 +113,14 @@ fn try_persisted_bob_attachments(
     };
 
     let mut successful = Vec::new();
+    let mut suggestions_examined = 0usize;
     for suggestion in &suggestions {
-        // Bound local branching; every returned pose is still live-validated.
-        if successful.len() >= 8 {
+        // Bound both successful branches and rejected attempts; every returned
+        // pose is still live-validated.
+        if successful.len() >= 4 || suggestions_examined >= 12 {
             break;
         }
+        suggestions_examined += 1;
         let mut trial = structure.clone();
         let indices = match crate::material_restoration::restore_material(
             &mut trial,
@@ -550,6 +553,10 @@ fn construct_persisted_bob_structure(
                 ) {
                     Ok(attachments) => {
                         for attachment in attachments {
+                            if queue.len() >= state_budget {
+                                queue_budget_drops += 1;
+                                continue;
+                            }
                             debug_assert!(
                                 attachment.new_unit_index < attachment.structure.units.len()
                             );
