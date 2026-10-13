@@ -1822,3 +1822,17 @@ The bond-driven placement loop previously stopped at the first reachable bluepri
 Extracted the constructor's reachable/unblocked element selection into `next_unblocked_element` and added a focused regression test: a reachable element marked blocked is skipped while another reachable element is attempted, then becomes eligible again when a successful structural change clears the blocked set. This tests the scheduling behavior independently of the full seed blueprint and Bob inventory.
 
 **Scaffold removal remains mandatory in this workstream.** This test is not a replacement coordinator and does not authorize keeping the Carbon scaffold as a fallback. The remaining migration is still to implement the persisted-formation coordinator, wire the initial startup through it, and remove the fixed ring/support topology, coordinate snapping/fallback, and `1.0e12` artificial energy allowance in that same controlled startup migration. The new test has been committed but has not yet been run locally or by exact-head CI; no passing result is claimed.
+
+
+### Constructor stripping sprint 12 — verify deferred-placement experiment (2026-10-13)
+
+**Exact-head CI:** commit `addc569ea90527a9e0b001841d90b1cd47812be0`, workflow run [#7250](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38401046777).
+
+- Formatting, source-file size guard, COMBINE architecture guard, the soft-cushion feasibility diagnostic step, all focused Bob persistence/concurrency/fluid checks, focused fluid restoration/coalescence checks, focused chemical BREAK checks, and singleton geometry generation completed successfully.
+- The new `blocked_reachable_element_is_deferred_until_structure_changes` regression test passed in the full suite.
+- The full Rust suite remains **408 passed, 26 failed, 1 ignored**. The same known geometry/contact/cavity/storage/reproduction failures remain; this small scheduling change did not resolve the broader baseline.
+- Clippy remains red under warnings-as-errors: **66 errors** for the binary and **37 errors** for the test target. These are existing broader lint failures, not introduced by the formatting correction.
+
+The first CI attempt for this test commit failed the formatting gate; the follow-up formatting-only commit fixed it, and run #7250 confirms formatting and architecture guards now pass. This experiment validates only deferred element selection; it does not validate a viable formation-driven startup or remove the production scaffold.
+
+**Startup energy audit:** `Simulation::create_initial_organism` currently computes `construction_cost = (1.0e12 - construction.energy).max(0.0)` and adds that spent construction cost back into the organism's initial usable energy. Therefore the legacy `1.0e12` allowance is not merely a search budget: the code also converts the construction expenditure into newly available organism energy. The replacement must remove both the artificial construction budget and this expenditure refund. The replacement coordinator must use a real supplied energy balance and commit the live `EnergyLedger`; do not preserve the refund under a new name or claim scaffold removal is safe before a no-cheat startup path is demonstrated.
