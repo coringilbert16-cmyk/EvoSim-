@@ -1,0 +1,113 @@
+name: Sulfur Parallelogram Geometry Experiment
+
+on:
+  pull_request:
+    branches: [fix/fluid-coalescence-transaction-2026-10-12]
+    paths:
+      - "src/materials/resources.rs"
+      - ".github/workflows/sulfur-parallelogram-experiment.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  compare-bob-two-piece-catalogues:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out baseline
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: baseline
+
+      - name: Check out sulfur-parallelogram variant
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: variant
+
+      - name: Check formatting
+        working-directory: variant
+        run: cargo fmt --all -- --check
+
+      - name: Run baseline Bob generation (up to two pieces)
+        working-directory: baseline
+        env:
+          EVOSIM_GEOMETRY_LIBRARY_DIR: ${{ runner.temp }}/sulfur-baseline-library
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVOSIM_GEOMETRY_LIBRARY_DIR"
+          cargo run --release -- --geometry-worker-complete-up-to 2 2>&1 | tee "${{ runner.temp }}/sulfur-baseline.log"
+
+      - name: Run parallelogram Bob generation (up to two pieces)
+        working-directory: variant
+        env:
+          EVOSIM_GEOMETRY_LIBRARY_DIR: ${{ runner.temp }}/sulfur-parallelogram-library
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVOSIM_GEOMETRY_LIBRARY_DIR"
+          cargo run --release -- --geometry-worker-complete-up-to 2 2>&1 | tee "${{ runner.temp }}/sulfur-parallelogram.log"
+
+      - name: Compare counts, sulfur-containing records, runtime, and storage
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          roots = {
+              "baseline": temp / "sulfur-baseline-library",
+              "parallelogram": temp / "sulfur-parallelogram-library",
+          }
+          for label, root in roots.items():
+              print(f"=== {label} ===")
+              total_bytes = sum(p.stat().st_size for p in root.glob("*") if p.is_file())
+              print(f"total_bytes={total_bytes}")
+              for filename in (
+                  "formations.jsonl",
+                  "rigid_contact_families.jsonl",
+                  "rigid_point_contact_families.jsonl",
+                  "rigid_vertex_contact_families.jsonl",
+                  "fluid_boundary_families.jsonl",
+              ):
+                  path = root / filename
+                  if not path.exists():
+                      print(f"{filename}: records=0 sulfur_records=0 bytes=0")
+                      continue
+                  records = 0
+                  sulfur_records = 0
+                  with path.open(encoding="utf-8") as stream:
+                      for line in stream:
+                          if not line.strip():
+                              continue
+                          records += 1
+                          try:
+                              record = json.loads(line)
+                              if "Sulfur" in json.dumps(record, ensure_ascii=False):
+                                  sulfur_records += 1
+                          except json.JSONDecodeError:
+                              if "Sulfur" in line:
+                                  sulfur_records += 1
+                  print(f"{filename}: records={records} sulfur_records={sulfur_records} bytes={path.stat().st_size}")
+              log = temp / f"sulfur-{label}.log"
+              if log.exists():
+                  for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
+                      if "geometry worker complete:" in line:
+                          print(line)
+          PY
+
+      - name: Upload both isolated catalogues and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sulfur-parallelogram-two-piece-comparison
+          path: |
+            ${{ runner.temp }}/sulfur-baseline-library/
+            ${{ runner.temp }}/sulfur-parallelogram-library/
+            ${{ runner.temp }}/sulfur-baseline.log
+            ${{ runner.temp }}/sulfur-parallelogram.log
+          if-no-files-found: warn
+          retention-days: 14
