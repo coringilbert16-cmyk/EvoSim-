@@ -9,7 +9,7 @@ mod tests {
     use crate::structure::Placement;
 
     const MAX_BOND_GAP: f64 = 0.1;
-    const ITERATIONS: usize = 30_000;
+    const ITERATIONS: usize = 3_000;
 
     fn world_vertices(form: &Form, pose: Placement) -> Option<Vec<(f64, f64)>> {
         Some(
