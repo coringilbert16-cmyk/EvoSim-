@@ -109,7 +109,7 @@ mod tests {
                     vertices[(i + 1) % vertices.len()],
                 ));
             }
-            return (distance - radius).max(0.0);
+            return (distance - *radius).max(0.0);
         }
         let (Some(av), Some(bv)) = (world_vertices(a, pa), world_vertices(b, pb)) else {
             return ((pa.x - pb.x).hypot(pa.y - pb.y) - a.bounding_radius() - b.bounding_radius())
