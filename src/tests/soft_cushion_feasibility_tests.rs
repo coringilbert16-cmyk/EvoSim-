@@ -4,9 +4,7 @@
 //! required connection may use a flexible boundary gap of up to 0.1 units.
 #[cfg(test)]
 mod tests {
-    use crate::material_geometry::{
-        placed_forms_penetrate, PlacedMaterialPart, GEOMETRY_EPSILON,
-    };
+    use crate::material_geometry::{placed_forms_penetrate, PlacedMaterialPart, GEOMETRY_EPSILON};
     use crate::resources::{default_catalog, Form};
     use crate::structure::Placement;
 
@@ -40,12 +38,7 @@ mod tests {
         (p.0 - (a.0 + t * dx)).hypot(p.1 - (a.1 + t * dy))
     }
 
-    fn segments_intersect(
-        a: (f64, f64),
-        b: (f64, f64),
-        c: (f64, f64),
-        d: (f64, f64),
-    ) -> bool {
+    fn segments_intersect(a: (f64, f64), b: (f64, f64), c: (f64, f64), d: (f64, f64)) -> bool {
         let eps = 1e-10;
         let ab_c = cross(a, b, c);
         let ab_d = cross(a, b, d);
@@ -62,12 +55,7 @@ mod tests {
             || (cd_b.abs() <= eps && point_segment_distance(b, c, d) <= eps)
     }
 
-    fn segments_distance(
-        a: (f64, f64),
-        b: (f64, f64),
-        c: (f64, f64),
-        d: (f64, f64),
-    ) -> f64 {
+    fn segments_distance(a: (f64, f64), b: (f64, f64), c: (f64, f64), d: (f64, f64)) -> f64 {
         if segments_intersect(a, b, c, d) {
             return 0.0;
         }
@@ -124,10 +112,8 @@ mod tests {
             return (distance - radius).max(0.0);
         }
         let (Some(av), Some(bv)) = (world_vertices(a, pa), world_vertices(b, pb)) else {
-            return ((pa.x - pb.x).hypot(pa.y - pb.y)
-                - a.bounding_radius()
-                - b.bounding_radius())
-            .max(0.0);
+            return ((pa.x - pb.x).hypot(pa.y - pb.y) - a.bounding_radius() - b.bounding_radius())
+                .max(0.0);
         };
         if av.iter().any(|&p| point_in_polygon(p, &bv))
             || bv.iter().any(|&p| point_in_polygon(p, &av))
