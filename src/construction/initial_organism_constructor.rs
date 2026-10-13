@@ -476,7 +476,7 @@ fn construct_persisted_bob_structure(
     let contact_records = library.rigid_contact_families().count()
         + library.rigid_point_contact_families().count()
         + library.rigid_vertex_contact_families().count();
-    let state_budget = contact_records.saturating_mul(2).clamp(64, 512);
+    let state_budget = contact_records.saturating_mul(2).clamp(32, 128);
     let mut queue = std::collections::VecDeque::new();
     let mut visited = std::collections::BTreeSet::new();
     for resource in &structural_resources {
@@ -495,6 +495,7 @@ fn construct_persisted_bob_structure(
     let mut explored_states = 0usize;
     let mut coverage_misses = 0usize;
     let mut rejected_placements = 0usize;
+    let mut queue_budget_drops = 0usize;
     while explored_states < state_budget {
         let Some(state) = queue.pop_front() else {
             break;
@@ -557,7 +558,11 @@ fn construct_persisted_bob_structure(
                             );
                             let signature = construction_state_signature(&next.structure);
                             if visited.insert(signature) {
-                                queue.push_back(next);
+                                if queue.len() < state_budget {
+                                    queue.push_back(next);
+                                } else {
+                                    queue_budget_drops += 1;
+                                }
                             }
                         }
                     }
@@ -573,7 +578,7 @@ fn construct_persisted_bob_structure(
     }
 
     Err(format!(
-        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, rigid_contact_records={contact_records}",
+        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, rigid_contact_records={contact_records}",
         queue.len()
     ))
 }
