@@ -272,24 +272,11 @@ impl Organism {
         &mut self,
         catalog: &[BaseResource],
     ) -> Option<crate::developmental_blueprint::DevelopmentalRealization> {
-        let reference = crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?;
-        self.developmental_realization_cached_for_reference(catalog, reference)
-    }
-
-    pub(crate) fn developmental_realization_cached_for_reference(
-        &mut self,
-        catalog: &[BaseResource],
-        (seed_mass, seed_length): (f64, f64),
-    ) -> Option<crate::developmental_blueprint::DevelopmentalRealization> {
         if self.cached_developmental_revision != Some(self.structure_revision) {
             let preferred_length = self
                 .genome
                 .developmental_blueprint
-                .preferred_developmental_length(
-                    self.genome.preferred_mass(),
-                    seed_mass,
-                    seed_length,
-                );
+                .preferred_developmental_length(self.genome.preferred_mass());
             self.cached_developmental_realization =
                 Some(self.genome.developmental_blueprint.realization_at_length(
                     &self.structure,
@@ -466,10 +453,6 @@ pub(crate) struct Simulation {
     pub(crate) next_transformation_id: u64,
     pub(crate) rng: ChaCha8Rng,
     pub(crate) decision_parameters: DecisionParameters,
-    /// Deterministic calibration derived from the immutable resource catalog.
-    /// Cached once at simulation creation so the tick hot path never rebuilds
-    /// the confirmed seed structure.
-    pub(crate) seed_scale_reference: Option<(f64, f64)>,
 }
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
 pub(crate) const DESIRABILITY_MAX: f64 = 1.0;

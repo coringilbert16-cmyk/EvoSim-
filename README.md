@@ -39,7 +39,7 @@ Construction-material similarity treats `Form::RegularPolygon` and `Form::Polygo
 
 - Sulfur geometry assertions cover four vertices, alternating 1.0/0.5 edge lengths, parallel opposite edges, 60°/120° interior angles, centering, area, and unchanged non-geometric properties.
 - Bob's catalogue signature regression confirms the shape change produces a distinct catalogue signature and prevents reuse of stale geometry records.
-- Formatting passed. The standard Rust CI run fails **28 tests** on the current base branch. The earlier comparison workflow forced an empty isolated Bob library during Rust-suite runs, producing 72 failures on both baseline and variant; that was not comparable to the standard 28-failure baseline. The comparison workflow now runs Rust suites in their separate checkout directories using the standard repository test environment, and reserves isolated temporary libraries for the Bob-generation comparison. Do not claim parity until the corrected workflow finishes.
+- Formatting passed. The reconciled #195 Rust run reports **405 passed, 28 failed, 1 ignored**, with exactly the same 28 failing test names as the pre-sulfur #195 comparison; strict Clippy remains red. The isolated Bob catalogue comparison on the reconciled stack is still running, so do not claim updated catalogue parity until it completes.
 - Isolated Bob generation completed for both variants with the same two-constituent limit, no oversized formations, no unfinished frontiers, and successful catalogue reopen. The parallelogram catalogue recorded 281 formations versus 264 baseline (+17); this is a useful coverage signal, not proof that the constructor is fixed.
 - The measured run used an isolated temporary library. Do not commit its generated catalogue or treat the raw record-count difference as a normalized geometry-fit score.
 
@@ -1713,3 +1713,266 @@ Exact-head workflow [38259310228](https://github.com/coringilbert16-cmyk/EvoSim-
 ### Fluid persistence/restoration regression added — 2026-10-12
 
 Added `coalesced_fluid_boundary_survives_physical_material_roundtrip_and_restore` to the fluid transaction tests. It coalesces the two Water semicircles, serializes the resulting exact multi-contact shape through `PhysicalMaterial`, deserializes it, restores it into a fresh structure, and asserts exact shape equality, valid geometry, conserved area, and amount. The regression passed on exact-head workflow run [38264734792](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38264734792), commit `c584bb1ba9d4d6db98111e6daa4a2270f30c7a88`. The same focused gate confirms rejection of off-interface fluid bonds, unsupported fluid-side Corner/LineEndpoint remapping, and separated bond endpoints on an otherwise shared segment. Focused fluid/Bob checks and formatting/architecture gates passed. Full suite: **396 passed, 28 failed, 1 ignored**; strict Clippy remains red on broad existing lint findings. This verifies the bounded exact-interface lifecycle path, not arbitrary boundary unions, mixed-resource fluids, or full-repository health. Keep PR #194 draft and broad catalogue generation gated.
+
+
+## Constructor stripping sprint 1 — inventory and removal boundaries (2026-10-12)
+
+This is the active constructor-cleanup checkpoint. It supplements the construction specification above; it does not supersede the biological or physical contracts.
+
+### Current implementation inventory
+
+| Area | Current implementation | Classification | Action |
+|---|---|---|---|
+| Initial organism topology | `src/construction/initial_organism_constructor.rs::construct_scaffold` creates a fixed Carbon inner ring, six radial supports, and an outer ring using axial lattice coordinates. | **REMOVE** | Replace with milestone-driven, open-ended physical construction. Do not preserve the rings as a hidden default or fallback. |
+| Construction placement | `add_unit` prefers Bob's rigid-edge suggestion but falls back to the prescribed scaffold coordinate when no suggestion passes. `bob_validated_neighbor_placement` restricts suggestions to the scaffold's intended coordinate and snaps the pose to that lattice point with zero rotation. | **REMOVE / REPLACE** | Remove scaffold-coordinate fallback and lattice snapping from strict construction. Use a persisted formation's relative pose as the proposal; live geometry and bond transactions remain authoritative. Missing coverage must be an explicit result, not a generated pose. |
+| Artificial construction energy | `CONSTRUCTION_ENERGY = 1.0e12` funds scaffold bonds; `src/simulation/simulation.rs::create_initial_organism` derives initial usable energy from the amount spent against this allowance. | **REMOVE** | Separate computation budget from physical energy. Do not substitute an arbitrary finite number; wire construction to the model's legitimate energy sources/costs and preserve ledger reconciliation. |
+| Physical bond authority | `bond_units` uses live contact candidates and the normal selected-candidate/COMBINE bond transaction. | **KEEP, then consolidate** | Preserve this authority. Remove only scaffold-specific orchestration once the replacement planner calls the shared transaction. |
+| Physical material restoration | Constructor paths use `PhysicalMaterial::realized` and `restore_material`. | **KEEP** | Preserve material identity, intact composites, and atomic failure behavior. Audit all inventory ownership transitions before changing them. |
+| Genome cavity qualification | Constructor calls `analyze_genome_cavity` on realized structure and checks `qualifies()`. | **KEEP** | This is a required biological milestone, not the problem. Remove the requirement that it be produced by a particular ring topology. |
+| Acquisition and Water | Initial constructor performs separate resource acquisition placement and queries Bob's fluid formation records before live geometric validation. | **KEEP / INVESTIGATE** | Preserve conserved fluid shape and physical acquisition. Later integrate acquisition as demand-driven construction milestones; do not turn the current single-resource path into a blanket proof of all fluid cases. |
+| Blueprint-driven growth | `src/construction/runtime.rs` provides bond-driven placement for a specified blueprint element; current diagnostics show element 26 exhausts candidates with overlap rejections. | **KEEP / REWORK** | Reuse authoritative placement/transaction primitives where sound. Remove fixed-blueprint dependence from initial construction and diagnose why candidate poses overlap before expanding search. |
+| Juvenile/seed path | `src/organism/juvenile.rs` exists and is imported by `src/main.rs`. It defines `confirmed_seed_baseline`, `confirmed_seed_scale_reference`, and trial-energy/reserve construction; live developmental realization and simulation startup call into it. | **REMOVE / REPLACE** | Remove the obsolete juvenile/seed calibration model and its callers. Preserve independent genome-cavity, physical viability, and live developmental-field behavior; migrate tests away from the calibration baseline. |
+| Failure behavior | Some initial-constructor helper paths use `.ok()`, `.flatten()`, `Option`, and `None` to reject candidates without preserving detailed causes; other paths return specific errors. | **REWORK** | Preserve structured candidate rejection diagnostics and distinguish missing library coverage, known candidates rejected by context, chemistry rejection, energy insufficiency, and exhausted operational budget. |
+| Geometry authority | Initial-constructor fluid checks include constructor-local boundary probes and containment checks; runtime has separate rigid placement/contact checks. | **INVESTIGATE / CONSOLIDATE** | Identify shared authoritative predicates and eliminate duplicated rules only after matching edge-case behavior with tests. Never weaken collision or contact rules as a shortcut. |
+
+### Cleanup order and gates
+
+1. **Do not extend the scaffold.** Treat fixed topology, hardcoded scaffold coordinates, lattice snapping, and the (10^{12}) physical-energy allowance as legacy implementation, not acceptable fallback behavior.
+2. Build a small milestone-driven construction coordinator that queries only persisted Bob records, composes known local formations, and routes candidates through the existing live validation and transaction authorities.
+3. Add an explicit candidate/result type before removing fallback behavior, so empty coverage is reported as missing library coverage rather than confused with physical impossibility or a generic construction failure.
+4. Replace the initial scaffold with the coordinator only after the minimal path can add a real bonded constituent from a persisted formation and account for its transaction.
+5. Keep cavity qualification, physical-material restoration, COMBINE, energy ledger, and fluid conservation rules. Audit all call sites before deleting legacy constructors or tests.
+6. Reconcile the live startup path with developmental/reproduction construction; delete duplicate paths only after callers and required policy differences are documented.
+7. Run focused tests at each layer. The current baseline is **402 passed, 28 failed, 1 ignored** in the supplied run. Do not attribute every existing failure to the constructor, and do not claim a fix based only on compilation or a green focused test.
+
+### First code-removal gate
+
+The scaffold and artificial-energy allowance are confirmed wrong by the current source and the construction specification, but they cannot safely be deleted in isolation: both currently provide the only complete startup path. The replacement coordinator and its explicit missing-coverage result must be introduced first. The next implementation sprint is therefore to establish that narrow coordinator and test its first persisted-record placement/COMBINE transaction; then remove the scaffold and artificial-energy conversion in the same controlled migration rather than leaving a silent fallback or a knowingly nonfunctional startup path.
+
+
+### Constructor stripping sprint 1 implementation checkpoint — 2026-10-12
+
+Added `GeometryLibrary::suggest_persisted_rigid_edge_placements` as a strict construction-facing query. It shares the rigid-edge resolver with the existing exploratory API but disables ephemeral geometry-family generation on a lookup miss. The existing `suggest_rigid_edge_placements` retains its exploratory empty-library behavior for discovery/diagnostics and compatibility; strict construction can now distinguish "no persisted candidate" from "candidate generated on demand". A regression assertion covers both behaviors against an empty library.
+
+**Not yet wired into live construction.** The initial constructor still uses its fixed scaffold and fallback coordinates at this checkpoint. Do not claim the strict-construction contract is enforced end to end yet. The next code gate is a structured placement result that preserves missing-coverage diagnostics, then routing construction through the strict query and live transaction before removing the scaffold/energy path. Focused CI has not yet been run for this branch.
+
+
+### Constructor stripping sprint 2 — strict runtime lookup and duplicate-search removal (2026-10-12)
+
+The blueprint-driven construction runtime now fails explicitly if the configured Bob store cannot be opened, uses the persisted-only rigid-edge query for rigid placement proposals, and no longer appends analytic endpoint poses when the live constructor has Bob available. The fluid path continues to query persisted fluid formations and uses the same live restoration/contact/COMBINE validation.
+
+The placement loop also no longer cross-products every existing endpoint with every candidate-material endpoint just to regenerate the same Bob pose. It queries per live anchor and physical constituent, then discovers the actual contact pair from the restored trial structure. This removes a source of repeated candidate work without relaxing overlap, contact, neighbor, energy, or COMBINE checks.
+
+**Current boundary:** the initial-organism constructor still uses the fixed Carbon scaffold, lattice snapping, coordinate fallback, and artificial construction-energy allowance. Those are not removed yet because the initial constructor has no replacement milestone-driven coordinator to report missing coverage and build from persisted local formations. The strict runtime may expose tests that previously depended on analytic fallback or an empty Bob catalogue; those must be migrated to explicit persisted fixtures or asserted as coverage misses, not fixed by restoring silent fallbacks.
+
+**Verification:** Rust CI was triggered for this branch and is still running at this checkpoint. No pass/fail conclusion is claimed for the newest runtime refactor.
+
+
+### Constructor stripping sprint 3 — missing-coverage diagnostics (2026-10-12)
+
+The bond-driven placement diagnostics now collect rigid anchor/candidate material pairs for which strict persisted Bob lookup returns no placements. If an element has no candidate origins at all and at least one rigid lookup missed, the runtime reports `missing Bob library coverage` rather than the generic no-placement message. This keeps library coverage distinct from cases where recorded candidates were found but rejected by live overlap/contact/COMBINE checks.
+
+Fluid-query coverage misses are not yet fully distinguished from fluid records that exist but fail live realization; that remains an explicit follow-up rather than an assumed equivalence.
+
+
+### Constructor stripping sprint 5 — remove seed scaling from developmental realization (2026-10-13)
+
+The developmental-field scale no longer depends on the fixed juvenile calibration structure. `DevelopmentalFieldBlueprint::preferred_developmental_length` now maps positive preferred mass to characteristic 2-D length with `sqrt(preferred_mass)`, following the area/mass scaling relationship in two dimensions. The public realization path and organism cache use that same mapping, and budding eligibility no longer requires the seed-scale reference just to calculate developmental realization. Added a focused unit test for the square-root relationship and invalid mass values.
+
+**Scope boundary:** the legacy seed reference still exists for other reproduction/construction call sites. This sprint does not claim `juvenile.rs` can be deleted yet. It also does not replace the initial scaffold, alter the physical bond authority, or claim that this first-pass scale mapping solves constructor viability. The current mapping is intentionally dimensionally grounded but still needs calibration against current resource geometry and realized organisms before it should be treated as biologically calibrated.
+
+**Verification:** source edits are committed on the active branch. GitHub Actions Rust workflow was observed running at run #7223 for an earlier code commit while this sprint was underway; the latest changes need their own completed CI result before any pass/fail claim.
+
+### Constructor stripping sprint 4 — juvenile/seed dependency audit (2026-10-13)
+
+The source-level audit corrects the earlier inventory row: `src/organism/juvenile.rs` is present and is imported by `src/main.rs`. Its dependencies are active, not merely historical:
+- `Simulation::new` builds and stores a seed-scale reference; several transformation and budding paths consume it.
+- `Organism::developmental_realization_cached` and `DevelopmentalFieldBlueprint::realization` call the juvenile calibration function.
+- `developmental_blueprint.rs` computes preferred length from seed mass and seed length.
+- `simulation_tests.rs::accessible_interior_starts_without_synthetic_water` directly calls the seed-baseline constructor.
+- Initial production startup independently still calls `construct_valid` → `construct_scaffold`; this must not be confused with the separate bond-driven blueprint constructor.
+
+**Implementation boundary:** do not delete the juvenile module or seed reference until its scaling consumers have a non-seed physical basis and the cavity/viability behavior has a replacement test. Do not replace the fixed scaffold with the failing current seed blueprint. The next implementation gate is to define and test the new blueprint's scale from current resource dimensions and actual realized structure, then connect a minimal persisted-Bob formation coordinator to startup. The scaffold and artificial energy are removed only when that coordinator can report coverage misses and pass real bonds through the live transaction.
+
+**Verification:** this sprint was a source audit and README correction only. No Rust source was changed and no tests were run in this checkpoint.
+
+### Constructor consolidation checkpoint — 2026-10-12
+
+The active constructor work is consolidated on `refactor/constructor-strip-2026-10-12` (PR #196). PR #197's seed-ring geometry correction is not carried forward as an architectural fix because that prescribed calibration topology is legacy and slated for removal; its independently useful energy-ledger correction and diagnostics are being ported into the strict persisted-Bob runtime instead. PR #198's restoration rejection reasons are also being ported here. Do not create parallel constructor branches or PRs.
+
+- Successful exits from bond-driven construction must commit both the trial energy ledger and remaining energy to the caller, including early genome-milestone exits.
+- Material restoration exposes stable rejection reasons while preserving the compatibility wrapper for callers that only need `Option`.
+- Placement diagnostics count restoration failures by reason, distinguishing restoration from overlap/contact/COMBINE rejection.
+- Fixed seed topology, lattice snapping, scaffold-coordinate fallback, and artificial construction-energy allowances remain legacy and must be removed only with a working milestone-driven replacement.
+- Verification is required on the consolidated head before treating these changes as sound. The superseded constructor PRs are closed to keep one workstream; their branches remain available for historical comparison. The constructor is not considered fixed based on these changes alone.
+
+### Constructor stripping sprint 6 — complete seed-independent scaling call-site migration (2026-10-13)
+
+The first seed-independent length function change exposed stale callers that still passed seed mass/length or used the removed reference-specific realization cache. The follow-up migration updates developmental action context, growth-fraction observation, reproduction length calculation, and the simulation call site to use the same mass-derived 2-D length mapping. The old seed-reference arguments remain temporarily in some reproduction APIs for staged compatibility, but they no longer calibrate developmental length. This does **not** remove the juvenile module globally: the simulation still stores a seed-scale reference for separate legacy transformation/reproduction pathways, and cavity/viability behavior still needs replacement coverage.
+
+The soft-cushion whole-blueprint feasibility probe is exploratory while construction placement is being redesigned. Its current infeasibility result must remain visible, but must not skip the independent Bob, chemistry, and Rust regression steps. The workflow now marks that one diagnostic step `continue-on-error` and runs each later regression gate with `if: always()`. This preserves separate results for Bob persistence, fluid/chemistry checks, geometry generation, the full Rust suite, and Clippy even when an earlier known-failing gate fails; the job still reports an overall failure if any required gate fails.
+
+**Verification:** the previous CI run failed to compile because of stale call sites, then skipped downstream regression tests after the exploratory feasibility probe failed. Those source call sites have now been migrated, and the workflow was adjusted. CI run [#7227](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38396855857) is queued for the latest workflow commit; no test pass is claimed yet. Fixed Carbon scaffold, lattice snapping, and the artificial 1.0e12 construction-energy allowance remain the production startup path and are still the next constructor replacement gate.
+
+### Constructor stripping sprint 7 — CI failure isolation and resource-scale audit (2026-10-13)
+
+**CI result:** run [#7231](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38397101953) completed with failure. Formatting, source-size and COMBINE architecture checks passed; the feasibility diagnostic completed; all focused Bob persistence, fluid and chemistry checks passed; singleton geometry generation passed. The full Rust suite reported **407 passed, 26 failed, 1 ignored**. The failures include the already-known forward-only seed-blueprint realization stopping at element 26 after 431 placement attempts; this is a constructor replacement blocker, not evidence that Bob's independent library checks failed. Clippy then failed under the all-warnings-as-errors policy, including broad existing dead-code/style issues. Two focused cleanup changes remove the now-obsolete seed-scale parameter from transformation preparation and remove an unfulfilled dead-code expectation on the actively used reproduction status enum. Latest CI runs are tracking those edits; no pass is claimed yet.
+
+**Resource geometry scale audit:** current default resource geometry does not have a uniform area-per-mass ratio. From the catalog dimensions, approximate area/mass ratios are Carbon 2.598, Methane 0.577, Hydrogen 0.400, Sulfur 1.147, Nitrogen 0.800, Phosphorus 0.309, and Water 0.500 (Water's nominal area is 0.5). The median is approximately 0.577 area units per mass unit. Therefore preferred length = sqrt(preferred mass) is dimensionally valid only under an implicit area-per-mass coefficient of 1.0, which the current catalog does not support. A median-catalog coefficient would map the default preferred mass 30 to a characteristic length of about 4.16 instead of 5.48. This is a diagnostic comparison, not yet an adopted scale change: the next experiment must compare candidate scales against measured extents and developmental realization of actual valid structures before selecting the coefficient. Keep this scale issue separate from the fixed-scaffold startup issue.
+
+**Still not replaced:** Simulation::create_initial_organism() still invokes construct_valid() and the fixed Carbon scaffold; the artificial construction-energy allowance remains. Do not remove these by simply switching startup to the current forward-only blueprint, which still fails at element 26. The next construction sprint should prototype a coordinator that consumes persisted Bob local formations and lets the live bond transaction accept/reject each proposed addition, recording coverage misses and stopping on genuine terminal conditions. It must not impose a full prescribed ring/lattice or spend artificial energy.
+
+### Constructor stripping sprint 8 — remove seed calibration from reproduction runtime (2026-10-13)
+
+The seed-scale reference no longer contributes to developmental length after the earlier mass-only migration. This sprint removes that dead dependency from the production simulation state and reproduction lifecycle: simulation startup no longer calculates/caches the juvenile seed reference; `advance_construction`, `finish_reproduction`, birth-readiness checks, and developmental context no longer accept or consult it; transformation preparation no longer accepts it either. The juvenile module remains temporarily because legacy tests still exercise its baseline/cavity behavior, and the production initial-organism constructor still uses the scaffold. This is not a claim that the juvenile module is ready to delete.
+
+During the migration, CI identified stale `None` arguments in reproduction tests and a dangling field comment after removing the `Simulation` member; both have been corrected. Earlier run #7236 compiled far enough to expose those call-site errors, so its failure is not a valid result for the corrected head. Latest CI is still pending; the constructor tests are expected to continue failing at the known forward-only seed realization, and Clippy still has a broader warning backlog.
+
+**Next gate:** do not select a new developmental length coefficient based on dimensional reasoning alone. The catalog audit found median resource area/mass ≈ 0.577, implying a default preferred-mass-30 length ≈ 4.16 versus the current 5.48. Measure valid realized structures and field-realization response against candidate coefficients first. Separately, prototype the minimal persisted-Bob formation coordinator; only then remove the fixed Carbon scaffold and artificial construction-energy allowance.
+
+### Constructor stripping sprint 9 — interpret the element-26 failure (2026-10-13)
+
+The detailed placement diagnostics make the current bond-driven seed failure more specific than “the blueprint is impossible.” At element 26, the constructor made 431 cumulative placement attempts, with 282 candidates generated for that element and 30 deduplicated. There were **0 material-restoration failures**, **0 no-bond-contact rejections**, **0 candidate-evaluation rejections**, and **0 COMBINE rejections**; all 282 remaining candidates were rejected by overlap checks. Counterfactual diagnostics show that omitting an already-placed blocker would let many candidates proceed through contact, evaluation, and COMBINE, but the actual structure cannot omit those existing constituents.
+
+Interpretation: the immediate failure is a **placement-order / local crowding conflict**, not evidence that the bond transaction itself is failing or that Bob coverage is missing. The current forward-only algorithm commits earlier placements and cannot rearrange them when a later constituent has no non-overlapping slot. This supports the already-approved direction: stop treating the exact seed blueprint as a required construction recipe; use persisted local formations as suggestions, validate against the live structure, and let a coordinator choose among alternatives before committing. Do not solve this by weakening nonpenetration or by deleting a blocker from the realized organism.
+
+**Latest verification after sprint 8:** [CI run #7243](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38398435377) passed formatting, source-size checks, architecture guards, the feasibility diagnostic step, all focused Bob/fluid/chemistry checks, and singleton geometry generation. It compiled and ran the full Rust suite, which remains **407 passed, 26 failed, 1 ignored**; the element-26 forward-only realization remains a major repeated failure, alongside older geometry-contract expectations that are outside the constructor replacement. Clippy remains red with 66 errors for the binary and 37 for the test target under `-D warnings`; this is a broader lint backlog, not fixed by the seed-reference removal. The constructor is not considered fixed. The README now records the overlap-only element-26 evidence so the replacement work targets placement ordering rather than weakening bond or collision rules.
+
+
+### Constructor stripping sprint 10 — retry blocked elements after a successful addition (2026-10-13)
+
+The bond-driven placement loop previously stopped at the first reachable blueprint element for which every candidate overlapped the current structure. That made a local ordering dead end terminal even when another already-reachable element might still fit and alter the available space. The loop now defers a blocked element, tries other currently reachable elements, and clears deferred failures after any successful addition so they can be retried against the changed live structure. If no eligible element can progress, it returns the latest concrete placement/coverage/material diagnostic. This does not remove the startup Carbon scaffold, does not establish that the current blueprint is viable, and does not relax collision or bond rules. It is a focused experiment addressing the diagnosed element-26 ordering/crowding failure; CI and the constructor replacement gate remain pending.
+
+
+### Constructor stripping sprint 11 — test deferred placement selection (2026-10-13)
+
+Extracted the constructor's reachable/unblocked element selection into `next_unblocked_element` and added a focused regression test: a reachable element marked blocked is skipped while another reachable element is attempted, then becomes eligible again when a successful structural change clears the blocked set. This tests the scheduling behavior independently of the full seed blueprint and Bob inventory.
+
+**Scaffold removal remains mandatory in this workstream.** This test is not a replacement coordinator and does not authorize keeping the Carbon scaffold as a fallback. The remaining migration is still to implement the persisted-formation coordinator, wire the initial startup through it, and remove the fixed ring/support topology, coordinate snapping/fallback, and `1.0e12` artificial energy allowance in that same controlled startup migration. The new test has been committed but has not yet been run locally or by exact-head CI; no passing result is claimed.
+
+
+### Constructor stripping sprint 12 — verify deferred-placement experiment (2026-10-13)
+
+**Exact-head CI:** commit `addc569ea90527a9e0b001841d90b1cd47812be0`, workflow run [#7250](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38401046777).
+
+- Formatting, source-file size guard, COMBINE architecture guard, the soft-cushion feasibility diagnostic step, all focused Bob persistence/concurrency/fluid checks, focused fluid restoration/coalescence checks, focused chemical BREAK checks, and singleton geometry generation completed successfully.
+- The new `blocked_reachable_element_is_deferred_until_structure_changes` regression test passed in the full suite.
+- The full Rust suite remains **408 passed, 26 failed, 1 ignored**. The same known geometry/contact/cavity/storage/reproduction failures remain; this small scheduling change did not resolve the broader baseline.
+- Clippy remains red under warnings-as-errors: **66 errors** for the binary and **37 errors** for the test target. These are existing broader lint failures, not introduced by the formatting correction.
+
+The first CI attempt for this test commit failed the formatting gate; the follow-up formatting-only commit fixed it, and run #7250 confirms formatting and architecture guards now pass. This experiment validates only deferred element selection; it does not validate a viable formation-driven startup or remove the production scaffold.
+
+**Startup energy audit:** `Simulation::create_initial_organism` currently computes `construction_cost = (1.0e12 - construction.energy).max(0.0)` and adds that spent construction cost back into the organism's initial usable energy. Therefore the legacy `1.0e12` allowance is not merely a search budget: the code also converts the construction expenditure into newly available organism energy. The replacement must remove both the artificial construction budget and this expenditure refund. The replacement coordinator must use a real supplied energy balance and commit the live `EnergyLedger`; do not preserve the refund under a new name or claim scaffold removal is safe before a no-cheat startup path is demonstrated.
+
+
+### Constructor migration checkpoint — persisted-Bob startup path (2026-10-13)
+
+The production startup route now calls `construct_valid_with_energy`, which searches bounded compositions from persisted Bob rigid-edge poses. The former Carbon ring/support/spoke scaffold, target lattice snapping, and `1.0e12` construction-energy allowance are absent from `src/construction/initial_organism_constructor.rs`; `Simulation::create_initial_organism` now keeps the constructor's remaining energy and does not refund construction costs. The constructor requires a qualifying realized cavity plus acquired Water and at least three distinct non-water resource types.
+
+**Collected CI result, workflow run #7259 (commit before the latest test addition):** both persisted-Bob attachment tests passed, including explicit coverage-miss/no-fallback behavior and successful live COMBINE/energy settlement. The full suite reported **410 passed, 26 failed, 1 ignored**. The failing tests are in the existing geometry/contact/cavity/storage/reproduction/movement/viability areas; the new attachment tests were not among the failures. Formatting failed on one test line in that run; the source has since been corrected. Clippy remains failing due to broader warnings-as-errors lint debt. Do not call this an exact-head green run.
+
+A new end-to-end constructor regression test was added after that run. It invokes the production constructor with the genome's supplied energy and checks cavity qualification, non-negative non-increasing energy, and the required acquired resource set. **That new test has not yet been verified by CI.** The latest exact-head workflow/status lookup has not returned a run, so no result is claimed for it.
+
+A stale acquisition-probe comment implying that a scaffold creates the chamber was removed. No fixed topology or geometry tolerance was reintroduced. Next verification gate: obtain exact-head CI for the new production-constructor test, inspect its diagnostic if it fails, then run the constructor repeatedly against the persisted Bob library and record elapsed time, state count, material composition, bond count, cavity result, and remaining energy before treating startup migration as stable.
+
+
+### Sprint 1 audit and retired-experiment cleanup — 2026-10-13
+
+Exact-head workflow run [#7259](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38407956526), commit `c4f87e3374d20d4a1e9fcf26ccc8a32eea84285b`, completed with failure. The focused Bob attachment checks passed, including strict persisted-coverage misses, live COMBINE, and fluid-record validation. The full suite reported **364 passed, 69 failed, 1 ignored**; the production constructor end-to-end test failed. Clippy also failed under `-D warnings`. This is the current inspected baseline, not a green exact-head result.
+
+The soft-cushion whole-blueprint probe has been retired. It optimized the coordinates of the old `confirmed_seed_baseline`, used a separate approximate geometry/scoring implementation, and only asserted that its score was finite. It did not exercise the live persisted-Bob constructor and no longer answers a useful question now that startup is formation-driven. Its 291-line test module, `main.rs` registration, and dedicated CI step have been removed. The fixed-ring spacing and methane-angle tests in `juvenile.rs` were also removed because they codified the retired seed topology. The juvenile baseline implementation remains for existing tests that still use it as a fixture; no claim is made that the module itself is obsolete.
+
+Historical entries above that describe the probe or fixed seed topology are retained as chronology, not as active constructor requirements or current CI gates. Do not remove other failing tests simply to lower the failure count: first classify whether each test protects a still-required physical/biological contract or only an obsolete implementation detail.
+
+**Next gate:** run CI on this cleanup commit and inspect the production-constructor failure and the full-suite regression increase before making further test deletions or constructor changes.
+
+
+### Sprint 1 exact-head CI result after obsolete-test cleanup — 2026-10-13
+
+Workflow run [#7294](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38409735027), exact commit `aa9cac4969e2d7029b4a86a71e4dd0820421c55d`, completed. Formatting, source-size guard, COMBINE architecture guard, all focused Bob persistence/concurrency/fluid checks, focused fluid restoration/coalescence checks, focused chemical BREAK checks, and singleton geometry generation passed.
+
+The full suite reported **361 passed, 69 failed, 1 ignored** after removing three obsolete tests. The production-constructor test fails because the persisted-Bob search exhausts **64/64 states** without a qualifying cavity: `coverage_misses=0`, `rejected_placements=7920`, `overlap_rejections=7876`, `energy_rejections=314`, `queue_budget_drops=16`. The last recorded COMBINE rejection required **1.529983** energy with only **0.355218** available. Restoration, no-bond-contact, candidate-evaluation, and COMBINE rejection counters were zero at the aggregate diagnostic level, apart from the recorded energy insufficiency. This points to a bounded-search/placement-diversity and energy-budget problem, not missing Bob records. Many full-suite failures are cascading: `Simulation::new` panics when its initial organism cannot be constructed, so tests of unrelated runtime behavior fail before reaching their own assertions. Do not treat all 69 as independent regressions.
+
+Clippy remains red under `-D warnings`: **65 application-target errors and 37 test-target errors**. The cleanup removed the obsolete experiment and fixed-seed topology tests; it did not make the constructor viable or resolve the pre-existing lint backlog.
+
+**Sprint 1 conclusion:** the exact-head workflow is reconciled and the obsolete experiment gates are removed. Next work should isolate the constructor failure: determine how search scoring, the 64-state cap, candidate truncation, and real available energy interact. Do not increase the budget blindly, reintroduce synthetic energy, weaken overlap checks, or delete remaining physical-contract tests to lower the failure count.
+
+
+### Candidate-selection diagnostic sprint — 2026-10-13
+
+Added constructor failure diagnostics for the search budget and placement-selection stages. Exact-head workflow [#7299](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38416823325), commit `f2945e971a2c8c5ab6f769a49ddbee3c3cff5e6e`, passed formatting, source-size and COMBINE architecture guards, all focused Bob persistence/concurrency/fluid checks, focused fluid restoration/coalescence checks, focused chemical BREAK checks, and singleton geometry generation. The full suite remains at **361 passed, 69 failed, 1 ignored**; Clippy remains red under warnings-as-errors (66 application-target errors and 38 test-target errors on this exact head). These are not claimed as new regressions from diagnostic instrumentation.
+
+The failed production-constructor run reported: 64/64 states explored; 744 placement queries; 58 state expansions hit the 12-query budget; 184 anchor-loop entries; 143 successfully generated child states; 13,915 raw persisted pair-formation poses; **10,885 poses dropped by the six-pose pair cap**; 5,001 persisted edge suggestions examined; 4,890 edge poses added; 111 duplicates; 7,920 candidate pose attempts; 7,876 overlap rejections; 314 energy rejections; zero Bob coverage misses. The pair cap therefore discards about **78.2%** of pair-formation poses before live validation. The candidate search still exhausts the state budget without a qualifying cavity; the last energy rejection required 1.529983 with 0.355218 available.
+
+This establishes a concrete selection bottleneck, not that it is the only cause of failure. The high overlap rejection count remains an independent diagnostic target, and energy insufficiency remains a real physical constraint. Next: replace signature-order truncation with deterministic pose-diversity selection while keeping the six pair-pose and twelve total-pose ceilings initially unchanged; then compare the same diagnostics against this baseline. Do not loosen overlap/contact rules or synthesize energy.
+
+
+### Sprint 2 — deterministic pair-pose diversity selection (2026-10-13)
+
+Replaced the pair-formation `truncate(6)` selection with deterministic farthest-point selection over normalized X/Y pose and circular rotation distance. The same six-pose cap, twelve-pose total cap, 12 queries per state, 64-state ceiling, live overlap/contact/COMBINE validation, and real energy ledger remain unchanged. Added a focused selector test with two spatial clusters and repeatability assertions in the next commit.
+
+Exact-head CI for selector commit `f22bdafb9148c122b8f9a19e55c0e922fd0d7a37`, workflow [#7304](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38418530989), passed formatting, source-size and COMBINE architecture guards, all focused Bob persistence/concurrency/fluid checks, focused fluid restoration/coalescence checks, focused chemical BREAK checks, and singleton geometry generation. Full suite remained **361 passed, 69 failed, 1 ignored**; Clippy remains red under warnings-as-errors.
+
+The selector changed search behavior but did not find a qualifying cavity within 64/64 states. Compared with the diagnostic baseline, child states generated rose from 143 to 154, while candidate attempts fell from 7,920 to 7,560; overlap rejections remained dominant (7,497), and energy rejections rose from 314 to 342. The pair-pose cap still discards 9,698 of 12,788 raw pair poses (75.8%), although the retained subset is now spatial/orientation-diverse rather than signature-order-biased. This is not a successful constructor fix; it demonstrates that selection order alone is insufficient. Next: verify the focused selector test on exact head, then examine the overlap predicate/pose-frame path and state scoring before changing budgets or energy rules.
+
+
+**Selector test verification — exact-head workflow [#7305](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38418697472), commit `7df4e2e9a3ebb8db8034eacbb947177381d0fb91`:** the new deterministic spatial-cluster/diversity test passed. Formatting, source-size, COMBINE architecture, and all focused Bob/fluid/chemistry gates passed. Full suite: **362 passed, 69 failed, 1 ignored** (one additional passing test is the new selector test). The production constructor still fails with the same 64-state exhaustion and overlap-dominated pattern; strict Clippy remains red with the repository's existing lint backlog. The selector change is verified as a deterministic bounded-selection improvement, but not as a constructor-viability fix.
+
+
+## Constructor resource modes — governing contract (2026-10-13)
+
+**Free-form construction:** unlimited construction-time energy and unlimited supply of every resource type. Resource shortages must never block structural exploration. Persisted Bob poses remain proposals; live restoration, nonpenetration, contact, bond-formation criteria, and genome-cavity qualification remain mandatory. Free-form bonds use the shared physical/formation authority but do not debit the resulting organism's real energy balance or ledger. Ranking and duplicate-state pruning are structural, never energy-based. Unlimited construction supply does not create infinite stored inventory or organism energy.
+
+**Blueprint-bound construction:** only physically acquired/transferred materials and actual available energy. If a valid next step lacks material or energy, wait, raise the relevant need, preserve the unfinished structure, and resume when the resource arrives. A shortage is temporary, not proof of structural impossibility. Ordinary simulation COMBINE remains energy-gated and ledger-settled; only free-form assembly skips energy settlement.
+
+Regression expectations: free-form assembly must not stop for zero energy and must return its unchanged real energy balance; blueprint-bound material/energy shortages wait and resume; neither mode bypasses live physical validation or fabricates stored inventory/energy.
+
+
+### Recovery checkpoint and test-regression ledger — 2026-10-13 (authoritative)
+
+This section supersedes earlier shorthand that grouped all current failures together. Counts below come from the exact workflow logs and test names, not estimates.
+
+**Preserved comparison checkpoint:** branch `recovery/baseline-407-pass-2026-10-13`, commit `e1e68eae3dcb96cfa84181a7976df2a1c4543ef1`. Exact-head CI workflow [#7231](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38397101953) reported **407 passed, 26 failed, 1 ignored**. This is a comparison checkpoint, not a green/release-ready state. It retains the then-working startup path and its known developmental-blueprint/geometry failures.
+
+**Current constructor branch:** `refactor/constructor-strip-2026-10-12`, exact head `62e5360190f2412e5342bcc50cff61c4c5701998). Exact-head CI [#7309](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38429538041) reported **362 passed, 69 failed, 1 ignored**. Formatting, source-size policy, COMBINE architecture checks, focused Bob persistence/concurrency/fluid checks, fluid restoration/coalescence checks, chemical BREAK checks, and singleton geometry generation passed. The full Rust suite and Clippy failed.
+
+**Test-name comparison against the preserved checkpoint:**
+
+- All 26 previously failing test names still fail in the current run; none is resolved by test-name comparison.
+- There are 43 additional failing test names in the current run. One is the new production-constructor acceptance test. The other 42 now fail before exercising their intended behavior because `Simulation::new` panics when the new initial-organism constructor cannot find a qualifying organism.
+- Two tests present in the earlier suite are absent after test cleanup, so raw pass/fail totals should not be interpreted without test-identity comparison.
+- The current constructor diagnostic exhausts 64/64 search states without a qualifying cavity. Bob coverage misses are zero; the latest recorded selector experiment remains overlap-dominated. Do not treat higher candidate diversity or passing library checks as constructor viability.
+- The baseline's 26 failures are pre-existing work, not a clean baseline. Keep them explicitly tracked rather than hiding/removing them.
+
+**Lint status:** Clippy is still failing under `-D warnings`. The latest inspected log reports 68 application-target errors and 40 test-target errors, including ordinary style findings and dead-code expectations. Do not suppress the lint policy globally; classify and fix findings by ownership after startup/test reachability is restored.
+
+**Recovery operating rules:**
+
+1. Treat `recovery/baseline-407-pass-2026-10-13` as an immutable comparison pointer. Do not force-push, reset, or repurpose it.
+2. Continue constructor work only on this PR's existing branch; do not open a parallel constructor PR.
+3. Preserve the approved removal of the fixed scaffold in the active workstream. Do not use the scaffold as a hidden fallback.
+4. Do not weaken live overlap, contact, restoration, COMBINE, or energy authority to make a candidate pass.
+5. The next implementation gate is to restore a viable free-form construction path, then verify the 42 startup-cascading tests become reachable. Re-run exact-head CI and compare failures by test identity. Only after that, address the baseline failures and Clippy in separate bounded sprints.
+
+
+### Rejected constructor query-order experiment — historical result (2026-10-13)
+
+**Status: reverted; not part of the active constructor.** Commit `a71b9b834d761ec6e5cffcf4e7e9ceede0540b92` rotated anchor/material query starts while preserving the per-state query cap and live physical authorities. The change was reverted in `bcb3745b8d1761cb7daed8fe45025d4fd6461c3d`. Keep this result as history; do not reintroduce the loop-order change without a new hypothesis and a focused acceptance metric.
+
+Exact-head CI for the experiment: [run #38431486175](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38431486175). It failed with **362 passed, 69 failed, 1 ignored**; Clippy also failed. Runtime increased from 47.95 s to 79.74 s. The experiment changed search distribution and generated more child states, but did not find a qualifying constructor.
+
+Experiment diagnostics:
+- States explored: 64/64; queue-budget drops: 251
+- Placement queries: 697; per-state query budget exhausted 50 times
+- Candidate states generated: 373, compared with 154 in the prior recorded diversity experiment
+- Raw pair placements: 7,989; dropped by selection cap: 5,533
+- Edge placements examined/added: 4,153 / 4,012
+- Live placement attempts: 6,468; overlap rejections: 6,468
+- Restoration failures: 0; no-bond-contact, evaluation, COMBINE, and energy rejections: 0
+- Bob coverage misses: 0
+
+**Interpretation:** distributing the bounded query budget increased candidate generation but did not yield a physically valid attachment. The observed failures point to proposal pose validity, not missing Bob coverage or energy rejection. One representative rejection placed Sulfur overlapping Carbon at near-coincident centers. A coordinate-frame/relative-pose mismatch or rigid-edge contact-parameter mismatch remains a hypothesis, not a proven cause.
+
+**Next diagnostic gate:** replay one persisted two-piece Bob formation onto a known live anchor; compare stored and restored world-space shapes and relative transforms; then add a focused regression test before changing production search or increasing budgets. Keep the fixed scaffold removed and preserve live restoration, non-overlap, contact, COMBINE, and energy checks.
+
+**Recovery status:** the production constructor still finds no qualifying cavity. The last recorded full-suite result is 362 passed, 69 failed, 1 ignored, with 42 startup-cascading failures among the blocked tests. These metrics describe the experiment run, not a fresh test of the reverted head. The subsequent narrow cleanup removed the obsolete overlap-prefilter counters and redundant nested query-budget checks, and this experiment history was consolidated into this single record. Cleanup commit: `ee16d483c7329aedf648fd86459fd443f4f376f6`. Exact-head CI [run #7328](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38434544879): formatting, source-size policy, COMBINE architecture checks, all focused Bob/fluid/chemical gates, and singleton geometry seeding passed. The full suite remains **362 passed, 69 failed, 1 ignored**; Clippy remains red with pre-existing application/test diagnostics (67 application-target and 39 test-target errors). This cleanup is not a constructor fix, and no clean/full-suite pass is claimed.

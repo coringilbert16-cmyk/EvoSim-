@@ -466,7 +466,6 @@ impl Simulation {
         organism: &mut Organism,
         environment: &mut Environment,
         ledger: &mut EnergyLedger,
-        seed_scale_reference: Option<(f64, f64)>,
     ) -> bool {
         if matches!(
             transformation.kind,
@@ -507,13 +506,8 @@ impl Simulation {
             let original_ledger = *ledger;
             let mut trial_ledger = original_ledger;
             let mut cache = crate::contact::ConnectionCompatibilityCache;
-            let developmental_context = seed_scale_reference.and_then(|reference| {
-                crate::developmental_decision::context(
-                    &mut trial_organism,
-                    &trial_environment,
-                    reference,
-                )
-            });
+            let developmental_context =
+                crate::developmental_decision::context(&mut trial_organism, &trial_environment);
             let developmental = developmental_context.as_ref().map(|context| {
                 (
                     &context.blueprint,

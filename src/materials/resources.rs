@@ -42,6 +42,8 @@ pub enum Form {
     Circle {
         radius: f64,
     },
+    /// Zero-thickness segment primitive for computational geometry only.
+    /// Physical resources require finite area; Hydrogen uses a thin rectangle.
     Line {
         length: f64,
     },
@@ -266,6 +268,12 @@ pub struct Shape {
 impl Shape {
     pub fn is_valid(&self) -> bool {
         self.form.is_valid()
+    }
+
+    /// Physical resources must occupy finite area. Form::Line remains a
+    /// geometry primitive, but cannot represent a physical resource.
+    pub fn is_valid_physical_shape(&self) -> bool {
+        self.is_valid() && !matches!(&self.form, Form::Line { .. })
     }
 }
 
@@ -768,10 +776,25 @@ mod shape_tests {
     }
 
     #[test]
-    fn every_catalog_resource_has_a_valid_shape() {
+    fn every_catalog_resource_has_a_valid_physical_shape() {
         for resource in default_catalog() {
             assert!(resource.shape.is_valid());
+            assert!(resource.shape.is_valid_physical_shape());
         }
+    }
+
+    #[test]
+    fn zero_area_line_is_not_a_physical_resource_shape() {
+        let line = Shape {
+            form: Form::Line { length: 1.0 },
+        };
+        assert!(line.is_valid(), "line remains a geometry primitive");
+        assert!(!line.is_valid_physical_shape());
+        let hydrogen = default_catalog()
+            .into_iter()
+            .find(|resource| resource.name == "Hydrogen")
+            .unwrap();
+        assert!(hydrogen.shape.is_valid_physical_shape());
     }
 
     #[test]
@@ -995,9 +1018,11 @@ mod shape_tests {
         assert!(catalog
             .iter()
             .any(|r| matches!(r.shape.form, Form::RegularPolygon { sides, .. } if sides != 6)));
+        // Physical resources use finite-area geometry; Hydrogen is the line-like
+        // resource and is represented by its thin rectangle.
         assert!(catalog
             .iter()
-            .any(|r| matches!(r.shape.form, Form::Line { .. })));
+            .any(|r| matches!(r.shape.form, Form::Rectangle { .. })));
     }
 
     #[test]

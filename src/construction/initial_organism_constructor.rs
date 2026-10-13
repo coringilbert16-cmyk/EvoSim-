@@ -1,20 +1,13 @@
-//! Deterministic physical construction baseline for the first valid organism.
+//! Formation-driven physical construction for the first valid organism.
 //!
-//! The current baseline has no developmental blueprint or target topology. It
-//! uses a temporary deterministic Carbon scaffold only to prove the physical
-//! construction, genome-cavity, and acquisition contracts. The final constructor
-//! will replace this fixed scaffold with local free-form construction while
-//! retaining the same physical bond authority.
+//! Startup composes local poses from persisted Bob geometry and admits each
+//! attachment only through live overlap, contact, COMBINE, and energy checks.
+//! No fixed scaffold, target lattice, or artificial construction-energy reserve
+//! is used.
 
 use crate::resources::{BaseResource, Form, Material, PhysicalState, Shape};
 use crate::state::EnergyLedger;
 use crate::structure::Placement;
-
-const CONSTRUCTION_ENERGY: f64 = 1.0e12;
-const INNER_RING_RADIUS: i32 = 3;
-const OUTER_RING_RADIUS: i32 = 5;
-const SPOKE_RADIUS: i32 = 4;
-const SQRT_3: f64 = 1.7320508075688772935;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ValidConstruction {
@@ -32,173 +25,536 @@ pub(crate) enum FluidGeometryStatus {
     CandidatesRejected,
 }
 
-/// Axial hex coordinates are used only as a deterministic geometric
-/// construction recipe. They are not a biological blueprint: every unit is
-/// still instantiated and every connection is admitted through the normal
-/// physical bond transaction.
-fn axial_to_world(q: i32, r: i32) -> (f64, f64) {
-    // Carbon's catalog hexagon has a vertex on the +x axis. These axial
-    // basis vectors therefore match the actual tessellation of that shape.
-    (
-        1.5 * q as f64,
-        (SQRT_3 * 0.5) * q as f64 + SQRT_3 * r as f64,
+struct PersistedAttachment {
+    structure: crate::structure::OrganismStructure,
+    new_unit_index: usize,
+    ledger: EnergyLedger,
+    energy: f64,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum PersistedAttachmentFailure {
+    CoverageMiss,
+    CandidatesRejected {
+        suggestions: usize,
+        raw_pair_placements: usize,
+        pair_placements_dropped_by_cap: usize,
+        edge_placements_examined: usize,
+        edge_placements_added: usize,
+        duplicate_placements: usize,
+        placement_attempts: usize,
+        last_overlap_rejection: Option<String>,
+        restoration_failures: usize,
+        overlap_rejections: usize,
+        pair_overlap_rejections: usize,
+        edge_overlap_rejections: usize,
+        no_bond_contact: usize,
+        evaluation_rejections: usize,
+        combine_rejections: usize,
+        energy_rejections: usize,
+        last_combine_rejection: Option<String>,
+    },
+}
+
+fn select_diverse_placements(placements: Vec<Placement>, limit: usize) -> Vec<Placement> {
+    if placements.len() <= limit || limit == 0 {
+        return if limit == 0 { Vec::new() } else { placements };
+    }
+
+    let min_x = placements.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+    let max_x = placements
+        .iter()
+        .map(|p| p.x)
+        .fold(f64::NEG_INFINITY, f64::max);
+    let min_y = placements.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+    let max_y = placements
+        .iter()
+        .map(|p| p.y)
+        .fold(f64::NEG_INFINITY, f64::max);
+    let spatial_scale = (max_x - min_x).max(max_y - min_y).max(1e-9);
+    let mean_x = placements.iter().map(|p| p.x).sum::<f64>() / placements.len() as f64;
+    let mean_y = placements.iter().map(|p| p.y).sum::<f64>() / placements.len() as f64;
+    let mean_sin = placements
+        .iter()
+        .map(|p| p.rotation_radians.sin())
+        .sum::<f64>();
+    let mean_cos = placements
+        .iter()
+        .map(|p| p.rotation_radians.cos())
+        .sum::<f64>();
+    let mean_rotation = mean_sin.atan2(mean_cos);
+
+    let distance_squared = |a: Placement, b: Placement| {
+        let dx = (a.x - b.x) / spatial_scale;
+        let dy = (a.y - b.y) / spatial_scale;
+        let angle = (a.rotation_radians - b.rotation_radians + std::f64::consts::PI)
+            .rem_euclid(std::f64::consts::TAU)
+            - std::f64::consts::PI;
+        dx * dx + dy * dy + (angle / std::f64::consts::PI).powi(2)
+    };
+    let centroid = Placement {
+        x: mean_x,
+        y: mean_y,
+        rotation_radians: mean_rotation,
+    };
+    let first_index = placements
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| {
+            distance_squared(**a, centroid).total_cmp(&distance_squared(**b, centroid))
+        })
+        .map(|(index, _)| index)
+        .expect("non-empty placement list has a first candidate");
+
+    let mut selected_indices = vec![first_index];
+    while selected_indices.len() < limit {
+        let next_index = placements
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !selected_indices.contains(index))
+            .max_by(|(_, a), (_, b)| {
+                let min_a = selected_indices
+                    .iter()
+                    .map(|&selected| distance_squared(**a, placements[selected]))
+                    .fold(f64::INFINITY, f64::min);
+                let min_b = selected_indices
+                    .iter()
+                    .map(|&selected| distance_squared(**b, placements[selected]))
+                    .fold(f64::INFINITY, f64::min);
+                min_a.total_cmp(&min_b)
+            })
+            .map(|(index, _)| index)
+            .expect("candidate count exceeds the selection limit");
+        selected_indices.push(next_index);
+    }
+
+    selected_indices
+        .into_iter()
+        .map(|index| placements[index])
+        .collect()
+}
+
+fn placement_signature(placement: Placement) -> String {
+    format!(
+        "{:.3},{:.3},{:.4}",
+        placement.x, placement.y, placement.rotation_radians
     )
 }
 
-fn hex_ring(radius: i32) -> Vec<(i32, i32)> {
-    if radius <= 0 {
-        return Vec::new();
-    }
-    let directions = [(0, 1), (1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1)];
-    let mut q = -radius;
-    let mut r = 0;
-    let mut result = Vec::with_capacity((radius * 6) as usize);
-    for (dq, dr) in directions {
-        for _ in 0..radius {
-            result.push((q, r));
-            q += dq;
-            r += dr;
-        }
-    }
-    result
-}
-
-/// Ask Bob for candidate neighbor poses, then admit only a pose that is close
-/// to the scaffold's intended lattice point and passes live whole-structure
-/// nonpenetration and contact checks. Bob never authorizes a bond.
-fn bob_validated_neighbor_placement(
-    structure: &crate::structure::OrganismStructure,
-    anchor_index: usize,
-    resource: &BaseResource,
-    intended: (f64, f64),
+/// Replay two-piece formations already stored in Bob as local growth proposals.
+/// The stored anchor constituent is rigidly aligned to the live anchor; the
+/// other constituent's recorded relative pose is preserved exactly.
+fn persisted_pair_formation_placements(
+    anchor_material: &str,
+    anchor_placement: Placement,
+    candidate_resource: &BaseResource,
     library: &crate::geometry_reference_library::GeometryLibrary,
-    catalog: &[BaseResource],
-) -> Option<Placement> {
-    let anchor = structure.units.get(anchor_index)?;
-    let anchor_material = anchor.material.parts.first()?.0.as_str();
-    let mut suggestions =
-        library.suggest_rigid_edge_placements(anchor_material, anchor.placement, resource, catalog);
-    suggestions.sort_by(|a, b| {
-        let score = |placement: Placement| {
-            (placement.x - intended.0).hypot(placement.y - intended.1)
-                + normalize_angle_for_constructor(placement.rotation_radians).abs() * 0.25
-        };
-        score(a.placement)
-            .partial_cmp(&score(b.placement))
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    for suggestion in suggestions {
-        let mut proposed = suggestion.placement;
-        // Bob proposes the local interface; the scaffold still defines the
-        // broad cavity topology. Only near-equivalent lattice poses are eligible.
-        if (proposed.x - intended.0).hypot(proposed.y - intended.1)
-            > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-            || !rotation_preserves_form_symmetry(&resource.shape.form, proposed.rotation_radians)
+) -> Vec<Placement> {
+    let mut placements = std::collections::BTreeMap::<String, Placement>::new();
+    for formation in library.formations() {
+        if formation.constituents.len() != 2
+            || !formation.bonds.iter().any(|bond| {
+                (bond.constituent_a == 0 && bond.constituent_b == 1)
+                    || (bond.constituent_a == 1 && bond.constituent_b == 0)
+            })
         {
             continue;
         }
-        // Snap only the near-equivalent proposal to the exact scaffold site
-        // and canonical pose. The candidate is rechecked after snapping, so
-        // this cannot bypass collision, contact, or bond validation.
-        proposed.x = intended.0;
-        proposed.y = intended.1;
-        proposed.rotation_radians = 0.0;
-        let Some(instance) = crate::physical_material::PhysicalMaterial::realized(
-            Material::free_base(resource.name.clone(), 1.0),
-            vec![Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            }],
-            catalog,
-        ) else {
-            continue;
-        };
-        let mut trial = structure.clone();
-        let Some(indices) =
-            crate::material_restoration::restore_material(&mut trial, &instance, proposed, catalog)
-        else {
-            continue;
-        };
-        let Some(&candidate_index) = indices.first() else {
-            continue;
-        };
-        let candidate = &trial.units[candidate_index];
-        let Some(candidate_shape) = candidate.shape(catalog) else {
-            continue;
-        };
-        let candidate_part = crate::material_geometry::PlacedMaterialPart {
-            part_index: candidate_index,
-            form: candidate_shape.form.clone(),
-            placement: candidate.placement,
-        };
-        let mut penetrates = false;
-        for (index, unit) in trial.units.iter().enumerate() {
-            if indices.contains(&index) {
+
+        for (anchor_index, candidate_index) in [(0, 1), (1, 0)] {
+            let stored_anchor = &formation.constituents[anchor_index];
+            let stored_candidate = &formation.constituents[candidate_index];
+            if stored_anchor.resource.as_str() != anchor_material
+                || stored_candidate.resource.as_str() != candidate_resource.name.as_str()
+            {
                 continue;
             }
-            let Some(shape) = unit.shape(catalog) else {
-                penetrates = true;
-                break;
+
+            let rotation_delta =
+                anchor_placement.rotation_radians - stored_anchor.placement.rotation_radians;
+            let (sin, cos) = rotation_delta.sin_cos();
+            let dx = stored_candidate.placement.x - stored_anchor.placement.x;
+            let dy = stored_candidate.placement.y - stored_anchor.placement.y;
+            let placement = Placement {
+                x: anchor_placement.x + dx * cos - dy * sin,
+                y: anchor_placement.y + dx * sin + dy * cos,
+                rotation_radians: stored_candidate.placement.rotation_radians + rotation_delta,
             };
-            let existing_part = crate::material_geometry::PlacedMaterialPart {
-                part_index: index,
-                form: shape.form.clone(),
-                placement: unit.placement,
-            };
-            if crate::material_geometry::placed_forms_penetrate(
-                &candidate_part,
-                &existing_part,
-                crate::material_geometry::GEOMETRY_EPSILON,
-            ) {
-                penetrates = true;
-                break;
+            if !placement.x.is_finite()
+                || !placement.y.is_finite()
+                || !placement.rotation_radians.is_finite()
+            {
+                continue;
             }
+            placements
+                .entry(placement_signature(placement))
+                .or_insert(placement);
         }
-        if penetrates {
+    }
+    placements.into_values().collect()
+}
+
+/// Return the persisted two-piece formation that reproduces a rejected world-space pose.
+/// This is diagnostic-only: it does not influence candidate ordering or acceptance.
+fn persisted_pair_pose_provenance(
+    anchor_material: &str,
+    anchor_placement: Placement,
+    candidate_resource: &BaseResource,
+    target_placement: Placement,
+    library: &crate::geometry_reference_library::GeometryLibrary,
+) -> Option<String> {
+    for formation in library.formations() {
+        if formation.constituents.len() != 2
+            || !formation.bonds.iter().any(|bond| {
+                (bond.constituent_a == 0 && bond.constituent_b == 1)
+                    || (bond.constituent_a == 1 && bond.constituent_b == 0)
+            })
+        {
             continue;
         }
-        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-        let touches_anchor = crate::contact::connection_pair_candidates_cached(
-            &trial,
-            anchor_index,
-            candidate_index,
-            catalog,
-            &mut cache,
-        )
-        .into_iter()
-        .any(|contact| {
-            contact.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                && contact.available_a
-                && contact.available_b
-        });
-        if touches_anchor {
-            return Some(proposed);
+        for (anchor_index, candidate_index) in [(0, 1), (1, 0)] {
+            let stored_anchor = &formation.constituents[anchor_index];
+            let stored_candidate = &formation.constituents[candidate_index];
+            if stored_anchor.resource.as_str() != anchor_material
+                || stored_candidate.resource.as_str() != candidate_resource.name.as_str()
+            {
+                continue;
+            }
+            let rotation_delta =
+                anchor_placement.rotation_radians - stored_anchor.placement.rotation_radians;
+            let (sin, cos) = rotation_delta.sin_cos();
+            let dx = stored_candidate.placement.x - stored_anchor.placement.x;
+            let dy = stored_candidate.placement.y - stored_anchor.placement.y;
+            let replayed = Placement {
+                x: anchor_placement.x + dx * cos - dy * sin,
+                y: anchor_placement.y + dx * sin + dy * cos,
+                rotation_radians: stored_candidate.placement.rotation_radians + rotation_delta,
+            };
+            if placement_signature(replayed) == placement_signature(target_placement) {
+                return Some(format!(
+                    "stored_anchor_index={anchor_index}; stored_anchor=({}, {}, {}); stored_candidate_index={candidate_index}; stored_candidate=({}, {}, {}); rotation_delta={rotation_delta:.6}; replayed=({}, {}, {})",
+                    stored_anchor.placement.x,
+                    stored_anchor.placement.y,
+                    stored_anchor.placement.rotation_radians,
+                    stored_candidate.placement.x,
+                    stored_candidate.placement.y,
+                    stored_candidate.placement.rotation_radians,
+                    replayed.x,
+                    replayed.y,
+                    replayed.rotation_radians,
+                ));
+            }
         }
     }
     None
 }
 
-fn normalize_angle_for_constructor(angle: f64) -> f64 {
-    (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI
-}
-
-/// A rotationally symmetric shape may have a different numeric pose while
-/// occupying exactly the same geometry. Preserve those valid equivalent poses.
-fn rotation_preserves_form_symmetry(form: &crate::resources::Form, rotation: f64) -> bool {
-    if normalize_angle_for_constructor(rotation).abs() <= 0.1 {
-        return true;
-    }
-    let Some(vertices) = form.polygon_vertices() else {
-        return false;
+/// Try one local growth step using only persisted pair formations and rigid-edge poses from Bob.
+/// The returned structure and energy are committed together only after the
+/// ordinary live COMBINE transaction succeeds. No intended lattice pose,
+/// snapping, or analytic fallback is available in this path.
+fn try_persisted_bob_attachments(
+    structure: &crate::structure::OrganismStructure,
+    anchor_index: usize,
+    resource: &BaseResource,
+    library: &crate::geometry_reference_library::GeometryLibrary,
+    catalog: &[BaseResource],
+    ledger: &EnergyLedger,
+    _available_energy: f64,
+) -> Result<Vec<PersistedAttachment>, PersistedAttachmentFailure> {
+    let Some(anchor) = structure.units.get(anchor_index) else {
+        return Err(PersistedAttachmentFailure::CandidatesRejected {
+            suggestions: 0,
+            raw_pair_placements: 0,
+            pair_placements_dropped_by_cap: 0,
+            edge_placements_examined: 0,
+            edge_placements_added: 0,
+            duplicate_placements: 0,
+            placement_attempts: 0,
+            last_overlap_rejection: None,
+            restoration_failures: 0,
+            overlap_rejections: 0,
+            pair_overlap_rejections: 0,
+            edge_overlap_rejections: 0,
+            no_bond_contact: 0,
+            evaluation_rejections: 0,
+            combine_rejections: 0,
+            energy_rejections: 0,
+            last_combine_rejection: None,
+        });
     };
-    let (s, c) = rotation.sin_cos();
-    vertices.iter().all(|&(x, y)| {
-        let rotated = (x * c - y * s, x * s + y * c);
-        vertices
-            .iter()
-            .any(|&(other_x, other_y)| (rotated.0 - other_x).hypot(rotated.1 - other_y) <= 1e-7)
+    let Some(anchor_material) = anchor.material.parts.first().map(|part| part.0.as_str()) else {
+        return Err(PersistedAttachmentFailure::CandidatesRejected {
+            suggestions: 0,
+            raw_pair_placements: 0,
+            pair_placements_dropped_by_cap: 0,
+            edge_placements_examined: 0,
+            edge_placements_added: 0,
+            duplicate_placements: 0,
+            placement_attempts: 0,
+            last_overlap_rejection: None,
+            restoration_failures: 0,
+            overlap_rejections: 0,
+            pair_overlap_rejections: 0,
+            edge_overlap_rejections: 0,
+            no_bond_contact: 0,
+            evaluation_rejections: 0,
+            combine_rejections: 0,
+            energy_rejections: 0,
+            last_combine_rejection: None,
+        });
+    };
+    let mut candidate_placements =
+        persisted_pair_formation_placements(anchor_material, anchor.placement, resource, library);
+    let raw_pair_placements = candidate_placements.len();
+    // Keep persisted pair proposals diverse and bounded. Do not pre-reject
+    // proposals using a separate geometry path: restoration followed by the
+    // authoritative live overlap/contact/COMBINE checks decides validity.
+    candidate_placements = select_diverse_placements(candidate_placements, 6);
+    let pair_placements_selected = candidate_placements.len();
+    let pair_placements_dropped_by_cap =
+        raw_pair_placements.saturating_sub(candidate_placements.len());
+    let mut seen_placements = candidate_placements
+        .iter()
+        .copied()
+        .map(placement_signature)
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut edge_placements_examined = 0usize;
+    let mut edge_placements_added = 0usize;
+    let mut duplicate_placements = 0usize;
+    for suggestion in library.suggest_persisted_rigid_edge_placements(
+        anchor_material,
+        anchor.placement,
+        resource,
+        catalog,
+    ) {
+        if candidate_placements.len() >= 12 {
+            break;
+        }
+        edge_placements_examined += 1;
+        if !seen_placements.insert(placement_signature(suggestion.placement)) {
+            duplicate_placements += 1;
+            continue;
+        }
+        // Keep edge suggestions for the same live validation as pair poses.
+        candidate_placements.push(suggestion.placement);
+        edge_placements_added += 1;
+    }
+    if candidate_placements.is_empty() && raw_pair_placements == 0 && edge_placements_examined == 0
+    {
+        return Err(PersistedAttachmentFailure::CoverageMiss);
+    }
+    let mut placement_attempts = 0usize;
+    let mut last_overlap_rejection = None;
+
+    let mut restoration_failures = 0;
+    let mut overlap_rejections = 0;
+    let mut pair_overlap_rejections = 0;
+    let mut edge_overlap_rejections = 0;
+    let mut no_bond_contact = 0;
+    let mut evaluation_rejections = 0;
+    let mut combine_rejections = 0;
+    let mut energy_rejections = 0;
+    let mut last_combine_rejection = None;
+    let Some(instance) = crate::physical_material::PhysicalMaterial::realized(
+        Material::free_base(resource.name.clone(), 1.0),
+        vec![Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        }],
+        catalog,
+    ) else {
+        return Err(PersistedAttachmentFailure::CandidatesRejected {
+            suggestions: candidate_placements.len(),
+            raw_pair_placements,
+            pair_placements_dropped_by_cap,
+            edge_placements_examined,
+            edge_placements_added,
+            duplicate_placements,
+            placement_attempts,
+            last_overlap_rejection,
+            restoration_failures: candidate_placements.len(),
+            overlap_rejections,
+            pair_overlap_rejections,
+            edge_overlap_rejections,
+            no_bond_contact,
+            evaluation_rejections,
+            combine_rejections,
+            energy_rejections: 0,
+            last_combine_rejection: Some(
+                "candidate material failed physical realization".to_owned(),
+            ),
+        });
+    };
+
+    let mut successful = Vec::new();
+    let mut suggestions_examined = 0usize;
+    for (suggestion_index, suggestion) in candidate_placements.iter().enumerate() {
+        // Bound both successful branches and rejected attempts; every returned
+        // pose is still live-validated.
+        if successful.len() >= 4 || suggestions_examined >= 12 {
+            break;
+        }
+        suggestions_examined += 1;
+        placement_attempts += 1;
+        let mut trial = structure.clone();
+        let indices = match crate::material_restoration::restore_material(
+            &mut trial,
+            &instance,
+            *suggestion,
+            catalog,
+        ) {
+            Some(indices) if !indices.is_empty() => indices,
+            _ => {
+                restoration_failures += 1;
+                continue;
+            }
+        };
+        let overlap = indices.iter().find_map(|&candidate_index| {
+            crate::construction_runtime::overlapping_unit_indices(
+                &trial,
+                &trial.units[candidate_index],
+                &indices,
+                catalog,
+            )
+            .first()
+            .copied()
+            .map(|existing_index| (candidate_index, existing_index))
+        });
+        if let Some((candidate_unit_index, existing_unit_index)) = overlap {
+            overlap_rejections += 1;
+            let source = if suggestion_index < pair_placements_selected {
+                pair_overlap_rejections += 1;
+                "pair-formation"
+            } else {
+                edge_overlap_rejections += 1;
+                "rigid-edge"
+            };
+            let candidate_pose = trial.units[candidate_unit_index].placement;
+            let existing_pose = trial.units[existing_unit_index].placement;
+            let existing_material = trial.units[existing_unit_index]
+                .material
+                .parts
+                .first()
+                .map(|part| part.0.as_str())
+                .unwrap_or("unknown");
+            let pair_provenance = if source == "pair-formation" {
+                persisted_pair_pose_provenance(
+                    anchor_material,
+                    anchor.placement,
+                    resource,
+                    candidate_pose,
+                    library,
+                )
+            } else {
+                None
+            };
+            last_overlap_rejection.get_or_insert_with(|| format!(
+                "source={source}; anchor={anchor_index}:{anchor_material}@({:.4},{:.4},{:.4}); candidate={}:{}@({:.4},{:.4},{:.4}); overlaps={existing_unit_index}:{existing_material}@({:.4},{:.4},{:.4}); pair_provenance={pair_provenance:?}",
+                anchor.placement.x,
+                anchor.placement.y,
+                anchor.placement.rotation_radians,
+                resource.name,
+                candidate_unit_index,
+                candidate_pose.x,
+                candidate_pose.y,
+                candidate_pose.rotation_radians,
+                existing_pose.x,
+                existing_pose.y,
+                existing_pose.rotation_radians,
+            ));
+            continue;
+        }
+
+        let new_unit_index = indices[0];
+        let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
+        let contacts = crate::contact::connection_pair_candidates_cached(
+            &trial,
+            anchor_index,
+            new_unit_index,
+            catalog,
+            &mut bond_cache,
+        )
+        .into_iter()
+        .filter(|candidate| {
+            candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                && candidate.available_a
+                && candidate.available_b
+        })
+        .collect::<Vec<_>>();
+        if contacts.is_empty() {
+            no_bond_contact += 1;
+            continue;
+        }
+
+        for candidate in contacts {
+            let Some((_, _, investment, required_energy)) =
+                crate::combine_runtime::selected_candidate_evaluation(
+                    &trial,
+                    anchor_index,
+                    new_unit_index,
+                    candidate,
+                    catalog,
+                )
+            else {
+                evaluation_rejections += 1;
+                continue;
+            };
+            let _ = required_energy;
+            let mut committed_structure = trial.clone();
+            let mut committed_ledger = *ledger;
+            let mut committed_energy = _available_energy;
+            let mut transaction_cache = crate::contact::ConnectionCompatibilityCache::new();
+            if let Err(reason) =
+                crate::combine_runtime::form_selected_bond_for_freeform_construction(
+                    &mut committed_structure,
+                    anchor_index,
+                    new_unit_index,
+                    candidate,
+                    investment,
+                    catalog,
+                    &mut transaction_cache,
+                    &mut committed_ledger,
+                    &mut committed_energy,
+                )
+            {
+                combine_rejections += 1;
+                last_combine_rejection = Some(reason.to_owned());
+                continue;
+            }
+            successful.push(PersistedAttachment {
+                structure: committed_structure,
+                new_unit_index,
+                ledger: committed_ledger,
+                energy: committed_energy,
+            });
+            break;
+        }
+    }
+
+    if !successful.is_empty() {
+        return Ok(successful);
+    }
+
+    Err(PersistedAttachmentFailure::CandidatesRejected {
+        suggestions: candidate_placements.len(),
+        raw_pair_placements,
+        pair_placements_dropped_by_cap,
+        edge_placements_examined,
+        edge_placements_added,
+        duplicate_placements,
+        placement_attempts,
+        last_overlap_rejection,
+        restoration_failures,
+        overlap_rejections,
+        pair_overlap_rejections,
+        edge_overlap_rejections,
+        no_bond_contact,
+        evaluation_rejections,
+        combine_rejections,
+        energy_rejections,
+        last_combine_rejection,
     })
 }
 
@@ -206,13 +562,10 @@ fn add_unit(
     structure: &mut crate::structure::OrganismStructure,
     resource: &BaseResource,
     center: (f64, f64),
-    anchor_index: Option<usize>,
-    bob_library: Option<&crate::geometry_reference_library::GeometryLibrary>,
     catalog: &[BaseResource],
 ) -> Result<usize, String> {
-    let material = Material::free_base(resource.name.clone(), 1.0);
     let instance = crate::physical_material::PhysicalMaterial::realized(
-        material,
+        Material::free_base(resource.name.clone(), 1.0),
         vec![Placement {
             x: 0.0,
             y: 0.0,
@@ -221,23 +574,14 @@ fn add_unit(
         catalog,
     )
     .ok_or_else(|| format!("failed to realize construction unit {}", resource.name))?;
-    let proposed_placement = anchor_index
-        .and_then(|anchor| {
-            bob_library.and_then(|library| {
-                bob_validated_neighbor_placement(
-                    structure, anchor, resource, center, library, catalog,
-                )
-            })
-        })
-        .unwrap_or(Placement {
-            x: center.0,
-            y: center.1,
-            rotation_radians: 0.0,
-        });
     let indices = crate::material_restoration::restore_material(
         structure,
         &instance,
-        proposed_placement,
+        Placement {
+            x: center.0,
+            y: center.1,
+            rotation_radians: 0.0,
+        },
         catalog,
     )
     .ok_or_else(|| format!("failed to restore construction unit {}", resource.name))?;
@@ -325,7 +669,7 @@ fn bond_units(
 
         // Recompute candidates on the next iteration after this transaction
         // changes endpoint availability.
-        crate::combine_runtime::form_selected_bond_diagnostic(
+        crate::combine_runtime::form_selected_bond_for_freeform_construction(
             structure, unit_a, unit_b, candidate, investment, catalog, &mut cache, ledger, energy,
         )
         .map_err(|reason| {
@@ -340,195 +684,354 @@ fn bond_units(
     Ok(())
 }
 
-/// Place the fixed geometric scaffold directly, while using the ordinary
-/// physical bond transaction for every permanent connection. There is no
-/// speculative placement search and no recursive body-plan search.
-fn construct_scaffold(
-    catalog: &[BaseResource],
-    bob_library: &crate::geometry_reference_library::GeometryLibrary,
-) -> Result<(crate::structure::OrganismStructure, EnergyLedger, f64), String> {
-    let carbon = catalog
+#[derive(Clone)]
+struct ConstructionSearchState {
+    structure: crate::structure::OrganismStructure,
+    ledger: EnergyLedger,
+    energy: f64,
+}
+
+fn construction_state_signature(structure: &crate::structure::OrganismStructure) -> String {
+    let unit_keys = structure
+        .units
         .iter()
-        .find(|resource| {
-            resource.name == "Carbon"
-                && resource.physical_state == PhysicalState::Rigid
-                && resource.shape.is_valid()
-        })
-        .ok_or_else(|| "catalog lacks valid rigid Carbon geometry".to_string())?;
-
-    let mut structure = crate::structure::OrganismStructure::new();
-    // Bob suggestions are optional, but failure to open the configured library
-    // is handled once by construct_valid rather than silently ignored here.
-    let mut ledger = EnergyLedger::default();
-    let mut energy = CONSTRUCTION_ENERGY;
-
-    // The inner ring closes the genome cavity. Its radius is deliberately large
-    // enough that the realized enclosed area exceeds the three-Carbon minimum
-    // reference; a radius-two ring leaves only a one-Carbon-scale central void.
-    let inner = hex_ring(INNER_RING_RADIUS);
-    let mut inner_indices = Vec::with_capacity(inner.len());
-    for coordinate in inner {
-        inner_indices.push(add_unit(
-            &mut structure,
-            carbon,
-            axial_to_world(coordinate.0, coordinate.1),
-            inner_indices.last().copied(),
-            Some(bob_library),
-            catalog,
-        )?);
-    }
-    for i in 0..inner_indices.len() {
-        bond_units(
-            &mut structure,
-            inner_indices[i],
-            inner_indices[(i + 1) % inner_indices.len()],
-            catalog,
-            &mut ledger,
-            &mut energy,
-        )?;
-    }
-
-    // The genome is a construction milestone, not a post-hoc property of the
-    // completed scaffold. Nothing outside this ring is needed to qualify it.
-    let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)
-        .map_err(|error| format!("genome cavity analysis failed: {error}"))?
-        .filter(|cavity| cavity.qualifies())
-        .ok_or_else(|| {
-            let pair_counts = (0..inner_indices.len())
-                .map(|i| {
-                    let a = structure.units[inner_indices[i]].physical_id;
-                    let b = structure.units[inner_indices[(i + 1) % inner_indices.len()]].physical_id;
-                    structure
-                        .bonds
-                        .iter()
-                        .filter(|bond| {
-                            (bond.endpoint_a.constituent_id == a
-                                && bond.endpoint_b.constituent_id == b)
-                                || (bond.endpoint_a.constituent_id == b
-                                    && bond.endpoint_b.constituent_id == a)
-                        })
-                        .count()
-                })
-                .collect::<Vec<_>>();
-            let regions =
-                crate::interior_geometry::find_enclosed_regions(&structure, catalog);
-            let max_region_area = regions
+        .map(|unit| {
+            let materials = unit
+                .material
+                .parts
                 .iter()
-                .map(|region| region.area)
-                .fold(0.0_f64, f64::max);
-            let first_a = structure.units[inner_indices[0]].physical_id;
-            let first_b = structure.units[inner_indices[1]].physical_id;
-            let first_pair_bonds = structure
-                .bonds
-                .iter()
-                .filter(|bond| {
-                    (bond.endpoint_a.constituent_id == first_a
-                        && bond.endpoint_b.constituent_id == first_b)
-                        || (bond.endpoint_a.constituent_id == first_b
-                            && bond.endpoint_b.constituent_id == first_a)
-                })
-                .map(|bond| (bond.endpoint_a.location, bond.endpoint_b.location))
-                .collect::<Vec<_>>();
+                .map(|part| part.0.as_str())
+                .collect::<Vec<_>>()
+                .join("+");
             format!(
-                "inner construction phase did not produce a qualifying genome cavity: bonds={}, pair_counts={pair_counts:?}, enclosed_regions={}, max_region_area={max_region_area}, first_pair_bonds={first_pair_bonds:?}",
-                structure.bonds.len(),
-                regions.len()
+                "{materials}@{:.3},{:.3},{:.4}",
+                unit.placement.x, unit.placement.y, unit.placement.rotation_radians
             )
-        })?;
-    if cavity.boundary_units.is_empty() {
-        return Err("qualifying genome cavity has no physical boundary".into());
-    }
+        })
+        .collect::<Vec<_>>();
+    let mut sorted_units = unit_keys.clone();
+    sorted_units.sort();
 
-    // Build six radial supports one ring outside the cavity boundary. They remain
-    // part of the structural path from the genome boundary to the outer boundary.
-    let mut spokes = Vec::with_capacity(6);
-    let spoke_coordinates = hex_ring(SPOKE_RADIUS);
-    let outer_coordinates = hex_ring(OUTER_RING_RADIUS);
-    for side in 0..6 {
-        let coordinate = spoke_coordinates[side * SPOKE_RADIUS as usize];
-        let inner_position = side * INNER_RING_RADIUS as usize;
-        let index = add_unit(
-            &mut structure,
-            carbon,
-            axial_to_world(coordinate.0, coordinate.1),
-            Some(inner_indices[inner_position]),
-            Some(bob_library),
-            catalog,
-        )?;
-        bond_units(
-            &mut structure,
-            index,
-            inner_indices[inner_position],
-            catalog,
-            &mut ledger,
-            &mut energy,
-        )?;
-        spokes.push(index);
-    }
-
-    // Grow the outer ring from the spokes. Every new unit is attached before
-    // the next one is created; the final six closure bonds are ordinary
-    // forward construction transactions between already realized units.
-    let mut outer_indices = Vec::with_capacity(outer_coordinates.len());
-    for (i, coordinate) in outer_coordinates.iter().enumerate() {
-        let index = add_unit(
-            &mut structure,
-            carbon,
-            axial_to_world(coordinate.0, coordinate.1),
-            if i == 0 {
-                Some(spokes[0])
+    let mut bond_keys = structure
+        .bonds
+        .iter()
+        .map(|bond| {
+            let a_index = structure
+                .units
+                .iter()
+                .position(|unit| unit.physical_id == bond.endpoint_a.constituent_id)
+                .unwrap_or(usize::MAX);
+            let b_index = structure
+                .units
+                .iter()
+                .position(|unit| unit.physical_id == bond.endpoint_b.constituent_id)
+                .unwrap_or(usize::MAX);
+            let a = format!(
+                "{}:{:?}",
+                unit_keys.get(a_index).map(String::as_str).unwrap_or("?"),
+                bond.endpoint_a.location
+            );
+            let b = format!(
+                "{}:{:?}",
+                unit_keys.get(b_index).map(String::as_str).unwrap_or("?"),
+                bond.endpoint_b.location
+            );
+            if a <= b {
+                format!("{a}--{b}")
             } else {
-                outer_indices.last().copied()
-            },
-            Some(bob_library),
-            catalog,
-        )?;
-        if i == 0 {
-            bond_units(
-                &mut structure,
-                index,
-                spokes[0],
-                catalog,
-                &mut ledger,
-                &mut energy,
-            )?;
-        } else {
-            bond_units(
-                &mut structure,
-                index,
-                outer_indices[i - 1],
-                catalog,
-                &mut ledger,
-                &mut energy,
-            )?;
+                format!("{b}--{a}")
+            }
+        })
+        .collect::<Vec<_>>();
+    bond_keys.sort();
+    format!("{}#{}", sorted_units.join(";"), bond_keys.join(";"))
+}
+
+/// Complete physically available contacts through the ordinary bond authority.
+/// Every candidate structure is an isolated trial, so a failed optional closure
+/// cannot corrupt another queued construction state.
+fn close_touching_bonds(
+    structure: &mut crate::structure::OrganismStructure,
+    new_unit_index: usize,
+    catalog: &[BaseResource],
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) {
+    if new_unit_index >= structure.units.len() {
+        return;
+    }
+    // Adding one unit cannot change contacts between older units. Check only
+    // the new unit's interfaces, and attempt each interface at most once.
+    for other_index in 0..structure.units.len() {
+        if other_index == new_unit_index {
+            continue;
         }
-        outer_indices.push(index);
+        let (a, b) = if other_index < new_unit_index {
+            (other_index, new_unit_index)
+        } else {
+            (new_unit_index, other_index)
+        };
+        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+        let touches =
+            crate::contact::connection_pair_candidates_cached(structure, a, b, catalog, &mut cache)
+                .into_iter()
+                .any(|candidate| {
+                    candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        && candidate.available_a
+                        && candidate.available_b
+                });
+        if touches {
+            let _ = bond_units(structure, a, b, catalog, ledger, energy);
+        }
     }
-    bond_units(
-        &mut structure,
-        outer_indices[0],
-        outer_indices[outer_indices.len() - 1],
-        catalog,
-        &mut ledger,
-        &mut energy,
-    )?;
+}
 
-    // Connect the remaining spokes to the outer boundary. The exact radial
-    // correspondence is selected from the physical contact graph rather than
-    // by inventing a special construction bond.
-    for side in 1..6 {
-        let outer_coordinate = side * OUTER_RING_RADIUS as usize;
-        bond_units(
-            &mut structure,
-            spokes[side],
-            outer_indices[outer_coordinate],
-            catalog,
-            &mut ledger,
-            &mut energy,
-        )?;
+fn construction_state_score(state: &ConstructionSearchState) -> (usize, usize, usize) {
+    let units = state.structure.units.len();
+    let bonds = state.structure.bonds.len();
+    (bonds.saturating_add(1).saturating_sub(units), units, bonds)
+}
+
+/// Search local arrangements from persisted Bob edge families. Every added
+/// constituent must come from a stored pose; live overlap, contact, COMBINE,
+/// and energy accounting remain authoritative. A bounded beam prioritizes
+/// structures with actual bonded cycles, which are more promising cavity
+/// candidates than open chains.
+fn construct_persisted_bob_structure(
+    catalog: &[BaseResource],
+    library: &crate::geometry_reference_library::GeometryLibrary,
+    acquisition_candidates: &[&BaseResource],
+    initial_energy: f64,
+) -> Result<ValidConstruction, String> {
+    if !initial_energy.is_finite() || initial_energy < 0.0 {
+        return Err("constructor requires finite non-negative supplied energy".into());
+    }
+    let structural_resources = catalog
+        .iter()
+        .filter(|resource| {
+            resource.physical_state == PhysicalState::Rigid
+                && resource.shape.is_valid_physical_shape()
+        })
+        .collect::<Vec<_>>();
+    if structural_resources.is_empty() {
+        return Err("catalog contains no valid rigid construction materials".into());
     }
 
-    Ok((structure, ledger, energy))
+    let contact_records = library.rigid_contact_families().count()
+        + library.rigid_point_contact_families().count()
+        + library.rigid_vertex_contact_families().count();
+    let state_budget = contact_records.saturating_mul(2).clamp(16, 64);
+    let mut queue = Vec::new();
+    let mut visited = std::collections::BTreeSet::<String>::new();
+    for resource in &structural_resources {
+        let mut structure = crate::structure::OrganismStructure::new();
+        add_unit(&mut structure, resource, (0.0, 0.0), catalog)?;
+        let state = ConstructionSearchState {
+            structure,
+            ledger: EnergyLedger::default(),
+            energy: initial_energy,
+        };
+        let signature = construction_state_signature(&state.structure);
+        if visited.insert(signature) {
+            queue.push(state);
+        }
+    }
+
+    let mut explored_states = 0usize;
+    let mut coverage_misses = 0usize;
+    let mut rejected_placements = 0usize;
+    let mut restoration_failures = 0usize;
+    let mut overlap_rejections = 0usize;
+    let mut pair_overlap_rejections = 0usize;
+    let mut edge_overlap_rejections = 0usize;
+    let mut no_bond_contact = 0usize;
+    let mut evaluation_rejections = 0usize;
+    let mut combine_rejections = 0usize;
+    let mut energy_rejections = 0usize;
+    let mut last_combine_rejection = None;
+    let mut queue_budget_drops = 0usize;
+    let mut placement_queries_total = 0usize;
+    let mut placement_query_budget_exhaustions = 0usize;
+    let mut anchors_considered_total = 0usize;
+    let mut candidate_states_generated_total = 0usize;
+    let mut raw_pair_placements_total = 0usize;
+    let mut pair_placements_dropped_by_cap_total = 0usize;
+    let mut edge_placements_examined_total = 0usize;
+    let mut edge_placements_added_total = 0usize;
+    let mut duplicate_placements_total = 0usize;
+    let mut placement_attempts_total = 0usize;
+    let mut last_overlap_rejection = None;
+
+    while explored_states < state_budget && !queue.is_empty() {
+        let best_index = queue
+            .iter()
+            .enumerate()
+            .max_by_key(|(_, state)| construction_state_score(state))
+            .map(|(index, _)| index)
+            .expect("non-empty construction queue has a best state");
+        let state = queue.swap_remove(best_index);
+        explored_states += 1;
+
+        let cavity = crate::cavity::analyze_genome_cavity(&state.structure, catalog)
+            .ok()
+            .flatten();
+        if cavity.as_ref().is_some_and(|cavity| cavity.qualifies()) {
+            if let Some((
+                acquired_resource_placements,
+                acquired_resource_shapes,
+                fluid_geometry_status,
+            )) = valid_construction(&state.structure, catalog, acquisition_candidates, library)
+            {
+                return Ok(ValidConstruction {
+                    structure: state.structure,
+                    energy: state.energy,
+                    acquired_resource_placements,
+                    acquired_resource_shapes,
+                    fluid_geometry_status,
+                });
+            }
+        }
+
+        let mut children = Vec::new();
+        let mut placement_queries_examined = 0usize;
+        let mut candidates_examined = 0usize;
+        'anchors: for anchor_index in 0..state.structure.units.len() {
+            anchors_considered_total += 1;
+            if placement_queries_examined >= 12 {
+                placement_query_budget_exhaustions += 1;
+                break;
+            }
+            for resource in &structural_resources {
+                if placement_queries_examined >= 12 {
+                    placement_query_budget_exhaustions += 1;
+                    break 'anchors;
+                }
+                placement_queries_examined += 1;
+                placement_queries_total += 1;
+                match try_persisted_bob_attachments(
+                    &state.structure,
+                    anchor_index,
+                    resource,
+                    library,
+                    catalog,
+                    &state.ledger,
+                    state.energy,
+                ) {
+                    Ok(attachments) => {
+                        for attachment in attachments {
+                            if candidates_examined >= 12 {
+                                break 'anchors;
+                            }
+                            candidates_examined += 1;
+                            candidate_states_generated_total += 1;
+                            debug_assert!(
+                                attachment.new_unit_index < attachment.structure.units.len()
+                            );
+                            let new_unit_index = attachment.new_unit_index;
+                            let mut next = ConstructionSearchState {
+                                structure: attachment.structure,
+                                ledger: attachment.ledger,
+                                energy: attachment.energy,
+                            };
+                            close_touching_bonds(
+                                &mut next.structure,
+                                new_unit_index,
+                                catalog,
+                                &mut next.ledger,
+                                &mut next.energy,
+                            );
+                            let signature = construction_state_signature(&next.structure);
+                            if !visited.insert(signature) {
+                                continue;
+                            }
+
+                            let cavity =
+                                crate::cavity::analyze_genome_cavity(&next.structure, catalog)
+                                    .ok()
+                                    .flatten();
+                            if cavity.as_ref().is_some_and(|cavity| cavity.qualifies()) {
+                                if let Some((
+                                    acquired_resource_placements,
+                                    acquired_resource_shapes,
+                                    fluid_geometry_status,
+                                )) = valid_construction(
+                                    &next.structure,
+                                    catalog,
+                                    acquisition_candidates,
+                                    library,
+                                ) {
+                                    return Ok(ValidConstruction {
+                                        structure: next.structure,
+                                        energy: next.energy,
+                                        acquired_resource_placements,
+                                        acquired_resource_shapes,
+                                        fluid_geometry_status,
+                                    });
+                                }
+                            }
+                            children.push(next);
+                        }
+                    }
+                    Err(PersistedAttachmentFailure::CoverageMiss) => {
+                        coverage_misses += 1;
+                    }
+                    Err(PersistedAttachmentFailure::CandidatesRejected {
+                        suggestions,
+                        raw_pair_placements,
+                        pair_placements_dropped_by_cap,
+                        edge_placements_examined,
+                        edge_placements_added,
+                        duplicate_placements,
+                        placement_attempts,
+                        last_overlap_rejection: step_last_overlap_rejection,
+                        restoration_failures: step_restoration_failures,
+                        overlap_rejections: step_overlap_rejections,
+                        pair_overlap_rejections: step_pair_overlap_rejections,
+                        edge_overlap_rejections: step_edge_overlap_rejections,
+                        no_bond_contact: step_no_bond_contact,
+                        evaluation_rejections: step_evaluation_rejections,
+                        combine_rejections: step_combine_rejections,
+                        energy_rejections: step_energy_rejections,
+                        last_combine_rejection: step_last_combine_rejection,
+                    }) => {
+                        raw_pair_placements_total += raw_pair_placements;
+                        pair_placements_dropped_by_cap_total += pair_placements_dropped_by_cap;
+                        edge_placements_examined_total += edge_placements_examined;
+                        edge_placements_added_total += edge_placements_added;
+                        duplicate_placements_total += duplicate_placements;
+                        placement_attempts_total += placement_attempts;
+                        if step_last_overlap_rejection.is_some() {
+                            last_overlap_rejection = step_last_overlap_rejection;
+                        }
+                        rejected_placements += suggestions;
+                        restoration_failures += step_restoration_failures;
+                        overlap_rejections += step_overlap_rejections;
+                        pair_overlap_rejections += step_pair_overlap_rejections;
+                        edge_overlap_rejections += step_edge_overlap_rejections;
+                        no_bond_contact += step_no_bond_contact;
+                        evaluation_rejections += step_evaluation_rejections;
+                        combine_rejections += step_combine_rejections;
+                        energy_rejections += step_energy_rejections;
+                        if step_last_combine_rejection.is_some() {
+                            last_combine_rejection = step_last_combine_rejection;
+                        }
+                    }
+                }
+            }
+        }
+
+        queue.extend(children);
+        queue.sort_by_key(|state| std::cmp::Reverse(construction_state_score(state)));
+        if queue.len() > state_budget {
+            queue_budget_drops += queue.len() - state_budget;
+            queue.truncate(state_budget);
+        }
+    }
+
+    Err(format!(
+        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, placement_queries_total={placement_queries_total}, placement_query_budget_exhaustions={placement_query_budget_exhaustions}, anchors_considered_total={anchors_considered_total}, candidate_states_generated_total={candidate_states_generated_total}, raw_pair_placements_total={raw_pair_placements_total}, pair_placements_dropped_by_cap_total={pair_placements_dropped_by_cap_total}, edge_placements_examined_total={edge_placements_examined_total}, edge_placements_added_total={edge_placements_added_total}, duplicate_placements_total={duplicate_placements_total}, placement_attempts_total={placement_attempts_total}, last_overlap_rejection={last_overlap_rejection:?}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, pair_overlap_rejections={pair_overlap_rejections}, edge_overlap_rejections={edge_overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, energy_rejections={energy_rejections}, last_combine_rejection={last_combine_rejection:?}, rigid_contact_records={contact_records}",
+        queue.len()
+    ))
 }
 
 fn placement_fits_resource(
@@ -536,9 +1039,9 @@ fn placement_fits_resource(
     region: &crate::interior_geometry::EnclosedRegion,
     catalog: &[BaseResource],
 ) -> Option<Placement> {
-    // The scaffold deliberately creates broad accessible chambers. Test the
-    // region's own sample point first, then a small deterministic set of
-    // nearby points. This is a bounded geometric check, not a raster search.
+    // Probe the region's sample point and a small deterministic set of
+    // nearby points. This is a bounded geometric check, not a raster search;
+    // no scaffold-specific layout or target coordinates are assumed.
     let points = [
         region.sample_point,
         (region.sample_point.0 * 0.75, region.sample_point.1 * 0.75),
@@ -578,7 +1081,7 @@ fn available_acquisition_resources<'a>(catalog: &'a [BaseResource]) -> Vec<&'a B
     catalog
         .iter()
         .filter(|resource| resource.name != "Water")
-        .filter(|resource| resource.shape.is_valid())
+        .filter(|resource| resource.shape.is_valid_physical_shape())
         .collect()
 }
 
@@ -807,7 +1310,7 @@ fn bob_fluid_acquisition_candidate(
                     rotation_radians: anchor_unit.placement.rotation_radians
                         + relative_pose.rotation_radians,
                 };
-                if !shape.is_valid() {
+                if !shape.is_valid_physical_shape() {
                     continue;
                 }
 
@@ -916,7 +1419,7 @@ fn valid_construction(
     let cavity = crate::cavity::analyze_genome_cavity(structure, catalog)
         .ok()
         .flatten()?;
-    if !cavity.qualifies() || structure.units.len() <= cavity.boundary_units.len() {
+    if !cavity.qualifies() {
         return None;
     }
 
@@ -959,7 +1462,18 @@ fn valid_construction(
     Some((acquired, acquired_shapes, fluid_geometry_status))
 }
 
+#[cfg(test)]
 pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruction, String> {
+    construct_valid_with_energy(
+        catalog,
+        crate::genome::initial_genome().reproductive_energy_allocation,
+    )
+}
+
+pub(crate) fn construct_valid_with_energy(
+    catalog: &[BaseResource],
+    initial_energy: f64,
+) -> Result<ValidConstruction, String> {
     let acquisition_candidates = available_acquisition_resources(catalog);
     if acquisition_candidates.len() < 3 {
         return Err("catalog does not contain three non-water acquisition resources".into());
@@ -970,19 +1484,12 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
 
     let bob_library = crate::geometry_reference_library::open_default_library()
         .map_err(|error| format!("failed to open persistent Bob geometry library: {error}"))?;
-    let (structure, _ledger, energy) = construct_scaffold(catalog, &bob_library)?;
-    let (acquired_resource_placements, acquired_resource_shapes, fluid_geometry_status) =
-        valid_construction(&structure, catalog, &acquisition_candidates, &bob_library).ok_or_else(
-            || "deterministic construction scaffold did not satisfy viability".to_string(),
-        )?;
-
-    Ok(ValidConstruction {
-        structure,
-        energy,
-        acquired_resource_placements,
-        acquired_resource_shapes,
-        fluid_geometry_status,
-    })
+    construct_persisted_bob_structure(
+        catalog,
+        &bob_library,
+        &acquisition_candidates,
+        initial_energy,
+    )
 }
 
 #[cfg(test)]
@@ -990,46 +1497,237 @@ mod tests {
     use super::*;
 
     #[test]
-    fn bob_neighbor_suggestions_reach_initial_constructor_physical_validation() {
+    fn pair_pose_selection_preserves_geometric_diversity() {
+        let placements = (0..6)
+            .map(|index| Placement {
+                x: index as f64 * 0.1,
+                y: 0.0,
+                rotation_radians: 0.0,
+            })
+            .chain((0..6).map(|index| Placement {
+                x: 10.0 + index as f64 * 0.1,
+                y: 0.0,
+                rotation_radians: std::f64::consts::PI,
+            }))
+            .collect::<Vec<_>>();
+
+        let selected = select_diverse_placements(placements.clone(), 6);
+        let repeated = select_diverse_placements(placements, 6);
+
+        assert_eq!(selected.len(), 6);
+        assert_eq!(selected, repeated);
+        let min_x = selected
+            .iter()
+            .map(|placement| placement.x)
+            .fold(f64::INFINITY, f64::min);
+        let max_x = selected
+            .iter()
+            .map(|placement| placement.x)
+            .fold(f64::NEG_INFINITY, f64::max);
+        assert!(
+            max_x - min_x > 10.0,
+            "selection should retain candidates from both spatial clusters"
+        );
+    }
+
+    #[test]
+    fn rejected_hydrogen_phosphorus_pose_is_valid_as_a_pair_but_hits_existing_methane() {
+        let catalog = crate::resources::default_catalog();
+        let resource = |name: &str| {
+            catalog
+                .iter()
+                .find(|resource| resource.name == name)
+                .unwrap_or_else(|| panic!("{name} exists in catalog"))
+        };
+        let hydrogen = resource("Hydrogen");
+        let phosphorus = resource("Phosphorus");
+        let methane = resource("Methane");
+        let anchor_pose = Placement {
+            x: 1.25,
+            y: -0.2665,
+            rotation_radians: 0.0,
+        };
+        let phosphorus_pose = Placement {
+            x: 2.5,
+            y: -0.433013,
+            rotation_radians: -std::f64::consts::PI,
+        };
+        let methane_pose = Placement {
+            x: 2.0387,
+            y: -0.7165,
+            rotation_radians: -2.0944,
+        };
+
+        let mut isolated_pair = crate::structure::OrganismStructure::new();
+        let anchor_index = add_unit(
+            &mut isolated_pair,
+            hydrogen,
+            (anchor_pose.x, anchor_pose.y),
+            &catalog,
+        )
+        .expect("Hydrogen anchor should realize");
+        isolated_pair.units[anchor_index].placement = anchor_pose;
+        let phosphorus_index = add_unit(
+            &mut isolated_pair,
+            phosphorus,
+            (phosphorus_pose.x, phosphorus_pose.y),
+            &catalog,
+        )
+        .expect("Phosphorus candidate should realize");
+        isolated_pair.units[phosphorus_index].placement = phosphorus_pose;
+        let pair_overlaps = crate::construction_runtime::overlapping_unit_indices(
+            &isolated_pair,
+            &isolated_pair.units[phosphorus_index],
+            &[phosphorus_index],
+            &catalog,
+        );
+        assert!(
+            pair_overlaps.is_empty(),
+            "the reported Hydrogen-Phosphorus pair should be non-penetrating in isolation; overlaps={pair_overlaps:?}"
+        );
+
+        let mut methane_collision = crate::structure::OrganismStructure::new();
+        let methane_index = add_unit(
+            &mut methane_collision,
+            methane,
+            (methane_pose.x, methane_pose.y),
+            &catalog,
+        )
+        .expect("Methane neighbor should realize");
+        methane_collision.units[methane_index].placement = methane_pose;
+        let phosphorus_index = add_unit(
+            &mut methane_collision,
+            phosphorus,
+            (phosphorus_pose.x, phosphorus_pose.y),
+            &catalog,
+        )
+        .expect("Phosphorus candidate should realize");
+        methane_collision.units[phosphorus_index].placement = phosphorus_pose;
+        let methane_overlaps = crate::construction_runtime::overlapping_unit_indices(
+            &methane_collision,
+            &methane_collision.units[phosphorus_index],
+            &[phosphorus_index],
+            &catalog,
+        );
+        assert_eq!(
+            methane_overlaps,
+            vec![methane_index],
+            "the same Phosphorus pose should collide with the reported existing Methane"
+        );
+    }
+
+    #[test]
+    fn persisted_pair_replay_preserves_relative_pose_at_a_rotated_live_anchor() {
         let catalog = crate::resources::default_catalog();
         let carbon = catalog
             .iter()
             .find(|resource| resource.name == "Carbon")
-            .expect("default catalog includes Carbon");
-        let mut structure = crate::structure::OrganismStructure::new();
-        add_unit(&mut structure, carbon, (0.0, 0.0), None, None, &catalog)
-            .expect("anchor Carbon should realize");
-        let library = crate::geometry_reference_library::open_default_library()
-            .expect("default Bob library should open, including an empty library");
-        let intended = axial_to_world(1, 0);
-        let raw_suggestions = library.suggest_rigid_edge_placements(
-            "Carbon",
-            structure.units[0].placement,
-            carbon,
-            &catalog,
-        );
-        let suggestion_poses = raw_suggestions
+            .expect("Carbon exists in catalog");
+        let nitrogen = catalog
             .iter()
-            .map(|suggestion| {
-                (
-                    suggestion.placement.x,
-                    suggestion.placement.y,
-                    suggestion.placement.rotation_radians,
-                )
+            .find(|resource| resource.name == "Nitrogen")
+            .expect("Nitrogen exists in catalog");
+        let root = std::env::temp_dir().join(format!(
+            "evosim-pair-replay-transform-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = crate::geometry_reference_library::GeometryLibrary::open(&root, &catalog)
+            .expect("isolated Bob library should open");
+
+        let parent = crate::geometry_reference_library::GeometryFormation::single("Carbon");
+        let pair = crate::geometry_reference_library::expand_formation_candidates(
+            &parent, nitrogen, &catalog,
+        )
+        .into_iter()
+        .find(|formation| {
+            formation.constituents.len() == 2
+                && formation
+                    .constituents
+                    .iter()
+                    .any(|part| part.resource == "Carbon")
+                && formation
+                    .constituents
+                    .iter()
+                    .any(|part| part.resource == "Nitrogen")
+                && formation.bonds.iter().any(|bond| {
+                    (bond.constituent_a == 0 && bond.constituent_b == 1)
+                        || (bond.constituent_a == 1 && bond.constituent_b == 0)
+                })
+        })
+        .expect("Bob geometry should provide a valid Carbon-Nitrogen pair");
+        library
+            .insert(pair, &catalog)
+            .expect("pair formation should persist");
+
+        let stored = library
+            .formations()
+            .find(|formation| {
+                formation.constituents.len() == 2
+                    && formation
+                        .constituents
+                        .iter()
+                        .any(|part| part.resource == "Carbon")
+                    && formation
+                        .constituents
+                        .iter()
+                        .any(|part| part.resource == "Nitrogen")
+                    && formation.bonds.iter().any(|bond| {
+                        (bond.constituent_a == 0 && bond.constituent_b == 1)
+                            || (bond.constituent_a == 1 && bond.constituent_b == 0)
+                    })
             })
-            .collect::<Vec<_>>();
-        let proposed =
-            bob_validated_neighbor_placement(&structure, 0, carbon, intended, &library, &catalog)
-                .unwrap_or_else(|| panic!(
-                    "Bob had no suggestion accepted by live physical validation; raw poses={suggestion_poses:?}"
-                ));
+            .expect("persisted pair should be readable")
+            .clone();
+        let stored_anchor_index = stored
+            .constituents
+            .iter()
+            .position(|part| part.resource == "Carbon")
+            .expect("stored pair contains Carbon");
+        let stored_candidate_index = stored
+            .constituents
+            .iter()
+            .position(|part| part.resource == "Nitrogen")
+            .expect("stored pair contains Nitrogen");
+        let stored_anchor = stored.constituents[stored_anchor_index].placement;
+        let stored_candidate = stored.constituents[stored_candidate_index].placement;
+
+        let live_anchor = Placement {
+            x: 4.25,
+            y: -3.5,
+            rotation_radians: 0.73,
+        };
+        let rotation_delta = live_anchor.rotation_radians - stored_anchor.rotation_radians;
+        let (sin, cos) = rotation_delta.sin_cos();
+        let dx = stored_candidate.x - stored_anchor.x;
+        let dy = stored_candidate.y - stored_anchor.y;
+        let expected = Placement {
+            x: live_anchor.x + dx * cos - dy * sin,
+            y: live_anchor.y + dx * sin + dy * cos,
+            rotation_radians: stored_candidate.rotation_radians + rotation_delta,
+        };
+
+        let suggestions =
+            persisted_pair_formation_placements("Carbon", live_anchor, nitrogen, &library);
         assert!(
-            (proposed.x - intended.0).hypot(proposed.y - intended.1)
-                <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE,
-            "accepted Bob pose must preserve the intended adjacent lattice site"
+            suggestions.iter().any(|pose| {
+                (pose.x - expected.x).hypot(pose.y - expected.y) < 1e-9
+                    && (pose.rotation_radians - expected.rotation_radians).abs() < 1e-9
+            }),
+            "Bob replay must preserve the saved candidate transform relative to the anchor"
         );
+
+        let mut structure = crate::structure::OrganismStructure::new();
+        add_unit(
+            &mut structure,
+            carbon,
+            (live_anchor.x, live_anchor.y),
+            &catalog,
+        )
+        .expect("live anchor should realize");
+        structure.units[0].placement.rotation_radians = live_anchor.rotation_radians;
         let instance = crate::physical_material::PhysicalMaterial::realized(
-            Material::free_base(carbon.name.clone(), 1.0),
+            Material::free_base(nitrogen.name.clone(), 1.0),
             vec![Placement {
                 x: 0.0,
                 y: 0.0,
@@ -1038,50 +1736,175 @@ mod tests {
             &catalog,
         )
         .expect("candidate material should realize");
-        let mut trial = structure.clone();
         let indices = crate::material_restoration::restore_material(
-            &mut trial, &instance, proposed, &catalog,
+            &mut structure,
+            &instance,
+            expected,
+            &catalog,
         )
-        .expect("accepted Bob pose should restore into the trial structure");
-        let candidate = *indices.first().expect("one Carbon constituent");
-        for (index, unit) in trial.units.iter().enumerate() {
-            if indices.contains(&index) {
-                continue;
-            }
-            let candidate_shape = trial.units[candidate]
-                .shape(&catalog)
-                .expect("candidate shape");
-            let existing_shape = unit.shape(&catalog).expect("existing shape");
-            assert!(
-                !crate::material_geometry::placed_forms_penetrate(
-                    &crate::material_geometry::PlacedMaterialPart {
-                        part_index: candidate,
-                        form: candidate_shape.form.clone(),
-                        placement: trial.units[candidate].placement,
-                    },
-                    &crate::material_geometry::PlacedMaterialPart {
-                        part_index: index,
-                        form: existing_shape.form.clone(),
-                        placement: unit.placement,
-                    },
-                    crate::material_geometry::GEOMETRY_EPSILON,
-                ),
-                "accepted Bob proposal must not penetrate existing structure"
-            );
-        }
-        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+        .expect("persisted candidate pose should restore");
+        let candidate_index = *indices.first().expect("candidate restores one unit");
+        let restored = structure.units[candidate_index].placement;
         assert!(
-            crate::contact::connection_pair_candidates_cached(
-                &trial, 0, candidate, &catalog, &mut cache,
-            )
-            .into_iter()
-            .any(|contact| {
-                contact.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                    && contact.available_a
-                    && contact.available_b
-            }),
-            "Bob proposal must reach and pass live contact validation"
+            (restored.x - expected.x).hypot(restored.y - expected.y) < 1e-9
+                && (restored.rotation_radians - expected.rotation_radians).abs() < 1e-9,
+            "live restoration must preserve the replayed world-space pose"
         );
+        let overlaps = crate::construction_runtime::overlapping_unit_indices(
+            &structure,
+            &structure.units[candidate_index],
+            &indices,
+            &catalog,
+        );
+        assert!(
+            overlaps.is_empty(),
+            "replaying a valid persisted pair must not introduce overlap: {overlaps:?}"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn production_constructor_builds_a_bob_formed_cavity_with_supplied_energy() {
+        let catalog = crate::resources::default_catalog();
+        let supplied_energy = crate::genome::initial_genome().reproductive_energy_allocation;
+        let construction = construct_valid_with_energy(&catalog, supplied_energy)
+            .expect("persisted-Bob constructor should realize the initial organism");
+
+        let cavity = crate::cavity::analyze_genome_cavity(&construction.structure, &catalog)
+            .expect("cavity analysis should succeed")
+            .expect("constructed organism must contain a genome cavity");
+        assert!(cavity.qualifies());
+        assert!(!construction.structure.bonds.is_empty());
+        assert!(construction.energy.is_finite());
+        assert!(construction.energy >= 0.0);
+        assert_eq!(
+            construction.energy, supplied_energy,
+            "free-form construction must not debit real starting energy"
+        );
+
+        let acquired_names = construction
+            .acquired_resource_placements
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert!(acquired_names.contains("Water"));
+        assert!(
+            acquired_names
+                .iter()
+                .filter(|name| **name != "Water")
+                .count()
+                >= 3,
+            "the initial organism must acquire at least three non-water resource types"
+        );
+        assert!(construction
+            .acquired_resource_placements
+            .iter()
+            .any(|(name, _)| name == "Water"));
+    }
+
+    #[test]
+    fn persisted_bob_attachment_reports_missing_coverage_without_fallback() {
+        let catalog = crate::resources::default_catalog();
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-persisted-attachment-empty-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let library = crate::geometry_reference_library::GeometryLibrary::open(&root, &catalog)
+            .expect("isolated Bob library should open");
+        let mut structure = crate::structure::OrganismStructure::new();
+        add_unit(&mut structure, carbon, (0.0, 0.0), &catalog).expect("anchor should realize");
+        let result = try_persisted_bob_attachments(
+            &structure,
+            0,
+            carbon,
+            &library,
+            &catalog,
+            &EnergyLedger::default(),
+            1_000_000.0,
+        );
+        match result {
+            Err(PersistedAttachmentFailure::CoverageMiss) => {}
+            Err(other) => panic!("unexpected persisted attachment failure: {other:?}"),
+            Ok(_) => panic!("empty Bob library must not produce an attachment"),
+        }
+        assert_eq!(
+            structure.units.len(),
+            1,
+            "coverage miss must not mutate the live structure"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn persisted_bob_attachment_commits_only_after_live_combine_succeeds() {
+        let catalog = crate::resources::default_catalog();
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-persisted-attachment-recorded-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = crate::geometry_reference_library::GeometryLibrary::open(&root, &catalog)
+            .expect("isolated Bob library should open");
+        let parent = crate::geometry_reference_library::GeometryFormation::single("Carbon");
+        library
+            .insert(parent.clone(), &catalog)
+            .expect("Carbon singleton should persist");
+        let families = crate::geometry_reference_library::generate_rigid_contact_families(
+            &parent, carbon, &catalog,
+        );
+        assert!(
+            !families.is_empty(),
+            "fixture should generate Carbon contact families"
+        );
+        library
+            .insert_rigid_contact_families(families)
+            .expect("generated contact families should persist");
+
+        let mut structure = crate::structure::OrganismStructure::new();
+        add_unit(&mut structure, carbon, (0.0, 0.0), &catalog).expect("anchor should realize");
+        let initial_energy = 1_000_000.0;
+        let attachments = try_persisted_bob_attachments(
+            &structure,
+            0,
+            carbon,
+            &library,
+            &catalog,
+            &EnergyLedger::default(),
+            initial_energy,
+        )
+        .expect(
+            "persisted Bob proposal should pass live restoration, overlap, contact, and COMBINE",
+        );
+        let attached = attachments
+            .first()
+            .expect("at least one attachment should succeed");
+        assert_eq!(attached.structure.units.len(), 2);
+        assert_eq!(attached.new_unit_index, 1);
+        assert!(!attached.structure.bonds.is_empty());
+        assert_eq!(
+            attached.energy, initial_energy,
+            "free-form construction must not debit the organism's real energy"
+        );
+        assert_eq!(
+            attached.ledger.total_heat_dissipated, 0.0,
+            "free-form construction must not settle a real COMBINE energy transaction"
+        );
+        assert!(attached.ledger.total_heat_dissipated.is_finite());
+        assert_eq!(
+            structure.units.len(),
+            1,
+            "trial growth must not mutate the caller's structure"
+        );
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
@@ -1126,7 +1949,7 @@ mod tests {
             .find(|resource| resource.name == "Carbon")
             .unwrap();
         let mut structure = crate::structure::OrganismStructure::new();
-        add_unit(&mut structure, carbon, (0.0, 0.0), None, None, &catalog)
+        add_unit(&mut structure, carbon, (0.0, 0.0), &catalog)
             .expect("Carbon anchor should realize");
         let region = crate::interior_geometry::EnclosedRegion {
             area: 400.0,
@@ -1162,47 +1985,5 @@ mod tests {
         ));
         assert!(placement.x.is_finite() && placement.y.is_finite());
         let _ = std::fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn axial_hex_ring_contains_only_unique_perimeter_cells() {
-        for radius in 1..=5 {
-            let ring = hex_ring(radius);
-            assert_eq!(ring.len(), (6 * radius) as usize);
-            assert!(
-                ring.iter()
-                    .all(|&(q, r)| { q.abs().max(r.abs()).max((q + r).abs()) == radius }),
-                "every generated axial cell must remain on radius {radius}"
-            );
-            let mut unique = ring.clone();
-            unique.sort_unstable();
-            unique.dedup();
-            assert_eq!(unique.len(), ring.len(), "ring cells must be unique");
-        }
-    }
-
-    #[test]
-    fn blueprint_free_constructor_produces_a_valid_organism() {
-        let catalog = crate::resources::default_catalog();
-        let result = construct_valid(&catalog).expect("constructor should find a valid organism");
-        assert!(!result.structure.units.is_empty());
-        assert!(!result.structure.bonds.is_empty());
-        let cavity = crate::cavity::analyze_genome_cavity(&result.structure, &catalog)
-            .expect("genome analysis should succeed");
-        assert!(cavity.is_some_and(|cavity| cavity.qualifies()));
-        assert_eq!(result.acquired_resource_placements.len(), 4);
-    }
-
-    #[test]
-    fn acquisition_requirement_is_binary_for_each_selected_resource() {
-        let catalog = crate::resources::default_catalog();
-        let result = construct_valid(&catalog).expect("constructor should find a valid organism");
-        let names = result
-            .acquired_resource_placements
-            .iter()
-            .map(|(name, _)| name.as_str())
-            .collect::<Vec<_>>();
-        assert!(names.contains(&"Water"));
-        assert_eq!(names.len(), 4);
     }
 }

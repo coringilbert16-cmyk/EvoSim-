@@ -105,7 +105,7 @@ impl PhysicalMaterial {
     ) -> Option<Self> {
         if self.material.parts.len() != 1
             || !self.material.internal_bonds.is_empty()
-            || !shape.is_valid()
+            || !shape.is_valid_physical_shape()
         {
             return None;
         }
@@ -160,7 +160,7 @@ impl PhysicalMaterial {
             Some(_) => return None,
             None => &resource.shape,
         };
-        if !shape.is_valid() {
+        if !shape.is_valid_physical_shape() {
             return None;
         }
         if shape != &resource.shape {

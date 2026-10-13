@@ -767,38 +767,59 @@ fn form_remaining_multi_contact_bonds_in_place(
     covered.into_iter().all(|is_covered| is_covered)
 }
 
-pub(crate) fn placed_unit_overlaps(
+pub(crate) fn overlapping_unit_indices(
     structure: &OrganismStructure,
     candidate: &StructuralUnit,
     ignored_units: &[usize],
     catalog: &[BaseResource],
-) -> bool {
+) -> Vec<usize> {
     let Some(candidate_shape) = candidate.shape(catalog) else {
-        return true;
+        return structure
+            .units
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !ignored_units.contains(index))
+            .map(|(index, _)| index)
+            .collect();
     };
     let candidate_part = crate::material_geometry::PlacedMaterialPart {
         part_index: 0,
         form: candidate_shape.form.clone(),
         placement: candidate.placement,
     };
-    structure.units.iter().enumerate().any(|(index, unit)| {
-        if ignored_units.contains(&index) {
-            return false;
-        }
-        let Some(shape) = unit.shape(catalog) else {
-            return true;
-        };
-        let existing_part = crate::material_geometry::PlacedMaterialPart {
-            part_index: index + 1,
-            form: shape.form.clone(),
-            placement: unit.placement,
-        };
-        crate::material_geometry::placed_forms_penetrate(
-            &candidate_part,
-            &existing_part,
-            crate::material_geometry::GEOMETRY_EPSILON,
-        )
-    })
+    structure
+        .units
+        .iter()
+        .enumerate()
+        .filter_map(|(index, unit)| {
+            if ignored_units.contains(&index) {
+                return None;
+            }
+            let Some(shape) = unit.shape(catalog) else {
+                return Some(index);
+            };
+            let existing_part = crate::material_geometry::PlacedMaterialPart {
+                part_index: index + 1,
+                form: shape.form.clone(),
+                placement: unit.placement,
+            };
+            crate::material_geometry::placed_forms_penetrate(
+                &candidate_part,
+                &existing_part,
+                crate::material_geometry::GEOMETRY_EPSILON,
+            )
+            .then_some(index)
+        })
+        .collect()
+}
+
+pub(crate) fn placed_unit_overlaps(
+    structure: &OrganismStructure,
+    candidate: &StructuralUnit,
+    ignored_units: &[usize],
+    catalog: &[BaseResource],
+) -> bool {
+    !overlapping_unit_indices(structure, candidate, ignored_units, catalog).is_empty()
 }
 
 fn point_in_triangle(point: (f64, f64), triangle: &[(f64, f64); 3]) -> bool {
@@ -820,6 +841,52 @@ fn form_vertices_world(form: &Form, placement: Placement) -> Vec<(f64, f64)> {
             (placement.x + x * c - y * s, placement.y + x * s + y * c)
         })
         .collect()
+}
+
+fn reversed_edge_counterfactual_placement(
+    anchor_form: &Form,
+    anchor_pose: Placement,
+    candidate_form: &Form,
+    candidate_pose: Placement,
+) -> Option<(Placement, usize, usize, f64)> {
+    let anchor_vertices = form_vertices_world(anchor_form, anchor_pose);
+    let candidate_local_vertices = candidate_form.polygon_vertices()?;
+    let candidate_vertices = form_vertices_world(candidate_form, candidate_pose);
+    if anchor_vertices.len() < 2
+        || candidate_local_vertices.len() < 2
+        || candidate_vertices.len() != candidate_local_vertices.len()
+    {
+        return None;
+    }
+    let mut nearest = None;
+    for ai in 0..anchor_vertices.len() {
+        let a = anchor_vertices[ai];
+        let b = anchor_vertices[(ai + 1) % anchor_vertices.len()];
+        let am = ((a.0 + b.0) * 0.5, (a.1 + b.1) * 0.5);
+        for ci in 0..candidate_vertices.len() {
+            let c = candidate_vertices[ci];
+            let d = candidate_vertices[(ci + 1) % candidate_vertices.len()];
+            let cm = ((c.0 + d.0) * 0.5, (c.1 + d.1) * 0.5);
+            let distance = (am.0 - cm.0).hypot(am.1 - cm.1);
+            if nearest
+                .is_none_or(|(_, _, _, best): (usize, usize, (f64, f64), f64)| distance < best)
+            {
+                nearest = Some((ai, ci, cm, distance));
+            }
+        }
+    }
+    let (anchor_edge, candidate_edge, old_midpoint, gap) = nearest?;
+    let local_a = candidate_local_vertices[candidate_edge];
+    let local_b = candidate_local_vertices[(candidate_edge + 1) % candidate_local_vertices.len()];
+    let local_midpoint = ((local_a.0 + local_b.0) * 0.5, (local_a.1 + local_b.1) * 0.5);
+    let rotation_radians = candidate_pose.rotation_radians + std::f64::consts::PI;
+    let (sin, cos) = rotation_radians.sin_cos();
+    let placement = Placement {
+        x: old_midpoint.0 - (local_midpoint.0 * cos - local_midpoint.1 * sin),
+        y: old_midpoint.1 - (local_midpoint.0 * sin + local_midpoint.1 * cos),
+        rotation_radians,
+    };
+    Some((placement, anchor_edge, candidate_edge, gap))
 }
 
 fn point_inside_form(form: &Form, placement: Placement, x: f64, y: f64) -> bool {
@@ -871,6 +938,37 @@ fn already_realized_neighbors(
                 .map(|_| neighbor)
         })
         .collect()
+}
+
+/// Select the next reachable element that has not already failed against the
+/// current structure. Blocked elements are retried after a successful change.
+fn next_unblocked_element(
+    blueprint: &crate::structural_blueprint::StructuralBlueprint,
+    realized: &[bool],
+    blocked: &[bool],
+) -> Option<(usize, Vec<usize>)> {
+    let mut next: Option<(usize, Vec<usize>)> = None;
+    for index in 0..blueprint.elements.len() {
+        if realized.get(index).copied().unwrap_or(false)
+            || blocked.get(index).copied().unwrap_or(false)
+        {
+            continue;
+        }
+        let neighbors = already_realized_neighbors(blueprint, index, realized);
+        if neighbors.is_empty() {
+            continue;
+        }
+        if next
+            .as_ref()
+            .is_none_or(|(current_index, current_neighbors)| {
+                neighbors.len() > current_neighbors.len()
+                    || (neighbors.len() == current_neighbors.len() && index < *current_index)
+            })
+        {
+            next = Some((index, neighbors));
+        }
+    }
+    next
 }
 
 /// Sequential developmental constructor: choose A.x and B.y, rotate B about
@@ -1256,11 +1354,24 @@ struct PlacementRejectionCounts {
     deduplicated_origins: usize,
     attempted_origins: usize,
     restore_failures: usize,
+    restore_failure_reasons: std::collections::BTreeMap<&'static str, usize>,
     overlap_rejections: usize,
+    overlap_rejections_by_unit: std::collections::BTreeMap<usize, usize>,
+    overlap_clear_if_omit_unit: std::collections::BTreeMap<usize, usize>,
+    overlap_still_rejected_if_omit_unit: std::collections::BTreeMap<usize, usize>,
+    overlap_counterfactual_contact_by_unit: std::collections::BTreeMap<usize, usize>,
+    overlap_counterfactual_evaluation_by_unit: std::collections::BTreeMap<usize, usize>,
+    overlap_counterfactual_combine_by_unit: std::collections::BTreeMap<usize, usize>,
+    overlap_counterfactual_neighbor_rejection_by_unit: std::collections::BTreeMap<usize, usize>,
+    overlap_counterfactual_still_overlapping_by_unit: std::collections::BTreeMap<usize, usize>,
+    overlap_counterfactual_full_accept_by_unit: std::collections::BTreeMap<usize, usize>,
+    overlap_counterfactual_anchor_removed_by_unit: std::collections::BTreeMap<usize, usize>,
+    anchor_overlap_samples: Vec<String>,
     neighbor_contact_rejections: usize,
     no_bond_contact: usize,
     candidate_evaluation_rejections: usize,
     combine_rejections: usize,
+    bob_coverage_misses: Vec<String>,
     neighbor_rejections_by_index: std::collections::BTreeMap<usize, usize>,
 }
 
@@ -1271,8 +1382,6 @@ fn realize_next_bond_driven(
     realized_units: &[Option<Vec<usize>>],
     _index: usize,
     neighbor: usize,
-    genome_anchor: Placement,
-    anchor_declared: BlueprintPlacement,
     new_material: &crate::physical_material::PhysicalMaterial,
     nodes: &mut usize,
     rejection_counts: &mut PlacementRejectionCounts,
@@ -1288,9 +1397,7 @@ fn realize_next_bond_driven(
     f64,
 )> {
     let existing_indices = realized_units[neighbor].as_ref()?.clone();
-    let new_endpoints = physical_material_endpoint_options(new_material, catalog);
-
-    if existing_indices.is_empty() || new_endpoints.is_empty() {
+    if existing_indices.is_empty() {
         return None;
     }
 
@@ -1302,288 +1409,572 @@ fn realize_next_bond_driven(
         .then(|| bob_library.and_then(|_| canonical_live_rigid_parent(structure, catalog)))
         .flatten();
 
+    // Query once per anchor/physical constituent pair. The previous endpoint
+    // cross-product repeatedly generated the same pose for every endpoint pair,
+    // multiplying work before the candidate even reached collision validation.
+    // The persisted formation proposes a pose; live contact discovery below
+    // determines the actual bond endpoint.
     for existing_index in existing_indices {
         let existing_unit = structure.units.get(existing_index)?;
-        let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
-        for endpoint_a in existing_endpoints {
-            let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
-            for (part_index, endpoint_b) in new_endpoints.iter().copied() {
-                let local_b = physical_material_endpoint_local_point(
-                    new_material,
-                    part_index,
-                    endpoint_b,
-                    catalog,
-                )?;
+        let anchor_material = existing_unit.material.parts.first()?.0.as_str();
+        for (part_index, (candidate_name, _)) in new_material.material.parts.iter().enumerate() {
+            let Some(candidate_resource) = resource(catalog, candidate_name) else {
+                continue;
+            };
+            let Some(relative_part_placement) = new_material
+                .placements
+                .as_ref()
+                .and_then(|placements| placements.get(part_index))
+                .copied()
+            else {
+                continue;
+            };
 
-                // The blueprint pose is a preference, not a placement command.
-                // The analytic target angle is followed by exact boundary alignments
-                // and a small coarse fallback rather than a blind 360-degree sweep.
-                let target = blueprint.elements[_index].placement;
-                let (s, c) = genome_anchor.rotation_radians.sin_cos();
-                let target_world = (
-                    genome_anchor.x + (target.x - anchor_declared.x) * c
-                        - (target.y - anchor_declared.y) * s,
-                    genome_anchor.y
-                        + (target.x - anchor_declared.x) * s
-                        + (target.y - anchor_declared.y) * c,
-                );
-                let ideal_angle = (joint.y - target_world.1).atan2(joint.x - target_world.0)
-                    - local_b.y.atan2(local_b.x);
-
-                let Some(existing_shape) = existing_unit.shape(catalog) else {
-                    continue;
-                };
-                let Some(candidate_shape) = new_material
-                    .material
-                    .parts
-                    .get(part_index)
-                    .and_then(|(name, _)| resource(catalog, name))
-                    .map(|resource| &resource.shape)
-                else {
-                    continue;
-                };
-                let angles = construction_angle_candidates(
-                    existing_shape,
-                    endpoint_a,
-                    existing_unit.placement.rotation_radians,
-                    candidate_shape,
-                    endpoint_b,
-                    new_material
-                        .placements
-                        .as_ref()
-                        .and_then(|placements| placements.get(part_index))
-                        .map(|placement| placement.rotation_radians)
-                        .unwrap_or(0.0),
-                    ideal_angle,
-                );
-                // Bob's stored contact families provide real candidate poses.
-                // They are tried before analytic endpoint alignments, but all
-                // suggestions pass through the same live overlap, contact,
-                // compatibility, and energy transaction checks below.
-                let mut candidate_origins =
-                    Vec::<(Placement, Option<crate::resources::Shape>)>::new();
-                if let Some(library) = bob_library {
-                    let anchor_material = existing_unit.material.parts.first()?.0.as_str();
-                    let candidate_resource = new_material
-                        .material
-                        .parts
-                        .get(part_index)
-                        .and_then(|(name, _)| resource(catalog, name));
-                    if let (Some(candidate_resource), Some(relative_part_placement)) = (
+            let mut candidate_origins = Vec::<(Placement, Option<crate::resources::Shape>)>::new();
+            if let Some(library) = bob_library {
+                if candidate_resource.physical_state == PhysicalState::Fluid {
+                    // Exact-parent fluid records remain proposals only; the
+                    // restored shape must pass live geometry and bond checks.
+                    if let Some(parent) = bob_parent.as_ref() {
+                        candidate_origins.extend(
+                            bob_fluid_origins_for_live_parent(
+                                library,
+                                parent,
+                                existing_unit.physical_id,
+                                candidate_resource,
+                                relative_part_placement,
+                                catalog,
+                            )
+                            .into_iter()
+                            .map(|(origin, shape)| (origin, Some(shape))),
+                        );
+                    }
+                } else {
+                    let suggestions = library.suggest_persisted_rigid_edge_placements(
+                        anchor_material,
+                        existing_unit.placement,
                         candidate_resource,
-                        new_material
-                            .placements
-                            .as_ref()
-                            .and_then(|placements| placements.get(part_index))
-                            .copied(),
-                    ) {
-                        if candidate_resource.physical_state == PhysicalState::Fluid {
-                            // These exact-parent suggestions are still proposals;
-                            // restoration and the ordinary live transaction checks
-                            // remain authoritative.
-                            if let Some(parent) = bob_parent.as_ref() {
-                                candidate_origins.extend(
-                                    bob_fluid_origins_for_live_parent(
-                                        library,
-                                        parent,
-                                        existing_unit.physical_id,
-                                        candidate_resource,
-                                        relative_part_placement,
-                                        catalog,
-                                    )
-                                    .into_iter()
-                                    .map(|(origin, shape)| (origin, Some(shape))),
-                                );
-                            }
-                        } else {
-                            candidate_origins.extend(
-                                library
-                                    .suggest_rigid_edge_placements(
-                                        anchor_material,
-                                        existing_unit.placement,
-                                        candidate_resource,
-                                        catalog,
-                                    )
-                                    .into_iter()
-                                    .map(|suggestion| {
-                                        (
-                                            composite_origin_for_constituent_pose(
-                                                suggestion.placement,
-                                                relative_part_placement,
-                                            ),
-                                            None,
-                                        )
-                                    }),
-                            );
+                        catalog,
+                    );
+                    if suggestions.is_empty() {
+                        let miss = format!(
+                            "anchor={} candidate={}",
+                            anchor_material, candidate_resource.name
+                        );
+                        if !rejection_counts.bob_coverage_misses.contains(&miss) {
+                            rejection_counts.bob_coverage_misses.push(miss);
                         }
                     }
+                    candidate_origins.extend(suggestions.into_iter().map(|suggestion| {
+                        (
+                            composite_origin_for_constituent_pose(
+                                suggestion.placement,
+                                relative_part_placement,
+                            ),
+                            None,
+                        )
+                    }));
                 }
-                candidate_origins.extend(angles.into_iter().map(|angle| {
-                    (
-                        placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle),
-                        None,
-                    )
-                }));
-                let generated_origins = candidate_origins.len();
-                rejection_counts.generated_origins += generated_origins;
-                let mut seen_origins =
-                    Vec::<((i64, i64, i64), Option<crate::resources::Shape>)>::new();
-                candidate_origins.retain(|(placement, shape)| {
-                    let key = (
-                        (placement.x * 1e8).round() as i64,
-                        (placement.y * 1e8).round() as i64,
-                        (placement.rotation_radians * 1e8).round() as i64,
-                    );
-                    if seen_origins
-                        .iter()
-                        .any(|(seen_key, seen_shape)| *seen_key == key && seen_shape == shape)
-                    {
-                        false
-                    } else {
-                        seen_origins.push((key, shape.clone()));
-                        true
-                    }
-                });
-                rejection_counts.deduplicated_origins +=
-                    generated_origins.saturating_sub(candidate_origins.len());
-                for (candidate_origin, fluid_shape) in candidate_origins {
-                    *nodes += 1;
-                    rejection_counts.attempted_origins += 1;
+            }
+            let generated_origins = candidate_origins.len();
+            rejection_counts.generated_origins += generated_origins;
+            let mut seen_origins = Vec::<((i64, i64, i64), Option<crate::resources::Shape>)>::new();
+            candidate_origins.retain(|(placement, shape)| {
+                let key = (
+                    (placement.x * 1e8).round() as i64,
+                    (placement.y * 1e8).round() as i64,
+                    (placement.rotation_radians * 1e8).round() as i64,
+                );
+                if seen_origins
+                    .iter()
+                    .any(|(seen_key, seen_shape)| *seen_key == key && seen_shape == shape)
+                {
+                    false
+                } else {
+                    seen_origins.push((key, shape.clone()));
+                    true
+                }
+            });
+            rejection_counts.deduplicated_origins +=
+                generated_origins.saturating_sub(candidate_origins.len());
+            for (candidate_origin, fluid_shape) in candidate_origins {
+                *nodes += 1;
+                rejection_counts.attempted_origins += 1;
 
-                    let mut trial = structure.clone();
-                    let candidate_material = if let Some(shape) = fluid_shape {
-                        new_material.clone().with_single_fluid_shape(shape, catalog)
-                    } else {
-                        Some(new_material.clone())
-                    };
-                    let Some(candidate_material) = candidate_material else {
+                let mut trial = structure.clone();
+                let candidate_material = if let Some(shape) = fluid_shape {
+                    new_material.clone().with_single_fluid_shape(shape, catalog)
+                } else {
+                    Some(new_material.clone())
+                };
+                let Some(candidate_material) = candidate_material else {
+                    rejection_counts.restore_failures += 1;
+                    *rejection_counts
+                        .restore_failure_reasons
+                        .entry("stored fluid shape candidate rejected")
+                        .or_default() += 1;
+                    continue;
+                };
+                let indices = match crate::material_restoration::restore_material_diagnostic(
+                    &mut trial,
+                    &candidate_material,
+                    candidate_origin,
+                    catalog,
+                ) {
+                    Ok(indices) => indices,
+                    Err(reason) => {
                         rejection_counts.restore_failures += 1;
-                        continue;
-                    };
-                    let Some(indices) = crate::material_restoration::restore_material(
-                        &mut trial,
-                        &candidate_material,
-                        candidate_origin,
-                        catalog,
-                    ) else {
-                        rejection_counts.restore_failures += 1;
-                        continue;
-                    };
-
-                    let new_unit_index = *indices.get(part_index)?;
-                    let ignored_units = indices.clone();
-                    if indices.iter().any(|index| {
-                        placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
-                    }) {
-                        rejection_counts.overlap_rejections += 1;
+                        *rejection_counts
+                            .restore_failure_reasons
+                            .entry(reason)
+                            .or_default() += 1;
                         continue;
                     }
-                    let missing_neighbors = missing_realized_neighbor_contacts(
-                        blueprint,
-                        _index,
-                        realized_units,
-                        &trial,
-                        &indices,
-                        catalog,
-                    );
-                    if !missing_neighbors.is_empty() {
-                        rejection_counts.neighbor_contact_rejections += 1;
-                        for neighbor in missing_neighbors {
-                            *rejection_counts
-                                .neighbor_rejections_by_index
-                                .entry(neighbor)
-                                .or_default() += 1;
-                        }
-                        continue;
-                    }
+                };
 
-                    let mut trial_ledger = *ledger;
-                    let mut trial_energy = available_energy;
-                    let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
-
-                    // The official connection points determine where the
-                    // constructor works from and how the new material is placed.
-                    // Once the material is physically placed, the actual bond may
-                    // land anywhere on the touching boundaries.
-                    let Some(candidate) = crate::contact::connection_pair_candidates_cached(
-                        &trial,
-                        existing_index,
-                        new_unit_index,
-                        catalog,
-                        &mut bond_cache,
-                    )
-                    .into_iter()
-                    .filter(|candidate| {
-                        candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                            && candidate.available_a
-                            && candidate.available_b
-                    })
-                    .min_by(|a, b| {
-                        a.distance
-                            .partial_cmp(&b.distance)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                            .then_with(|| {
-                                b.facing
-                                    .partial_cmp(&a.facing)
-                                    .unwrap_or(std::cmp::Ordering::Equal)
-                            })
-                    }) else {
-                        rejection_counts.no_bond_contact += 1;
-                        continue;
-                    };
-
-                    let Some((_, _, investment, _required_energy)) =
-                        crate::combine_runtime::selected_candidate_evaluation(
+                let new_unit_index = *indices.get(part_index)?;
+                let ignored_units = indices.clone();
+                let overlapping_units = indices
+                    .iter()
+                    .flat_map(|index| {
+                        overlapping_unit_indices(
                             &trial,
-                            existing_index,
-                            new_unit_index,
-                            candidate,
+                            &trial.units[*index],
+                            &ignored_units,
                             catalog,
                         )
-                    else {
-                        rejection_counts.candidate_evaluation_rejections += 1;
-                        continue;
-                    };
+                    })
+                    .collect::<std::collections::BTreeSet<_>>();
+                if !overlapping_units.is_empty() {
+                    rejection_counts.overlap_rejections += 1;
+                    for &overlap_index in &overlapping_units {
+                        *rejection_counts
+                            .overlap_rejections_by_unit
+                            .entry(overlap_index)
+                            .or_default() += 1;
 
-                    let Some(attempt) = crate::combine_runtime::form_selected_bond(
-                        &mut trial,
+                        // Keep the intended anchor fixed and record a small,
+                        // reproducible sample of its rejected Sulfur poses.
+                        // The geometry authority currently exposes penetration
+                        // as a boolean, so record that exact result plus shapes,
+                        // poses, relative transform, and ordinary contact candidates.
+                        if overlap_index == existing_index
+                            && rejection_counts.anchor_overlap_samples.len() < 8
+                        {
+                            let anchor = &trial.units[existing_index];
+                            let candidate = &trial.units[new_unit_index];
+                            let anchor_form = anchor
+                                .shape(catalog)
+                                .map(|shape| format!("{:?}", shape.form))
+                                .unwrap_or_else(|| "<unavailable>".to_string());
+                            let candidate_form = candidate
+                                .shape(catalog)
+                                .map(|shape| format!("{:?}", shape.form))
+                                .unwrap_or_else(|| "<unavailable>".to_string());
+                            let contact_candidates =
+                                crate::contact::connection_pair_candidates_cached(
+                                    &trial,
+                                    existing_index,
+                                    new_unit_index,
+                                    catalog,
+                                    &mut crate::contact::ConnectionCompatibilityCache::new(),
+                                );
+                            let contact_summary = contact_candidates
+                                .iter()
+                                .take(6)
+                                .map(|candidate| {
+                                    format!(
+                                        "(distance={:.6}, facing={:.6}, available_a={}, available_b={})",
+                                        candidate.distance,
+                                        candidate.facing,
+                                        candidate.available_a,
+                                        candidate.available_b
+                                    )
+                                })
+                                .collect::<Vec<_>>();
+                            let flip_summary = anchor.shape(catalog).and_then(|anchor_shape| {
+                                candidate.shape(catalog).and_then(|candidate_shape| {
+                                    reversed_edge_counterfactual_placement(
+                                        &anchor_shape.form,
+                                        anchor.placement,
+                                        &candidate_shape.form,
+                                        candidate.placement,
+                                    ).map(|(flipped_pose, anchor_edge, candidate_edge, midpoint_gap)| {
+                                        let anchor_pose = anchor.placement;
+                                        let dx = flipped_pose.x - anchor_pose.x;
+                                        let dy = flipped_pose.y - anchor_pose.y;
+                                        let center_distance = dx.hypot(dy).max(1e-12);
+                                        let (ux, uy) = (dx / center_distance, dy / center_distance);
+                                        let gap_probes = [0.0_f64, 0.025, 0.05, 0.075, 0.1]
+                                            .into_iter()
+                                            .map(|gap| {
+                                                let mut shifted_trial = trial.clone();
+                                                let shifted_pose = Placement {
+                                                    x: flipped_pose.x + ux * gap,
+                                                    y: flipped_pose.y + uy * gap,
+                                                    rotation_radians: flipped_pose.rotation_radians,
+                                                };
+                                                shifted_trial.units[new_unit_index].placement = shifted_pose;
+                                                let blockers = overlapping_unit_indices(
+                                                    &shifted_trial,
+                                                    &shifted_trial.units[new_unit_index],
+                                                    &ignored_units,
+                                                    catalog,
+                                                );
+                                                let contacts = crate::contact::connection_pair_candidates_cached(
+                                                    &shifted_trial,
+                                                    existing_index,
+                                                    new_unit_index,
+                                                    catalog,
+                                                    &mut crate::contact::ConnectionCompatibilityCache::new(),
+                                                );
+                                                let within_bond_threshold = contacts.iter().any(|contact| {
+                                                    contact.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                                                        && contact.available_a
+                                                        && contact.available_b
+                                                });
+                                                format!(
+                                                    "gap_probe={:.3}:pose=({:.6},{:.6}) blockers={:?} contacts={} bond_threshold_candidate={}",
+                                                    gap, shifted_pose.x, shifted_pose.y, blockers, contacts.len(), within_bond_threshold
+                                                )
+                                            })
+                                            .collect::<Vec<_>>()
+                                            .join(";");
+                                        format!(
+                                            "flip_pose=({:.9},{:.9},{:.9}) edge_pair=({}, {}) midpoint_gap={:.9} center_distance={:.9} [{}]",
+                                            flipped_pose.x, flipped_pose.y, flipped_pose.rotation_radians,
+                                            anchor_edge, candidate_edge, midpoint_gap, center_distance, gap_probes
+                                        )
+                                    })
+                                })
+                            }).unwrap_or_else(|| "flip_counterfactual=unavailable".to_string());
+                            rejection_counts.anchor_overlap_samples.push(format!(
+                                "anchor_index={} anchor_material={:?} anchor_form={} anchor_pose=({:.9},{:.9},{:.9}) candidate_material={:?} candidate_form={} candidate_pose=({:.9},{:.9},{:.9}) relative_delta=({:.9},{:.9}) relative_rotation={:.9} penetration=true contact_candidate_count={} nearest_contacts={:?} {}",
+                                existing_index,
+                                anchor.material,
+                                anchor_form,
+                                anchor.placement.x,
+                                anchor.placement.y,
+                                anchor.placement.rotation_radians,
+                                candidate.material,
+                                candidate_form,
+                                candidate.placement.x,
+                                candidate.placement.y,
+                                candidate.placement.rotation_radians,
+                                candidate.placement.x - anchor.placement.x,
+                                candidate.placement.y - anchor.placement.y,
+                                candidate.placement.rotation_radians - anchor.placement.rotation_radians,
+                                contact_candidates.len(),
+                                contact_summary,
+                                flip_summary
+                            ));
+                        }
+
+                        // Diagnostic-only leave-one-out experiment: preserve the
+                        // exact candidate pose and overlap rule, but temporarily
+                        // ignore one colliding pre-existing unit. This does not
+                        // mutate the trial or authorize the candidate.
+                        let mut ignored_for_probe = ignored_units.clone();
+                        ignored_for_probe.push(overlap_index);
+                        let still_overlapping = indices.iter().any(|index| {
+                            !overlapping_unit_indices(
+                                &trial,
+                                &trial.units[*index],
+                                &ignored_for_probe,
+                                catalog,
+                            )
+                            .is_empty()
+                        });
+                        let counter = if still_overlapping {
+                            &mut rejection_counts.overlap_still_rejected_if_omit_unit
+                        } else {
+                            &mut rejection_counts.overlap_clear_if_omit_unit
+                        };
+                        *counter.entry(overlap_index).or_default() += 1;
+
+                        // True leave-one-out replay: remove the suspected blocker
+                        // from a disposable physical graph, including all incident
+                        // bonds, then remap by stable constituent IDs and run the
+                        // ordinary acceptance stages without bypassing overlap checks.
+                        // The original trial and all live state remain untouched.
+                        if !still_overlapping && overlapping_units.len() == 1 {
+                            let Some(blocker_id) = trial.physical_id(overlap_index) else {
+                                continue;
+                            };
+                            let Some(anchor_id) = trial.physical_id(existing_index) else {
+                                continue;
+                            };
+                            let Some(candidate_id) = trial.physical_id(new_unit_index) else {
+                                continue;
+                            };
+                            if blocker_id == anchor_id {
+                                *rejection_counts
+                                    .overlap_counterfactual_anchor_removed_by_unit
+                                    .entry(overlap_index)
+                                    .or_default() += 1;
+                                continue;
+                            }
+
+                            let mut probe_trial = trial.clone();
+                            probe_trial.remove_units_by_physical_ids(&[blocker_id]);
+                            let Some(probe_anchor_index) = probe_trial.unit_index(anchor_id) else {
+                                continue;
+                            };
+                            let Some(probe_new_unit_index) = probe_trial.unit_index(candidate_id)
+                            else {
+                                continue;
+                            };
+                            let probe_indices = indices
+                                .iter()
+                                .filter_map(|index| trial.physical_id(*index))
+                                .filter_map(|id| probe_trial.unit_index(id))
+                                .collect::<Vec<_>>();
+                            if probe_indices.len() != indices.len() {
+                                continue;
+                            }
+
+                            let probe_still_overlapping = probe_indices.iter().any(|index| {
+                                !overlapping_unit_indices(
+                                    &probe_trial,
+                                    &probe_trial.units[*index],
+                                    &probe_indices,
+                                    catalog,
+                                )
+                                .is_empty()
+                            });
+                            if probe_still_overlapping {
+                                *rejection_counts
+                                    .overlap_counterfactual_still_overlapping_by_unit
+                                    .entry(overlap_index)
+                                    .or_default() += 1;
+                                continue;
+                            }
+
+                            let probe_realized_units = realized_units
+                                .iter()
+                                .map(|element_units| {
+                                    element_units.as_ref().map(|unit_indices| {
+                                        unit_indices
+                                            .iter()
+                                            .filter_map(|index| trial.physical_id(*index))
+                                            .filter_map(|id| probe_trial.unit_index(id))
+                                            .collect::<Vec<_>>()
+                                    })
+                                })
+                                .collect::<Vec<_>>();
+                            if !missing_realized_neighbor_contacts(
+                                blueprint,
+                                _index,
+                                &probe_realized_units,
+                                &probe_trial,
+                                &probe_indices,
+                                catalog,
+                            )
+                            .is_empty()
+                            {
+                                *rejection_counts
+                                    .overlap_counterfactual_neighbor_rejection_by_unit
+                                    .entry(overlap_index)
+                                    .or_default() += 1;
+                                continue;
+                            }
+
+                            let mut probe_cache =
+                                crate::contact::ConnectionCompatibilityCache::new();
+                            let probe_candidate =
+                                crate::contact::connection_pair_candidates_cached(
+                                    &probe_trial,
+                                    probe_anchor_index,
+                                    probe_new_unit_index,
+                                    catalog,
+                                    &mut probe_cache,
+                                )
+                                .into_iter()
+                                .filter(|candidate| {
+                                    candidate.distance
+                                        <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                                        && candidate.available_a
+                                        && candidate.available_b
+                                })
+                                .min_by(|a, b| {
+                                    a.distance
+                                        .partial_cmp(&b.distance)
+                                        .unwrap_or(std::cmp::Ordering::Equal)
+                                        .then_with(|| {
+                                            b.facing
+                                                .partial_cmp(&a.facing)
+                                                .unwrap_or(std::cmp::Ordering::Equal)
+                                        })
+                                });
+                            let Some(probe_candidate) = probe_candidate else {
+                                continue;
+                            };
+                            *rejection_counts
+                                .overlap_counterfactual_contact_by_unit
+                                .entry(overlap_index)
+                                .or_default() += 1;
+                            let Some((_, _, investment, _)) =
+                                crate::combine_runtime::selected_candidate_evaluation(
+                                    &probe_trial,
+                                    probe_anchor_index,
+                                    probe_new_unit_index,
+                                    probe_candidate,
+                                    catalog,
+                                )
+                            else {
+                                continue;
+                            };
+                            *rejection_counts
+                                .overlap_counterfactual_evaluation_by_unit
+                                .entry(overlap_index)
+                                .or_default() += 1;
+
+                            let mut probe_ledger = *ledger;
+                            let mut probe_energy = available_energy;
+                            let mut probe_cache =
+                                crate::contact::ConnectionCompatibilityCache::new();
+                            if crate::combine_runtime::form_selected_bond(
+                                &mut probe_trial,
+                                probe_anchor_index,
+                                probe_new_unit_index,
+                                probe_candidate,
+                                investment,
+                                catalog,
+                                &mut probe_cache,
+                                &mut probe_ledger,
+                                &mut probe_energy,
+                            )
+                            .is_none()
+                            {
+                                continue;
+                            }
+                            *rejection_counts
+                                .overlap_counterfactual_combine_by_unit
+                                .entry(overlap_index)
+                                .or_default() += 1;
+                            if !form_remaining_multi_contact_bonds(
+                                &mut probe_trial,
+                                probe_new_unit_index,
+                                probe_anchor_index,
+                                catalog,
+                                &mut probe_ledger,
+                                &mut probe_energy,
+                            ) {
+                                continue;
+                            }
+                            *rejection_counts
+                                .overlap_counterfactual_full_accept_by_unit
+                                .entry(overlap_index)
+                                .or_default() += 1;
+                        }
+                    }
+                    continue;
+                }
+                let missing_neighbors = missing_realized_neighbor_contacts(
+                    blueprint,
+                    _index,
+                    realized_units,
+                    &trial,
+                    &indices,
+                    catalog,
+                );
+                if !missing_neighbors.is_empty() {
+                    rejection_counts.neighbor_contact_rejections += 1;
+                    for neighbor in missing_neighbors {
+                        *rejection_counts
+                            .neighbor_rejections_by_index
+                            .entry(neighbor)
+                            .or_default() += 1;
+                    }
+                    continue;
+                }
+
+                let mut trial_ledger = *ledger;
+                let mut trial_energy = available_energy;
+                let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
+
+                // The official connection points determine where the
+                // constructor works from and how the new material is placed.
+                // Once the material is physically placed, the actual bond may
+                // land anywhere on the touching boundaries.
+                let Some(candidate) = crate::contact::connection_pair_candidates_cached(
+                    &trial,
+                    existing_index,
+                    new_unit_index,
+                    catalog,
+                    &mut bond_cache,
+                )
+                .into_iter()
+                .filter(|candidate| {
+                    candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        && candidate.available_a
+                        && candidate.available_b
+                })
+                .min_by(|a, b| {
+                    a.distance
+                        .partial_cmp(&b.distance)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then_with(|| {
+                            b.facing
+                                .partial_cmp(&a.facing)
+                                .unwrap_or(std::cmp::Ordering::Equal)
+                        })
+                }) else {
+                    rejection_counts.no_bond_contact += 1;
+                    continue;
+                };
+
+                let Some((_, _, investment, _required_energy)) =
+                    crate::combine_runtime::selected_candidate_evaluation(
+                        &trial,
                         existing_index,
                         new_unit_index,
                         candidate,
-                        investment,
                         catalog,
-                        &mut bond_cache,
-                        &mut trial_ledger,
-                        &mut trial_energy,
-                    ) else {
-                        rejection_counts.combine_rejections += 1;
-                        continue;
-                    };
+                    )
+                else {
+                    rejection_counts.candidate_evaluation_rejections += 1;
+                    continue;
+                };
 
-                    if !form_remaining_multi_contact_bonds(
-                        &mut trial,
-                        new_unit_index,
-                        existing_index,
-                        catalog,
-                        &mut trial_ledger,
-                        &mut trial_energy,
-                    ) {
-                        rejection_counts.combine_rejections += 1;
-                        continue;
-                    }
+                let Some(attempt) = crate::combine_runtime::form_selected_bond(
+                    &mut trial,
+                    existing_index,
+                    new_unit_index,
+                    candidate,
+                    investment,
+                    catalog,
+                    &mut bond_cache,
+                    &mut trial_ledger,
+                    &mut trial_energy,
+                ) else {
+                    rejection_counts.combine_rejections += 1;
+                    continue;
+                };
 
-                    // The first exact, physically admissible continuation wins.
-                    // Construction is forward-only: do not continue searching for a
-                    // "better" pose after a permanent bond can already be formed.
-                    return Some((
-                        trial,
-                        indices,
-                        part_index,
-                        attempt,
-                        trial_ledger,
-                        trial_energy,
-                    ));
+                if !form_remaining_multi_contact_bonds(
+                    &mut trial,
+                    new_unit_index,
+                    existing_index,
+                    catalog,
+                    &mut trial_ledger,
+                    &mut trial_energy,
+                ) {
+                    rejection_counts.combine_rejections += 1;
+                    continue;
                 }
+
+                // The first exact, physically admissible continuation wins.
+                // Construction is forward-only: do not continue searching for a
+                // "better" pose after a permanent bond can already be formed.
+                return Some((
+                    trial,
+                    indices,
+                    part_index,
+                    attempt,
+                    trial_ledger,
+                    trial_energy,
+                ));
             }
         }
     }
@@ -1671,9 +2062,11 @@ fn construct_blueprint_bond_driven_internal(
         .ok_or_else(|| "construction anchor references a missing element".to_string())?;
     let anchor_preferred = anchor_element.material.parts[0].0.clone();
 
-    // Load Bob once per construction, not once per candidate. If no persistent
-    // store is configured yet, the constructor keeps its analytic fallback.
-    let bob_library = crate::geometry_reference_library::open_default_library().ok();
+    // Strict live construction requires a readable Bob store. A missing or
+    // invalid store is an infrastructure/coverage error, not permission to
+    // silently switch to analytic pose generation.
+    let bob_library = crate::geometry_reference_library::open_default_library()
+        .map_err(|error| format!("failed to open persistent Bob geometry library: {error}"))?;
 
     let mut structure = OrganismStructure::new();
     let mut realized = vec![false; blueprint.elements.len()];
@@ -1688,6 +2081,11 @@ fn construct_blueprint_bond_driven_internal(
     let mut nodes = 0usize;
     let mut reserved_storage_indices = Vec::<usize>::new();
     let mut closed_connections = vec![false; blueprint.connections.len()];
+    // A failed element is deferred while other currently reachable elements are
+    // attempted. A successful addition changes the collision field, so every
+    // deferred element becomes eligible for another attempt afterward.
+    let mut blocked_elements = vec![false; blueprint.elements.len()];
+    let mut last_blocked_diagnostic: Option<String> = None;
 
     let mut anchor_storage_index = None;
     let anchor_instance = if let Some(storage) = available_materials.as_deref_mut() {
@@ -1743,42 +2141,23 @@ fn construct_blueprint_bond_driven_internal(
         }
         reserved_storage_indices.push(storage_index);
     }
-    let anchor_unit_index = *anchor_indices
-        .first()
-        .ok_or_else(|| "construction anchor restored no physical units".to_string())?;
+    if anchor_indices.is_empty() {
+        return Err("construction anchor restored no physical units".to_string());
+    }
     realized[anchor_index] = true;
     realized_units[anchor_index] = Some(anchor_indices.clone());
-    let genome_anchor = structure.units[anchor_unit_index].placement;
     while !realized.iter().all(|value| *value) {
         // Select the next element only from its currently realized neighbors.
         // Total blueprint degree is deliberately not a tie-breaker: that would
         // use knowledge of future connections to choose which bond gets formed
         // first. If several elements are equally ready, blueprint index provides
         // a deterministic order.
-        let mut next: Option<(usize, Vec<usize>)> = None;
-        for index in 0..blueprint.elements.len() {
-            if realized[index] {
-                continue;
-            }
-            let neighbors = already_realized_neighbors(blueprint, index, &realized);
-            if neighbors.is_empty() {
-                continue;
-            }
-            if next
-                .as_ref()
-                .is_none_or(|(current_index, current_neighbors)| {
-                    neighbors.len() > current_neighbors.len()
-                        || (neighbors.len() == current_neighbors.len() && index < *current_index)
-                })
-            {
-                next = Some((index, neighbors));
-            }
-        }
-
-        let Some((index, neighbors)) = next else {
-            return Err(
-                "bond-driven constructor reached an unrealized disconnected element".into(),
-            );
+        let Some((index, neighbors)) =
+            next_unblocked_element(blueprint, &realized, &blocked_elements)
+        else {
+            return Err(last_blocked_diagnostic.unwrap_or_else(|| {
+                "bond-driven constructor reached an unrealized disconnected element".into()
+            }));
         };
 
         // One bond, one committed construction step. The constructor does
@@ -1834,9 +2213,11 @@ fn construct_blueprint_bond_driven_internal(
             .first()
             .map(|candidate| candidate.2)
             .unwrap_or(0.0);
-            return Err(format!(
-                "construction material need: preferred={preferred}, best_available_structural_match={best:.6}, threshold={MIN_CONSTRUCTION_MATERIAL_MATCH:.6}"
+            blocked_elements[index] = true;
+            last_blocked_diagnostic = Some(format!(
+                "construction material need for blueprint element {index}: preferred={preferred}, best_available_structural_match={best:.6}, threshold={MIN_CONSTRUCTION_MATERIAL_MATCH:.6}"
             ));
+            continue;
         }
 
         let mut attached = false;
@@ -1887,14 +2268,12 @@ fn construct_blueprint_bond_driven_internal(
                     &realized_units,
                     index,
                     neighbor,
-                    genome_anchor,
-                    anchor_element.placement,
                     &candidate_instance,
                     &mut nodes,
                     &mut rejection_counts,
                     &construction_ledger,
                     remaining_energy,
-                    bob_library.as_ref(),
+                    Some(&bob_library),
                 ) {
                     construction_ledger = trial_ledger;
                     remaining_energy = trial_energy;
@@ -1918,6 +2297,8 @@ fn construct_blueprint_bond_driven_internal(
                         }
                     }
                     attached = true;
+                    blocked_elements.fill(false);
+                    last_blocked_diagnostic = None;
 
                     // The cavity is a construction milestone, not merely a
                     // post-construction validation. As soon as the newly
@@ -1927,6 +2308,8 @@ fn construct_blueprint_bond_driven_internal(
                     if stop_at_genome
                         && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_some()
                     {
+                        *ledger = construction_ledger;
+                        *energy = remaining_energy;
                         return Ok((structure, total_heat));
                     }
 
@@ -1937,21 +2320,46 @@ fn construct_blueprint_bond_driven_internal(
 
         if !attached {
             eprintln!(
-                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} overlap_rejections={} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={}",
+                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} restore_failure_reasons={:?} overlap_rejections={} overlap_rejections_by_unit={:?} overlap_clear_if_omit_unit={:?} overlap_still_rejected_if_omit_unit={:?} overlap_counterfactual_contact_by_unit={:?} overlap_counterfactual_evaluation_by_unit={:?} overlap_counterfactual_combine_by_unit={:?} overlap_counterfactual_neighbor_rejection_by_unit={:?} overlap_counterfactual_still_overlapping_by_unit={:?} overlap_counterfactual_full_accept_by_unit={:?} overlap_counterfactual_anchor_removed_by_unit={:?} anchor_overlap_samples={:?} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} bob_coverage_misses={:?}",
                 rejection_counts.attempted_origins,
                 rejection_counts.generated_origins,
                 rejection_counts.deduplicated_origins,
                 rejection_counts.restore_failures,
+                rejection_counts.restore_failure_reasons,
                 rejection_counts.overlap_rejections,
+                rejection_counts.overlap_rejections_by_unit,
+                rejection_counts.overlap_clear_if_omit_unit,
+                rejection_counts.overlap_still_rejected_if_omit_unit,
+                rejection_counts.overlap_counterfactual_contact_by_unit,
+                rejection_counts.overlap_counterfactual_evaluation_by_unit,
+                rejection_counts.overlap_counterfactual_combine_by_unit,
+                rejection_counts.overlap_counterfactual_neighbor_rejection_by_unit,
+                rejection_counts.overlap_counterfactual_still_overlapping_by_unit,
+                rejection_counts.overlap_counterfactual_full_accept_by_unit,
+                rejection_counts.overlap_counterfactual_anchor_removed_by_unit,
+                rejection_counts.anchor_overlap_samples,
                 rejection_counts.neighbor_contact_rejections,
                 rejection_counts.neighbor_rejections_by_index,
                 rejection_counts.no_bond_contact,
                 rejection_counts.candidate_evaluation_rejections,
                 rejection_counts.combine_rejections,
+                rejection_counts.bob_coverage_misses,
             );
-            return Err(format!(
-                "no forward bond-driven placement found for blueprint element {index} after {nodes} placement attempts"
-            ));
+            blocked_elements[index] = true;
+            last_blocked_diagnostic = Some(
+                if rejection_counts.generated_origins == 0
+                    && !rejection_counts.bob_coverage_misses.is_empty()
+                {
+                    format!(
+                        "missing Bob library coverage for blueprint element {index}: {:?}",
+                        rejection_counts.bob_coverage_misses
+                    )
+                } else {
+                    format!(
+                        "no forward bond-driven placement found for blueprint element {index} after {nodes} placement attempts"
+                    )
+                },
+            );
         }
     }
 
@@ -2037,6 +2445,8 @@ fn construct_blueprint_bond_driven_internal(
                         if stop_at_genome
                             && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_some()
                         {
+                            *ledger = construction_ledger;
+                            *energy = remaining_energy;
                             return Ok((structure, total_heat));
                         }
 
@@ -2081,12 +2491,63 @@ fn construct_blueprint_bond_driven_internal(
         }
     }
 
+    *ledger = construction_ledger;
+    *energy = remaining_energy;
     Ok((structure, total_heat))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn blocked_reachable_element_is_deferred_until_structure_changes() {
+        use crate::resources::Material;
+        use crate::structural_blueprint::{
+            BlueprintConnection, BlueprintElement, BlueprintPlacement, StructuralBlueprint,
+        };
+
+        let element = || BlueprintElement {
+            material: Material::free_base("Carbon", 1.0),
+            placement: BlueprintPlacement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        };
+        let blueprint = StructuralBlueprint::with_anchor_elements(
+            vec![element(), element(), element(), element()],
+            vec![
+                BlueprintConnection {
+                    element_a: 0,
+                    element_b: 1,
+                },
+                BlueprintConnection {
+                    element_a: 0,
+                    element_b: 2,
+                },
+                BlueprintConnection {
+                    element_a: 2,
+                    element_b: 3,
+                },
+            ],
+            vec![0],
+        );
+        let realized = [true, false, false, false];
+        let mut blocked = [false, true, false, false];
+
+        let (next, neighbors) = next_unblocked_element(&blueprint, &realized, &blocked)
+            .expect("another reachable element should be attempted");
+        assert_eq!(next, 2);
+        assert_eq!(neighbors, vec![0]);
+
+        // A successful structural change invalidates previous placement failures.
+        blocked.fill(false);
+        let (retried, retried_neighbors) = next_unblocked_element(&blueprint, &realized, &blocked)
+            .expect("the formerly blocked element should be retried");
+        assert_eq!(retried, 1);
+        assert_eq!(retried_neighbors, vec![0]);
+    }
 
     #[test]
     fn bond_driven_triangle_commits_all_realized_neighbor_bonds() {
@@ -2323,8 +2784,9 @@ mod tests {
         for name in ["TestWallA", "TestWallB"] {
             let mut wall = carbon.clone();
             wall.name = name.to_string();
-            wall.shape.form = Form::Line {
-                length: wall_length,
+            wall.shape.form = Form::Rectangle {
+                width: wall_length,
+                height: 0.1,
             };
             catalog.push(wall);
         }
@@ -2356,11 +2818,13 @@ mod tests {
         live.bonds.push(Bond {
             endpoint_a: BondEndpoint::new(
                 left_id,
-                ConnectionEndpoint::LineEndpoint { point_index: 1 },
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
             ),
             endpoint_b: BondEndpoint::new(
                 right_id,
-                ConnectionEndpoint::LineEndpoint { point_index: 0 },
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::PI,
+                },
             ),
             strength: 1.0,
             bond_energy: 0.0,
@@ -2758,8 +3222,9 @@ mod tests {
         let angle = std::f64::consts::FRAC_PI_2;
         let family = CapillaryContactFamily::solve(area, angle).unwrap();
         let segment_length = family.contact_length / 3.0;
-        catalog[carbon_index].shape.form = Form::Line {
-            length: segment_length,
+        catalog[carbon_index].shape.form = Form::Rectangle {
+            width: segment_length,
+            height: 0.1,
         };
 
         let third = family.contact_length / 3.0;
@@ -2808,7 +3273,7 @@ mod tests {
                 "Carbon",
                 Placement {
                     x,
-                    y: 0.0,
+                    y: -0.05,
                     rotation_radians: 0.0,
                 },
             ));
