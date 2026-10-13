@@ -38,9 +38,11 @@ fn form_family(form: &Form) -> u8 {
         Form::Circle { .. } => 0,
         Form::Line { .. } => 1,
         Form::Rectangle { .. } => 2,
-        Form::RegularPolygon { .. } => 3,
-        Form::Polygon { .. } => 4,
-        Form::Fluid { .. } => 5,
+        // Explicit polygons and regular polygons share the same broad
+        // construction family. Their exact vertices remain authoritative for
+        // placement/contact; representation type must not penalize substitution.
+        Form::RegularPolygon { .. } | Form::Polygon { .. } => 3,
+        Form::Fluid { .. } => 4,
     }
 }
 
@@ -208,6 +210,25 @@ mod tests {
                 resource_name: "Carbon".into(),
                 score: 1.0,
             })
+        );
+    }
+
+    #[test]
+    fn regular_and_explicit_polygons_share_construction_shape_family() {
+        let catalog = default_catalog();
+        let find = |name: &str| catalog.iter().find(|r| r.name == name).unwrap();
+
+        assert!(matches!(find("Carbon").shape.form, Form::RegularPolygon { .. }));
+        assert!(matches!(find("Sulfur").shape.form, Form::Polygon { .. }));
+        assert_eq!(
+            form_family(&find("Carbon").shape.form),
+            form_family(&find("Sulfur").shape.form),
+            "polygon representation must not change the shape-family component of material similarity"
+        );
+        assert_eq!(
+            form_family(&find("Phosphorus").shape.form),
+            form_family(&find("Sulfur").shape.form),
+            "irregular polygons must remain in the same broad construction family"
         );
     }
 
