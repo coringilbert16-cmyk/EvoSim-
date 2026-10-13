@@ -227,7 +227,10 @@ enum PersistedAttachmentFailure {
 /// The returned structure and energy are committed together only after the
 /// ordinary live COMBINE transaction succeeds. No intended lattice pose,
 /// snapping, or analytic fallback is available in this path.
-#[expect(dead_code, reason = "Consumed by the pending formation-driven startup coordinator")]
+#[expect(
+    dead_code,
+    reason = "Consumed by the pending formation-driven startup coordinator"
+)]
 fn try_persisted_bob_attachment(
     structure: &crate::structure::OrganismStructure,
     anchor_index: usize,
@@ -339,15 +342,13 @@ fn try_persisted_bob_attachment(
         }
 
         for candidate in contacts {
-            let Some((_, _, investment, _)) =
-                crate::combine_runtime::selected_candidate_evaluation(
-                    &trial,
-                    anchor_index,
-                    new_unit_index,
-                    candidate,
-                    catalog,
-                )
-            else {
+            let Some((_, _, investment, _)) = crate::combine_runtime::selected_candidate_evaluation(
+                &trial,
+                anchor_index,
+                new_unit_index,
+                candidate,
+                catalog,
+            ) else {
                 evaluation_rejections += 1;
                 continue;
             };
@@ -1180,7 +1181,10 @@ mod tests {
     #[test]
     fn persisted_bob_attachment_reports_missing_coverage_without_fallback() {
         let catalog = crate::resources::default_catalog();
-        let carbon = catalog.iter().find(|resource| resource.name == "Carbon").unwrap();
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap();
         let root = std::env::temp_dir().join(format!(
             "evosim-persisted-attachment-empty-{}",
             std::process::id()
@@ -1200,8 +1204,15 @@ mod tests {
             &EnergyLedger::default(),
             1_000_000.0,
         );
-        assert_eq!(result.unwrap_err(), PersistedAttachmentFailure::CoverageMiss);
-        assert_eq!(structure.units.len(), 1, "coverage miss must not mutate the live structure");
+        assert_eq!(
+            result.unwrap_err(),
+            PersistedAttachmentFailure::CoverageMiss
+        );
+        assert_eq!(
+            structure.units.len(),
+            1,
+            "coverage miss must not mutate the live structure"
+        );
         let _ = std::fs::remove_dir_all(root);
     }
 
@@ -1221,11 +1232,12 @@ mod tests {
             .insert(parent.clone(), &catalog)
             .expect("Carbon singleton should persist");
         let families = crate::geometry_reference_library::generate_rigid_contact_families(
-            &parent,
-            carbon,
-            &catalog,
+            &parent, carbon, &catalog,
         );
-        assert!(!families.is_empty(), "fixture should generate Carbon contact families");
+        assert!(
+            !families.is_empty(),
+            "fixture should generate Carbon contact families"
+        );
         library
             .insert_rigid_contact_families(families)
             .expect("generated contact families should persist");
@@ -1249,12 +1261,18 @@ mod tests {
         assert_eq!(attached.structure.units.len(), 2);
         assert_eq!(attached.new_unit_index, 1);
         assert!(!attached.structure.bonds.is_empty());
-        assert!(attached.energy < initial_energy, "COMBINE must settle against supplied energy");
+        assert!(
+            attached.energy < initial_energy,
+            "COMBINE must settle against supplied energy"
+        );
         assert!(attached.ledger.total_heat_dissipated.is_finite());
-        assert_eq!(structure.units.len(), 1, "trial growth must not mutate the caller's structure");
+        assert_eq!(
+            structure.units.len(),
+            1,
+            "trial growth must not mutate the caller's structure"
+        );
         let _ = std::fs::remove_dir_all(root);
     }
-
 
     #[test]
     fn bob_neighbor_suggestions_reach_initial_constructor_physical_validation() {
