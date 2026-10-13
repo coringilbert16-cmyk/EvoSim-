@@ -35,11 +35,20 @@ mod tests {
     }
 
     fn segments_intersect(a: (f64, f64), b: (f64, f64), c: (f64, f64), d: (f64, f64)) -> bool {
+        let eps = 1e-10;
         let ab_c = cross(a, b, c);
         let ab_d = cross(a, b, d);
         let cd_a = cross(c, d, a);
         let cd_b = cross(c, d, b);
-        (ab_c * ab_d <= GEOMETRY_EPSILON) && (cd_a * cd_b <= GEOMETRY_EPSILON)
+        if ((ab_c > eps && ab_d < -eps) || (ab_c < -eps && ab_d > eps))
+            && ((cd_a > eps && cd_b < -eps) || (cd_a < -eps && cd_b > eps))
+        {
+            return true;
+        }
+        (ab_c.abs() <= eps && point_segment_distance(c, a, b) <= eps)
+            || (ab_d.abs() <= eps && point_segment_distance(d, a, b) <= eps)
+            || (cd_a.abs() <= eps && point_segment_distance(a, c, d) <= eps)
+            || (cd_b.abs() <= eps && point_segment_distance(b, c, d) <= eps)
     }
 
     fn segments_distance(a: (f64, f64), b: (f64, f64), c: (f64, f64), d: (f64, f64)) -> f64 {
