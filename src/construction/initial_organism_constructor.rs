@@ -575,18 +575,18 @@ fn construct_persisted_bob_structure(
                     }
                     Err(PersistedAttachmentFailure::CandidatesRejected {
                         suggestions,
-                        restoration_failures,
-                        overlap_rejections,
-                        no_bond_contact,
-                        evaluation_rejections,
-                        combine_rejections,
+                        restoration_failures: step_restoration_failures,
+                        overlap_rejections: step_overlap_rejections,
+                        no_bond_contact: step_no_bond_contact,
+                        evaluation_rejections: step_evaluation_rejections,
+                        combine_rejections: step_combine_rejections,
                     }) => {
                         rejected_placements += suggestions;
-                        restoration_failures += restoration_failures;
-                        overlap_rejections += overlap_rejections;
-                        no_bond_contact += no_bond_contact;
-                        evaluation_rejections += evaluation_rejections;
-                        combine_rejections += combine_rejections;
+                        restoration_failures += step_restoration_failures;
+                        overlap_rejections += step_overlap_rejections;
+                        no_bond_contact += step_no_bond_contact;
+                        evaluation_rejections += step_evaluation_rejections;
+                        combine_rejections += step_combine_rejections;
                     }
                 }
             }
