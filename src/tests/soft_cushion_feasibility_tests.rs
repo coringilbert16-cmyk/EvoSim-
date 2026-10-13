@@ -4,19 +4,25 @@
 //! required connection may use a flexible boundary gap of up to 0.1 units.
 #[cfg(test)]
 mod tests {
-    use crate::material_geometry::{placed_forms_penetrate, PlacedMaterialPart, GEOMETRY_EPSILON};
+    use crate::material_geometry::{
+        placed_forms_penetrate, PlacedMaterialPart, GEOMETRY_EPSILON,
+    };
     use crate::resources::{default_catalog, Form};
     use crate::structure::Placement;
-    use crate::structural_blueprint::StructuralBlueprint;
 
     const MAX_BOND_GAP: f64 = 0.1;
     const ITERATIONS: usize = 30_000;
 
     fn world_vertices(form: &Form, pose: Placement) -> Option<Vec<(f64, f64)>> {
-        Some(form.polygon_vertices()?.into_iter().map(|(x, y)| {
-            let (s, c) = pose.rotation_radians.sin_cos();
-            (pose.x + x * c - y * s, pose.y + x * s + y * c)
-        }).collect())
+        Some(
+            form.polygon_vertices()?
+                .into_iter()
+                .map(|(x, y)| {
+                    let (s, c) = pose.rotation_radians.sin_cos();
+                    (pose.x + x * c - y * s, pose.y + x * s + y * c)
+                })
+                .collect(),
+        )
     }
 
     fn cross(a: (f64, f64), b: (f64, f64), p: (f64, f64)) -> f64 {
@@ -34,7 +40,12 @@ mod tests {
         (p.0 - (a.0 + t * dx)).hypot(p.1 - (a.1 + t * dy))
     }
 
-    fn segments_intersect(a: (f64, f64), b: (f64, f64), c: (f64, f64), d: (f64, f64)) -> bool {
+    fn segments_intersect(
+        a: (f64, f64),
+        b: (f64, f64),
+        c: (f64, f64),
+        d: (f64, f64),
+    ) -> bool {
         let eps = 1e-10;
         let ab_c = cross(a, b, c);
         let ab_d = cross(a, b, d);
@@ -51,7 +62,12 @@ mod tests {
             || (cd_b.abs() <= eps && point_segment_distance(b, c, d) <= eps)
     }
 
-    fn segments_distance(a: (f64, f64), b: (f64, f64), c: (f64, f64), d: (f64, f64)) -> f64 {
+    fn segments_distance(
+        a: (f64, f64),
+        b: (f64, f64),
+        c: (f64, f64),
+        d: (f64, f64),
+    ) -> f64 {
         if segments_intersect(a, b, c, d) {
             return 0.0;
         }
@@ -80,7 +96,10 @@ mod tests {
             return ((pa.x - pb.x).hypot(pa.y - pb.y) - ar - br).max(0.0);
         }
         let (Some(av), Some(bv)) = (world_vertices(a, pa), world_vertices(b, pb)) else {
-            return ((pa.x - pb.x).hypot(pa.y - pb.y) - a.bounding_radius() - b.bounding_radius()).max(0.0);
+            return ((pa.x - pb.x).hypot(pa.y - pb.y)
+                - a.bounding_radius()
+                - b.bounding_radius())
+            .max(0.0);
         };
         if av.iter().any(|&p| point_in_polygon(p, &bv))
             || bv.iter().any(|&p| point_in_polygon(p, &av))
@@ -91,7 +110,10 @@ mod tests {
         for i in 0..av.len() {
             for j in 0..bv.len() {
                 gap = gap.min(segments_distance(
-                    av[i], av[(i + 1) % av.len()], bv[j], bv[(j + 1) % bv.len()],
+                    av[i],
+                    av[(i + 1) % av.len()],
+                    bv[j],
+                    bv[(j + 1) % bv.len()],
                 ));
             }
         }
@@ -107,13 +129,22 @@ mod tests {
         let mut overlaps = 0;
         let mut max_bond_gap: f64 = 0.0;
         for i in 0..forms.len() {
-            let a = PlacedMaterialPart { part_index: i, form: forms[i].clone(), placement: poses[i] };
+            let a = PlacedMaterialPart {
+                part_index: i,
+                form: forms[i].clone(),
+                placement: poses[i],
+            };
             for j in (i + 1)..forms.len() {
-                let b = PlacedMaterialPart { part_index: j, form: forms[j].clone(), placement: poses[j] };
+                let b = PlacedMaterialPart {
+                    part_index: j,
+                    form: forms[j].clone(),
+                    placement: poses[j],
+                };
                 if placed_forms_penetrate(&a, &b, GEOMETRY_EPSILON) {
                     overlaps += 1;
                     let center = (poses[i].x - poses[j].x).hypot(poses[i].y - poses[j].y);
-                    let depth_proxy = (forms[i].bounding_radius() + forms[j].bounding_radius() - center).max(0.0);
+                    let depth_proxy =
+                        (forms[i].bounding_radius() + forms[j].bounding_radius() - center).max(0.0);
                     value += 1_000.0 + depth_proxy * 20.0;
                 }
             }
@@ -135,27 +166,51 @@ mod tests {
     fn soft_cushion_global_layout_feasibility_probe() {
         let catalog = default_catalog();
         let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
-        let forms: Vec<Form> = blueprint.elements.iter().map(|element| {
-            let (name, _) = element.material.parts.first().expect("seed element has a material part");
-            catalog.iter().find(|r| r.name == *name).expect("seed resource exists").shape.form.clone()
-        }).collect();
-        let connections: Vec<(usize, usize)> = blueprint.connections.iter()
-            .map(|c| (c.element_a, c.element_b)).collect();
-        let mut poses: Vec<Placement> = blueprint.elements.iter().map(|e| Placement {
-            x: e.placement.x,
-            y: e.placement.y,
-            rotation_radians: e.placement.rotation_radians,
-        }).collect();
+        let forms: Vec<Form> = blueprint
+            .elements
+            .iter()
+            .map(|element| {
+                let (name, _) = element
+                    .material
+                    .parts
+                    .first()
+                    .expect("seed element has a material part");
+                catalog
+                    .iter()
+                    .find(|resource| resource.name == *name)
+                    .expect("seed resource exists")
+                    .shape
+                    .form
+                    .clone()
+            })
+            .collect();
+        let connections: Vec<(usize, usize)> = blueprint
+            .connections
+            .iter()
+            .map(|connection| (connection.element_a, connection.element_b))
+            .collect();
+        let mut poses: Vec<Placement> = blueprint
+            .elements
+            .iter()
+            .map(|element| Placement {
+                x: element.placement.x,
+                y: element.placement.y,
+                rotation_radians: element.placement.rotation_radians,
+            })
+            .collect();
 
-        let (mut current_score, _, _) = score(&forms, &poses, &connections);
+        let (mut current_score, initial_overlaps, initial_gap) =
+            score(&forms, &poses, &connections);
         let mut best_poses = poses.clone();
         let mut best_score = current_score;
-        let mut best_overlaps = current_overlaps;
-        let mut best_gap = current_gap;
+        let mut best_overlaps = initial_overlaps;
+        let mut best_gap = initial_gap;
         // Fixed-seed LCG keeps the experiment repeatable across CI runs.
         let mut rng: u64 = 0x5eed_c0ff_ee12_3456;
         let mut random = || {
-            rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            rng = rng
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             ((rng >> 11) as f64) / ((1u64 << 53) as f64)
         };
 
@@ -174,7 +229,8 @@ mod tests {
             } else {
                 poses[index].rotation_radians += (random() * 2.0 - 1.0) * step * 0.8;
             }
-            let (candidate_score, candidate_overlaps, candidate_gap) = score(&forms, &poses, &connections);
+            let (candidate_score, candidate_overlaps, candidate_gap) =
+                score(&forms, &poses, &connections);
             let accept = candidate_score <= current_score
                 || random() < ((current_score - candidate_score) / temperature).exp();
             if accept {
@@ -194,14 +250,28 @@ mod tests {
         }
 
         let complete = best_overlaps == 0 && best_gap <= MAX_BOND_GAP;
-        let moved = best_poses.iter().zip(blueprint.elements.iter()).filter(|(p, e)| {
-            (p.x - e.placement.x).hypot(p.y - e.placement.y) > 1e-3
-                || (p.rotation_radians - e.placement.rotation_radians).abs() > 1e-3
-        }).count();
+        let moved = best_poses
+            .iter()
+            .zip(blueprint.elements.iter())
+            .filter(|(pose, element)| {
+                (pose.x - element.placement.x).hypot(pose.y - element.placement.y) > 1e-3
+                    || (pose.rotation_radians - element.placement.rotation_radians).abs() > 1e-3
+            })
+            .count();
         eprintln!(
             "SOFT_CUSHION_GLOBAL_PROBE: elements={} connections={} iterations={} complete={} best_score={:.6} overlaps={} max_required_gap={:.6} moved_elements={}",
-            forms.len(), connections.len(), ITERATIONS, complete, best_score, best_overlaps, best_gap, moved
+            forms.len(),
+            connections.len(),
+            ITERATIONS,
+            complete,
+            best_score,
+            best_overlaps,
+            best_gap,
+            moved
         );
-        assert!(best_score.is_finite(), "diagnostic solver must return a finite score");
+        assert!(
+            best_score.is_finite(),
+            "diagnostic solver must return a finite score"
+        );
     }
 }
