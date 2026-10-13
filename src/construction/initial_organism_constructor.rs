@@ -53,6 +53,72 @@ enum PersistedAttachmentFailure {
     },
 }
 
+fn select_diverse_placements(
+    placements: Vec<Placement>,
+    limit: usize,
+) -> Vec<Placement> {
+    if placements.len() <= limit || limit == 0 {
+        return if limit == 0 { Vec::new() } else { placements };
+    }
+
+    let min_x = placements.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+    let max_x = placements.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
+    let min_y = placements.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+    let max_y = placements.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
+    let spatial_scale = (max_x - min_x).max(max_y - min_y).max(1e-9);
+    let mean_x = placements.iter().map(|p| p.x).sum::<f64>() / placements.len() as f64;
+    let mean_y = placements.iter().map(|p| p.y).sum::<f64>() / placements.len() as f64;
+    let mean_sin = placements.iter().map(|p| p.rotation_radians.sin()).sum::<f64>();
+    let mean_cos = placements.iter().map(|p| p.rotation_radians.cos()).sum::<f64>();
+    let mean_rotation = mean_sin.atan2(mean_cos);
+
+    let distance_squared = |a: Placement, b: Placement| {
+        let dx = (a.x - b.x) / spatial_scale;
+        let dy = (a.y - b.y) / spatial_scale;
+        let angle = (a.rotation_radians - b.rotation_radians + std::f64::consts::PI)
+            .rem_euclid(std::f64::consts::TAU)
+            - std::f64::consts::PI;
+        dx * dx + dy * dy + (angle / std::f64::consts::PI).powi(2)
+    };
+    let centroid = Placement {
+        x: mean_x,
+        y: mean_y,
+        rotation_radians: mean_rotation,
+    };
+    let first_index = placements
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| {
+            distance_squared(**a, centroid).total_cmp(&distance_squared(**b, centroid))
+        })
+        .map(|(index, _)| index)
+        .expect("non-empty placement list has a first candidate");
+
+    let mut selected_indices = vec![first_index];
+    while selected_indices.len() < limit {
+        let next_index = placements
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !selected_indices.contains(index))
+            .max_by(|(_, a), (_, b)| {
+                let min_a = selected_indices
+                    .iter()
+                    .map(|&selected| distance_squared(**a, placements[selected]))
+                    .fold(f64::INFINITY, f64::min);
+                let min_b = selected_indices
+                    .iter()
+                    .map(|&selected| distance_squared(**b, placements[selected]))
+                    .fold(f64::INFINITY, f64::min);
+                min_a.total_cmp(&min_b)
+            })
+            .map(|(index, _)| index)
+            .expect("candidate count exceeds the selection limit");
+        selected_indices.push(next_index);
+    }
+
+    selected_indices.into_iter().map(|index| placements[index]).collect()
+}
+
 fn placement_signature(placement: Placement) -> String {
     format!(
         "{:.3},{:.3},{:.4}",
@@ -168,7 +234,7 @@ fn try_persisted_bob_attachments(
     // Keep the pair-formation proposals diverse and bounded, then fill any
     // remaining slots from persisted edge families. Both sources are Bob data;
     // neither source bypasses the live physical transaction.
-    candidate_placements.truncate(6);
+    candidate_placements = select_diverse_placements(candidate_placements, 6);
     let pair_placements_dropped_by_cap =
         raw_pair_placements.saturating_sub(candidate_placements.len());
     let mut seen_placements = candidate_placements
