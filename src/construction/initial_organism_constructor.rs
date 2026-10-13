@@ -107,7 +107,7 @@ fn persisted_pair_formation_placements(
     placements.into_values().collect()
 }
 
-/// Try one local growth step using only rigid-edge poses recorded in Bob.
+/// Try one local growth step using only persisted pair formations and rigid-edge poses from Bob.
 /// The returned structure and energy are committed together only after the
 /// ordinary live COMBINE transaction succeeds. No intended lattice pose,
 /// snapping, or analytic fallback is available in this path.
@@ -193,7 +193,7 @@ fn try_persisted_bob_attachments(
     ) else {
         return Err(PersistedAttachmentFailure::CandidatesRejected {
             suggestions: candidate_placements.len(),
-            restoration_failures: suggestions.len(),
+            restoration_failures: candidate_placements.len(),
             overlap_rejections,
             no_bond_contact,
             evaluation_rejections,
@@ -314,7 +314,7 @@ fn try_persisted_bob_attachments(
     }
 
     Err(PersistedAttachmentFailure::CandidatesRejected {
-        suggestions: suggestions.len(),
+        suggestions: candidate_placements.len(),
         restoration_failures,
         overlap_rejections,
         no_bond_contact,
