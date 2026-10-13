@@ -111,7 +111,7 @@ PR #200 merged into #194 at `412a2e8b795e9a2b107455eb899a25cba1a6a4ec`. The sulf
 
 - Reconciled #195 full Rust suite: **405 passed, 28 failed, 1 ignored**. Direct comparison with the pre-merge #195 run shows identical sets of 28 failing test names, with no new named failures. Focused Bob/fluid/chemistry gates passed. Clippy fails.
 - Isolated two-piece Bob comparison on #195 is still in progress; no new catalogue parity claim is made.
-- Reconciled #196 exact-head Rust run is in progress. Its pre-merge run was **364 passed, 69 failed, 1 ignored**. Compare named failures when the new run completes; the merge itself is not constructor recovery.
+- Reconciled #196 exact-head Rust run [#7377](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38476203144): **367 passed, 69 failed, 1 ignored**. Direct comparison with its pre-merge run shows exactly the same 69 failing test names, with no new named failures. Sulfur geometry, Bob-signature, and chemistry-cache regressions pass; Clippy fails.
 - README and this audit are the authoritative current status for the stack. Older entries below are historical snapshots where their status conflicts with this section.
 
 ### Next safe action
