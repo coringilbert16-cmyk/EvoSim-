@@ -96,27 +96,26 @@ The PR commit history confirms the two separable concerns are embedded in the sh
 This makes a file-level split less safe than it first appears. Do not rewrite the current stack just to improve PR scope. If a narrower feature branch is still needed, reconstruct it from the integration base with an explicit allowlist of behavior commits, then prove it with the focused transaction, persistence, and constructor startup gates before changing any existing PR bases.
 
 
-## Post-sulfur merge reconciliation — 2026-10-13
+## Stack reconciliation — 2026-10-13
 
-PR [#200](https://github.com/coringilbert16-cmyk/EvoSim-/pull/200) merged successfully into `fix/fluid-coalescence-transaction-2026-10-12` at `412a2e8b795e9a2b107455eb899a25cba1a6a4ec`.
+PR #200 merged into #194 at `412a2e8b795e9a2b107455eb899a25cba1a6a4ec`. The sulfur change is now represented in the downstream stack through explicit two-parent merge commits.
 
-### Exact branch state
+### Reconciled heads
 
-- #193 head: `f879de00d008561fcd82ce27fb2fa0349c8373c0`, base branch #186 integration.
-- #194 head: `412a2e8b795e9a2b107455eb899a25cba1a6a4ec`, based on #193. This is the post-sulfur head.
-- #195 head: `728e455b780ce18e4117112c075921ec55ec88c2`, based on the #194 branch as originally recorded; its head has not incorporated the sulfur merge commit in its ancestry.
-- #196 head: `095fbc34cee7bb5ae3009073b65d2d41a98aa53e`, based on #195's existing head.
-- #186 integration head: `2fe1e649278c965572c57a2c7ef64b761a8ffc2e`; the sulfur merge commit is not an ancestor of this branch.
+- #194 head: `412a2e8b795e9a2b107455eb899a25cba1a6a4ec`.
+- #195 head: `22b7da1cbc740c65e43937ea62f43d792b473db2`; parents are old #195 head `728e455b` and sulfur merge `412a2e8b`. The chemistry-library transaction code, rollback/concurrency tests, and sulfur cache-stability regression are present together.
+- #196 head: `b0d51d899fd027ce609fc38d71d248968fcc9872`; parents are old constructor head `095fbc34` and reconciled #195 `22b7da1c`. The constructor branch retains its own code while incorporating the sulfur geometry and related regression coverage.
+- #186 integration head before this documentation update: `a7406db5eefecd88f7c401b007d05f26e8877ab0`; it remains separate from the feature stack and draft-only.
 
-The direct commit comparison from the former #194 base `b3bc66eb` to the sulfur merge commit `412a2e8b` contains the six expected sulfur-change files plus the experiment workflow. Comparing the old #194 base to #195's head shows the chemistry persistence work as an additional commit series. Comparing the current #194 head with #195's head reports one commit behind and eight ahead, confirming that the current tips diverge. Do not force-push, reset, or blindly copy `src/chemistry/chemistry_library.rs`: both the sulfur signature regression and transactional persistence changes touch this subsystem and must be preserved together.
+### Exact-head evidence
 
-### Post-merge test evidence
+- Reconciled #195 full Rust suite: **405 passed, 28 failed, 1 ignored**. Direct comparison with the pre-merge #195 run shows identical sets of 28 failing test names, with no new named failures. Focused Bob/fluid/chemistry gates passed. Clippy fails.
+- Isolated two-piece Bob comparison on #195 is still in progress; no new catalogue parity claim is made.
+- Reconciled #196 exact-head Rust run is in progress. Its pre-merge run was **364 passed, 69 failed, 1 ignored**. Compare named failures when the new run completes; the merge itself is not constructor recovery.
+- README and this audit are the authoritative current status for the stack. Older entries below are historical snapshots where their status conflicts with this section.
 
-The latest #194 head run [#7373](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38474817384) reports **403 passed, 28 failed, 1 ignored**; Clippy fails. This retains the established 28-failure comparison count but does not prove the entire stack is healthy. The earlier #195 run [#7148](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38272687270) reports 402 passed, 28 failed, 1 ignored on the pre-sulfur head and must not be represented as verification of the reconciled stack. #196's run [#7338](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38438644278) remains 364 passed, 69 failed, 1 ignored and is still a separate constructor regression.
+### Next safe action
 
-### Approved next action
-
-1. Preserve the current branches and commit history; no blind cherry-picks or force updates.
-2. Reconcile #195 against the new #194 head while preserving the transactional chemistry changes, then reconcile #196 only after the resulting #195 exact head is verified.
-3. Run focused Bob/fluid/chemistry gates and the full suite on each resulting exact head; record exact SHA and outcomes.
-4. Keep #186 draft-only and do not start broad Bob catalogue generation or constructor feature work during reconciliation.
+1. Inspect the completed Bob comparison and reconciled #196 exact-head run.
+2. Confirm the sulfur-specific shape, Bob-signature, and chemistry-cache regressions pass on the reconciled #196 head.
+3. Only after exact-head evidence is recorded, decide whether the library line can advance toward integration. Keep constructor feature work frozen and keep #186 draft-only until the established release gates pass.
