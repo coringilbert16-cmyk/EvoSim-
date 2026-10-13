@@ -457,11 +457,13 @@ fn close_touching_bonds(
     }
 }
 
-fn construction_state_score(state: &ConstructionSearchState) -> (usize, usize, usize) {
+fn construction_state_score(state: &ConstructionSearchState) -> (usize, usize, u64, usize) {
     let units = state.structure.units.len();
     let bonds = state.structure.bonds.len();
     let cycle_rank = bonds.saturating_add(1).saturating_sub(units);
-    (cycle_rank, bonds, usize::MAX - units)
+    // Prefer actual closed connectivity, then enough constituents to form a
+    // cavity, then the most remaining real energy among equally sized states.
+    (cycle_rank, units, state.energy.to_bits(), bonds)
 }
 
 /// Search local arrangements from persisted Bob edge families. Every added
@@ -494,7 +496,7 @@ fn construct_persisted_bob_structure(
         + library.rigid_vertex_contact_families().count();
     let state_budget = contact_records.saturating_mul(2).clamp(16, 64);
     let mut queue = Vec::new();
-    let mut visited = std::collections::BTreeSet::new();
+    let mut visited = std::collections::BTreeMap::<String, f64>::new();
     for resource in &structural_resources {
         let mut structure = crate::structure::OrganismStructure::new();
         add_unit(&mut structure, resource, (0.0, 0.0), catalog)?;
@@ -503,7 +505,8 @@ fn construct_persisted_bob_structure(
             ledger: EnergyLedger::default(),
             energy: initial_energy,
         };
-        if visited.insert(construction_state_signature(&state.structure)) {
+        let signature = construction_state_signature(&state.structure);
+        if visited.insert(signature, state.energy).is_none() {
             queue.push(state);
         }
     }
@@ -527,6 +530,13 @@ fn construct_persisted_bob_structure(
             .map(|(index, _)| index)
             .expect("non-empty construction queue has a best state");
         let state = queue.swap_remove(best_index);
+        let signature = construction_state_signature(&state.structure);
+        if visited
+            .get(&signature)
+            .is_some_and(|best_energy| state.energy + 1e-9 < *best_energy)
+        {
+            continue;
+        }
         explored_states += 1;
 
         let cavity = crate::cavity::analyze_genome_cavity(&state.structure, catalog)
@@ -591,9 +601,13 @@ fn construct_persisted_bob_structure(
                                 &mut next.energy,
                             );
                             let signature = construction_state_signature(&next.structure);
-                            if !visited.insert(signature) {
+                            if visited
+                                .get(&signature)
+                                .is_some_and(|best_energy| *best_energy >= next.energy - 1e-9)
+                            {
                                 continue;
                             }
+                            visited.insert(signature, next.energy);
 
                             let cavity =
                                 crate::cavity::analyze_genome_cavity(&next.structure, catalog)
