@@ -2,7 +2,7 @@
 
 ## Scope and handling rules
 
-This audit updates the 2026-10-12 lineage snapshot using current PR metadata, branch relationships, changed-file scope, and Actions evidence. It covers every currently open PR except **PR #200**, which is intentionally excluded from audit changes and consolidation at the user's direction, plus closed PRs directly related to active work. Older closed PRs outside the active lineage are historical work, not candidates for blind cherry-picking.
+This audit updates the 2026-10-12 lineage snapshot using PR metadata, branch relationships, changed-file scope, and Actions evidence. It covers open PRs and closed PRs directly related to active work. PR #200 was merged after the original audit text below was written; the post-merge reconciliation section at the end is the current status where it conflicts with the earlier snapshot. Older closed PRs outside the active lineage are historical work, not candidates for blind cherry-picking.
 
 No PR was merged, force-updated, or closed as part of this audit. The integration branch `integration/unified-source-and-catalogue` remains the sole integration target and `main` remains untouched.
 
@@ -44,7 +44,7 @@ Run #7148's full Rust suite still failed: **402 passed, 28 failed, 1 ignored**; 
 | #187–#188 — seed ring calibration | Not integrated; fixed seed topology conflicts with current scaffold-free direction | Historical evidence/fixtures only; no wholesale recovery |
 | #179 — geometry storage compaction | Practice-only; no production adapter or compatibility gate proven | Keep isolated until production gates are met |
 | #181–#185 and older closed work carried by integration ancestry | Prior lineage audit found those branch tips already ancestors of integration | Preserve as history; do not cherry-pick duplicates |
-| #200 — sulfur parallelogram experiment | Explicitly excluded from this audit/consolidation | Leave completely untouched |
+| #200 — sulfur parallelogram experiment | Merged into #194 at `412a2e8b`; downstream stack and integration ancestry not yet reconciled | Preserve the merged change; verify downstream exact heads before integration |
 
 ## Consolidation decision
 
@@ -94,3 +94,29 @@ The PR commit history confirms the two separable concerns are embedded in the sh
 - #194 and #195 descend from #193; #196 descends from #195. Therefore both commits are in the lineage inherited by the downstream stack. A revert on #193 would change the parent history for every downstream branch and would not, by itself, cleanly isolate either concern from #196's overlapping files.
 
 This makes a file-level split less safe than it first appears. Do not rewrite the current stack just to improve PR scope. If a narrower feature branch is still needed, reconstruct it from the integration base with an explicit allowlist of behavior commits, then prove it with the focused transaction, persistence, and constructor startup gates before changing any existing PR bases.
+
+
+## Post-sulfur merge reconciliation — 2026-10-13
+
+PR [#200](https://github.com/coringilbert16-cmyk/EvoSim-/pull/200) merged successfully into `fix/fluid-coalescence-transaction-2026-10-12` at `412a2e8b795e9a2b107455eb899a25cba1a6a4ec`.
+
+### Exact branch state
+
+- #193 head: `f879de00d008561fcd82ce27fb2fa0349c8373c0`, base branch #186 integration.
+- #194 head: `412a2e8b795e9a2b107455eb899a25cba1a6a4ec`, based on #193. This is the post-sulfur head.
+- #195 head: `728e455b780ce18e4117112c075921ec55ec88c2`, based on the #194 branch as originally recorded; its head has not incorporated the sulfur merge commit in its ancestry.
+- #196 head: `095fbc34cee7bb5ae3009073b65d2d41a98aa53e`, based on #195's existing head.
+- #186 integration head: `2fe1e649278c965572c57a2c7ef64b761a8ffc2e`; the sulfur merge commit is not an ancestor of this branch.
+
+The direct commit comparison from the former #194 base `b3bc66eb` to the sulfur merge commit `412a2e8b` contains the six expected sulfur-change files plus the experiment workflow. Comparing the old #194 base to #195's head shows the chemistry persistence work as an additional commit series. Comparing the current #194 head with #195's head reports one commit behind and eight ahead, confirming that the current tips diverge. Do not force-push, reset, or blindly copy `src/chemistry/chemistry_library.rs`: both the sulfur signature regression and transactional persistence changes touch this subsystem and must be preserved together.
+
+### Post-merge test evidence
+
+The latest #194 head run [#7373](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38474817384) reports **403 passed, 28 failed, 1 ignored**; Clippy fails. This retains the established 28-failure comparison count but does not prove the entire stack is healthy. The earlier #195 run [#7148](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38272687270) reports 402 passed, 28 failed, 1 ignored on the pre-sulfur head and must not be represented as verification of the reconciled stack. #196's run [#7338](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38438644278) remains 364 passed, 69 failed, 1 ignored and is still a separate constructor regression.
+
+### Approved next action
+
+1. Preserve the current branches and commit history; no blind cherry-picks or force updates.
+2. Reconcile #195 against the new #194 head while preserving the transactional chemistry changes, then reconcile #196 only after the resulting #195 exact head is verified.
+3. Run focused Bob/fluid/chemistry gates and the full suite on each resulting exact head; record exact SHA and outcomes.
+4. Keep #186 draft-only and do not start broad Bob catalogue generation or constructor feature work during reconciliation.
