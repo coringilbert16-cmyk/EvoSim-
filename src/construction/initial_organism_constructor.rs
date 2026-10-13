@@ -1200,7 +1200,7 @@ mod tests {
         let mut structure = crate::structure::OrganismStructure::new();
         add_unit(&mut structure, carbon, (0.0, 0.0), None, None, &catalog)
             .expect("anchor should realize");
-        let result = try_persisted_bob_attachment(
+        let result = try_persisted_bob_attachments(
             &structure,
             0,
             carbon,
@@ -1225,7 +1225,10 @@ mod tests {
     #[test]
     fn persisted_bob_attachment_commits_only_after_live_combine_succeeds() {
         let catalog = crate::resources::default_catalog();
-        let carbon = catalog.iter().find(|resource| resource.name == "Carbon").unwrap();
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap();
         let root = std::env::temp_dir().join(format!(
             "evosim-persisted-attachment-recorded-{}",
             std::process::id()
