@@ -5,6 +5,8 @@ on:
     branches: [fix/fluid-coalescence-transaction-2026-10-12]
     paths:
       - "src/materials/resources.rs"
+      - "src/construction/material_selection.rs"
+      - "README.md"
       - ".github/workflows/sulfur-parallelogram-experiment.yml"
 
 permissions:
@@ -30,6 +32,75 @@ jobs:
       - name: Check formatting
         working-directory: variant
         run: cargo fmt --all -- --check
+
+      - name: Run full Rust suites on baseline and variant
+        env:
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          mkdir -p "${{ runner.temp }}/sulfur-baseline-test-library" "${{ runner.temp }}/sulfur-variant-test-library"
+          set +e
+          (
+            cd baseline
+            EVOSIM_GEOMETRY_LIBRARY_DIR="${{ runner.temp }}/sulfur-baseline-test-library" cargo test --all-targets
+          ) > "${{ runner.temp }}/sulfur-baseline-tests.log" 2>&1
+          baseline_status=$?
+          (
+            cd variant
+            EVOSIM_GEOMETRY_LIBRARY_DIR="${{ runner.temp }}/sulfur-variant-test-library" cargo test --all-targets
+          ) > "${{ runner.temp }}/sulfur-variant-tests.log" 2>&1
+          variant_status=$?
+          set -e
+          printf '%s\n' "$baseline_status" > "${{ runner.temp }}/sulfur-baseline-tests.exit"
+          printf '%s\n' "$variant_status" > "${{ runner.temp }}/sulfur-variant-tests.exit"
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          def read(label):
+              return (root / f"sulfur-{label}-tests.log").read_text(
+                  encoding="utf-8", errors="replace"
+              )
+          def failures(output):
+              return set(re.findall(r"^test (.+) \.\.\. FAILED$", output, re.MULTILINE))
+          baseline = read("baseline")
+          variant = read("variant")
+          baseline_failures = failures(baseline)
+          variant_failures = failures(variant)
+          new_failures = sorted(variant_failures - baseline_failures)
+          baseline_compile_error = "could not compile" in baseline or "error[E" in baseline
+          variant_compile_error = "could not compile" in variant or "error[E" in variant
+          baseline_status = int((root / "sulfur-baseline-tests.exit").read_text().strip())
+          variant_status = int((root / "sulfur-variant-tests.exit").read_text().strip())
+          print(f"baseline_exit={baseline_status}; baseline_failed_tests={len(baseline_failures)}")
+          print(f"variant_exit={variant_status}; variant_failed_tests={len(variant_failures)}")
+          print("Baseline failures (known backlog; informational):")
+          for name in sorted(baseline_failures):
+              print(f"  {name}")
+          print("New variant failures:")
+          for name in new_failures:
+              print(f"  {name}")
+          if baseline_compile_error or variant_compile_error:
+              raise SystemExit("Rust suite failed to compile on baseline or variant")
+          if new_failures:
+              raise SystemExit("Sulfur variant introduced test failures relative to baseline")
+          if not variant_failures and variant_status != 0:
+              raise SystemExit("Variant cargo test failed without identifiable test failures")
+          print("No additional named test failures relative to the base branch.")
+          PY
+
+      - name: Upload Rust test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sulfur-parallelogram-rust-test-logs
+          path: |
+            ${{ runner.temp }}/sulfur-baseline-tests.log
+            ${{ runner.temp }}/sulfur-variant-tests.log
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Run baseline Bob generation (up to two pieces)
         working-directory: baseline
