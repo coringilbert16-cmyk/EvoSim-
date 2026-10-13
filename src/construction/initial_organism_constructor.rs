@@ -657,15 +657,17 @@ fn construct_persisted_bob_structure(
         }
 
         let mut children = Vec::new();
+        let mut placement_queries_examined = 0usize;
         let mut candidates_examined = 0usize;
         'anchors: for anchor_index in 0..state.structure.units.len() {
-            if state.energy <= 0.0 {
+            if state.energy <= 0.0 || placement_queries_examined >= 12 {
                 break;
             }
             for resource in &structural_resources {
-                if state.energy <= 0.0 || candidates_examined >= 12 {
+                if state.energy <= 0.0 || placement_queries_examined >= 12 {
                     break 'anchors;
                 }
+                placement_queries_examined += 1;
                 match try_persisted_bob_attachments(
                     &state.structure,
                     anchor_index,
