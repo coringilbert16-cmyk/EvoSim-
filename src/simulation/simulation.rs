@@ -572,13 +572,8 @@ impl Simulation {
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
             crate::harmonics::update_organism_harmonics(organism, &self.environment);
             crate::memory::update_experience_memory(organism, &self.environment);
-            let budding_available = seed_reference
-                .and_then(|reference| {
-                    organism.developmental_realization_cached_for_reference(
-                        &self.environment.catalog,
-                        reference,
-                    )
-                })
+            let budding_available = organism
+                .developmental_realization_cached(&self.environment.catalog)
                 .is_some_and(|realization| realization.overall > BUDDING_AVAILABILITY_FRACTION);
             if budding_available && organism.reproductive_construction.is_none() {
                 let _ = crate::reproduction::begin_reproduction(
