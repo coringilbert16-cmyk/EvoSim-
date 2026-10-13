@@ -95,6 +95,34 @@ mod tests {
         if let (Form::Circle { radius: ar }, Form::Circle { radius: br }) = (a, b) {
             return ((pa.x - pb.x).hypot(pa.y - pb.y) - ar - br).max(0.0);
         }
+        if let (Form::Circle { radius }, Some(vertices)) = (a, world_vertices(b, pb)) {
+            if point_in_polygon((pa.x, pa.y), &vertices) {
+                return 0.0;
+            }
+            let mut distance = f64::INFINITY;
+            for i in 0..vertices.len() {
+                distance = distance.min(point_segment_distance(
+                    (pa.x, pa.y),
+                    vertices[i],
+                    vertices[(i + 1) % vertices.len()],
+                ));
+            }
+            return (distance - radius).max(0.0);
+        }
+        if let (Some(vertices), Form::Circle { radius }) = (world_vertices(a, pa), b) {
+            if point_in_polygon((pb.x, pb.y), &vertices) {
+                return 0.0;
+            }
+            let mut distance = f64::INFINITY;
+            for i in 0..vertices.len() {
+                distance = distance.min(point_segment_distance(
+                    (pb.x, pb.y),
+                    vertices[i],
+                    vertices[(i + 1) % vertices.len()],
+                ));
+            }
+            return (distance - radius).max(0.0);
+        }
         let (Some(av), Some(bv)) = (world_vertices(a, pa), world_vertices(b, pb)) else {
             return ((pa.x - pb.x).hypot(pa.y - pb.y)
                 - a.bounding_radius()
