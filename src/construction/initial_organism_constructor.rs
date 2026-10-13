@@ -1243,7 +1243,9 @@ mod tests {
             &EnergyLedger::default(),
             initial_energy,
         )
-        .expect("persisted Bob proposal should pass live restoration, overlap, contact, and COMBINE");
+        .expect(
+            "persisted Bob proposal should pass live restoration, overlap, contact, and COMBINE",
+        );
         assert_eq!(attached.structure.units.len(), 2);
         assert_eq!(attached.new_unit_index, 1);
         assert!(!attached.structure.bonds.is_empty());
