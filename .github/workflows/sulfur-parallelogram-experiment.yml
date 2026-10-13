@@ -15,14 +15,18 @@ permissions:
   contents: read
 
 jobs:
+  # This is a one-PR experiment, not a downstream-stack gate.
+  # Only run it for the dedicated sulfur experiment branch.
   compare-bob-two-piece-catalogues:
+    if: github.event.pull_request.head.ref == 'experiment/sulfur-parallelogram-2026-10-13'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Check out baseline
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          # Pin the known pre-sulfur baseline; the PR base advances after merge.
+          ref: b3bc66eb17c3ae4b51c1a49bf1febbcdae7ad46d
           path: baseline
 
       - name: Check out sulfur-parallelogram variant
