@@ -218,7 +218,10 @@ mod tests {
         let catalog = default_catalog();
         let find = |name: &str| catalog.iter().find(|r| r.name == name).unwrap();
 
-        assert!(matches!(find("Carbon").shape.form, Form::RegularPolygon { .. }));
+        assert!(matches!(
+            find("Carbon").shape.form,
+            Form::RegularPolygon { .. }
+        ));
         assert!(matches!(find("Sulfur").shape.form, Form::Polygon { .. }));
         assert_eq!(
             form_family(&find("Carbon").shape.form),
