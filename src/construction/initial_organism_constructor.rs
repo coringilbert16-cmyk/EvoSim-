@@ -420,10 +420,14 @@ fn close_touching_bonds(
     ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) {
+    let mut processed_pairs = std::collections::BTreeSet::new();
     loop {
         let mut next_pair = None;
         'pairs: for a in 0..structure.units.len() {
             for b in (a + 1)..structure.units.len() {
+                if processed_pairs.contains(&(a, b)) {
+                    continue;
+                }
                 let mut cache = crate::contact::ConnectionCompatibilityCache::new();
                 let touches = crate::contact::connection_pair_candidates_cached(
                     structure, a, b, catalog, &mut cache,
@@ -443,12 +447,11 @@ fn close_touching_bonds(
         let Some((a, b)) = next_pair else {
             break;
         };
-        let bonds_before = structure.bonds.len();
-        if bond_units(structure, a, b, catalog, ledger, energy).is_err()
-            || structure.bonds.len() == bonds_before
-        {
-            break;
-        }
+        processed_pairs.insert((a, b));
+        // A pair receives one bounded closure attempt. Edge contact candidates
+        // can remain continuously available after a bond, so revisiting the
+        // same pair must not become an unbounded bonding loop.
+        let _ = bond_units(structure, a, b, catalog, ledger, energy);
     }
 }
 
