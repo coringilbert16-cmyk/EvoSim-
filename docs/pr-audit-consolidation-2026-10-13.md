@@ -115,8 +115,13 @@ PR #200 merged into #194 at `412a2e8b795e9a2b107455eb899a25cba1a6a4ec`. The sulf
 - #196 run [#7384](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38476838600): **367 passed, 69 failed, 1 ignored**; same named failures as prior run.
 - Focused gates and formatting pass; strict Clippy remains red. These are no-regression results, not constructor recovery.
 
+### Integration-head verification
+
+- Integration commit [`40201f62`](https://github.com/coringilbert16-cmyk/EvoSim-/commit/40201f6282f58f6b08c0810c47ee1cae55b87483) run [#7388](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38477522294): **405 passed, 28 failed, 1 ignored**. The 28 failing test names exactly match reconciled #195; no additional named failures were introduced.
+- Formatting and focused Bob/fluid/chemistry/sulfur tests passed. Windows runner validation passed. Strict Clippy remains red.
+
 ### Next safe action
 
-1. Incorporate #193 → #195 into #186 through a deliberate two-parent merge; keep #186 draft-only and do not merge to `main`.
-2. Verify the new integration-head CI and compare named failures with the established 28-failure baseline.
-3. Keep constructor feature work frozen and do not start broad catalogue generation until the README's persisted-fluid-realization and live-transaction gates are satisfied.
+1. Keep #186 draft-only; do not merge to `main`. The stack is integrated for continued validation, not release approval.
+2. Keep constructor feature work frozen. The 69-failure constructor suite is unchanged; diagnose that independently after integration settles.
+3. Do not start broad catalogue generation until the README's persisted-fluid-realization and live-transaction gates are satisfied. Track the known 28 full-suite failures and Clippy findings separately rather than treating the integration as green.
