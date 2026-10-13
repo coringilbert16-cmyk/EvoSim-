@@ -1847,3 +1847,14 @@ The production startup route now calls `construct_valid_with_energy`, which sear
 A new end-to-end constructor regression test was added after that run. It invokes the production constructor with the genome's supplied energy and checks cavity qualification, non-negative non-increasing energy, and the required acquired resource set. **That new test has not yet been verified by CI.** The latest exact-head workflow/status lookup has not returned a run, so no result is claimed for it.
 
 A stale acquisition-probe comment implying that a scaffold creates the chamber was removed. No fixed topology or geometry tolerance was reintroduced. Next verification gate: obtain exact-head CI for the new production-constructor test, inspect its diagnostic if it fails, then run the constructor repeatedly against the persisted Bob library and record elapsed time, state count, material composition, bond count, cavity result, and remaining energy before treating startup migration as stable.
+
+
+### Sprint 1 audit and retired-experiment cleanup — 2026-10-13
+
+Exact-head workflow run [#7259](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38407956526), commit `c4f87e3374d20d4a1e9fcf26ccc8a32eea84285b`, completed with failure. The focused Bob attachment checks passed, including strict persisted-coverage misses, live COMBINE, and fluid-record validation. The full suite reported **364 passed, 69 failed, 1 ignored**; the production constructor end-to-end test failed. Clippy also failed under `-D warnings`. This is the current inspected baseline, not a green exact-head result.
+
+The soft-cushion whole-blueprint probe has been retired. It optimized the coordinates of the old `confirmed_seed_baseline`, used a separate approximate geometry/scoring implementation, and only asserted that its score was finite. It did not exercise the live persisted-Bob constructor and no longer answers a useful question now that startup is formation-driven. Its 291-line test module, `main.rs` registration, and dedicated CI step have been removed. The fixed-ring spacing and methane-angle tests in `juvenile.rs` were also removed because they codified the retired seed topology. The juvenile baseline implementation remains for existing tests that still use it as a fixture; no claim is made that the module itself is obsolete.
+
+Historical entries above that describe the probe or fixed seed topology are retained as chronology, not as active constructor requirements or current CI gates. Do not remove other failing tests simply to lower the failure count: first classify whether each test protects a still-required physical/biological contract or only an obsolete implementation detail.
+
+**Next gate:** run CI on this cleanup commit and inspect the production-constructor failure and the full-suite regression increase before making further test deletions or constructor changes.
