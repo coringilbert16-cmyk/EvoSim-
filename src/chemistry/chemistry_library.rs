@@ -521,6 +521,24 @@ mod tests {
     }
 
     #[test]
+    fn sulfur_shape_replacement_preserves_existing_chemistry_cache_output() {
+        // The cache is keyed by material pair and interface class/signature,
+        // not by serialized outline. A geometry-only sulfur change must not
+        // silently change this already-established chemistry result.
+        let library = ChemistryLibrary::open("chemistry_library/data").unwrap();
+        let key = ChemistryKey::new(
+            "Hydrogen",
+            "Sulfur",
+            "rigid_point",
+            "live-v1|Hydrogen:line:0|Sulfur:corner:0",
+        );
+        let record = library
+            .get(&key)
+            .expect("the existing Hydrogen–Sulfur corner interaction remains reusable");
+        assert!((record.static_potential - 0.09678938442541647).abs() < 1e-12);
+    }
+
+    #[test]
     fn calculate_on_miss_persists_static_potential() {
         let root =
             std::env::temp_dir().join(format!("evosim-chemistry-miss-{}", std::process::id()));
