@@ -2050,6 +2050,11 @@ fn construct_blueprint_bond_driven_internal(
     let mut nodes = 0usize;
     let mut reserved_storage_indices = Vec::<usize>::new();
     let mut closed_connections = vec![false; blueprint.connections.len()];
+    // A failed element is deferred while other currently reachable elements are
+    // attempted. A successful addition changes the collision field, so every
+    // deferred element becomes eligible for another attempt afterward.
+    let mut blocked_elements = vec![false; blueprint.elements.len()];
+    let mut last_blocked_diagnostic: Option<String> = None;
 
     let mut anchor_storage_index = None;
     let anchor_instance = if let Some(storage) = available_materials.as_deref_mut() {
@@ -2118,7 +2123,7 @@ fn construct_blueprint_bond_driven_internal(
         // a deterministic order.
         let mut next: Option<(usize, Vec<usize>)> = None;
         for index in 0..blueprint.elements.len() {
-            if realized[index] {
+            if realized[index] || blocked_elements[index] {
                 continue;
             }
             let neighbors = already_realized_neighbors(blueprint, index, &realized);
@@ -2137,9 +2142,9 @@ fn construct_blueprint_bond_driven_internal(
         }
 
         let Some((index, neighbors)) = next else {
-            return Err(
-                "bond-driven constructor reached an unrealized disconnected element".into(),
-            );
+            return Err(last_blocked_diagnostic.unwrap_or_else(|| {
+                "bond-driven constructor reached an unrealized disconnected element".into()
+            }));
         };
 
         // One bond, one committed construction step. The constructor does
@@ -2195,9 +2200,11 @@ fn construct_blueprint_bond_driven_internal(
             .first()
             .map(|candidate| candidate.2)
             .unwrap_or(0.0);
-            return Err(format!(
-                "construction material need: preferred={preferred}, best_available_structural_match={best:.6}, threshold={MIN_CONSTRUCTION_MATERIAL_MATCH:.6}"
+            blocked_elements[index] = true;
+            last_blocked_diagnostic = Some(format!(
+                "construction material need for blueprint element {index}: preferred={preferred}, best_available_structural_match={best:.6}, threshold={MIN_CONSTRUCTION_MATERIAL_MATCH:.6}"
             ));
+            continue;
         }
 
         let mut attached = false;
@@ -2277,6 +2284,8 @@ fn construct_blueprint_bond_driven_internal(
                         }
                     }
                     attached = true;
+                    blocked_elements.fill(false);
+                    last_blocked_diagnostic = None;
 
                     // The cavity is a construction milestone, not merely a
                     // post-construction validation. As soon as the newly
@@ -2323,17 +2332,19 @@ fn construct_blueprint_bond_driven_internal(
                 rejection_counts.combine_rejections,
                 rejection_counts.bob_coverage_misses,
             );
-            if rejection_counts.generated_origins == 0
+            blocked_elements[index] = true;
+            last_blocked_diagnostic = Some(if rejection_counts.generated_origins == 0
                 && !rejection_counts.bob_coverage_misses.is_empty()
             {
-                return Err(format!(
+                format!(
                     "missing Bob library coverage for blueprint element {index}: {:?}",
                     rejection_counts.bob_coverage_misses
-                ));
-            }
-            return Err(format!(
-                "no forward bond-driven placement found for blueprint element {index} after {nodes} placement attempts"
-            ));
+                )
+            } else {
+                format!(
+                    "no forward bond-driven placement found for blueprint element {index} after {nodes} placement attempts"
+                )
+            });
         }
     }
 
