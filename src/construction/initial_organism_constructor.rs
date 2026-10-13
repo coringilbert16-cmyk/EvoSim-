@@ -1107,8 +1107,7 @@ mod tests {
             .expect("generated contact families should persist");
 
         let mut structure = crate::structure::OrganismStructure::new();
-        add_unit(&mut structure, carbon, (0.0, 0.0), &catalog)
-            .expect("anchor should realize");
+        add_unit(&mut structure, carbon, (0.0, 0.0), &catalog).expect("anchor should realize");
         let initial_energy = 1_000_000.0;
         let attachments = try_persisted_bob_attachments(
             &structure,
@@ -1183,7 +1182,7 @@ mod tests {
             .find(|resource| resource.name == "Carbon")
             .unwrap();
         let mut structure = crate::structure::OrganismStructure::new();
-        add_unit(&mut structure, carbon, (0.0, 0.0), None, None, &catalog)
+        add_unit(&mut structure, carbon, (0.0, 0.0), &catalog)
             .expect("Carbon anchor should realize");
         let region = crate::interior_geometry::EnclosedRegion {
             area: 400.0,
