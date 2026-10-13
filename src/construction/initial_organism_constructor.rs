@@ -606,10 +606,7 @@ fn construct_persisted_bob_structure(
                                     acquired_resource_shapes,
                                     fluid_geometry_status,
                                 )) = valid_construction(
-                                    &next.structure,
-                                    catalog,
-                                    acquisition_candidates,
-                                    library,
+                                    &next.structure, catalog, acquisition_candidates, library,
                                 ) {
                                     return Ok(ValidConstruction {
                                         structure: next.structure,
@@ -1301,5 +1298,4 @@ mod tests {
         assert!(placement.x.is_finite() && placement.y.is_finite());
         let _ = std::fs::remove_dir_all(root);
     }
-
 }
