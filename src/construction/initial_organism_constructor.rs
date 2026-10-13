@@ -144,12 +144,8 @@ fn try_persisted_bob_attachments(
             last_combine_rejection: None,
         });
     };
-    let mut candidate_placements = persisted_pair_formation_placements(
-        anchor_material,
-        anchor.placement,
-        resource,
-        library,
-    );
+    let mut candidate_placements =
+        persisted_pair_formation_placements(anchor_material, anchor.placement, resource, library);
     // Keep the pair-formation proposals diverse and bounded, then fill any
     // remaining slots from persisted edge families. Both sources are Bob data;
     // neither source bypasses the live physical transaction.
