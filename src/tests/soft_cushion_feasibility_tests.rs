@@ -147,7 +147,7 @@ mod tests {
             rotation_radians: e.placement.rotation_radians,
         }).collect();
 
-        let (mut current_score, mut current_overlaps, mut current_gap) = score(&forms, &poses, &connections);
+        let (mut current_score, _, _) = score(&forms, &poses, &connections);
         let mut best_poses = poses.clone();
         let mut best_score = current_score;
         let mut best_overlaps = current_overlaps;
@@ -179,8 +179,6 @@ mod tests {
                 || random() < ((current_score - candidate_score) / temperature).exp();
             if accept {
                 current_score = candidate_score;
-                current_overlaps = candidate_overlaps;
-                current_gap = candidate_gap;
                 if candidate_score < best_score {
                     best_score = candidate_score;
                     best_overlaps = candidate_overlaps;
