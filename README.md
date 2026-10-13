@@ -6,17 +6,21 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 
 ## PR audit and consolidation — 2026-10-13
 
-### Post-sulfur merge reconciliation — 2026-10-13
+### Stack reconciliation — 2026-10-13
 
-PR [#200](https://github.com/coringilbert16-cmyk/EvoSim-/pull/200) was merged into the fluid-coalescence branch at `412a2e8b795e9a2b107455eb899a25cba1a6a4ec`. The merge is real and verified, but it has **not** yet been incorporated into the integration branch `integration/unified-source-and-catalogue` (current audited head `2fe1e649278c965572c57a2c7ef64b761a8ffc2e`) or the chemistry-persistence/constructor branch ancestry.
+PR [#200](https://github.com/coringilbert16-cmyk/EvoSim-/pull/200) is merged into the fluid-coalescence branch at `412a2e8b795e9a2b107455eb899a25cba1a6a4ec`. The merge has now been carried into the downstream stack through two explicit merge commits:
 
-- #194 now points at the sulfur merge commit. Its post-merge Rust run [#7373](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38474817384) reports **403 passed, 28 failed, 1 ignored**; Clippy fails. The known 28-failure baseline remains, so this is no-regression evidence, not green CI.
-- #195 remains on its earlier head `728e455b`, and #196 remains on `095fbc34`. The commit comparison shows #195 and the updated #194 head diverge by the sulfur merge commit; the PRs must be reconciled and reverified before merge decisions. Do not force-update branches or blindly cherry-pick overlapping chemistry/library files.
-- #186 remains draft-only and does not yet contain the sulfur change. Its latest audited head remains `2fe1e649`; do not promote to `main`.
-- Constructor #196 remains frozen pending a controlled baseline/regression isolation. Do not expand constructor features during the Bob/fluid/chemistry reconciliation sprint.
-- Next gate: reconcile the #193 → #194 → #195 lineage without losing transactional chemistry changes, rerun the focused Bob/fluid/chemistry gates on the resulting exact heads, and update this README with those results before considering integration.
+- #195: [`22b7da1c`](https://github.com/coringilbert16-cmyk/EvoSim-/commit/22b7da1cbc740c65e43937ea62f43d792b473db2), with its prior transactional-chemistry head as first parent and #194's sulfur merge as second parent.
+- #196: [`b0d51d89`](https://github.com/coringilbert16-cmyk/EvoSim-/commit/b0d51d899fd027ce609fc38d71d248968fcc9872), with the prior constructor head as first parent and reconciled #195 as second parent. The constructor changes remain intact; overlapping resource/Bob/README changes were merged selectively rather than overwritten wholesale.
 
-This current post-merge status supersedes the older audit text below where it conflicts. The dated sections that follow preserve historical evidence; their former statement that #200 was excluded is no longer current.
+**Verification status:**
+
+- Reconciled #195 full Rust suite: **405 passed, 28 failed, 1 ignored**. Its 28 failing test names match the previous #195 run exactly; no new named failures. Focused Bob/fluid/chemistry gates passed. Strict Clippy still fails.
+- Reconciled #195's isolated two-piece Bob catalogue comparison is still running; do not claim updated catalogue parity yet.
+- Reconciled #196 exact-head Rust run is in progress. Its pre-merge baseline was **364 passed, 69 failed, 1 ignored**; assess the new run against that failure set before drawing conclusions.
+- #186 remains draft-only and does not yet contain the sulfur merge. Do not promote to `main`, start broad catalogue generation, or weaken physical invariants while the new exact-head checks run.
+
+The dated audit sections below are retained as historical evidence where they predate this reconciliation. This current section supersedes their earlier statement that #200 was excluded and their earlier description of #195/#196 as un-reconciled.
 
 ## Exact-head follow-up — 2026-10-13
 
