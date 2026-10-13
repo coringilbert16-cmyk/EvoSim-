@@ -202,7 +202,6 @@ fn rotation_preserves_form_symmetry(form: &crate::resources::Form, rotation: f64
     })
 }
 
-#[derive(Debug)]
 struct PersistedAttachment {
     structure: crate::structure::OrganismStructure,
     new_unit_index: usize,
@@ -1204,10 +1203,11 @@ mod tests {
             &EnergyLedger::default(),
             1_000_000.0,
         );
-        assert_eq!(
-            result.unwrap_err(),
-            PersistedAttachmentFailure::CoverageMiss
-        );
+        match result {
+            Err(PersistedAttachmentFailure::CoverageMiss) => {}
+            Err(other) => panic!("unexpected persisted attachment failure: {other:?}"),
+            Ok(_) => panic!("empty Bob library must not produce an attachment"),
+        }
         assert_eq!(
             structure.units.len(),
             1,
