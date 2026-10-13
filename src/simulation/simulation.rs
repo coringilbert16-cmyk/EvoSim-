@@ -18,8 +18,6 @@ impl Simulation {
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
         let rng = ChaCha8Rng::seed_from_u64(seed);
         let environment = Self::create_environment();
-        let seed_scale_reference =
-            crate::juvenile::confirmed_seed_scale_reference(&environment.catalog).ok();
         let organism = Self::create_initial_organism();
         Self {
             tick: 0,
@@ -37,7 +35,6 @@ impl Simulation {
             next_transformation_id: 1,
             rng,
             decision_parameters: DecisionParameters::default(),
-            seed_scale_reference,
         }
     }
     fn create_environment() -> Environment {
@@ -1051,7 +1048,6 @@ impl Simulation {
                         &mut organism.usable_energy,
                         &mut self.rng,
                         &parent_body,
-                        self.seed_scale_reference,
                     )
                 };
                 if let Some(stress) = stress {
@@ -1070,7 +1066,6 @@ impl Simulation {
                         child_id,
                         &self.environment.catalog,
                         &mut self.energy_ledger,
-                        self.seed_scale_reference,
                     ) {
                         next_organism_id += 1;
                         offspring.push(child);
