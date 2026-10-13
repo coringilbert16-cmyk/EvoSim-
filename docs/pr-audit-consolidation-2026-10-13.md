@@ -83,3 +83,14 @@ Two additional areas are not intrinsically part of the multi-contact transaction
 ### Next safe action
 
 Before any code movement, compare the individual commits in #193 against its parent and the overlapping changes in #196. Identify which exact commits/hunks own seed calibration and constructor startup policy, and verify whether the latter is required for the persisted-Bob path. Then isolate only independently movable changes on a new review branch and run the focused Bob/fluid gates plus constructor startup tests. If isolation cannot be demonstrated without altering physical invariants or destabilizing the stack, keep the stack intact and treat the scope issue as documented rather than forcing a split.
+
+
+### Commit-lineage detail from follow-up review
+
+The PR commit history confirms the two separable concerns are embedded in the shared ancestry, not isolated side branches:
+
+- Seed calibration was ported into #193 by commit [`a8c00d89`](https://github.com/coringilbert16-cmyk/EvoSim-/commit/a8c00d890595c1a04dcc5039c5b7a4b68e9c67a0) (message: “Consolidate seed geometry calibration into Bob integration branch”). It changes the juvenile seed ring/chain and peripheral material anchor layout.
+- Strict constructor startup behavior was added at #193's current tip by [`f879de00`](https://github.com/coringilbert16-cmyk/EvoSim-/commit/f879de00d008561fcd82ce27fb2fa0349c8373c0) (message: “Use one strict Bob library open in initial constructor”). It moves the persistent Bob open into the constructor's error path instead of treating the library as optional.
+- #194 and #195 descend from #193; #196 descends from #195. Therefore both commits are in the lineage inherited by the downstream stack. A revert on #193 would change the parent history for every downstream branch and would not, by itself, cleanly isolate either concern from #196's overlapping files.
+
+This makes a file-level split less safe than it first appears. Do not rewrite the current stack just to improve PR scope. If a narrower feature branch is still needed, reconstruct it from the integration base with an explicit allowlist of behavior commits, then prove it with the focused transaction, persistence, and constructor startup gates before changing any existing PR bases.
