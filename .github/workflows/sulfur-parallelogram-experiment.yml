@@ -1,0 +1,247 @@
+name: Sulfur Parallelogram Replacement Verification
+
+on:
+  pull_request:
+    branches: [fix/fluid-coalescence-transaction-2026-10-12]
+    paths:
+      - "src/materials/resources.rs"
+      - "src/construction/material_selection.rs"
+      - "src/chemistry/chemistry_library.rs"
+      - "src/bob/library.rs"
+      - "README.md"
+      - ".github/workflows/sulfur-parallelogram-experiment.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  compare-bob-two-piece-catalogues:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out baseline
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: baseline
+
+      - name: Check out sulfur-parallelogram variant
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: variant
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check formatting
+        working-directory: variant
+        run: cargo fmt --all -- --check
+
+      - name: Run full Rust suites on baseline twice and variant once
+        env:
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          set +e
+          (
+            cd baseline
+            cargo test --all-targets
+          ) > "${{ runner.temp }}/sulfur-baseline-1-tests.log" 2>&1
+          baseline_status_1=$?
+          (
+            cd baseline
+            cargo test --all-targets
+          ) > "${{ runner.temp }}/sulfur-baseline-2-tests.log" 2>&1
+          baseline_status_2=$?
+          (
+            cd variant
+            cargo test --all-targets
+          ) > "${{ runner.temp }}/sulfur-variant-tests.log" 2>&1
+          variant_status=$?
+          set -e
+          printf '%s\n' "$baseline_status_1" > "${{ runner.temp }}/sulfur-baseline-1-tests.exit"
+          printf '%s\n' "$baseline_status_2" > "${{ runner.temp }}/sulfur-baseline-2-tests.exit"
+          printf '%s\n' "$variant_status" > "${{ runner.temp }}/sulfur-variant-tests.exit"
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          def read(label):
+              return (root / f"sulfur-{label}-tests.log").read_text(
+                  encoding="utf-8", errors="replace"
+              )
+          def failures(output):
+              return set(re.findall(r"^test (.+) \.\.\. FAILED$", output, re.MULTILINE))
+          outputs = {
+              "baseline-1": read("baseline-1"),
+              "baseline-2": read("baseline-2"),
+              "variant": read("variant"),
+          }
+          failed = {label: failures(output) for label, output in outputs.items()}
+          baseline_failures = failed["baseline-1"] | failed["baseline-2"]
+          new_failures = sorted(failed["variant"] - baseline_failures)
+          statuses = {
+              "baseline-1": int((root / "sulfur-baseline-1-tests.exit").read_text().strip()),
+              "baseline-2": int((root / "sulfur-baseline-2-tests.exit").read_text().strip()),
+              "variant": int((root / "sulfur-variant-tests.exit").read_text().strip()),
+          }
+          compile_error = {
+              label: "could not compile" in output or "error[E" in output
+              for label, output in outputs.items()
+          }
+          for label in outputs:
+              print(f"{label}_exit={statuses[label]}; failed_tests={len(failed[label])}")
+          print("Baseline failure union (captures known intermittent baseline failures):")
+          for name in sorted(baseline_failures):
+              print(f"  {name}")
+          print("New variant failures:")
+          for name in new_failures:
+              print(f"  {name}")
+          if any(compile_error.values()):
+              raise SystemExit("Rust suite failed to compile on baseline or variant")
+          for label in outputs:
+              if statuses[label] != 0 and not failed[label]:
+                  raise SystemExit(f"{label} cargo test failed without identifiable test failures")
+          if new_failures:
+              raise SystemExit("Sulfur variant introduced test failures beyond two baseline runs")
+          print("No additional named test failures relative to either baseline run.")
+          PY
+
+      - name: Upload Rust test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sulfur-parallelogram-rust-test-logs
+          path: |
+            ${{ runner.temp }}/sulfur-baseline-1-tests.log
+            ${{ runner.temp }}/sulfur-baseline-2-tests.log
+            ${{ runner.temp }}/sulfur-variant-tests.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Run baseline Bob generation (up to two pieces)
+        working-directory: baseline
+        env:
+          EVOSIM_GEOMETRY_LIBRARY_DIR: ${{ runner.temp }}/sulfur-baseline-library
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVOSIM_GEOMETRY_LIBRARY_DIR"
+          cargo run --release -- --geometry-worker-complete-up-to 2 2>&1 | tee "${{ runner.temp }}/sulfur-baseline.log"
+
+      - name: Run parallelogram Bob generation (up to two pieces)
+        working-directory: variant
+        env:
+          EVOSIM_GEOMETRY_LIBRARY_DIR: ${{ runner.temp }}/sulfur-parallelogram-library
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVOSIM_GEOMETRY_LIBRARY_DIR"
+          cargo run --release -- --geometry-worker-complete-up-to 2 2>&1 | tee "${{ runner.temp }}/sulfur-parallelogram.log"
+
+      - name: Compare counts, sulfur-containing records, runtime, and storage
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from collections import Counter
+          from pathlib import Path
+
+          material_names = {
+              "Water", "Nitrogen", "Phosphorus", "Carbon",
+              "Sulfur", "Hydrogen", "Methane",
+          }
+          temp = Path(os.environ["RUNNER_TEMP"])
+          roots = {
+              "baseline": temp / "sulfur-baseline-library",
+              "parallelogram": temp / "sulfur-parallelogram-library",
+          }
+          for label, root in roots.items():
+              print(f"=== {label} ===")
+              total_bytes = sum(p.stat().st_size for p in root.glob("*") if p.is_file())
+              print(f"total_bytes={total_bytes}")
+              formation_path = root / "formations.jsonl"
+              seed_resources = {}
+              if formation_path.exists():
+                  with formation_path.open(encoding="utf-8") as stream:
+                      for line in stream:
+                          if not line.strip():
+                              continue
+                          try:
+                              formation = json.loads(line)
+                          except json.JSONDecodeError:
+                              continue
+                          constituents = formation.get("constituents", [])
+                          # Seed formations have one constituent; generated formation
+                          # records in this catalog can have empty constituent arrays.
+                          if len(constituents) == 1:
+                              resource = constituents[0].get("resource")
+                              if resource in material_names:
+                                  seed_resources[formation.get("formation_id")] = resource
+
+              for filename in (
+                  "formations.jsonl",
+                  "rigid_contact_families.jsonl",
+                  "rigid_point_contact_families.jsonl",
+                  "rigid_vertex_contact_families.jsonl",
+                  "fluid_boundary_families.jsonl",
+              ):
+                  path = root / filename
+                  if not path.exists():
+                      print(f"{filename}: records=0 sulfur_records=0 bytes=0")
+                      continue
+                  records = 0
+                  sulfur_records = 0
+                  sulfur_partner_counts = Counter()
+                  with path.open(encoding="utf-8") as stream:
+                      for line in stream:
+                          if not line.strip():
+                              continue
+                          records += 1
+                          try:
+                              record = json.loads(line)
+                          except json.JSONDecodeError:
+                              if "Sulfur" in line:
+                                  sulfur_records += 1
+                              continue
+                          if "Sulfur" in json.dumps(record, ensure_ascii=False):
+                              sulfur_records += 1
+                          if filename in {
+                              "rigid_contact_families.jsonl",
+                              "rigid_point_contact_families.jsonl",
+                              "rigid_vertex_contact_families.jsonl",
+                          }:
+                              anchor_resource = seed_resources.get(record.get("formation_id"))
+                              candidate_resource = record.get("candidate_resource")
+                              if anchor_resource == "Sulfur" and candidate_resource in material_names - {"Sulfur"}:
+                                  sulfur_partner_counts[candidate_resource] += 1
+                              elif candidate_resource == "Sulfur" and anchor_resource in material_names - {"Sulfur"}:
+                                  sulfur_partner_counts[anchor_resource] += 1
+                  print(f"{filename}: records={records} sulfur_records={sulfur_records} bytes={path.stat().st_size}")
+                  if filename in {
+                      "rigid_contact_families.jsonl",
+                      "rigid_point_contact_families.jsonl",
+                      "rigid_vertex_contact_families.jsonl",
+                  }:
+                      print(f"{filename}_sulfur_partner_families=" + json.dumps(dict(sorted(sulfur_partner_counts.items()))))
+              log = temp / f"sulfur-{label}.log"
+              if log.exists():
+                  for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
+                      if "geometry worker complete:" in line:
+                          print(line)
+          PY
+
+      - name: Upload both isolated catalogues and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sulfur-parallelogram-two-piece-comparison
+          path: |
+            ${{ runner.temp }}/sulfur-baseline-library/
+            ${{ runner.temp }}/sulfur-parallelogram-library/
+            ${{ runner.temp }}/sulfur-baseline.log
+            ${{ runner.temp }}/sulfur-parallelogram.log
+          if-no-files-found: warn
+          retention-days: 14
