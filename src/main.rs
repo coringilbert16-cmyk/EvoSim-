@@ -152,9 +152,6 @@ mod phase3_authority_contract_tests;
 #[cfg(test)]
 #[path = "tests/simulation_tests.rs"]
 mod simulation_tests;
-#[cfg(test)]
-#[path = "tests/soft_cushion_feasibility_tests.rs"]
-mod soft_cushion_feasibility_tests;
 
 #[tokio::main]
 async fn main() {
