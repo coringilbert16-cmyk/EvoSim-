@@ -38,9 +38,7 @@ enum PersistedAttachmentFailure {
     CandidatesRejected {
         suggestions: usize,
         raw_pair_placements: usize,
-        pair_pose_overlap_drops: usize,
         pair_placements_dropped_by_cap: usize,
-        edge_pose_overlap_drops: usize,
         edge_placements_examined: usize,
         edge_placements_added: usize,
         duplicate_placements: usize,
@@ -213,9 +211,7 @@ fn try_persisted_bob_attachments(
         return Err(PersistedAttachmentFailure::CandidatesRejected {
             suggestions: 0,
             raw_pair_placements: 0,
-            pair_pose_overlap_drops: 0,
             pair_placements_dropped_by_cap: 0,
-            edge_pose_overlap_drops: 0,
             edge_placements_examined: 0,
             edge_placements_added: 0,
             duplicate_placements: 0,
@@ -236,9 +232,7 @@ fn try_persisted_bob_attachments(
         return Err(PersistedAttachmentFailure::CandidatesRejected {
             suggestions: 0,
             raw_pair_placements: 0,
-            pair_pose_overlap_drops: 0,
             pair_placements_dropped_by_cap: 0,
-            edge_pose_overlap_drops: 0,
             edge_placements_examined: 0,
             edge_placements_added: 0,
             duplicate_placements: 0,
@@ -259,7 +253,6 @@ fn try_persisted_bob_attachments(
     // Keep persisted pair proposals diverse and bounded. Do not pre-reject
     // proposals using a separate geometry path: restoration followed by the
     // authoritative live overlap/contact/COMBINE checks decides validity.
-    let pair_pose_overlap_drops = 0usize;
     candidate_placements = select_diverse_placements(candidate_placements, 6);
     let pair_placements_selected = candidate_placements.len();
     let pair_placements_dropped_by_cap =
@@ -271,7 +264,6 @@ fn try_persisted_bob_attachments(
         .collect::<std::collections::BTreeSet<_>>();
     let mut edge_placements_examined = 0usize;
     let mut edge_placements_added = 0usize;
-    let mut edge_pose_overlap_drops = 0usize;
     let mut duplicate_placements = 0usize;
     for suggestion in library.suggest_persisted_rigid_edge_placements(
         anchor_material,
@@ -319,9 +311,7 @@ fn try_persisted_bob_attachments(
         return Err(PersistedAttachmentFailure::CandidatesRejected {
             suggestions: candidate_placements.len(),
             raw_pair_placements,
-            pair_pose_overlap_drops,
             pair_placements_dropped_by_cap,
-            edge_pose_overlap_drops,
             edge_placements_examined,
             edge_placements_added,
             duplicate_placements,
@@ -482,9 +472,7 @@ fn try_persisted_bob_attachments(
     Err(PersistedAttachmentFailure::CandidatesRejected {
         suggestions: candidate_placements.len(),
         raw_pair_placements,
-        pair_pose_overlap_drops,
         pair_placements_dropped_by_cap,
-        edge_pose_overlap_drops,
         edge_placements_examined,
         edge_placements_added,
         duplicate_placements,
@@ -844,16 +832,12 @@ fn construct_persisted_bob_structure(
         'anchors: for anchor_index in 0..state.structure.units.len() {
             anchors_considered_total += 1;
             if placement_queries_examined >= 12 {
-                if placement_queries_examined >= 12 {
-                    placement_query_budget_exhaustions += 1;
-                }
+                placement_query_budget_exhaustions += 1;
                 break;
             }
             for resource in &structural_resources {
                 if placement_queries_examined >= 12 {
-                    if placement_queries_examined >= 12 {
-                        placement_query_budget_exhaustions += 1;
-                    }
+                    placement_query_budget_exhaustions += 1;
                     break 'anchors;
                 }
                 placement_queries_examined += 1;
@@ -928,9 +912,7 @@ fn construct_persisted_bob_structure(
                     Err(PersistedAttachmentFailure::CandidatesRejected {
                         suggestions,
                         raw_pair_placements,
-                        pair_pose_overlap_drops,
                         pair_placements_dropped_by_cap,
-                        edge_pose_overlap_drops,
                         edge_placements_examined,
                         edge_placements_added,
                         duplicate_placements,
@@ -947,9 +929,7 @@ fn construct_persisted_bob_structure(
                         last_combine_rejection: step_last_combine_rejection,
                     }) => {
                         raw_pair_placements_total += raw_pair_placements;
-                        pair_pose_overlap_drops_total += pair_pose_overlap_drops;
                         pair_placements_dropped_by_cap_total += pair_placements_dropped_by_cap;
-                        edge_pose_overlap_drops_total += edge_pose_overlap_drops;
                         edge_placements_examined_total += edge_placements_examined;
                         edge_placements_added_total += edge_placements_added;
                         duplicate_placements_total += duplicate_placements;
@@ -983,7 +963,7 @@ fn construct_persisted_bob_structure(
     }
 
     Err(format!(
-        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, placement_queries_total={placement_queries_total}, placement_query_budget_exhaustions={placement_query_budget_exhaustions}, anchors_considered_total={anchors_considered_total}, candidate_states_generated_total={candidate_states_generated_total}, raw_pair_placements_total={raw_pair_placements_total}, pair_pose_overlap_drops_total={pair_pose_overlap_drops_total}, pair_placements_dropped_by_cap_total={pair_placements_dropped_by_cap_total}, edge_pose_overlap_drops_total={edge_pose_overlap_drops_total}, edge_placements_examined_total={edge_placements_examined_total}, edge_placements_added_total={edge_placements_added_total}, duplicate_placements_total={duplicate_placements_total}, placement_attempts_total={placement_attempts_total}, last_overlap_rejection={last_overlap_rejection:?}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, pair_overlap_rejections={pair_overlap_rejections}, edge_overlap_rejections={edge_overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, energy_rejections={energy_rejections}, last_combine_rejection={last_combine_rejection:?}, rigid_contact_records={contact_records}",
+        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, placement_queries_total={placement_queries_total}, placement_query_budget_exhaustions={placement_query_budget_exhaustions}, anchors_considered_total={anchors_considered_total}, candidate_states_generated_total={candidate_states_generated_total}, raw_pair_placements_total={raw_pair_placements_total}, pair_placements_dropped_by_cap_total={pair_placements_dropped_by_cap_total}, edge_placements_examined_total={edge_placements_examined_total}, edge_placements_added_total={edge_placements_added_total}, duplicate_placements_total={duplicate_placements_total}, placement_attempts_total={placement_attempts_total}, last_overlap_rejection={last_overlap_rejection:?}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, pair_overlap_rejections={pair_overlap_rejections}, edge_overlap_rejections={edge_overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, energy_rejections={energy_rejections}, last_combine_rejection={last_combine_rejection:?}, rigid_contact_records={contact_records}",
         queue.len()
     ))
 }
