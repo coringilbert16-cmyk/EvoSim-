@@ -47,6 +47,66 @@ enum PersistedAttachmentFailure {
     },
 }
 
+fn placement_signature(placement: Placement) -> String {
+    format!(
+        "{:.3},{:.3},{:.4}",
+        placement.x, placement.y, placement.rotation_radians
+    )
+}
+
+/// Replay two-piece formations already stored in Bob as local growth proposals.
+/// The stored anchor constituent is rigidly aligned to the live anchor; the
+/// other constituent's recorded relative pose is preserved exactly.
+fn persisted_pair_formation_placements(
+    anchor_material: &str,
+    anchor_placement: Placement,
+    candidate_resource: &BaseResource,
+    library: &crate::geometry_reference_library::GeometryLibrary,
+) -> Vec<Placement> {
+    let mut placements = std::collections::BTreeMap::<String, Placement>::new();
+    for formation in library.formations() {
+        if formation.constituents.len() != 2
+            || !formation.bonds.iter().any(|bond| {
+                (bond.constituent_a == 0 && bond.constituent_b == 1)
+                    || (bond.constituent_a == 1 && bond.constituent_b == 0)
+            })
+        {
+            continue;
+        }
+
+        for (anchor_index, candidate_index) in [(0, 1), (1, 0)] {
+            let stored_anchor = &formation.constituents[anchor_index];
+            let stored_candidate = &formation.constituents[candidate_index];
+            if stored_anchor.resource != anchor_material
+                || stored_candidate.resource != candidate_resource.name
+            {
+                continue;
+            }
+
+            let rotation_delta =
+                anchor_placement.rotation_radians - stored_anchor.placement.rotation_radians;
+            let (sin, cos) = rotation_delta.sin_cos();
+            let dx = stored_candidate.placement.x - stored_anchor.placement.x;
+            let dy = stored_candidate.placement.y - stored_anchor.placement.y;
+            let placement = Placement {
+                x: anchor_placement.x + dx * cos - dy * sin,
+                y: anchor_placement.y + dx * sin + dy * cos,
+                rotation_radians: stored_candidate.placement.rotation_radians + rotation_delta,
+            };
+            if !placement.x.is_finite()
+                || !placement.y.is_finite()
+                || !placement.rotation_radians.is_finite()
+            {
+                continue;
+            }
+            placements
+                .entry(placement_signature(placement))
+                .or_insert(placement);
+        }
+    }
+    placements.into_values().collect()
+}
+
 /// Try one local growth step using only rigid-edge poses recorded in Bob.
 /// The returned structure and energy are committed together only after the
 /// ordinary live COMBINE transaction succeeds. No intended lattice pose,
@@ -83,13 +143,35 @@ fn try_persisted_bob_attachments(
             last_combine_rejection: None,
         });
     };
-    let suggestions = library.suggest_persisted_rigid_edge_placements(
+    let mut candidate_placements = persisted_pair_formation_placements(
+        anchor_material,
+        anchor.placement,
+        resource,
+        library,
+    );
+    // Keep the pair-formation proposals diverse and bounded, then fill any
+    // remaining slots from persisted edge families. Both sources are Bob data;
+    // neither source bypasses the live physical transaction.
+    candidate_placements.truncate(6);
+    let mut seen_placements = candidate_placements
+        .iter()
+        .copied()
+        .map(placement_signature)
+        .collect::<std::collections::BTreeSet<_>>();
+    for suggestion in library.suggest_persisted_rigid_edge_placements(
         anchor_material,
         anchor.placement,
         resource,
         catalog,
-    );
-    if suggestions.is_empty() {
+    ) {
+        if candidate_placements.len() >= 12 {
+            break;
+        }
+        if seen_placements.insert(placement_signature(suggestion.placement)) {
+            candidate_placements.push(suggestion.placement);
+        }
+    }
+    if candidate_placements.is_empty() {
         return Err(PersistedAttachmentFailure::CoverageMiss);
     }
 
@@ -110,7 +192,7 @@ fn try_persisted_bob_attachments(
         catalog,
     ) else {
         return Err(PersistedAttachmentFailure::CandidatesRejected {
-            suggestions: suggestions.len(),
+            suggestions: candidate_placements.len(),
             restoration_failures: suggestions.len(),
             overlap_rejections,
             no_bond_contact,
@@ -125,7 +207,7 @@ fn try_persisted_bob_attachments(
 
     let mut successful = Vec::new();
     let mut suggestions_examined = 0usize;
-    for suggestion in &suggestions {
+    for suggestion in &candidate_placements {
         // Bound both successful branches and rejected attempts; every returned
         // pose is still live-validated.
         if successful.len() >= 4 || suggestions_examined >= 12 {
@@ -136,7 +218,7 @@ fn try_persisted_bob_attachments(
         let indices = match crate::material_restoration::restore_material(
             &mut trial,
             &instance,
-            suggestion.placement,
+            *suggestion,
             catalog,
         ) {
             Some(indices) if !indices.is_empty() => indices,
