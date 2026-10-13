@@ -18,9 +18,9 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 - Generated geometry stays outside Git. The last measured two-piece baseline was about 48.3 MB uncompressed; three-piece size is unknown and may grow substantially. Measure counts, runtime, and storage before treating a three-piece catalogue as complete.
 - Fluid knowledge is stored as symbolic capillary boundary/family records with conserved area and contact constraints—not sampled rigid poses. Current records have persistence validation and live-interface resolution; the active work is converting those records into a reproducible, area-preserving realized fluid boundary and proving it through physical validation.
 
-### Resource geometry experiment — sulfur parallelogram
+### Sulfur geometry — parallelogram replacement
 
-The sulfur-shape experiment changes **geometry only**. Sulfur is an explicit four-vertex parallelogram centered at the origin, with cyclic edge lengths **1.0, 0.5, 1.0, 0.5**, interior angles alternating **60° and 120°**, and opposite edges parallel. Its area is \(\sqrt{3}/4 \approx 0.4330127\) square units and its perimeter is 3.0 units. The canonical vertices are:
+Sulfur's default rigid outline is a four-vertex parallelogram centered at the origin, with cyclic edge lengths **1.0, 0.5, 1.0, 0.5**, interior angles alternating **60° and 120°**, and opposite edges parallel. Its area is \\(\\sqrt{3}/4 \\approx 0.4330127\\) square units and its perimeter is 3.0 units. Canonical vertices:
 
 ```text
 (-0.625, -sqrt(3)/8)
@@ -29,13 +29,21 @@ The sulfur-shape experiment changes **geometry only**. Sulfur is an explicit fou
 (-0.375,  sqrt(3)/8)
 ```
 
-The implementation stores the equivalent decimal coordinates. Keep the centroid and bounding-box center at the origin. Do not substitute a rhombus or regular polygon: the two long edges and two short edges are intentionally different.
+The implementation stores equivalent decimal coordinates. Keep the centroid and bounding-box center at the origin. Do not substitute a rhombus or regular polygon: the two long edges and two short edges are intentional.
 
-All non-geometric sulfur properties remain unchanged in this experiment: mass 1.50, potential-energy capacity 8.0, reactivity 2.0, chemical position 3.5, cohesion 0.45, and rigid physical state. Since area falls from the former unit-edge regular pentagon's approximately 1.72048 to 0.43301 while mass is fixed, mass per occupied area increases by about 3.97×. That is a known consequence to evaluate, not a reason to silently change mass or chemistry in this shape-only PR.
+This is a **geometry-only replacement**. Sulfur's mass (1.50), potential-energy capacity (8.0), reactivity (2.0), chemical position (3.5), cohesion (0.45), and rigid physical state remain unchanged. The smaller occupied area relative to the former unit-edge regular pentagon is an expected consequence of the selected geometry; do not silently change unrelated properties to compensate.
 
-Construction-material similarity treats `Form::RegularPolygon` and `Form::Polygon` as one broad polygon family. This prevents the implementation representation change from introducing an artificial family-score penalty; exact geometry still governs actual contact and placement. Bob's catalogue signature includes serialized resource shapes, so the sulfur change invalidates a catalogue built for the previous shape. Regenerate and reopen Bob in an isolated output directory before using the new catalogue. Do not commit generated catalogue data. The small chemistry interface cache remains chemistry-derived; verify unchanged chemistry behavior rather than deleting or regenerating it solely because the outline changed.
+Construction-material similarity treats `Form::RegularPolygon` and `Form::Polygon` as one broad polygon family. This avoids an artificial material-selection penalty caused solely by switching sulfur's representation; exact vertices remain authoritative for placement and contact. Bob's catalogue signature includes serialized resource shapes, so the previous-shape catalogue is invalidated and must be regenerated in an isolated output directory. Generated catalogue data must stay out of Git. The chemistry interface cache remains keyed by material pair and interface signature; the focused regression confirms the existing Hydrogen–Sulfur interface result is unchanged.
 
-The sulfur change is not accepted on catalogue counts alone. The experiment workflow must compare baseline and variant under the same two-piece generation limit, run formatting and Rust tests, and identify any additional failing test names relative to the known base-branch backlog. More stored records are a coverage signal, not proof of more useful or valid construction options.
+#### Replacement verification checkpoint — 2026-10-13
+
+- Sulfur geometry assertions cover four vertices, alternating 1.0/0.5 edge lengths, parallel opposite edges, 60°/120° interior angles, centering, area, and unchanged non-geometric properties.
+- Bob's catalogue signature regression confirms the new shape does not reuse a catalogue signature generated for the pentagon.
+- Formatting passed. The baseline Rust suite failed 72 named tests on each of two runs; the parallelogram variant failed the same 72, with **no additional named failures**.
+- Isolated Bob generation completed for both variants with the same two-constituent limit, no oversized formations, no unfinished frontiers, and successful catalogue reopen. The parallelogram catalogue recorded 281 formations versus 264 baseline (+17); this is a useful coverage signal, not proof that the constructor is fixed.
+- The measured run used an isolated temporary library. Do not commit its generated catalogue or treat the raw record-count difference as a normalized geometry-fit score.
+
+This replacement is intended to improve geometric compatibility, not to claim that sulfur alone resolves multi-piece constructor failures. Keep live geometry/contact validation authoritative.
 
 ### Operational gates
 
