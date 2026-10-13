@@ -361,10 +361,7 @@ fn next_construction_resource_status(
     }
 }
 
-fn preferred_length(
-    genome: &crate::genome::Genome,
-    _catalog: &[crate::resources::BaseResource],
-) -> Option<f64> {
+fn preferred_length(genome: &crate::genome::Genome) -> Option<f64> {
     Some(
         genome
             .developmental_blueprint
@@ -376,9 +373,8 @@ fn developmental_context<'a>(
     genome: &'a crate::genome::Genome,
     origin: &Position,
     orientation: f64,
-    _catalog: &[crate::resources::BaseResource],
 ) -> Option<DevelopmentalContext<'a>> {
-    let preferred = preferred_length(genome, _catalog)?;
+    let preferred = preferred_length(genome)?;
     Some((
         &genome.developmental_blueprint,
         (origin.x, origin.y),
@@ -395,11 +391,8 @@ fn developmental_linear_extent(structure: &OrganismStructure, origin: &Position)
         .fold(0.0, f64::max)
 }
 
-fn budding_scale_reached(
-    construction: &ReproductiveConstruction,
-    catalog: &[crate::resources::BaseResource],
-) -> bool {
-    let Some(preferred) = preferred_length(&construction.child_genome, catalog) else {
+fn budding_scale_reached(construction: &ReproductiveConstruction) -> bool {
+    let Some(preferred) = preferred_length(&construction.child_genome) else {
         return false;
     };
     if preferred <= 0.0 || !preferred.is_finite() {
@@ -439,7 +432,7 @@ fn birth_ready(
     {
         return false;
     }
-    budding_scale_reached(construction, catalog)
+    budding_scale_reached(construction)
 }
 
 fn anchor_structure(
@@ -634,7 +627,6 @@ pub(crate) fn advance_construction(
             &construction.child_genome,
             &construction.developmental_origin,
             construction.developmental_orientation_radians,
-            &environment.catalog,
         )
     } else {
         // Genome construction is deliberately performed through the normal
@@ -759,7 +751,7 @@ mod tests {
         let catalog = default_catalog();
         let genome = initial_genome();
         let origin = Position { x: 0.0, y: 0.0 };
-        let preferred = preferred_length(&genome, &catalog).unwrap();
+        let preferred = preferred_length(&genome).unwrap();
         let construction = ReproductiveConstruction {
             committed_material: MaterialStorage::default(),
             developing_structure: OrganismStructure::new(),
@@ -773,7 +765,7 @@ mod tests {
             needs_space: false,
         };
         assert!(preferred > 0.0);
-        assert!(!budding_scale_reached(&construction, &catalog));
+        assert!(!budding_scale_reached(&construction));
     }
 
     #[test]
