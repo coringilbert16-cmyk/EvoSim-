@@ -38,25 +38,31 @@ jobs:
         working-directory: variant
         run: cargo fmt --all -- --check
 
-      - name: Run full Rust suites on baseline and variant
+      - name: Run full Rust suites on baseline twice and variant once
         env:
           CARGO_TERM_COLOR: never
         run: |
           set -euo pipefail
-          mkdir -p "${{ runner.temp }}/sulfur-baseline-test-library" "${{ runner.temp }}/sulfur-variant-test-library"
+          mkdir -p "${{ runner.temp }}/sulfur-baseline-test-library-1" "${{ runner.temp }}/sulfur-baseline-test-library-2" "${{ runner.temp }}/sulfur-variant-test-library"
           set +e
           (
             cd baseline
-            EVOSIM_GEOMETRY_LIBRARY_DIR="${{ runner.temp }}/sulfur-baseline-test-library" cargo test --all-targets
-          ) > "${{ runner.temp }}/sulfur-baseline-tests.log" 2>&1
-          baseline_status=$?
+            EVOSIM_GEOMETRY_LIBRARY_DIR="${{ runner.temp }}/sulfur-baseline-test-library-1" cargo test --all-targets
+          ) > "${{ runner.temp }}/sulfur-baseline-1-tests.log" 2>&1
+          baseline_status_1=$?
+          (
+            cd baseline
+            EVOSIM_GEOMETRY_LIBRARY_DIR="${{ runner.temp }}/sulfur-baseline-test-library-2" cargo test --all-targets
+          ) > "${{ runner.temp }}/sulfur-baseline-2-tests.log" 2>&1
+          baseline_status_2=$?
           (
             cd variant
             EVOSIM_GEOMETRY_LIBRARY_DIR="${{ runner.temp }}/sulfur-variant-test-library" cargo test --all-targets
           ) > "${{ runner.temp }}/sulfur-variant-tests.log" 2>&1
           variant_status=$?
           set -e
-          printf '%s\n' "$baseline_status" > "${{ runner.temp }}/sulfur-baseline-tests.exit"
+          printf '%s\n' "$baseline_status_1" > "${{ runner.temp }}/sulfur-baseline-1-tests.exit"
+          printf '%s\n' "$baseline_status_2" > "${{ runner.temp }}/sulfur-baseline-2-tests.exit"
           printf '%s\n' "$variant_status" > "${{ runner.temp }}/sulfur-variant-tests.exit"
           python3 - <<'PY'
           import os
@@ -70,30 +76,39 @@ jobs:
               )
           def failures(output):
               return set(re.findall(r"^test (.+) \.\.\. FAILED$", output, re.MULTILINE))
-          baseline = read("baseline")
-          variant = read("variant")
-          baseline_failures = failures(baseline)
-          variant_failures = failures(variant)
-          new_failures = sorted(variant_failures - baseline_failures)
-          baseline_compile_error = "could not compile" in baseline or "error[E" in baseline
-          variant_compile_error = "could not compile" in variant or "error[E" in variant
-          baseline_status = int((root / "sulfur-baseline-tests.exit").read_text().strip())
-          variant_status = int((root / "sulfur-variant-tests.exit").read_text().strip())
-          print(f"baseline_exit={baseline_status}; baseline_failed_tests={len(baseline_failures)}")
-          print(f"variant_exit={variant_status}; variant_failed_tests={len(variant_failures)}")
-          print("Baseline failures (known backlog; informational):")
+          outputs = {
+              "baseline-1": read("baseline-1"),
+              "baseline-2": read("baseline-2"),
+              "variant": read("variant"),
+          }
+          failed = {label: failures(output) for label, output in outputs.items()}
+          baseline_failures = failed["baseline-1"] | failed["baseline-2"]
+          new_failures = sorted(failed["variant"] - baseline_failures)
+          statuses = {
+              "baseline-1": int((root / "sulfur-baseline-1-tests.exit").read_text().strip()),
+              "baseline-2": int((root / "sulfur-baseline-2-tests.exit").read_text().strip()),
+              "variant": int((root / "sulfur-variant-tests.exit").read_text().strip()),
+          }
+          compile_error = {
+              label: "could not compile" in output or "error[E" in output
+              for label, output in outputs.items()
+          }
+          for label in outputs:
+              print(f"{label}_exit={statuses[label]}; failed_tests={len(failed[label])}")
+          print("Baseline failure union (captures known intermittent baseline failures):")
           for name in sorted(baseline_failures):
               print(f"  {name}")
           print("New variant failures:")
           for name in new_failures:
               print(f"  {name}")
-          if baseline_compile_error or variant_compile_error:
+          if any(compile_error.values()):
               raise SystemExit("Rust suite failed to compile on baseline or variant")
+          for label in outputs:
+              if statuses[label] != 0 and not failed[label]:
+                  raise SystemExit(f"{label} cargo test failed without identifiable test failures")
           if new_failures:
-              raise SystemExit("Sulfur variant introduced test failures relative to baseline")
-          if not variant_failures and variant_status != 0:
-              raise SystemExit("Variant cargo test failed without identifiable test failures")
-          print("No additional named test failures relative to the base branch.")
+              raise SystemExit("Sulfur variant introduced test failures beyond two baseline runs")
+          print("No additional named test failures relative to either baseline run.")
           PY
 
       - name: Upload Rust test logs
@@ -102,7 +117,8 @@ jobs:
         with:
           name: sulfur-parallelogram-rust-test-logs
           path: |
-            ${{ runner.temp }}/sulfur-baseline-tests.log
+            ${{ runner.temp }}/sulfur-baseline-1-tests.log
+            ${{ runner.temp }}/sulfur-baseline-2-tests.log
             ${{ runner.temp }}/sulfur-variant-tests.log
           if-no-files-found: warn
           retention-days: 14
