@@ -202,6 +202,193 @@ fn rotation_preserves_form_symmetry(form: &crate::resources::Form, rotation: f64
     })
 }
 
+#[derive(Debug)]
+struct PersistedAttachment {
+    structure: crate::structure::OrganismStructure,
+    new_unit_index: usize,
+    ledger: EnergyLedger,
+    energy: f64,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum PersistedAttachmentFailure {
+    CoverageMiss,
+    CandidatesRejected {
+        suggestions: usize,
+        restoration_failures: usize,
+        overlap_rejections: usize,
+        no_bond_contact: usize,
+        evaluation_rejections: usize,
+        combine_rejections: usize,
+    },
+}
+
+/// Try one local growth step using only rigid-edge poses recorded in Bob.
+/// The returned structure and energy are committed together only after the
+/// ordinary live COMBINE transaction succeeds. No intended lattice pose,
+/// snapping, or analytic fallback is available in this path.
+fn try_persisted_bob_attachment(
+    structure: &crate::structure::OrganismStructure,
+    anchor_index: usize,
+    resource: &BaseResource,
+    library: &crate::geometry_reference_library::GeometryLibrary,
+    catalog: &[BaseResource],
+    ledger: &EnergyLedger,
+    available_energy: f64,
+) -> Result<PersistedAttachment, PersistedAttachmentFailure> {
+    let Some(anchor) = structure.units.get(anchor_index) else {
+        return Err(PersistedAttachmentFailure::CandidatesRejected {
+            suggestions: 0,
+            restoration_failures: 0,
+            overlap_rejections: 0,
+            no_bond_contact: 0,
+            evaluation_rejections: 0,
+            combine_rejections: 0,
+        });
+    };
+    let Some(anchor_material) = anchor.material.parts.first().map(|part| part.0.as_str()) else {
+        return Err(PersistedAttachmentFailure::CandidatesRejected {
+            suggestions: 0,
+            restoration_failures: 0,
+            overlap_rejections: 0,
+            no_bond_contact: 0,
+            evaluation_rejections: 0,
+            combine_rejections: 0,
+        });
+    };
+    let suggestions = library.suggest_persisted_rigid_edge_placements(
+        anchor_material,
+        anchor.placement,
+        resource,
+        catalog,
+    );
+    if suggestions.is_empty() {
+        return Err(PersistedAttachmentFailure::CoverageMiss);
+    }
+
+    let mut restoration_failures = 0;
+    let mut overlap_rejections = 0;
+    let mut no_bond_contact = 0;
+    let mut evaluation_rejections = 0;
+    let mut combine_rejections = 0;
+    let Some(instance) = crate::physical_material::PhysicalMaterial::realized(
+        Material::free_base(resource.name.clone(), 1.0),
+        vec![Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        }],
+        catalog,
+    ) else {
+        return Err(PersistedAttachmentFailure::CandidatesRejected {
+            suggestions: suggestions.len(),
+            restoration_failures: suggestions.len(),
+            overlap_rejections,
+            no_bond_contact,
+            evaluation_rejections,
+            combine_rejections,
+        });
+    };
+
+    for suggestion in &suggestions {
+        let mut trial = structure.clone();
+        let indices = match crate::material_restoration::restore_material(
+            &mut trial,
+            &instance,
+            suggestion.placement,
+            catalog,
+        ) {
+            Some(indices) if !indices.is_empty() => indices,
+            _ => {
+                restoration_failures += 1;
+                continue;
+            }
+        };
+        if indices.iter().any(|&index| {
+            crate::construction_runtime::placed_unit_overlaps(
+                &trial,
+                &trial.units[index],
+                &indices,
+                catalog,
+            )
+        }) {
+            overlap_rejections += 1;
+            continue;
+        }
+
+        let new_unit_index = indices[0];
+        let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
+        let contacts = crate::contact::connection_pair_candidates_cached(
+            &trial,
+            anchor_index,
+            new_unit_index,
+            catalog,
+            &mut bond_cache,
+        )
+        .into_iter()
+        .filter(|candidate| {
+            candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                && candidate.available_a
+                && candidate.available_b
+        })
+        .collect::<Vec<_>>();
+        if contacts.is_empty() {
+            no_bond_contact += 1;
+            continue;
+        }
+
+        for candidate in contacts {
+            let Some((_, _, investment, _)) =
+                crate::combine_runtime::selected_candidate_evaluation(
+                    &trial,
+                    anchor_index,
+                    new_unit_index,
+                    candidate,
+                    catalog,
+                )
+            else {
+                evaluation_rejections += 1;
+                continue;
+            };
+            let mut committed_structure = trial.clone();
+            let mut committed_ledger = *ledger;
+            let mut committed_energy = available_energy;
+            let mut transaction_cache = crate::contact::ConnectionCompatibilityCache::new();
+            if crate::combine_runtime::form_selected_bond(
+                &mut committed_structure,
+                anchor_index,
+                new_unit_index,
+                candidate,
+                investment,
+                catalog,
+                &mut transaction_cache,
+                &mut committed_ledger,
+                &mut committed_energy,
+            )
+            .is_none()
+            {
+                combine_rejections += 1;
+                continue;
+            }
+            return Ok(PersistedAttachment {
+                structure: committed_structure,
+                new_unit_index,
+                ledger: committed_ledger,
+                energy: committed_energy,
+            });
+        }
+    }
+
+    Err(PersistedAttachmentFailure::CandidatesRejected {
+        suggestions: suggestions.len(),
+        restoration_failures,
+        overlap_rejections,
+        no_bond_contact,
+        evaluation_rejections,
+        combine_rejections,
+    })
+}
+
 fn add_unit(
     structure: &mut crate::structure::OrganismStructure,
     resource: &BaseResource,
