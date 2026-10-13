@@ -491,6 +491,11 @@ fn construct_persisted_bob_structure(
     let mut explored_states = 0usize;
     let mut coverage_misses = 0usize;
     let mut rejected_placements = 0usize;
+    let mut restoration_failures = 0usize;
+    let mut overlap_rejections = 0usize;
+    let mut no_bond_contact = 0usize;
+    let mut evaluation_rejections = 0usize;
+    let mut combine_rejections = 0usize;
     let mut queue_budget_drops = 0usize;
     while explored_states < state_budget {
         let Some(state) = queue.pop_front() else {
@@ -577,13 +582,11 @@ fn construct_persisted_bob_structure(
                         combine_rejections,
                     }) => {
                         rejected_placements += suggestions;
-                        let _rejections_by_cause = (
-                            restoration_failures,
-                            overlap_rejections,
-                            no_bond_contact,
-                            evaluation_rejections,
-                            combine_rejections,
-                        );
+                        restoration_failures += restoration_failures;
+                        overlap_rejections += overlap_rejections;
+                        no_bond_contact += no_bond_contact;
+                        evaluation_rejections += evaluation_rejections;
+                        combine_rejections += combine_rejections;
                     }
                 }
             }
@@ -591,7 +594,7 @@ fn construct_persisted_bob_structure(
     }
 
     Err(format!(
-        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, rigid_contact_records={contact_records}",
+        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, rigid_contact_records={contact_records}",
         queue.len()
     ))
 }
