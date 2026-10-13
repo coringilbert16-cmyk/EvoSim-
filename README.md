@@ -39,7 +39,7 @@ Construction-material similarity treats `Form::RegularPolygon` and `Form::Polygo
 
 - Sulfur geometry assertions cover four vertices, alternating 1.0/0.5 edge lengths, parallel opposite edges, 60°/120° interior angles, centering, area, and unchanged non-geometric properties.
 - Bob's catalogue signature regression confirms the new shape does not reuse a catalogue signature generated for the pentagon.
-- Formatting passed. The baseline Rust suite failed 72 named tests on each of two runs; the parallelogram variant failed the same 72, with **no additional named failures**.
+- Formatting passed. The standard Rust CI run fails **28 tests** on the current base branch. The earlier comparison workflow forced an empty isolated Bob library during Rust-suite runs, producing 72 failures on both baseline and variant; that was not comparable to the standard 28-failure baseline. The comparison workflow now runs Rust suites in their separate checkout directories using the standard repository test environment, and reserves isolated temporary libraries for the Bob-generation comparison. Do not claim parity until the corrected workflow finishes.
 - Isolated Bob generation completed for both variants with the same two-constituent limit, no oversized formations, no unfinished frontiers, and successful catalogue reopen. The parallelogram catalogue recorded 281 formations versus 264 baseline (+17); this is a useful coverage signal, not proof that the constructor is fixed.
 - The measured run used an isolated temporary library. Do not commit its generated catalogue or treat the raw record-count difference as a normalized geometry-fit score.
 
