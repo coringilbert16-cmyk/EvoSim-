@@ -416,49 +416,41 @@ fn construction_state_signature(structure: &crate::structure::OrganismStructure)
 /// cannot corrupt another queued construction state.
 fn close_touching_bonds(
     structure: &mut crate::structure::OrganismStructure,
+    new_unit_index: usize,
     catalog: &[BaseResource],
     ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) {
-    let mut processed_pairs = std::collections::BTreeSet::new();
-    loop {
-        let mut next_pair = None;
-        'pairs: for a in 0..structure.units.len() {
-            for b in (a + 1)..structure.units.len() {
-                if processed_pairs.contains(&(a, b)) {
-                    continue;
-                }
-                let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-                let touches = crate::contact::connection_pair_candidates_cached(
-                    structure, a, b, catalog, &mut cache,
-                )
-                .into_iter()
-                .any(|candidate| {
-                    candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                        && candidate.available_a
-                        && candidate.available_b
-                });
-                if touches {
-                    next_pair = Some((a, b));
-                    break 'pairs;
-                }
-            }
+    if new_unit_index >= structure.units.len() {
+        return;
+    }
+    // Adding one unit cannot change contacts between older units. Check only
+    // the new unit's interfaces, and attempt each interface at most once.
+    for other_index in 0..structure.units.len() {
+        if other_index == new_unit_index {
+            continue;
         }
-        let Some((a, b)) = next_pair else {
-            break;
+        let (a, b) = if other_index < new_unit_index {
+            (other_index, new_unit_index)
+        } else {
+            (new_unit_index, other_index)
         };
-        processed_pairs.insert((a, b));
-        // A pair receives one bounded closure attempt. Edge contact candidates
-        // can remain continuously available after a bond, so revisiting the
-        // same pair must not become an unbounded bonding loop.
-        let _ = bond_units(structure, a, b, catalog, ledger, energy);
+        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+        let touches = crate::contact::connection_pair_candidates_cached(
+            structure, a, b, catalog, &mut cache,
+        )
+        .into_iter()
+        .any(|candidate| {
+            candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                && candidate.available_a
+                && candidate.available_b
+        });
+        if touches {
+            let _ = bond_units(structure, a, b, catalog, ledger, energy);
+        }
     }
 }
 
-/// Search local arrangements from persisted Bob edge families. Every added
-/// constituent must come from a stored pose; live overlap, contact, COMBINE,
-/// and energy accounting remain authoritative. The work bound is derived from
-/// the contact index and does not prescribe organism size or topology.
 fn construction_state_score(state: &ConstructionSearchState) -> (usize, usize, usize) {
     let units = state.structure.units.len();
     let bonds = state.structure.bonds.len();
@@ -578,13 +570,16 @@ fn construct_persisted_bob_structure(
                             debug_assert!(
                                 attachment.new_unit_index < attachment.structure.units.len()
                             );
+                            let new_unit_index = attachment.new_unit_index;
                             let mut next = ConstructionSearchState {
                                 structure: attachment.structure,
                                 ledger: attachment.ledger,
                                 energy: attachment.energy,
+                                score: (0, 0, 0),
                             };
                             close_touching_bonds(
                                 &mut next.structure,
+                                new_unit_index,
                                 catalog,
                                 &mut next.ledger,
                                 &mut next.energy,
