@@ -1931,3 +1931,25 @@ This section supersedes earlier shorthand that grouped all current failures toge
 **Controlled query-order experiment — rejected and reverted (2026-10-13):** commit `a71b9b834d761ec6e5cffcf4e7e9ceede0540b92` rotated the query start across anchors/materials and changed the loop order while preserving the 12-query/state cap and all physical authorities. Exact-head CI [#7310](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38431486175) still reported **362 passed, 69 failed, 1 ignored**; constructor startup still failed. Runtime increased from **47.95 s** to **79.74 s**. The diagnostic changed from 733 queries / 183 anchor-loop entries / 180 generated child states / 7,416 attempted rejected placements (prior head) to 697 queries / 697 anchor-resource entries / 373 generated child states / 6,468 attempted rejected placements. All counted candidate attempts were still rejected for overlap; energy and COMBINE rejection counts remained zero. This experiment did not improve viability and was reverted in commit `bcb3745b8d1761cb7daed8fe45025d4fd6461c3d`. Do not restore this loop-order experiment without a new hypothesis and a focused acceptance metric.
 
 **Updated constructor diagnosis:** the dominant blocker is now clearly *pose validity in the current structure*, not energy shortage or missing Bob coverage. A representative latest rejection places a candidate only about 0.18 units from its anchor and reports overlap with the anchor itself. That can indicate a stale/mismatched persisted formation, a coordinate-frame/relative-pose error, or a rigid-edge suggestion that assumes the candidate edge midpoint rather than the recorded candidate contact parameter. These are hypotheses, not yet proven causes. Next sprint must split pair-formation proposals from rigid-edge proposals in the diagnostics and validate the exact local/world pose transform for each source. Do not expand search budgets again until proposal geometry is explained.
+
+
+### Constructor query-distribution experiment result — 2026-10-13
+
+Experiment commit: `a71b9b834d761ec6e5cffcf4e7e9ceede0540b92`. Exact-head CI: [run #38431486175](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38431486175).
+
+**Result: failed; the experiment is informative but not a recovery.** Full suite remains **362 passed, 69 failed, 1 ignored**; Clippy also fails (68 application-target and 40 test-target diagnostics). The rotation of anchor/material query starts changed search behavior but did not create any successful placement.
+
+Latest constructor diagnostics:
+- states explored: 64/64; queue budget drops: 251
+- placement queries: 697; per-state query budget exhausted 50 times
+- candidate states generated: 373 (up from 154 in the prior recorded diversity experiment)
+- raw pair placements: 7,989; pair placements dropped by selection cap: 5,533
+- edge placements examined/added: 4,153 / 4,012
+- live placement attempts: 6,468; overlap rejections: 6,468
+- restoration failures: 0; no-bond-contact, evaluation, COMBINE, and energy rejections: all 0
+- Bob coverage misses: 0
+- latest overlap diagnostic reports the candidate Sulfur pose overlapping existing Carbon at the same near-coincident centers.
+
+**Interpretation:** distributing the bounded query budget increases generated child states (373 vs 154), but all attempted candidate poses still fail the authoritative overlap check. This rules out anchor starvation as the sole cause. Do not increase the state/query caps yet: the next sprint should inspect the coordinate/pose contract between persisted two-piece formation records, edge-placement suggestions, and the live material restoration/overlap validator. Take one recorded Bob formation, transform it onto a known anchor, and compare its two realized world-space shapes and relative transform against the same stored formation before any multi-state search. Add a focused regression test for that replay contract before modifying production search again.
+
+**Current gate remains closed:** no qualifying cavity from the production constructor; 42 startup-cascading tests remain blocked, in addition to the pre-existing failures. Preserve the scaffold removal and all authoritative live physics/COMBINE/energy checks.
