@@ -227,6 +227,7 @@ enum PersistedAttachmentFailure {
 /// The returned structure and energy are committed together only after the
 /// ordinary live COMBINE transaction succeeds. No intended lattice pose,
 /// snapping, or analytic fallback is available in this path.
+#[expect(dead_code, reason = "Consumed by the pending formation-driven startup coordinator")]
 fn try_persisted_bob_attachment(
     structure: &crate::structure::OrganismStructure,
     anchor_index: usize,
@@ -1175,6 +1176,83 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn persisted_bob_attachment_reports_missing_coverage_without_fallback() {
+        let catalog = crate::resources::default_catalog();
+        let carbon = catalog.iter().find(|resource| resource.name == "Carbon").unwrap();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-persisted-attachment-empty-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let library = crate::geometry_reference_library::GeometryLibrary::open(&root, &catalog)
+            .expect("isolated Bob library should open");
+        let mut structure = crate::structure::OrganismStructure::new();
+        add_unit(&mut structure, carbon, (0.0, 0.0), None, None, &catalog)
+            .expect("anchor should realize");
+        let result = try_persisted_bob_attachment(
+            &structure,
+            0,
+            carbon,
+            &library,
+            &catalog,
+            &EnergyLedger::default(),
+            1_000_000.0,
+        );
+        assert_eq!(result.unwrap_err(), PersistedAttachmentFailure::CoverageMiss);
+        assert_eq!(structure.units.len(), 1, "coverage miss must not mutate the live structure");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn persisted_bob_attachment_commits_only_after_live_combine_succeeds() {
+        let catalog = crate::resources::default_catalog();
+        let carbon = catalog.iter().find(|resource| resource.name == "Carbon").unwrap();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-persisted-attachment-recorded-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = crate::geometry_reference_library::GeometryLibrary::open(&root, &catalog)
+            .expect("isolated Bob library should open");
+        let parent = crate::geometry_reference_library::GeometryFormation::single("Carbon");
+        library
+            .insert(parent.clone(), &catalog)
+            .expect("Carbon singleton should persist");
+        let families = crate::geometry_reference_library::generate_rigid_contact_families(
+            &parent,
+            carbon,
+            &catalog,
+        );
+        assert!(!families.is_empty(), "fixture should generate Carbon contact families");
+        library
+            .insert_rigid_contact_families(families)
+            .expect("generated contact families should persist");
+
+        let mut structure = crate::structure::OrganismStructure::new();
+        add_unit(&mut structure, carbon, (0.0, 0.0), None, None, &catalog)
+            .expect("anchor should realize");
+        let initial_energy = 1_000_000.0;
+        let attached = try_persisted_bob_attachment(
+            &structure,
+            0,
+            carbon,
+            &library,
+            &catalog,
+            &EnergyLedger::default(),
+            initial_energy,
+        )
+        .expect("persisted Bob proposal should pass live restoration, overlap, contact, and COMBINE");
+        assert_eq!(attached.structure.units.len(), 2);
+        assert_eq!(attached.new_unit_index, 1);
+        assert!(!attached.structure.bonds.is_empty());
+        assert!(attached.energy < initial_energy, "COMBINE must settle against supplied energy");
+        assert!(attached.ledger.balanced(), "successful transaction must preserve ledger balance");
+        assert_eq!(structure.units.len(), 1, "trial growth must not mutate the caller's structure");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
 
     #[test]
     fn bob_neighbor_suggestions_reach_initial_constructor_physical_validation() {
