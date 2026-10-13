@@ -622,13 +622,8 @@ impl Simulation {
                 {
                     continue;
                 }
-                let developmental = seed_reference.and_then(|reference| {
-                    crate::developmental_decision::context(
-                        &mut organisms[index],
-                        environment,
-                        reference,
-                    )
-                });
+                let developmental =
+                    crate::developmental_decision::context(&mut organisms[index], environment);
                 let needs = Self::current_needs(
                     &mut organisms[index],
                     environment,
