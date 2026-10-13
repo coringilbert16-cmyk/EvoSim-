@@ -367,22 +367,20 @@ fn next_construction_resource_status(
 
 fn preferred_length(
     genome: &crate::genome::Genome,
-    catalog: &[crate::resources::BaseResource],
+    _catalog: &[crate::resources::BaseResource],
 ) -> Option<f64> {
-    let seed_reference = crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?;
-    preferred_length_with_reference(genome, seed_reference)
+    Some(
+        genome
+            .developmental_blueprint
+            .preferred_developmental_length(genome.preferred_mass()),
+    )
 }
 
 fn preferred_length_with_reference(
     genome: &crate::genome::Genome,
-    seed_reference: (f64, f64),
+    _seed_reference: (f64, f64),
 ) -> Option<f64> {
-    let (seed_mass, seed_length) = seed_reference;
-    Some(
-        genome
-            .developmental_blueprint
-            .preferred_developmental_length(genome.preferred_mass(), seed_mass, seed_length),
-    )
+    preferred_length(genome, &[])
 }
 
 fn developmental_context<'a>(
