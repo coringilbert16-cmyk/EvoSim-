@@ -7,6 +7,7 @@ on:
       - "src/materials/resources.rs"
       - "src/construction/material_selection.rs"
       - "src/chemistry/chemistry_library.rs"
+      - "src/bob/library.rs"
       - "README.md"
       - ".github/workflows/sulfur-parallelogram-experiment.yml"
 
