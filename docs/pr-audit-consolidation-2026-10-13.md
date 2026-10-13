@@ -57,3 +57,29 @@ Run #7148's full Rust suite still failed: **402 passed, 28 failed, 1 ignored**; 
 ## Audit limits
 
 This is a status/lineage audit, not proof that every historical feature PR still behaves correctly today. Older merged PRs are not individually re-tested; current focused tests and the current full suite are the behavior evidence. The sulfur parallelogram PR #200 was not inspected or changed as part of this work.
+
+
+## Exact-head follow-up — 2026-10-13
+
+A fresh source-scope review of the current PR heads confirms the #193 → #194 → #195 stack is intact and all three full Rust suites remain red, while focused gates pass:
+
+- **#193 current head** `f879de00d008561fcd82ce27fb2fa0349c8373c0`, run [#7143](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38270282801): **377 passed, 28 failed, 1 ignored**; Clippy failed.
+- **#194 current head** `b3bc66eb17c3ae4b51c1a49bf1febbcdae7ad46d`, run [#7144](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38270352595): **400 passed, 28 failed, 1 ignored**; Clippy failed.
+- **#195 current head** `728e455b780ce18e4117112c075921ec55ec88c2`, run [#7148](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38272687270): **402 passed, 28 failed, 1 ignored**; Clippy failed.
+
+These are exact-head results for the respective PR tips, not green CI. The increasing pass count with the same 28 failing tests is encouraging but does not establish that the failures are harmless or that the branches are merge-ready.
+
+### #193 scope review and safe consolidation boundary
+
+Current #193 changes ten files. The central multi-contact behavior spans `src/construction/runtime.rs`, `src/geometry/contact.rs`, `src/geometry/structure.rs`, and fluid–fluid eligibility in `src/chemistry/combine.rs`; those changes are behaviorally connected and should not be split apart casually. `src/bob/library.rs` adds unique temporary manifest/frontier paths and a concurrent initialization regression; `src/bob/worker.rs` is only test formatting in the current diff.
+
+Two additional areas are not intrinsically part of the multi-contact transaction:
+
+1. `src/organism/juvenile.rs` changes the seed baseline from a ten-piece ring plus tight spiral to a six-piece ring plus outward chain and adjusts peripheral Sulfur/Methane anchors. This is seed/construction calibration, not the multi-contact transaction itself.
+2. `src/construction/initial_organism_constructor.rs` changes a missing/unopenable persistent Bob library from a silently ignored optional lookup to a hard construction error. That may be intentional fail-closed behavior, but it changes constructor startup behavior and must be judged with constructor recovery, not assumed safe merely because the Bob gate passes.
+
+**Do not perform a blind file-level revert or move these hunks now.** PR #196 is already stacked on #195 and edits overlapping constructor, runtime, geometry, and juvenile files. Moving hunks without a tested parent/child reconstruction risks losing fixes or creating a misleading test baseline. The safe decision is to preserve current source history, keep all three PRs draft, and prepare a separately tested scope-split only after a clean commit-level dependency map and targeted regressions are available. No source code was changed during this follow-up.
+
+### Next safe action
+
+Before any code movement, compare the individual commits in #193 against its parent and the overlapping changes in #196. Identify which exact commits/hunks own seed calibration and constructor startup policy, and verify whether the latter is required for the persisted-Bob path. Then isolate only independently movable changes on a new review branch and run the focused Bob/fluid gates plus constructor startup tests. If isolation cannot be demonstrated without altering physical invariants or destabilizing the stack, keep the stack intact and treat the scope issue as documented rather than forcing a split.
