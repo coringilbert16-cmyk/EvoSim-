@@ -767,7 +767,7 @@ fn form_remaining_multi_contact_bonds_in_place(
     covered.into_iter().all(|is_covered| is_covered)
 }
 
-fn overlapping_unit_indices(
+pub(crate) fn overlapping_unit_indices(
     structure: &OrganismStructure,
     candidate: &StructuralUnit,
     ignored_units: &[usize],
