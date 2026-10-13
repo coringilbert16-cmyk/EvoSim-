@@ -1815,3 +1815,10 @@ Interpretation: the immediate failure is a **placement-order / local crowding co
 ### Constructor stripping sprint 10 — retry blocked elements after a successful addition (2026-10-13)
 
 The bond-driven placement loop previously stopped at the first reachable blueprint element for which every candidate overlapped the current structure. That made a local ordering dead end terminal even when another already-reachable element might still fit and alter the available space. The loop now defers a blocked element, tries other currently reachable elements, and clears deferred failures after any successful addition so they can be retried against the changed live structure. If no eligible element can progress, it returns the latest concrete placement/coverage/material diagnostic. This does not remove the startup Carbon scaffold, does not establish that the current blueprint is viable, and does not relax collision or bond rules. It is a focused experiment addressing the diagnosed element-26 ordering/crowding failure; CI and the constructor replacement gate remain pending.
+
+
+### Constructor stripping sprint 11 — test deferred placement selection (2026-10-13)
+
+Extracted the constructor's reachable/unblocked element selection into `next_unblocked_element` and added a focused regression test: a reachable element marked blocked is skipped while another reachable element is attempted, then becomes eligible again when a successful structural change clears the blocked set. This tests the scheduling behavior independently of the full seed blueprint and Bob inventory.
+
+**Scaffold removal remains mandatory in this workstream.** This test is not a replacement coordinator and does not authorize keeping the Carbon scaffold as a fallback. The remaining migration is still to implement the persisted-formation coordinator, wire the initial startup through it, and remove the fixed ring/support topology, coordinate snapping/fallback, and `1.0e12` artificial energy allowance in that same controlled startup migration. The new test has been committed but has not yet been run locally or by exact-head CI; no passing result is claimed.
