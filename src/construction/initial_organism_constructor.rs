@@ -42,6 +42,7 @@ enum PersistedAttachmentFailure {
         no_bond_contact: usize,
         evaluation_rejections: usize,
         combine_rejections: usize,
+        last_combine_rejection: Option<String>,
     },
 }
 
@@ -66,6 +67,7 @@ fn try_persisted_bob_attachments(
             no_bond_contact: 0,
             evaluation_rejections: 0,
             combine_rejections: 0,
+            last_combine_rejection: None,
         });
     };
     let Some(anchor_material) = anchor.material.parts.first().map(|part| part.0.as_str()) else {
@@ -93,6 +95,7 @@ fn try_persisted_bob_attachments(
     let mut no_bond_contact = 0;
     let mut evaluation_rejections = 0;
     let mut combine_rejections = 0;
+    let mut last_combine_rejection = None;
     let Some(instance) = crate::physical_material::PhysicalMaterial::realized(
         Material::free_base(resource.name.clone(), 1.0),
         vec![Placement {
@@ -109,6 +112,9 @@ fn try_persisted_bob_attachments(
             no_bond_contact,
             evaluation_rejections,
             combine_rejections,
+            last_combine_rejection: Some(
+                "candidate material failed physical realization".to_owned(),
+            ),
         });
     };
 
@@ -182,7 +188,7 @@ fn try_persisted_bob_attachments(
             let mut committed_ledger = *ledger;
             let mut committed_energy = available_energy;
             let mut transaction_cache = crate::contact::ConnectionCompatibilityCache::new();
-            if crate::combine_runtime::form_selected_bond(
+            if let Err(reason) = crate::combine_runtime::form_selected_bond_diagnostic(
                 &mut committed_structure,
                 anchor_index,
                 new_unit_index,
@@ -192,10 +198,9 @@ fn try_persisted_bob_attachments(
                 &mut transaction_cache,
                 &mut committed_ledger,
                 &mut committed_energy,
-            )
-            .is_none()
-            {
+            ) {
                 combine_rejections += 1;
+                last_combine_rejection = Some(reason);
                 continue;
             }
             successful.push(PersistedAttachment {
@@ -219,6 +224,7 @@ fn try_persisted_bob_attachments(
         no_bond_contact,
         evaluation_rejections,
         combine_rejections,
+        last_combine_rejection,
     })
 }
 
@@ -509,6 +515,7 @@ fn construct_persisted_bob_structure(
     let mut no_bond_contact = 0usize;
     let mut evaluation_rejections = 0usize;
     let mut combine_rejections = 0usize;
+    let mut last_combine_rejection = None;
     let mut queue_budget_drops = 0usize;
 
     while explored_states < state_budget && !queue.is_empty() {
@@ -624,6 +631,7 @@ fn construct_persisted_bob_structure(
                         no_bond_contact: step_no_bond_contact,
                         evaluation_rejections: step_evaluation_rejections,
                         combine_rejections: step_combine_rejections,
+                        last_combine_rejection: step_last_combine_rejection,
                     }) => {
                         rejected_placements += suggestions;
                         restoration_failures += step_restoration_failures;
@@ -631,6 +639,9 @@ fn construct_persisted_bob_structure(
                         no_bond_contact += step_no_bond_contact;
                         evaluation_rejections += step_evaluation_rejections;
                         combine_rejections += step_combine_rejections;
+                        if step_last_combine_rejection.is_some() {
+                            last_combine_rejection = step_last_combine_rejection;
+                        }
                     }
                 }
             }
@@ -645,7 +656,7 @@ fn construct_persisted_bob_structure(
     }
 
     Err(format!(
-        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, rigid_contact_records={contact_records}",
+        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, last_combine_rejection={last_combine_rejection:?}, rigid_contact_records={contact_records}",
         queue.len()
     ))
 }
