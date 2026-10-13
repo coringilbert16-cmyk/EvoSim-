@@ -43,21 +43,20 @@ jobs:
           CARGO_TERM_COLOR: never
         run: |
           set -euo pipefail
-          mkdir -p "${{ runner.temp }}/sulfur-baseline-test-library-1" "${{ runner.temp }}/sulfur-baseline-test-library-2" "${{ runner.temp }}/sulfur-variant-test-library"
           set +e
           (
             cd baseline
-            EVOSIM_GEOMETRY_LIBRARY_DIR="${{ runner.temp }}/sulfur-baseline-test-library-1" cargo test --all-targets
+            cargo test --all-targets
           ) > "${{ runner.temp }}/sulfur-baseline-1-tests.log" 2>&1
           baseline_status_1=$?
           (
             cd baseline
-            EVOSIM_GEOMETRY_LIBRARY_DIR="${{ runner.temp }}/sulfur-baseline-test-library-2" cargo test --all-targets
+            cargo test --all-targets
           ) > "${{ runner.temp }}/sulfur-baseline-2-tests.log" 2>&1
           baseline_status_2=$?
           (
             cd variant
-            EVOSIM_GEOMETRY_LIBRARY_DIR="${{ runner.temp }}/sulfur-variant-test-library" cargo test --all-targets
+            cargo test --all-targets
           ) > "${{ runner.temp }}/sulfur-variant-tests.log" 2>&1
           variant_status=$?
           set -e
