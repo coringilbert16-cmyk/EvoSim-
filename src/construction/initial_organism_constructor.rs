@@ -48,6 +48,8 @@ enum PersistedAttachmentFailure {
         last_overlap_rejection: Option<String>,
         restoration_failures: usize,
         overlap_rejections: usize,
+        pair_overlap_rejections: usize,
+        edge_overlap_rejections: usize,
         no_bond_contact: usize,
         evaluation_rejections: usize,
         combine_rejections: usize,
@@ -221,6 +223,8 @@ fn try_persisted_bob_attachments(
             last_overlap_rejection: None,
             restoration_failures: 0,
             overlap_rejections: 0,
+            pair_overlap_rejections: 0,
+            edge_overlap_rejections: 0,
             no_bond_contact: 0,
             evaluation_rejections: 0,
             combine_rejections: 0,
@@ -257,6 +261,7 @@ fn try_persisted_bob_attachments(
     // authoritative live overlap/contact/COMBINE checks decides validity.
     let pair_pose_overlap_drops = 0usize;
     candidate_placements = select_diverse_placements(candidate_placements, 6);
+    let pair_placements_selected = candidate_placements.len();
     let pair_placements_dropped_by_cap =
         raw_pair_placements.saturating_sub(candidate_placements.len());
     let mut seen_placements = candidate_placements
@@ -295,6 +300,8 @@ fn try_persisted_bob_attachments(
 
     let mut restoration_failures = 0;
     let mut overlap_rejections = 0;
+    let mut pair_overlap_rejections = 0;
+    let mut edge_overlap_rejections = 0;
     let mut no_bond_contact = 0;
     let mut evaluation_rejections = 0;
     let mut combine_rejections = 0;
@@ -322,6 +329,8 @@ fn try_persisted_bob_attachments(
             last_overlap_rejection,
             restoration_failures: candidate_placements.len(),
             overlap_rejections,
+            pair_overlap_rejections,
+            edge_overlap_rejections,
             no_bond_contact,
             evaluation_rejections,
             combine_rejections,
@@ -334,7 +343,7 @@ fn try_persisted_bob_attachments(
 
     let mut successful = Vec::new();
     let mut suggestions_examined = 0usize;
-    for suggestion in &candidate_placements {
+    for (suggestion_index, suggestion) in candidate_placements.iter().enumerate() {
         // Bound both successful branches and rejected attempts; every returned
         // pose is still live-validated.
         if successful.len() >= 4 || suggestions_examined >= 12 {
@@ -368,6 +377,13 @@ fn try_persisted_bob_attachments(
         });
         if let Some((candidate_unit_index, existing_unit_index)) = overlap {
             overlap_rejections += 1;
+            let source = if suggestion_index < pair_placements_selected {
+                pair_overlap_rejections += 1;
+                "pair-formation"
+            } else {
+                edge_overlap_rejections += 1;
+                "rigid-edge"
+            };
             let candidate_pose = trial.units[candidate_unit_index].placement;
             let existing_pose = trial.units[existing_unit_index].placement;
             let existing_material = trial.units[existing_unit_index]
@@ -377,7 +393,7 @@ fn try_persisted_bob_attachments(
                 .map(|part| part.0.as_str())
                 .unwrap_or("unknown");
             last_overlap_rejection = Some(format!(
-                "anchor={anchor_index}:{anchor_material}@({:.4},{:.4},{:.4}); candidate={}:{}@({:.4},{:.4},{:.4}); overlaps={existing_unit_index}:{existing_material}@({:.4},{:.4},{:.4})",
+                "source={source}; anchor={anchor_index}:{anchor_material}@({:.4},{:.4},{:.4}); candidate={}:{}@({:.4},{:.4},{:.4}); overlaps={existing_unit_index}:{existing_material}@({:.4},{:.4},{:.4})",
                 anchor.placement.x,
                 anchor.placement.y,
                 anchor.placement.rotation_radians,
@@ -476,6 +492,8 @@ fn try_persisted_bob_attachments(
         last_overlap_rejection,
         restoration_failures,
         overlap_rejections,
+        pair_overlap_rejections,
+        edge_overlap_rejections,
         no_bond_contact,
         evaluation_rejections,
         combine_rejections,
@@ -768,6 +786,8 @@ fn construct_persisted_bob_structure(
     let mut rejected_placements = 0usize;
     let mut restoration_failures = 0usize;
     let mut overlap_rejections = 0usize;
+    let mut pair_overlap_rejections = 0usize;
+    let mut edge_overlap_rejections = 0usize;
     let mut no_bond_contact = 0usize;
     let mut evaluation_rejections = 0usize;
     let mut combine_rejections = 0usize;
@@ -918,6 +938,8 @@ fn construct_persisted_bob_structure(
                         last_overlap_rejection: step_last_overlap_rejection,
                         restoration_failures: step_restoration_failures,
                         overlap_rejections: step_overlap_rejections,
+                        pair_overlap_rejections: step_pair_overlap_rejections,
+                        edge_overlap_rejections: step_edge_overlap_rejections,
                         no_bond_contact: step_no_bond_contact,
                         evaluation_rejections: step_evaluation_rejections,
                         combine_rejections: step_combine_rejections,
@@ -938,6 +960,8 @@ fn construct_persisted_bob_structure(
                         rejected_placements += suggestions;
                         restoration_failures += step_restoration_failures;
                         overlap_rejections += step_overlap_rejections;
+                        pair_overlap_rejections += step_pair_overlap_rejections;
+                        edge_overlap_rejections += step_edge_overlap_rejections;
                         no_bond_contact += step_no_bond_contact;
                         evaluation_rejections += step_evaluation_rejections;
                         combine_rejections += step_combine_rejections;
@@ -959,7 +983,7 @@ fn construct_persisted_bob_structure(
     }
 
     Err(format!(
-        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, placement_queries_total={placement_queries_total}, placement_query_budget_exhaustions={placement_query_budget_exhaustions}, anchors_considered_total={anchors_considered_total}, candidate_states_generated_total={candidate_states_generated_total}, raw_pair_placements_total={raw_pair_placements_total}, pair_pose_overlap_drops_total={pair_pose_overlap_drops_total}, pair_placements_dropped_by_cap_total={pair_placements_dropped_by_cap_total}, edge_pose_overlap_drops_total={edge_pose_overlap_drops_total}, edge_placements_examined_total={edge_placements_examined_total}, edge_placements_added_total={edge_placements_added_total}, duplicate_placements_total={duplicate_placements_total}, placement_attempts_total={placement_attempts_total}, last_overlap_rejection={last_overlap_rejection:?}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, energy_rejections={energy_rejections}, last_combine_rejection={last_combine_rejection:?}, rigid_contact_records={contact_records}",
+        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, placement_queries_total={placement_queries_total}, placement_query_budget_exhaustions={placement_query_budget_exhaustions}, anchors_considered_total={anchors_considered_total}, candidate_states_generated_total={candidate_states_generated_total}, raw_pair_placements_total={raw_pair_placements_total}, pair_pose_overlap_drops_total={pair_pose_overlap_drops_total}, pair_placements_dropped_by_cap_total={pair_placements_dropped_by_cap_total}, edge_pose_overlap_drops_total={edge_pose_overlap_drops_total}, edge_placements_examined_total={edge_placements_examined_total}, edge_placements_added_total={edge_placements_added_total}, duplicate_placements_total={duplicate_placements_total}, placement_attempts_total={placement_attempts_total}, last_overlap_rejection={last_overlap_rejection:?}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, pair_overlap_rejections={pair_overlap_rejections}, edge_overlap_rejections={edge_overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, energy_rejections={energy_rejections}, last_combine_rejection={last_combine_rejection:?}, rigid_contact_records={contact_records}",
         queue.len()
     ))
 }
