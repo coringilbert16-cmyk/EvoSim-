@@ -230,7 +230,7 @@ enum PersistedAttachmentFailure {
     dead_code,
     reason = "Consumed by the pending formation-driven startup coordinator"
 )]
-fn try_persisted_bob_attachment(
+fn try_persisted_bob_attachments(
     structure: &crate::structure::OrganismStructure,
     anchor_index: usize,
     resource: &BaseResource,
@@ -238,7 +238,7 @@ fn try_persisted_bob_attachment(
     catalog: &[BaseResource],
     ledger: &EnergyLedger,
     available_energy: f64,
-) -> Result<PersistedAttachment, PersistedAttachmentFailure> {
+) -> Result<Vec<PersistedAttachment>, PersistedAttachmentFailure> {
     let Some(anchor) = structure.units.get(anchor_index) else {
         return Err(PersistedAttachmentFailure::CandidatesRejected {
             suggestions: 0,
@@ -293,6 +293,7 @@ fn try_persisted_bob_attachment(
         });
     };
 
+    let mut successful = Vec::new();
     for suggestion in &suggestions {
         let mut trial = structure.clone();
         let indices = match crate::material_restoration::restore_material(
@@ -371,13 +372,18 @@ fn try_persisted_bob_attachment(
                 combine_rejections += 1;
                 continue;
             }
-            return Ok(PersistedAttachment {
+            successful.push(PersistedAttachment {
                 structure: committed_structure,
                 new_unit_index,
                 ledger: committed_ledger,
                 energy: committed_energy,
             });
+            break;
         }
+    }
+
+    if !successful.is_empty() {
+        return Ok(successful);
     }
 
     Err(PersistedAttachmentFailure::CandidatesRejected {
@@ -1246,7 +1252,7 @@ mod tests {
         add_unit(&mut structure, carbon, (0.0, 0.0), None, None, &catalog)
             .expect("anchor should realize");
         let initial_energy = 1_000_000.0;
-        let attached = try_persisted_bob_attachment(
+        let attachments = try_persisted_bob_attachments(
             &structure,
             0,
             carbon,
@@ -1258,6 +1264,7 @@ mod tests {
         .expect(
             "persisted Bob proposal should pass live restoration, overlap, contact, and COMBINE",
         );
+        let attached = attachments.first().expect("at least one attachment should succeed");
         assert_eq!(attached.structure.units.len(), 2);
         assert_eq!(attached.new_unit_index, 1);
         assert!(!attached.structure.bonds.is_empty());
