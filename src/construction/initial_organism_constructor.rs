@@ -1465,6 +1465,136 @@ mod tests {
     }
 
     #[test]
+    fn persisted_pair_replay_preserves_relative_pose_at_a_rotated_live_anchor() {
+        let catalog = crate::resources::default_catalog();
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .expect("Carbon exists in catalog");
+        let nitrogen = catalog
+            .iter()
+            .find(|resource| resource.name == "Nitrogen")
+            .expect("Nitrogen exists in catalog");
+        let root = std::env::temp_dir().join(format!(
+            "evosim-pair-replay-transform-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut library = crate::geometry_reference_library::GeometryLibrary::open(&root, &catalog)
+            .expect("isolated Bob library should open");
+
+        let parent = crate::geometry_reference_library::GeometryFormation::single("Carbon");
+        let pair = crate::geometry_reference_library::expand_formation_candidates(
+            &parent, nitrogen, &catalog,
+        )
+        .into_iter()
+        .find(|formation| {
+            formation.constituents.len() == 2
+                && formation.constituents.iter().any(|part| part.resource == "Carbon")
+                && formation.constituents.iter().any(|part| part.resource == "Nitrogen")
+                && formation.bonds.iter().any(|bond| {
+                    (bond.constituent_a == 0 && bond.constituent_b == 1)
+                        || (bond.constituent_a == 1 && bond.constituent_b == 0)
+                })
+        })
+        .expect("Bob geometry should provide a valid Carbon-Nitrogen pair");
+        library
+            .insert(pair, &catalog)
+            .expect("pair formation should persist");
+
+        let stored = library
+            .formations()
+            .find(|formation| {
+                formation.constituents.len() == 2
+                    && formation.constituents.iter().any(|part| part.resource == "Carbon")
+                    && formation.constituents.iter().any(|part| part.resource == "Nitrogen")
+                    && formation.bonds.iter().any(|bond| {
+                        (bond.constituent_a == 0 && bond.constituent_b == 1)
+                            || (bond.constituent_a == 1 && bond.constituent_b == 0)
+                    })
+            })
+            .expect("persisted pair should be readable")
+            .clone();
+        let stored_anchor_index = stored
+            .constituents
+            .iter()
+            .position(|part| part.resource == "Carbon")
+            .expect("stored pair contains Carbon");
+        let stored_candidate_index = stored
+            .constituents
+            .iter()
+            .position(|part| part.resource == "Nitrogen")
+            .expect("stored pair contains Nitrogen");
+        let stored_anchor = stored.constituents[stored_anchor_index].placement;
+        let stored_candidate = stored.constituents[stored_candidate_index].placement;
+
+        let live_anchor = Placement {
+            x: 4.25,
+            y: -3.5,
+            rotation_radians: 0.73,
+        };
+        let rotation_delta = live_anchor.rotation_radians - stored_anchor.rotation_radians;
+        let (sin, cos) = rotation_delta.sin_cos();
+        let dx = stored_candidate.x - stored_anchor.x;
+        let dy = stored_candidate.y - stored_anchor.y;
+        let expected = Placement {
+            x: live_anchor.x + dx * cos - dy * sin,
+            y: live_anchor.y + dx * sin + dy * cos,
+            rotation_radians: stored_candidate.rotation_radians + rotation_delta,
+        };
+
+        let suggestions =
+            persisted_pair_formation_placements("Carbon", live_anchor, nitrogen, &library);
+        assert!(
+            suggestions.iter().any(|pose| {
+                (pose.x - expected.x).hypot(pose.y - expected.y) < 1e-9
+                    && (pose.rotation_radians - expected.rotation_radians).abs() < 1e-9
+            }),
+            "Bob replay must preserve the saved candidate transform relative to the anchor"
+        );
+
+        let mut structure = crate::structure::OrganismStructure::new();
+        add_unit(&mut structure, carbon, (live_anchor.x, live_anchor.y), &catalog)
+            .expect("live anchor should realize");
+        structure.units[0].placement.rotation_radians = live_anchor.rotation_radians;
+        let instance = crate::physical_material::PhysicalMaterial::realized(
+            Material::free_base(nitrogen.name.clone(), 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("candidate material should realize");
+        let indices = crate::material_restoration::restore_material(
+            &mut structure,
+            &instance,
+            expected,
+            &catalog,
+        )
+        .expect("persisted candidate pose should restore");
+        let candidate_index = *indices.first().expect("candidate restores one unit");
+        let restored = structure.units[candidate_index].placement;
+        assert!(
+            (restored.x - expected.x).hypot(restored.y - expected.y) < 1e-9
+                && (restored.rotation_radians - expected.rotation_radians).abs() < 1e-9,
+            "live restoration must preserve the replayed world-space pose"
+        );
+        let overlaps = crate::construction_runtime::overlapping_unit_indices(
+            &structure,
+            &structure.units[candidate_index],
+            &indices,
+            &catalog,
+        );
+        assert!(
+            overlaps.is_empty(),
+            "replaying a valid persisted pair must not introduce overlap: {overlaps:?}"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn production_constructor_builds_a_bob_formed_cavity_with_supplied_energy() {
         let catalog = crate::resources::default_catalog();
         let supplied_energy = crate::genome::initial_genome().reproductive_energy_allocation;
