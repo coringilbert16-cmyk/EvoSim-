@@ -1569,25 +1569,50 @@ fn realize_next_bond_driven(
                                         &candidate_shape.form,
                                         candidate.placement,
                                     ).map(|(flipped_pose, anchor_edge, candidate_edge, midpoint_gap)| {
-                                        let mut flipped_trial = trial.clone();
-                                        flipped_trial.units[new_unit_index].placement = flipped_pose;
-                                        let blockers = overlapping_unit_indices(
-                                            &flipped_trial,
-                                            &flipped_trial.units[new_unit_index],
-                                            &ignored_units,
-                                            catalog,
-                                        );
-                                        let flipped_contacts = crate::contact::connection_pair_candidates_cached(
-                                            &flipped_trial,
-                                            existing_index,
-                                            new_unit_index,
-                                            catalog,
-                                            &mut crate::contact::ConnectionCompatibilityCache::new(),
-                                        );
+                                        let anchor_pose = anchor.placement;
+                                        let dx = flipped_pose.x - anchor_pose.x;
+                                        let dy = flipped_pose.y - anchor_pose.y;
+                                        let center_distance = dx.hypot(dy).max(1e-12);
+                                        let (ux, uy) = (dx / center_distance, dy / center_distance);
+                                        let gap_probes = [0.0_f64, 0.025, 0.05, 0.075, 0.1]
+                                            .into_iter()
+                                            .map(|gap| {
+                                                let mut shifted_trial = trial.clone();
+                                                let shifted_pose = Placement {
+                                                    x: flipped_pose.x + ux * gap,
+                                                    y: flipped_pose.y + uy * gap,
+                                                    rotation_radians: flipped_pose.rotation_radians,
+                                                };
+                                                shifted_trial.units[new_unit_index].placement = shifted_pose;
+                                                let blockers = overlapping_unit_indices(
+                                                    &shifted_trial,
+                                                    &shifted_trial.units[new_unit_index],
+                                                    &ignored_units,
+                                                    catalog,
+                                                );
+                                                let contacts = crate::contact::connection_pair_candidates_cached(
+                                                    &shifted_trial,
+                                                    existing_index,
+                                                    new_unit_index,
+                                                    catalog,
+                                                    &mut crate::contact::ConnectionCompatibilityCache::new(),
+                                                );
+                                                let within_bond_threshold = contacts.iter().any(|contact| {
+                                                    contact.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                                                        && contact.available_a
+                                                        && contact.available_b
+                                                });
+                                                format!(
+                                                    "gap_probe={:.3}:pose=({:.6},{:.6}) blockers={:?} contacts={} bond_threshold_candidate={}",
+                                                    gap, shifted_pose.x, shifted_pose.y, blockers, contacts.len(), within_bond_threshold
+                                                )
+                                            })
+                                            .collect::<Vec<_>>()
+                                            .join(";");
                                         format!(
-                                            "flip_pose=({:.9},{:.9},{:.9}) edge_pair=({}, {}) midpoint_gap={:.9} flip_blockers={:?} flip_contact_candidates={}",
+                                            "flip_pose=({:.9},{:.9},{:.9}) edge_pair=({}, {}) midpoint_gap={:.9} center_distance={:.9} [{}]",
                                             flipped_pose.x, flipped_pose.y, flipped_pose.rotation_radians,
-                                            anchor_edge, candidate_edge, midpoint_gap, blockers, flipped_contacts.len()
+                                            anchor_edge, candidate_edge, midpoint_gap, center_distance, gap_probes
                                         )
                                     })
                                 })
