@@ -655,9 +655,9 @@ fn placement_fits_resource(
     region: &crate::interior_geometry::EnclosedRegion,
     catalog: &[BaseResource],
 ) -> Option<Placement> {
-    // The scaffold deliberately creates broad accessible chambers. Test the
-    // region's own sample point first, then a small deterministic set of
-    // nearby points. This is a bounded geometric check, not a raster search.
+    // Probe the region's sample point and a small deterministic set of
+    // nearby points. This is a bounded geometric check, not a raster search;
+    // no scaffold-specific layout or target coordinates are assumed.
     let points = [
         region.sample_point,
         (region.sample_point.0 * 0.75, region.sample_point.1 * 0.75),
