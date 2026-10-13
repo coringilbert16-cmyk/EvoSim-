@@ -185,10 +185,10 @@ fn try_persisted_bob_attachments(
         resource,
         catalog,
     ) {
-        edge_placements_examined += 1;
         if candidate_placements.len() >= 12 {
             break;
         }
+        edge_placements_examined += 1;
         if seen_placements.insert(placement_signature(suggestion.placement)) {
             candidate_placements.push(suggestion.placement);
             edge_placements_added += 1;
