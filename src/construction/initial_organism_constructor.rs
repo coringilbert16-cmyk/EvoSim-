@@ -285,8 +285,7 @@ fn try_persisted_bob_attachments(
     // authoritative and is deliberately retained.
     let mut pair_pose_overlap_drops = 0usize;
     candidate_placements.retain(|placement| {
-        let overlaps =
-            candidate_pose_overlaps_structure(structure, resource, *placement, catalog);
+        let overlaps = candidate_pose_overlaps_structure(structure, resource, *placement, catalog);
         if overlaps {
             pair_pose_overlap_drops += 1;
         }
@@ -329,10 +328,7 @@ fn try_persisted_bob_attachments(
         candidate_placements.push(suggestion.placement);
         edge_placements_added += 1;
     }
-    if candidate_placements.is_empty()
-        && raw_pair_placements == 0
-        && edge_placements_examined == 0
-    {
+    if candidate_placements.is_empty() && raw_pair_placements == 0 && edge_placements_examined == 0 {
         return Err(PersistedAttachmentFailure::CoverageMiss);
     }
     let mut placement_attempts = 0usize;
@@ -475,19 +471,21 @@ fn try_persisted_bob_attachments(
             let _ = required_energy;
             let mut committed_structure = trial.clone();
             let mut committed_ledger = *ledger;
-            let mut committed_energy = available_energy;
+            let mut committed_energy = _available_energy;
             let mut transaction_cache = crate::contact::ConnectionCompatibilityCache::new();
-            if let Err(reason) = crate::combine_runtime::form_selected_bond_for_freeform_construction(
-                &mut committed_structure,
-                anchor_index,
-                new_unit_index,
-                candidate,
-                investment,
-                catalog,
-                &mut transaction_cache,
-                &mut committed_ledger,
-                &mut committed_energy,
-            ) {
+            if let Err(reason) =
+                crate::combine_runtime::form_selected_bond_for_freeform_construction(
+                    &mut committed_structure,
+                    anchor_index,
+                    new_unit_index,
+                    candidate,
+                    investment,
+                    catalog,
+                    &mut transaction_cache,
+                    &mut committed_ledger,
+                    &mut committed_energy,
+                )
+            {
                 combine_rejections += 1;
                 last_combine_rejection = Some(reason.to_owned());
                 continue;
@@ -801,7 +799,9 @@ fn construct_persisted_bob_structure(
             energy: initial_energy,
         };
         let signature = construction_state_signature(&state.structure);
-        if visited.insert(signature) { queue.push(state); }
+        if visited.insert(signature) {
+            queue.push(state);
+        }
     }
 
     let mut explored_states = 0usize;
@@ -912,7 +912,9 @@ fn construct_persisted_bob_structure(
                                 &mut next.energy,
                             );
                             let signature = construction_state_signature(&next.structure);
-                            if !visited.insert(signature) { continue; }
+                            if !visited.insert(signature) {
+                                continue;
+                            }
 
                             let cavity =
                                 crate::cavity::analyze_genome_cavity(&next.structure, catalog)
@@ -1513,7 +1515,10 @@ mod tests {
         assert!(!construction.structure.bonds.is_empty());
         assert!(construction.energy.is_finite());
         assert!(construction.energy >= 0.0);
-        assert_eq!(construction.energy, supplied_energy, "free-form construction must not debit real starting energy");
+        assert_eq!(
+            construction.energy, supplied_energy,
+            "free-form construction must not debit real starting energy"
+        );
 
         let acquired_names = construction
             .acquired_resource_placements
