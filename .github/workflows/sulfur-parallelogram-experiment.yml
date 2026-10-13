@@ -147,6 +147,7 @@ jobs:
           python3 - <<'PY'
           import json
           import os
+          from collections import Counter
           from pathlib import Path
 
           temp = Path(os.environ["RUNNER_TEMP"])
@@ -171,6 +172,7 @@ jobs:
                       continue
                   records = 0
                   sulfur_records = 0
+                  sulfur_partner_counts = Counter()
                   with path.open(encoding="utf-8") as stream:
                       for line in stream:
                           if not line.strip():
@@ -180,10 +182,21 @@ jobs:
                               record = json.loads(line)
                               if "Sulfur" in json.dumps(record, ensure_ascii=False):
                                   sulfur_records += 1
+                              if filename == "formations.jsonl":
+                                  resources = [
+                                      item.get("resource")
+                                      for item in record.get("constituents", [])
+                                      if isinstance(item, dict)
+                                  ]
+                                  if "Sulfur" in resources:
+                                      for partner in sorted(set(resources) - {"Sulfur"}):
+                                          sulfur_partner_counts[partner] += 1
                           except json.JSONDecodeError:
                               if "Sulfur" in line:
                                   sulfur_records += 1
                   print(f"{filename}: records={records} sulfur_records={sulfur_records} bytes={path.stat().st_size}")
+                  if filename == "formations.jsonl":
+                      print("sulfur_partner_counts=" + json.dumps(dict(sorted(sulfur_partner_counts.items()))))
               log = temp / f"sulfur-{label}.log"
               if log.exists():
                   for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
