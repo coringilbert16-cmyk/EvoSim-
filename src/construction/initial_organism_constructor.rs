@@ -1530,7 +1530,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn rejected_hydrogen_phosphorus_pose_is_valid_as_a_pair_but_hits_existing_methane() {
         let catalog = crate::resources::default_catalog();
