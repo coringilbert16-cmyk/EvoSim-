@@ -916,6 +916,11 @@ mod shape_tests {
             .sum::<f64>()
             .abs();
         assert!((doubled_area / 2.0 - 3.0_f64.sqrt() / 4.0).abs() < 1e-9);
+        let phosphorus = find("Phosphorus").shape.form.polygon_vertices().unwrap();
+        assert_ne!(
+            sulfur, phosphorus,
+            "sulfur's parallelogram must remain distinct from phosphorus's trapezoid"
+        );
 
         // Shape-only experiment: all non-geometric sulfur properties stay fixed.
         let sulfur_resource = find("Sulfur");
