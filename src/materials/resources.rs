@@ -631,7 +631,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
             physical_state: PhysicalState::Rigid,
             shape: Shape {
                 form: Form::Polygon {
-                    // Experimental sulfur parallelogram: 1.0/0.5 alternating edges,
+                    // Sulfur parallelogram: 1.0/0.5 alternating edges,
                     // 60°/120° interior angles, centered at the origin.
                     vertices: vec![
                         (-0.625, -0.216_506_350_946_109_65),
