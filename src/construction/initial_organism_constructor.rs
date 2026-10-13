@@ -77,8 +77,8 @@ fn persisted_pair_formation_placements(
         for (anchor_index, candidate_index) in [(0, 1), (1, 0)] {
             let stored_anchor = &formation.constituents[anchor_index];
             let stored_candidate = &formation.constituents[candidate_index];
-            if stored_anchor.resource != anchor_material
-                || stored_candidate.resource != candidate_resource.name
+            if stored_anchor.resource.as_str() != anchor_material
+                || stored_candidate.resource.as_str() != candidate_resource.name.as_str()
             {
                 continue;
             }
