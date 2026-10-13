@@ -114,6 +114,10 @@ fn try_persisted_bob_attachments(
 
     let mut successful = Vec::new();
     for suggestion in &suggestions {
+        // Bound local branching; every returned pose is still live-validated.
+        if successful.len() >= 8 {
+            break;
+        }
         let mut trial = structure.clone();
         let indices = match crate::material_restoration::restore_material(
             &mut trial,
@@ -472,7 +476,7 @@ fn construct_persisted_bob_structure(
     let contact_records = library.rigid_contact_families().count()
         + library.rigid_point_contact_families().count()
         + library.rigid_vertex_contact_families().count();
-    let state_budget = contact_records.saturating_mul(2).clamp(32, 128);
+    let state_budget = contact_records.saturating_mul(2).clamp(16, 64);
     let mut queue = std::collections::VecDeque::new();
     let mut visited = std::collections::BTreeSet::new();
     for resource in &structural_resources {
