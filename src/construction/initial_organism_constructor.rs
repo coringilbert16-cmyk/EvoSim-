@@ -42,6 +42,7 @@ enum PersistedAttachmentFailure {
         no_bond_contact: usize,
         evaluation_rejections: usize,
         combine_rejections: usize,
+        energy_rejections: usize,
         last_combine_rejection: Option<String>,
     },
 }
@@ -67,6 +68,7 @@ fn try_persisted_bob_attachments(
             no_bond_contact: 0,
             evaluation_rejections: 0,
             combine_rejections: 0,
+            energy_rejections: 0,
             last_combine_rejection: None,
         });
     };
@@ -96,6 +98,7 @@ fn try_persisted_bob_attachments(
     let mut no_bond_contact = 0;
     let mut evaluation_rejections = 0;
     let mut combine_rejections = 0;
+    let mut energy_rejections = 0;
     let mut last_combine_rejection = None;
     let Some(instance) = crate::physical_material::PhysicalMaterial::realized(
         Material::free_base(resource.name.clone(), 1.0),
@@ -113,6 +116,7 @@ fn try_persisted_bob_attachments(
             no_bond_contact,
             evaluation_rejections,
             combine_rejections,
+            energy_rejections: 0,
             last_combine_rejection: Some(
                 "candidate material failed physical realization".to_owned(),
             ),
@@ -175,16 +179,25 @@ fn try_persisted_bob_attachments(
         }
 
         for candidate in contacts {
-            let Some((_, _, investment, _)) = crate::combine_runtime::selected_candidate_evaluation(
-                &trial,
-                anchor_index,
-                new_unit_index,
-                candidate,
-                catalog,
-            ) else {
+            let Some((_, _, investment, required_energy)) =
+                crate::combine_runtime::selected_candidate_evaluation(
+                    &trial,
+                    anchor_index,
+                    new_unit_index,
+                    candidate,
+                    catalog,
+                )
+            else {
                 evaluation_rejections += 1;
                 continue;
             };
+            if required_energy > available_energy + 1e-9 {
+                energy_rejections += 1;
+                last_combine_rejection = Some(format!(
+                    "required energy {required_energy:.6} exceeds available {available_energy:.6}"
+                ));
+                continue;
+            }
             let mut committed_structure = trial.clone();
             let mut committed_ledger = *ledger;
             let mut committed_energy = available_energy;
@@ -225,6 +238,7 @@ fn try_persisted_bob_attachments(
         no_bond_contact,
         evaluation_rejections,
         combine_rejections,
+        energy_rejections,
         last_combine_rejection,
     })
 }
@@ -519,6 +533,7 @@ fn construct_persisted_bob_structure(
     let mut no_bond_contact = 0usize;
     let mut evaluation_rejections = 0usize;
     let mut combine_rejections = 0usize;
+    let mut energy_rejections = 0usize;
     let mut last_combine_rejection = None;
     let mut queue_budget_drops = 0usize;
 
@@ -646,6 +661,7 @@ fn construct_persisted_bob_structure(
                         no_bond_contact: step_no_bond_contact,
                         evaluation_rejections: step_evaluation_rejections,
                         combine_rejections: step_combine_rejections,
+                        energy_rejections: step_energy_rejections,
                         last_combine_rejection: step_last_combine_rejection,
                     }) => {
                         rejected_placements += suggestions;
@@ -654,6 +670,7 @@ fn construct_persisted_bob_structure(
                         no_bond_contact += step_no_bond_contact;
                         evaluation_rejections += step_evaluation_rejections;
                         combine_rejections += step_combine_rejections;
+                        energy_rejections += step_energy_rejections;
                         if step_last_combine_rejection.is_some() {
                             last_combine_rejection = step_last_combine_rejection;
                         }
@@ -671,7 +688,7 @@ fn construct_persisted_bob_structure(
     }
 
     Err(format!(
-        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, last_combine_rejection={last_combine_rejection:?}, rigid_contact_records={contact_records}",
+        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, energy_rejections={energy_rejections}, last_combine_rejection={last_combine_rejection:?}, rigid_contact_records={contact_records}",
         queue.len()
     ))
 }
