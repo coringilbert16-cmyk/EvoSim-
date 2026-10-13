@@ -6,6 +6,14 @@ This root `README.md` is the **only authoritative working README** for EvoSim. S
 
 ## PR audit and consolidation — 2026-10-13
 
+
+## Exact-head follow-up — 2026-10-13
+
+Current exact-head Rust results for the stacked Bob/fluid/chemistry PRs are **#193: 377 passed / 28 failed / 1 ignored** ([run #7143](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38270282801)); **#194: 400 / 28 / 1** ([run #7144](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38270352595)); and **#195: 402 / 28 / 1** ([run #7148](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38272687270)). Strict Clippy fails on all three. Focused gates passing and a stable count of 28 full-suite failures are not a green build or merge approval.
+
+The #193 source review found its multi-contact transaction spans construction runtime, contact endpoint discovery, structure endpoint mapping, and fluid–fluid candidate eligibility; those parts should not be separated casually. Its juvenile seed-ring/chain calibration and constructor's fail-closed behavior when the persistent Bob library cannot open are separate concerns. Because #196 is stacked downstream and edits overlapping files, no blind revert or file-level split is safe. Keep the stack draft and unchanged until a commit/hunk dependency map and targeted regression plan prove a clean split. No source code changed in this follow-up.
+
+
 Current PR evidence and the consolidation map are recorded in [docs/pr-audit-consolidation-2026-10-13.md](docs/pr-audit-consolidation-2026-10-13.md). This current status supersedes older PR-status snapshots, while retaining their useful lineage history.
 
 - Recent stacked Bob/fluid/chemistry focused gates pass, including tested chemistry-library rollback/concurrent-writer cases. The recorded full Rust suite still has 28 failures (402 passed, 28 failed, 1 ignored); Clippy remains red.
