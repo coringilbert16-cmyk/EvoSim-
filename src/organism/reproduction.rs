@@ -1002,7 +1002,6 @@ mod tests {
             &mut parent.usable_energy,
             &mut simulation.rng,
             &body,
-            None,
         )
         .0;
         assert_eq!(first_status, ConstructionStatus::Waiting);
@@ -1021,7 +1020,6 @@ mod tests {
             &mut parent.usable_energy,
             &mut simulation.rng,
             &body,
-            None,
         )
         .0;
 
