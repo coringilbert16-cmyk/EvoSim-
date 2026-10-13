@@ -384,7 +384,7 @@ fn try_persisted_bob_attachments(
                 .first()
                 .map(|part| part.0.as_str())
                 .unwrap_or("unknown");
-            last_overlap_rejection = Some(format!(
+            last_overlap_rejection.get_or_insert_with(|| format!(
                 "source={source}; anchor={anchor_index}:{anchor_material}@({:.4},{:.4},{:.4}); candidate={}:{}@({:.4},{:.4},{:.4}); overlaps={existing_unit_index}:{existing_material}@({:.4},{:.4},{:.4})",
                 anchor.placement.x,
                 anchor.placement.y,
