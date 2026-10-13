@@ -22,7 +22,7 @@ PR [#200](https://github.com/coringilbert16-cmyk/EvoSim-/pull/200) is merged int
 - Exact-head #194 run [#7382](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38476788537): **403 passed, 28 failed, 1 ignored**, with the same 28 failing names as the prior #194 run. Focused gates and formatting pass; Clippy fails.
 - Exact-head #195 run [#7383](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38476821937): **405 passed, 28 failed, 1 ignored**, with the same 28 failing names as the prior #195 run. Focused Bob/fluid/chemistry gates and formatting pass; Clippy fails. The sulfur experiment workflow is skipped on this downstream PR as intended.
 - Exact-head #196 run [#7384](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38476838600): **367 passed, 69 failed, 1 ignored**, with the same 69 failing names as the pre-merge run. Sulfur geometry, Bob-signature, and chemistry-cache tests pass; formatting passes, Clippy fails. These are no-regression results, not constructor recovery.
-- #186 remains draft-only and does not yet contain the sulfur merge. The exact-head stack checks are complete, but the known full-suite failures and Clippy gate remain red. Do not promote to `main`, start broad catalogue generation, or weaken physical invariants.
+- The reconciled #193 → #195 Bob/fluid/chemistry stack is ready to be incorporated into #186; constructor PR #196 remains separate. Keep #186 draft-only. Exact-head checks show no new named failures, but the established full-suite failures and Clippy gate remain red. Do not promote to `main`, start broad catalogue generation, or weaken physical invariants.
 
 The dated audit sections below are retained as historical evidence where they predate this reconciliation. This current section supersedes their earlier statement that #200 was excluded and their earlier description of #195/#196 as un-reconciled.
 
@@ -54,6 +54,33 @@ Current PR evidence and the consolidation map are recorded in [docs/pr-audit-con
 - **Hard catalogue size rule (updated 2026-10-12):** Bob may persist singleton, two-piece, and three-piece rigid formations (maximum `constituents.len() == 3`). The worker must reject configured limits above 3 and never expand beyond three pieces. Multi-contact fluid geometry may contact multiple surfaces of a parent formation; contact count is not constituent count.
 - Generated geometry stays outside Git. The last measured two-piece baseline was about 48.3 MB uncompressed; three-piece size is unknown and may grow substantially. Measure counts, runtime, and storage before treating a three-piece catalogue as complete.
 - Fluid knowledge is stored as symbolic capillary boundary/family records with conserved area and contact constraints—not sampled rigid poses. Current records have persistence validation and live-interface resolution; the active work is converting those records into a reproducible, area-preserving realized fluid boundary and proving it through physical validation.
+
+### Sulfur geometry — parallelogram replacement
+
+Sulfur's default rigid outline is a four-vertex parallelogram centered at the origin, with cyclic edge lengths **1.0, 0.5, 1.0, 0.5**, interior angles alternating **60° and 120°**, and opposite edges parallel. Its area is \\(\\sqrt{3}/4 \\approx 0.4330127\\) square units and its perimeter is 3.0 units. Canonical vertices:
+
+```text
+(-0.625, -sqrt(3)/8)
+( 0.375, -sqrt(3)/8)
+( 0.625,  sqrt(3)/8)
+(-0.375,  sqrt(3)/8)
+```
+
+The implementation stores equivalent decimal coordinates. Keep the centroid and bounding-box center at the origin. Do not substitute a rhombus or regular polygon: the two long edges and two short edges are intentional.
+
+This is a **geometry-only replacement**. Sulfur's mass (1.50), potential-energy capacity (8.0), reactivity (2.0), chemical position (3.5), cohesion (0.45), and rigid physical state remain unchanged. The smaller occupied area relative to the previous sulfur geometry is an expected consequence of the selected geometry; do not silently change unrelated properties to compensate.
+
+Construction-material similarity treats `Form::RegularPolygon` and `Form::Polygon` as one broad polygon family. This avoids an artificial material-selection penalty caused solely by switching sulfur's representation; exact vertices remain authoritative for placement and contact. Bob's catalogue signature includes serialized resource shapes, so the previous-shape catalogue is invalidated and must be regenerated in an isolated output directory. Generated catalogue data must stay out of Git. The chemistry interface cache remains keyed by material pair and interface signature; the focused regression confirms the existing Hydrogen–Sulfur interface result is unchanged.
+
+#### Replacement verification checkpoint — 2026-10-13
+
+- Sulfur geometry assertions cover four vertices, alternating 1.0/0.5 edge lengths, parallel opposite edges, 60°/120° interior angles, centering, area, and unchanged non-geometric properties.
+- Bob's catalogue signature regression confirms the shape change produces a distinct catalogue signature and prevents reuse of stale geometry records.
+- Formatting passed. Valid pre-merge comparison [run #30](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38474765699) measured 264 baseline formations versus 281 parallelogram formations; both catalogues reopened, all 15 multi-contact fluid formations were retained, and no oversized formations or unfinished frontiers remained. Follow-up [run #31](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38475883030) was not a valid comparison because its baseline already contained sulfur. The workflow is now pinned to the pre-sulfur baseline and scoped to the dedicated experiment PR. Do not interpret formation count alone as proof of improved multi-piece fit.
+- Isolated Bob generation completed for both variants with the same two-constituent limit, no oversized formations, no unfinished frontiers, and successful catalogue reopen. The parallelogram catalogue recorded 281 formations versus 264 baseline (+17); this is a useful coverage signal, not proof that the constructor is fixed.
+- The measured run used an isolated temporary library. Do not commit its generated catalogue or treat the raw record-count difference as a normalized geometry-fit score.
+
+This replacement is intended to improve geometric compatibility, not to claim that sulfur alone resolves multi-piece constructor failures. Keep live geometry/contact validation authoritative.
 
 ### Operational gates
 

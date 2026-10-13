@@ -345,6 +345,7 @@ fn bond_units(
 /// speculative placement search and no recursive body-plan search.
 fn construct_scaffold(
     catalog: &[BaseResource],
+    bob_library: &crate::geometry_reference_library::GeometryLibrary,
 ) -> Result<(crate::structure::OrganismStructure, EnergyLedger, f64), String> {
     let carbon = catalog
         .iter()
@@ -356,9 +357,8 @@ fn construct_scaffold(
         .ok_or_else(|| "catalog lacks valid rigid Carbon geometry".to_string())?;
 
     let mut structure = crate::structure::OrganismStructure::new();
-    // Load once. An absent/empty persistent store remains valid: Bob's API
-    // derives non-persistent local suggestions and every suggestion is rechecked.
-    let bob_library = crate::geometry_reference_library::open_default_library().ok();
+    // Bob suggestions are optional, but failure to open the configured library
+    // is handled once by construct_valid rather than silently ignored here.
     let mut ledger = EnergyLedger::default();
     let mut energy = CONSTRUCTION_ENERGY;
 
@@ -373,7 +373,7 @@ fn construct_scaffold(
             carbon,
             axial_to_world(coordinate.0, coordinate.1),
             inner_indices.last().copied(),
-            bob_library.as_ref(),
+            Some(bob_library),
             catalog,
         )?);
     }
@@ -452,7 +452,7 @@ fn construct_scaffold(
             carbon,
             axial_to_world(coordinate.0, coordinate.1),
             Some(inner_indices[inner_position]),
-            bob_library.as_ref(),
+            Some(bob_library),
             catalog,
         )?;
         bond_units(
@@ -480,7 +480,7 @@ fn construct_scaffold(
             } else {
                 outer_indices.last().copied()
             },
-            bob_library.as_ref(),
+            Some(bob_library),
             catalog,
         )?;
         if i == 0 {
@@ -968,9 +968,9 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
         return Err("catalog does not contain Water".into());
     }
 
-    let (structure, _ledger, energy) = construct_scaffold(catalog)?;
     let bob_library = crate::geometry_reference_library::open_default_library()
         .map_err(|error| format!("failed to open persistent Bob geometry library: {error}"))?;
+    let (structure, _ledger, energy) = construct_scaffold(catalog, &bob_library)?;
     let (acquired_resource_placements, acquired_resource_shapes, fluid_geometry_status) =
         valid_construction(&structure, catalog, &acquisition_candidates, &bob_library).ok_or_else(
             || "deterministic construction scaffold did not satisfy viability".to_string(),

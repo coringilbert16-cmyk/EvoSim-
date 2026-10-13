@@ -98,25 +98,25 @@ This makes a file-level split less safe than it first appears. Do not rewrite th
 
 ## Stack reconciliation — 2026-10-13
 
-PR #200 merged into #194 at `412a2e8b795e9a2b107455eb899a25cba1a6a4ec`. The sulfur change is now represented in the downstream stack through explicit two-parent merge commits.
+PR #200 merged into #194 at `412a2e8b795e9a2b107455eb899a25cba1a6a4ec`. The sulfur change is carried into the downstream stack through explicit two-parent merge commits.
 
 ### Reconciled heads
 
-- #194 head: `af223a901404b61bc4ad6de1eeebead4db0fd8fa`; this corrects the sulfur experiment workflow's trigger and pins its pre-sulfur baseline.
-- #195 head: `3418cc0c251162d4cd9e508ed9aecf8a81a13ba0`; parents are old #195 head `728e455b` and updated #194 `af223a90`. The chemistry-library transaction code, rollback/concurrency tests, and sulfur cache-stability regression are present together.
-- #196 head: `d4f817414fa7b2c8b8cd2dddc50994e05720f966`; parents are old constructor head `095fbc34` and reconciled #195 `3418cc0c`. The constructor branch retains its own code while incorporating sulfur geometry and related regression coverage.
-- #186 remains the sole integration target and draft-only; the sulfur/chemistry stack is not yet incorporated into it.
+- #194 head: `af223a901404b61bc4ad6de1eeebead4db0fd8fa`; experiment workflow trigger and baseline are corrected.
+- #195 head: `3418cc0c251162d4cd9e508ed9aecf8a81a13ba0`; transactional chemistry and sulfur changes are both preserved.
+- #196 head: `d4f817414fa7b2c8b8cd2dddc50994e05720f966`; constructor code and sulfur changes are preserved. Constructor remains separate.
 
 ### Exact-head evidence
 
-- Valid pre-merge sulfur experiment [run #30](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38474765699) used baseline `b3bc66eb`: 264 baseline formations / 46,112,052 bytes versus 281 parallelogram formations / 47,271,092 bytes; all 15 multi-contact fluid formations were retained, both catalogues reopened, and there were no oversized formations or unfinished frontiers. This is a coverage signal, not proof of constructor recovery.
-- Follow-up [run #31](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38475883030) was not a valid new comparison: it checked out `412a2e8b`, which already contains sulfur, so both sides produced 281 formations and 47,271,092 bytes. The workflow is now scoped to the dedicated sulfur experiment branch and pins the pre-sulfur baseline; it is skipped on #195.
-- Exact-head #194 run [#7382](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38476788537): **403 passed, 28 failed, 1 ignored**, with identical named failures to the previous #194 run. Focused gates and formatting pass; Clippy fails.
-- Exact-head #195 run [#7383](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38476821937): **405 passed, 28 failed, 1 ignored**, with identical named failures to the previous #195 run. Focused Bob/fluid/chemistry gates and formatting pass; Clippy fails.
-- Exact-head #196 run [#7384](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38476838600): **367 passed, 69 failed, 1 ignored**, with identical named failures to the pre-merge #196 run. Sulfur geometry, Bob-signature, and chemistry-cache tests pass; formatting passes, Clippy fails. These are no-regression results, not constructor recovery.
+- Valid pre-merge sulfur experiment [run #30](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38474765699): 264 baseline formations / 46,112,052 bytes versus 281 parallelogram formations / 47,271,092 bytes; all 15 multi-contact fluid formations retained, both catalogues reopened, no oversized formations or unfinished frontiers.
+- Follow-up [run #31](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38475883030) was invalid as a new comparison because its baseline already contained sulfur. The workflow is pinned to the pre-sulfur baseline and skipped on downstream PRs.
+- #194 run [#7382](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38476788537): **403 passed, 28 failed, 1 ignored**; same named failures as prior run.
+- #195 run [#7383](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38476821937): **405 passed, 28 failed, 1 ignored**; same named failures as prior run.
+- #196 run [#7384](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38476838600): **367 passed, 69 failed, 1 ignored**; same named failures as prior run.
+- Focused gates and formatting pass; strict Clippy remains red. These are no-regression results, not constructor recovery.
 
 ### Next safe action
 
-1. The sulfur/chemistry stack is now reconciled and exact-head focused gates show no additional named test failures. Consider integrating #193 → #195 into #186 through a deliberate reviewed merge sequence; do not merge to `main`.
-2. Keep the constructor feature work frozen. The 69-failure constructor suite is unchanged, and Clippy remains red; diagnose that independently after the library stack is integrated into the draft integration target.
-3. Do not start broad catalogue generation until the README's persisted-fluid-realization and live-transaction gates are satisfied.
+1. Incorporate #193 → #195 into #186 through a deliberate two-parent merge; keep #186 draft-only and do not merge to `main`.
+2. Verify the new integration-head CI and compare named failures with the established 28-failure baseline.
+3. Keep constructor feature work frozen and do not start broad catalogue generation until the README's persisted-fluid-realization and live-transaction gates are satisfied.

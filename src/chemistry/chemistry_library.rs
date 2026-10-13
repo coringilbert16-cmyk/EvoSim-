@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 3;
 
@@ -200,6 +201,12 @@ impl ChemistryLibrary {
     pub fn open(root: impl AsRef<Path>) -> std::io::Result<Self> {
         let root = root.as_ref().to_path_buf();
         fs::create_dir_all(&root)?;
+        let _lock = lock_chemistry_store(&root)?;
+        Self::open_unlocked(root)
+    }
+
+    fn open_unlocked(root: PathBuf) -> std::io::Result<Self> {
+        fs::create_dir_all(&root)?;
         let data = root.join("chemistry.jsonl");
         let manifest_path = root.join("manifest.json");
         let mut entries = HashMap::new();
@@ -287,11 +294,11 @@ impl ChemistryLibrary {
             return Ok(Some(record.static_potential));
         }
         let record = ChemistryRecord {
-            key,
+            key: key.clone(),
             static_potential,
         };
         self.insert(record)?;
-        Ok(Some(static_potential))
+        Ok(self.get(&key).map(|record| record.static_potential))
     }
     pub fn len(&self) -> usize {
         self.entries.len()
@@ -301,28 +308,137 @@ impl ChemistryLibrary {
     }
 
     pub fn insert(&mut self, record: ChemistryRecord) -> std::io::Result<bool> {
+        self.insert_with_manifest_persistence(record, persist_manifest_atomically)
+    }
+
+    fn insert_with_manifest_persistence<F>(
+        &mut self,
+        record: ChemistryRecord,
+        persist_manifest: F,
+    ) -> std::io::Result<bool>
+    where
+        F: FnOnce(&Path, &ChemistryLibraryManifest) -> std::io::Result<()>,
+    {
         if !record.is_valid() {
             return Ok(false);
         }
+        let _lock = lock_chemistry_store(&self.root)?;
+        // Another instance may have changed the store since this instance opened.
+        // Refresh under the lock before duplicate detection or manifest counting.
+        let current = Self::open_unlocked(self.root.clone())?;
+        self.entries = current.entries;
+        self.manifest = current.manifest;
+
         let key = record.key.clone();
         if self.entries.contains_key(&key) {
             return Ok(false);
         }
+        let data_path = self.root.join("chemistry.jsonl");
         let mut file = OpenOptions::new()
             .create(true)
+            .read(true)
             .append(true)
-            .open(self.root.join("chemistry.jsonl"))?;
-        serde_json::to_writer(&mut file, &record)
+            .open(&data_path)?;
+        let original_len = file.metadata()?.len();
+        let mut row = serde_json::to_vec(&record)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        file.write_all(b"\n")?;
-        file.sync_data()?;
+        row.push(b'\n');
+
+        if let Err(write_error) = file.write_all(&row).and_then(|()| file.sync_data()) {
+            return Err(rollback_appended_record(
+                &mut file,
+                original_len,
+                write_error,
+            ));
+        }
+
+        let mut next_manifest = self.manifest.clone();
+        next_manifest.entries = (self.entries.len() + 1) as u64;
+        if let Err(manifest_error) = persist_manifest(&self.root, &next_manifest) {
+            return Err(rollback_appended_record(
+                &mut file,
+                original_len,
+                manifest_error,
+            ));
+        }
+
+        // Publish the new in-memory state only after both persisted updates succeed.
         self.entries.insert(key, record);
-        self.manifest.entries = self.entries.len() as u64;
-        let bytes = serde_json::to_vec_pretty(&self.manifest)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        fs::write(self.root.join("manifest.json"), bytes)?;
+        self.manifest = next_manifest;
         Ok(true)
     }
+}
+
+fn rollback_appended_record(
+    file: &mut File,
+    original_len: u64,
+    original_error: std::io::Error,
+) -> std::io::Error {
+    match file.set_len(original_len).and_then(|()| file.sync_data()) {
+        Ok(()) => original_error,
+        Err(rollback_error) => std::io::Error::new(
+            rollback_error.kind(),
+            format!(
+                "chemistry persistence failed ({original_error}); additionally failed to roll back appended data ({rollback_error})"
+            ),
+        ),
+    }
+}
+
+// Advisory file locking coordinates independent ChemistryLibrary instances and
+// separate processes that use the same store path.
+fn lock_chemistry_store(root: &Path) -> std::io::Result<File> {
+    let lock_file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(root.join(".chemistry.lock"))?;
+    lock_file.lock()?;
+    Ok(lock_file)
+}
+
+// Unique names prevent independent library instances from colliding on a temporary
+// manifest file. Atomic rename keeps readers from observing a partially-written JSON.
+static MANIFEST_TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn persist_manifest_atomically(
+    root: &Path,
+    manifest: &ChemistryLibraryManifest,
+) -> std::io::Result<()> {
+    let bytes = serde_json::to_vec_pretty(manifest)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    let manifest_path = root.join("manifest.json");
+    let (temp_path, mut file) = loop {
+        let sequence = MANIFEST_TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let candidate = root.join(format!(
+            ".manifest.json.tmp-{}-{sequence}",
+            std::process::id()
+        ));
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(file) => break (candidate, file),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    };
+
+    let write_result = (|| {
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temp_path, &manifest_path)?;
+        // The rename is the commit point. Directory syncing is best-effort because
+        // reporting failure after rename would falsely imply the manifest was unchanged.
+        let _ = File::open(root).and_then(|directory| directory.sync_all());
+        Ok(())
+    })();
+    if write_result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    write_result
 }
 
 pub fn open_default_library() -> std::io::Result<ChemistryLibrary> {
@@ -405,6 +521,24 @@ mod tests {
     }
 
     #[test]
+    fn sulfur_shape_replacement_preserves_existing_chemistry_cache_output() {
+        // The cache is keyed by material pair and interface class/signature,
+        // not by serialized outline. A geometry-only sulfur change must not
+        // silently change this already-established chemistry result.
+        let library = ChemistryLibrary::open("chemistry_library/data").unwrap();
+        let key = ChemistryKey::new(
+            "Hydrogen",
+            "Sulfur",
+            "rigid_point",
+            "live-v1|Hydrogen:line:0|Sulfur:corner:0",
+        );
+        let record = library
+            .get(&key)
+            .expect("the existing Hydrogen–Sulfur corner interaction remains reusable");
+        assert!((record.static_potential - 0.09678938442541647).abs() < 1e-12);
+    }
+
+    #[test]
     fn calculate_on_miss_persists_static_potential() {
         let root =
             std::env::temp_dir().join(format!("evosim-chemistry-miss-{}", std::process::id()));
@@ -443,6 +577,109 @@ mod tests {
         assert!(!lib.insert(record).unwrap());
         assert!(lib.get(&key).is_some());
         assert_eq!(ChemistryLibrary::open(&root).unwrap().len(), 1);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn manifest_failure_rolls_back_appended_record_and_reopens_cleanly() {
+        let root = test_root("manifest-failure");
+        let _ = fs::remove_dir_all(&root);
+        let mut library = ChemistryLibrary::open(&root).unwrap();
+        let record = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "rollback"),
+            static_potential: 0.55,
+        };
+        let manifest_path = root.join("manifest.json");
+        let original_manifest = match fs::read(&manifest_path) {
+            Ok(bytes) => Some(bytes),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => panic!("failed to read original manifest: {error}"),
+        };
+        let error = library
+            .insert_with_manifest_persistence(record, |_, _| {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "injected manifest replacement failure",
+                ))
+            })
+            .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+        assert_eq!(library.len(), 0);
+        assert_eq!(library.manifest.entries, 0);
+        assert_eq!(fs::metadata(root.join("chemistry.jsonl")).unwrap().len(), 0);
+        let manifest_after_failure = match fs::read(&manifest_path) {
+            Ok(bytes) => Some(bytes),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => panic!("failed to read manifest after failed insert: {error}"),
+        };
+        assert_eq!(manifest_after_failure, original_manifest);
+
+        let reopened = ChemistryLibrary::open(&root).unwrap();
+        assert!(reopened.is_empty());
+        assert_eq!(reopened.manifest.entries, 0);
+        drop(reopened);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn independent_instances_serialize_writes_and_refresh_stale_state() {
+        let root = test_root("concurrent-writers");
+        let _ = fs::remove_dir_all(&root);
+        let first = ChemistryLibrary::open(&root).unwrap();
+        let second = ChemistryLibrary::open(&root).unwrap();
+        let first_record = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "concurrent-a"),
+            static_potential: 0.4,
+        };
+        let second_record = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "concurrent-b"),
+            static_potential: 0.6,
+        };
+
+        let first_thread = std::thread::spawn(move || {
+            let mut library = first;
+            library.insert(first_record)
+        });
+        let second_thread = std::thread::spawn(move || {
+            let mut library = second;
+            library.insert(second_record)
+        });
+        assert!(first_thread.join().unwrap().unwrap());
+        assert!(second_thread.join().unwrap().unwrap());
+        assert_eq!(ChemistryLibrary::open(&root).unwrap().len(), 2);
+
+        // Two stale instances racing to insert the same key must not create a
+        // duplicate persisted row or inflate the manifest count.
+        let third = ChemistryLibrary::open(&root).unwrap();
+        let fourth = ChemistryLibrary::open(&root).unwrap();
+        let duplicate = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "concurrent-duplicate"),
+            static_potential: 0.7,
+        };
+        let third_thread = std::thread::spawn({
+            let duplicate = duplicate.clone();
+            move || {
+                let mut library = third;
+                library.insert(duplicate)
+            }
+        });
+        let fourth_thread = std::thread::spawn(move || {
+            let mut library = fourth;
+            library.insert(duplicate)
+        });
+        let inserted = [
+            third_thread.join().unwrap().unwrap(),
+            fourth_thread.join().unwrap().unwrap(),
+        ];
+        assert_eq!(inserted.into_iter().filter(|value| *value).count(), 1);
+        let reopened = ChemistryLibrary::open(&root).unwrap();
+        assert_eq!(reopened.len(), 3);
+        let rows = BufReader::new(File::open(root.join("chemistry.jsonl")).unwrap())
+            .lines()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(rows.len(), 3);
+        drop(reopened);
         let _ = fs::remove_dir_all(root);
     }
 

@@ -454,7 +454,7 @@ mod tests {
 
     #[test]
     fn worker_accepts_three_piece_limit_and_rejects_wider_limits() {
-        let error = run_to_completion(4).err().expect("Bob must reject a four-piece limit");
+        let error = run_to_completion(4).expect_err("Bob must reject a four-piece limit");
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
 
         let catalog = default_catalog();
@@ -479,8 +479,12 @@ mod tests {
             .unwrap()
             .expect("the two-piece parent should have work remaining");
         assert!(first_pass.added_formations > 0);
-        assert!(library.formations().any(|formation| formation.constituents.len() == 3));
-        assert!(library.formations().all(|formation| formation.constituents.len() <= 3));
+        assert!(library
+            .formations()
+            .any(|formation| formation.constituents.len() == 3));
+        assert!(library
+            .formations()
+            .all(|formation| formation.constituents.len() <= 3));
 
         let three_piece = library
             .formations()
@@ -494,7 +498,9 @@ mod tests {
         assert_eq!(second_pass.formation_size, 3);
         assert!(second_pass.expansion_limit_reached);
         assert!(library.get(&three_piece).is_some());
-        assert!(library.formations().all(|formation| formation.constituents.len() <= 3));
+        assert!(library
+            .formations()
+            .all(|formation| formation.constituents.len() <= 3));
 
         let error = process_one_frontier(&mut library, &catalog, 4)
             .err()

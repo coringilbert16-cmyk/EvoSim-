@@ -233,29 +233,12 @@ pub fn eligible_candidates(
     catalog: &[BaseResource],
     cache: &mut ConnectionCompatibilityCache,
 ) -> Vec<ConnectionPairCandidate> {
-    let Some(a) = structure.units.get(unit_a) else {
-        return Vec::new();
-    };
-    let Some(b) = structure.units.get(unit_b) else {
-        return Vec::new();
-    };
-    let is_water_only = |material: &Material| {
-        !material.parts.is_empty()
-            && material.parts.iter().all(|(name, amount)| {
-                *amount > EPSILON
-                    && catalog
-                        .iter()
-                        .find(|resource| resource.name == *name)
-                        .is_some_and(|resource| {
-                            resource.name == "Water"
-                                && resource.physical_state == crate::resources::PhysicalState::Fluid
-                        })
-            })
-    };
-    let both_fluid = is_water_only(&a.material) && is_water_only(&b.material);
-    if both_fluid {
+    if unit_a >= structure.units.len() || unit_b >= structure.units.len() {
         return Vec::new();
     }
+    // Fluid-fluid contacts remain eligible for ordinary chemical/physical bond
+    // evaluation. Contact alone is not a bond and must not trigger coalescence;
+    // the successful bond transaction is the only event allowed to do that.
     crate::contact::connection_pair_candidates_cached(structure, unit_a, unit_b, catalog, cache)
         .into_iter()
         .filter(|candidate| candidate.available_a && candidate.available_b)
@@ -471,7 +454,7 @@ mod tests {
         assert_eq!(decoded, b)
     }
     #[test]
-    fn water_water_bond_candidates_are_forbidden() {
+    fn water_water_contact_can_offer_a_bond_candidate_without_merging() {
         let catalog = default_catalog();
         let mut s = OrganismStructure::new();
         s.add_unit(StructuralUnit::new(
@@ -491,7 +474,20 @@ mod tests {
             },
         ));
         let mut cache = ConnectionCompatibilityCache::new();
-        assert!(eligible_candidates(&s, 0, 1, &catalog, &mut cache).is_empty());
+        let candidates = eligible_candidates(&s, 0, 1, &catalog, &mut cache);
+        assert!(
+            !candidates.is_empty(),
+            "touching water may be evaluated for a bond; it is not connected until the bond transaction succeeds"
+        );
+        assert!(
+            s.bonds.is_empty(),
+            "candidate generation must not create a bond or merge fluid"
+        );
+        assert_eq!(
+            s.units.len(),
+            2,
+            "candidate generation must not coalesce fluid units"
+        );
     }
 
     #[test]
