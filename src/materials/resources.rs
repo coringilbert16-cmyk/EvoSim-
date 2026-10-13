@@ -888,8 +888,8 @@ mod shape_tests {
         for (a, b, expected) in [(0, 1, 120.0_f64), (1, 2, 60.0_f64)] {
             let incoming = (-edge(a).0, -edge(a).1);
             let outgoing = edge(b);
-            let interior = dot(incoming, outgoing)
-                .atan2(cross(incoming, outgoing))
+            let interior = cross(incoming, outgoing)
+                .atan2(dot(incoming, outgoing))
                 .to_degrees()
                 .abs();
             assert!((interior - expected).abs() < 1e-7);
