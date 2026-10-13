@@ -1,10 +1,9 @@
-//! Deterministic physical construction baseline for the first valid organism.
+//! Formation-driven physical construction for the first valid organism.
 //!
-//! The current baseline has no developmental blueprint or target topology. It
-//! uses a temporary deterministic Carbon scaffold only to prove the physical
-//! construction, genome-cavity, and acquisition contracts. The final constructor
-//! will replace this fixed scaffold with local free-form construction while
-//! retaining the same physical bond authority.
+//! Startup composes local poses from persisted Bob geometry and admits each
+//! attachment only through live overlap, contact, COMBINE, and energy checks.
+//! No fixed scaffold, target lattice, or artificial construction-energy reserve
+//! is used.
 
 use crate::resources::{BaseResource, Form, Material, PhysicalState, Shape};
 use crate::state::EnergyLedger;
@@ -353,9 +352,7 @@ struct ConstructionSearchState {
     energy: f64,
 }
 
-fn construction_state_signature(
-    structure: &crate::structure::OrganismStructure,
-) -> String {
+fn construction_state_signature(structure: &crate::structure::OrganismStructure) -> String {
     let unit_keys = structure
         .units
         .iter()
@@ -504,29 +501,27 @@ fn construct_persisted_bob_structure(
         };
         explored_states += 1;
 
-        if state.structure.units.len() >= 3 {
-            let cavity = crate::cavity::analyze_genome_cavity(&state.structure, catalog)
-                .ok()
-                .flatten();
-            if cavity.as_ref().is_some_and(|cavity| cavity.qualifies()) {
-                if let Some((
+        let cavity = crate::cavity::analyze_genome_cavity(&state.structure, catalog)
+            .ok()
+            .flatten();
+        if cavity.as_ref().is_some_and(|cavity| cavity.qualifies()) {
+            if let Some((
+                acquired_resource_placements,
+                acquired_resource_shapes,
+                fluid_geometry_status,
+            )) = valid_construction(
+                &state.structure,
+                catalog,
+                acquisition_candidates,
+                library,
+            ) {
+                return Ok(ValidConstruction {
+                    structure: state.structure,
+                    energy: state.energy,
                     acquired_resource_placements,
                     acquired_resource_shapes,
                     fluid_geometry_status,
-                )) = valid_construction(
-                    &state.structure,
-                    catalog,
-                    acquisition_candidates,
-                    library,
-                ) {
-                    return Ok(ValidConstruction {
-                        structure: state.structure,
-                        energy: state.energy,
-                        acquired_resource_placements,
-                        acquired_resource_shapes,
-                        fluid_geometry_status,
-                    });
-                }
+                });
             }
         }
 
@@ -1059,8 +1054,7 @@ mod tests {
         let library = crate::geometry_reference_library::GeometryLibrary::open(&root, &catalog)
             .expect("isolated Bob library should open");
         let mut structure = crate::structure::OrganismStructure::new();
-        add_unit(&mut structure, carbon, (0.0, 0.0), &catalog)
-            .expect("anchor should realize");
+        add_unit(&mut structure, carbon, (0.0, 0.0), &catalog).expect("anchor should realize");
         let result = try_persisted_bob_attachments(
             &structure,
             0,
@@ -1113,7 +1107,7 @@ mod tests {
             .expect("generated contact families should persist");
 
         let mut structure = crate::structure::OrganismStructure::new();
-        add_unit(&mut structure, carbon, (0.0, 0.0), None, None, &catalog)
+        add_unit(&mut structure, carbon, (0.0, 0.0), &catalog)
             .expect("anchor should realize");
         let initial_energy = 1_000_000.0;
         let attachments = try_persisted_bob_attachments(
@@ -1226,6 +1220,5 @@ mod tests {
         assert!(placement.x.is_finite() && placement.y.is_finite());
         let _ = std::fs::remove_dir_all(root);
     }
-
 
 }
