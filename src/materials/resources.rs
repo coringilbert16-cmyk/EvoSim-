@@ -911,10 +911,7 @@ mod shape_tests {
         assert!((min_y + max_y).abs() < 1e-12);
 
         let doubled_area = (0..4)
-            .map(|i| {
-                sulfur[i].0 * sulfur[(i + 1) % 4].1
-                    - sulfur[(i + 1) % 4].0 * sulfur[i].1
-            })
+            .map(|i| sulfur[i].0 * sulfur[(i + 1) % 4].1 - sulfur[(i + 1) % 4].0 * sulfur[i].1)
             .sum::<f64>()
             .abs();
         assert!((doubled_area / 2.0 - 3.0_f64.sqrt() / 4.0).abs() < 1e-9);
