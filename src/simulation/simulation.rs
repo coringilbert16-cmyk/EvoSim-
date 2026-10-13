@@ -1091,7 +1091,6 @@ impl Simulation {
                         child_id,
                         &self.environment.catalog,
                         &mut self.energy_ledger,
-                        self.seed_scale_reference,
                     ) {
                         next_organism_id += 1;
                         survivors.push(child);
