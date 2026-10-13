@@ -26,6 +26,8 @@ jobs:
         run: bash scripts/check_large_files.sh
       - name: Check COMBINE architecture
         run: bash scripts/check_combine_architecture.sh
+      - name: Report soft-cushion whole-blueprint feasibility
+        run: cargo test --locked soft_cushion_global_layout_feasibility_probe -- --nocapture
       # Run the persistence-specific tests independently so their result is visible
       # even while the repository's known unrelated baseline tests are failing.
       - name: Run Bob compact-storage tests
