@@ -233,7 +233,7 @@ fn try_persisted_bob_attachments(
     library: &crate::geometry_reference_library::GeometryLibrary,
     catalog: &[BaseResource],
     ledger: &EnergyLedger,
-    available_energy: f64,
+    _available_energy: f64,
 ) -> Result<Vec<PersistedAttachment>, PersistedAttachmentFailure> {
     let Some(anchor) = structure.units.get(anchor_index) else {
         return Err(PersistedAttachmentFailure::CandidatesRejected {
@@ -837,7 +837,6 @@ fn construct_persisted_bob_structure(
             .map(|(index, _)| index)
             .expect("non-empty construction queue has a best state");
         let state = queue.swap_remove(best_index);
-        let signature = construction_state_signature(&state.structure);
         explored_states += 1;
 
         let cavity = crate::cavity::analyze_genome_cavity(&state.structure, catalog)
@@ -872,7 +871,7 @@ fn construct_persisted_bob_structure(
                 break;
             }
             for resource in &structural_resources {
-                if state.energy <= 0.0 || placement_queries_examined >= 12 {
+                if placement_queries_examined >= 12 {
                     if placement_queries_examined >= 12 {
                         placement_query_budget_exhaustions += 1;
                     }
