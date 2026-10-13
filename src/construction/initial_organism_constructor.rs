@@ -1484,10 +1484,8 @@ mod tests {
             .expect("isolated Bob library should open");
 
         let parent = crate::geometry_reference_library::GeometryFormation::single("Carbon");
-        let pair = crate::geometry_reference_library::expand_formation_candidates(
-            &parent, nitrogen, &catalog,
-        )
-        .into_iter()
+        let pair = crate::geometry_reference_library::expand_formation_candidates(&parent, nitrogen, &catalog)
+            .into_iter()
         .find(|formation| {
             formation.constituents.len() == 2
                 && formation.constituents.iter().any(|part| part.resource == "Carbon")
