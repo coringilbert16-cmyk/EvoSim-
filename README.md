@@ -1704,7 +1704,7 @@ This is the active constructor-cleanup checkpoint. It supplements the constructi
 | Genome cavity qualification | Constructor calls `analyze_genome_cavity` on realized structure and checks `qualifies()`. | **KEEP** | This is a required biological milestone, not the problem. Remove the requirement that it be produced by a particular ring topology. |
 | Acquisition and Water | Initial constructor performs separate resource acquisition placement and queries Bob's fluid formation records before live geometric validation. | **KEEP / INVESTIGATE** | Preserve conserved fluid shape and physical acquisition. Later integrate acquisition as demand-driven construction milestones; do not turn the current single-resource path into a blanket proof of all fluid cases. |
 | Blueprint-driven growth | `src/construction/runtime.rs` provides bond-driven placement for a specified blueprint element; current diagnostics show element 26 exhausts candidates with overlap rejections. | **KEEP / REWORK** | Reuse authoritative placement/transaction primitives where sound. Remove fixed-blueprint dependence from initial construction and diagnose why candidate poses overlap before expanding search. |
-| Juvenile/seed path | The intended `juvenile.rs` source path was not found at the inspected branch path; test names and README references indicate a legacy/calibration route may still exist elsewhere. | **INVESTIGATE** | Locate actual definitions and all callers before deleting. Ensure tests exercise live startup rather than assuming the calibration path proves it. |
+| Juvenile/seed path | `src/organism/juvenile.rs` exists and is imported by `src/main.rs`. It defines `confirmed_seed_baseline`, `confirmed_seed_scale_reference`, and trial-energy/reserve construction; live developmental realization and simulation startup call into it. | **REMOVE / REPLACE** | Remove the obsolete juvenile/seed calibration model and its callers. Preserve independent genome-cavity, physical viability, and live developmental-field behavior; migrate tests away from the calibration baseline. |
 | Failure behavior | Some initial-constructor helper paths use `.ok()`, `.flatten()`, `Option`, and `None` to reject candidates without preserving detailed causes; other paths return specific errors. | **REWORK** | Preserve structured candidate rejection diagnostics and distinguish missing library coverage, known candidates rejected by context, chemistry rejection, energy insufficiency, and exhausted operational budget. |
 | Geometry authority | Initial-constructor fluid checks include constructor-local boundary probes and containment checks; runtime has separate rigid placement/contact checks. | **INVESTIGATE / CONSOLIDATE** | Identify shared authoritative predicates and eliminate duplicated rules only after matching edge-case behavior with tests. Never weaken collision or contact rules as a shortcut. |
 
@@ -1747,6 +1747,19 @@ The bond-driven placement diagnostics now collect rigid anchor/candidate materia
 
 Fluid-query coverage misses are not yet fully distinguished from fluid records that exist but fail live realization; that remains an explicit follow-up rather than an assumed equivalence.
 
+
+### Constructor stripping sprint 4 — juvenile/seed dependency audit (2026-10-13)
+
+The source-level audit corrects the earlier inventory row: `src/organism/juvenile.rs` is present and is imported by `src/main.rs`. Its dependencies are active, not merely historical:
+- `Simulation::new` builds and stores a seed-scale reference; several transformation and budding paths consume it.
+- `Organism::developmental_realization_cached` and `DevelopmentalFieldBlueprint::realization` call the juvenile calibration function.
+- `developmental_blueprint.rs` computes preferred length from seed mass and seed length.
+- `simulation_tests.rs::accessible_interior_starts_without_synthetic_water` directly calls the seed-baseline constructor.
+- Initial production startup independently still calls `construct_valid` → `construct_scaffold`; this must not be confused with the separate bond-driven blueprint constructor.
+
+**Implementation boundary:** do not delete the juvenile module or seed reference until its scaling consumers have a non-seed physical basis and the cavity/viability behavior has a replacement test. Do not replace the fixed scaffold with the failing current seed blueprint. The next implementation gate is to define and test the new blueprint's scale from current resource dimensions and actual realized structure, then connect a minimal persisted-Bob formation coordinator to startup. The scaffold and artificial energy are removed only when that coordinator can report coverage misses and pass real bonds through the live transaction.
+
+**Verification:** this sprint was a source audit and README correction only. No Rust source was changed and no tests were run in this checkpoint.
 
 ### Constructor consolidation checkpoint — 2026-10-12
 
