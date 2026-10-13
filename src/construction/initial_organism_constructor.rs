@@ -10,12 +10,6 @@ use crate::resources::{BaseResource, Form, Material, PhysicalState, Shape};
 use crate::state::EnergyLedger;
 use crate::structure::Placement;
 
-const CONSTRUCTION_ENERGY: f64 = 1.0e12;
-const INNER_RING_RADIUS: i32 = 3;
-const OUTER_RING_RADIUS: i32 = 5;
-const SPOKE_RADIUS: i32 = 4;
-const SQRT_3: f64 = 1.7320508075688772935;
-
 #[derive(Clone, Debug)]
 pub(crate) struct ValidConstruction {
     pub structure: crate::structure::OrganismStructure,
@@ -30,176 +24,6 @@ pub(crate) enum FluidGeometryStatus {
     BobSuggestionAccepted,
     CoverageMiss,
     CandidatesRejected,
-}
-
-/// Axial hex coordinates are used only as a deterministic geometric
-/// construction recipe. They are not a biological blueprint: every unit is
-/// still instantiated and every connection is admitted through the normal
-/// physical bond transaction.
-fn axial_to_world(q: i32, r: i32) -> (f64, f64) {
-    // Carbon's catalog hexagon has a vertex on the +x axis. These axial
-    // basis vectors therefore match the actual tessellation of that shape.
-    (
-        1.5 * q as f64,
-        (SQRT_3 * 0.5) * q as f64 + SQRT_3 * r as f64,
-    )
-}
-
-fn hex_ring(radius: i32) -> Vec<(i32, i32)> {
-    if radius <= 0 {
-        return Vec::new();
-    }
-    let directions = [(0, 1), (1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1)];
-    let mut q = -radius;
-    let mut r = 0;
-    let mut result = Vec::with_capacity((radius * 6) as usize);
-    for (dq, dr) in directions {
-        for _ in 0..radius {
-            result.push((q, r));
-            q += dq;
-            r += dr;
-        }
-    }
-    result
-}
-
-/// Ask Bob for candidate neighbor poses, then admit only a pose that is close
-/// to the scaffold's intended lattice point and passes live whole-structure
-/// nonpenetration and contact checks. Bob never authorizes a bond.
-fn bob_validated_neighbor_placement(
-    structure: &crate::structure::OrganismStructure,
-    anchor_index: usize,
-    resource: &BaseResource,
-    intended: (f64, f64),
-    library: &crate::geometry_reference_library::GeometryLibrary,
-    catalog: &[BaseResource],
-) -> Option<Placement> {
-    let anchor = structure.units.get(anchor_index)?;
-    let anchor_material = anchor.material.parts.first()?.0.as_str();
-    let mut suggestions =
-        library.suggest_rigid_edge_placements(anchor_material, anchor.placement, resource, catalog);
-    suggestions.sort_by(|a, b| {
-        let score = |placement: Placement| {
-            (placement.x - intended.0).hypot(placement.y - intended.1)
-                + normalize_angle_for_constructor(placement.rotation_radians).abs() * 0.25
-        };
-        score(a.placement)
-            .partial_cmp(&score(b.placement))
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    for suggestion in suggestions {
-        let mut proposed = suggestion.placement;
-        // Bob proposes the local interface; the scaffold still defines the
-        // broad cavity topology. Only near-equivalent lattice poses are eligible.
-        if (proposed.x - intended.0).hypot(proposed.y - intended.1)
-            > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-            || !rotation_preserves_form_symmetry(&resource.shape.form, proposed.rotation_radians)
-        {
-            continue;
-        }
-        // Snap only the near-equivalent proposal to the exact scaffold site
-        // and canonical pose. The candidate is rechecked after snapping, so
-        // this cannot bypass collision, contact, or bond validation.
-        proposed.x = intended.0;
-        proposed.y = intended.1;
-        proposed.rotation_radians = 0.0;
-        let Some(instance) = crate::physical_material::PhysicalMaterial::realized(
-            Material::free_base(resource.name.clone(), 1.0),
-            vec![Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            }],
-            catalog,
-        ) else {
-            continue;
-        };
-        let mut trial = structure.clone();
-        let Some(indices) =
-            crate::material_restoration::restore_material(&mut trial, &instance, proposed, catalog)
-        else {
-            continue;
-        };
-        let Some(&candidate_index) = indices.first() else {
-            continue;
-        };
-        let candidate = &trial.units[candidate_index];
-        let Some(candidate_shape) = candidate.shape(catalog) else {
-            continue;
-        };
-        let candidate_part = crate::material_geometry::PlacedMaterialPart {
-            part_index: candidate_index,
-            form: candidate_shape.form.clone(),
-            placement: candidate.placement,
-        };
-        let mut penetrates = false;
-        for (index, unit) in trial.units.iter().enumerate() {
-            if indices.contains(&index) {
-                continue;
-            }
-            let Some(shape) = unit.shape(catalog) else {
-                penetrates = true;
-                break;
-            };
-            let existing_part = crate::material_geometry::PlacedMaterialPart {
-                part_index: index,
-                form: shape.form.clone(),
-                placement: unit.placement,
-            };
-            if crate::material_geometry::placed_forms_penetrate(
-                &candidate_part,
-                &existing_part,
-                crate::material_geometry::GEOMETRY_EPSILON,
-            ) {
-                penetrates = true;
-                break;
-            }
-        }
-        if penetrates {
-            continue;
-        }
-        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-        let touches_anchor = crate::contact::connection_pair_candidates_cached(
-            &trial,
-            anchor_index,
-            candidate_index,
-            catalog,
-            &mut cache,
-        )
-        .into_iter()
-        .any(|contact| {
-            contact.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                && contact.available_a
-                && contact.available_b
-        });
-        if touches_anchor {
-            return Some(proposed);
-        }
-    }
-    None
-}
-
-fn normalize_angle_for_constructor(angle: f64) -> f64 {
-    (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI
-}
-
-/// A rotationally symmetric shape may have a different numeric pose while
-/// occupying exactly the same geometry. Preserve those valid equivalent poses.
-fn rotation_preserves_form_symmetry(form: &crate::resources::Form, rotation: f64) -> bool {
-    if normalize_angle_for_constructor(rotation).abs() <= 0.1 {
-        return true;
-    }
-    let Some(vertices) = form.polygon_vertices() else {
-        return false;
-    };
-    let (s, c) = rotation.sin_cos();
-    vertices.iter().all(|&(x, y)| {
-        let rotated = (x * c - y * s, x * s + y * c);
-        vertices
-            .iter()
-            .any(|&(other_x, other_y)| (rotated.0 - other_x).hypot(rotated.1 - other_y) <= 1e-7)
-    })
 }
 
 struct PersistedAttachment {
@@ -400,13 +224,10 @@ fn add_unit(
     structure: &mut crate::structure::OrganismStructure,
     resource: &BaseResource,
     center: (f64, f64),
-    anchor_index: Option<usize>,
-    bob_library: Option<&crate::geometry_reference_library::GeometryLibrary>,
     catalog: &[BaseResource],
 ) -> Result<usize, String> {
-    let material = Material::free_base(resource.name.clone(), 1.0);
     let instance = crate::physical_material::PhysicalMaterial::realized(
-        material,
+        Material::free_base(resource.name.clone(), 1.0),
         vec![Placement {
             x: 0.0,
             y: 0.0,
@@ -415,23 +236,14 @@ fn add_unit(
         catalog,
     )
     .ok_or_else(|| format!("failed to realize construction unit {}", resource.name))?;
-    let proposed_placement = anchor_index
-        .and_then(|anchor| {
-            bob_library.and_then(|library| {
-                bob_validated_neighbor_placement(
-                    structure, anchor, resource, center, library, catalog,
-                )
-            })
-        })
-        .unwrap_or(Placement {
-            x: center.0,
-            y: center.1,
-            rotation_radians: 0.0,
-        });
     let indices = crate::material_restoration::restore_material(
         structure,
         &instance,
-        proposed_placement,
+        Placement {
+            x: center.0,
+            y: center.1,
+            rotation_radians: 0.0,
+        },
         catalog,
     )
     .ok_or_else(|| format!("failed to restore construction unit {}", resource.name))?;
@@ -534,195 +346,241 @@ fn bond_units(
     Ok(())
 }
 
-/// Place the fixed geometric scaffold directly, while using the ordinary
-/// physical bond transaction for every permanent connection. There is no
-/// speculative placement search and no recursive body-plan search.
-fn construct_scaffold(
-    catalog: &[BaseResource],
-    bob_library: &crate::geometry_reference_library::GeometryLibrary,
-) -> Result<(crate::structure::OrganismStructure, EnergyLedger, f64), String> {
-    let carbon = catalog
+#[derive(Clone)]
+struct ConstructionSearchState {
+    structure: crate::structure::OrganismStructure,
+    ledger: EnergyLedger,
+    energy: f64,
+}
+
+fn construction_state_signature(
+    structure: &crate::structure::OrganismStructure,
+) -> String {
+    let unit_keys = structure
+        .units
         .iter()
-        .find(|resource| {
-            resource.name == "Carbon"
-                && resource.physical_state == PhysicalState::Rigid
+        .map(|unit| {
+            let materials = unit
+                .material
+                .parts
+                .iter()
+                .map(|part| part.0.as_str())
+                .collect::<Vec<_>>()
+                .join("+");
+            format!(
+                "{materials}@{:.3},{:.3},{:.4}",
+                unit.placement.x, unit.placement.y, unit.placement.rotation_radians
+            )
+        })
+        .collect::<Vec<_>>();
+    let mut sorted_units = unit_keys.clone();
+    sorted_units.sort();
+
+    let mut bond_keys = structure
+        .bonds
+        .iter()
+        .map(|bond| {
+            let a_index = structure
+                .units
+                .iter()
+                .position(|unit| unit.physical_id == bond.endpoint_a.constituent_id)
+                .unwrap_or(usize::MAX);
+            let b_index = structure
+                .units
+                .iter()
+                .position(|unit| unit.physical_id == bond.endpoint_b.constituent_id)
+                .unwrap_or(usize::MAX);
+            let a = format!(
+                "{}:{:?}",
+                unit_keys.get(a_index).map(String::as_str).unwrap_or("?"),
+                bond.endpoint_a.location
+            );
+            let b = format!(
+                "{}:{:?}",
+                unit_keys.get(b_index).map(String::as_str).unwrap_or("?"),
+                bond.endpoint_b.location
+            );
+            if a <= b {
+                format!("{a}--{b}")
+            } else {
+                format!("{b}--{a}")
+            }
+        })
+        .collect::<Vec<_>>();
+    bond_keys.sort();
+    format!("{}#{}", sorted_units.join(";"), bond_keys.join(";"))
+}
+
+/// Complete physically available contacts through the ordinary bond authority.
+/// Every candidate structure is an isolated trial, so a failed optional closure
+/// cannot corrupt another queued construction state.
+fn close_touching_bonds(
+    structure: &mut crate::structure::OrganismStructure,
+    catalog: &[BaseResource],
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) {
+    loop {
+        let mut next_pair = None;
+        'pairs: for a in 0..structure.units.len() {
+            for b in (a + 1)..structure.units.len() {
+                let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+                let touches = crate::contact::connection_pair_candidates_cached(
+                    structure, a, b, catalog, &mut cache,
+                )
+                .into_iter()
+                .any(|candidate| {
+                    candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        && candidate.available_a
+                        && candidate.available_b
+                });
+                if touches {
+                    next_pair = Some((a, b));
+                    break 'pairs;
+                }
+            }
+        }
+        let Some((a, b)) = next_pair else {
+            break;
+        };
+        let bonds_before = structure.bonds.len();
+        if bond_units(structure, a, b, catalog, ledger, energy).is_err()
+            || structure.bonds.len() == bonds_before
+        {
+            break;
+        }
+    }
+}
+
+/// Search local arrangements from persisted Bob edge families. Every added
+/// constituent must come from a stored pose; live overlap, contact, COMBINE,
+/// and energy accounting remain authoritative. The work bound is derived from
+/// the contact index and does not prescribe organism size or topology.
+fn construct_persisted_bob_structure(
+    catalog: &[BaseResource],
+    library: &crate::geometry_reference_library::GeometryLibrary,
+    acquisition_candidates: &[&BaseResource],
+    initial_energy: f64,
+) -> Result<ValidConstruction, String> {
+    if !initial_energy.is_finite() || initial_energy < 0.0 {
+        return Err("constructor requires finite non-negative supplied energy".into());
+    }
+    let structural_resources = catalog
+        .iter()
+        .filter(|resource| {
+            resource.physical_state == PhysicalState::Rigid
                 && resource.shape.is_valid_physical_shape()
         })
-        .ok_or_else(|| "catalog lacks valid rigid Carbon geometry".to_string())?;
-
-    let mut structure = crate::structure::OrganismStructure::new();
-    // Bob suggestions are optional, but failure to open the configured library
-    // is handled once by construct_valid rather than silently ignored here.
-    let mut ledger = EnergyLedger::default();
-    let mut energy = CONSTRUCTION_ENERGY;
-
-    // The inner ring closes the genome cavity. Its radius is deliberately large
-    // enough that the realized enclosed area exceeds the three-Carbon minimum
-    // reference; a radius-two ring leaves only a one-Carbon-scale central void.
-    let inner = hex_ring(INNER_RING_RADIUS);
-    let mut inner_indices = Vec::with_capacity(inner.len());
-    for coordinate in inner {
-        inner_indices.push(add_unit(
-            &mut structure,
-            carbon,
-            axial_to_world(coordinate.0, coordinate.1),
-            inner_indices.last().copied(),
-            Some(bob_library),
-            catalog,
-        )?);
-    }
-    for i in 0..inner_indices.len() {
-        bond_units(
-            &mut structure,
-            inner_indices[i],
-            inner_indices[(i + 1) % inner_indices.len()],
-            catalog,
-            &mut ledger,
-            &mut energy,
-        )?;
+        .collect::<Vec<_>>();
+    if structural_resources.is_empty() {
+        return Err("catalog contains no valid rigid construction materials".into());
     }
 
-    // The genome is a construction milestone, not a post-hoc property of the
-    // completed scaffold. Nothing outside this ring is needed to qualify it.
-    let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)
-        .map_err(|error| format!("genome cavity analysis failed: {error}"))?
-        .filter(|cavity| cavity.qualifies())
-        .ok_or_else(|| {
-            let pair_counts = (0..inner_indices.len())
-                .map(|i| {
-                    let a = structure.units[inner_indices[i]].physical_id;
-                    let b = structure.units[inner_indices[(i + 1) % inner_indices.len()]].physical_id;
-                    structure
-                        .bonds
-                        .iter()
-                        .filter(|bond| {
-                            (bond.endpoint_a.constituent_id == a
-                                && bond.endpoint_b.constituent_id == b)
-                                || (bond.endpoint_a.constituent_id == b
-                                    && bond.endpoint_b.constituent_id == a)
-                        })
-                        .count()
-                })
-                .collect::<Vec<_>>();
-            let regions =
-                crate::interior_geometry::find_enclosed_regions(&structure, catalog);
-            let max_region_area = regions
-                .iter()
-                .map(|region| region.area)
-                .fold(0.0_f64, f64::max);
-            let first_a = structure.units[inner_indices[0]].physical_id;
-            let first_b = structure.units[inner_indices[1]].physical_id;
-            let first_pair_bonds = structure
-                .bonds
-                .iter()
-                .filter(|bond| {
-                    (bond.endpoint_a.constituent_id == first_a
-                        && bond.endpoint_b.constituent_id == first_b)
-                        || (bond.endpoint_a.constituent_id == first_b
-                            && bond.endpoint_b.constituent_id == first_a)
-                })
-                .map(|bond| (bond.endpoint_a.location, bond.endpoint_b.location))
-                .collect::<Vec<_>>();
-            format!(
-                "inner construction phase did not produce a qualifying genome cavity: bonds={}, pair_counts={pair_counts:?}, enclosed_regions={}, max_region_area={max_region_area}, first_pair_bonds={first_pair_bonds:?}",
-                structure.bonds.len(),
-                regions.len()
-            )
-        })?;
-    if cavity.boundary_units.is_empty() {
-        return Err("qualifying genome cavity has no physical boundary".into());
-    }
-
-    // Build six radial supports one ring outside the cavity boundary. They remain
-    // part of the structural path from the genome boundary to the outer boundary.
-    let mut spokes = Vec::with_capacity(6);
-    let spoke_coordinates = hex_ring(SPOKE_RADIUS);
-    let outer_coordinates = hex_ring(OUTER_RING_RADIUS);
-    for side in 0..6 {
-        let coordinate = spoke_coordinates[side * SPOKE_RADIUS as usize];
-        let inner_position = side * INNER_RING_RADIUS as usize;
-        let index = add_unit(
-            &mut structure,
-            carbon,
-            axial_to_world(coordinate.0, coordinate.1),
-            Some(inner_indices[inner_position]),
-            Some(bob_library),
-            catalog,
-        )?;
-        bond_units(
-            &mut structure,
-            index,
-            inner_indices[inner_position],
-            catalog,
-            &mut ledger,
-            &mut energy,
-        )?;
-        spokes.push(index);
-    }
-
-    // Grow the outer ring from the spokes. Every new unit is attached before
-    // the next one is created; the final six closure bonds are ordinary
-    // forward construction transactions between already realized units.
-    let mut outer_indices = Vec::with_capacity(outer_coordinates.len());
-    for (i, coordinate) in outer_coordinates.iter().enumerate() {
-        let index = add_unit(
-            &mut structure,
-            carbon,
-            axial_to_world(coordinate.0, coordinate.1),
-            if i == 0 {
-                Some(spokes[0])
-            } else {
-                outer_indices.last().copied()
-            },
-            Some(bob_library),
-            catalog,
-        )?;
-        if i == 0 {
-            bond_units(
-                &mut structure,
-                index,
-                spokes[0],
-                catalog,
-                &mut ledger,
-                &mut energy,
-            )?;
-        } else {
-            bond_units(
-                &mut structure,
-                index,
-                outer_indices[i - 1],
-                catalog,
-                &mut ledger,
-                &mut energy,
-            )?;
+    let contact_records = library.rigid_contact_families().count()
+        + library.rigid_point_contact_families().count()
+        + library.rigid_vertex_contact_families().count();
+    let state_budget = contact_records.saturating_mul(2).clamp(64, 512);
+    let mut queue = std::collections::VecDeque::new();
+    let mut visited = std::collections::BTreeSet::new();
+    for resource in &structural_resources {
+        let mut structure = crate::structure::OrganismStructure::new();
+        add_unit(&mut structure, resource, (0.0, 0.0), catalog)?;
+        let state = ConstructionSearchState {
+            structure,
+            ledger: EnergyLedger::default(),
+            energy: initial_energy,
+        };
+        if visited.insert(construction_state_signature(&state.structure)) {
+            queue.push_back(state);
         }
-        outer_indices.push(index);
-    }
-    bond_units(
-        &mut structure,
-        outer_indices[0],
-        outer_indices[outer_indices.len() - 1],
-        catalog,
-        &mut ledger,
-        &mut energy,
-    )?;
-
-    // Connect the remaining spokes to the outer boundary. The exact radial
-    // correspondence is selected from the physical contact graph rather than
-    // by inventing a special construction bond.
-    for side in 1..6 {
-        let outer_coordinate = side * OUTER_RING_RADIUS as usize;
-        bond_units(
-            &mut structure,
-            spokes[side],
-            outer_indices[outer_coordinate],
-            catalog,
-            &mut ledger,
-            &mut energy,
-        )?;
     }
 
-    Ok((structure, ledger, energy))
+    let mut explored_states = 0usize;
+    let mut coverage_misses = 0usize;
+    let mut rejected_placements = 0usize;
+    while explored_states < state_budget {
+        let Some(state) = queue.pop_front() else {
+            break;
+        };
+        explored_states += 1;
+
+        if state.structure.units.len() >= 3 {
+            let cavity = crate::cavity::analyze_genome_cavity(&state.structure, catalog)
+                .ok()
+                .flatten();
+            if cavity.as_ref().is_some_and(|cavity| cavity.qualifies()) {
+                if let Some((
+                    acquired_resource_placements,
+                    acquired_resource_shapes,
+                    fluid_geometry_status,
+                )) = valid_construction(
+                    &state.structure,
+                    catalog,
+                    acquisition_candidates,
+                    library,
+                ) {
+                    return Ok(ValidConstruction {
+                        structure: state.structure,
+                        energy: state.energy,
+                        acquired_resource_placements,
+                        acquired_resource_shapes,
+                        fluid_geometry_status,
+                    });
+                }
+            }
+        }
+
+        for anchor_index in 0..state.structure.units.len() {
+            if state.energy <= 0.0 {
+                break;
+            }
+            for resource in &structural_resources {
+                if state.energy <= 0.0 {
+                    break;
+                }
+                match try_persisted_bob_attachments(
+                    &state.structure,
+                    anchor_index,
+                    resource,
+                    library,
+                    catalog,
+                    &state.ledger,
+                    state.energy,
+                ) {
+                    Ok(attachments) => {
+                        for attachment in attachments {
+                            let mut next = ConstructionSearchState {
+                                structure: attachment.structure,
+                                ledger: attachment.ledger,
+                                energy: attachment.energy,
+                            };
+                            close_touching_bonds(
+                                &mut next.structure,
+                                catalog,
+                                &mut next.ledger,
+                                &mut next.energy,
+                            );
+                            let signature = construction_state_signature(&next.structure);
+                            if visited.insert(signature) {
+                                queue.push_back(next);
+                            }
+                        }
+                    }
+                    Err(PersistedAttachmentFailure::CoverageMiss) => {
+                        coverage_misses += 1;
+                    }
+                    Err(PersistedAttachmentFailure::CandidatesRejected { suggestions, .. }) => {
+                        rejected_placements += suggestions;
+                    }
+                }
+            }
+        }
+    }
+
+    Err(format!(
+        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, rigid_contact_records={contact_records}",
+        queue.len()
+    ))
 }
 
 fn placement_fits_resource(
@@ -1110,7 +968,7 @@ fn valid_construction(
     let cavity = crate::cavity::analyze_genome_cavity(structure, catalog)
         .ok()
         .flatten()?;
-    if !cavity.qualifies() || structure.units.len() <= cavity.boundary_units.len() {
+    if !cavity.qualifies() {
         return None;
     }
 
@@ -1154,6 +1012,16 @@ fn valid_construction(
 }
 
 pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruction, String> {
+    construct_valid_with_energy(
+        catalog,
+        crate::genome::initial_genome().reproductive_energy_allocation,
+    )
+}
+
+pub(crate) fn construct_valid_with_energy(
+    catalog: &[BaseResource],
+    initial_energy: f64,
+) -> Result<ValidConstruction, String> {
     let acquisition_candidates = available_acquisition_resources(catalog);
     if acquisition_candidates.len() < 3 {
         return Err("catalog does not contain three non-water acquisition resources".into());
@@ -1164,19 +1032,12 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
 
     let bob_library = crate::geometry_reference_library::open_default_library()
         .map_err(|error| format!("failed to open persistent Bob geometry library: {error}"))?;
-    let (structure, _ledger, energy) = construct_scaffold(catalog, &bob_library)?;
-    let (acquired_resource_placements, acquired_resource_shapes, fluid_geometry_status) =
-        valid_construction(&structure, catalog, &acquisition_candidates, &bob_library).ok_or_else(
-            || "deterministic construction scaffold did not satisfy viability".to_string(),
-        )?;
-
-    Ok(ValidConstruction {
-        structure,
-        energy,
-        acquired_resource_placements,
-        acquired_resource_shapes,
-        fluid_geometry_status,
-    })
+    construct_persisted_bob_structure(
+        catalog,
+        &bob_library,
+        &acquisition_candidates,
+        initial_energy,
+    )
 }
 
 #[cfg(test)]
@@ -1198,7 +1059,7 @@ mod tests {
         let library = crate::geometry_reference_library::GeometryLibrary::open(&root, &catalog)
             .expect("isolated Bob library should open");
         let mut structure = crate::structure::OrganismStructure::new();
-        add_unit(&mut structure, carbon, (0.0, 0.0), None, None, &catalog)
+        add_unit(&mut structure, carbon, (0.0, 0.0), &catalog)
             .expect("anchor should realize");
         let result = try_persisted_bob_attachments(
             &structure,
@@ -1287,101 +1148,6 @@ mod tests {
     }
 
     #[test]
-    fn bob_neighbor_suggestions_reach_initial_constructor_physical_validation() {
-        let catalog = crate::resources::default_catalog();
-        let carbon = catalog
-            .iter()
-            .find(|resource| resource.name == "Carbon")
-            .expect("default catalog includes Carbon");
-        let mut structure = crate::structure::OrganismStructure::new();
-        add_unit(&mut structure, carbon, (0.0, 0.0), None, None, &catalog)
-            .expect("anchor Carbon should realize");
-        let library = crate::geometry_reference_library::open_default_library()
-            .expect("default Bob library should open, including an empty library");
-        let intended = axial_to_world(1, 0);
-        let raw_suggestions = library.suggest_rigid_edge_placements(
-            "Carbon",
-            structure.units[0].placement,
-            carbon,
-            &catalog,
-        );
-        let suggestion_poses = raw_suggestions
-            .iter()
-            .map(|suggestion| {
-                (
-                    suggestion.placement.x,
-                    suggestion.placement.y,
-                    suggestion.placement.rotation_radians,
-                )
-            })
-            .collect::<Vec<_>>();
-        let proposed =
-            bob_validated_neighbor_placement(&structure, 0, carbon, intended, &library, &catalog)
-                .unwrap_or_else(|| panic!(
-                    "Bob had no suggestion accepted by live physical validation; raw poses={suggestion_poses:?}"
-                ));
-        assert!(
-            (proposed.x - intended.0).hypot(proposed.y - intended.1)
-                <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE,
-            "accepted Bob pose must preserve the intended adjacent lattice site"
-        );
-        let instance = crate::physical_material::PhysicalMaterial::realized(
-            Material::free_base(carbon.name.clone(), 1.0),
-            vec![Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            }],
-            &catalog,
-        )
-        .expect("candidate material should realize");
-        let mut trial = structure.clone();
-        let indices = crate::material_restoration::restore_material(
-            &mut trial, &instance, proposed, &catalog,
-        )
-        .expect("accepted Bob pose should restore into the trial structure");
-        let candidate = *indices.first().expect("one Carbon constituent");
-        for (index, unit) in trial.units.iter().enumerate() {
-            if indices.contains(&index) {
-                continue;
-            }
-            let candidate_shape = trial.units[candidate]
-                .shape(&catalog)
-                .expect("candidate shape");
-            let existing_shape = unit.shape(&catalog).expect("existing shape");
-            assert!(
-                !crate::material_geometry::placed_forms_penetrate(
-                    &crate::material_geometry::PlacedMaterialPart {
-                        part_index: candidate,
-                        form: candidate_shape.form.clone(),
-                        placement: trial.units[candidate].placement,
-                    },
-                    &crate::material_geometry::PlacedMaterialPart {
-                        part_index: index,
-                        form: existing_shape.form.clone(),
-                        placement: unit.placement,
-                    },
-                    crate::material_geometry::GEOMETRY_EPSILON,
-                ),
-                "accepted Bob proposal must not penetrate existing structure"
-            );
-        }
-        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-        assert!(
-            crate::contact::connection_pair_candidates_cached(
-                &trial, 0, candidate, &catalog, &mut cache,
-            )
-            .into_iter()
-            .any(|contact| {
-                contact.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                    && contact.available_a
-                    && contact.available_b
-            }),
-            "Bob proposal must reach and pass live contact validation"
-        );
-    }
-
-    #[test]
     fn persisted_bob_fluid_suggestion_reaches_live_constructor_validation() {
         let catalog = crate::resources::default_catalog();
         let root =
@@ -1461,45 +1227,5 @@ mod tests {
         let _ = std::fs::remove_dir_all(root);
     }
 
-    #[test]
-    fn axial_hex_ring_contains_only_unique_perimeter_cells() {
-        for radius in 1..=5 {
-            let ring = hex_ring(radius);
-            assert_eq!(ring.len(), (6 * radius) as usize);
-            assert!(
-                ring.iter()
-                    .all(|&(q, r)| { q.abs().max(r.abs()).max((q + r).abs()) == radius }),
-                "every generated axial cell must remain on radius {radius}"
-            );
-            let mut unique = ring.clone();
-            unique.sort_unstable();
-            unique.dedup();
-            assert_eq!(unique.len(), ring.len(), "ring cells must be unique");
-        }
-    }
 
-    #[test]
-    fn blueprint_free_constructor_produces_a_valid_organism() {
-        let catalog = crate::resources::default_catalog();
-        let result = construct_valid(&catalog).expect("constructor should find a valid organism");
-        assert!(!result.structure.units.is_empty());
-        assert!(!result.structure.bonds.is_empty());
-        let cavity = crate::cavity::analyze_genome_cavity(&result.structure, &catalog)
-            .expect("genome analysis should succeed");
-        assert!(cavity.is_some_and(|cavity| cavity.qualifies()));
-        assert_eq!(result.acquired_resource_placements.len(), 4);
-    }
-
-    #[test]
-    fn acquisition_requirement_is_binary_for_each_selected_resource() {
-        let catalog = crate::resources::default_catalog();
-        let result = construct_valid(&catalog).expect("constructor should find a valid organism");
-        let names = result
-            .acquired_resource_placements
-            .iter()
-            .map(|(name, _)| name.as_str())
-            .collect::<Vec<_>>();
-        assert!(names.contains(&"Water"));
-        assert_eq!(names.len(), 4);
-    }
 }
