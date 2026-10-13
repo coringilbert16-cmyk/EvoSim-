@@ -1,4 +1,4 @@
-name: Sulfur Parallelogram Geometry Experiment
+name: Sulfur Parallelogram Replacement Verification
 
 on:
   pull_request:
