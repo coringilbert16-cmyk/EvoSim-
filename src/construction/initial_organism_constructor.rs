@@ -53,16 +53,9 @@ enum PersistedAttachmentFailure {
     },
 }
 
-fn select_diverse_placements(
-    placements: Vec<Placement>,
-    limit: usize,
-) -> Vec<Placement> {
+fn select_diverse_placements(placements: Vec<Placement>, limit: usize) -> Vec<Placement> {
     if placements.len() <= limit || limit == 0 {
-        return if limit == 0 {
-            Vec::new()
-        } else {
-            placements
-        };
+        return if limit == 0 { Vec::new() } else { placements };
     }
 
     let min_x = placements
@@ -73,19 +66,14 @@ fn select_diverse_placements(
         .iter()
         .map(|p| p.x)
         .fold(f64::NEG_INFINITY, f64::max);
-    let min_y = placements
-        .iter()
-        .map(|p| p.y)
-        .fold(f64::INFINITY, f64::min);
+    let min_y = placements.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
     let max_y = placements
         .iter()
         .map(|p| p.y)
         .fold(f64::NEG_INFINITY, f64::max);
     let spatial_scale = (max_x - min_x).max(max_y - min_y).max(1e-9);
-    let mean_x =
-        placements.iter().map(|p| p.x).sum::<f64>() / placements.len() as f64;
-    let mean_y =
-        placements.iter().map(|p| p.y).sum::<f64>() / placements.len() as f64;
+    let mean_x = placements.iter().map(|p| p.x).sum::<f64>() / placements.len() as f64;
+    let mean_y = placements.iter().map(|p| p.y).sum::<f64>() / placements.len() as f64;
     let mean_sin = placements
         .iter()
         .map(|p| p.rotation_radians.sin())
@@ -140,7 +128,10 @@ fn select_diverse_placements(
         selected_indices.push(next_index);
     }
 
-    selected_indices.into_iter().map(|index| placements[index]).collect()
+    selected_indices
+        .into_iter()
+        .map(|index| placements[index])
+        .collect()
 }
 
 fn placement_signature(placement: Placement) -> String {
