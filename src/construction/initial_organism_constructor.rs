@@ -194,7 +194,6 @@ fn persisted_pair_formation_placements(
     placements.into_values().collect()
 }
 
-
 /// Return the persisted two-piece formation that reproduces a rejected world-space pose.
 /// This is diagnostic-only: it does not influence candidate ordering or acceptance.
 fn persisted_pair_pose_provenance(
