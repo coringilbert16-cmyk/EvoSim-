@@ -787,8 +787,6 @@ fn construct_persisted_bob_structure(
     let mut anchors_considered_total = 0usize;
     let mut candidate_states_generated_total = 0usize;
     let mut raw_pair_placements_total = 0usize;
-    let mut pair_pose_overlap_drops_total = 0usize;
-    let mut edge_pose_overlap_drops_total = 0usize;
     let mut pair_placements_dropped_by_cap_total = 0usize;
     let mut edge_placements_examined_total = 0usize;
     let mut edge_placements_added_total = 0usize;
