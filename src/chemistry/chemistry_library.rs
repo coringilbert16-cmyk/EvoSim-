@@ -405,7 +405,7 @@ mod tests {
     }
 
     #[test]
-    fn sulfur_shape_experiment_preserves_existing_chemistry_cache_output() {
+    fn sulfur_shape_replacement_preserves_existing_chemistry_cache_output() {
         // The cache is keyed by material pair and interface class/signature,
         // not by serialized outline. A geometry-only sulfur change must not
         // silently change this already-established chemistry result.
