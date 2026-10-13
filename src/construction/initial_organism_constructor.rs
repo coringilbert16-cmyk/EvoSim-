@@ -459,6 +459,18 @@ fn close_touching_bonds(
 /// constituent must come from a stored pose; live overlap, contact, COMBINE,
 /// and energy accounting remain authoritative. The work bound is derived from
 /// the contact index and does not prescribe organism size or topology.
+fn construction_state_score(state: &ConstructionSearchState) -> (usize, usize, usize) {
+    let units = state.structure.units.len();
+    let bonds = state.structure.bonds.len();
+    let cycle_rank = bonds.saturating_add(1).saturating_sub(units);
+    (cycle_rank, bonds, usize::MAX - units)
+}
+
+/// Search local arrangements from persisted Bob edge families. Every added
+/// constituent must come from a stored pose; live overlap, contact, COMBINE,
+/// and energy accounting remain authoritative. A bounded beam prioritizes
+/// structures with actual bonded cycles, which are more promising cavity
+/// candidates than open chains.
 fn construct_persisted_bob_structure(
     catalog: &[BaseResource],
     library: &crate::geometry_reference_library::GeometryLibrary,
@@ -483,7 +495,7 @@ fn construct_persisted_bob_structure(
         + library.rigid_point_contact_families().count()
         + library.rigid_vertex_contact_families().count();
     let state_budget = contact_records.saturating_mul(2).clamp(16, 64);
-    let mut queue = std::collections::VecDeque::new();
+    let mut queue = Vec::new();
     let mut visited = std::collections::BTreeSet::new();
     for resource in &structural_resources {
         let mut structure = crate::structure::OrganismStructure::new();
@@ -494,7 +506,7 @@ fn construct_persisted_bob_structure(
             energy: initial_energy,
         };
         if visited.insert(construction_state_signature(&state.structure)) {
-            queue.push_back(state);
+            queue.push(state);
         }
     }
 
@@ -507,10 +519,15 @@ fn construct_persisted_bob_structure(
     let mut evaluation_rejections = 0usize;
     let mut combine_rejections = 0usize;
     let mut queue_budget_drops = 0usize;
-    while explored_states < state_budget {
-        let Some(state) = queue.pop_front() else {
-            break;
-        };
+
+    while explored_states < state_budget && !queue.is_empty() {
+        let best_index = queue
+            .iter()
+            .enumerate()
+            .max_by_key(|(_, state)| construction_state_score(state))
+            .map(|(index, _)| index)
+            .expect("non-empty construction queue has a best state");
+        let state = queue.swap_remove(best_index);
         explored_states += 1;
 
         let cavity = crate::cavity::analyze_genome_cavity(&state.structure, catalog)
@@ -521,12 +538,9 @@ fn construct_persisted_bob_structure(
                 acquired_resource_placements,
                 acquired_resource_shapes,
                 fluid_geometry_status,
-            )) = valid_construction(
-                &state.structure,
-                catalog,
-                acquisition_candidates,
-                library,
-            ) {
+            )) =
+                valid_construction(&state.structure, catalog, acquisition_candidates, library)
+            {
                 return Ok(ValidConstruction {
                     structure: state.structure,
                     energy: state.energy,
@@ -537,13 +551,15 @@ fn construct_persisted_bob_structure(
             }
         }
 
-        for anchor_index in 0..state.structure.units.len() {
+        let mut children = Vec::new();
+        let mut candidates_examined = 0usize;
+        'anchors: for anchor_index in 0..state.structure.units.len() {
             if state.energy <= 0.0 {
                 break;
             }
             for resource in &structural_resources {
-                if state.energy <= 0.0 {
-                    break;
+                if state.energy <= 0.0 || candidates_examined >= 12 {
+                    break 'anchors;
                 }
                 match try_persisted_bob_attachments(
                     &state.structure,
@@ -556,10 +572,10 @@ fn construct_persisted_bob_structure(
                 ) {
                     Ok(attachments) => {
                         for attachment in attachments {
-                            if queue.len() >= state_budget {
-                                queue_budget_drops += 1;
-                                continue;
+                            if candidates_examined >= 12 {
+                                break 'anchors;
                             }
+                            candidates_examined += 1;
                             debug_assert!(
                                 attachment.new_unit_index < attachment.structure.units.len()
                             );
@@ -575,13 +591,37 @@ fn construct_persisted_bob_structure(
                                 &mut next.energy,
                             );
                             let signature = construction_state_signature(&next.structure);
-                            if visited.insert(signature) {
-                                if queue.len() < state_budget {
-                                    queue.push_back(next);
-                                } else {
-                                    queue_budget_drops += 1;
+                            if !visited.insert(signature) {
+                                continue;
+                            }
+
+                            let cavity = crate::cavity::analyze_genome_cavity(
+                                &next.structure,
+                                catalog,
+                            )
+                            .ok()
+                            .flatten();
+                            if cavity.as_ref().is_some_and(|cavity| cavity.qualifies()) {
+                                if let Some((
+                                    acquired_resource_placements,
+                                    acquired_resource_shapes,
+                                    fluid_geometry_status,
+                                )) = valid_construction(
+                                    &next.structure,
+                                    catalog,
+                                    acquisition_candidates,
+                                    library,
+                                ) {
+                                    return Ok(ValidConstruction {
+                                        structure: next.structure,
+                                        energy: next.energy,
+                                        acquired_resource_placements,
+                                        acquired_resource_shapes,
+                                        fluid_geometry_status,
+                                    });
                                 }
                             }
+                            children.push(next);
                         }
                     }
                     Err(PersistedAttachmentFailure::CoverageMiss) => {
@@ -604,6 +644,13 @@ fn construct_persisted_bob_structure(
                     }
                 }
             }
+        }
+
+        queue.extend(children);
+        queue.sort_by_key(|state| std::cmp::Reverse(construction_state_score(state)));
+        if queue.len() > state_budget {
+            queue_budget_drops += queue.len() - state_budget;
+            queue.truncate(state_budget);
         }
     }
 
