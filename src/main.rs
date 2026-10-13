@@ -135,9 +135,6 @@ mod blueprint_diagnostics;
 #[path = "tests/blueprint_spatial_target_tests.rs"]
 mod blueprint_spatial_target_tests;
 #[cfg(test)]
-#[path = "tests/soft_cushion_feasibility_tests.rs"]
-mod soft_cushion_feasibility_tests;
-#[cfg(test)]
 #[path = "tests/bond_driven_contract_tests.rs"]
 mod bond_driven_contract_tests;
 #[cfg(test)]
@@ -155,6 +152,9 @@ mod phase3_authority_contract_tests;
 #[cfg(test)]
 #[path = "tests/simulation_tests.rs"]
 mod simulation_tests;
+#[cfg(test)]
+#[path = "tests/soft_cushion_feasibility_tests.rs"]
+mod soft_cushion_feasibility_tests;
 
 #[tokio::main]
 async fn main() {
