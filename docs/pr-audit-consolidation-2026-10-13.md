@@ -102,20 +102,20 @@ PR #200 merged into #194 at `412a2e8b795e9a2b107455eb899a25cba1a6a4ec`. The sulf
 
 ### Reconciled heads
 
-- #194 head: `412a2e8b795e9a2b107455eb899a25cba1a6a4ec`.
-- #195 head: `22b7da1cbc740c65e43937ea62f43d792b473db2`; parents are old #195 head `728e455b` and sulfur merge `412a2e8b`. The chemistry-library transaction code, rollback/concurrency tests, and sulfur cache-stability regression are present together.
-- #196 head: `b0d51d899fd027ce609fc38d71d248968fcc9872`; parents are old constructor head `095fbc34` and reconciled #195 `22b7da1c`. The constructor branch retains its own code while incorporating the sulfur geometry and related regression coverage.
-- #186 integration head before this documentation update: `a7406db5eefecd88f7c401b007d05f26e8877ab0`; it remains separate from the feature stack and draft-only.
+- #194 head: `af223a901404b61bc4ad6de1eeebead4db0fd8fa`; this corrects the sulfur experiment workflow's trigger and pins its pre-sulfur baseline.
+- #195 head: `3418cc0c251162d4cd9e508ed9aecf8a81a13ba0`; parents are old #195 head `728e455b` and updated #194 `af223a90`. The chemistry-library transaction code, rollback/concurrency tests, and sulfur cache-stability regression are present together.
+- #196 head: `d4f817414fa7b2c8b8cd2dddc50994e05720f966`; parents are old constructor head `095fbc34` and reconciled #195 `3418cc0c`. The constructor branch retains its own code while incorporating sulfur geometry and related regression coverage.
+- #186 remains the sole integration target and draft-only; the sulfur/chemistry stack is not yet incorporated into it.
 
 ### Exact-head evidence
 
-- Reconciled #195 full Rust suite: **405 passed, 28 failed, 1 ignored**. Direct comparison with the pre-merge #195 run shows identical sets of 28 failing test names, with no new named failures. Focused Bob/fluid/chemistry gates passed. Clippy fails.
-- Isolated two-piece Bob comparison on #195 is still in progress; no new catalogue parity claim is made.
-- Reconciled #196 exact-head Rust run [#7377](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38476203144): **367 passed, 69 failed, 1 ignored**. Direct comparison with its pre-merge run shows exactly the same 69 failing test names, with no new named failures. Sulfur geometry, Bob-signature, and chemistry-cache regressions pass; Clippy fails.
-- README and this audit are the authoritative current status for the stack. Older entries below are historical snapshots where their status conflicts with this section.
+- Valid pre-merge sulfur experiment [run #30](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38474765699) used baseline `b3bc66eb`: 264 baseline formations / 46,112,052 bytes versus 281 parallelogram formations / 47,271,092 bytes; all 15 multi-contact fluid formations were retained, both catalogues reopened, and there were no oversized formations or unfinished frontiers.
+- Follow-up [run #31](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38475883030) was not a valid new comparison: it checked out `412a2e8b`, which already contains sulfur, so both sides produced 281 formations and 47,271,092 bytes. The workflow is now scoped to the dedicated sulfur experiment branch and pins the pre-sulfur baseline; it is skipped on #195.
+- The last completed #195 full suite remains **405 passed, 28 failed, 1 ignored**, with identical named failures to its previous run. The last completed #196 suite remains **367 passed, 69 failed, 1 ignored**, with identical named failures to its pre-merge run. Focused sulfur geometry, Bob-signature, and chemistry-cache tests pass; Clippy fails.
+- New exact-head Rust checks are running on the workflow-correction commits; do not call the stack fully verified until those finish.
 
 ### Next safe action
 
-1. Inspect the completed Bob comparison and reconciled #196 exact-head run.
-2. Confirm the sulfur-specific shape, Bob-signature, and chemistry-cache regressions pass on the reconciled #196 head.
-3. Only after exact-head evidence is recorded, decide whether the library line can advance toward integration. Keep constructor feature work frozen and keep #186 draft-only until the established release gates pass.
+1. Inspect the new exact-head Rust runs for #194, #195, and #196.
+2. Keep the full-suite failure counts explicit and do not treat Clippy as green.
+3. Once the focused gates and exact-head results are recorded, consider integrating the Bob/fluid/chemistry stack into #186 through a deliberate reviewed merge. Keep constructor feature work frozen and #186 draft-only until repository-integrity/release gates pass.
