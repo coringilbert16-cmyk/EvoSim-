@@ -466,7 +466,6 @@ impl Simulation {
         organism: &mut Organism,
         environment: &mut Environment,
         ledger: &mut EnergyLedger,
-        seed_scale_reference: Option<(f64, f64)>,
     ) -> bool {
         if matches!(
             transformation.kind,
