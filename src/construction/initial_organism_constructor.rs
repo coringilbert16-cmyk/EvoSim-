@@ -821,24 +821,21 @@ fn construct_persisted_bob_structure(
         let mut children = Vec::new();
         let mut placement_queries_examined = 0usize;
         let mut candidates_examined = 0usize;
-        let anchor_count = state.structure.units.len();
-        let resource_count = structural_resources.len();
-        let anchor_start = (explored_states - 1) % anchor_count.max(1);
-        let resource_start = (explored_states - 1) % resource_count.max(1);
-        // Spread the fixed per-state query budget across anchors and rotate both
-        // traversal starts between states. The previous anchor-major loop spent
-        // nearly every query on the first one or two constituents, starving the
-        // rest of the current structure of construction opportunities.
-        'resource_queries: for resource_offset in 0..resource_count {
-            let resource =
-                &structural_resources[(resource_start + resource_offset) % resource_count];
-            for anchor_offset in 0..anchor_count {
-                let anchor_index = (anchor_start + anchor_offset) % anchor_count;
+        'anchors: for anchor_index in 0..state.structure.units.len() {
+            anchors_considered_total += 1;
+            if placement_queries_examined >= 12 {
                 if placement_queries_examined >= 12 {
                     placement_query_budget_exhaustions += 1;
-                    break 'resource_queries;
                 }
-                anchors_considered_total += 1;
+                break;
+            }
+            for resource in &structural_resources {
+                if placement_queries_examined >= 12 {
+                    if placement_queries_examined >= 12 {
+                        placement_query_budget_exhaustions += 1;
+                    }
+                    break 'anchors;
+                }
                 placement_queries_examined += 1;
                 placement_queries_total += 1;
                 match try_persisted_bob_attachments(
@@ -853,7 +850,7 @@ fn construct_persisted_bob_structure(
                     Ok(attachments) => {
                         for attachment in attachments {
                             if candidates_examined >= 12 {
-                                break 'resource_queries;
+                                break 'anchors;
                             }
                             candidates_examined += 1;
                             candidate_states_generated_total += 1;
