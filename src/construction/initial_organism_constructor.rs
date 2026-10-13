@@ -1488,8 +1488,14 @@ mod tests {
             .into_iter()
         .find(|formation| {
             formation.constituents.len() == 2
-                && formation.constituents.iter().any(|part| part.resource == "Carbon")
-                && formation.constituents.iter().any(|part| part.resource == "Nitrogen")
+                && formation
+                    .constituents
+                    .iter()
+                    .any(|part| part.resource == "Carbon")
+                && formation
+                    .constituents
+                    .iter()
+                    .any(|part| part.resource == "Nitrogen")
                 && formation.bonds.iter().any(|bond| {
                     (bond.constituent_a == 0 && bond.constituent_b == 1)
                         || (bond.constituent_a == 1 && bond.constituent_b == 0)
@@ -1504,8 +1510,14 @@ mod tests {
             .formations()
             .find(|formation| {
                 formation.constituents.len() == 2
-                    && formation.constituents.iter().any(|part| part.resource == "Carbon")
-                    && formation.constituents.iter().any(|part| part.resource == "Nitrogen")
+                    && formation
+                        .constituents
+                        .iter()
+                        .any(|part| part.resource == "Carbon")
+                    && formation
+                        .constituents
+                        .iter()
+                        .any(|part| part.resource == "Nitrogen")
                     && formation.bonds.iter().any(|bond| {
                         (bond.constituent_a == 0 && bond.constituent_b == 1)
                             || (bond.constituent_a == 1 && bond.constituent_b == 0)
@@ -1552,8 +1564,13 @@ mod tests {
         );
 
         let mut structure = crate::structure::OrganismStructure::new();
-        add_unit(&mut structure, carbon, (live_anchor.x, live_anchor.y), &catalog)
-            .expect("live anchor should realize");
+        add_unit(
+            &mut structure,
+            carbon,
+            (live_anchor.x, live_anchor.y),
+            &catalog,
+        )
+        .expect("live anchor should realize");
         structure.units[0].placement.rotation_radians = live_anchor.rotation_radians;
         let instance = crate::physical_material::PhysicalMaterial::realized(
             Material::free_base(nitrogen.name.clone(), 1.0),
