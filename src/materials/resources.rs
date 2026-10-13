@@ -630,9 +630,15 @@ pub fn default_catalog() -> Vec<BaseResource> {
             },
             physical_state: PhysicalState::Rigid,
             shape: Shape {
-                form: Form::RegularPolygon {
-                    sides: 5,
-                    radius: 0.850_650_808_352_039_9,
+                form: Form::Polygon {
+                    // Experimental sulfur parallelogram: 1.0/0.5 alternating edges,
+                    // 60°/120° interior angles, centered at the origin.
+                    vertices: vec![
+                        (-0.625, -0.216_506_350_946_109_65),
+                        (0.375, -0.216_506_350_946_109_65),
+                        (0.625, 0.216_506_350_946_109_65),
+                        (-0.375, 0.216_506_350_946_109_65),
+                    ],
                 },
             },
         },
@@ -815,8 +821,8 @@ mod shape_tests {
             Form::RegularPolygon { sides: 3, .. }
         ));
         assert!(matches!(
-            find("Sulfur").shape.form,
-            Form::RegularPolygon { sides: 5, .. }
+            &find("Sulfur").shape.form,
+            Form::Polygon { vertices } if vertices.len() == 4
         ));
         assert!(matches!(
             find("Nitrogen").shape.form,
@@ -848,7 +854,7 @@ mod shape_tests {
         let catalog = default_catalog();
         let find = |name: &str| catalog.iter().find(|r| r.name == name).unwrap();
 
-        for name in ["Carbon", "Methane", "Sulfur"] {
+        for name in ["Carbon", "Methane"] {
             let vertices = find(name).shape.form.polygon_vertices().unwrap();
             for i in 0..vertices.len() {
                 assert!(
@@ -856,6 +862,18 @@ mod shape_tests {
                 );
             }
         }
+
+        let sulfur = find("Sulfur").shape.form.polygon_vertices().unwrap();
+        assert_eq!(sulfur.len(), 4);
+        let sulfur_lengths = (0..sulfur.len())
+            .map(|i| distance(sulfur[i], sulfur[(i + 1) % sulfur.len()]))
+            .collect::<Vec<_>>();
+        assert!((sulfur_lengths[0] - 1.0).abs() < 1e-9);
+        assert!((sulfur_lengths[1] - 0.5).abs() < 1e-9);
+        assert!((sulfur_lengths[2] - 1.0).abs() < 1e-9);
+        assert!((sulfur_lengths[3] - 0.5).abs() < 1e-9);
+        assert!((sulfur[0].1 - sulfur[1].1).abs() < 1e-9);
+        assert!((sulfur[2].1 - sulfur[3].1).abs() < 1e-9);
 
         let hydrogen = find("Hydrogen").shape.form.clone();
         assert!(matches!(
