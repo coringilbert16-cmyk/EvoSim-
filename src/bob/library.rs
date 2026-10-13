@@ -3631,7 +3631,7 @@ mod resource_catalog_signature_tests {
             .expect("default catalog contains sulfur");
         sulfur.shape.form = Form::RegularPolygon {
             sides: 5,
-            radius: 0.850_650_808_352_039_9,
+            radius: 1.0 / (2.0 * (std::f64::consts::PI / 5.0).sin()),
         };
 
         assert_ne!(
