@@ -1783,7 +1783,10 @@ mod tests {
             !structure.bonds.is_empty(),
             "the restored pair must form an actual live bond"
         );
-        assert_eq!(energy, initial_energy, "free-form construction energy must remain unchanged");
+        assert_eq!(
+            energy, initial_energy,
+            "free-form construction energy must remain unchanged"
+        );
         assert_eq!(ledger.total_heat_dissipated, 0.0);
         assert_eq!(ledger.total_potential_energy_released, 0.0);
         assert_eq!(ledger.total_usable_energy_gained, 0.0);
@@ -1805,7 +1808,10 @@ mod tests {
         let radial_x = expected.x - live_anchor.x;
         let radial_y = expected.y - live_anchor.y;
         let radial_length = radial_x.hypot(radial_y);
-        assert!(radial_length > 0.0, "pair replay has a nonzero anchor offset");
+        assert!(
+            radial_length > 0.0,
+            "pair replay has a nonzero anchor offset"
+        );
         let neighbor_pose = Placement {
             x: expected.x + radial_x / radial_length * 0.01,
             y: expected.y + radial_y / radial_length * 0.01,
@@ -1818,7 +1824,9 @@ mod tests {
             &catalog,
         )
         .expect("existing neighboring Nitrogen should restore");
-        let neighbor_index = *neighbor_indices.first().expect("neighbor restores one unit");
+        let neighbor_index = *neighbor_indices
+            .first()
+            .expect("neighbor restores one unit");
         assert!(
             crate::construction_runtime::overlapping_unit_indices(
                 &growth_context,
@@ -1862,12 +1870,12 @@ mod tests {
         assert_eq!(
             first_rejection,
             vec![neighbor_index],
-            "same pair-valid pose must be rejected by the existing neighboring unit; anchor={:?}, replay={:?}, neighbor={:?}, anchor_form={:?}, candidate_form={:?}",
+            "same pair-valid pose must be rejected by the existing neighboring unit; anchor={:?}, replay={:?}, neighbor={:?}, anchor_resource={}, candidate_resource={}",
             live_anchor,
             expected,
             neighbor_pose,
-            carbon.shape(&catalog).map(|shape| shape.form),
-            nitrogen.shape(&catalog).map(|shape| shape.form),
+            carbon.name,
+            nitrogen.name,
         );
         assert_eq!(
             context_energy, initial_energy,
