@@ -1822,7 +1822,6 @@ pub struct GeometryLibrary {
     root: PathBuf,
     entries: BTreeMap<String, GeometryFormation>,
     equivalence_index: BTreeMap<String, Vec<String>>,
-    bonded_pair_formation_index: BTreeMap<(String, String), Vec<String>>,
     manifest: GeometryLibraryManifest,
     frontier: GeometryFrontier,
     contact_families: BTreeMap<String, GeometryContactFamily>,
@@ -1836,24 +1835,6 @@ pub struct GeometryLibrary {
     rigid_vertex_contact_index: HashMap<u64, Vec<String>>,
     formation_ids: BTreeMap<String, String>,
     formation_storage_version: u32,
-}
-
-fn bonded_pair_formation_key(formation: &GeometryFormation) -> Option<(String, String)> {
-    if formation.constituents.len() != 2
-        || !formation.bonds.iter().any(|bond| {
-            (bond.constituent_a == 0 && bond.constituent_b == 1)
-                || (bond.constituent_a == 1 && bond.constituent_b == 0)
-        })
-    {
-        return None;
-    }
-    let first = formation.constituents[0].resource.clone();
-    let second = formation.constituents[1].resource.clone();
-    Some(if first <= second {
-        (first, second)
-    } else {
-        (second, first)
-    })
 }
 
 fn compact_formation_value(
@@ -2554,22 +2535,10 @@ impl GeometryLibrary {
                 .push(signature.clone());
         }
 
-        let mut bonded_pair_formation_index =
-            BTreeMap::<(String, String), Vec<String>>::new();
-        for (signature, formation) in &entries {
-            if let Some(key) = bonded_pair_formation_key(formation) {
-                bonded_pair_formation_index
-                    .entry(key)
-                    .or_default()
-                    .push(signature.clone());
-            }
-        }
-
         let mut library = Self {
             root,
             entries,
             equivalence_index,
-            bonded_pair_formation_index,
             manifest,
             frontier,
             contact_families,
@@ -2645,25 +2614,6 @@ impl GeometryLibrary {
 
     pub fn formations(&self) -> impl Iterator<Item = &GeometryFormation> {
         self.entries.values()
-    }
-
-    /// Query only bonded two-piece formations for a material pair. Results
-    /// retain the same canonical-signature order as `formations()`.
-    pub fn bonded_pair_formations(
-        &self,
-        first_resource: &str,
-        second_resource: &str,
-    ) -> impl Iterator<Item = &GeometryFormation> {
-        let key = if first_resource <= second_resource {
-            (first_resource.to_owned(), second_resource.to_owned())
-        } else {
-            (second_resource.to_owned(), first_resource.to_owned())
-        };
-        self.bonded_pair_formation_index
-            .get(&key)
-            .into_iter()
-            .flatten()
-            .filter_map(|signature| self.entries.get(signature))
     }
 
     pub fn frontier(&self) -> &GeometryFrontier {
@@ -3597,14 +3547,6 @@ impl GeometryLibrary {
                 .entry(formation_equivalence_key(formation))
                 .or_default()
                 .push(signature.clone());
-            if let Some(key) = bonded_pair_formation_key(formation) {
-                let signatures = self
-                    .bonded_pair_formation_index
-                    .entry(key)
-                    .or_default();
-                let position = signatures.binary_search(signature).unwrap_or_else(|i| i);
-                signatures.insert(position, signature.clone());
-            }
         }
         self.entries.extend(unique);
         self.manifest.entries = self.entries.len() as u64;
