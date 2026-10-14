@@ -917,8 +917,8 @@ fn construct_persisted_bob_structure(
         let mut children = Vec::new();
         'anchors: for anchor_index in 0..state.structure.units.len() {
             anchors_considered_total += 1;
-remove anchor query cap            for resource in &structural_resources {
-remove resource query cap                placement_queries_total += 1;
+            for resource in &structural_resources {
+                placement_queries_total += 1;
                 match try_persisted_bob_attachments(
                     &state.structure,
                     anchor_index,
@@ -930,7 +930,7 @@ remove resource query cap                placement_queries_total += 1;
                 ) {
                     Ok(attachments) => {
                         for attachment in attachments {
-remove child cap                            candidate_states_generated_total += 1;
+                            candidate_states_generated_total += 1;
                             debug_assert!(
                                 attachment.new_unit_index < attachment.structure.units.len()
                             );
