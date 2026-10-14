@@ -75,9 +75,7 @@ fn placement_frontier_score(
         .iter()
         .enumerate()
         .filter(|(index, _)| *index != anchor_index)
-        .map(|(_, unit)| {
-            (placement.x - unit.placement.x).hypot(placement.y - unit.placement.y)
-        })
+        .map(|(_, unit)| (placement.x - unit.placement.x).hypot(placement.y - unit.placement.y))
         .fold(f64::INFINITY, f64::min)
 }
 
@@ -91,10 +89,8 @@ fn rank_candidate_placements(
         placement_frontier_score(structure, anchor_index, *b)
             .total_cmp(&placement_frontier_score(structure, anchor_index, *a))
             .then_with(|| {
-                let a_is_pair = pair_placement_signatures
-                    .contains(&placement_signature(*a));
-                let b_is_pair = pair_placement_signatures
-                    .contains(&placement_signature(*b));
+                let a_is_pair = pair_placement_signatures.contains(&placement_signature(*a));
+                let b_is_pair = pair_placement_signatures.contains(&placement_signature(*b));
                 b_is_pair.cmp(&a_is_pair)
             })
             .then_with(|| placement_signature(*a).cmp(&placement_signature(*b)))
