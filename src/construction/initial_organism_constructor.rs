@@ -25,6 +25,15 @@ pub(crate) enum FluidGeometryStatus {
     CandidatesRejected,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ConstructionQualificationFailure {
+    CavityAnalysisError,
+    NoCavity,
+    CavityDoesNotQualify,
+    InteriorAnalysisError,
+    NoAccessibleInterior,
+}
+
 struct PersistedAttachment {
     structure: crate::structure::OrganismStructure,
     new_unit_index: usize,
@@ -817,6 +826,13 @@ fn construct_persisted_bob_structure(
     let mut duplicate_placements_total = 0usize;
     let mut placement_attempts_total = 0usize;
     let mut last_overlap_rejection = None;
+    let mut cavity_analysis_errors = 0usize;
+    let mut states_without_cavity = 0usize;
+    let mut nonqualifying_cavities = 0usize;
+    let mut qualifying_cavity_states = 0usize;
+    let mut accessible_interior_states = 0usize;
+    let mut inaccessible_interior_states = 0usize;
+    let mut interior_analysis_errors = 0usize;
 
     while explored_states < state_budget && !queue.is_empty() {
         let best_index = queue
@@ -828,26 +844,8 @@ fn construct_persisted_bob_structure(
         let state = queue.swap_remove(best_index);
         explored_states += 1;
 
-        let cavity = crate::cavity::analyze_genome_cavity(&state.structure, catalog)
-            .ok()
-            .flatten();
-        if cavity.as_ref().is_some_and(|cavity| cavity.qualifies()) {
-            if let Some((
-                acquired_resource_placements,
-                acquired_resource_shapes,
-                fluid_geometry_status,
-            )) = valid_construction(&state.structure, catalog, acquisition_candidates, library)
-            {
-                return Ok(ValidConstruction {
-                    structure: state.structure,
-                    energy: state.energy,
-                    acquired_resource_placements,
-                    acquired_resource_shapes,
-                    fluid_geometry_status,
-                });
-            }
-        }
-
+        // Every queued child is qualified exactly once before entering the queue.
+        // Avoid repeating cavity and interior analysis when the state is later popped.
         let mut children = Vec::new();
         'anchors: for anchor_index in 0..state.structure.units.len() {
             anchors_considered_total += 1;
@@ -886,21 +884,19 @@ fn construct_persisted_bob_structure(
                                 continue;
                             }
 
-                            let cavity =
-                                crate::cavity::analyze_genome_cavity(&next.structure, catalog)
-                                    .ok()
-                                    .flatten();
-                            if cavity.as_ref().is_some_and(|cavity| cavity.qualifies()) {
-                                if let Some((
+                            match valid_construction(
+                                &next.structure,
+                                catalog,
+                                acquisition_candidates,
+                                library,
+                            ) {
+                                Ok((
                                     acquired_resource_placements,
                                     acquired_resource_shapes,
                                     fluid_geometry_status,
-                                )) = valid_construction(
-                                    &next.structure,
-                                    catalog,
-                                    acquisition_candidates,
-                                    library,
-                                ) {
+                                )) => {
+                                    qualifying_cavity_states += 1;
+                                    accessible_interior_states += 1;
                                     return Ok(ValidConstruction {
                                         structure: next.structure,
                                         energy: next.energy,
@@ -908,6 +904,23 @@ fn construct_persisted_bob_structure(
                                         acquired_resource_shapes,
                                         fluid_geometry_status,
                                     });
+                                }
+                                Err(ConstructionQualificationFailure::CavityAnalysisError) => {
+                                    cavity_analysis_errors += 1;
+                                }
+                                Err(ConstructionQualificationFailure::NoCavity) => {
+                                    states_without_cavity += 1;
+                                }
+                                Err(ConstructionQualificationFailure::CavityDoesNotQualify) => {
+                                    nonqualifying_cavities += 1;
+                                }
+                                Err(ConstructionQualificationFailure::InteriorAnalysisError) => {
+                                    qualifying_cavity_states += 1;
+                                    interior_analysis_errors += 1;
+                                }
+                                Err(ConstructionQualificationFailure::NoAccessibleInterior) => {
+                                    qualifying_cavity_states += 1;
+                                    inaccessible_interior_states += 1;
                                 }
                             }
                             children.push(next);
@@ -986,7 +999,7 @@ fn construct_persisted_bob_structure(
         "all explored states exhausted without a qualifying cavity"
     };
     Err(format!(
-        "persisted Bob constructor: {stop_reason}; explored {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, last_beam_cutoff_score={last_beam_cutoff_score:?}, beam_dropped_score_counts={beam_dropped_score_counts:?}, beam_truncation_tie_drops={beam_truncation_tie_drops}, placement_queries_total={placement_queries_total}, placement_query_budget_exhaustions={placement_query_budget_exhaustions}, anchors_considered_total={anchors_considered_total}, candidate_states_generated_total={candidate_states_generated_total}, raw_pair_placements_total={raw_pair_placements_total}, pair_placements_dropped_by_cap_total={pair_placements_dropped_by_cap_total}, edge_placements_examined_total={edge_placements_examined_total}, edge_placements_added_total={edge_placements_added_total}, duplicate_placements_total={duplicate_placements_total}, placement_attempts_total={placement_attempts_total}, last_overlap_rejection={last_overlap_rejection:?}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, pair_overlap_rejections={pair_overlap_rejections}, edge_overlap_rejections={edge_overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, energy_rejections={energy_rejections}, last_combine_rejection={last_combine_rejection:?}, rigid_contact_records={contact_records}",
+        "persisted Bob constructor: {stop_reason}; explored {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, last_beam_cutoff_score={last_beam_cutoff_score:?}, beam_dropped_score_counts={beam_dropped_score_counts:?}, beam_truncation_tie_drops={beam_truncation_tie_drops}, placement_queries_total={placement_queries_total}, placement_query_budget_exhaustions={placement_query_budget_exhaustions}, anchors_considered_total={anchors_considered_total}, candidate_states_generated_total={candidate_states_generated_total}, raw_pair_placements_total={raw_pair_placements_total}, pair_placements_dropped_by_cap_total={pair_placements_dropped_by_cap_total}, edge_placements_examined_total={edge_placements_examined_total}, edge_placements_added_total={edge_placements_added_total}, duplicate_placements_total={duplicate_placements_total}, placement_attempts_total={placement_attempts_total}, last_overlap_rejection={last_overlap_rejection:?}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, pair_overlap_rejections={pair_overlap_rejections}, edge_overlap_rejections={edge_overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, energy_rejections={energy_rejections}, last_combine_rejection={last_combine_rejection:?}, cavity_analysis_errors={cavity_analysis_errors}, states_without_cavity={states_without_cavity}, nonqualifying_cavities={nonqualifying_cavities}, qualifying_cavity_states={qualifying_cavity_states}, accessible_interior_states={accessible_interior_states}, inaccessible_interior_states={inaccessible_interior_states}, interior_analysis_errors={interior_analysis_errors}, rigid_contact_records={contact_records}",
         queue.len()
     ))
 }
@@ -1354,22 +1367,26 @@ fn valid_construction(
     catalog: &[BaseResource],
     acquisition_candidates: &[&BaseResource],
     bob_library: &crate::geometry_reference_library::GeometryLibrary,
-) -> Option<(
-    Vec<(String, Placement)>,
-    Vec<(String, Shape)>,
-    FluidGeometryStatus,
-)> {
+) -> Result<
+    (
+        Vec<(String, Placement)>,
+        Vec<(String, Shape)>,
+        FluidGeometryStatus,
+    ),
+    ConstructionQualificationFailure,
+> {
     let cavity = crate::cavity::analyze_genome_cavity(structure, catalog)
-        .ok()
-        .flatten()?;
+        .map_err(|_| ConstructionQualificationFailure::CavityAnalysisError)?
+        .ok_or(ConstructionQualificationFailure::NoCavity)?;
     if !cavity.qualifies() {
-        return None;
+        return Err(ConstructionQualificationFailure::CavityDoesNotQualify);
     }
 
     let regions =
-        crate::interior_geometry::find_accessible_interior_regions(structure, catalog).ok()?;
+        crate::interior_geometry::find_accessible_interior_regions(structure, catalog)
+            .map_err(|_| ConstructionQualificationFailure::InteriorAnalysisError)?;
     if regions.is_empty() {
-        return None;
+        return Err(ConstructionQualificationFailure::NoAccessibleInterior);
     }
 
     // Starting inventory is opportunistic, not a viability recipe. The
@@ -1402,7 +1419,7 @@ fn valid_construction(
         }
     }
 
-    Some((acquired, acquired_shapes, fluid_geometry_status))
+    Ok((acquired, acquired_shapes, fluid_geometry_status))
 }
 
 #[cfg(test)]
