@@ -311,7 +311,6 @@ fn try_persisted_bob_attachments(
     // proposals using a separate geometry path: restoration followed by the
     // authoritative live overlap/contact/COMBINE checks decides validity.
     candidate_placements = select_diverse_placements(candidate_placements, 6);
-    let pair_placements_selected = candidate_placements.len();
     let pair_placements_dropped_by_cap =
         raw_pair_placements.saturating_sub(candidate_placements.len());
     let mut seen_placements = candidate_placements
@@ -389,14 +388,12 @@ fn try_persisted_bob_attachments(
     };
 
     let mut successful = Vec::new();
-    let mut suggestions_examined = 0usize;
     for (suggestion_index, suggestion) in candidate_placements.iter().enumerate() {
         // Bound both successful branches and rejected attempts; every returned
         // pose is still live-validated.
         if successful.len() >= 4 || suggestions_examined >= 12 {
             break;
         }
-        suggestions_examined += 1;
         placement_attempts += 1;
         let mut trial = structure.clone();
         let indices = match crate::material_restoration::restore_material(
@@ -897,8 +894,6 @@ fn construct_persisted_bob_structure(
         }
 
         let mut children = Vec::new();
-        let mut placement_queries_examined = 0usize;
-        let mut candidates_examined = 0usize;
         'anchors: for anchor_index in 0..state.structure.units.len() {
             anchors_considered_total += 1;
             if placement_queries_examined >= 12 {
@@ -910,7 +905,6 @@ fn construct_persisted_bob_structure(
                     placement_query_budget_exhaustions += 1;
                     break 'anchors;
                 }
-                placement_queries_examined += 1;
                 placement_queries_total += 1;
                 match try_persisted_bob_attachments(
                     &state.structure,
@@ -926,7 +920,6 @@ fn construct_persisted_bob_structure(
                             if candidates_examined >= 12 {
                                 break 'anchors;
                             }
-                            candidates_examined += 1;
                             candidate_states_generated_total += 1;
                             debug_assert!(
                                 attachment.new_unit_index < attachment.structure.units.len()
