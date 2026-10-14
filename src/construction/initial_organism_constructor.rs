@@ -2137,4 +2137,106 @@ mod tests {
         assert!(placement.x.is_finite() && placement.y.is_finite());
         let _ = std::fs::remove_dir_all(root);
     }
+
+    #[test]
+    fn five_by_five_nitrogen_ring_reports_cavity_and_separate_processing_space() {
+        let catalog = crate::resources::default_catalog();
+        let nitrogen = catalog
+            .iter()
+            .find(|resource| resource.name == "Nitrogen")
+            .expect("Nitrogen exists in the default catalog");
+        let mut structure = crate::structure::OrganismStructure::new();
+        let mut grid = [[None; 5]; 5];
+
+        // A one-unit-thick perimeter around a 3x3 empty interior.
+        for y in 0..5 {
+            for x in 0..5 {
+                if x != 0 && x != 4 && y != 0 && y != 4 {
+                    continue;
+                }
+                let index = add_unit(
+                    &mut structure,
+                    nitrogen,
+                    (x as f64 - 2.0, y as f64 - 2.0),
+                    &catalog,
+                )
+                .expect("nitrogen square should realize");
+                grid[y][x] = Some(index);
+            }
+        }
+
+        assert_eq!(structure.units.len(), 16, "ring should contain 16 squares");
+
+        // Build bonds only through the normal live physical bond transaction.
+        let mut ledger = EnergyLedger::default();
+        let mut energy = 1_000_000.0;
+        let mut adjacent_pairs = 0usize;
+        for y in 0..5 {
+            for x in 0..5 {
+                let Some(a) = grid[y][x] else { continue };
+                for (nx, ny) in [(x + 1, y), (x, y + 1)] {
+                    if nx >= 5 || ny >= 5 {
+                        continue;
+                    }
+                    let Some(b) = grid[ny][nx] else { continue };
+                    bond_units(
+                        &mut structure,
+                        a,
+                        b,
+                        &catalog,
+                        &mut ledger,
+                        &mut energy,
+                    )
+                    .unwrap_or_else(|error| {
+                        panic!("adjacent nitrogen squares ({x},{y})-({nx},{ny}) failed to bond: {error}")
+                    });
+                    adjacent_pairs += 1;
+
+                    let id_a = structure.units[a].physical_id;
+                    let id_b = structure.units[b].physical_id;
+                    assert!(
+                        structure.bonds.iter().any(|bond| {
+                            (bond.endpoint_a.constituent_id == id_a
+                                && bond.endpoint_b.constituent_id == id_b)
+                                || (bond.endpoint_a.constituent_id == id_b
+                                    && bond.endpoint_b.constituent_id == id_a)
+                        }),
+                        "every neighboring perimeter pair must have a physical bond"
+                    );
+                }
+            }
+        }
+
+        assert_eq!(adjacent_pairs, 16, "ring perimeter should have 16 joins");
+        assert_eq!(
+            structure.connected_components().len(),
+            1,
+            "the ring must be one bonded structure"
+        );
+
+        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .expect("cavity analysis should complete")
+            .expect("nitrogen ring should enclose a candidate genome cavity");
+        assert!(cavity.qualifies(), "cavity should meet the size/boundary contract");
+        assert!(
+            (cavity.area - 9.0).abs() < 1e-6,
+            "expected 3x3 interior area 9.0, got {}",
+            cavity.area
+        );
+        assert!(
+            !cavity.boundary_bond_indices(&structure, &catalog).is_empty(),
+            "the cavity wall should belong to the bonded structure"
+        );
+
+        // The ring alone has no second enclosed region for processing material.
+        // The genome cavity must not be misclassified as accessible processing space.
+        let accessible =
+            crate::interior_geometry::find_accessible_interior_regions(&structure, &catalog)
+                .expect("accessible-interior analysis should complete");
+        assert!(
+            accessible.is_empty(),
+            "ring-only seed must not expose its genome cavity as processing space"
+        );
+    }
+
 }
