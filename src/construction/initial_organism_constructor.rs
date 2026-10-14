@@ -1382,9 +1382,8 @@ fn valid_construction(
         return Err(ConstructionQualificationFailure::CavityDoesNotQualify);
     }
 
-    let regions =
-        crate::interior_geometry::find_accessible_interior_regions(structure, catalog)
-            .map_err(|_| ConstructionQualificationFailure::InteriorAnalysisError)?;
+    let regions = crate::interior_geometry::find_accessible_interior_regions(structure, catalog)
+        .map_err(|_| ConstructionQualificationFailure::InteriorAnalysisError)?;
     if regions.is_empty() {
         return Err(ConstructionQualificationFailure::NoAccessibleInterior);
     }
@@ -1941,7 +1940,10 @@ mod tests {
             let cavity = crate::cavity::analyze_genome_cavity(&construction.structure, &catalog)
                 .expect("cavity analysis should succeed")
                 .expect("each constructed organism must contain a genome cavity");
-            assert!(cavity.qualifies(), "attempt {attempt} produced an unqualified cavity");
+            assert!(
+                cavity.qualifies(),
+                "attempt {attempt} produced an unqualified cavity"
+            );
             assert!(
                 !construction.structure.bonds.is_empty(),
                 "attempt {attempt} produced an unbonded structure"
