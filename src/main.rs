@@ -3,14 +3,14 @@
 // Core environment, resources, and physical material/structure.
 #[path = "organism/developmental_blueprint.rs"]
 mod developmental_blueprint;
-#[path = "organism/juvenile.rs"]
-mod juvenile;
 #[path = "simulation/environment.rs"]
 mod environment;
 #[path = "materials/environmental_materials.rs"]
 mod environmental_materials;
 #[path = "chemistry/expulsion.rs"]
 mod expulsion;
+#[path = "organism/juvenile.rs"]
+mod juvenile;
 #[path = "geometry/material_geometry.rs"]
 mod material_geometry;
 #[path = "materials/material_restoration.rs"]
