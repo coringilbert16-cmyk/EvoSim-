@@ -63,9 +63,8 @@ mod tests {
     #[test]
     fn cavity_contract_does_not_depend_on_a_predefined_piece_count_or_core() {
         let catalog = default_catalog();
-        let structure =
-            crate::initial_organism_constructor::sealed_nitrogen_ring_fixture(&catalog)
-                .expect("test ring should be physically realized and bonded");
+        let structure = crate::initial_organism_constructor::sealed_nitrogen_ring_fixture(&catalog)
+            .expect("test ring should be physically realized and bonded");
         validate_realized_organism(
             &structure,
             &catalog,
@@ -93,7 +92,7 @@ mod tests {
         );
         assert!(
             result
-                .as_deref()
+                .as_ref()
                 .is_err_and(|error| error.contains("genome cavity is not sealed")),
             "a single missing perimeter bond must invalidate the genome cavity; result={result:?}"
         );
