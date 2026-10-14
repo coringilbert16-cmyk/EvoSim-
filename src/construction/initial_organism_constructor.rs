@@ -1042,34 +1042,20 @@ fn available_acquisition_resources<'a>(catalog: &'a [BaseResource]) -> Vec<&'a B
         .collect()
 }
 
-fn find_acquisition_set(
+fn find_acquisition_resources(
     candidates: &[&BaseResource],
     regions: &[crate::interior_geometry::EnclosedRegion],
     catalog: &[BaseResource],
-) -> Option<Vec<(String, Placement)>> {
-    for first in 0..candidates.len() {
-        for second in first + 1..candidates.len() {
-            for third in second + 1..candidates.len() {
-                let selected = [candidates[first], candidates[second], candidates[third]];
-                let mut placements = Vec::with_capacity(3);
-                let mut fits = true;
-                for resource in selected {
-                    let Some(placement) = regions
-                        .iter()
-                        .find_map(|region| placement_fits_resource(resource, region, catalog))
-                    else {
-                        fits = false;
-                        break;
-                    };
-                    placements.push((resource.name.clone(), placement));
-                }
-                if fits {
-                    return Some(placements);
-                }
-            }
-        }
-    }
-    None
+) -> Vec<(String, Placement)> {
+    candidates
+        .iter()
+        .filter_map(|resource| {
+            regions
+                .iter()
+                .find_map(|region| placement_fits_resource(resource, region, catalog))
+                .map(|placement| (resource.name.clone(), placement))
+        })
+        .collect()
 }
 
 fn resource_area(resource: &BaseResource) -> Option<f64> {
@@ -1386,36 +1372,36 @@ fn valid_construction(
         return None;
     }
 
-    let mut acquired = find_acquisition_set(acquisition_candidates, &regions, catalog)?;
-    let water = catalog.iter().find(|resource| resource.name == "Water")?;
-    let (water_candidate, had_bob_records) =
-        bob_fluid_acquisition_candidate(structure, &regions, water, bob_library, catalog);
-    let (water_shape, water_placement, fluid_geometry_status) =
-        match (water_candidate, had_bob_records) {
-            (Some((shape, placement)), _) => (
-                Some(shape),
-                placement,
-                FluidGeometryStatus::BobSuggestionAccepted,
-            ),
-            (None, true) => (
-                None,
-                regions
+    // Starting inventory is opportunistic, not a viability recipe. The
+    // organism is valid because its realized structure has a qualifying cavity
+    // and accessible processing space; missing resource types must not reject it.
+    let mut acquired = find_acquisition_resources(acquisition_candidates, &regions, catalog);
+    let mut acquired_shapes = Vec::new();
+    let mut fluid_geometry_status = FluidGeometryStatus::CoverageMiss;
+
+    if let Some(water) = catalog.iter().find(|resource| resource.name == "Water") {
+        let (water_candidate, had_bob_records) =
+            bob_fluid_acquisition_candidate(structure, &regions, water, bob_library, catalog);
+        match water_candidate {
+            Some((shape, placement)) => {
+                acquired.push((water.name.clone(), placement));
+                acquired_shapes.push((water.name.clone(), shape));
+                fluid_geometry_status = FluidGeometryStatus::BobSuggestionAccepted;
+            }
+            None => {
+                if let Some(placement) = regions
                     .iter()
-                    .find_map(|region| placement_fits_resource(water, region, catalog))?,
-                FluidGeometryStatus::CandidatesRejected,
-            ),
-            (None, false) => (
-                None,
-                regions
-                    .iter()
-                    .find_map(|region| placement_fits_resource(water, region, catalog))?,
-                FluidGeometryStatus::CoverageMiss,
-            ),
-        };
-    acquired.push((water.name.clone(), water_placement));
-    let acquired_shapes = water_shape
-        .map(|shape| vec![(water.name.clone(), shape)])
-        .unwrap_or_default();
+                    .find_map(|region| placement_fits_resource(water, region, catalog))
+                {
+                    acquired.push((water.name.clone(), placement));
+                }
+                if had_bob_records {
+                    fluid_geometry_status = FluidGeometryStatus::CandidatesRejected;
+                }
+            }
+        }
+    }
+
     Some((acquired, acquired_shapes, fluid_geometry_status))
 }
 
@@ -1432,12 +1418,6 @@ pub(crate) fn construct_valid_with_energy(
     initial_energy: f64,
 ) -> Result<ValidConstruction, String> {
     let acquisition_candidates = available_acquisition_resources(catalog);
-    if acquisition_candidates.len() < 3 {
-        return Err("catalog does not contain three non-water acquisition resources".into());
-    }
-    if !catalog.iter().any(|resource| resource.name == "Water") {
-        return Err("catalog does not contain Water".into());
-    }
 
     let bob_library = crate::geometry_reference_library::open_default_library()
         .map_err(|error| format!("failed to open persistent Bob geometry library: {error}"))?;
@@ -1861,6 +1841,34 @@ mod tests {
     }
 
     #[test]
+    fn opportunistic_acquisition_does_not_require_three_distinct_resources() {
+        let catalog = crate::resources::default_catalog();
+        let candidates = ["Carbon", "Nitrogen"]
+            .into_iter()
+            .map(|name| {
+                catalog
+                    .iter()
+                    .find(|resource| resource.name == name)
+                    .expect("test resource exists in catalog")
+            })
+            .collect::<Vec<_>>();
+        let region = crate::interior_geometry::EnclosedRegion {
+            area: 100.0,
+            boundary_units: Vec::new(),
+            sample_point: (0.0, 0.0),
+            boundary: vec![(-5.0, -5.0), (5.0, -5.0), (5.0, 5.0), (-5.0, 5.0)],
+        };
+        let acquired = find_acquisition_resources(&candidates, &[region], &catalog);
+        assert_eq!(
+            acquired.len(),
+            2,
+            "every resource that fits is opportunistic; three distinct types are not a gate"
+        );
+        assert!(acquired.iter().any(|(name, _)| name == "Carbon"));
+        assert!(acquired.iter().any(|(name, _)| name == "Nitrogen"));
+    }
+
+    #[test]
     fn production_constructor_builds_a_bob_formed_cavity_with_supplied_energy() {
         let catalog = crate::resources::default_catalog();
         let supplied_energy = crate::genome::initial_genome().reproductive_energy_allocation;
@@ -1879,24 +1887,27 @@ mod tests {
             "free-form construction must not debit real starting energy"
         );
 
-        let acquired_names = construction
-            .acquired_resource_placements
-            .iter()
-            .map(|(name, _)| name.as_str())
-            .collect::<std::collections::BTreeSet<_>>();
-        assert!(acquired_names.contains("Water"));
+        for (name, placement) in &construction.acquired_resource_placements {
+            assert!(
+                catalog.iter().any(|resource| resource.name == *name),
+                "acquired resource {name} must belong to the catalog"
+            );
+            assert!(
+                placement.x.is_finite()
+                    && placement.y.is_finite()
+                    && placement.rotation_radians.is_finite(),
+                "acquired resource placements must be finite"
+            );
+        }
         assert!(
-            acquired_names
-                .iter()
-                .filter(|name| **name != "Water")
-                .count()
-                >= 3,
-            "the initial organism must acquire at least three non-water resource types"
+            construction.acquired_resource_shapes.iter().all(|(name, _)| {
+                construction
+                    .acquired_resource_placements
+                    .iter()
+                    .any(|(acquired_name, _)| acquired_name == name)
+            }),
+            "any realized acquired fluid shape must have a corresponding acquired resource"
         );
-        assert!(construction
-            .acquired_resource_placements
-            .iter()
-            .any(|(name, _)| name == "Water"));
     }
 
     #[test]
