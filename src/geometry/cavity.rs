@@ -51,12 +51,16 @@ impl GenomeCavity {
         }
     }
 
-    /// A detected cavity is geometrically sufficient only when it is finite,
-    /// has positive area, and has a real boundary. The Carbon-equivalent area
-    /// is diagnostic reference data, not a biological threshold. Functional
-    /// viability is decided by the organism viability contract.
+    /// A genome cavity qualifies only when it has finite area at least equal
+    /// to three Carbon constituents and a real physical boundary. Sealing and
+    /// accessible-interior requirements are validated separately.
     pub fn qualifies(&self) -> bool {
-        self.area.is_finite() && self.area > EPS && self.boundary_units.len() >= 3
+        self.area.is_finite()
+            && self.area > EPS
+            && self.area >= self.minimum_area
+            && self.minimum_area.is_finite()
+            && self.minimum_area > 0.0
+            && self.boundary_units.len() >= 3
     }
 
     /// Expose the realized cavity boundary geometry to harmonic reception.
@@ -96,9 +100,9 @@ impl GenomeCavity {
     }
 }
 
-/// The minimum cavity is strictly larger than the area occupied by three
-/// joined Carbon hexagons. Carbon supplies only the geometric reference; it is
-/// not the genome.
+/// The minimum cavity area is exactly the area of three Carbon constituents.
+/// Equality qualifies; no additional margin is added. Carbon supplies a size
+/// reference, not a prescribed genome topology.
 pub fn minimum_genome_cavity_area(catalog: &[BaseResource]) -> Result<f64, String> {
     let carbon = catalog
         .iter()
@@ -113,10 +117,10 @@ pub fn minimum_genome_cavity_area(catalog: &[BaseResource]) -> Result<f64, Strin
     Ok(minimum)
 }
 
-/// Analyze the realized physical structure for a sealed, positive-area cavity.
-/// The three-Carbon-equivalent capacity is retained as a reference measurement,
-/// not a minimum. No predefined subset of units is treated as the genome; the
-/// physical cavity and the full viability contract determine qualification.
+/// Analyze the realized physical structure for a sealed cavity whose area
+/// meets the three-Carbon minimum. No predefined subset of units is treated as
+/// the genome; the physical cavity and the full viability contract determine
+/// qualification.
 pub fn analyze_genome_cavity(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
@@ -321,13 +325,24 @@ mod tests {
     }
 
     #[test]
-    fn carbon_capacity_reference_is_not_a_hard_threshold() {
-        let mut cavity = GenomeCavity::test_fixture(1.0, 100.0);
+    fn cavity_below_three_carbon_minimum_does_not_qualify() {
+        let mut cavity = GenomeCavity::test_fixture(99.999, 100.0);
         cavity.boundary_units = vec![0, 1, 2];
-        assert!(
-            cavity.qualifies(),
-            "a positive-area cavity with a real boundary must not be rejected by the reference area"
-        );
+        assert!(!cavity.qualifies());
+    }
+
+    #[test]
+    fn cavity_at_exact_three_carbon_minimum_qualifies() {
+        let mut cavity = GenomeCavity::test_fixture(100.0, 100.0);
+        cavity.boundary_units = vec![0, 1, 2];
+        assert!(cavity.qualifies());
+    }
+
+    #[test]
+    fn cavity_above_three_carbon_minimum_qualifies() {
+        let mut cavity = GenomeCavity::test_fixture(100.001, 100.0);
+        cavity.boundary_units = vec![0, 1, 2];
+        assert!(cavity.qualifies());
     }
 
     #[test]
