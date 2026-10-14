@@ -830,7 +830,6 @@ fn construct_persisted_bob_structure(
     let mut states_without_cavity = 0usize;
     let mut nonqualifying_cavities = 0usize;
     let mut qualifying_cavity_states = 0usize;
-    let mut accessible_interior_states = 0usize;
     let mut inaccessible_interior_states = 0usize;
     let mut interior_analysis_errors = 0usize;
 
@@ -895,8 +894,6 @@ fn construct_persisted_bob_structure(
                                     acquired_resource_shapes,
                                     fluid_geometry_status,
                                 )) => {
-                                    qualifying_cavity_states += 1;
-                                    accessible_interior_states += 1;
                                     return Ok(ValidConstruction {
                                         structure: next.structure,
                                         energy: next.energy,
@@ -999,7 +996,7 @@ fn construct_persisted_bob_structure(
         "all explored states exhausted without a qualifying cavity"
     };
     Err(format!(
-        "persisted Bob constructor: {stop_reason}; explored {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, last_beam_cutoff_score={last_beam_cutoff_score:?}, beam_dropped_score_counts={beam_dropped_score_counts:?}, beam_truncation_tie_drops={beam_truncation_tie_drops}, placement_queries_total={placement_queries_total}, placement_query_budget_exhaustions={placement_query_budget_exhaustions}, anchors_considered_total={anchors_considered_total}, candidate_states_generated_total={candidate_states_generated_total}, raw_pair_placements_total={raw_pair_placements_total}, pair_placements_dropped_by_cap_total={pair_placements_dropped_by_cap_total}, edge_placements_examined_total={edge_placements_examined_total}, edge_placements_added_total={edge_placements_added_total}, duplicate_placements_total={duplicate_placements_total}, placement_attempts_total={placement_attempts_total}, last_overlap_rejection={last_overlap_rejection:?}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, pair_overlap_rejections={pair_overlap_rejections}, edge_overlap_rejections={edge_overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, energy_rejections={energy_rejections}, last_combine_rejection={last_combine_rejection:?}, cavity_analysis_errors={cavity_analysis_errors}, states_without_cavity={states_without_cavity}, nonqualifying_cavities={nonqualifying_cavities}, qualifying_cavity_states={qualifying_cavity_states}, accessible_interior_states={accessible_interior_states}, inaccessible_interior_states={inaccessible_interior_states}, interior_analysis_errors={interior_analysis_errors}, rigid_contact_records={contact_records}",
+        "persisted Bob constructor: {stop_reason}; explored {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, last_beam_cutoff_score={last_beam_cutoff_score:?}, beam_dropped_score_counts={beam_dropped_score_counts:?}, beam_truncation_tie_drops={beam_truncation_tie_drops}, placement_queries_total={placement_queries_total}, placement_query_budget_exhaustions={placement_query_budget_exhaustions}, anchors_considered_total={anchors_considered_total}, candidate_states_generated_total={candidate_states_generated_total}, raw_pair_placements_total={raw_pair_placements_total}, pair_placements_dropped_by_cap_total={pair_placements_dropped_by_cap_total}, edge_placements_examined_total={edge_placements_examined_total}, edge_placements_added_total={edge_placements_added_total}, duplicate_placements_total={duplicate_placements_total}, placement_attempts_total={placement_attempts_total}, last_overlap_rejection={last_overlap_rejection:?}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, pair_overlap_rejections={pair_overlap_rejections}, edge_overlap_rejections={edge_overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, energy_rejections={energy_rejections}, last_combine_rejection={last_combine_rejection:?}, cavity_analysis_errors={cavity_analysis_errors}, states_without_cavity={states_without_cavity}, nonqualifying_cavities={nonqualifying_cavities}, qualifying_cavity_states={qualifying_cavity_states}, accessible_interior_states_on_failed_search=0, inaccessible_interior_states={inaccessible_interior_states}, interior_analysis_errors={interior_analysis_errors}, rigid_contact_records={contact_records}",
         queue.len()
     ))
 }
