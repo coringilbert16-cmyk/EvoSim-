@@ -173,7 +173,9 @@ fn new_structure_bond_is_formed_only_through_combine() {
     assert_eq!(structure.bonds.len(), 1);
     assert!(attempt.energy_invested >= 0.0);
     assert!(ledger.total_usable_energy_gained.is_finite());
-    assert!(ledger.total_heat_dissipated > 0.0);
+    // The pair is already touching, so no approach work remains to dissipate.
+    assert_eq!(attempt.work_cost, 0.0);
+    assert_eq!(ledger.total_heat_dissipated, 0.0);
     assert!(energy < 100.0 || attempt.energy_invested == 0.0);
 }
 
