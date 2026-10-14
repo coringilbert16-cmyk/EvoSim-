@@ -75,6 +75,10 @@ jobs:
       - name: Seed Bob and generate all singleton geometry frontiers
         if: always()
         run: cargo run --locked -- --geometry-worker-passes 7
+      # Keep the persisted-pair transform/contact/collision replay independently visible.
+      - name: Run persisted-pair replay regression
+        if: always()
+        run: cargo test --locked persisted_pair_replay_preserves_relative_pose_at_a_rotated_live_anchor -- --nocapture
       # Expensive headless multigeneration validation is paused while the seed
       # topology is being finalized. Keep the normal Rust/Clippy gates active.
       - name: Run Rust tests
