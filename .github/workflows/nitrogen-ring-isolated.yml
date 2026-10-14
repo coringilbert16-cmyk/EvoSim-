@@ -1,0 +1,17 @@
+name: Isolated nitrogen ring diagnostic
+
+on:
+  push:
+    branches: [test/nitrogen-ring-isolated]
+
+permissions:
+  contents: read
+
+jobs:
+  nitrogen-ring:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run only the five-by-five nitrogen ring diagnostic
+        run: cargo test --locked five_by_five_nitrogen_ring_reports_cavity_and_separate_processing_space -- --nocapture
