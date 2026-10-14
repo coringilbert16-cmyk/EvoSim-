@@ -1914,6 +1914,29 @@ mod tests {
     }
 
     #[test]
+    fn production_constructor_remains_viable_across_repeated_runs() {
+        let catalog = crate::resources::default_catalog();
+        let supplied_energy = crate::genome::initial_genome().reproductive_energy_allocation;
+
+        for attempt in 1..=3 {
+            let construction = construct_valid_with_energy(&catalog, supplied_energy)
+                .unwrap_or_else(|error| panic!("constructor attempt {attempt} failed: {error}"));
+            let cavity = crate::cavity::analyze_genome_cavity(&construction.structure, &catalog)
+                .expect("cavity analysis should succeed")
+                .expect("each constructed organism must contain a genome cavity");
+            assert!(cavity.qualifies(), "attempt {attempt} produced an unqualified cavity");
+            assert!(
+                !construction.structure.bonds.is_empty(),
+                "attempt {attempt} produced an unbonded structure"
+            );
+            assert_eq!(
+                construction.energy, supplied_energy,
+                "attempt {attempt} must preserve free-form construction energy"
+            );
+        }
+    }
+
+    #[test]
     fn persisted_bob_attachment_reports_missing_coverage_without_fallback() {
         let catalog = crate::resources::default_catalog();
         let carbon = catalog
