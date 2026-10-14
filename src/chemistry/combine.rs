@@ -514,9 +514,9 @@ mod tests {
         let candidates = eligible_candidates(&s, 0, 1, &catalog, &mut cache);
         assert!(candidates
             .iter()
-            .any(|candidate| matches!(candidate.endpoint_a, ConnectionEndpoint::LineEndpoint { .. })));
+            .any(|c| matches!(c.endpoint_a, ConnectionEndpoint::LineEndpoint { .. })));
         assert!(candidates
             .iter()
-            .any(|candidate| matches!(candidate.endpoint_a, ConnectionEndpoint::Boundary { .. })));
+            .any(|c| matches!(c.endpoint_a, ConnectionEndpoint::Boundary { .. })));
     }
 }
