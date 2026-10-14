@@ -108,15 +108,14 @@ mod integration_tests {
     }
     #[test]
     fn accessible_interior_starts_without_synthetic_water() {
-        let s = Simulation::new(22, 10.0);
-        let catalog = s.environment.catalog.clone();
-        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog)
-            .expect("confirmed seed baseline should be valid");
-        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog)
-            .expect("initial realization should produce the seed boundary");
+        // Exercise the production constructor rather than the retired fixed-seed
+        // blueprint. The interior must be accessible in the realized startup organism.
+        let organism = Simulation::create_initial_organism();
+        let structure = &organism.structure;
+        let catalog = crate::resources::default_catalog();
         let regions =
-            crate::interior_geometry::find_accessible_interior_regions(&structure, &catalog)
-                .expect("initial seed should expose accessible topology");
+            crate::interior_geometry::find_accessible_interior_regions(structure, &catalog)
+                .expect("initial organism should expose accessible topology");
         assert!(!regions.is_empty());
         // Boundary Water is ordinary realized structure; no Water is synthesized
         // into the accessible interior.
