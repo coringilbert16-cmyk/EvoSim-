@@ -9,8 +9,6 @@ mod environment;
 mod environmental_materials;
 #[path = "chemistry/expulsion.rs"]
 mod expulsion;
-#[path = "organism/juvenile.rs"]
-mod juvenile;
 #[path = "geometry/material_geometry.rs"]
 mod material_geometry;
 #[path = "materials/material_restoration.rs"]
