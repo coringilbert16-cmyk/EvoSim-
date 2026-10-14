@@ -75,10 +75,11 @@ fn placement_frontier_score(
         .iter()
         .enumerate()
         .filter(|(index, _)| *index != anchor_index)
-        .map(|(_, unit)| (placement.x - unit.placement.x).hypot(placement.y - unit.placement.y))
+        .map(|(_, unit)| {
+            (placement.x - unit.placement.x).hypot(placement.y - unit.placement.y)
+        })
         .fold(f64::INFINITY, f64::min)
 }
-
 
 fn rank_candidate_placements(
     structure: &crate::structure::OrganismStructure,
@@ -90,8 +91,10 @@ fn rank_candidate_placements(
         placement_frontier_score(structure, anchor_index, *b)
             .total_cmp(&placement_frontier_score(structure, anchor_index, *a))
             .then_with(|| {
-                let a_is_pair = pair_placement_signatures.contains(&placement_signature(*a));
-                let b_is_pair = pair_placement_signatures.contains(&placement_signature(*b));
+                let a_is_pair = pair_placement_signatures
+                    .contains(&placement_signature(*a));
+                let b_is_pair = pair_placement_signatures
+                    .contains(&placement_signature(*b));
                 b_is_pair.cmp(&a_is_pair)
             })
             .then_with(|| placement_signature(*a).cmp(&placement_signature(*b)))
@@ -1467,13 +1470,31 @@ mod tests {
                 .unwrap_or_else(|| panic!("{name} exists in catalog"))
         };
         let mut structure = crate::structure::OrganismStructure::new();
-        let anchor_index = add_unit(&mut structure, resource("Hydrogen"), (0.0, 0.0), &catalog)
-            .expect("anchor should realize");
-        add_unit(&mut structure, resource("Methane"), (5.0, 0.0), &catalog)
-            .expect("blocker should realize");
+        let anchor_index = add_unit(
+            &mut structure,
+            resource("Hydrogen"),
+            (0.0, 0.0),
+            &catalog,
+        )
+        .expect("anchor should realize");
+        add_unit(
+            &mut structure,
+            resource("Methane"),
+            (5.0, 0.0),
+            &catalog,
+        )
+        .expect("blocker should realize");
 
-        let farther = Placement { x: 10.0, y: 0.0, rotation_radians: 0.0 };
-        let nearer = Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 };
+        let farther = Placement {
+            x: 10.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let nearer = Placement {
+            x: 1.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
         let ranked = rank_candidate_placements(
             &structure,
             anchor_index,
@@ -1482,8 +1503,16 @@ mod tests {
         );
         assert_eq!(ranked[0], farther, "greater clearance should rank first");
 
-        let pair_replay = Placement { x: 10.0, y: 0.0, rotation_radians: std::f64::consts::PI };
-        let edge_seed = Placement { x: 10.0, y: 0.0, rotation_radians: 0.0 };
+        let pair_replay = Placement {
+            x: 10.0,
+            y: 0.0,
+            rotation_radians: std::f64::consts::PI,
+        };
+        let edge_seed = Placement {
+            x: 10.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
         let pair_signatures = [placement_signature(pair_replay)].into_iter().collect();
         let ranked = rank_candidate_placements(
             &structure,
