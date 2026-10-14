@@ -850,6 +850,10 @@ fn construct_persisted_bob_structure(
     let mut energy_rejections = 0usize;
     let mut last_combine_rejection = None;
     let mut queue_budget_drops = 0usize;
+    let mut beam_dropped_score_counts =
+        std::collections::BTreeMap::<(usize, usize, usize), usize>::new();
+    let mut beam_truncation_tie_drops = 0usize;
+    let mut last_beam_cutoff_score = None;
     let mut placement_queries_total = 0usize;
     let mut placement_query_budget_exhaustions = 0usize;
     let mut anchors_considered_total = 0usize;
@@ -1023,13 +1027,22 @@ fn construct_persisted_bob_structure(
         queue.extend(children);
         queue.sort_by_key(|state| std::cmp::Reverse(construction_state_score(state)));
         if queue.len() > state_budget {
+            let cutoff_score = construction_state_score(&queue[state_budget - 1]);
+            last_beam_cutoff_score = Some(cutoff_score);
+            for dropped in queue.iter().skip(state_budget) {
+                let score = construction_state_score(dropped);
+                *beam_dropped_score_counts.entry(score).or_default() += 1;
+                if score == cutoff_score {
+                    beam_truncation_tie_drops += 1;
+                }
+            }
             queue_budget_drops += queue.len() - state_budget;
             queue.truncate(state_budget);
         }
     }
 
     Err(format!(
-        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, placement_queries_total={placement_queries_total}, placement_query_budget_exhaustions={placement_query_budget_exhaustions}, anchors_considered_total={anchors_considered_total}, candidate_states_generated_total={candidate_states_generated_total}, raw_pair_placements_total={raw_pair_placements_total}, pair_placements_dropped_by_cap_total={pair_placements_dropped_by_cap_total}, edge_placements_examined_total={edge_placements_examined_total}, edge_placements_added_total={edge_placements_added_total}, duplicate_placements_total={duplicate_placements_total}, placement_attempts_total={placement_attempts_total}, last_overlap_rejection={last_overlap_rejection:?}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, pair_overlap_rejections={pair_overlap_rejections}, edge_overlap_rejections={edge_overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, energy_rejections={energy_rejections}, last_combine_rejection={last_combine_rejection:?}, rigid_contact_records={contact_records}",
+        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, last_beam_cutoff_score={last_beam_cutoff_score:?}, beam_dropped_score_counts={beam_dropped_score_counts:?}, beam_truncation_tie_drops={beam_truncation_tie_drops}, placement_queries_total={placement_queries_total}, placement_query_budget_exhaustions={placement_query_budget_exhaustions}, anchors_considered_total={anchors_considered_total}, candidate_states_generated_total={candidate_states_generated_total}, raw_pair_placements_total={raw_pair_placements_total}, pair_placements_dropped_by_cap_total={pair_placements_dropped_by_cap_total}, edge_placements_examined_total={edge_placements_examined_total}, edge_placements_added_total={edge_placements_added_total}, duplicate_placements_total={duplicate_placements_total}, placement_attempts_total={placement_attempts_total}, last_overlap_rejection={last_overlap_rejection:?}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, pair_overlap_rejections={pair_overlap_rejections}, edge_overlap_rejections={edge_overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, energy_rejections={energy_rejections}, last_combine_rejection={last_combine_rejection:?}, rigid_contact_records={contact_records}",
         queue.len()
     ))
 }
