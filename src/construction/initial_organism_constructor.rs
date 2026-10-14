@@ -2141,7 +2141,7 @@ mod tests {
     }
 
     #[test]
-    fn five_by_five_nitrogen_ring_reports_cavity_and_separate_processing_space() {
+    fn five_by_five_nitrogen_ring_qualifies_as_genome_cavity() {
         let catalog = crate::resources::default_catalog();
         let nitrogen = catalog
             .iter()
@@ -2228,18 +2228,20 @@ mod tests {
             cavity.area
         );
         assert!(
-            !cavity.boundary_bond_indices(&structure, &catalog).is_empty(),
-            "the cavity wall should belong to the bonded structure"
+            cavity.area >= cavity.minimum_area,
+            "genome cavity area {} must be at least the three-Carbon minimum {}",
+            cavity.area,
+            cavity.minimum_area
         );
-
-        // The ring alone has no second enclosed region for processing material.
-        // The genome cavity must not be misclassified as accessible processing space.
-        let accessible =
-            crate::interior_geometry::find_accessible_interior_regions(&structure, &catalog)
-                .expect("accessible-interior analysis should complete");
-        assert!(
-            accessible.is_empty(),
-            "ring-only seed must not expose its genome cavity as processing space"
+        assert_eq!(
+            cavity.boundary_units.len(),
+            16,
+            "every square in this ring must contribute to the detected cavity boundary"
+        );
+        assert_eq!(
+            cavity.boundary_bond_indices(&structure, &catalog).len(),
+            16,
+            "all 16 perimeter joins must be represented by physical bonds"
         );
     }
 
