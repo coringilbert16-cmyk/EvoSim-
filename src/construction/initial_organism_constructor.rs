@@ -2243,6 +2243,17 @@ mod tests {
             16,
             "all 16 perimeter joins must be represented by physical bonds"
         );
+
+        // A geometrically ring-shaped arrangement is not a sealed genome if
+        // even one of its required perimeter connections is absent.
+        let mut missing_boundary_bond = structure.clone();
+        missing_boundary_bond.bonds.pop();
+        assert!(
+            crate::cavity::analyze_genome_cavity(&missing_boundary_bond, &catalog)
+                .expect("cavity analysis should complete after removing a bond")
+                .is_none(),
+            "a ring missing one perimeter bond must not qualify as a genome cavity"
+        );
     }
 
 }
