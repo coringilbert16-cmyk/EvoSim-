@@ -342,8 +342,9 @@ mod tests {
     #[test]
     fn realized_structure_cavity_qualifies_without_a_predefined_core() {
         let catalog = default_catalog();
-        let structure = crate::structural_blueprint::test_sealed_cavity_structure(&catalog)
-            .expect("compact physical cavity fixture should realize");
+        let structure = crate::initial_organism_constructor::construct_valid(&catalog)
+            .expect("freeform constructor should produce a viable organism")
+            .structure;
         let cavity = analyze_genome_cavity(&structure, &catalog)
             .unwrap()
             .expect("realized structure must contain a sealed qualifying cavity");
@@ -354,8 +355,9 @@ mod tests {
     #[test]
     fn unbonded_structure_is_not_a_genome() {
         let catalog = default_catalog();
-        let mut structure = crate::structural_blueprint::test_sealed_cavity_structure(&catalog)
-            .expect("compact physical cavity fixture should realize");
+        let mut structure = crate::initial_organism_constructor::construct_valid(&catalog)
+            .expect("freeform constructor should produce a viable organism")
+            .structure;
         structure.bonds.clear();
         assert!(analyze_genome_cavity(&structure, &catalog)
             .unwrap()
