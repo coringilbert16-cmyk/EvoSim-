@@ -541,8 +541,9 @@ mod tests {
     #[test]
     fn genome_cavity_receives_environmental_material_at_realized_boundary() {
         let catalog = crate::resources::default_catalog();
-        let mut structure = crate::initial_organism_constructor::sealed_nitrogen_ring_fixture(&catalog)
-            .expect("test ring should be physically realized and bonded");
+        let mut structure =
+            crate::initial_organism_constructor::sealed_nitrogen_ring_fixture(&catalog)
+                .expect("test ring should be physically realized and bonded");
         for unit in &mut structure.units {
             unit.placement.x += 500.0;
             unit.placement.y += 500.0;
