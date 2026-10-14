@@ -1782,7 +1782,9 @@ mod tests {
         );
         assert_eq!(energy, initial_energy, "free-form construction energy must remain unchanged");
         assert_eq!(ledger.total_heat_dissipated, 0.0);
-        assert_eq!(ledger.total_energy_created, 0.0);
+        assert_eq!(ledger.total_potential_energy_released, 0.0);
+        assert_eq!(ledger.total_usable_energy_gained, 0.0);
+        assert_eq!(ledger.total_usable_energy_held, 0.0);
 
         // Replay the same candidate pose against a valid existing neighbor.
         // Move a second Nitrogen just 0.01 units outward from the candidate:
@@ -1857,7 +1859,7 @@ mod tests {
         assert_eq!(
             first_rejection,
             vec![neighbor_index],
-            "same pair-valid pose must be rejected by the existing neighboring unit;              anchor={:?}, replay={:?}, neighbor={:?}, anchor_form={:?}, candidate_form={:?}",
+            "same pair-valid pose must be rejected by the existing neighboring unit; anchor={:?}, replay={:?}, neighbor={:?}, anchor_form={:?}, candidate_form={:?}",
             live_anchor,
             expected,
             neighbor_pose,
