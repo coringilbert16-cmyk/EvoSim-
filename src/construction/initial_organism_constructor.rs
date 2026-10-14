@@ -1760,6 +1760,114 @@ mod tests {
             overlaps.is_empty(),
             "replaying a valid persisted pair must not introduce overlap: {overlaps:?}"
         );
+
+        // Pair validity is tested independently from growth-context validity.
+        // The exact persisted replay must make real contact and form a bond,
+        // without spending or inventing construction energy.
+        let initial_energy = 10_000.0;
+        let mut ledger = EnergyLedger::default();
+        let mut energy = initial_energy;
+        bond_units(
+            &mut structure,
+            0,
+            candidate_index,
+            &catalog,
+            &mut ledger,
+            &mut energy,
+        )
+        .expect("persisted pair replay must pass live contact and COMBINE");
+        assert!(
+            !structure.bonds.is_empty(),
+            "the restored pair must form an actual live bond"
+        );
+        assert_eq!(energy, initial_energy, "free-form construction energy must remain unchanged");
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+        assert_eq!(ledger.total_energy_created, 0.0);
+
+        // Replay the same candidate pose against a valid existing neighbor.
+        // Move a second Nitrogen just 0.01 units outward from the candidate:
+        // it remains within live contact tolerance of Carbon, but occupies the
+        // same local growth space as the candidate being replayed.
+        let mut growth_context = crate::structure::OrganismStructure::new();
+        add_unit(
+            &mut growth_context,
+            carbon,
+            (live_anchor.x, live_anchor.y),
+            &catalog,
+        )
+        .expect("growth-context anchor should realize");
+        growth_context.units[0].placement = live_anchor;
+        let radial_x = expected.x - live_anchor.x;
+        let radial_y = expected.y - live_anchor.y;
+        let radial_length = radial_x.hypot(radial_y);
+        assert!(radial_length > 0.0, "pair replay has a nonzero anchor offset");
+        let neighbor_pose = Placement {
+            x: expected.x + radial_x / radial_length * 0.01,
+            y: expected.y + radial_y / radial_length * 0.01,
+            rotation_radians: expected.rotation_radians,
+        };
+        let neighbor_indices = crate::material_restoration::restore_material(
+            &mut growth_context,
+            &instance,
+            neighbor_pose,
+            &catalog,
+        )
+        .expect("existing neighboring Nitrogen should restore");
+        let neighbor_index = *neighbor_indices.first().expect("neighbor restores one unit");
+        assert!(
+            crate::construction_runtime::overlapping_unit_indices(
+                &growth_context,
+                &growth_context.units[neighbor_index],
+                &neighbor_indices,
+                &catalog,
+            )
+            .is_empty(),
+            "existing neighbor must not penetrate the anchor before candidate replay"
+        );
+        let mut context_ledger = EnergyLedger::default();
+        let mut context_energy = initial_energy;
+        bond_units(
+            &mut growth_context,
+            0,
+            neighbor_index,
+            &catalog,
+            &mut context_ledger,
+            &mut context_energy,
+        )
+        .expect("existing neighboring unit must have a real live bond to the anchor");
+        assert!(
+            !growth_context.bonds.is_empty(),
+            "growth context must contain the existing anchor-neighbor bond"
+        );
+
+        let replay_indices = crate::material_restoration::restore_material(
+            &mut growth_context,
+            &instance,
+            expected,
+            &catalog,
+        )
+        .expect("trial replay should restore before authoritative overlap rejection");
+        let replay_index = *replay_indices.first().expect("replay restores one unit");
+        let first_rejection = crate::construction_runtime::overlapping_unit_indices(
+            &growth_context,
+            &growth_context.units[replay_index],
+            &replay_indices,
+            &catalog,
+        );
+        assert_eq!(
+            first_rejection,
+            vec![neighbor_index],
+            "same pair-valid pose must be rejected by the existing neighboring unit;              anchor={:?}, replay={:?}, neighbor={:?}, anchor_form={:?}, candidate_form={:?}",
+            live_anchor,
+            expected,
+            neighbor_pose,
+            carbon.shape(&catalog).map(|shape| shape.form),
+            nitrogen.shape(&catalog).map(|shape| shape.form),
+        );
+        assert_eq!(
+            context_energy, initial_energy,
+            "free-form growth-context replay must not alter construction energy"
+        );
         let _ = std::fs::remove_dir_all(root);
     }
 
