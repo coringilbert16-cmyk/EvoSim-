@@ -2554,8 +2554,7 @@ impl GeometryLibrary {
                 .push(signature.clone());
         }
 
-        let mut bonded_pair_formation_index =
-            BTreeMap::<(String, String), Vec<String>>::new();
+        let mut bonded_pair_formation_index = BTreeMap::<(String, String), Vec<String>>::new();
         for (signature, formation) in &entries {
             if let Some(key) = bonded_pair_formation_key(formation) {
                 bonded_pair_formation_index
@@ -3598,10 +3597,7 @@ impl GeometryLibrary {
                 .or_default()
                 .push(signature.clone());
             if let Some(key) = bonded_pair_formation_key(formation) {
-                let signatures = self
-                    .bonded_pair_formation_index
-                    .entry(key)
-                    .or_default();
+                let signatures = self.bonded_pair_formation_index.entry(key).or_default();
                 let position = signatures.binary_search(signature).unwrap_or_else(|i| i);
                 signatures.insert(position, signature.clone());
             }
