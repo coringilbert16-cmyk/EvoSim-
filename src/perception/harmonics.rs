@@ -541,8 +541,9 @@ mod tests {
     #[test]
     fn genome_cavity_receives_environmental_material_at_realized_boundary() {
         let catalog = crate::resources::default_catalog();
-        let mut structure = crate::structural_blueprint::test_sealed_cavity_structure(&catalog)
-            .expect("compact physical cavity fixture should realize");
+        let mut structure = crate::initial_organism_constructor::construct_valid(&catalog)
+            .expect("freeform constructor should produce a viable organism")
+            .structure;
         for unit in &mut structure.units {
             unit.placement.x += 500.0;
             unit.placement.y += 500.0;
@@ -589,8 +590,9 @@ mod tests {
     #[test]
     fn harmonic_reception_depends_on_qualifying_realized_cavity() {
         let catalog = crate::resources::default_catalog();
-        let mut structure = crate::structural_blueprint::test_sealed_cavity_structure(&catalog)
-            .expect("compact physical cavity fixture should realize");
+        let mut structure = crate::initial_organism_constructor::construct_valid(&catalog)
+            .expect("freeform constructor should produce a viable organism")
+            .structure;
         let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
             .unwrap()
             .expect("confirmed seed must contain a genome cavity");
@@ -630,8 +632,9 @@ mod tests {
     #[test]
     fn resonance_perception_preserves_environmental_source_location() {
         let catalog = crate::resources::default_catalog();
-        let mut structure = crate::structural_blueprint::test_sealed_cavity_structure(&catalog)
-            .expect("compact physical cavity fixture should realize");
+        let mut structure = crate::initial_organism_constructor::construct_valid(&catalog)
+            .expect("freeform constructor should produce a viable organism")
+            .structure;
         for unit in &mut structure.units {
             unit.placement.x += 500.0;
             unit.placement.y += 500.0;
