@@ -2132,7 +2132,9 @@ mod tests {
             Form::Fluid {
                 nominal_area,
                 boundary: None,
-                arc_boundary: Some(_), ..} if (*nominal_area - expected_area).abs() < 1e-9
+                arc_boundary: Some(_),
+                ..
+            } if (*nominal_area - expected_area).abs() < 1e-9
         ));
         assert!(placement.x.is_finite() && placement.y.is_finite());
         let _ = std::fs::remove_dir_all(root);
