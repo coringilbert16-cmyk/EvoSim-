@@ -1997,3 +1997,13 @@ The unique PR #190 viability changes are being consolidated here:
 - No constructor energy/resource gates or collision tolerances are changed by this port.
 
 PR #190 remains open until this branch verifies the consolidated changes and the README/source state is checked. The current production path uses bounded persisted-Bob formation search rather than the old fixed scaffold, but still retains the Water-plus-three-non-Water acquisition gate; that remaining recipe gate is outside this narrow PR #190 port and remains inconsistent with the approved free-form viability contract.
+
+
+### Exact constructor failure classification — 2026-10-14
+
+The same run's production-constructor failure is now classified from its structured rejection diagnostics:
+- Search exhausted **64/64 states** with 62 still queued and 34 states dropped by the beam budget.
+- Across the attempted attachments: 13,424 raw persisted pair placements, 10,052 pair placements dropped by the candidate cap, 7,368 placement attempts, and **7,368 overlap rejections**. There were zero restoration failures, zero no-contact failures, zero candidate-evaluation failures, zero COMBINE failures, and zero energy failures.
+- The first recorded overlap was a persisted Hydrogen–Phosphorus pair. Live Hydrogen anchor pose `(1.2500, -0.2665, 0)`; stored relative candidate pose `(1.25, -0.166506, -π)`; replayed candidate pose `(2.5000, -0.433013, -π)`. It overlapped existing unit 7, Methane at `(2.0387, 0.1835, 2.0944)`. The logged pair provenance confirms the relative transform was replayed with zero rotation delta.
+- Therefore the observed terminal failure is **growth-context overlap / search ordering**, not restoration, bond contact, COMBINE, or energy. Do not loosen overlap rules. The current beam score prioritizes cycle count, then unit count and bond count; the search does not score how much usable, collision-free growth frontier remains. The next experiment should measure whether beam states are being crowded out before changing that score or its budget.
+- The two new cavity qualification unit tests pass. The legacy realized-cavity/viability tests do not reach their validator: their juvenile seed fixture independently fails at blueprint element 31 after 1,771 attempts, with 271/271 candidates rejected for overlap. Keep that fixture failure separate from the cavity-reference behavior.
