@@ -866,9 +866,11 @@ mod tests {
     ) {
         let genome = crate::genome::initial_genome();
         let catalog = crate::resources::default_catalog();
-        let structure = crate::initial_organism_constructor::construct_valid(&catalog)
-            .expect("freeform constructor should produce a viable organism")
-            .structure;
+        let structure =
+            crate::initial_organism_constructor::sealed_nitrogen_ring_with_external_unit_fixture(
+                &catalog,
+            )
+            .expect("test ring and external bond should be physically realized");
         let organism = crate::state::Organism {
             id: "test".into(),
             developmental_origin: crate::state::Position { x: 0.0, y: 0.0 },
