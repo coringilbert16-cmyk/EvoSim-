@@ -51,8 +51,12 @@ impl GenomeCavity {
         }
     }
 
+    /// A detected cavity is geometrically sufficient only when it is finite,
+    /// has positive area, and has a real boundary. The Carbon-equivalent area
+    /// is diagnostic reference data, not a biological threshold. Functional
+    /// viability is decided by the organism viability contract.
     pub fn qualifies(&self) -> bool {
-        self.area + EPS >= self.minimum_area
+        self.area.is_finite() && self.area > EPS && self.boundary_units.len() >= 3
     }
 
     /// Expose the realized cavity boundary geometry to harmonic reception.
@@ -109,10 +113,10 @@ pub fn minimum_genome_cavity_area(catalog: &[BaseResource]) -> Result<f64, Strin
     Ok(minimum)
 }
 
-/// Analyze the realized physical structure for a sealed cavity large enough
-/// for the established three-Carbon reference. No predefined subset of units
-/// is treated as the genome; the qualifying cavity itself is the physical
-/// genome criterion.
+/// Analyze the realized physical structure for a sealed, positive-area cavity.
+/// The three-Carbon-equivalent capacity is retained as a reference measurement,
+/// not a minimum. No predefined subset of units is treated as the genome; the
+/// physical cavity and the full viability contract determine qualification.
 pub fn analyze_genome_cavity(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
@@ -138,14 +142,15 @@ fn analyze_genome_cavity_in_indices(
     catalog: &[BaseResource],
     candidate_indices: &[usize],
 ) -> Result<Option<GenomeCavity>, String> {
-    let minimum_area = minimum_genome_cavity_area(catalog)?;
+    let capacity_reference_area = minimum_genome_cavity_area(catalog)?;
     let component_set: HashSet<usize> = candidate_indices.iter().copied().collect();
 
     // Interior geometry is the single source of truth for realized planar
     // faces. Do not rebuild the same planar graph here.
     let mut best = None;
     for region in crate::interior_geometry::find_enclosed_regions(structure, catalog) {
-        if region.area + EPS < minimum_area
+        if !region.area.is_finite()
+            || region.area <= EPS
             || region.boundary_units.len() < 3
             || !region
                 .boundary_units
@@ -191,7 +196,7 @@ fn analyze_genome_cavity_in_indices(
         let candidate = GenomeCavity {
             area: region.area,
             boundary_units: region.boundary_units.clone(),
-            minimum_area,
+            minimum_area: capacity_reference_area,
             boundary_segments,
         };
 
@@ -313,6 +318,25 @@ mod tests {
             .abs()
                 < 1e-12
         );
+    }
+
+    #[test]
+    fn carbon_capacity_reference_is_not_a_hard_threshold() {
+        let mut cavity = GenomeCavity::test_fixture(1.0, 100.0);
+        cavity.boundary_units = vec![0, 1, 2];
+        assert!(
+            cavity.qualifies(),
+            "a positive-area cavity with a real boundary must not be rejected by the reference area"
+        );
+    }
+
+    #[test]
+    fn nonfinite_or_nonpositive_cavity_area_does_not_qualify() {
+        for area in [f64::NAN, f64::INFINITY, 0.0, -1.0] {
+            let mut cavity = GenomeCavity::test_fixture(area, 0.0);
+            cavity.boundary_units = vec![0, 1, 2];
+            assert!(!cavity.qualifies(), "area={area}");
+        }
     }
 
     #[test]
