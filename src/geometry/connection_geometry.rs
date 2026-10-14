@@ -108,6 +108,11 @@ pub fn rigid_endpoint_world_point(
         crate::resources::Form::Line { .. } => {
             transform_line_endpoint(shape, vertex, origin_x, origin_y, rotation_radians)
         }
+        crate::resources::Form::Rectangle { width, height }
+            if *height <= *width * 0.1 + 1e-12 =>
+        {
+            transform_line_endpoint(shape, vertex, origin_x, origin_y, rotation_radians)
+        }
         _ => transform_polygon_vertex(shape, vertex, origin_x, origin_y, rotation_radians),
     }
 }
