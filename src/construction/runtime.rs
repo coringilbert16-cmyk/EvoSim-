@@ -2479,18 +2479,6 @@ fn construct_blueprint_bond_driven_internal(
         }
     }
 
-    // Reservations refer to the original staged indices. Remove in descending
-    // order so earlier indices remain stable as entries are consumed.
-    for storage_index in reserved_storage_indices.into_iter().rev() {
-        let Some(storage) = staged_materials.as_mut() else {
-            return Err("construction reserved material without a staged inventory".to_string());
-        };
-        if storage_index >= storage.entries.len() {
-            return Err("reserved construction material disappeared before commit".to_string());
-        }
-        storage.entries.remove(storage_index);
-    }
-
     // All placement, closure-bond, and inventory checks passed. Commit the
     // physical structure, energy accounting, and consumed inventory together.
     *ledger = construction_ledger;
