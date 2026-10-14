@@ -58,14 +58,14 @@ pub fn validate_realized_organism(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::juvenile::confirmed_seed_baseline;
     use crate::resources::default_catalog;
 
     #[test]
     fn viability_does_not_depend_on_a_predefined_piece_count_or_core() {
         let catalog = default_catalog();
-        let blueprint = confirmed_seed_baseline(&catalog).unwrap();
-        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
+        let structure = crate::initial_organism_constructor::construct_valid(&catalog)
+            .expect("freeform constructor should produce a viable organism")
+            .structure;
         validate_realized_organism(
             &structure,
             &catalog,
@@ -77,8 +77,9 @@ mod tests {
     #[test]
     fn unsealed_genome_fails_viability() {
         let catalog = default_catalog();
-        let blueprint = confirmed_seed_baseline(&catalog).unwrap();
-        let mut structure = blueprint.realize(&catalog).unwrap();
+        let mut structure = crate::initial_organism_constructor::construct_valid(&catalog)
+            .expect("freeform constructor should produce a viable organism")
+            .structure;
         structure.bonds.clear();
         assert!(validate_realized_organism(
             &structure,
