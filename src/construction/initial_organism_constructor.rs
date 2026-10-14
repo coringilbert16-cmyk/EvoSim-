@@ -1463,12 +1463,7 @@ pub(crate) fn sealed_nitrogen_ring_fixture(
             if x != 0 && x != 4 && y != 0 && y != 4 {
                 continue;
             }
-            let index = add_unit(
-                &mut structure,
-                nitrogen,
-                (x as f64 - 2.0, y as f64 - 2.0),
-                catalog,
-            )?;
+            let index = add_unit(&mut structure, nitrogen, (x as f64 - 2.0, y as f64 - 2.0), catalog)?;
             grid[y][x] = Some(index);
         }
     }
