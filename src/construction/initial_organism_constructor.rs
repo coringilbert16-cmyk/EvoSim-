@@ -75,9 +75,7 @@ fn placement_frontier_score(
         .iter()
         .enumerate()
         .filter(|(index, _)| *index != anchor_index)
-        .map(|(_, unit)| {
-            (placement.x - unit.placement.x).hypot(placement.y - unit.placement.y)
-        })
+        .map(|(_, unit)| (placement.x - unit.placement.x).hypot(placement.y - unit.placement.y))
         .fold(f64::INFINITY, f64::min)
 }
 
@@ -1470,20 +1468,10 @@ mod tests {
                 .unwrap_or_else(|| panic!("{name} exists in catalog"))
         };
         let mut structure = crate::structure::OrganismStructure::new();
-        let anchor_index = add_unit(
-            &mut structure,
-            resource("Hydrogen"),
-            (0.0, 0.0),
-            &catalog,
-        )
-        .expect("anchor should realize");
-        add_unit(
-            &mut structure,
-            resource("Methane"),
-            (5.0, 0.0),
-            &catalog,
-        )
-        .expect("blocker should realize");
+        let anchor_index = add_unit(&mut structure, resource("Hydrogen"), (0.0, 0.0), &catalog)
+            .expect("anchor should realize");
+        add_unit(&mut structure, resource("Methane"), (5.0, 0.0), &catalog)
+            .expect("blocker should realize");
 
         let farther = Placement {
             x: 10.0,
