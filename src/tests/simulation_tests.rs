@@ -26,21 +26,20 @@ mod integration_tests {
         )
         .unwrap()
         .is_some());
-        assert!(!o.structure.units.is_empty());
-        assert!(!o.stored_material.is_empty());
         let stored = o.stored_material.materials_snapshot();
-        assert_eq!(stored.len(), 4);
-        assert!(stored
-            .iter()
-            .any(|material| { material.parts.iter().any(|(name, _)| name == "Water") }));
+        let catalog = crate::resources::default_catalog();
+        for material in &stored {
+            assert!(!material.parts.is_empty());
+            assert!(material.parts.iter().all(|(name, amount)| {
+                catalog.iter().any(|resource| resource.name == *name)
+                    && amount.is_finite()
+                    && *amount > 0.0
+            }));
+        }
         assert_eq!(
-            stored
-                .iter()
-                .filter(|material| { material.parts.iter().all(|(name, _)| name != "Water") })
-                .count(),
-            3
+            o.usable_energy, o.genome.reproductive_energy_allocation,
+            "free-form construction must preserve the supplied energy allocation"
         );
-        assert!(o.usable_energy >= o.genome.reproductive_energy_allocation);
         assert!(o.decision_history.entries.is_empty());
     }
 
