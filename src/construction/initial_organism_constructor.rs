@@ -1659,6 +1659,9 @@ mod tests {
         library
             .insert(pair, &catalog)
             .expect("pair formation should persist");
+        drop(library);
+        let library = crate::geometry_reference_library::GeometryLibrary::open(&root, &catalog)
+            .expect("persisted Bob library should reopen before replay");
 
         let stored = library
             .formations()
