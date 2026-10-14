@@ -63,9 +63,8 @@ mod tests {
     #[test]
     fn viability_does_not_depend_on_a_predefined_piece_count_or_core() {
         let catalog = default_catalog();
-        let structure = crate::initial_organism_constructor::construct_valid(&catalog)
-            .expect("freeform constructor should produce a viable organism")
-            .structure;
+        let structure = crate::structural_blueprint::test_sealed_cavity_structure(&catalog)
+            .expect("compact physical cavity fixture should realize");
         validate_realized_organism(
             &structure,
             &catalog,
@@ -77,9 +76,8 @@ mod tests {
     #[test]
     fn unsealed_genome_fails_viability() {
         let catalog = default_catalog();
-        let mut structure = crate::initial_organism_constructor::construct_valid(&catalog)
-            .expect("freeform constructor should produce a viable organism")
-            .structure;
+        let mut structure = crate::structural_blueprint::test_sealed_cavity_structure(&catalog)
+            .expect("compact physical cavity fixture should realize");
         structure.bonds.clear();
         assert!(validate_realized_organism(
             &structure,
