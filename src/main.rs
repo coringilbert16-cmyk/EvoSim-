@@ -49,8 +49,6 @@ mod geometry_server;
 mod initial_organism_constructor;
 #[path = "geometry/interior_geometry.rs"]
 mod interior_geometry;
-#[path = "organism/juvenile.rs"]
-mod juvenile;
 #[path = "geometry/organism_geometry.rs"]
 mod organism_geometry;
 #[path = "organism/viability.rs"]
