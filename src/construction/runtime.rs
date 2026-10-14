@@ -2447,6 +2447,33 @@ fn construct_blueprint_bond_driven_internal(
         }
     }
 
+    // Inventory ownership changes only after the complete structure and every
+    // declared connection have succeeded. Until this point, stored instances
+    // are borrowed by index and cloned for trial restoration, so every failure
+    // above leaves the caller's inventory, ledger, and energy untouched.
+    if let Some(storage) = available_materials.as_deref_mut() {
+        let mut consumed_indices = reserved_storage_indices.clone();
+        consumed_indices.sort_unstable();
+        consumed_indices.dedup();
+        if consumed_indices.len() != reserved_storage_indices.len() {
+            return Err("construction reserved the same stored material more than once".to_string());
+        }
+        if consumed_indices.iter().any(|&index| {
+            !matches!(
+                storage.entries.get(index),
+                Some(crate::material_storage::StoredMaterial::Physical(instance))
+                    if instance.is_realized()
+            )
+        }) {
+            return Err("reserved construction material changed before commit".to_string());
+        }
+        // Remove highest indices first: swap_remove cannot invalidate any
+        // lower reserved index that remains to be consumed.
+        for index in consumed_indices.into_iter().rev() {
+            storage.entries.swap_remove(index);
+        }
+    }
+
     *ledger = construction_ledger;
     *energy = remaining_energy;
     Ok((structure, total_heat))
