@@ -358,7 +358,8 @@ pub(crate) fn test_sealed_cavity_structure(
         .ok_or_else(|| "test fixture requires polygonal Carbon geometry".to_string())?;
     let sides = 6usize;
     let spacing = 3.0_f64.sqrt() * carbon_radius;
-    let ring_radius = spacing / (2.0 * (std::f64::consts::PI / sides as f64).sin());
+    let ring_radius =
+        spacing / (2.0 * (std::f64::consts::PI / sides as f64).sin());
     let mut elements = Vec::with_capacity(sides + 1);
     for index in 0..sides {
         let angle = std::f64::consts::TAU * index as f64 / sides as f64;
