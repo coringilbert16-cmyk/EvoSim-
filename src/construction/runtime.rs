@@ -2461,7 +2461,9 @@ fn construct_blueprint_bond_driven_internal(
         consumed_indices.sort_unstable();
         consumed_indices.dedup();
         if consumed_indices.len() != reserved_storage_indices.len() {
-            return Err("construction reserved the same stored material more than once".to_string());
+            return Err(
+                "construction reserved the same stored material more than once".to_string(),
+            );
         }
         if consumed_indices.iter().any(|&index| {
             !matches!(
