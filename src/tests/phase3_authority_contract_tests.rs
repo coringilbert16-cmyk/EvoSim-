@@ -8,8 +8,9 @@ mod tests {
     #[test]
     fn decomposition_release_returns_realized_material_to_environment() {
         let catalog = default_catalog();
-        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
-        let mut structure = blueprint.realize(&catalog).unwrap();
+        let mut structure = crate::initial_organism_constructor::construct_valid(&catalog)
+            .expect("freeform constructor should produce a viable organism")
+            .structure;
         assert!(!structure.bonds.is_empty());
         structure.bonds.truncate(1);
         let expected_units = structure.units.len();
