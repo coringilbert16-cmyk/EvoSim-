@@ -56,84 +56,6 @@ enum PersistedAttachmentFailure {
     },
 }
 
-fn select_diverse_placements(placements: Vec<Placement>, limit: usize) -> Vec<Placement> {
-    if placements.len() <= limit || limit == 0 {
-        return if limit == 0 { Vec::new() } else { placements };
-    }
-
-    let min_x = placements.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
-    let max_x = placements
-        .iter()
-        .map(|p| p.x)
-        .fold(f64::NEG_INFINITY, f64::max);
-    let min_y = placements.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
-    let max_y = placements
-        .iter()
-        .map(|p| p.y)
-        .fold(f64::NEG_INFINITY, f64::max);
-    let spatial_scale = (max_x - min_x).max(max_y - min_y).max(1e-9);
-    let mean_x = placements.iter().map(|p| p.x).sum::<f64>() / placements.len() as f64;
-    let mean_y = placements.iter().map(|p| p.y).sum::<f64>() / placements.len() as f64;
-    let mean_sin = placements
-        .iter()
-        .map(|p| p.rotation_radians.sin())
-        .sum::<f64>();
-    let mean_cos = placements
-        .iter()
-        .map(|p| p.rotation_radians.cos())
-        .sum::<f64>();
-    let mean_rotation = mean_sin.atan2(mean_cos);
-
-    let distance_squared = |a: Placement, b: Placement| {
-        let dx = (a.x - b.x) / spatial_scale;
-        let dy = (a.y - b.y) / spatial_scale;
-        let angle = (a.rotation_radians - b.rotation_radians + std::f64::consts::PI)
-            .rem_euclid(std::f64::consts::TAU)
-            - std::f64::consts::PI;
-        dx * dx + dy * dy + (angle / std::f64::consts::PI).powi(2)
-    };
-    let centroid = Placement {
-        x: mean_x,
-        y: mean_y,
-        rotation_radians: mean_rotation,
-    };
-    let first_index = placements
-        .iter()
-        .enumerate()
-        .max_by(|(_, a), (_, b)| {
-            distance_squared(**a, centroid).total_cmp(&distance_squared(**b, centroid))
-        })
-        .map(|(index, _)| index)
-        .expect("non-empty placement list has a first candidate");
-
-    let mut selected_indices = vec![first_index];
-    while selected_indices.len() < limit {
-        let next_index = placements
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| !selected_indices.contains(index))
-            .max_by(|(_, a), (_, b)| {
-                let min_a = selected_indices
-                    .iter()
-                    .map(|&selected| distance_squared(**a, placements[selected]))
-                    .fold(f64::INFINITY, f64::min);
-                let min_b = selected_indices
-                    .iter()
-                    .map(|&selected| distance_squared(**b, placements[selected]))
-                    .fold(f64::INFINITY, f64::min);
-                min_a.total_cmp(&min_b)
-            })
-            .map(|(index, _)| index)
-            .expect("candidate count exceeds the selection limit");
-        selected_indices.push(next_index);
-    }
-
-    selected_indices
-        .into_iter()
-        .map(|index| placements[index])
-        .collect()
-}
-
 fn placement_signature(placement: Placement) -> String {
     format!(
         "{:.3},{:.3},{:.4}",
@@ -155,6 +77,26 @@ fn placement_frontier_score(
         .filter(|(index, _)| *index != anchor_index)
         .map(|(_, unit)| (placement.x - unit.placement.x).hypot(placement.y - unit.placement.y))
         .fold(f64::INFINITY, f64::min)
+}
+
+
+fn rank_candidate_placements(
+    structure: &crate::structure::OrganismStructure,
+    anchor_index: usize,
+    mut placements: Vec<Placement>,
+    pair_placement_signatures: &std::collections::BTreeSet<String>,
+) -> Vec<Placement> {
+    placements.sort_by(|a, b| {
+        placement_frontier_score(structure, anchor_index, *b)
+            .total_cmp(&placement_frontier_score(structure, anchor_index, *a))
+            .then_with(|| {
+                let a_is_pair = pair_placement_signatures.contains(&placement_signature(*a));
+                let b_is_pair = pair_placement_signatures.contains(&placement_signature(*b));
+                b_is_pair.cmp(&a_is_pair)
+            })
+            .then_with(|| placement_signature(*a).cmp(&placement_signature(*b)))
+    });
+    placements
 }
 
 /// Replay two-piece formations already stored in Bob as local growth proposals.
@@ -356,16 +298,12 @@ fn try_persisted_bob_attachments(
     }
     // Prefer suggestions with more clearance from the existing structure,
     // then exact persisted formation replays over edge-family seeds.
-    candidate_placements.sort_by(|a, b| {
-        placement_frontier_score(structure, anchor_index, *b)
-            .total_cmp(&placement_frontier_score(structure, anchor_index, *a))
-            .then_with(|| {
-                let a_is_pair = pair_placement_signatures.contains(&placement_signature(*a));
-                let b_is_pair = pair_placement_signatures.contains(&placement_signature(*b));
-                b_is_pair.cmp(&a_is_pair)
-            })
-            .then_with(|| placement_signature(*a).cmp(&placement_signature(*b)))
-    });
+    candidate_placements = rank_candidate_placements(
+        structure,
+        anchor_index,
+        candidate_placements,
+        &pair_placement_signatures,
+    );
     let mut placement_attempts = 0usize;
     let mut last_overlap_rejection = None;
 
@@ -1520,37 +1458,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pair_pose_selection_preserves_geometric_diversity() {
-        let placements = (0..6)
-            .map(|index| Placement {
-                x: index as f64 * 0.1,
-                y: 0.0,
-                rotation_radians: 0.0,
-            })
-            .chain((0..6).map(|index| Placement {
-                x: 10.0 + index as f64 * 0.1,
-                y: 0.0,
-                rotation_radians: std::f64::consts::PI,
-            }))
-            .collect::<Vec<_>>();
+    fn bob_candidate_ranking_prefers_clear_frontier_then_exact_pair_replay() {
+        let catalog = crate::resources::default_catalog();
+        let resource = |name: &str| {
+            catalog
+                .iter()
+                .find(|resource| resource.name == name)
+                .unwrap_or_else(|| panic!("{name} exists in catalog"))
+        };
+        let mut structure = crate::structure::OrganismStructure::new();
+        let anchor_index = add_unit(&mut structure, resource("Hydrogen"), (0.0, 0.0), &catalog)
+            .expect("anchor should realize");
+        add_unit(&mut structure, resource("Methane"), (5.0, 0.0), &catalog)
+            .expect("blocker should realize");
 
-        let selected = select_diverse_placements(placements.clone(), 6);
-        let repeated = select_diverse_placements(placements, 6);
-
-        assert_eq!(selected.len(), 6);
-        assert_eq!(selected, repeated);
-        let min_x = selected
-            .iter()
-            .map(|placement| placement.x)
-            .fold(f64::INFINITY, f64::min);
-        let max_x = selected
-            .iter()
-            .map(|placement| placement.x)
-            .fold(f64::NEG_INFINITY, f64::max);
-        assert!(
-            max_x - min_x > 10.0,
-            "selection should retain candidates from both spatial clusters"
+        let farther = Placement { x: 10.0, y: 0.0, rotation_radians: 0.0 };
+        let nearer = Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 };
+        let ranked = rank_candidate_placements(
+            &structure,
+            anchor_index,
+            vec![nearer, farther],
+            &std::collections::BTreeSet::new(),
         );
+        assert_eq!(ranked[0], farther, "greater clearance should rank first");
+
+        let pair_replay = Placement { x: 10.0, y: 0.0, rotation_radians: std::f64::consts::PI };
+        let edge_seed = Placement { x: 10.0, y: 0.0, rotation_radians: 0.0 };
+        let pair_signatures = [placement_signature(pair_replay)].into_iter().collect();
+        let ranked = rank_candidate_placements(
+            &structure,
+            anchor_index,
+            vec![edge_seed, pair_replay],
+            &pair_signatures,
+        );
+        assert_eq!(ranked[0], pair_replay, "exact pair replay wins a score tie");
     }
 
     #[test]
