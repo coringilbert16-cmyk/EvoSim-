@@ -379,7 +379,9 @@ mod tests {
                 .expect("test ring should be physically realized and bonded");
         structure.bonds.clear();
         assert!(
-            analyze_genome_cavity(&structure, &catalog).unwrap().is_none(),
+            analyze_genome_cavity(&structure, &catalog)
+                .unwrap()
+                .is_none(),
             "geometry alone must not qualify an unbonded ring as a genome"
         );
     }
