@@ -349,7 +349,11 @@ fn try_persisted_bob_attachments(
 
     let mut successful = Vec::new();
     for suggestion in &candidate_placements {
-        // Exhaust the ranked persisted suggestions for this construction need.
+        // Validate suggestions in rank order. Four successful branches provide
+        // a bounded frontier; rejected candidates never consume that branch cap.
+        if successful.len() >= 4 {
+            break;
+        }
         placement_attempts += 1;
         let mut trial = structure.clone();
         let indices = match crate::material_restoration::restore_material(
