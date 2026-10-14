@@ -2209,10 +2209,7 @@ mod tests {
             }
         }
 
-        assert_eq!(
-            adjacent_pairs, 16,
-            "ring perimeter should have 16 joins"
-        );
+        assert_eq!(adjacent_pairs, 16, "ring perimeter should have 16 joins");
         assert_eq!(
             structure.connected_components().len(),
             1,
@@ -2222,10 +2219,7 @@ mod tests {
         let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
             .expect("cavity analysis should complete")
             .expect("nitrogen ring should enclose a candidate genome cavity");
-        assert!(
-            cavity.qualifies(),
-            "cavity should meet the size/boundary contract"
-        );
+        assert!(cavity.qualifies(), "cavity should meet the size/boundary contract");
         assert!(
             (cavity.area - 9.0).abs() < 1e-6,
             "expected 3x3 interior area 9.0, got {}",
@@ -2246,4 +2240,5 @@ mod tests {
             "ring-only seed must not expose its genome cavity as processing space"
         );
     }
+
 }
