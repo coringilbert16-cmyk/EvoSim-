@@ -1443,6 +1443,53 @@ pub(crate) fn construct_valid_with_energy(
     )
 }
 
+/// Build a realized, physically bonded cavity fixture without invoking the
+/// production constructor. Tests of cavity, viability rejection, and boundary
+/// behavior must not fail merely because startup construction is currently
+/// unable to find a viable organism.
+#[cfg(test)]
+pub(crate) fn sealed_nitrogen_ring_fixture(
+    catalog: &[BaseResource],
+) -> Result<crate::structure::OrganismStructure, String> {
+    let nitrogen = catalog
+        .iter()
+        .find(|resource| resource.name == "Nitrogen")
+        .ok_or_else(|| "catalog has no Nitrogen resource".to_string())?;
+    let mut structure = crate::structure::OrganismStructure::new();
+    let mut grid = [[None; 5]; 5];
+
+    for y in 0..5 {
+        for x in 0..5 {
+            if x != 0 && x != 4 && y != 0 && y != 4 {
+                continue;
+            }
+            let index = add_unit(
+                &mut structure,
+                nitrogen,
+                (x as f64 - 2.0, y as f64 - 2.0),
+                catalog,
+            )?;
+            grid[y][x] = Some(index);
+        }
+    }
+
+    let mut ledger = EnergyLedger::default();
+    let mut energy = 1_000_000.0;
+    for y in 0..5 {
+        for x in 0..5 {
+            let Some(a) = grid[y][x] else { continue };
+            for (nx, ny) in [(x + 1, y), (x, y + 1)] {
+                if nx >= 5 || ny >= 5 {
+                    continue;
+                }
+                let Some(b) = grid[ny][nx] else { continue };
+                bond_units(&mut structure, a, b, catalog, &mut ledger, &mut energy)?;
+            }
+        }
+    }
+    Ok(structure)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
