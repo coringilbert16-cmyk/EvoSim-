@@ -1,13 +1,16 @@
 name: Rust
 
-# CI trigger: validate main pushes and every pull request targeting main.
+# CI trigger: validate main, the active constructor branch, and PRs targeting integration.
+# The explicit constructor-branch push trigger makes focused replay regressions runnable
+# even when PR workflow dispatch does not produce a new run for a connector-created commit.
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'refactor/constructor-strip-2026-10-12']
   pull_request:
-    # Also validate stacked fix branches against their parent fix branch.
+    # Validate the integration target and stacked fix branches.
     branches: [main, integration/unified-source-and-catalogue, 'fix/**']
+  workflow_dispatch:
 
 permissions:
   contents: read
