@@ -396,31 +396,35 @@ fn try_persisted_bob_attachments(
                 .first()
                 .map(|part| part.0.as_str())
                 .unwrap_or("unknown");
-            let pair_provenance = if source == "pair-formation" {
-                persisted_pair_pose_provenance(
-                    anchor_material,
-                    anchor.placement,
-                    resource,
-                    candidate_pose,
-                    library,
+            last_overlap_rejection.get_or_insert_with(|| {
+                // Only the first overlap is retained as a diagnostic, so do not
+                // rescan Bob's formations for provenance on subsequent rejections.
+                let pair_provenance = if source == "pair-formation" {
+                    persisted_pair_pose_provenance(
+                        anchor_material,
+                        anchor.placement,
+                        resource,
+                        candidate_pose,
+                        library,
+                    )
+                } else {
+                    None
+                };
+                format!(
+                    "source={source}; anchor={anchor_index}:{anchor_material}@({:.4},{:.4},{:.4}); candidate={}:{}@({:.4},{:.4},{:.4}); overlaps={existing_unit_index}:{existing_material}@({:.4},{:.4},{:.4}); pair_provenance={pair_provenance:?}",
+                    anchor.placement.x,
+                    anchor.placement.y,
+                    anchor.placement.rotation_radians,
+                    resource.name,
+                    candidate_unit_index,
+                    candidate_pose.x,
+                    candidate_pose.y,
+                    candidate_pose.rotation_radians,
+                    existing_pose.x,
+                    existing_pose.y,
+                    existing_pose.rotation_radians,
                 )
-            } else {
-                None
-            };
-            last_overlap_rejection.get_or_insert_with(|| format!(
-                "source={source}; anchor={anchor_index}:{anchor_material}@({:.4},{:.4},{:.4}); candidate={}:{}@({:.4},{:.4},{:.4}); overlaps={existing_unit_index}:{existing_material}@({:.4},{:.4},{:.4}); pair_provenance={pair_provenance:?}",
-                anchor.placement.x,
-                anchor.placement.y,
-                anchor.placement.rotation_radians,
-                resource.name,
-                candidate_unit_index,
-                candidate_pose.x,
-                candidate_pose.y,
-                candidate_pose.rotation_radians,
-                existing_pose.x,
-                existing_pose.y,
-                existing_pose.rotation_radians,
-            ));
+            });
             continue;
         }
 
