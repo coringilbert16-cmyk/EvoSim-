@@ -899,8 +899,10 @@ fn construct_persisted_bob_structure(
                                     return Ok(ValidConstruction {
                                         structure: next.structure,
                                         energy: next.energy,
-                                        acquired_resource_placements: qualification.acquired_resource_placements,
-                                        acquired_resource_shapes: qualification.acquired_resource_shapes,
+                                        acquired_resource_placements: qualification
+                                            .acquired_resource_placements,
+                                        acquired_resource_shapes: qualification
+                                            .acquired_resource_shapes,
                                         fluid_geometry_status: qualification.fluid_geometry_status,
                                     });
                                 }
