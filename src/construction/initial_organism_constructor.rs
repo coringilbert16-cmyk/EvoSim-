@@ -141,6 +141,22 @@ fn placement_signature(placement: Placement) -> String {
     )
 }
 
+/// Rank suggestions by clearance from the nearest occupied non-anchor unit.
+/// This ranks candidates only; live geometry and bond validation stay authoritative.
+fn placement_frontier_score(
+    structure: &crate::structure::OrganismStructure,
+    anchor_index: usize,
+    placement: Placement,
+) -> f64 {
+    structure
+        .units
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| *index != anchor_index)
+        .map(|(_, unit)| (placement.x - unit.placement.x).hypot(placement.y - unit.placement.y))
+        .fold(f64::INFINITY, f64::min)
+}
+
 /// Replay two-piece formations already stored in Bob as local growth proposals.
 /// The stored anchor constituent is rigidly aligned to the live anchor; the
 /// other constituent's recorded relative pose is preserved exactly.
@@ -307,17 +323,15 @@ fn try_persisted_bob_attachments(
     let mut candidate_placements =
         persisted_pair_formation_placements(anchor_material, anchor.placement, resource, library);
     let raw_pair_placements = candidate_placements.len();
-    // Keep persisted pair proposals diverse and bounded. Do not pre-reject
-    // proposals using a separate geometry path: restoration followed by the
-    // authoritative live overlap/contact/COMBINE checks decides validity.
-    candidate_placements = select_diverse_placements(candidate_placements, 6);
-    let pair_placements_dropped_by_cap =
-        raw_pair_placements.saturating_sub(candidate_placements.len());
-    let mut seen_placements = candidate_placements
+    // Keep every distinct persisted pair proposal; do not discard lower-ranked
+    // Bob knowledge before the authoritative live checks.
+    let pair_placements_dropped_by_cap = 0usize;
+    let pair_placement_signatures = candidate_placements
         .iter()
         .copied()
         .map(placement_signature)
         .collect::<std::collections::BTreeSet<_>>();
+    let mut seen_placements = pair_placement_signatures.clone();
     let mut edge_placements_examined = 0usize;
     let mut edge_placements_added = 0usize;
     let mut duplicate_placements = 0usize;
@@ -327,9 +341,6 @@ fn try_persisted_bob_attachments(
         resource,
         catalog,
     ) {
-        if candidate_placements.len() >= 12 {
-            break;
-        }
         edge_placements_examined += 1;
         if !seen_placements.insert(placement_signature(suggestion.placement)) {
             duplicate_placements += 1;
@@ -343,6 +354,18 @@ fn try_persisted_bob_attachments(
     {
         return Err(PersistedAttachmentFailure::CoverageMiss);
     }
+    // Prefer suggestions with more clearance from the existing structure,
+    // then exact persisted formation replays over edge-family seeds.
+    candidate_placements.sort_by(|a, b| {
+        placement_frontier_score(structure, anchor_index, *b)
+            .total_cmp(&placement_frontier_score(structure, anchor_index, *a))
+            .then_with(|| {
+                let a_is_pair = pair_placement_signatures.contains(&placement_signature(*a));
+                let b_is_pair = pair_placement_signatures.contains(&placement_signature(*b));
+                b_is_pair.cmp(&a_is_pair)
+            })
+            .then_with(|| placement_signature(*a).cmp(&placement_signature(*b)))
+    });
     let mut placement_attempts = 0usize;
     let mut last_overlap_rejection = None;
 
@@ -388,12 +411,8 @@ fn try_persisted_bob_attachments(
     };
 
     let mut successful = Vec::new();
-    for (suggestion_index, suggestion) in candidate_placements.iter().enumerate() {
-        // Bound both successful branches and rejected attempts; every returned
-        // pose is still live-validated.
-        if successful.len() >= 4 || suggestions_examined >= 12 {
-            break;
-        }
+    for suggestion in &candidate_placements {
+        // Exhaust the ranked persisted suggestions for this construction need.
         placement_attempts += 1;
         let mut trial = structure.clone();
         let indices = match crate::material_restoration::restore_material(
@@ -421,7 +440,9 @@ fn try_persisted_bob_attachments(
         });
         if let Some((candidate_unit_index, existing_unit_index)) = overlap {
             overlap_rejections += 1;
-            let source = if suggestion_index < pair_placements_selected {
+            let source = if pair_placement_signatures
+                .contains(&placement_signature(*suggestion))
+            {
                 pair_overlap_rejections += 1;
                 "pair-formation"
             } else {
@@ -896,16 +917,8 @@ fn construct_persisted_bob_structure(
         let mut children = Vec::new();
         'anchors: for anchor_index in 0..state.structure.units.len() {
             anchors_considered_total += 1;
-            if placement_queries_examined >= 12 {
-                placement_query_budget_exhaustions += 1;
-                break;
-            }
-            for resource in &structural_resources {
-                if placement_queries_examined >= 12 {
-                    placement_query_budget_exhaustions += 1;
-                    break 'anchors;
-                }
-                placement_queries_total += 1;
+remove anchor query cap            for resource in &structural_resources {
+remove resource query cap                placement_queries_total += 1;
                 match try_persisted_bob_attachments(
                     &state.structure,
                     anchor_index,
@@ -917,10 +930,7 @@ fn construct_persisted_bob_structure(
                 ) {
                     Ok(attachments) => {
                         for attachment in attachments {
-                            if candidates_examined >= 12 {
-                                break 'anchors;
-                            }
-                            candidate_states_generated_total += 1;
+remove child cap                            candidate_states_generated_total += 1;
                             debug_assert!(
                                 attachment.new_unit_index < attachment.structure.units.len()
                             );
@@ -1034,8 +1044,15 @@ fn construct_persisted_bob_structure(
         }
     }
 
+    let stop_reason = if !queue.is_empty() && explored_states >= state_budget {
+        "search budget exhausted before the queue was empty"
+    } else if queue_budget_drops > 0 {
+        "search ended with states discarded by the explicit beam budget"
+    } else {
+        "all explored states exhausted without a qualifying cavity"
+    };
     Err(format!(
-        "persisted Bob constructor found no qualifying cavity within {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, last_beam_cutoff_score={last_beam_cutoff_score:?}, beam_dropped_score_counts={beam_dropped_score_counts:?}, beam_truncation_tie_drops={beam_truncation_tie_drops}, placement_queries_total={placement_queries_total}, placement_query_budget_exhaustions={placement_query_budget_exhaustions}, anchors_considered_total={anchors_considered_total}, candidate_states_generated_total={candidate_states_generated_total}, raw_pair_placements_total={raw_pair_placements_total}, pair_placements_dropped_by_cap_total={pair_placements_dropped_by_cap_total}, edge_placements_examined_total={edge_placements_examined_total}, edge_placements_added_total={edge_placements_added_total}, duplicate_placements_total={duplicate_placements_total}, placement_attempts_total={placement_attempts_total}, last_overlap_rejection={last_overlap_rejection:?}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, pair_overlap_rejections={pair_overlap_rejections}, edge_overlap_rejections={edge_overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, energy_rejections={energy_rejections}, last_combine_rejection={last_combine_rejection:?}, rigid_contact_records={contact_records}",
+        "persisted Bob constructor: {stop_reason}; explored {explored_states}/{state_budget} states; queued={}, queue_budget_drops={queue_budget_drops}, last_beam_cutoff_score={last_beam_cutoff_score:?}, beam_dropped_score_counts={beam_dropped_score_counts:?}, beam_truncation_tie_drops={beam_truncation_tie_drops}, placement_queries_total={placement_queries_total}, placement_query_budget_exhaustions={placement_query_budget_exhaustions}, anchors_considered_total={anchors_considered_total}, candidate_states_generated_total={candidate_states_generated_total}, raw_pair_placements_total={raw_pair_placements_total}, pair_placements_dropped_by_cap_total={pair_placements_dropped_by_cap_total}, edge_placements_examined_total={edge_placements_examined_total}, edge_placements_added_total={edge_placements_added_total}, duplicate_placements_total={duplicate_placements_total}, placement_attempts_total={placement_attempts_total}, last_overlap_rejection={last_overlap_rejection:?}, coverage_misses={coverage_misses}, rejected_placements={rejected_placements}, restoration_failures={restoration_failures}, overlap_rejections={overlap_rejections}, pair_overlap_rejections={pair_overlap_rejections}, edge_overlap_rejections={edge_overlap_rejections}, no_bond_contact={no_bond_contact}, evaluation_rejections={evaluation_rejections}, combine_rejections={combine_rejections}, energy_rejections={energy_rejections}, last_combine_rejection={last_combine_rejection:?}, rigid_contact_records={contact_records}",
         queue.len()
     ))
 }
