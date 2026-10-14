@@ -357,9 +357,8 @@ mod tests {
     #[test]
     fn realized_structure_cavity_qualifies_without_a_predefined_core() {
         let catalog = default_catalog();
-        let structure =
-            crate::initial_organism_constructor::sealed_nitrogen_ring_fixture(&catalog)
-                .expect("test ring should be physically realized and bonded");
+        let structure = crate::initial_organism_constructor::sealed_nitrogen_ring_fixture(&catalog)
+            .expect("test ring should be physically realized and bonded");
         let cavity = analyze_genome_cavity(&structure, &catalog)
             .unwrap()
             .expect("realized structure must contain a sealed qualifying cavity");
@@ -380,7 +379,9 @@ mod tests {
                 .expect("test ring should be physically realized and bonded");
         structure.bonds.clear();
         assert!(
-            analyze_genome_cavity(&structure, &catalog).unwrap().is_none(),
+            analyze_genome_cavity(&structure, &catalog)
+                .unwrap()
+                .is_none(),
             "geometry alone must not qualify an unbonded ring as a genome"
         );
     }
