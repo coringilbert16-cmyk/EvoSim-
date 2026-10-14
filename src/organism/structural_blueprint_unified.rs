@@ -394,4 +394,3 @@ pub(crate) fn test_sealed_cavity_structure(
 
     StructuralBlueprint::with_anchor_elements(elements, connections, vec![0]).realize(catalog)
 }
-
