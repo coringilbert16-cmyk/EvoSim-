@@ -8,8 +8,9 @@ mod tests {
     #[test]
     fn decomposition_release_returns_realized_material_to_environment() {
         let catalog = default_catalog();
-        let mut structure = crate::structural_blueprint::test_sealed_cavity_structure(&catalog)
-            .expect("compact physical cavity fixture should realize");
+        let mut structure = crate::initial_organism_constructor::construct_valid(&catalog)
+            .expect("freeform constructor should produce a viable organism")
+            .structure;
         assert!(!structure.bonds.is_empty());
         structure.bonds.truncate(1);
         let expected_units = structure.units.len();
