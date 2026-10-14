@@ -34,6 +34,12 @@ enum ConstructionQualificationFailure {
     NoAccessibleInterior,
 }
 
+struct QualifiedCavity {
+    acquired_resource_placements: Vec<(String, Placement)>,
+    acquired_resource_shapes: Vec<(String, Shape)>,
+    fluid_geometry_status: FluidGeometryStatus,
+}
+
 struct PersistedAttachment {
     structure: crate::structure::OrganismStructure,
     new_unit_index: usize,
@@ -889,17 +895,13 @@ fn construct_persisted_bob_structure(
                                 acquisition_candidates,
                                 library,
                             ) {
-                                Ok((
-                                    acquired_resource_placements,
-                                    acquired_resource_shapes,
-                                    fluid_geometry_status,
-                                )) => {
+                                Ok(qualification) => {
                                     return Ok(ValidConstruction {
                                         structure: next.structure,
                                         energy: next.energy,
-                                        acquired_resource_placements,
-                                        acquired_resource_shapes,
-                                        fluid_geometry_status,
+                                        acquired_resource_placements: qualification.acquired_resource_placements,
+                                        acquired_resource_shapes: qualification.acquired_resource_shapes,
+                                        fluid_geometry_status: qualification.fluid_geometry_status,
                                     });
                                 }
                                 Err(ConstructionQualificationFailure::CavityAnalysisError) => {
@@ -1364,14 +1366,7 @@ fn valid_construction(
     catalog: &[BaseResource],
     acquisition_candidates: &[&BaseResource],
     bob_library: &crate::geometry_reference_library::GeometryLibrary,
-) -> Result<
-    (
-        Vec<(String, Placement)>,
-        Vec<(String, Shape)>,
-        FluidGeometryStatus,
-    ),
-    ConstructionQualificationFailure,
-> {
+) -> Result<QualifiedCavity, ConstructionQualificationFailure> {
     let cavity = crate::cavity::analyze_genome_cavity(structure, catalog)
         .map_err(|_| ConstructionQualificationFailure::CavityAnalysisError)?
         .ok_or(ConstructionQualificationFailure::NoCavity)?;
@@ -1415,7 +1410,11 @@ fn valid_construction(
         }
     }
 
-    Ok((acquired, acquired_shapes, fluid_geometry_status))
+    Ok(QualifiedCavity {
+        acquired_resource_placements: acquired,
+        acquired_resource_shapes: acquired_shapes,
+        fluid_geometry_status,
+    })
 }
 
 #[cfg(test)]
