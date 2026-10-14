@@ -61,31 +61,41 @@ mod tests {
     use crate::resources::default_catalog;
 
     #[test]
-    fn viability_does_not_depend_on_a_predefined_piece_count_or_core() {
+    fn cavity_contract_does_not_depend_on_a_predefined_piece_count_or_core() {
         let catalog = default_catalog();
-        let structure = crate::initial_organism_constructor::construct_valid(&catalog)
-            .expect("freeform constructor should produce a viable organism")
-            .structure;
+        let structure =
+            crate::initial_organism_constructor::sealed_nitrogen_ring_fixture(&catalog)
+                .expect("test ring should be physically realized and bonded");
         validate_realized_organism(
             &structure,
             &catalog,
-            OrganismViabilityRequirements::default(),
+            OrganismViabilityRequirements {
+                require_sealed_genome_cavity: true,
+                // This test isolates the cavity contract. Extra processing
+                // structure is a separate viability requirement.
+                require_extra_structure: false,
+            },
         )
-        .unwrap();
+        .expect("any realized topology meeting the cavity contract should qualify");
     }
 
     #[test]
     fn unsealed_genome_fails_viability() {
         let catalog = default_catalog();
-        let mut structure = crate::initial_organism_constructor::construct_valid(&catalog)
-            .expect("freeform constructor should produce a viable organism")
-            .structure;
-        structure.bonds.clear();
-        assert!(validate_realized_organism(
+        let mut structure =
+            crate::initial_organism_constructor::sealed_nitrogen_ring_fixture(&catalog)
+                .expect("test ring should be physically realized and bonded");
+        structure.bonds.pop();
+        let result = validate_realized_organism(
             &structure,
             &catalog,
             OrganismViabilityRequirements::default(),
-        )
-        .is_err());
+        );
+        assert!(
+            result
+                .as_deref()
+                .is_err_and(|error| error.contains("genome cavity is not sealed")),
+            "a single missing perimeter bond must invalidate the genome cavity; result={result:?}"
+        );
     }
 }
