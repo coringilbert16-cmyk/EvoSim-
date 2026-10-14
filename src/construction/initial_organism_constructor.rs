@@ -75,7 +75,9 @@ fn placement_frontier_score(
         .iter()
         .enumerate()
         .filter(|(index, _)| *index != anchor_index)
-        .map(|(_, unit)| (placement.x - unit.placement.x).hypot(placement.y - unit.placement.y))
+        .map(|(_, unit)| {
+            (placement.x - unit.placement.x).hypot(placement.y - unit.placement.y)
+        })
         .fold(f64::INFINITY, f64::min)
 }
 
