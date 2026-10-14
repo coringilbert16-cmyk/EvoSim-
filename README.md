@@ -1983,3 +1983,17 @@ Experiment diagnostics:
 Added `persisted_pair_replay_preserves_relative_pose_at_a_rotated_live_anchor` to the active constructor branch. The test persists a Bob-generated two-piece Carbon–Nitrogen formation in an isolated temporary library, replays the saved relative pose against a rotated live anchor, checks world-space restoration and non-overlap, and requires a real live bond while construction energy and the energy ledger remain unchanged. It then places a valid bonded neighboring unit in the growth context and replays the same candidate pose, requiring the first overlap report to identify that neighbor and printing the involved poses and shape forms for diagnosis. Collision rules are unchanged.
 
 The focused test is now an explicit CI step before the full Rust suite. **Verification is pending:** the latest available completed CI run predates this regression, and the GitHub connection did not provide a run for the current head. Do not treat the test as passing until a run on the exact commit reports its result. The #190 cavity-capacity and accessible-processing-space changes remain unported until this geometry regression is verified, as required by the construction sequence.
+
+
+### Constructor replay regression and viability consolidation — 2026-10-14
+
+The exact-head CI run [38555835930](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38555835930), commit `b5305e6a195dcf6be4a56d0338d26763551b8b85`, passed the dedicated `persisted_pair_replay_preserves_relative_pose_at_a_rotated_live_anchor` regression. It restored a persisted two-piece formation at a rotated live anchor, preserved the relative pose, passed overlap validation, formed the live bond without changing construction energy, and rejected the same candidate when an existing bonded neighbor occupied the candidate location. Collision rules were not relaxed.
+
+The run's full Rust suite reported **367 passed, 69 failed, 1 ignored**; strict Clippy failed with 67 lint errors. Failures include constructor/cavity/viability and many simulation tests cascading from startup construction failure, plus separate geometry, storage, and chemistry assertions. Treat this as a broader baseline failure to triage, not a failure of the focused pair-replay regression. Do not claim the constructor works end to end.
+
+The unique PR #190 viability changes are being consolidated here:
+- The Carbon-equivalent cavity area is a reference metric, not a hard biological minimum. Cavity candidates must still have finite positive area and a real boundary of at least three units.
+- Viability requires positive-area accessible processing space outside the genome cavity; outside-piece count alone is insufficient.
+- No constructor energy/resource gates or collision tolerances are changed by this port.
+
+PR #190 remains open until this branch verifies the consolidated changes and the README/source state is checked. The production constructor still needs a working milestone-driven coordinator and must not silently fall back to the old fixed scaffold.
