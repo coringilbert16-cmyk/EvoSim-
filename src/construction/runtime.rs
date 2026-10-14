@@ -2017,8 +2017,13 @@ fn construct_blueprint_bond_driven_internal(
     catalog: &[BaseResource],
     ledger: &mut EnergyLedger,
     energy: &mut f64,
-    mut available_materials: Option<&mut crate::material_storage::MaterialStorage>,
+    available_materials: Option<&mut crate::material_storage::MaterialStorage>,
 ) -> Result<(OrganismStructure, f64), String> {
+    // Inventory ownership is part of the construction transaction. Work against
+    // a staged copy so every failure leaves the caller's inventory untouched.
+    let mut destination_materials = available_materials;
+    let mut staged_materials = destination_materials.as_deref().cloned();
+    let mut available_materials = staged_materials.as_mut();
     if blueprint.elements.is_empty() {
         return Err("blueprint must contain at least one element".into());
     }
@@ -2474,8 +2479,27 @@ fn construct_blueprint_bond_driven_internal(
         }
     }
 
+    // Reservations refer to the original staged indices. Remove in descending
+    // order so earlier indices remain stable as entries are consumed.
+    for storage_index in reserved_storage_indices.into_iter().rev() {
+        let Some(storage) = staged_materials.as_mut() else {
+            return Err("construction reserved material without a staged inventory".to_string());
+        };
+        if storage_index >= storage.entries.len() {
+            return Err("reserved construction material disappeared before commit".to_string());
+        }
+        storage.entries.remove(storage_index);
+    }
+
+    // All placement, closure-bond, and inventory checks passed. Commit the
+    // physical structure, energy accounting, and consumed inventory together.
     *ledger = construction_ledger;
     *energy = remaining_energy;
+    if let (Some(destination), Some(staged)) =
+        (destination_materials.as_deref_mut(), staged_materials)
+    {
+        *destination = staged;
+    }
     Ok((structure, total_heat))
 }
 
