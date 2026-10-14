@@ -1900,12 +1900,15 @@ mod tests {
             );
         }
         assert!(
-            construction.acquired_resource_shapes.iter().all(|(name, _)| {
-                construction
-                    .acquired_resource_placements
-                    .iter()
-                    .any(|(acquired_name, _)| acquired_name == name)
-            }),
+            construction
+                .acquired_resource_shapes
+                .iter()
+                .all(|(name, _)| {
+                    construction
+                        .acquired_resource_placements
+                        .iter()
+                        .any(|(acquired_name, _)| acquired_name == name)
+                }),
             "any realized acquired fluid shape must have a corresponding acquired resource"
         );
     }
