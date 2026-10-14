@@ -1996,4 +1996,4 @@ The unique PR #190 viability changes are being consolidated here:
 - Viability requires positive-area accessible processing space outside the genome cavity; outside-piece count alone is insufficient.
 - No constructor energy/resource gates or collision tolerances are changed by this port.
 
-PR #190 remains open until this branch verifies the consolidated changes and the README/source state is checked. The production constructor still needs a working milestone-driven coordinator and must not silently fall back to the old fixed scaffold.
+PR #190 remains open until this branch verifies the consolidated changes and the README/source state is checked. The current production path uses bounded persisted-Bob formation search rather than the old fixed scaffold, but still retains the Water-plus-three-non-Water acquisition gate; that remaining recipe gate is outside this narrow PR #190 port and remains inconsistent with the approved free-form viability contract.
