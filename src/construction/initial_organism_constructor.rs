@@ -381,9 +381,7 @@ fn try_persisted_bob_attachments(
         });
         if let Some((candidate_unit_index, existing_unit_index)) = overlap {
             overlap_rejections += 1;
-            let source = if pair_placement_signatures
-                .contains(&placement_signature(*suggestion))
-            {
+            let source = if pair_placement_signatures.contains(&placement_signature(*suggestion)) {
                 pair_overlap_rejections += 1;
                 "pair-formation"
             } else {
@@ -1470,13 +1468,31 @@ mod tests {
                 .unwrap_or_else(|| panic!("{name} exists in catalog"))
         };
         let mut structure = crate::structure::OrganismStructure::new();
-        let anchor_index = add_unit(&mut structure, resource("Hydrogen"), (0.0, 0.0), &catalog)
-            .expect("anchor should realize");
-        add_unit(&mut structure, resource("Methane"), (5.0, 0.0), &catalog)
-            .expect("blocker should realize");
+        let anchor_index = add_unit(
+            &mut structure,
+            resource("Hydrogen"),
+            (0.0, 0.0),
+            &catalog,
+        )
+        .expect("anchor should realize");
+        add_unit(
+            &mut structure,
+            resource("Methane"),
+            (5.0, 0.0),
+            &catalog,
+        )
+        .expect("blocker should realize");
 
-        let farther = Placement { x: 10.0, y: 0.0, rotation_radians: 0.0 };
-        let nearer = Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 };
+        let farther = Placement {
+            x: 10.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let nearer = Placement {
+            x: 1.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
         let ranked = rank_candidate_placements(
             &structure,
             anchor_index,
@@ -1485,8 +1501,16 @@ mod tests {
         );
         assert_eq!(ranked[0], farther, "greater clearance should rank first");
 
-        let pair_replay = Placement { x: 10.0, y: 0.0, rotation_radians: std::f64::consts::PI };
-        let edge_seed = Placement { x: 10.0, y: 0.0, rotation_radians: 0.0 };
+        let pair_replay = Placement {
+            x: 10.0,
+            y: 0.0,
+            rotation_radians: std::f64::consts::PI,
+        };
+        let edge_seed = Placement {
+            x: 10.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
         let pair_signatures = [placement_signature(pair_replay)].into_iter().collect();
         let ranked = rank_candidate_placements(
             &structure,
