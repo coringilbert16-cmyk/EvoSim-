@@ -866,10 +866,7 @@ mod tests {
     ) {
         let genome = crate::genome::initial_genome();
         let catalog = crate::resources::default_catalog();
-        let structure =
-            crate::initial_organism_constructor::sealed_nitrogen_ring_with_external_unit_fixture(
-                &catalog,
-            )
+        let structure = crate::initial_organism_constructor::sealed_nitrogen_ring_with_external_unit_fixture(&catalog)
             .expect("test ring and external bond should be physically realized");
         let organism = crate::state::Organism {
             id: "test".into(),
