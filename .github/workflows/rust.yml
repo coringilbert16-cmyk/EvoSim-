@@ -86,6 +86,8 @@ jobs:
       # topology is being finalized. Keep the normal Rust/Clippy gates active.
       - name: Run Rust tests
         if: always()
+        env:
+          EVOSIM_GEOMETRY_LIBRARY_DIR: ${{ runner.temp }}/evosim-bob-constructor-replay
         run: cargo test --locked --all-targets
       - name: Run Clippy
         if: always()
