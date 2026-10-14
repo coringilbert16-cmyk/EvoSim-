@@ -1490,6 +1490,39 @@ pub(crate) fn sealed_nitrogen_ring_fixture(
     Ok(structure)
 }
 
+/// Add one bonded external constituent to the sealed ring fixture. This
+/// lets bond-selection tests distinguish genome-boundary bonds from ordinary
+/// structural bonds without depending on production startup construction.
+#[cfg(test)]
+pub(crate) fn sealed_nitrogen_ring_with_external_unit_fixture(
+    catalog: &[BaseResource],
+) -> Result<crate::structure::OrganismStructure, String> {
+    let mut structure = sealed_nitrogen_ring_fixture(catalog)?;
+    let nitrogen = catalog
+        .iter()
+        .find(|resource| resource.name == "Nitrogen")
+        .ok_or_else(|| "catalog has no Nitrogen resource".to_string())?;
+    let anchor = structure
+        .units
+        .iter()
+        .position(|unit| {
+            (unit.placement.x - 2.0).abs() < 1e-9 && unit.placement.y.abs() < 1e-9
+        })
+        .ok_or_else(|| "test ring has no right-side anchor".to_string())?;
+    let external = add_unit(&mut structure, nitrogen, (3.0, 0.0), catalog)?;
+    let mut ledger = EnergyLedger::default();
+    let mut energy = 1_000_000.0;
+    bond_units(
+        &mut structure,
+        anchor,
+        external,
+        catalog,
+        &mut ledger,
+        &mut energy,
+    )?;
+    Ok(structure)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
