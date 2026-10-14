@@ -1992,7 +1992,7 @@ The exact-head CI run [38555835930](https://github.com/coringilbert16-cmyk/EvoSi
 The run's full Rust suite reported **367 passed, 69 failed, 1 ignored**; strict Clippy failed with 67 lint errors. Failures include constructor/cavity/viability and many simulation tests cascading from startup construction failure, plus separate geometry, storage, and chemistry assertions. Treat this as a broader baseline failure to triage, not a failure of the focused pair-replay regression. Do not claim the constructor works end to end.
 
 The unique PR #190 viability changes are being consolidated here:
-- The Carbon-equivalent cavity area is a reference metric, not a hard biological minimum. Cavity candidates must still have finite positive area and a real boundary of at least three units.
+- The genome cavity must have area at least equal to exactly three Carbon constituents (`cavity.area >= cavity.minimum_area`); equality qualifies with no extra margin. The cavity must also have finite positive area and a real physical boundary. Sealing and accessible-interior requirements remain separate mandatory checks.
 - Viability requires positive-area accessible processing space outside the genome cavity; outside-piece count alone is insufficient.
 - No constructor energy/resource gates or collision tolerances are changed by this port.
 
