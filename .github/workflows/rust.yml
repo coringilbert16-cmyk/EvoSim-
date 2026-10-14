@@ -71,13 +71,13 @@ jobs:
       - name: Run focused chemical BREAK tests
         if: always()
         run: cargo test --locked chemical_break_
-      # Constructor placement now intentionally requires persisted Bob records.
-      # Build a small, disposable local library in the CI workspace so constructor
-      # tests exercise the real persisted-query path instead of silently relying
-      # on an absent/empty default store. Generated library files are not committed.
-      - name: Seed Bob and generate all singleton geometry frontiers
+      # Generate Bob knowledge in an isolated temporary store. Never seed the
+      # repository's default geometry_library/data directory from CI.
+      - name: Seed Bob and generate geometry frontiers in an isolated store
         if: always()
-        run: cargo run --locked -- --geometry-worker-passes 7
+        run: |
+          export EVOSIM_GEOMETRY_LIBRARY_DIR="$RUNNER_TEMP/evosim-bob-constructor-replay"
+          cargo run --locked -- --geometry-worker-passes 7
       # Keep the persisted-pair transform/contact/collision replay independently visible.
       - name: Run persisted-pair replay regression
         if: always()
