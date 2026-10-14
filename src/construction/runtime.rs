@@ -2017,13 +2017,8 @@ fn construct_blueprint_bond_driven_internal(
     catalog: &[BaseResource],
     ledger: &mut EnergyLedger,
     energy: &mut f64,
-    available_materials: Option<&mut crate::material_storage::MaterialStorage>,
+    mut available_materials: Option<&mut crate::material_storage::MaterialStorage>,
 ) -> Result<(OrganismStructure, f64), String> {
-    // Inventory ownership is part of the construction transaction. Work against
-    // a staged copy so every failure leaves the caller's inventory untouched.
-    let mut destination_materials = available_materials;
-    let mut staged_materials = destination_materials.as_deref().cloned();
-    let mut available_materials = staged_materials.as_mut();
     if blueprint.elements.is_empty() {
         return Err("blueprint must contain at least one element".into());
     }
@@ -2485,11 +2480,6 @@ fn construct_blueprint_bond_driven_internal(
     // physical structure, energy accounting, and consumed inventory together.
     *ledger = construction_ledger;
     *energy = remaining_energy;
-    if let (Some(destination), Some(staged)) =
-        (destination_materials.as_deref_mut(), staged_materials)
-    {
-        *destination = staged;
-    }
     Ok((structure, total_heat))
 }
 
