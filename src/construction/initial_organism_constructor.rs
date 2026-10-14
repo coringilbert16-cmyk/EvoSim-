@@ -2305,5 +2305,4 @@ mod tests {
             "a ring missing one perimeter bond must not qualify as a genome cavity"
         );
     }
-
 }
