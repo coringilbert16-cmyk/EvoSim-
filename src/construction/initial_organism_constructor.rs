@@ -108,16 +108,7 @@ fn persisted_pair_formation_placements(
     library: &crate::geometry_reference_library::GeometryLibrary,
 ) -> Vec<Placement> {
     let mut placements = std::collections::BTreeMap::<String, Placement>::new();
-    for formation in library.formations() {
-        if formation.constituents.len() != 2
-            || !formation.bonds.iter().any(|bond| {
-                (bond.constituent_a == 0 && bond.constituent_b == 1)
-                    || (bond.constituent_a == 1 && bond.constituent_b == 0)
-            })
-        {
-            continue;
-        }
-
+    for formation in library.bonded_pair_formations(anchor_material, &candidate_resource.name) {
         for (anchor_index, candidate_index) in [(0, 1), (1, 0)] {
             let stored_anchor = &formation.constituents[anchor_index];
             let stored_candidate = &formation.constituents[candidate_index];
