@@ -15,7 +15,7 @@ use crate::structure::OrganismStructure;
 
 #[path = "cavity_mutation.rs"]
 mod cavity_mutation;
-pub(crate) use cavity_mutation::mutate_once;
+pub(crate) use cavity_mutation::{mutate_once, mutate_until_full};
 
 const SCHEMA_VERSION: u32 = 3;
 const PREVIOUS_SCHEMA_VERSION: u32 = 2;
@@ -23,7 +23,7 @@ const LEGACY_SCHEMA_VERSION: u32 = 1;
 const NITROGEN_RING_SEED_ID: &str = "nitrogen-ring-seed-v1";
 pub(crate) const MAX_QUALIFYING_CANDIDATES: usize = 5_000;
 pub(crate) const MAX_MUTATION_ATTEMPTS_PER_RUN: usize = 5_000;
-const MAX_STORE_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_STORE_BYTES: u64 = 256 * 1024 * 1024;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct KnownQualifyingCavity {
