@@ -29,11 +29,7 @@ pub(crate) struct KnownQualifyingCavity {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum SeedOutcome {
-    Added {
-        id: String,
-        constituent_count: usize,
-        cavity_area: f64,
-    },
+    Added { id: String, constituent_count: usize, cavity_area: f64 },
     AlreadyPresent { id: String },
 }
 
@@ -76,9 +72,8 @@ pub(crate) fn persist_if_qualifying(
 
     // Use the authoritative realized-geometry validator. Extra processing
     // structure is deliberately not required for this category.
-    let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)?.ok_or_else(|| {
-        "candidate has no sealed cavity meeting the three-Carbon minimum".to_string()
-    })?;
+    let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)?
+        .ok_or_else(|| "candidate has no sealed cavity meeting the three-Carbon minimum".to_string())?;
     if !cavity.qualifies() {
         return Err("candidate cavity failed the authoritative qualification checks".to_string());
     }
@@ -93,24 +88,21 @@ pub(crate) fn persist_if_qualifying(
 
     let path = path.as_ref();
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|error| format!("create cavity store directory: {error}"))?;
+        fs::create_dir_all(parent).map_err(|error| format!("create cavity store directory: {error}"))?;
     }
 
     if path.exists() {
         let file = std::fs::File::open(path)
             .map_err(|error| format!("open cavity store for duplicate check: {error}"))?;
         for (line_number, line) in BufReader::new(file).lines().enumerate() {
-            let line = line.map_err(|error| {
-                format!("read cavity store line {}: {error}", line_number + 1)
-            })?;
+            let line = line
+                .map_err(|error| format!("read cavity store line {}: {error}", line_number + 1))?;
             if line.trim().is_empty() {
                 continue;
             }
-            let existing: KnownQualifyingCavity = serde_json::from_str(&line)
-                .map_err(|error| {
-                    format!("decode cavity store line {}: {error}", line_number + 1)
-                })?;
+            let existing: KnownQualifyingCavity = serde_json::from_str(&line).map_err(|error| {
+                format!("decode cavity store line {}: {error}", line_number + 1)
+            })?;
             if existing.id == id {
                 return Ok(SeedOutcome::AlreadyPresent { id: id.to_string() });
             }
@@ -164,7 +156,10 @@ pub(crate) fn load_records(
                 serde_json::from_str(&line)
                     .map_err(|error| format!("decode cavity store line {}: {error}", index + 1)),
             ),
-            Err(error) => Some(Err(format!("read cavity store line {}: {error}", index + 1))),
+            Err(error) => Some(Err(format!(
+                "read cavity store line {}: {error}",
+                index + 1
+            ))),
         })
         .collect()
 }
@@ -188,7 +183,11 @@ mod tests {
         let _ = fs::remove_file(&path);
 
         let first = seed_nitrogen_ring(&path, &catalog).expect("nitrogen ring should qualify");
-        let SeedOutcome::Added { constituent_count, cavity_area, .. } = first else {
+        let SeedOutcome::Added {
+            constituent_count,
+            cavity_area,
+            ..
+        } = first else {
             panic!("first seed should be added");
         };
         assert_eq!(constituent_count, 16);
@@ -204,7 +203,9 @@ mod tests {
         let second = seed_nitrogen_ring(&path, &catalog).expect("repeat seed should be safe");
         assert_eq!(
             second,
-            SeedOutcome::AlreadyPresent { id: NITROGEN_RING_SEED_ID.to_string() }
+            SeedOutcome::AlreadyPresent {
+                id: NITROGEN_RING_SEED_ID.to_string()
+            }
         );
         assert_eq!(load_records(&path).unwrap().len(), 1);
         let _ = fs::remove_file(path);
