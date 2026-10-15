@@ -476,6 +476,43 @@ mod tests {
     }
 
     #[test]
+    fn mutation_frontier_includes_independent_one_unit_translations() {
+        let catalog = crate::resources::default_catalog();
+        let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("nitrogen ring seed should build");
+        let parent = KnownQualifyingCavity {
+            schema_version: SCHEMA_VERSION,
+            id: "translation-test-seed".to_string(),
+            parent_id: None,
+            change: "test seed".to_string(),
+            constituent_count: structure.units.len(),
+            cavity_area: crate::cavity::analyze_genome_cavity(&structure, &catalog)
+                .expect("cavity analysis should succeed")
+                .expect("seed should have a cavity")
+                .area,
+            minimum_cavity_area: crate::cavity::analyze_genome_cavity(&structure, &catalog)
+                .expect("cavity analysis should succeed")
+                .expect("seed should have a cavity")
+                .minimum_area,
+            structure,
+        };
+        let mutations = cavity_mutation::one_step_mutations(&parent, &catalog);
+        let translated = mutations
+            .iter()
+            .find(|(change, _)| change == "translate constituent at index 0 (move +y 1.0)")
+            .expect("Bob should try moving an individual constituent upward by one unit");
+        assert_eq!(
+            translated.1.units[0].placement.y,
+            parent.structure.units[0].placement.y + 1.0
+        );
+        assert_eq!(
+            translated.1.units[0].material,
+            parent.structure.units[0].material,
+            "translation must preserve the constituent's resource"
+        );
+    }
+
+    #[test]
     fn replacement_trial_must_rebuild_a_live_physical_contact() {
         let catalog = crate::resources::default_catalog();
         let mut structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
