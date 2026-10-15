@@ -54,12 +54,8 @@ pub(crate) enum SeedOutcome {
 /// is eligible for storage; it does not create a second copy of the same formation.
 fn geometry_signature(structure: &OrganismStructure) -> Result<String, String> {
     let mut normalized = structure.clone();
-    let mut id_map = std::collections::HashMap::new();
     for (index, unit) in normalized.units.iter_mut().enumerate() {
-        let old = unit.physical_id;
-        let new = crate::structure::PhysicalConstituentId(index as u64 + 1);
-        id_map.insert(old, new);
-        unit.physical_id = new;
+        unit.physical_id = crate::structure::PhysicalConstituentId(index as u64 + 1);
     }
     // Bond endpoints are deliberately excluded from the identity signature:
     // adding/removing a bond alone must not fill the library with duplicate formations.
