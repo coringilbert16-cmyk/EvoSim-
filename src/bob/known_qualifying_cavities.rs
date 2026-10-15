@@ -292,7 +292,12 @@ pub(crate) fn mutate_once(
     catalog: &[BaseResource],
 ) -> Result<MutationBatchStats, String> {
     let path = path.as_ref();
-    if !path.exists() || fs::metadata(path).map_err(|e| format!("inspect cavity store: {e}"))?.len() == 0 {
+    if !path.exists()
+        || fs::metadata(path)
+            .map_err(|e| format!("inspect cavity store: {e}"))?
+            .len()
+            == 0
+    {
         seed_nitrogen_ring(path, catalog)?;
     }
     let records = load_records(path)?;
@@ -300,8 +305,11 @@ pub(crate) fn mutate_once(
         return Err("known qualifying cavity store has no seed candidates".to_string());
     }
     let cursor_path = path.with_extension("cursor");
-    let start = fs::read_to_string(&cursor_path).ok()
-        .and_then(|text| text.trim().parse::<usize>().ok()).unwrap_or(0) % records.len();
+    let start = fs::read_to_string(&cursor_path)
+        .ok()
+        .and_then(|text| text.trim().parse::<usize>().ok())
+        .unwrap_or(0)
+        % records.len();
 
     let mut known_signatures = std::collections::HashSet::new();
     for record in &records {
@@ -310,7 +318,9 @@ pub(crate) fn mutate_once(
     let mut stats = MutationBatchStats::default();
     let mut appended = Vec::<u8>::new();
     let mut stored_count = records.len();
-    let mut stored_bytes = fs::metadata(path).map_err(|e| format!("inspect cavity store size: {e}"))?.len();
+    let stored_bytes = fs::metadata(path)
+        .map_err(|e| format!("inspect cavity store size: {e}"))?
+        .len();
     let mut parents_processed = 0usize;
 
     'parents: for offset in 0..records.len() {
