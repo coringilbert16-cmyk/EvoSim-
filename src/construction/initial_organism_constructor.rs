@@ -1486,8 +1486,10 @@ pub(crate) fn construct_valid_with_energy(
 /// production constructor. Tests of cavity, viability rejection, and boundary
 /// behavior must not fail merely because startup construction is currently
 /// unable to find a viable organism.
-#[cfg(test)]
-pub(crate) fn sealed_nitrogen_ring_fixture(
+/// Build the validated nitrogen-ring starting structure for Bob's separate
+/// known-qualifying-cavity exploration category. This does not add the ring to
+/// the ordinary small-formation catalogue.
+pub(crate) fn build_nitrogen_ring_seed(
     catalog: &[BaseResource],
 ) -> Result<crate::structure::OrganismStructure, String> {
     let nitrogen = catalog
@@ -1527,6 +1529,13 @@ pub(crate) fn sealed_nitrogen_ring_fixture(
         }
     }
     Ok(structure)
+}
+
+#[cfg(test)]
+pub(crate) fn sealed_nitrogen_ring_fixture(
+    catalog: &[BaseResource],
+) -> Result<crate::structure::OrganismStructure, String> {
+    build_nitrogen_ring_seed(catalog)
 }
 
 /// Add one bonded external constituent to the sealed ring fixture. This
