@@ -98,7 +98,7 @@ pub(super) fn one_step_mutations(
 /// Rebuild connections for a swapped constituent from current physical
 /// contacts. No bond count or old endpoint layout is treated as formation
 /// identity; the ordinary constructor bond transaction remains authoritative.
-fn rebuild_replacement_connections(
+pub(super) fn rebuild_replacement_connections(
     structure: &mut OrganismStructure,
     changed_index: usize,
     catalog: &[BaseResource],
