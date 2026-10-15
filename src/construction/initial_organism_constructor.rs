@@ -583,7 +583,7 @@ fn add_unit(
     })
 }
 
-fn bond_units(
+pub(crate) fn bond_units(
     structure: &mut crate::structure::OrganismStructure,
     unit_a: usize,
     unit_b: usize,
