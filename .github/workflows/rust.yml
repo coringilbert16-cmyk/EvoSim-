@@ -92,6 +92,26 @@ jobs:
           export EVOSIM_GEOMETRY_LIBRARY_DIR="$RUNNER_TEMP/evosim-bob-constructor-replay"
           mkdir -p "$EVOSIM_GEOMETRY_LIBRARY_DIR"
           cargo run --locked -- --geometry-worker-passes 7
+      # Measure real qualifying-cavity library growth, not ordinary geometry formations.
+      # Use a disposable isolated store; never touch the developer/default library.
+      - name: Measure Bob qualifying-cavity library growth
+        timeout-minutes: 5
+        if: always()
+        run: |
+          export EVOSIM_KNOWN_CAVITIES_DIR="$RUNNER_TEMP/evosim-known-cavities-growth"
+          rm -rf "$EVOSIM_KNOWN_CAVITIES_DIR"
+          mkdir -p "$EVOSIM_KNOWN_CAVITIES_DIR"
+          store="$EVOSIM_KNOWN_CAVITIES_DIR/candidates.jsonl"
+          echo "Initial qualifying-candidate count: $(test -f "$store" && wc -l < "$store" || echo 0)"
+          for pass in 1 2 3; do
+            echo "=== Cavity mutation pass $pass ==="
+            cargo run --locked -- --bob-cavity-mutate-once
+            echo "Qualifying candidates after pass $pass: $(wc -l < "$store")"
+          done
+          echo "=== Final cavity-library integrity check ==="
+          cargo run --locked -- --bob-cavity-mutate-once
+          echo "Final qualifying-candidate count: $(wc -l < "$store")"
+          echo "Stored records are revalidated by the mutator on every invocation."
       # Keep the persisted-pair transform/contact/collision replay independently visible.
       - name: Run persisted-pair replay regression
         timeout-minutes: 5
