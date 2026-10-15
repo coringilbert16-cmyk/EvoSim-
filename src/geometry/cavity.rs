@@ -369,10 +369,10 @@ mod tests {
             "realized cavity must meet the three-Carbon minimum"
         );
         // The four corner squares close the outer perimeter but do not face
-        // the cavity. Only the three squares along each of the four inner
-        // sides contribute to its boundary: 12 units and 8 side-to-side bonds.
+        // the cavity. The 12 side squares contribute 8 adjacent side-to-side
+        // joins; the live bond transaction represents each join with 2 bonds.
         assert_eq!(cavity.boundary_units.len(), 12);
-        assert_eq!(cavity.boundary_bond_indices(&structure, &catalog).len(), 8);
+        assert_eq!(cavity.boundary_bond_indices(&structure, &catalog).len(), 16);
     }
 
     #[test]
