@@ -63,7 +63,6 @@ pub(super) fn one_step_mutations(
                 trial.units[unit_index].placement.x += dx;
                 trial.units[unit_index].placement.y += dy;
                 trial.units[unit_index].placement.rotation_radians += rotation_delta;
-                rebuild_replacement_connections(&mut trial, unit_index, catalog);
                 out.push((
                     format!(
                         "replace constituent at index {unit_index} with {} ({pose_label})",
@@ -194,11 +193,20 @@ pub(crate) fn mutate_once(
         let parent = &records[parent_index];
         parents_processed += 1;
         let mutations = one_step_mutations(parent, catalog);
-        for (change, structure) in mutations {
+        for (change, mut structure) in mutations {
             if stats.attempts >= MAX_MUTATION_ATTEMPTS_PER_RUN {
                 break 'parents;
             }
             stats.attempts += 1;
+            if change.starts_with("replace constituent") {
+                if let Some(unit_index) = change
+                    .strip_prefix("replace constituent at index ")
+                    .and_then(|rest| rest.split_whitespace().next())
+                    .and_then(|index| index.parse::<usize>().ok())
+                {
+                    rebuild_replacement_connections(&mut structure, unit_index, catalog);
+                }
+            }
             if structure.units.len() > parent.constituent_count {
                 stats.rejected += 1;
                 *stats
