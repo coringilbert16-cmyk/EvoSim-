@@ -691,7 +691,7 @@ mod tests {
         let _ = fs::remove_file(&path);
         seed_nitrogen_ring(&path, &catalog).expect("valid seed should persist");
         let contents = fs::read_to_string(&path).expect("store should be readable");
-        let corrupted = contents.replace("\\\"schema_version\\\":3", "\\\"schema_version\\\":999");
+        let corrupted = contents.replace("\\\"constituent_count\\\":16", "\\\"constituent_count\\\":999");
         assert_ne!(
             contents, corrupted,
             "fixture must contain the expected metadata"
@@ -709,7 +709,7 @@ mod tests {
         let _ = fs::remove_file(&path);
         seed_nitrogen_ring(&path, &catalog).expect("valid seed should persist");
         let contents = fs::read_to_string(&path).expect("store should be readable");
-        let corrupted = contents.replace("\"schema_version\":2", "\"schema_version\":999");
+        let corrupted = contents.replace("\"schema_version\":3", "\"schema_version\":999");
         assert_ne!(
             contents, corrupted,
             "fixture must contain the expected schema"
