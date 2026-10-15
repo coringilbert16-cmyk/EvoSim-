@@ -15,7 +15,7 @@ use crate::structure::OrganismStructure;
 
 #[path = "cavity_mutation.rs"]
 mod cavity_mutation;
-pub(crate) use cavity_mutation::{mutate_once, MutationBatchStats};
+pub(crate) use cavity_mutation::mutate_once;
 
 const SCHEMA_VERSION: u32 = 1;
 const NITROGEN_RING_SEED_ID: &str = "nitrogen-ring-seed-v1";
