@@ -124,10 +124,13 @@ pub fn find_enclosed_regions(
         let Some(resource) = catalog.iter().find(|resource| resource.name == *name) else {
             continue;
         };
-        let Some(geometry) = unit.geometry.as_ref() else {
+        // A missing cached geometry is expected after a resource mutation.
+        // Resolve the current material's catalog shape in that case; silently
+        // skipping the unit would measure a stale/incomplete cavity boundary.
+        let Some(shape) = unit.shape(catalog) else {
             continue;
         };
-        if let Some(polygon) = transformed_polygon(&geometry.shape().form, unit.placement) {
+        if let Some(polygon) = transformed_polygon(&shape.form, unit.placement) {
             if polygon.len() < 3 {
                 continue;
             }
@@ -143,7 +146,7 @@ pub fn find_enclosed_regions(
         // real boundaries when their endpoints stitch two area boundaries.
         // Keep them in the planar graph without allowing a free-standing line
         // to create containment by itself.
-        let Form::Line { length } = geometry.shape().form else {
+        let Form::Line { length } = shape.form else {
             continue;
         };
         if !length.is_finite() || length <= 0.0 {
