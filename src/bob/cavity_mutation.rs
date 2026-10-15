@@ -104,7 +104,7 @@ pub(super) fn one_step_mutations(
                 trial.units[unit_index].placement.y += dy;
                 out.push((
                     format!(
-                        "translate constituent at index {unit_index} (move {direction} {distance:.2})"
+                        "translate constituent at index {unit_index} {direction} {distance:.2}"
                     ),
                     trial,
                 ));
