@@ -41,8 +41,6 @@ mod construction_runtime;
 mod contact;
 #[path = "bob/worker.rs"]
 mod geometry_library_worker;
-#[path = "bob/known_qualifying_cavities.rs"]
-mod known_qualifying_cavities;
 #[path = "bob/library.rs"]
 mod geometry_reference_library;
 #[path = "bob/server.rs"]
@@ -51,6 +49,8 @@ mod geometry_server;
 mod initial_organism_constructor;
 #[path = "geometry/interior_geometry.rs"]
 mod interior_geometry;
+#[path = "bob/known_qualifying_cavities.rs"]
+mod known_qualifying_cavities;
 #[path = "geometry/organism_geometry.rs"]
 mod organism_geometry;
 #[path = "organism/viability.rs"]
