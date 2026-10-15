@@ -82,34 +82,44 @@ pub(super) fn one_step_mutations(
         }
     }
 
-    // After trying resource substitutions, move each unchanged constituent
-    // independently. Translation is itself a cavity mutation: a boundary
-    // piece can move outward, reconnect at different corners, and change the
-    // measured enclosed area without changing its material.
+    // Translation is itself a cavity mutation. Move each unchanged piece in
+    // cardinal and diagonal directions at 0.25-unit increments, out to 1.5
+    // units. Generate only these eight rays, not the full 13x13 square grid.
+    // This keeps the mutation set broad without exploding CI work.
     for unit_index in 0..original_count {
-        for (label, dx, dy) in [
-            ("move +x 0.25", 0.25, 0.0),
-            ("move -x 0.25", -0.25, 0.0),
-            ("move +y 0.25", 0.0, 0.25),
-            ("move -y 0.25", 0.0, -0.25),
-            ("move +x 0.5", 0.5, 0.0),
-            ("move -x 0.5", -0.5, 0.0),
-            ("move +y 0.5", 0.0, 0.5),
-            ("move -y 0.5", 0.0, -0.5),
-            ("move +x 1.0", 1.0, 0.0),
-            ("move -x 1.0", -1.0, 0.0),
-            ("move +y 1.0", 0.0, 1.0),
-            ("move -y 1.0", 0.0, -1.0),
-            ("move +xy 1.0", 1.0, 1.0),
-            ("move +x-y 1.0", 1.0, -1.0),
-            ("move -x+y 1.0", -1.0, 1.0),
-            ("move -xy 1.0", -1.0, -1.0),
-        ] {
+        for step in 1..=6 {
+            let distance = step as f64 * 0.25;
+            for (direction, dx, dy) in [
+                ("+x", distance, 0.0),
+                ("-x", -distance, 0.0),
+                ("+y", 0.0, distance),
+                ("-y", 0.0, -distance),
+                ("+xy", distance, distance),
+                ("+x-y", distance, -distance),
+                ("-x+y", -distance, distance),
+                ("-xy", -distance, -distance),
+            ] {
+                let mut trial = parent.structure.clone();
+                trial.units[unit_index].placement.x += dx;
+                trial.units[unit_index].placement.y += dy;
+                out.push((
+                    format!(
+                        "translate constituent at index {unit_index} (move {direction} {distance:.2})"
+                    ),
+                    trial,
+                ));
+            }
+        }
+
+        // Rotation is independent of translation and must also trigger live
+        // contact/bond reconstruction before geometry and cavity validation.
+        for step in 1..=24 {
+            let angle_degrees = step * 15;
             let mut trial = parent.structure.clone();
-            trial.units[unit_index].placement.x += dx;
-            trial.units[unit_index].placement.y += dy;
+            trial.units[unit_index].placement.rotation_radians +=
+                angle_step * step as f64;
             out.push((
-                format!("translate constituent at index {unit_index} ({label})"),
+                format!("rotate constituent at index {unit_index} by {angle_degrees}deg"),
                 trial,
             ));
         }
@@ -246,11 +256,14 @@ pub(crate) fn mutate_once(
             stats.attempts += 1;
             if change.starts_with("replace constituent")
                 || change.starts_with("translate constituent")
+                || change.starts_with("rotate constituent")
             {
                 let prefix = if change.starts_with("replace constituent") {
                     "replace constituent at index "
-                } else {
+                } else if change.starts_with("translate constituent") {
                     "translate constituent at index "
+                } else {
+                    "rotate constituent at index "
                 };
                 if let Some(unit_index) = change
                     .strip_prefix(prefix)
