@@ -112,6 +112,42 @@ jobs:
           cargo run --locked -- --bob-cavity-mutate-once
           echo "Final qualifying-candidate count: $(wc -l < "$store")"
           echo "Stored records are revalidated by the mutator on every invocation."
+          python3 - <<'PY'
+          import collections, json, pathlib
+          store = pathlib.Path("${RUNNER_TEMP}/evosim-known-cavities-growth/candidates.jsonl")
+          records = [json.loads(line) for line in store.read_text().splitlines() if line.strip()]
+          ids = [record["id"] for record in records]
+          by_id = {record["id"]: record for record in records}
+          assert len(records) == len(ids), "duplicate candidate IDs"
+          assert len(records) <= 5000, f"hard candidate cap exceeded: {len(records)}"
+          assert records and records[0]["id"] == "nitrogen-ring-seed-v1", "nitrogen-ring seed is not first"
+          assert records[0]["constituent_count"] == 16, "seed is not the expected 16-piece ring"
+          assert all(record["constituent_count"] == len(record["structure"]["units"]) for record in records), "constituent metadata mismatch"
+          assert all(record["constituent_count"] <= 16 for record in records), "candidate grew beyond the 16-piece seed"
+          for index, record in enumerate(records):
+              parent_id = record.get("parent_id")
+              if parent_id:
+                  assert parent_id in by_id, f"missing parent {parent_id} for {record['id']}"
+                  assert record["constituent_count"] <= by_id[parent_id]["constituent_count"], f"constituent count increased: {record['id']}"
+                  assert ids.index(parent_id) < index, f"parent must precede child: {record['id']}"
+          counts = collections.Counter(record["constituent_count"] for record in records)
+          operations = collections.Counter()
+          for record in records:
+              change = record.get("change", "")
+              operation = next((prefix for prefix in ("initial validated", "remove constituent", "move ", "rotate ", "replace constituent", "remove bond") if change.startswith(prefix)), "other")
+              operations[operation] += 1
+          areas = [record["cavity_area"] for record in records]
+          minima = [record["minimum_cavity_area"] for record in records]
+          bond_counts = [len(record["structure"].get("bonds", [])) for record in records]
+          print("=== Cavity candidate quality report ===")
+          print(f"records={len(records)} unique_ids={len(set(ids))} seed_constituents={records[0]['constituent_count']}")
+          print(f"constituent_count_distribution={dict(sorted(counts.items()))}")
+          print(f"mutation_operation_distribution={dict(sorted(operations.items()))}")
+          print(f"cavity_area_range={min(areas):.6g}..{max(areas):.6g}; unique_rounded_areas={len({round(value, 6) for value in areas})}")
+          print(f"minimum_required_area_range={min(minima):.6g}..{max(minima):.6g}")
+          print(f"bond_count_range={min(bond_counts)}..{max(bond_counts)}; unique_bond_counts={len(set(bond_counts))}")
+          print("PASS: unique IDs, seed identity/size, stored metadata, lineage, non-increasing constituent counts, and 5,000-record cap")
+          PY
       # Keep the persisted-pair transform/contact/collision replay independently visible.
       - name: Run persisted-pair replay regression
         timeout-minutes: 5
