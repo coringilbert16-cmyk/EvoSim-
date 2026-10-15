@@ -478,9 +478,8 @@ mod tests {
     #[test]
     fn mutation_frontier_includes_independent_one_unit_translations() {
         let catalog = crate::resources::default_catalog();
-        let structure =
-            crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
-                .expect("nitrogen ring seed should build");
+        let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("nitrogen ring seed should build");
         let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
             .expect("cavity analysis should succeed")
             .expect("seed should have a cavity");
@@ -504,8 +503,7 @@ mod tests {
             parent.structure.units[0].placement.y + 1.0
         );
         assert_eq!(
-            translated.1.units[0].material,
-            parent.structure.units[0].material,
+            translated.1.units[0].material, parent.structure.units[0].material,
             "translation must preserve the constituent's resource"
         );
     }
