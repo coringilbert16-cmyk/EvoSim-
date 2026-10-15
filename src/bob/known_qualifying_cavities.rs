@@ -399,6 +399,31 @@ mod tests {
             change.starts_with("replace constituent")
                 && candidate.units.len() == parent.constituent_count
         }));
+
+        assert!(
+            mutations[0].0.starts_with("replace constituent"),
+            "resource substitution must be the first attempted mutation"
+        );
+        let first_non_replacement = mutations
+            .iter()
+            .position(|(change, _)| !change.starts_with("replace constituent"))
+            .expect("mutation list should include non-substitution operations");
+        assert!(
+            mutations[..first_non_replacement]
+                .iter()
+                .all(|(change, _)| change.starts_with("replace constituent")),
+            "all resource substitutions must be prioritized before other operations"
+        );
+        let first_removal = mutations
+            .iter()
+            .position(|(change, _)| change.starts_with("remove constituent"))
+            .expect("mutation list should include constituent removal");
+        assert!(
+            mutations[first_removal..]
+                .iter()
+                .all(|(change, _)| change.starts_with("remove constituent")),
+            "constituent removals must be the final mutation family"
+        );
     }
 
     #[test]
