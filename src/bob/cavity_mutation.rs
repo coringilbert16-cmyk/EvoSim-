@@ -235,6 +235,18 @@ pub(crate) fn mutate_once(
         .ok()
         .and_then(|text| serde_json::from_str(&text).ok())
         .unwrap_or_default();
+    let current_ids: HashSet<String> = records.iter().map(|record| record.id.clone()).collect();
+    let stale_progress = frontier.validated_record_count > records.len()
+        || frontier
+            .next_indices
+            .keys()
+            .chain(frontier.exhausted_parent_ids.iter())
+            .any(|id| !current_ids.contains(id));
+    if stale_progress {
+        // The store was pruned or replaced. Its persisted search frontier no
+        // longer describes the active parent library, so start cleanly.
+        frontier = MutationFrontier::default();
+    }
 
     let mut known_signatures = std::collections::HashSet::new();
     let mut known_ids: std::collections::HashSet<String> =
