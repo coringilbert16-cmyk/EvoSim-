@@ -507,6 +507,25 @@ mod tests {
             "translation must preserve the constituent's resource"
         );
 
+        let rotated = mutations
+            .iter()
+            .find(|(change, _)| change == "rotate constituent at index 0 by 15deg")
+            .expect("Bob should try rotating an individual constituent by 15 degrees");
+        assert!(
+            (rotated.1.units[0].placement.rotation_radians
+                - (parent.structure.units[0].placement.rotation_radians
+                    + std::f64::consts::PI / 12.0))
+                .abs()
+                < 1e-10,
+            "rotation mutation should add exactly 15 degrees"
+        );
+        assert!(
+            mutations
+                .iter()
+                .any(|(change, _)| change == "rotate constituent at index 0 by 360deg"),
+            "Bob should include the complete rotation cycle through 360 degrees"
+        );
+
         let mut found_area_change = false;
         for (change, candidate) in mutations
             .iter()
