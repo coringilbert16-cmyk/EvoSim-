@@ -2361,8 +2361,8 @@ mod tests {
             cavity.minimum_area
         );
         // Corner squares close the outside of the ring but do not face the
-        // cavity. Its inner boundary consists of 12 side squares and 8 bonds
-        // joining adjacent squares along those four inner sides.
+        // cavity. Its inner boundary consists of 12 side squares and 8 joins.
+        // Each physical join is represented by two bond records.
         assert_eq!(
             cavity.boundary_units.len(),
             12,
@@ -2371,17 +2371,24 @@ mod tests {
         let boundary_bonds = cavity.boundary_bond_indices(&structure, &catalog);
         assert_eq!(
             boundary_bonds.len(),
-            8,
-            "the four inner sides contain two bonds each"
+            16,
+            "the eight inner-side joins have two physical bond records each"
         );
 
-        // Remove a bond that is actually part of the cavity wall. Removing an
-        // arbitrary perimeter bond could remove only an outside corner join.
+        // Remove every bond record for one actual cavity-wall join. Removing a
+        // single record would leave its paired bond and would not break the join.
         let mut missing_boundary_bond = structure.clone();
-        let boundary_bond_index = *boundary_bonds
+        let first_boundary_bond = &structure.bonds[*boundary_bonds
             .first()
-            .expect("the sealed cavity has wall bonds");
-        missing_boundary_bond.bonds.remove(boundary_bond_index);
+            .expect("the sealed cavity has wall bonds")];
+        let endpoint_a = first_boundary_bond.endpoint_a.constituent_id;
+        let endpoint_b = first_boundary_bond.endpoint_b.constituent_id;
+        missing_boundary_bond.bonds.retain(|bond| {
+            !((bond.endpoint_a.constituent_id == endpoint_a
+                && bond.endpoint_b.constituent_id == endpoint_b)
+                || (bond.endpoint_a.constituent_id == endpoint_b
+                    && bond.endpoint_b.constituent_id == endpoint_a))
+        });
         assert!(
             crate::cavity::analyze_genome_cavity(&missing_boundary_bond, &catalog)
                 .expect("cavity analysis should complete after removing a bond")
