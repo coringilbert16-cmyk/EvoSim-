@@ -496,7 +496,7 @@ mod tests {
         let mutations = cavity_mutation::one_step_mutations(&parent, &catalog);
         let translated = mutations
             .iter()
-            .find(|(change, _)| change == "translate constituent at index 0 (move +y 1.0)")
+            .find(|(change, _)| change == "translate constituent at index 0 (move dx=0.00 dy=1.00)")
             .expect("Bob should try moving an individual constituent upward by one unit");
         assert_eq!(
             translated.1.units[0].placement.y,
@@ -506,6 +506,31 @@ mod tests {
             translated.1.units[0].material, parent.structure.units[0].material,
             "translation must preserve the constituent's resource"
         );
+
+        let quarter_step = mutations
+            .iter()
+            .find(|(change, _)| change == "translate constituent at index 0 (move dx=0.25 dy=0.00)")
+            .expect("translation should include quarter-unit increments");
+        assert!((quarter_step.1.units[0].placement.x
+            - (parent.structure.units[0].placement.x + 0.25))
+            .abs() < 1e-9);
+
+        let longer_move = mutations
+            .iter()
+            .find(|(change, _)| change == "translate constituent at index 0 (move dx=1.25 dy=0.00)")
+            .expect("translation should explore beyond one unit");
+        assert!((longer_move.1.units[0].placement.x
+            - (parent.structure.units[0].placement.x + 1.25))
+            .abs() < 1e-9);
+
+        let rotated = mutations
+            .iter()
+            .find(|(change, _)| change == "rotate constituent at index 0 by 345deg")
+            .expect("unchanged constituents should explore all 24 orientations");
+        assert!((rotated.1.units[0].placement.rotation_radians
+            - (parent.structure.units[0].placement.rotation_radians
+                + 23.0 * std::f64::consts::PI / 12.0))
+            .abs() < 1e-9);
 
         let mut found_area_change = false;
         for (change, candidate) in mutations
