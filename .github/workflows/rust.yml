@@ -161,6 +161,7 @@ jobs:
         timeout-minutes: 5
         if: always()
         run: |
+          cargo test --locked cavity_analysis_uses_catalog_shape_when_mutated_unit_geometry_is_missing -- --nocapture
           cargo test --locked cavity::tests::
           cargo test --locked viability::tests::
           cargo test --locked five_by_five_nitrogen_ring_qualifies_as_genome_cavity
