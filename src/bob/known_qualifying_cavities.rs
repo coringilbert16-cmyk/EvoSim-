@@ -47,9 +47,11 @@ pub(crate) enum SeedOutcome {
     },
 }
 
-/// Stable signature for a realized geometry, independent of physical IDs.
-/// Unit order is preserved because mutation operators preserve the parent order;
-/// IDs are normalized so the same geometry reached through repeated runs deduplicates.
+/// Stable formation signature, independent of physical IDs and bond bookkeeping.
+/// Formation identity is defined by constituent materials and realized geometry, not
+/// by arbitrary bond additions/removals. Stored records must still pass cavity analysis,
+/// so only a bond change that alters cavity qualification can affect whether a record
+/// is eligible for storage; it does not create a second copy of the same formation.
 fn geometry_signature(structure: &OrganismStructure) -> Result<String, String> {
     let mut normalized = structure.clone();
     let mut id_map = std::collections::HashMap::new();
@@ -59,17 +61,12 @@ fn geometry_signature(structure: &OrganismStructure) -> Result<String, String> {
         id_map.insert(old, new);
         unit.physical_id = new;
     }
-    for bond in &mut normalized.bonds {
-        bond.endpoint_a.constituent_id = *id_map
-            .get(&bond.endpoint_a.constituent_id)
-            .ok_or_else(|| "candidate bond references a missing constituent".to_string())?;
-        bond.endpoint_b.constituent_id = *id_map
-            .get(&bond.endpoint_b.constituent_id)
-            .ok_or_else(|| "candidate bond references a missing constituent".to_string())?;
-    }
+    // Bond endpoints are deliberately excluded from the identity signature:
+    // adding/removing a bond alone must not fill the library with duplicate formations.
+    // The live candidate validator and cavity analyzer remain authoritative for eligibility.
     normalized.clear_genome_constituent_ids();
-    let payload = serde_json::to_vec(&(&normalized.units, &normalized.bonds))
-        .map_err(|error| format!("serialize candidate geometry signature: {error}"))?;
+    let payload = serde_json::to_vec(&normalized.units)
+        .map_err(|error| format!("serialize candidate formation signature: {error}"))?;
     let digest = Sha256::digest(payload);
     Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
 }
@@ -456,6 +453,21 @@ mod tests {
 
         let _ = fs::remove_file(path);
         let _ = fs::remove_file(cursor);
+    }
+
+    #[test]
+    fn geometry_signature_ignores_bond_only_differences() {
+        let catalog = crate::resources::default_catalog();
+        let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("seed structure should build");
+        let original = geometry_signature(&structure).expect("signature should build");
+        let mut changed_bonds = structure.clone();
+        changed_bonds.break_bond(0);
+        assert_eq!(
+            original,
+            geometry_signature(&changed_bonds).expect("signature should build"),
+            "bond-only changes must not be counted as a new formation"
+        );
     }
 
     #[test]
