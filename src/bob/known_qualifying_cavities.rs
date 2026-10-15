@@ -353,6 +353,7 @@ mod tests {
 
         let stats = mutate_once(&path, &catalog).expect("bounded mutation batch should complete");
         assert!(stats.attempts <= MAX_MUTATION_ATTEMPTS_PER_RUN);
+        assert!(stats.accepted > 0, "seed should produce at least one qualifying one-step variant");
         let records = load_records(&path).expect("mutated store should reopen");
         assert!(!records.is_empty());
         assert!(records.len() <= MAX_QUALIFYING_CANDIDATES);
