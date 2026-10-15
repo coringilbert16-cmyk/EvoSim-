@@ -84,7 +84,25 @@ mod tests {
         let mut structure =
             crate::initial_organism_constructor::sealed_nitrogen_ring_fixture(&catalog)
                 .expect("test ring should be physically realized and bonded");
-        structure.bonds.pop();
+        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .expect("fixture starts with a qualifying cavity");
+        let bond_index = cavity
+            .boundary_bond_indices(&structure, &catalog)
+            .first()
+            .copied()
+            .expect("cavity wall must have bonded neighboring units");
+        let bond = structure.bonds[bond_index].clone();
+        let a = bond.endpoint_a.constituent_id;
+        let b = bond.endpoint_b.constituent_id;
+        // A physical join has multiple endpoint records. Remove every record
+        // for this constituent pair so the wall join is genuinely unbonded.
+        structure.bonds.retain(|candidate| {
+            !((candidate.endpoint_a.constituent_id == a
+                && candidate.endpoint_b.constituent_id == b)
+                || (candidate.endpoint_a.constituent_id == b
+                    && candidate.endpoint_b.constituent_id == a))
+        });
         let result = validate_realized_organism(
             &structure,
             &catalog,
