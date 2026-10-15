@@ -2360,21 +2360,28 @@ mod tests {
             cavity.area,
             cavity.minimum_area
         );
+        // Corner squares close the outside of the ring but do not face the
+        // cavity. Its inner boundary consists of 12 side squares and 8 bonds
+        // joining adjacent squares along those four inner sides.
         assert_eq!(
             cavity.boundary_units.len(),
-            16,
-            "every square in this ring must contribute to the detected cavity boundary"
+            12,
+            "only the 12 squares facing the cavity belong to its boundary"
         );
+        let boundary_bonds = cavity.boundary_bond_indices(&structure, &catalog);
         assert_eq!(
-            cavity.boundary_bond_indices(&structure, &catalog).len(),
-            16,
-            "all 16 perimeter joins must be represented by physical bonds"
+            boundary_bonds.len(),
+            8,
+            "the four inner sides contain two bonds each"
         );
 
-        // A geometrically ring-shaped arrangement is not a sealed genome if
-        // even one of its required perimeter connections is absent.
+        // Remove a bond that is actually part of the cavity wall. Removing an
+        // arbitrary perimeter bond could remove only an outside corner join.
         let mut missing_boundary_bond = structure.clone();
-        missing_boundary_bond.bonds.pop();
+        let boundary_bond_index = *boundary_bonds
+            .first()
+            .expect("the sealed cavity has wall bonds");
+        missing_boundary_bond.bonds.remove(boundary_bond_index);
         assert!(
             crate::cavity::analyze_genome_cavity(&missing_boundary_bond, &catalog)
                 .expect("cavity analysis should complete after removing a bond")
