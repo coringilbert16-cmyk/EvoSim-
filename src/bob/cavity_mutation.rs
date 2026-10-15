@@ -116,8 +116,7 @@ pub(super) fn one_step_mutations(
         for step in 1..=24 {
             let angle_degrees = step * 15;
             let mut trial = parent.structure.clone();
-            trial.units[unit_index].placement.rotation_radians +=
-                angle_step * step as f64;
+            trial.units[unit_index].placement.rotation_radians += angle_step * step as f64;
             out.push((
                 format!("rotate constituent at index {unit_index} by {angle_degrees}deg"),
                 trial,
