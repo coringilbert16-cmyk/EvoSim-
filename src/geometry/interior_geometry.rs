@@ -551,6 +551,20 @@ mod tests {
                 .any(|region| region.boundary_units.contains(&indices[0])),
             "the mutated Carbon must participate in the analyzed boundary"
         );
+
+        // Compare against the same formation with the original Nitrogen
+        // restored. The changed catalog shape must affect measured topology,
+        // not merely the material label attached to a stale cavity.
+        let mut nitrogen_baseline = structure.clone();
+        nitrogen_baseline.units[indices[0]].material =
+            crate::resources::Material::free_base("Nitrogen", 1.0);
+        let baseline_regions = find_enclosed_regions(&nitrogen_baseline, &catalog);
+        let measured_area: f64 = regions.iter().map(|region| region.area).sum();
+        let baseline_area: f64 = baseline_regions.iter().map(|region| region.area).sum();
+        assert!(
+            (measured_area - baseline_area).abs() > EPS,
+            "replacing a cavity piece with Carbon must recalculate the measured area"
+        );
     }
 
     fn region_count(polygons: Vec<Vec<Point>>) -> usize {
