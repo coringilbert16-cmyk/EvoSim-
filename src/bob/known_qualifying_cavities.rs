@@ -16,7 +16,6 @@ use crate::structure::OrganismStructure;
 const SCHEMA_VERSION: u32 = 1;
 const NITROGEN_RING_SEED_ID: &str = "nitrogen-ring-seed-v1";
 pub(crate) const MAX_QUALIFYING_CANDIDATES: usize = 5_000;
-pub(crate) const MAX_MUTATION_ATTEMPTS_PER_RUN: usize = 5_000;
 const MAX_STORE_BYTES: u64 = 64 * 1024 * 1024;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -149,14 +148,18 @@ pub(crate) fn persist_if_qualifying(
                 format!("decode cavity store line {}: {error}", line_number + 1)
             })?;
             existing_count += 1;
-            if existing.id == id || geometry_signature(&existing.structure)? == candidate_signature {
+            if existing.id == id
+                || geometry_signature(&existing.structure)? == candidate_signature
+            {
                 return Ok(SeedOutcome::AlreadyPresent { id: existing.id });
             }
         }
     }
 
     if existing_count >= MAX_QUALIFYING_CANDIDATES {
-        return Err(format!("known qualifying cavity store reached its hard limit of {MAX_QUALIFYING_CANDIDATES} candidates"));
+        return Err(format!(
+            "known qualifying cavity store reached its hard limit of {MAX_QUALIFYING_CANDIDATES} candidates"
+        ));
     }
 
     let record = KnownQualifyingCavity {
@@ -173,7 +176,10 @@ pub(crate) fn persist_if_qualifying(
         .map_err(|error| format!("serialize qualifying cavity: {error}"))?;
     serialized.push(b'\n');
     if existing_bytes.saturating_add(serialized.len() as u64) > MAX_STORE_BYTES {
-        return Err(format!("known qualifying cavity store would exceed its hard {} MiB disk budget", MAX_STORE_BYTES / (1024 * 1024)));
+        return Err(format!(
+            "known qualifying cavity store would exceed its hard {} MiB disk budget",
+            MAX_STORE_BYTES / (1024 * 1024)
+        ));
     }
     let mut file = OpenOptions::new()
         .create(true)
@@ -226,6 +232,26 @@ mod tests {
             std::process::id(),
             std::thread::current().name().unwrap_or("test")
         ))
+    }
+
+    #[test]
+    fn geometry_signature_ignores_physical_id_values() {
+        let catalog = crate::resources::default_catalog();
+        let mut first = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("seed structure should build");
+        let original = geometry_signature(&first).expect("signature should build");
+        let mut id_map = std::collections::HashMap::new();
+        for (index, unit) in first.units.iter_mut().enumerate() {
+            let old = unit.physical_id;
+            let new = crate::structure::PhysicalConstituentId(100 + index as u64);
+            id_map.insert(old, new);
+            unit.physical_id = new;
+        }
+        for bond in &mut first.bonds {
+            bond.endpoint_a.constituent_id = id_map[&bond.endpoint_a.constituent_id];
+            bond.endpoint_b.constituent_id = id_map[&bond.endpoint_b.constituent_id];
+        }
+        assert_eq!(original, geometry_signature(&first).unwrap());
     }
 
     #[test]
