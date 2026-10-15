@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 use rand::seq::SliceRandom;
+use rand::SeedableRng;
+use rand_chacha::ChaCha8Rng;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct MutationBatchStats {
@@ -28,6 +30,20 @@ struct MutationFrontier {
     next_indices: HashMap<String, usize>,
     exhausted_parent_ids: HashSet<String>,
     validated_record_count: usize,
+    selection_counter: u64,
+}
+
+fn shuffle_parent_candidates<T>(values: &mut [T], frontier: &mut MutationFrontier) {
+    if let Some(seed) = std::env::var("EVOSIM_BOB_SEED")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+    {
+        let seed = seed.wrapping_add(frontier.selection_counter);
+        frontier.selection_counter = frontier.selection_counter.wrapping_add(1);
+        values.shuffle(&mut ChaCha8Rng::seed_from_u64(seed));
+    } else {
+        values.shuffle(&mut rand::thread_rng());
+    }
 }
 
 /// Generate swap-first mutation trials. Each resource substitution owns its
@@ -261,7 +277,7 @@ pub(crate) fn mutate_once(
             .iter()
             .filter(|record| !frontier.exhausted_parent_ids.contains(&record.id))
             .collect();
-        eligible.shuffle(&mut rand::thread_rng());
+        shuffle_parent_candidates(&mut eligible, &mut frontier);
         eligible.first().map(|record| record.id.clone())
     });
 
