@@ -242,13 +242,15 @@ pub(crate) fn mutate_once(
     for (record_index, record) in records.iter().enumerate() {
         if record_index >= frontier.validated_record_count {
             validate_candidate_geometry(&record.structure, catalog).map_err(|error| {
-            format!(
-                "stored cavity candidate {} fails live geometry validation: {error}",
-                record.id
-            )
-        })?;
-        let cavity = crate::cavity::analyze_genome_cavity(&record.structure, catalog)?
-            .ok_or_else(|| format!("stored cavity candidate {} no longer qualifies", record.id))?;
+                format!(
+                    "stored cavity candidate {} fails live geometry validation: {error}",
+                    record.id
+                )
+            })?;
+            let cavity = crate::cavity::analyze_genome_cavity(&record.structure, catalog)?
+                .ok_or_else(|| {
+                    format!("stored cavity candidate {} no longer qualifies", record.id)
+                })?;
             if !cavity.qualifies()
                 || (cavity.area - record.cavity_area).abs() > 1e-7
                 || (cavity.minimum_area - record.minimum_cavity_area).abs() > 1e-7
@@ -267,8 +269,13 @@ pub(crate) fn mutate_once(
     let stored_bytes = fs::metadata(path)
         .map_err(|e| format!("inspect cavity store size: {e}"))?
         .len();
-    let known_parent_ids: HashSet<&str> = records.iter().map(|record| record.id.as_str()).collect();
-    if frontier.active_parent_id.as_deref().is_some_and(|id| !known_parent_ids.contains(id)) {
+    let known_parent_ids: HashSet<&str> =
+        records.iter().map(|record| record.id.as_str()).collect();
+    if frontier
+        .active_parent_id
+        .as_deref()
+        .is_some_and(|id| !known_parent_ids.contains(id))
+    {
         frontier.active_parent_id = None;
     }
 
@@ -283,12 +290,17 @@ pub(crate) fn mutate_once(
 
     let Some(selected_parent_id) = selected_parent_id else {
         stats.stopped_at_search_exhaustion = true;
-        fs::write(&frontier_path, serde_json::to_vec_pretty(&frontier)
-            .map_err(|e| format!("serialize cavity mutation frontier: {e}"))?)
-            .map_err(|e| format!("save cavity mutation frontier: {e}"))?;
+        fs::write(
+            &frontier_path,
+            serde_json::to_vec_pretty(&frontier)
+                .map_err(|e| format!("serialize cavity mutation frontier: {e}"))?,
+        )
+        .map_err(|e| format!("save cavity mutation frontier: {e}"))?;
         return Ok(stats);
     };
-    let parent_index = records.iter().position(|record| record.id == selected_parent_id)
+    let parent_index = records
+        .iter()
+        .position(|record| record.id == selected_parent_id)
         .ok_or_else(|| format!("active cavity parent {selected_parent_id} is missing"))?;
     let parent = &records[parent_index];
     let mutations = one_step_mutations(parent, catalog);
@@ -447,9 +459,12 @@ pub(crate) fn mutate_once(
     if !appended.is_empty() {
         append_records_atomically(path, &appended)?;
     }
-    fs::write(&frontier_path, serde_json::to_vec_pretty(&frontier)
-        .map_err(|e| format!("serialize cavity mutation frontier: {e}"))?)
-        .map_err(|e| format!("save cavity mutation frontier: {e}"))?;
+    fs::write(
+        &frontier_path,
+        serde_json::to_vec_pretty(&frontier)
+            .map_err(|e| format!("serialize cavity mutation frontier: {e}"))?,
+    )
+    .map_err(|e| format!("save cavity mutation frontier: {e}"))?;
     Ok(stats)
 }
 
