@@ -10,6 +10,8 @@ pub(crate) struct MutationBatchStats {
     pub rejected: usize,
     pub duplicates: usize,
     pub geometry_rejections: usize,
+    /// Candidates that passed physical geometry validation and were analyzed for cavity qualification.
+    pub cavity_checks_performed: usize,
     pub cavity_rejections: usize,
     pub viability_rejections: usize,
     pub rejection_reasons: BTreeMap<String, usize>,
@@ -189,6 +191,7 @@ pub(crate) fn mutate_once(
                     .or_default() += 1;
                 continue;
             }
+            stats.cavity_checks_performed += 1;
             let cavity = match crate::cavity::analyze_genome_cavity(&structure, catalog) {
                 Ok(Some(cavity)) if cavity.qualifies() => cavity,
                 Ok(_) => {
