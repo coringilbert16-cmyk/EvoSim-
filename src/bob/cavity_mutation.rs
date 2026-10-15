@@ -95,12 +95,15 @@ fn rebuild_replacement_connections(
     changed_index: usize,
     catalog: &[BaseResource],
 ) {
-    let Some(changed_id) = structure.units.get(changed_index).map(|unit| unit.physical_id) else {
+    let Some(changed_id) = structure
+        .units
+        .get(changed_index)
+        .map(|unit| unit.physical_id)
+    else {
         return;
     };
     structure.bonds.retain(|bond| {
-        bond.endpoint_a.constituent_id != changed_id
-            && bond.endpoint_b.constituent_id != changed_id
+        bond.endpoint_a.constituent_id != changed_id && bond.endpoint_b.constituent_id != changed_id
     });
 
     let mut ledger = crate::state::EnergyLedger::default();
