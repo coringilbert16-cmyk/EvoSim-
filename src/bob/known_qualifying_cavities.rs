@@ -412,6 +412,14 @@ mod tests {
         let stats = mutate_once(&path, &catalog).expect("bounded mutation batch should complete");
         assert!(stats.attempts <= MAX_MUTATION_ATTEMPTS_PER_RUN);
         assert!(
+            stats.cavity_checks_performed > 0,
+            "mutator should run cavity analysis on physically valid novel candidates"
+        );
+        assert!(
+            stats.cavity_checks_performed <= stats.attempts,
+            "cavity checks cannot exceed candidate attempts"
+        );
+        assert!(
             stats.accepted > 0,
             "seed should produce at least one qualifying one-step variant"
         );
