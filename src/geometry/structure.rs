@@ -370,7 +370,7 @@ impl Bond {
             && connection_is_valid(self.endpoint_b)
     }
 }
-fn units_strictly_overlap(
+pub(crate) fn units_strictly_overlap(
     a: &StructuralUnit,
     b: &StructuralUnit,
     catalog: &[BaseResource],
