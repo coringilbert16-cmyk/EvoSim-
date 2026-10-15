@@ -427,14 +427,15 @@ mod tests {
         assert!(validate_candidate_geometry(&structure, &catalog).is_err());
         let path = temporary_store();
         let _ = fs::remove_file(&path);
-        assert!(persist_if_qualifying(
+        let result = persist_if_qualifying(
             &path,
             "rejected-overlap",
             None,
             "move a boundary piece into its neighbor".to_string(),
             structure,
             &catalog,
-        ).is_err());
+        );
+        assert!(result.is_err());
         assert!(!path.exists() || load_records(&path).unwrap().is_empty());
         let _ = fs::remove_file(path);
     }
