@@ -478,22 +478,20 @@ mod tests {
     #[test]
     fn mutation_frontier_includes_independent_one_unit_translations() {
         let catalog = crate::resources::default_catalog();
-        let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
-            .expect("nitrogen ring seed should build");
+        let structure =
+            crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+                .expect("nitrogen ring seed should build");
+        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .expect("cavity analysis should succeed")
+            .expect("seed should have a cavity");
         let parent = KnownQualifyingCavity {
             schema_version: SCHEMA_VERSION,
             id: "translation-test-seed".to_string(),
             parent_id: None,
             change: "test seed".to_string(),
             constituent_count: structure.units.len(),
-            cavity_area: crate::cavity::analyze_genome_cavity(&structure, &catalog)
-                .expect("cavity analysis should succeed")
-                .expect("seed should have a cavity")
-                .area,
-            minimum_cavity_area: crate::cavity::analyze_genome_cavity(&structure, &catalog)
-                .expect("cavity analysis should succeed")
-                .expect("seed should have a cavity")
-                .minimum_area,
+            cavity_area: cavity.area,
+            minimum_cavity_area: cavity.minimum_area,
             structure,
         };
         let mutations = cavity_mutation::one_step_mutations(&parent, &catalog);
