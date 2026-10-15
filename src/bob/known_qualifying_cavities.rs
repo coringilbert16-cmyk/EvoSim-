@@ -4,7 +4,7 @@
 //! catalogue or its three-constituent expansion frontier.
 
 use std::fs::{self, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -17,7 +17,8 @@ use crate::structure::OrganismStructure;
 mod cavity_mutation;
 pub(crate) use cavity_mutation::mutate_once;
 
-const SCHEMA_VERSION: u32 = 2;
+const SCHEMA_VERSION: u32 = 3;
+const PREVIOUS_SCHEMA_VERSION: u32 = 2;
 const LEGACY_SCHEMA_VERSION: u32 = 1;
 const NITROGEN_RING_SEED_ID: &str = "nitrogen-ring-seed-v1";
 pub(crate) const MAX_QUALIFYING_CANDIDATES: usize = 5_000;
@@ -320,6 +321,7 @@ pub(crate) fn load_records(path: impl AsRef<Path>) -> Result<Vec<KnownQualifying
         let record: KnownQualifyingCavity = serde_json::from_str(line)
             .map_err(|error| format!("decode cavity store line {line_number}: {error}"))?;
         if record.schema_version != SCHEMA_VERSION
+            && record.schema_version != PREVIOUS_SCHEMA_VERSION
             && record.schema_version != LEGACY_SCHEMA_VERSION
         {
             return Err(format!(
@@ -336,7 +338,7 @@ pub(crate) fn load_records(path: impl AsRef<Path>) -> Result<Vec<KnownQualifying
     // newly generated candidates rather than resetting the store again.
     if records
         .iter()
-        .any(|record| record.schema_version == LEGACY_SCHEMA_VERSION)
+        .any(|record| record.schema_version != SCHEMA_VERSION)
     {
         let mut seed = records
             .into_iter()
@@ -356,7 +358,7 @@ pub(crate) fn load_records(path: impl AsRef<Path>) -> Result<Vec<KnownQualifying
     let mut ids = std::collections::HashSet::new();
     for (index, record) in records.iter().enumerate() {
         let line_number = index + 1;
-        if record.id.trim().is_empty() || !ids.insert(record.id.clone()) {
+        if record.id.trim().is_empty() || ids.contains(&record.id) {
             return Err(format!(
                 "empty or duplicate cavity candidate ID on line {line_number}"
             ));
@@ -385,6 +387,7 @@ pub(crate) fn load_records(path: impl AsRef<Path>) -> Result<Vec<KnownQualifying
                 ));
             }
         }
+        ids.insert(record.id.clone());
         if index + 1 > MAX_QUALIFYING_CANDIDATES {
             return Err(format!(
                 "cavity store exceeds hard limit of {MAX_QUALIFYING_CANDIDATES} records"
@@ -516,7 +519,7 @@ mod tests {
             .expect("seed cavity analysis should succeed")
             .expect("seed should have a qualifying cavity");
         let seed = KnownQualifyingCavity {
-            schema_version: LEGACY_SCHEMA_VERSION,
+            schema_version: PREVIOUS_SCHEMA_VERSION,
             id: NITROGEN_RING_SEED_ID.to_string(),
             parent_id: None,
             change: "initial validated 5x5 nitrogen perimeter".to_string(),
@@ -688,7 +691,7 @@ mod tests {
         let _ = fs::remove_file(&path);
         seed_nitrogen_ring(&path, &catalog).expect("valid seed should persist");
         let contents = fs::read_to_string(&path).expect("store should be readable");
-        let corrupted = contents.replace("\"constituent_count\":16", "\"constituent_count\":15");
+        let corrupted = contents.replace("\\\"schema_version\\\":3", "\\\"schema_version\\\":999");
         assert_ne!(
             contents, corrupted,
             "fixture must contain the expected metadata"
