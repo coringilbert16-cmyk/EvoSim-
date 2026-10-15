@@ -413,3 +413,38 @@ pub(crate) fn mutate_once(
         .map_err(|e| format!("save cavity mutation frontier: {e}"))?;
     Ok(stats)
 }
+
+/// Keep running bounded mutation batches until the 5,000-record target is
+/// reached, storage is exhausted, or every persisted parent frontier is exhausted.
+pub(crate) fn mutate_until_full(
+    path: impl AsRef<Path>,
+    catalog: &[BaseResource],
+) -> Result<MutationBatchStats, String> {
+    let path = path.as_ref();
+    let mut total = MutationBatchStats::default();
+    loop {
+        let batch = mutate_once(path, catalog)?;
+        total.attempts += batch.attempts;
+        total.accepted += batch.accepted;
+        total.rejected += batch.rejected;
+        total.duplicates += batch.duplicates;
+        total.geometry_rejections += batch.geometry_rejections;
+        total.cavity_checks_performed += batch.cavity_checks_performed;
+        total.cavity_rejections += batch.cavity_rejections;
+        total.viability_rejections += batch.viability_rejections;
+        for (reason, count) in batch.rejection_reasons {
+            *total.rejection_reasons.entry(reason).or_default() += count;
+        }
+        total.stopped_at_candidate_limit |= batch.stopped_at_candidate_limit;
+        total.stopped_at_storage_limit |= batch.stopped_at_storage_limit;
+        total.stopped_at_search_exhaustion |= batch.stopped_at_search_exhaustion;
+
+        if total.stopped_at_candidate_limit
+            || total.stopped_at_storage_limit
+            || total.stopped_at_search_exhaustion
+        {
+            break;
+        }
+    }
+    Ok(total)
+}
