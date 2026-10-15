@@ -348,7 +348,7 @@ pub(crate) fn load_records(path: impl AsRef<Path>) -> Result<Vec<KnownQualifying
         seed.schema_version = SCHEMA_VERSION;
         let mut bytes = serde_json::to_vec(&seed)
             .map_err(|error| format!("serialize migrated nitrogen-ring seed: {error}"))?;
-        bytes.push(b'\\n');
+        bytes.push(b'\n');
         replace_records_atomically(path, &bytes)?;
         return Ok(vec![seed]);
     }
@@ -531,9 +531,9 @@ mod tests {
         obsolete.change = "remove bond at index 0".to_string();
         obsolete.structure.break_bond(0);
         let mut contents = serde_json::to_vec(&seed).unwrap();
-        contents.push(b'\\n');
+        contents.push(b'\n');
         contents.extend(serde_json::to_vec(&obsolete).unwrap());
-        contents.push(b'\\n');
+        contents.push(b'\n');
         fs::write(&path, contents).expect("legacy fixture should be writable");
 
         let migrated = load_records(&path).expect("legacy store should migrate");
@@ -552,7 +552,7 @@ mod tests {
         evolved.change = "test generated candidate".to_string();
         let mut next_contents = on_disk;
         next_contents.push_str(&serde_json::to_string(&evolved).unwrap());
-        next_contents.push('\\n');
+        next_contents.push('\n');
         fs::write(&path, next_contents).unwrap();
         assert_eq!(load_records(&path).unwrap().len(), 2);
         let _ = fs::remove_file(path);
@@ -706,7 +706,7 @@ mod tests {
         let _ = fs::remove_file(&path);
         seed_nitrogen_ring(&path, &catalog).expect("valid seed should persist");
         let contents = fs::read_to_string(&path).expect("store should be readable");
-        let corrupted = contents.replace("\"schema_version\":1", "\"schema_version\":999");
+        let corrupted = contents.replace("\"schema_version\":2", "\"schema_version\":999");
         assert_ne!(
             contents, corrupted,
             "fixture must contain the expected schema"
