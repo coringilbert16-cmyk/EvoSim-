@@ -198,6 +198,14 @@ fn analyze_genome_cavity_in_indices(
             continue;
         }
 
+        // Every shared material/material seam between two cavity-wall units
+        // must have a live bond. Component membership alone is insufficient:
+        // a ring remains one connected component even after one wall join is
+        // removed, and duplicated endpoint records must not mask a missing join.
+        if !boundary_units_have_bonded_shared_edges(structure, catalog, &region.boundary_units) {
+            continue;
+        }
+
         let candidate = GenomeCavity {
             area: region.area,
             boundary_units: region.boundary_units.clone(),
@@ -214,6 +222,63 @@ fn analyze_genome_cavity_in_indices(
     }
 
     Ok(best)
+}
+
+fn boundary_units_have_bonded_shared_edges(
+    structure: &OrganismStructure,
+    catalog: &[BaseResource],
+    boundary_units: &[usize],
+) -> bool {
+    for (position, &a_index) in boundary_units.iter().enumerate() {
+        let Some(a_unit) = structure.units.get(a_index) else {
+            return false;
+        };
+        let Some(a_shape) = a_unit.shape(catalog) else {
+            return false;
+        };
+        let Some(a_polygon) = transformed_polygon(&a_shape.form, a_unit.placement) else {
+            continue;
+        };
+
+        for &b_index in &boundary_units[position + 1..] {
+            let Some(b_unit) = structure.units.get(b_index) else {
+                return false;
+            };
+            let Some(b_shape) = b_unit.shape(catalog) else {
+                return false;
+            };
+            let Some(b_polygon) = transformed_polygon(&b_shape.form, b_unit.placement) else {
+                continue;
+            };
+
+            let shares_edge = a_polygon.iter().enumerate().any(|(i, &a0)| {
+                let a1 = a_polygon[(i + 1) % a_polygon.len()];
+                b_polygon.iter().enumerate().any(|(j, &b0)| {
+                    let b1 = b_polygon[(j + 1) % b_polygon.len()];
+                    (a0.sub(b0).norm() <= NODE_TOLERANCE
+                        && a1.sub(b1).norm() <= NODE_TOLERANCE)
+                        || (a0.sub(b1).norm() <= NODE_TOLERANCE
+                            && a1.sub(b0).norm() <= NODE_TOLERANCE)
+                })
+            });
+            if !shares_edge {
+                continue;
+            }
+
+            let a_id = a_unit.physical_id;
+            let b_id = b_unit.physical_id;
+            let bonded = structure.bonds.iter().any(|bond| {
+                (bond.endpoint_a.constituent_id == a_id
+                    && bond.endpoint_b.constituent_id == b_id)
+                    || (bond.endpoint_a.constituent_id == b_id
+                        && bond.endpoint_b.constituent_id == a_id)
+            });
+            if !bonded {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 fn unit_boundary_matches_segment(
