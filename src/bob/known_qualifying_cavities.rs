@@ -221,6 +221,7 @@ mod tests {
             crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
                 .expect("seed structure should build");
         let removed_id = structure.units[0].physical_id;
+        structure.units.retain(|unit| unit.physical_id != removed_id);
         structure.bonds.retain(|bond| {
             bond.endpoint_a.constituent_id != removed_id
                 && bond.endpoint_b.constituent_id != removed_id
