@@ -114,7 +114,8 @@ jobs:
       - name: Hold broad Rust suite during constructor calibration
         timeout-minutes: 1
         if: always()
-        run: echo "HOLD: broad Rust suite paused; constructor-dependent tests can run indirectly from unrelated test names."
+        run: |
+          echo "HOLD: broad Rust suite paused; constructor-dependent tests can run indirectly from unrelated test names."
       - name: Run Clippy
         timeout-minutes: 5
         if: always()
