@@ -104,7 +104,7 @@ fn rebuild_replacement_connections(
             && bond.endpoint_b.constituent_id != changed_id
     });
 
-    let mut ledger = crate::energy::EnergyLedger::default();
+    let mut ledger = crate::state::EnergyLedger::default();
     let mut energy = f64::MAX / 4.0;
     let neighbor_indices = (0..structure.units.len())
         .filter(|&index| index != changed_index)
