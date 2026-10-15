@@ -109,7 +109,6 @@ fn validate_candidate_geometry(
     Ok(())
 }
 
-
 /// Publish a JSONL append by atomically replacing the file. An interrupted write
 /// leaves either the previous complete store or the complete new store visible.
 pub(super) fn append_records_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -542,21 +541,14 @@ mod tests {
         let _ = fs::remove_file(&path);
         seed_nitrogen_ring(&path, &catalog).expect("valid seed should persist");
         let contents = fs::read_to_string(&path).expect("store should be readable");
-        let corrupted = contents.replace(
-            "\"constituent_count\":16",
-            "\"constituent_count\":15",
-        );
+        let corrupted = contents.replace("\"constituent_count\":16", "\"constituent_count\":15");
         assert_ne!(
             contents, corrupted,
             "fixture must contain the expected metadata"
         );
         fs::write(&path, corrupted).expect("corrupt test fixture should be writable");
-        let error =
-            load_records(&path).expect_err("inconsistent metadata must be rejected");
-        assert!(
-            error.contains("inconsistent constituent_count"),
-            "{error}"
-        );
+        let error = load_records(&path).expect_err("inconsistent metadata must be rejected");
+        assert!(error.contains("inconsistent constituent_count"), "{error}");
         let _ = fs::remove_file(path);
     }
 
@@ -567,10 +559,7 @@ mod tests {
         let _ = fs::remove_file(&path);
         seed_nitrogen_ring(&path, &catalog).expect("valid seed should persist");
         let contents = fs::read_to_string(&path).expect("store should be readable");
-        let corrupted = contents.replace(
-            "\"schema_version\":1",
-            "\"schema_version\":999",
-        );
+        let corrupted = contents.replace("\"schema_version\":1", "\"schema_version\":999");
         assert_ne!(
             contents, corrupted,
             "fixture must contain the expected schema"
@@ -583,5 +572,4 @@ mod tests {
         );
         let _ = fs::remove_file(path);
     }
-
 }
