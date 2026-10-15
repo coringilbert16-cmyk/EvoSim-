@@ -368,8 +368,11 @@ mod tests {
             cavity.area >= minimum_genome_cavity_area(&catalog).unwrap(),
             "realized cavity must meet the three-Carbon minimum"
         );
-        assert_eq!(cavity.boundary_units.len(), 16);
-        assert_eq!(cavity.boundary_bond_indices(&structure, &catalog).len(), 16);
+        // The four corner squares close the outer perimeter but do not face
+        // the cavity. Only the three squares along each of the four inner
+        // sides contribute to its boundary: 12 units and 8 side-to-side bonds.
+        assert_eq!(cavity.boundary_units.len(), 12);
+        assert_eq!(cavity.boundary_bond_indices(&structure, &catalog).len(), 8);
     }
 
     #[test]
