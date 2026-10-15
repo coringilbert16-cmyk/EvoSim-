@@ -53,7 +53,8 @@ impl GenomeCavity {
 
     /// A genome cavity qualifies only when it has finite area at least equal
     /// to three Carbon constituents and a real physical boundary. Sealing and
-    /// accessible-interior requirements are validated separately.
+    /// The area threshold is a hard minimum, not a suggestion. Sealing is
+    /// established by the realized physical boundary and bond graph.
     pub fn qualifies(&self) -> bool {
         self.area.is_finite()
             && self.area > EPS
@@ -100,9 +101,9 @@ impl GenomeCavity {
     }
 }
 
-/// The minimum cavity area is exactly the area of three Carbon constituents.
-/// Equality qualifies; no additional margin is added. Carbon supplies a size
-/// reference, not a prescribed genome topology.
+/// The hard minimum cavity area is exactly the area of three Carbon constituents.
+/// Equality qualifies; no additional margin is added. Carbon geometry sets the
+/// area threshold, but does not prescribe the genome's topology.
 pub fn minimum_genome_cavity_area(catalog: &[BaseResource]) -> Result<f64, String> {
     let carbon = catalog
         .iter()
@@ -112,7 +113,7 @@ pub fn minimum_genome_cavity_area(catalog: &[BaseResource]) -> Result<f64, Strin
         form_area(&carbon.shape.form).ok_or_else(|| "Carbon has no finite 2D area".to_string())?;
     let minimum = 3.0 * area;
     if !minimum.is_finite() || minimum <= 0.0 {
-        return Err("invalid Carbon cavity reference area".into());
+        return Err("invalid Carbon cavity minimum area".into());
     }
     Ok(minimum)
 }
@@ -146,7 +147,7 @@ fn analyze_genome_cavity_in_indices(
     catalog: &[BaseResource],
     candidate_indices: &[usize],
 ) -> Result<Option<GenomeCavity>, String> {
-    let capacity_reference_area = minimum_genome_cavity_area(catalog)?;
+    let minimum_area = minimum_genome_cavity_area(catalog)?;
     let component_set: HashSet<usize> = candidate_indices.iter().copied().collect();
 
     // Interior geometry is the single source of truth for realized planar
@@ -200,7 +201,7 @@ fn analyze_genome_cavity_in_indices(
         let candidate = GenomeCavity {
             area: region.area,
             boundary_units: region.boundary_units.clone(),
-            minimum_area: capacity_reference_area,
+            minimum_area,
             boundary_segments,
         };
 
@@ -313,7 +314,7 @@ mod tests {
     use crate::resources::default_catalog;
 
     #[test]
-    fn three_carbon_reference_comes_from_carbon_geometry() {
+    fn three_carbon_minimum_comes_from_carbon_geometry() {
         let catalog = default_catalog();
         let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
         assert!(
