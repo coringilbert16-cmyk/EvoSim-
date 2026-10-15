@@ -109,6 +109,40 @@ fn validate_candidate_geometry(
     Ok(())
 }
 
+
+/// Publish a JSONL append by atomically replacing the file. An interrupted write
+/// leaves either the previous complete store or the complete new store visible.
+pub(super) fn append_records_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let temporary_path = path.with_extension("tmp");
+    let result = (|| {
+        let mut temporary = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&temporary_path)
+            .map_err(|error| format!("open temporary cavity store: {error}"))?;
+        if path.exists() {
+            let mut existing = std::fs::File::open(path)
+                .map_err(|error| format!("open existing cavity store: {error}"))?;
+            std::io::copy(&mut existing, &mut temporary)
+                .map_err(|error| format!("copy existing cavity store: {error}"))?;
+        }
+        temporary
+            .write_all(bytes)
+            .map_err(|error| format!("write temporary cavity store: {error}"))?;
+        temporary
+            .sync_all()
+            .map_err(|error| format!("sync temporary cavity store: {error}"))?;
+        fs::rename(&temporary_path, path)
+            .map_err(|error| format!("publish cavity store atomically: {error}"))?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary_path);
+    }
+    result
+}
+
 struct StoreLock {
     path: PathBuf,
 }
@@ -207,18 +241,9 @@ pub(crate) fn persist_if_qualifying(
         existing_bytes = fs::metadata(path)
             .map_err(|error| format!("inspect cavity store size: {error}"))?
             .len();
-        let file = std::fs::File::open(path)
-            .map_err(|error| format!("open cavity store for duplicate check: {error}"))?;
-        for (line_number, line) in BufReader::new(file).lines().enumerate() {
-            let line = line
-                .map_err(|error| format!("read cavity store line {}: {error}", line_number + 1))?;
-            if line.trim().is_empty() {
-                continue;
-            }
-            let existing: KnownQualifyingCavity = serde_json::from_str(&line).map_err(|error| {
-                format!("decode cavity store line {}: {error}", line_number + 1)
-            })?;
-            existing_count += 1;
+        let existing_records = load_records(path)?;
+        existing_count = existing_records.len();
+        for existing in existing_records {
             if existing.id == id || geometry_signature(&existing.structure)? == candidate_signature
             {
                 return Ok(SeedOutcome::AlreadyPresent { id: existing.id });
@@ -251,15 +276,7 @@ pub(crate) fn persist_if_qualifying(
             MAX_STORE_BYTES / (1024 * 1024)
         ));
     }
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .map_err(|error| format!("open cavity store for append: {error}"))?;
-    file.write_all(&serialized)
-        .map_err(|error| format!("finish cavity record: {error}"))?;
-    file.sync_data()
-        .map_err(|error| format!("sync cavity store: {error}"))?;
+    append_records_atomically(path, &serialized)?;
 
     Ok(SeedOutcome::Added {
         id: record.id,
