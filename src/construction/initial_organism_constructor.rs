@@ -1798,7 +1798,13 @@ mod tests {
         };
 
         let suggestions =
-            persisted_pair_formation_placements("Carbon", live_anchor, nitrogen, &library);
+            persisted_pair_formation_placements(
+                "Carbon",
+                live_anchor,
+                nitrogen,
+                &library,
+                Instant::now() + CONSTRUCTION_TIME_LIMIT,
+            );
         assert!(
             suggestions.iter().any(|pose| {
                 (pose.x - expected.x).hypot(pose.y - expected.y) < 1e-9
@@ -2094,6 +2100,7 @@ mod tests {
             &catalog,
             &EnergyLedger::default(),
             1_000_000.0,
+            Instant::now() + CONSTRUCTION_TIME_LIMIT,
         );
         match result {
             Err(PersistedAttachmentFailure::CoverageMiss) => {}
@@ -2148,6 +2155,7 @@ mod tests {
             &catalog,
             &EnergyLedger::default(),
             initial_energy,
+            Instant::now() + CONSTRUCTION_TIME_LIMIT,
         )
         .expect(
             "persisted Bob proposal should pass live restoration, overlap, contact, and COMBINE",
