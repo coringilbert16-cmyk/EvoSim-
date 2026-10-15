@@ -70,6 +70,32 @@ fn geometry_signature(structure: &OrganismStructure) -> Result<String, String> {
     Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
+struct StoreLock {
+    path: PathBuf,
+}
+
+impl StoreLock {
+    fn acquire(store_path: &Path) -> Result<Self, String> {
+        let path = store_path.with_extension("lock");
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .map_err(|error| {
+                format!(
+                    "known qualifying cavity store is locked or its lock cannot be created: {error}"
+                )
+            })?;
+        Ok(Self { path })
+    }
+}
+
+impl Drop for StoreLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
 pub(crate) fn default_store_path() -> PathBuf {
     std::env::var_os("EVOSIM_KNOWN_CAVITIES_DIR")
         .map(PathBuf::from)
@@ -130,6 +156,7 @@ pub(crate) fn persist_if_qualifying(
             .map_err(|error| format!("create cavity store directory: {error}"))?;
     }
 
+    let _store_lock = StoreLock::acquire(path)?;
     let candidate_signature = geometry_signature(&structure)?;
     let mut existing_count = 0usize;
     let mut existing_bytes = 0u64;
@@ -265,14 +292,20 @@ fn one_step_mutations(
         }
 
         let current_name = parent.structure.units[unit_index]
-            .material.parts.first().map(|part| part.0.as_str()).unwrap_or("");
+            .material
+            .parts
+            .first()
+            .map(|part| part.0.as_str())
+            .unwrap_or("");
         for resource in catalog.iter().filter(|resource| resource.name != current_name) {
             let mut replaced = parent.structure.clone();
-            replaced.units[unit_index].material = crate::resources::Material::free_base(
-                resource.name.clone(), 1.0,
-            );
+            replaced.units[unit_index].material =
+                crate::resources::Material::free_base(resource.name.clone(), 1.0);
             replaced.units[unit_index].geometry = None;
-            out.push((format!("replace constituent at index {unit_index} with {}", resource.name), replaced));
+            out.push((
+                format!("replace constituent at index {unit_index} with {}", resource.name),
+                replaced,
+            ));
         }
     }
     for bond_index in 0..parent.structure.bonds.len() {
@@ -300,6 +333,7 @@ pub(crate) fn mutate_once(
     {
         seed_nitrogen_ring(path, catalog)?;
     }
+    let _store_lock = StoreLock::acquire(path)?;
     let records = load_records(path)?;
     if records.is_empty() {
         return Err("known qualifying cavity store has no seed candidates".to_string());
@@ -422,6 +456,18 @@ mod tests {
             std::process::id(),
             std::thread::current().name().unwrap_or("test")
         ))
+    }
+
+    #[test]
+    fn cavity_store_lock_prevents_concurrent_writers() {
+        let path = temporary_store();
+        let lock_path = path.with_extension("lock");
+        let _ = fs::remove_file(&lock_path);
+        let first = StoreLock::acquire(&path).expect("first writer should acquire lock");
+        assert!(StoreLock::acquire(&path).is_err());
+        drop(first);
+        assert!(StoreLock::acquire(&path).is_ok());
+        let _ = fs::remove_file(lock_path);
     }
 
     #[test]
