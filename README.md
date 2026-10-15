@@ -47,6 +47,12 @@ This replacement is intended to improve geometric compatibility, not to claim th
 
 ### Operational gates
 
+### Non-negotiable constructor acceptance and runtime limit
+
+- **Genome cavity area is a hard biological rule, never a suggestion or reference value:** the realized, sealed genome cavity must have area greater than or equal to the area of exactly three Carbon constituents. Equality passes; any smaller area fails. The cavity analyzer's minimum-area value and qualification check must enforce this invariant. Do not add an extra margin or replace it with a topology/constituent-count proxy.
+- The timeout is a failure boundary, not permission to weaken cavity area, sealing, nonpenetration, bond, or energy invariants.
+- **Hard runtime limit:** every constructor invocation and every individual CI command/test run has a five-minute maximum. A run that has not achieved its required result by 5:00 is a failure, not an indefinitely running test. Timeout failures must be reported distinctly from biological/geometry rejection and include available progress diagnostics.
+
 1. Keep the geometry catalogue empty in the tracked tree. Never run the continuous worker or use the default catalogue directory for tests.
 2. The focused Bob fluid transaction gate now passes on PR #193: same-rigid-unit multi-contact, existing multi-contact rollback, persisted-record realization, restored fluid contacts, three-piece cap, and area-conservation solver tests are explicit in `.github/workflows/rust.yml`. Live validation remains authoritative.
 3. Do not run production three-piece generation from the integration branch until these changes are incorporated into `integration/unified-source-and-catalogue`. Then use the manual `.github/workflows/bob-three-piece-generation.yml` workflow, which writes to an isolated runner-temporary output root and uploads the result as an artifact. Keep generated data out of Git and report formation/family counts, runtime, storage size, frontier completion, and reopen verification.
@@ -1992,7 +1998,7 @@ The exact-head CI run [38555835930](https://github.com/coringilbert16-cmyk/EvoSi
 The run's full Rust suite reported **367 passed, 69 failed, 1 ignored**; strict Clippy failed with 67 lint errors. Failures include constructor/cavity/viability and many simulation tests cascading from startup construction failure, plus separate geometry, storage, and chemistry assertions. Treat this as a broader baseline failure to triage, not a failure of the focused pair-replay regression. Do not claim the constructor works end to end.
 
 The unique PR #190 viability changes are being consolidated here:
-- The genome cavity must have area at least equal to exactly three Carbon constituents (`cavity.area >= cavity.minimum_area`); equality qualifies with no extra margin. The cavity must also have finite positive area and a real physical boundary. Sealing and accessible-interior requirements remain separate mandatory checks.
+- **Hard genome-cavity rule:** the realized, sealed cavity must have area greater than or equal to the area of exactly three Carbon constituents; equality qualifies and anything smaller fails. This is a hard minimum, not reference data. The cavity must have finite positive area and a real physical boundary.
 - Viability requires positive-area accessible processing space outside the genome cavity; outside-piece count alone is insufficient.
 - No constructor energy/resource gates or collision tolerances are changed by this port.
 
