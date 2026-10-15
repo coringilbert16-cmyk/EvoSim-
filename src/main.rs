@@ -41,6 +41,8 @@ mod construction_runtime;
 mod contact;
 #[path = "bob/worker.rs"]
 mod geometry_library_worker;
+#[path = "bob/known_qualifying_cavities.rs"]
+mod known_qualifying_cavities;
 #[path = "bob/library.rs"]
 mod geometry_reference_library;
 #[path = "bob/server.rs"]
@@ -161,6 +163,16 @@ async fn main() {
             .and_then(|value| value.parse::<u16>().ok())
             .expect("--simulation-child requires a TCP port");
         sim_process::run_child(port).await;
+        return;
+    }
+
+    if command.as_deref() == Some("--bob-cavity-seed-nitrogen-ring") {
+        let catalog = resources::default_catalog();
+        let path = known_qualifying_cavities::default_store_path();
+        let outcome = known_qualifying_cavities::seed_nitrogen_ring(&path, &catalog)
+            .expect("nitrogen-ring cavity seed failed authoritative validation or persistence");
+        println!("Known qualifying cavity store: {}", path.display());
+        println!("{outcome:?}");
         return;
     }
 
