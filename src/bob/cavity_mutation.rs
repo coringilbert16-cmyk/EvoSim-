@@ -102,10 +102,14 @@ pub(super) fn one_step_mutations(
                 let mut trial = parent.structure.clone();
                 trial.units[unit_index].placement.x += dx;
                 trial.units[unit_index].placement.y += dy;
+                let distance_label = if distance.fract() == 0.0 {
+                    format!("{distance:.1}")
+                } else {
+                    format!("{distance:.2}")
+                };
+                let label = format!("move {direction} {distance_label}");
                 out.push((
-                    format!(
-                        "translate constituent at index {unit_index} {direction} {distance:.2}"
-                    ),
+                    format!("translate constituent at index {unit_index} ({label})"),
                     trial,
                 ));
             }
