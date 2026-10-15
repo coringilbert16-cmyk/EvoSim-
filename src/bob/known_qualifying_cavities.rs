@@ -290,7 +290,8 @@ pub(crate) fn load_records(path: impl AsRef<Path>) -> Result<Vec<KnownQualifying
     if !path.exists() {
         return Ok(Vec::new());
     }
-    let file = std::fs::File::open(path).map_err(|error| format!("open cavity store: {error}"))?;
+    let file = std::fs::File::open(path)
+        .map_err(|error| format!("open cavity store: {error}"))?;
     let mut records = Vec::new();
     let mut ids = std::collections::HashSet::new();
     for (index, line) in BufReader::new(file).lines().enumerate() {
