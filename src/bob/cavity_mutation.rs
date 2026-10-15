@@ -130,6 +130,10 @@ pub(crate) fn mutate_once(
                 stats.duplicates += 1;
                 continue;
             }
+            if validate_candidate_geometry(&structure, catalog).is_err() {
+                stats.rejected += 1;
+                continue;
+            }
             let cavity = match crate::cavity::analyze_genome_cavity(&structure, catalog) {
                 Ok(Some(cavity)) if cavity.qualifies() => cavity,
                 _ => {
