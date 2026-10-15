@@ -29,8 +29,14 @@ pub(crate) struct KnownQualifyingCavity {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum SeedOutcome {
-    Added { id: String, constituent_count: usize, cavity_area: f64 },
-    AlreadyPresent { id: String },
+    Added {
+        id: String,
+        constituent_count: usize,
+        cavity_area: f64,
+    },
+    AlreadyPresent {
+        id: String,
+    },
 }
 
 pub(crate) fn default_store_path() -> PathBuf {
@@ -72,8 +78,9 @@ pub(crate) fn persist_if_qualifying(
 
     // Use the authoritative realized-geometry validator. Extra processing
     // structure is deliberately not required for this category.
-    let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)?
-        .ok_or_else(|| "candidate has no sealed cavity meeting the three-Carbon minimum".to_string())?;
+    let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)?.ok_or_else(|| {
+        "candidate has no sealed cavity meeting the three-Carbon minimum".to_string()
+    })?;
     if !cavity.qualifies() {
         return Err("candidate cavity failed the authoritative qualification checks".to_string());
     }
@@ -88,7 +95,8 @@ pub(crate) fn persist_if_qualifying(
 
     let path = path.as_ref();
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| format!("create cavity store directory: {error}"))?;
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("create cavity store directory: {error}"))?;
     }
 
     if path.exists() {
@@ -187,7 +195,8 @@ mod tests {
             constituent_count,
             cavity_area,
             ..
-        } = first else {
+        } = first
+        else {
             panic!("first seed should be added");
         };
         assert_eq!(constituent_count, 16);
