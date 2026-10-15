@@ -28,7 +28,8 @@ pub(crate) struct MutationBatchStats {
 struct MutationFrontier {
     active_parent_id: Option<String>,
     next_indices: HashMap<String, usize>,
-    exhausted_parent_ids: HashSet<String>,
+    exhausted_at_record_count: HashMap<String, usize>,
+    last_parent_id: Option<String>,
     validated_record_count: usize,
     selection_counter: u64,
 }
@@ -240,7 +241,7 @@ pub(crate) fn mutate_once(
         || frontier
             .next_indices
             .keys()
-            .chain(frontier.exhausted_parent_ids.iter())
+            .chain(frontier.exhausted_at_record_count.keys())
             .any(|id| !current_ids.contains(id));
     if stale_progress {
         // The store was pruned or replaced. Its persisted search frontier no
@@ -294,8 +295,18 @@ pub(crate) fn mutate_once(
     let selected_parent_id = frontier.active_parent_id.clone().or_else(|| {
         let mut eligible: Vec<&KnownQualifyingCavity> = records
             .iter()
-            .filter(|record| !frontier.exhausted_parent_ids.contains(&record.id))
+            .filter(|record| {
+                frontier
+                    .exhausted_at_record_count
+                    .get(&record.id)
+                    .is_none_or(|exhausted_at| *exhausted_at < stored_count)
+            })
             .collect();
+        // Avoid immediately retrying the last parent when another eligible
+        // parent exists, while keeping the selection randomized.
+        if eligible.len() > 1 {
+            eligible.retain(|record| frontier.last_parent_id.as_deref() != Some(&record.id));
+        }
         shuffle_parent_candidates(&mut eligible, &mut frontier);
         eligible.first().map(|record| record.id.clone())
     });
@@ -315,6 +326,7 @@ pub(crate) fn mutate_once(
         .position(|record| record.id == selected_parent_id)
         .ok_or_else(|| format!("active cavity parent {selected_parent_id} is missing"))?;
     let parent = &records[parent_index];
+    frontier.last_parent_id = Some(parent.id.clone());
     let mutations = one_step_mutations(parent, catalog);
     let mut next_index = frontier.next_indices.get(&parent.id).copied().unwrap_or(0);
 
@@ -450,7 +462,9 @@ pub(crate) fn mutate_once(
     }
 
     if next_index >= mutations.len() {
-        frontier.exhausted_parent_ids.insert(parent.id.clone());
+        frontier
+            .exhausted_at_record_count
+            .insert(parent.id.clone(), stored_count);
         frontier.active_parent_id = None;
     } else if stats.accepted == 0
         && !stats.stopped_at_storage_limit
@@ -464,7 +478,7 @@ pub(crate) fn mutate_once(
         frontier
             .next_indices
             .insert(parent.id.clone(), next_index.saturating_sub(1));
-        frontier.exhausted_parent_ids.remove(&parent.id);
+        frontier.exhausted_at_record_count.remove(&parent.id);
         frontier.active_parent_id = None;
     }
     frontier.validated_record_count = stored_count;
