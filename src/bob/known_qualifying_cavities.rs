@@ -187,8 +187,7 @@ mod tests {
             constituent_count,
             cavity_area,
             ..
-        } = first
-        else {
+        } = first else {
             panic!("first seed should be added");
         };
         assert_eq!(constituent_count, 16);
