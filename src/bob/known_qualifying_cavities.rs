@@ -238,7 +238,7 @@ fn one_step_mutations(
     parent: &KnownQualifyingCavity,
     catalog: &[BaseResource],
 ) -> Vec<(String, OrganismStructure)> {
-    use std::f64::consts::FRAC_PI_12;
+    let angle_step = std::f64::consts::PI / 12.0;
     let mut out = Vec::new();
     let original_count = parent.structure.units.len();
     for unit_index in 0..original_count {
@@ -258,7 +258,7 @@ fn one_step_mutations(
             moved.units[unit_index].placement.y += dy;
             out.push((format!("{label} constituent at index {unit_index}"), moved));
         }
-        for (label, delta) in [("rotate +15deg", FRAC_PI_12), ("rotate -15deg", -FRAC_PI_12)] {
+        for (label, delta) in [("rotate +15deg", angle_step), ("rotate -15deg", -angle_step)] {
             let mut rotated = parent.structure.clone();
             rotated.units[unit_index].placement.rotation_radians += delta;
             out.push((format!("{label} constituent at index {unit_index}"), rotated));
