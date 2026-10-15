@@ -265,15 +265,7 @@ pub(crate) fn mutate_once(
     }
 
     if !appended.is_empty() {
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .map_err(|e| format!("open cavity store for mutation append: {e}"))?;
-        file.write_all(&appended)
-            .map_err(|e| format!("append qualifying mutations: {e}"))?;
-        file.sync_data()
-            .map_err(|e| format!("sync qualifying mutations: {e}"))?;
+        append_records_atomically(path, &appended)?;
     }
     let next_cursor = (start + parents_processed.max(1)) % records.len();
     fs::write(cursor_path, next_cursor.to_string())
