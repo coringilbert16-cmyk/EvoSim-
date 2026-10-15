@@ -28,35 +28,10 @@ pub(super) fn one_step_mutations(
     let angle_step = std::f64::consts::PI / 12.0;
     let mut out = Vec::new();
     let original_count = parent.structure.units.len();
+
+    // Priority 1: try resource substitutions before changing geometry or
+    // topology. This is deliberately the first mutation family on every parent.
     for unit_index in 0..original_count {
-        let unit_id = parent.structure.units[unit_index].physical_id;
-        let mut removed = parent.structure.clone();
-        removed.remove_units_by_physical_ids(&[unit_id]);
-        out.push((format!("remove constituent at index {unit_index}"), removed));
-
-        for (label, dx, dy) in [
-            ("move +x", 0.05, 0.0),
-            ("move -x", -0.05, 0.0),
-            ("move +y", 0.0, 0.05),
-            ("move -y", 0.0, -0.05),
-        ] {
-            let mut moved = parent.structure.clone();
-            moved.units[unit_index].placement.x += dx;
-            moved.units[unit_index].placement.y += dy;
-            out.push((format!("{label} constituent at index {unit_index}"), moved));
-        }
-        for (label, delta) in [
-            ("rotate +15deg", angle_step),
-            ("rotate -15deg", -angle_step),
-        ] {
-            let mut rotated = parent.structure.clone();
-            rotated.units[unit_index].placement.rotation_radians += delta;
-            out.push((
-                format!("{label} constituent at index {unit_index}"),
-                rotated,
-            ));
-        }
-
         let current_name = parent.structure.units[unit_index]
             .material
             .parts
@@ -80,11 +55,49 @@ pub(super) fn one_step_mutations(
             ));
         }
     }
+
+    // Priority 2: explore small pose changes while retaining all constituents.
+    for unit_index in 0..original_count {
+        for (label, dx, dy) in [
+            ("move +x", 0.05, 0.0),
+            ("move -x", -0.05, 0.0),
+            ("move +y", 0.0, 0.05),
+            ("move -y", 0.0, -0.05),
+        ] {
+            let mut moved = parent.structure.clone();
+            moved.units[unit_index].placement.x += dx;
+            moved.units[unit_index].placement.y += dy;
+            out.push((format!("{label} constituent at index {unit_index}"), moved));
+        }
+        for (label, delta) in [
+            ("rotate +15deg", angle_step),
+            ("rotate -15deg", -angle_step),
+        ] {
+            let mut rotated = parent.structure.clone();
+            rotated.units[unit_index].placement.rotation_radians += delta;
+            out.push((
+                format!("{label} constituent at index {unit_index}"),
+                rotated,
+            ));
+        }
+    }
+
+    // Priority 3: alter topology without deleting material.
     for bond_index in 0..parent.structure.bonds.len() {
         let mut changed = parent.structure.clone();
         changed.break_bond(bond_index);
         out.push((format!("remove bond at index {bond_index}"), changed));
     }
+
+    // Priority 4 (last): constituent removal is destructive and should be
+    // considered only after every substitution, pose change, and bond change.
+    for unit_index in 0..original_count {
+        let unit_id = parent.structure.units[unit_index].physical_id;
+        let mut removed = parent.structure.clone();
+        removed.remove_units_by_physical_ids(&[unit_id]);
+        out.push((format!("remove constituent at index {unit_index}"), removed));
+    }
+
     out
 }
 
