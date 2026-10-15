@@ -50,10 +50,18 @@ pub(super) fn one_step_mutations(
                 ("rotate -15deg", 0.0, 0.0, -angle_step),
                 ("rotate +30deg", 0.0, 0.0, angle_step * 2.0),
                 ("rotate -30deg", 0.0, 0.0, -angle_step * 2.0),
-                ("move +x", 0.05, 0.0, 0.0),
-                ("move -x", -0.05, 0.0, 0.0),
-                ("move +y", 0.0, 0.05, 0.0),
-                ("move -y", 0.0, -0.05, 0.0),
+                ("move +x 0.25", 0.25, 0.0, 0.0),
+                ("move -x 0.25", -0.25, 0.0, 0.0),
+                ("move +y 0.25", 0.0, 0.25, 0.0),
+                ("move -y 0.25", 0.0, -0.25, 0.0),
+                ("move +x 0.5", 0.5, 0.0, 0.0),
+                ("move -x 0.5", -0.5, 0.0, 0.0),
+                ("move +y 0.5", 0.0, 0.5, 0.0),
+                ("move -y 0.5", 0.0, -0.5, 0.0),
+                ("move +xy 0.25", 0.25, 0.25, 0.0),
+                ("move +x-y 0.25", 0.25, -0.25, 0.0),
+                ("move -x+y 0.25", -0.25, 0.25, 0.0),
+                ("move -xy 0.25", -0.25, -0.25, 0.0),
             ];
             for (pose_label, dx, dy, rotation_delta) in poses {
                 let mut trial = parent.structure.clone();
@@ -94,14 +102,15 @@ fn rebuild_replacement_connections(
     structure: &mut OrganismStructure,
     changed_index: usize,
     catalog: &[BaseResource],
-) {
+) -> bool {
     let Some(changed_id) = structure
         .units
         .get(changed_index)
         .map(|unit| unit.physical_id)
     else {
-        return;
+        return false;
     };
+    let old_bond_count = structure.bonds.len();
     structure.bonds.retain(|bond| {
         bond.endpoint_a.constituent_id != changed_id && bond.endpoint_b.constituent_id != changed_id
     });
@@ -123,6 +132,7 @@ fn rebuild_replacement_connections(
             &mut energy,
         );
     }
+    structure.bonds.len() > old_bond_count
 }
 
 /// Explore one bounded batch from the persistent cavity frontier. Validation
@@ -207,7 +217,15 @@ pub(crate) fn mutate_once(
                     .and_then(|rest| rest.split_whitespace().next())
                     .and_then(|index| index.parse::<usize>().ok())
                 {
-                    rebuild_replacement_connections(&mut structure, unit_index, catalog);
+                    if !rebuild_replacement_connections(&mut structure, unit_index, catalog) {
+                        stats.rejected += 1;
+                        stats.geometry_rejections += 1;
+                        *stats
+                            .rejection_reasons
+                            .entry("replacement_has_no_repaired_contact".to_string())
+                            .or_default() += 1;
+                        continue;
+                    }
                 }
             }
             if structure.units.len() > parent.constituent_count {
