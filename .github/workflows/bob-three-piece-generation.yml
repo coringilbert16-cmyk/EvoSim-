@@ -16,24 +16,30 @@ jobs:
           ref: integration/unified-source-and-catalogue
       - uses: dtolnay/rust-toolchain@stable
       - name: Check formatting
+        timeout-minutes: 5
         run: cargo fmt --all -- --check
       - name: Create isolated persistent output root
+        timeout-minutes: 5
         run: mkdir -p "$RUNNER_TEMP/evosim-bob-three-piece"
       - name: Run focused worker cap regression
+        timeout-minutes: 5
         env:
           EVOSIM_GEOMETRY_LIBRARY_DIR: ${{ runner.temp }}/evosim-bob-three-piece
         run: |
           set -euo pipefail
           cargo test worker_accepts_three_piece_limit_and_rejects_wider_limits -- --nocapture
       - name: Verify persisted fluid record reaches live transaction
+        timeout-minutes: 5
         run: cargo test reopened_two_piece_bob_record_maps_into_transformed_live_parent -- --nocapture
       - name: Run Bob to completion for formations up to three constituents
+        timeout-minutes: 5
         env:
           EVOSIM_GEOMETRY_LIBRARY_DIR: ${{ runner.temp }}/evosim-bob-three-piece
         run: |
           set -euo pipefail
           cargo run --release -- --geometry-worker-complete-up-to 3 2>&1 | tee "$RUNNER_TEMP/bob-three-piece-generation.log"
       - name: Record generated library footprint
+        timeout-minutes: 5
         if: always()
         run: |
           set -euo pipefail
