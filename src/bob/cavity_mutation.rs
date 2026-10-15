@@ -125,10 +125,15 @@ pub(crate) fn mutate_once(
     let mut known_signatures = std::collections::HashSet::new();
     for record in &records {
         validate_candidate_geometry(&record.structure, catalog).map_err(|error| {
-            format!("stored cavity candidate {} fails live geometry validation: {error}", record.id)
+            format!(
+                "stored cavity candidate {} fails live geometry validation: {error}",
+                record.id
+            )
         })?;
         let cavity = crate::cavity::analyze_genome_cavity(&record.structure, catalog)?
-            .ok_or_else(|| format!("stored cavity candidate {} no longer qualifies", record.id))?;
+            .ok_or_else(|| {
+                format!("stored cavity candidate {} no longer qualifies", record.id)
+            })?;
         if !cavity.qualifies()
             || (cavity.area - record.cavity_area).abs() > 1e-7
             || (cavity.minimum_area - record.minimum_cavity_area).abs() > 1e-7
@@ -160,7 +165,10 @@ pub(crate) fn mutate_once(
             stats.attempts += 1;
             if structure.units.len() > parent.constituent_count {
                 stats.rejected += 1;
-                *stats.rejection_reasons.entry("constituent_count_increased".to_string()).or_default() += 1;
+                *stats
+                    .rejection_reasons
+                    .entry("constituent_count_increased".to_string())
+                    .or_default() += 1;
                 continue;
             }
             let signature = geometry_signature(&structure)?;
@@ -178,7 +186,10 @@ pub(crate) fn mutate_once(
                 } else {
                     "geometry_shape"
                 };
-                *stats.rejection_reasons.entry(reason.to_string()).or_default() += 1;
+                *stats
+                    .rejection_reasons
+                    .entry(reason.to_string())
+                    .or_default() += 1;
                 continue;
             }
             let cavity = match crate::cavity::analyze_genome_cavity(&structure, catalog) {
@@ -186,13 +197,19 @@ pub(crate) fn mutate_once(
                 Ok(_) => {
                     stats.rejected += 1;
                     stats.cavity_rejections += 1;
-                    *stats.rejection_reasons.entry("cavity_not_qualifying".to_string()).or_default() += 1;
+                    *stats
+                        .rejection_reasons
+                        .entry("cavity_not_qualifying".to_string())
+                        .or_default() += 1;
                     continue;
                 }
                 Err(error) => {
                     stats.rejected += 1;
                     stats.cavity_rejections += 1;
-                    *stats.rejection_reasons.entry(format!("cavity_analysis_error: {error}")).or_default() += 1;
+                    *stats
+                        .rejection_reasons
+                        .entry(format!("cavity_analysis_error: {error}"))
+                        .or_default() += 1;
                     continue;
                 }
             };
@@ -208,7 +225,10 @@ pub(crate) fn mutate_once(
             {
                 stats.rejected += 1;
                 stats.viability_rejections += 1;
-                *stats.rejection_reasons.entry("viability_rejected".to_string()).or_default() += 1;
+                *stats
+                    .rejection_reasons
+                    .entry("viability_rejected".to_string())
+                    .or_default() += 1;
                 continue;
             }
             if stored_count >= MAX_QUALIFYING_CANDIDATES {
