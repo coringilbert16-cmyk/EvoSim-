@@ -122,7 +122,7 @@ impl StoreLock {
             .open(&path)
             .map_err(|error| {
                 format!(
-                    "known qualifying cavity store is locked or its lock cannot be created: {error}"
+                    "known qualifying cavity store lock {} could not be acquired: {error}; if no Bob process is running, inspect and manually remove the stale lock before retrying", path.display()
                 )
             })?;
         Ok(Self { path })
@@ -507,4 +507,34 @@ mod tests {
         assert!(!path.exists() || load_records(&path).unwrap().is_empty());
         let _ = fs::remove_file(path);
     }
+    #[test]
+    fn load_records_rejects_inconsistent_constituent_metadata() {
+        let catalog = crate::resources::default_catalog();
+        let path = temporary_store();
+        let _ = fs::remove_file(&path);
+        seed_nitrogen_ring(&path, &catalog).expect("valid seed should persist");
+        let contents = fs::read_to_string(&path).expect("store should be readable");
+        let corrupted = contents.replace("\\"constituent_count\\":16", "\\"constituent_count\\":15");
+        assert_ne!(contents, corrupted, "fixture must contain the expected metadata");
+        fs::write(&path, corrupted).expect("corrupt test fixture should be writable");
+        let error = load_records(&path).expect_err("inconsistent metadata must be rejected");
+        assert!(error.contains("inconsistent constituent_count"), "{error}");
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn load_records_rejects_unsupported_schema_version() {
+        let catalog = crate::resources::default_catalog();
+        let path = temporary_store();
+        let _ = fs::remove_file(&path);
+        seed_nitrogen_ring(&path, &catalog).expect("valid seed should persist");
+        let contents = fs::read_to_string(&path).expect("store should be readable");
+        let corrupted = contents.replace("\\"schema_version\\":1", "\\"schema_version\\":999");
+        assert_ne!(contents, corrupted, "fixture must contain the expected schema");
+        fs::write(&path, corrupted).expect("corrupt test fixture should be writable");
+        let error = load_records(&path).expect_err("unknown schema must be rejected");
+        assert!(error.contains("unsupported cavity-store schema version"), "{error}");
+        let _ = fs::remove_file(path);
+    }
+
 }
