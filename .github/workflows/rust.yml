@@ -147,6 +147,28 @@ jobs:
           print(f"cavity_area_range={min(areas):.6g}..{max(areas):.6g}; unique_rounded_areas={len({round(value, 6) for value in areas})}")
           print(f"minimum_required_area_range={min(minima):.6g}..{max(minima):.6g}")
           print(f"bond_count_range={min(bond_counts)}..{max(bond_counts)}; unique_bond_counts={len(set(bond_counts))}")
+          # Trace accepted substitutions against their exact parent so we can see
+          # whether cavity-facing pieces ever change and what geometry is persisted.
+          replacements = [record for record in records if record.get("change", "").startswith("replace constituent")]
+          replacement_locations = collections.Counter()
+          print("=== Accepted resource substitutions ===")
+          for record in replacements:
+              parent = by_id.get(record.get("parent_id"))
+              if parent is None:
+                  continue
+              try:
+                  index = int(record["change"].split("index ", 1)[1].split()[0])
+                  old_unit = parent["structure"]["units"][index]
+                  new_unit = record["structure"]["units"][index]
+                  old_name = old_unit["material"]["parts"][0][0]
+                  new_name = new_unit["material"]["parts"][0][0]
+                  pose = old_unit["placement"]
+                  location = (round(pose["x"], 4), round(pose["y"], 4))
+                  replacement_locations[(location, old_name, new_name, round(record["cavity_area"], 6))] += 1
+                  print(f"id={record['id']} parent={parent['id']} index={index} pose={location} material={old_name}->{new_name} area={record['cavity_area']:.6g}")
+              except (IndexError, KeyError, TypeError, ValueError) as error:
+                  print(f"Could not decode replacement {record.get('id')}: {error}")
+          print(f"replacement_count={len(replacements)} distinct_replacement_location/material/area={len(replacement_locations)}")
           print("PASS: unique IDs, seed identity/size, stored metadata, lineage, non-increasing constituent counts, and 5,000-record cap")
           PY
       # Keep the persisted-pair transform/contact/collision replay independently visible.
