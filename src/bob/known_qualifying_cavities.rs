@@ -17,7 +17,8 @@ use crate::structure::OrganismStructure;
 mod cavity_mutation;
 pub(crate) use cavity_mutation::mutate_once;
 
-const SCHEMA_VERSION: u32 = 1;
+const SCHEMA_VERSION: u32 = 2;
+const LEGACY_SCHEMA_VERSION: u32 = 1;
 const NITROGEN_RING_SEED_ID: &str = "nitrogen-ring-seed-v1";
 pub(crate) const MAX_QUALIFYING_CANDIDATES: usize = 5_000;
 pub(crate) const MAX_MUTATION_ATTEMPTS_PER_RUN: usize = 5_000;
@@ -100,6 +101,32 @@ fn validate_candidate_geometry(
         }
     }
     Ok(())
+}
+
+/// Atomically replace a cavity store during schema migration.
+fn replace_records_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let temporary_path = path.with_extension("migration.tmp");
+    let result = (|| {
+        let mut temporary = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&temporary_path)
+            .map_err(|error| format!("open temporary cavity migration: {error}"))?;
+        temporary
+            .write_all(bytes)
+            .map_err(|error| format!("write temporary cavity migration: {error}"))?;
+        temporary
+            .sync_all()
+            .map_err(|error| format!("sync temporary cavity migration: {error}"))?;
+        fs::rename(&temporary_path, path)
+            .map_err(|error| format!("publish migrated cavity store: {error}"))?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary_path);
+    }
+    result
 }
 
 /// Publish a JSONL append by atomically replacing the file. An interrupted write
@@ -282,25 +309,54 @@ pub(crate) fn load_records(path: impl AsRef<Path>) -> Result<Vec<KnownQualifying
     if !path.exists() {
         return Ok(Vec::new());
     }
-    let file = std::fs::File::open(path).map_err(|error| format!("open cavity store: {error}"))?;
+    let contents =
+        fs::read_to_string(path).map_err(|error| format!("open cavity store: {error}"))?;
     let mut records = Vec::new();
-    let mut ids = std::collections::HashSet::new();
-    for (index, line) in BufReader::new(file).lines().enumerate() {
+    for (index, line) in contents.lines().enumerate() {
         let line_number = index + 1;
-        let line =
-            line.map_err(|error| format!("read cavity store line {line_number}: {error}"))?;
         if line.trim().is_empty() {
             continue;
         }
-        let record: KnownQualifyingCavity = serde_json::from_str(&line)
+        let record: KnownQualifyingCavity = serde_json::from_str(line)
             .map_err(|error| format!("decode cavity store line {line_number}: {error}"))?;
-        if record.schema_version != SCHEMA_VERSION {
+        if record.schema_version != SCHEMA_VERSION
+            && record.schema_version != LEGACY_SCHEMA_VERSION
+        {
             return Err(format!(
                 "unsupported cavity-store schema version {} on line {line_number}; expected {SCHEMA_VERSION}",
                 record.schema_version
             ));
         }
-        if record.id.trim().is_empty() || ids.contains(&record.id) {
+        records.push(record);
+    }
+
+    // One-time migration for the old store: preserve only the original nitrogen
+    // ring and discard every candidate generated under bond-sensitive identity.
+    // Writing schema v2 makes this migration idempotent; subsequent Bob runs keep
+    // newly generated candidates rather than resetting the store again.
+    if records
+        .iter()
+        .any(|record| record.schema_version == LEGACY_SCHEMA_VERSION)
+    {
+        let mut seed = records
+            .into_iter()
+            .find(|record| record.id == NITROGEN_RING_SEED_ID)
+            .ok_or_else(|| {
+                "legacy cavity store has no original nitrogen-ring seed; refusing destructive migration"
+                    .to_string()
+            })?;
+        seed.schema_version = SCHEMA_VERSION;
+        let mut bytes = serde_json::to_vec(&seed)
+            .map_err(|error| format!("serialize migrated nitrogen-ring seed: {error}"))?;
+        bytes.push(b'\\n');
+        replace_records_atomically(path, &bytes)?;
+        return Ok(vec![seed]);
+    }
+
+    let mut ids = std::collections::HashSet::new();
+    for (index, record) in records.iter().enumerate() {
+        let line_number = index + 1;
+        if record.id.trim().is_empty() || !ids.insert(record.id.clone()) {
             return Err(format!(
                 "empty or duplicate cavity candidate ID on line {line_number}"
             ));
@@ -329,9 +385,7 @@ pub(crate) fn load_records(path: impl AsRef<Path>) -> Result<Vec<KnownQualifying
                 ));
             }
         }
-        ids.insert(record.id.clone());
-        records.push(record);
-        if records.len() > MAX_QUALIFYING_CANDIDATES {
+        if index + 1 > MAX_QUALIFYING_CANDIDATES {
             return Err(format!(
                 "cavity store exceeds hard limit of {MAX_QUALIFYING_CANDIDATES} records"
             ));
@@ -339,7 +393,6 @@ pub(crate) fn load_records(path: impl AsRef<Path>) -> Result<Vec<KnownQualifying
     }
     Ok(records)
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -449,6 +502,60 @@ mod tests {
 
         let _ = fs::remove_file(path);
         let _ = fs::remove_file(cursor);
+    }
+
+    #[test]
+    fn legacy_store_migration_keeps_only_the_original_nitrogen_ring() {
+        let catalog = crate::resources::default_catalog();
+        let path = temporary_store();
+        let _ = fs::remove_file(&path);
+        let seed_structure =
+            crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+                .expect("seed structure should build");
+        let seed_cavity = crate::cavity::analyze_genome_cavity(&seed_structure, &catalog)
+            .expect("seed cavity analysis should succeed")
+            .expect("seed should have a qualifying cavity");
+        let seed = KnownQualifyingCavity {
+            schema_version: LEGACY_SCHEMA_VERSION,
+            id: NITROGEN_RING_SEED_ID.to_string(),
+            parent_id: None,
+            change: "initial validated 5x5 nitrogen perimeter".to_string(),
+            constituent_count: seed_structure.units.len(),
+            cavity_area: seed_cavity.area,
+            minimum_cavity_area: seed_cavity.minimum_area,
+            structure: seed_structure.clone(),
+        };
+        let mut obsolete = seed.clone();
+        obsolete.id = "legacy-bond-variant".to_string();
+        obsolete.parent_id = Some(NITROGEN_RING_SEED_ID.to_string());
+        obsolete.change = "remove bond at index 0".to_string();
+        obsolete.structure.break_bond(0);
+        let mut contents = serde_json::to_vec(&seed).unwrap();
+        contents.push(b'\\n');
+        contents.extend(serde_json::to_vec(&obsolete).unwrap());
+        contents.push(b'\\n');
+        fs::write(&path, contents).expect("legacy fixture should be writable");
+
+        let migrated = load_records(&path).expect("legacy store should migrate");
+        assert_eq!(migrated.len(), 1);
+        assert_eq!(migrated[0].id, NITROGEN_RING_SEED_ID);
+        assert_eq!(migrated[0].schema_version, SCHEMA_VERSION);
+        let on_disk = fs::read_to_string(&path).expect("migrated store should be readable");
+        assert_eq!(on_disk.lines().count(), 1);
+        assert!(on_disk.contains(NITROGEN_RING_SEED_ID));
+        assert!(!on_disk.contains("legacy-bond-variant"));
+
+        // A second load must not reset newly written v2 records.
+        let mut evolved = migrated[0].clone();
+        evolved.id = "new-v2-candidate".to_string();
+        evolved.parent_id = Some(NITROGEN_RING_SEED_ID.to_string());
+        evolved.change = "test generated candidate".to_string();
+        let mut next_contents = on_disk;
+        next_contents.push_str(&serde_json::to_string(&evolved).unwrap());
+        next_contents.push('\\n');
+        fs::write(&path, next_contents).unwrap();
+        assert_eq!(load_records(&path).unwrap().len(), 2);
+        let _ = fs::remove_file(path);
     }
 
     #[test]
