@@ -25,6 +25,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Check formatting
         run: cargo fmt --all -- --check
+      - name: Check compilation
+        run: cargo check --locked --all-targets
       - name: Check source file sizes
         run: bash scripts/check_large_files.sh
       - name: Check COMBINE architecture
