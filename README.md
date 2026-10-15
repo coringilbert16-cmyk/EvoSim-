@@ -1999,7 +1999,7 @@ The run's full Rust suite reported **367 passed, 69 failed, 1 ignored**; strict 
 
 The unique PR #190 viability changes are being consolidated here:
 - **Hard genome-cavity rule:** the realized, sealed cavity must have area greater than or equal to the area of exactly three Carbon constituents; equality qualifies and anything smaller fails. This is a hard minimum, not reference data. The cavity must have finite positive area and a real physical boundary.
-- Viability requires positive-area accessible processing space outside the genome cavity; outside-piece count alone is insufficient.
+- Processing-space/accessibility is deferred for this constructor sprint and must not be used as an additional acceptance gate.
 - No constructor energy/resource gates or collision tolerances are changed by this port.
 
 PR #190 is superseded and closed; PR #196 is the sole active constructor/viability workstream. The production path uses bounded persisted-Bob formation search rather than the old fixed scaffold. The Water-plus-three-non-Water acquisition gate remains a separate unresolved conflict with the approved free-form viability contract.
