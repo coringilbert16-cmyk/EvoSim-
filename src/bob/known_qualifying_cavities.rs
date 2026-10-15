@@ -308,6 +308,26 @@ mod tests {
     }
 
     #[test]
+    fn mutation_batch_stays_within_candidate_and_attempt_budgets() {
+        let catalog = crate::resources::default_catalog();
+        let path = temporary_store();
+        let cursor = path.with_extension("cursor");
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(&cursor);
+
+        let stats = mutate_once(&path, &catalog).expect("bounded mutation batch should complete");
+        assert!(stats.attempts <= MAX_MUTATION_ATTEMPTS_PER_RUN);
+        let records = load_records(&path).expect("mutated store should reopen");
+        assert!(!records.is_empty());
+        assert!(records.len() <= MAX_QUALIFYING_CANDIDATES);
+        assert_eq!(records[0].id, NITROGEN_RING_SEED_ID);
+        assert!(records.iter().all(|record| record.constituent_count <= 16));
+
+        let _ = fs::remove_file(path);
+        let _ = fs::remove_file(cursor);
+    }
+
+    #[test]
     fn geometry_signature_ignores_physical_id_values() {
         let catalog = crate::resources::default_catalog();
         let mut first = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
