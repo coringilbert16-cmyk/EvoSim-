@@ -74,6 +74,39 @@ fn geometry_signature(structure: &OrganismStructure) -> Result<String, String> {
     Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
+/// Reject mutations that violate the live rigid-geometry invariants before cavity analysis.
+/// Cavity qualification alone is not a collision or bond-validity check.
+fn validate_candidate_geometry(
+    structure: &OrganismStructure,
+    catalog: &[BaseResource],
+) -> Result<(), String> {
+    for (index, unit) in structure.units.iter().enumerate() {
+        if !unit
+            .shape(catalog)
+            .is_some_and(|shape| shape.is_valid_physical_shape())
+        {
+            return Err(format!("constituent {index} has no valid physical shape"));
+        }
+    }
+    for (index, bond) in structure.bonds.iter().enumerate() {
+        if !structure.is_valid_bond(bond, catalog) {
+            return Err(format!("bond {index} violates physical endpoint/contact rules"));
+        }
+    }
+    for left in 0..structure.units.len() {
+        for right in (left + 1)..structure.units.len() {
+            if crate::structure::units_strictly_overlap(
+                &structure.units[left],
+                &structure.units[right],
+                catalog,
+            ) {
+                return Err(format!("constituents {left} and {right} overlap"));
+            }
+        }
+    }
+    Ok(())
+}
+
 struct StoreLock {
     path: PathBuf,
 }
@@ -136,6 +169,8 @@ pub(crate) fn persist_if_qualifying(
     if id.trim().is_empty() {
         return Err("known cavity candidate ID must not be empty".to_string());
     }
+
+    validate_candidate_geometry(&structure, catalog)?;
 
     // Use the authoritative realized-geometry validator. Extra processing
     // structure is deliberately not required for this category.
@@ -378,6 +413,29 @@ mod tests {
             }
         );
         assert_eq!(load_records(&path).unwrap().len(), 1);
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn overlapping_mutation_is_rejected_before_cavity_persistence() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("seed structure should build");
+        // Shift one top-edge square into its neighbor; cavity shape alone must
+        // not be enough to admit this physically overlapping candidate.
+        structure.units[2].placement.x += 0.25;
+        assert!(validate_candidate_geometry(&structure, &catalog).is_err());
+        let path = temporary_store();
+        let _ = fs::remove_file(&path);
+        assert!(persist_if_qualifying(
+            &path,
+            "rejected-overlap",
+            None,
+            "move a boundary piece into its neighbor".to_string(),
+            structure,
+            &catalog,
+        ).is_err());
+        assert!(!path.exists() || load_records(&path).unwrap().is_empty());
         let _ = fs::remove_file(path);
     }
 
