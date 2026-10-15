@@ -82,6 +82,39 @@ pub(super) fn one_step_mutations(
         }
     }
 
+    // After trying resource substitutions, move each unchanged constituent
+    // independently. Translation is itself a cavity mutation: a boundary
+    // piece can move outward, reconnect at different corners, and change the
+    // measured enclosed area without changing its material.
+    for unit_index in 0..original_count {
+        for (label, dx, dy) in [
+            ("move +x 0.25", 0.25, 0.0),
+            ("move -x 0.25", -0.25, 0.0),
+            ("move +y 0.25", 0.0, 0.25),
+            ("move -y 0.25", 0.0, -0.25),
+            ("move +x 0.5", 0.5, 0.0),
+            ("move -x 0.5", -0.5, 0.0),
+            ("move +y 0.5", 0.0, 0.5),
+            ("move -y 0.5", 0.0, -0.5),
+            ("move +x 1.0", 1.0, 0.0),
+            ("move -x 1.0", -1.0, 0.0),
+            ("move +y 1.0", 0.0, 1.0),
+            ("move -y 1.0", 0.0, -1.0),
+            ("move +xy 1.0", 1.0, 1.0),
+            ("move +x-y 1.0", 1.0, -1.0),
+            ("move -x+y 1.0", -1.0, 1.0),
+            ("move -xy 1.0", -1.0, -1.0),
+        ] {
+            let mut trial = parent.structure.clone();
+            trial.units[unit_index].placement.x += dx;
+            trial.units[unit_index].placement.y += dy;
+            out.push((
+                format!("translate constituent at index {unit_index} ({label})"),
+                trial,
+            ));
+        }
+    }
+
     // Destructive removal is deliberately last. Bond-only bookkeeping edits
     // are not mutations: formation identity is determined by material and
     // realized geometry, and cavity analysis decides whether it qualifies.
@@ -110,10 +143,10 @@ pub(super) fn rebuild_replacement_connections(
     else {
         return false;
     };
-    let old_bond_count = structure.bonds.len();
     structure.bonds.retain(|bond| {
         bond.endpoint_a.constituent_id != changed_id && bond.endpoint_b.constituent_id != changed_id
     });
+    let remaining_bond_count = structure.bonds.len();
 
     let mut ledger = crate::state::EnergyLedger::default();
     let mut energy = f64::MAX / 4.0;
@@ -132,7 +165,7 @@ pub(super) fn rebuild_replacement_connections(
             &mut energy,
         );
     }
-    structure.bonds.len() > old_bond_count
+    structure.bonds.len() > remaining_bond_count
 }
 
 /// Explore one bounded batch from the persistent cavity frontier. Validation
@@ -211,9 +244,16 @@ pub(crate) fn mutate_once(
                 break 'parents;
             }
             stats.attempts += 1;
-            if change.starts_with("replace constituent") {
+            if change.starts_with("replace constituent")
+                || change.starts_with("translate constituent")
+            {
+                let prefix = if change.starts_with("replace constituent") {
+                    "replace constituent at index "
+                } else {
+                    "translate constituent at index "
+                };
                 if let Some(unit_index) = change
-                    .strip_prefix("replace constituent at index ")
+                    .strip_prefix(prefix)
                     .and_then(|rest| rest.split_whitespace().next())
                     .and_then(|index| index.parse::<usize>().ok())
                 {
