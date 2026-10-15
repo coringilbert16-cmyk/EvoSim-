@@ -126,9 +126,13 @@ fn persisted_pair_formation_placements(
 ) -> Vec<Placement> {
     let mut placements = std::collections::BTreeMap::<String, Placement>::new();
     for formation in library.bonded_pair_formations(anchor_material, &candidate_resource.name) {
-        if Instant::now() >= deadline { break; }
+        if Instant::now() >= deadline {
+            break;
+        }
         for (anchor_index, candidate_index) in [(0, 1), (1, 0)] {
-            if Instant::now() >= deadline { break; }
+            if Instant::now() >= deadline {
+                break;
+            }
             let stored_anchor = &formation.constituents[anchor_index];
             let stored_candidate = &formation.constituents[candidate_index];
             if stored_anchor.resource.as_str() != anchor_material
@@ -294,7 +298,9 @@ fn try_persisted_bob_attachments(
         resource,
         catalog,
     ) {
-        if Instant::now() >= deadline { break; }
+        if Instant::now() >= deadline {
+            break;
+        }
         edge_placements_examined += 1;
         if !seen_placements.insert(placement_signature(suggestion.placement)) {
             duplicate_placements += 1;
@@ -362,7 +368,9 @@ fn try_persisted_bob_attachments(
 
     let mut successful = Vec::new();
     for suggestion in &candidate_placements {
-        if Instant::now() >= deadline { break; }
+        if Instant::now() >= deadline {
+            break;
+        }
         // Validate suggestions in rank order. Four successful branches provide
         // a bounded frontier; rejected candidates never consume that branch cap.
         if successful.len() >= 4 {
@@ -464,7 +472,9 @@ fn try_persisted_bob_attachments(
         }
 
         for candidate in contacts {
-            if Instant::now() >= deadline { break; }
+            if Instant::now() >= deadline {
+                break;
+            }
             let Some((_, _, investment, required_energy)) =
                 crate::combine_runtime::selected_candidate_evaluation(
                     &trial,
@@ -860,10 +870,14 @@ fn construct_persisted_bob_structure(
         // Avoid repeating cavity and interior analysis when the state is later popped.
         let mut children = Vec::new();
         'anchors: for anchor_index in 0..state.structure.units.len() {
-            if Instant::now() >= deadline { break 'anchors; }
+            if Instant::now() >= deadline {
+                break 'anchors;
+            }
             anchors_considered_total += 1;
             for resource in &structural_resources {
-                if Instant::now() >= deadline { break 'anchors; }
+                if Instant::now() >= deadline {
+                break 'anchors;
+            }
                 placement_queries_total += 1;
                 match try_persisted_bob_attachments(
                     &state.structure,
@@ -877,7 +891,9 @@ fn construct_persisted_bob_structure(
                 ) {
                     Ok(attachments) => {
                         for attachment in attachments {
-                            if Instant::now() >= deadline { break 'anchors; }
+                            if Instant::now() >= deadline {
+                break 'anchors;
+            }
                             candidate_states_generated_total += 1;
                             debug_assert!(
                                 attachment.new_unit_index < attachment.structure.units.len()
@@ -907,7 +923,9 @@ fn construct_persisted_bob_structure(
                                 library,
                             ) {
                                 Ok(qualification) => {
-                                    if Instant::now() >= deadline { break 'anchors; }
+                                    if Instant::now() >= deadline {
+                break 'anchors;
+            }
                                     return Ok(ValidConstruction {
                                         structure: next.structure,
                                         energy: next.energy,
@@ -976,7 +994,9 @@ fn construct_persisted_bob_structure(
                         }
                     }
                 }
-                if Instant::now() >= deadline { break 'anchors; }
+                if Instant::now() >= deadline {
+                break 'anchors;
+            }
             }
         }
 
