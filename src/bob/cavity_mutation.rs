@@ -400,12 +400,16 @@ pub(crate) fn mutate_once(
         // Continue this parent's unfinished mutation list on the next batch.
         frontier.active_parent_id = Some(parent.id.clone());
     }
-    fs::write(&frontier_path, serde_json::to_vec_pretty(&frontier)
-        .map_err(|e| format!("serialize cavity mutation frontier: {e}"))?)
-        .map_err(|e| format!("save cavity mutation frontier: {e}"))?;
-
+    if stats.stopped_at_storage_limit {
+        // Retry this exact mutation if the storage budget is raised later.
+        frontier.next_indices.insert(parent.id.clone(), next_index.saturating_sub(1));
+        frontier.active_parent_id = None;
+    }
     if !appended.is_empty() {
         append_records_atomically(path, &appended)?;
     }
+    fs::write(&frontier_path, serde_json::to_vec_pretty(&frontier)
+        .map_err(|e| format!("serialize cavity mutation frontier: {e}"))?)
+        .map_err(|e| format!("save cavity mutation frontier: {e}"))?;
     Ok(stats)
 }
