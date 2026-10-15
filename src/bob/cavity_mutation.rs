@@ -246,11 +246,14 @@ pub(crate) fn mutate_once(
             stats.attempts += 1;
             if change.starts_with("replace constituent")
                 || change.starts_with("translate constituent")
+                || change.starts_with("rotate constituent")
             {
                 let prefix = if change.starts_with("replace constituent") {
                     "replace constituent at index "
-                } else {
+                } else if change.starts_with("translate constituent") {
                     "translate constituent at index "
+                } else {
+                    "rotate constituent at index "
                 };
                 if let Some(unit_index) = change
                     .strip_prefix(prefix)
