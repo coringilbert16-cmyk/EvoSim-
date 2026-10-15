@@ -1,11 +1,11 @@
 use super::*;
-use std::collections::{BTreeMap, HashMap, HashSet};
-use serde::{Deserialize, Serialize};
-use std::fs;
-use std::path::Path;
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fs;
+use std::path::Path;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct MutationBatchStats {
