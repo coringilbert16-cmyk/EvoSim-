@@ -147,9 +147,7 @@ pub(crate) fn persist_if_qualifying(
 }
 
 #[cfg(test)]
-pub(crate) fn load_records(
-    path: impl AsRef<Path>,
-) -> Result<Vec<KnownQualifyingCavity>, String> {
+pub(crate) fn load_records(path: impl AsRef<Path>) -> Result<Vec<KnownQualifyingCavity>, String> {
     let path = path.as_ref();
     if !path.exists() {
         return Ok(Vec::new());
@@ -200,9 +198,7 @@ mod tests {
             panic!("first seed should be added");
         };
         assert_eq!(constituent_count, 16);
-        assert!(
-            cavity_area >= crate::cavity::minimum_genome_cavity_area(&catalog).unwrap()
-        );
+        assert!(cavity_area >= crate::cavity::minimum_genome_cavity_area(&catalog).unwrap());
 
         let records = load_records(&path).expect("store should reopen");
         assert_eq!(records.len(), 1);
@@ -225,9 +221,8 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let path = temporary_store();
         let _ = fs::remove_file(&path);
-        let mut structure =
-            crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
-                .expect("seed structure should build");
+        let mut structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("seed structure should build");
         let removed_id = structure.units[0].physical_id;
         structure.units.retain(|unit| unit.physical_id != removed_id);
         structure.bonds.retain(|bond| {
