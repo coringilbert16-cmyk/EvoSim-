@@ -277,7 +277,11 @@ fn try_persisted_bob_attachments(
         });
     };
     let mut candidate_placements = persisted_pair_formation_placements(
-        anchor_material, anchor.placement, resource, library, deadline,
+        anchor_material,
+        anchor.placement,
+        resource,
+        library,
+        deadline,
     );
     let raw_pair_placements = candidate_placements.len();
     // Keep every distinct persisted pair proposal; do not discard lower-ranked
@@ -1465,7 +1469,9 @@ pub(crate) fn construct_valid_with_energy(
     let bob_library = crate::geometry_reference_library::open_default_library()
         .map_err(|error| format!("failed to open persistent Bob geometry library: {error}"))?;
     if Instant::now() >= deadline {
-        return Err("hard five-minute construction deadline exceeded while opening Bob library".into());
+        return Err(
+            "hard five-minute construction deadline exceeded while opening Bob library".into(),
+        );
     }
     construct_persisted_bob_structure(
         catalog,
@@ -1538,9 +1544,7 @@ pub(crate) fn sealed_nitrogen_ring_with_external_unit_fixture(
     let anchor = structure
         .units
         .iter()
-        .position(|unit| {
-            (unit.placement.x - 2.0).abs() < 1e-9 && unit.placement.y.abs() < 1e-9
-        })
+        .position(|unit| (unit.placement.x - 2.0).abs() < 1e-9 && unit.placement.y.abs() < 1e-9)
         .ok_or_else(|| "test ring has no right-side anchor".to_string())?;
     let external = add_unit(&mut structure, nitrogen, (3.0, 0.0), catalog)?;
     let mut ledger = EnergyLedger::default();
