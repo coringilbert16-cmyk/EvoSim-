@@ -498,6 +498,61 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn cavity_analysis_uses_catalog_shape_when_mutated_unit_geometry_is_missing() {
+        use crate::structure::{
+            Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit,
+        };
+
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let placements = [
+            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+            Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 },
+            Placement { x: 1.0, y: 1.0, rotation_radians: 0.0 },
+            Placement { x: 0.0, y: 1.0, rotation_radians: 0.0 },
+        ];
+        let mut indices = Vec::new();
+        for (index, placement) in placements.into_iter().enumerate() {
+            let resource = if index == 0 { "Carbon" } else { "Nitrogen" };
+            indices.push(structure.add_unit(StructuralUnit::new(resource, placement)));
+        }
+
+        let genome_id = structure.physical_id(indices[0]).unwrap();
+        structure.set_genome_constituent_ids([genome_id]);
+        for index in 0..indices.len() {
+            let next = (index + 1) % indices.len();
+            let a = structure.physical_id(indices[index]).unwrap();
+            let b = structure.physical_id(indices[next]).unwrap();
+            structure.push_bond_unchecked(Bond {
+                endpoint_a: BondEndpoint::new(
+                    a,
+                    ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+                ),
+                endpoint_b: BondEndpoint::new(
+                    b,
+                    ConnectionEndpoint::Boundary {
+                        angle_radians: std::f64::consts::PI,
+                    },
+                ),
+                strength: 0.5,
+                bond_energy: 1.0,
+            });
+        }
+
+        // The Carbon unit represents a just-mutated piece: its cached geometry
+        // is absent, so cavity analysis must use Carbon's current catalog shape.
+        assert!(structure.units[indices[0]].geometry.is_none());
+        assert!(structure.units[indices[0]].shape(&catalog).is_some());
+        let regions = find_enclosed_regions(&structure, &catalog);
+        assert!(
+            regions
+                .iter()
+                .any(|region| region.boundary_units.contains(&indices[0])),
+            "the mutated Carbon must participate in the analyzed boundary"
+        );
+    }
+
     fn region_count(polygons: Vec<Vec<Point>>) -> usize {
         let mut points = Vec::new();
         let mut point_index = HashMap::new();
