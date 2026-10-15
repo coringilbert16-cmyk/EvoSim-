@@ -506,6 +506,40 @@ mod tests {
             translated.1.units[0].material, parent.structure.units[0].material,
             "translation must preserve the constituent's resource"
         );
+
+        let mut found_area_change = false;
+        for (change, candidate) in mutations
+            .iter()
+            .filter(|(change, _)| change.starts_with("translate constituent"))
+        {
+            let Some(unit_index) = change
+                .strip_prefix("translate constituent at index ")
+                .and_then(|rest| rest.split_whitespace().next())
+                .and_then(|index| index.parse::<usize>().ok())
+            else {
+                continue;
+            };
+            let mut candidate = candidate.clone();
+            if !cavity_mutation::rebuild_replacement_connections(
+                &mut candidate,
+                unit_index,
+                &catalog,
+            ) || validate_candidate_geometry(&candidate, &catalog).is_err()
+            {
+                continue;
+            }
+            let Ok(Some(cavity)) = crate::cavity::analyze_genome_cavity(&candidate, &catalog) else {
+                continue;
+            };
+            if cavity.qualifies() && (cavity.area - parent.cavity_area).abs() > 1e-7 {
+                found_area_change = true;
+                break;
+            }
+        }
+        assert!(
+            found_area_change,
+            "at least one independently translated constituent must preserve a valid cavity with a changed measured area"
+        );
     }
 
     #[test]
