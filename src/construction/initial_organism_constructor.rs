@@ -8,6 +8,9 @@
 use crate::resources::{BaseResource, Form, Material, PhysicalState, Shape};
 use crate::state::EnergyLedger;
 use crate::structure::Placement;
+use std::time::{Duration, Instant};
+
+const CONSTRUCTION_TIME_LIMIT: Duration = Duration::from_secs(5 * 60);
 
 #[derive(Clone, Debug)]
 pub(crate) struct ValidConstruction {
@@ -121,10 +124,13 @@ fn persisted_pair_formation_placements(
     anchor_placement: Placement,
     candidate_resource: &BaseResource,
     library: &crate::geometry_reference_library::GeometryLibrary,
+    deadline: Instant,
 ) -> Vec<Placement> {
     let mut placements = std::collections::BTreeMap::<String, Placement>::new();
     for formation in library.bonded_pair_formations(anchor_material, &candidate_resource.name) {
+        if Instant::now() >= deadline { break; }
         for (anchor_index, candidate_index) in [(0, 1), (1, 0)] {
+            if Instant::now() >= deadline { break; }
             let stored_anchor = &formation.constituents[anchor_index];
             let stored_candidate = &formation.constituents[candidate_index];
             if stored_anchor.resource.as_str() != anchor_material
@@ -224,6 +230,7 @@ fn try_persisted_bob_attachments(
     catalog: &[BaseResource],
     ledger: &EnergyLedger,
     _available_energy: f64,
+    deadline: Instant,
 ) -> Result<Vec<PersistedAttachment>, PersistedAttachmentFailure> {
     let Some(anchor) = structure.units.get(anchor_index) else {
         return Err(PersistedAttachmentFailure::CandidatesRejected {
@@ -267,8 +274,9 @@ fn try_persisted_bob_attachments(
             last_combine_rejection: None,
         });
     };
-    let mut candidate_placements =
-        persisted_pair_formation_placements(anchor_material, anchor.placement, resource, library);
+    let mut candidate_placements = persisted_pair_formation_placements(
+        anchor_material, anchor.placement, resource, library, deadline,
+    );
     let raw_pair_placements = candidate_placements.len();
     // Keep every distinct persisted pair proposal; do not discard lower-ranked
     // Bob knowledge before the authoritative live checks.
@@ -288,6 +296,7 @@ fn try_persisted_bob_attachments(
         resource,
         catalog,
     ) {
+        if Instant::now() >= deadline { break; }
         edge_placements_examined += 1;
         if !seen_placements.insert(placement_signature(suggestion.placement)) {
             duplicate_placements += 1;
@@ -355,6 +364,7 @@ fn try_persisted_bob_attachments(
 
     let mut successful = Vec::new();
     for suggestion in &candidate_placements {
+        if Instant::now() >= deadline { break; }
         // Validate suggestions in rank order. Four successful branches provide
         // a bounded frontier; rejected candidates never consume that branch cap.
         if successful.len() >= 4 {
@@ -456,6 +466,7 @@ fn try_persisted_bob_attachments(
         }
 
         for candidate in contacts {
+            if Instant::now() >= deadline { break; }
             let Some((_, _, investment, required_energy)) =
                 crate::combine_runtime::selected_candidate_evaluation(
                     &trial,
@@ -769,6 +780,7 @@ fn construct_persisted_bob_structure(
     library: &crate::geometry_reference_library::GeometryLibrary,
     acquisition_candidates: &[&BaseResource],
     initial_energy: f64,
+    deadline: Instant,
 ) -> Result<ValidConstruction, String> {
     if !initial_energy.is_finite() || initial_energy < 0.0 {
         return Err("constructor requires finite non-negative supplied energy".into());
@@ -839,7 +851,7 @@ fn construct_persisted_bob_structure(
     let mut inaccessible_interior_states = 0usize;
     let mut interior_analysis_errors = 0usize;
 
-    while explored_states < state_budget && !queue.is_empty() {
+    while explored_states < state_budget && !queue.is_empty() && Instant::now() < deadline {
         let best_index = queue
             .iter()
             .enumerate()
@@ -853,8 +865,10 @@ fn construct_persisted_bob_structure(
         // Avoid repeating cavity and interior analysis when the state is later popped.
         let mut children = Vec::new();
         'anchors: for anchor_index in 0..state.structure.units.len() {
+            if Instant::now() >= deadline { break 'anchors; }
             anchors_considered_total += 1;
             for resource in &structural_resources {
+                if Instant::now() >= deadline { break 'anchors; }
                 placement_queries_total += 1;
                 match try_persisted_bob_attachments(
                     &state.structure,
@@ -864,9 +878,11 @@ fn construct_persisted_bob_structure(
                     catalog,
                     &state.ledger,
                     state.energy,
+                    deadline,
                 ) {
                     Ok(attachments) => {
                         for attachment in attachments {
+                            if Instant::now() >= deadline { break 'anchors; }
                             candidate_states_generated_total += 1;
                             debug_assert!(
                                 attachment.new_unit_index < attachment.structure.units.len()
@@ -896,6 +912,7 @@ fn construct_persisted_bob_structure(
                                 library,
                             ) {
                                 Ok(qualification) => {
+                                    if Instant::now() >= deadline { break 'anchors; }
                                     return Ok(ValidConstruction {
                                         structure: next.structure,
                                         energy: next.energy,
@@ -972,6 +989,7 @@ fn construct_persisted_bob_structure(
                         }
                     }
                 }
+                if Instant::now() >= deadline { break 'anchors; }
             }
         }
 
@@ -992,7 +1010,9 @@ fn construct_persisted_bob_structure(
         }
     }
 
-    let stop_reason = if !queue.is_empty() && explored_states >= state_budget {
+    let stop_reason = if Instant::now() >= deadline {
+        "hard five-minute construction deadline exceeded"
+    } else if !queue.is_empty() && explored_states >= state_budget {
         "search budget exhausted before the queue was empty"
     } else if queue_budget_drops > 0 {
         "search ended with states discarded by the explicit beam budget"
@@ -1431,15 +1451,20 @@ pub(crate) fn construct_valid_with_energy(
     catalog: &[BaseResource],
     initial_energy: f64,
 ) -> Result<ValidConstruction, String> {
+    let deadline = Instant::now() + CONSTRUCTION_TIME_LIMIT;
     let acquisition_candidates = available_acquisition_resources(catalog);
 
     let bob_library = crate::geometry_reference_library::open_default_library()
         .map_err(|error| format!("failed to open persistent Bob geometry library: {error}"))?;
+    if Instant::now() >= deadline {
+        return Err("hard five-minute construction deadline exceeded while opening Bob library".into());
+    }
     construct_persisted_bob_structure(
         catalog,
         &bob_library,
         &acquisition_candidates,
         initial_energy,
+        deadline,
     )
 }
 
