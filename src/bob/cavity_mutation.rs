@@ -2,6 +2,7 @@ use super::*;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use rand::seq::SliceRandom;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct MutationBatchStats {
@@ -44,25 +45,33 @@ pub(super) fn one_step_mutations(
             .iter()
             .filter(|resource| resource.name != current_name)
         {
-            let poses = [
-                ("existing pose", 0.0, 0.0, 0.0),
-                ("rotate +15deg", 0.0, 0.0, angle_step),
-                ("rotate -15deg", 0.0, 0.0, -angle_step),
-                ("rotate +30deg", 0.0, 0.0, angle_step * 2.0),
-                ("rotate -30deg", 0.0, 0.0, -angle_step * 2.0),
-                ("move +x 0.25", 0.25, 0.0, 0.0),
-                ("move -x 0.25", -0.25, 0.0, 0.0),
-                ("move +y 0.25", 0.0, 0.25, 0.0),
-                ("move -y 0.25", 0.0, -0.25, 0.0),
-                ("move +x 0.5", 0.5, 0.0, 0.0),
-                ("move -x 0.5", -0.5, 0.0, 0.0),
-                ("move +y 0.5", 0.0, 0.5, 0.0),
-                ("move -y 0.5", 0.0, -0.5, 0.0),
-                ("move +xy 0.25", 0.25, 0.25, 0.0),
-                ("move +x-y 0.25", 0.25, -0.25, 0.0),
-                ("move -x+y 0.25", -0.25, 0.25, 0.0),
-                ("move -xy 0.25", -0.25, -0.25, 0.0),
-            ];
+            // Explore the complete 15-degree rotation cycle, then every
+            // 0.25-unit translation on a square grid out to 1.5 units.
+            let mut poses: Vec<(String, f64, f64, f64)> =
+                vec![("existing pose".to_string(), 0.0, 0.0, 0.0)];
+            for step in 1..24 {
+                poses.push((
+                    format!("rotate +{}deg", step * 15),
+                    0.0,
+                    0.0,
+                    angle_step * step as f64,
+                ));
+            }
+            for x_step in -6i32..=6 {
+                for y_step in -6i32..=6 {
+                    if x_step == 0 && y_step == 0 {
+                        continue;
+                    }
+                    let dx = x_step as f64 * 0.25;
+                    let dy = y_step as f64 * 0.25;
+                    poses.push((
+                        format!("translate dx={dx:.2} dy={dy:.2}"),
+                        dx,
+                        dy,
+                        0.0,
+                    ));
+                }
+            }
             for (pose_label, dx, dy, rotation_delta) in poses {
                 let mut trial = parent.structure.clone();
                 trial.units[unit_index].material =
@@ -87,29 +96,29 @@ pub(super) fn one_step_mutations(
     // piece can move outward, reconnect at different corners, and change the
     // measured enclosed area without changing its material.
     for unit_index in 0..original_count {
-        for (label, dx, dy) in [
-            ("move +x 0.25", 0.25, 0.0),
-            ("move -x 0.25", -0.25, 0.0),
-            ("move +y 0.25", 0.0, 0.25),
-            ("move -y 0.25", 0.0, -0.25),
-            ("move +x 0.5", 0.5, 0.0),
-            ("move -x 0.5", -0.5, 0.0),
-            ("move +y 0.5", 0.0, 0.5),
-            ("move -y 0.5", 0.0, -0.5),
-            ("move +x 1.0", 1.0, 0.0),
-            ("move -x 1.0", -1.0, 0.0),
-            ("move +y 1.0", 0.0, 1.0),
-            ("move -y 1.0", 0.0, -1.0),
-            ("move +xy 1.0", 1.0, 1.0),
-            ("move +x-y 1.0", 1.0, -1.0),
-            ("move -x+y 1.0", -1.0, 1.0),
-            ("move -xy 1.0", -1.0, -1.0),
-        ] {
+        for x_step in -6i32..=6 {
+            for y_step in -6i32..=6 {
+                if x_step == 0 && y_step == 0 {
+                    continue;
+                }
+                let dx = x_step as f64 * 0.25;
+                let dy = y_step as f64 * 0.25;
+                let label = format!("move dx={dx:.2} dy={dy:.2}");
             let mut trial = parent.structure.clone();
             trial.units[unit_index].placement.x += dx;
             trial.units[unit_index].placement.y += dy;
+                out.push((
+                    format!("translate constituent at index {unit_index} ({label})"),
+                    trial,
+                ));
+            }
+        }
+        // Rotations of unchanged constituents are separate mutations.
+        for step in 1..24 {
+            let mut trial = parent.structure.clone();
+            trial.units[unit_index].placement.rotation_radians += angle_step * step as f64;
             out.push((
-                format!("translate constituent at index {unit_index} ({label})"),
+                format!("rotate constituent at index {unit_index} by {}deg", step * 15),
                 trial,
             ));
         }
@@ -168,10 +177,9 @@ pub(super) fn rebuild_replacement_connections(
     structure.bonds.len() > remaining_bond_count
 }
 
-/// Explore one bounded batch from the persistent cavity frontier. Validation
-/// and duplicate signatures are checked before a candidate is appended. A small
-/// cursor rotates the starting parent between runs so early records do not starve
-/// later candidates once the library grows.
+/// Explore a bounded batch from randomly selected known-good parents. A newly
+/// accepted formation is persisted before the next call, so it joins the parent
+/// pool immediately. Live geometry and cavity validation remain authoritative.
 pub(crate) fn mutate_once(
     path: impl AsRef<Path>,
     catalog: &[BaseResource],
@@ -196,13 +204,6 @@ pub(crate) fn mutate_once(
             ..MutationBatchStats::default()
         });
     }
-    let cursor_path = path.with_extension("cursor");
-    let start = fs::read_to_string(&cursor_path)
-        .ok()
-        .and_then(|text| text.trim().parse::<usize>().ok())
-        .unwrap_or(0)
-        % records.len();
-
     let mut known_signatures = std::collections::HashSet::new();
     let mut known_ids: std::collections::HashSet<String> =
         records.iter().map(|record| record.id.clone()).collect();
@@ -232,12 +233,11 @@ pub(crate) fn mutate_once(
     let stored_bytes = fs::metadata(path)
         .map_err(|e| format!("inspect cavity store size: {e}"))?
         .len();
-    let mut parents_processed = 0usize;
+    let mut parent_indices: Vec<usize> = (0..records.len()).collect();
+    parent_indices.shuffle(&mut rand::thread_rng());
 
-    'parents: for offset in 0..records.len() {
-        let parent_index = (start + offset) % records.len();
+    'parents: for parent_index in parent_indices {
         let parent = &records[parent_index];
-        parents_processed += 1;
         let mutations = one_step_mutations(parent, catalog);
         for (change, mut structure) in mutations {
             if stats.attempts >= MAX_MUTATION_ATTEMPTS_PER_RUN {
@@ -374,14 +374,14 @@ pub(crate) fn mutate_once(
             known_ids.insert(id);
             known_signatures.insert(signature);
             stats.accepted += 1;
+            // Yield after one discovery. The next call chooses a fresh random
+            // parent from the updated library, including this new formation.
+            break 'parents;
         }
     }
 
     if !appended.is_empty() {
         append_records_atomically(path, &appended)?;
     }
-    let next_cursor = (start + parents_processed.max(1)) % records.len();
-    fs::write(cursor_path, next_cursor.to_string())
-        .map_err(|e| format!("save cavity mutation cursor: {e}"))?;
     Ok(stats)
 }
