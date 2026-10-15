@@ -528,7 +528,8 @@ mod tests {
             {
                 continue;
             }
-            let Ok(Some(cavity)) = crate::cavity::analyze_genome_cavity(&candidate, &catalog) else {
+            let Ok(Some(cavity)) = crate::cavity::analyze_genome_cavity(&candidate, &catalog)
+            else {
                 continue;
             };
             if cavity.qualifies() && (cavity.area - parent.cavity_area).abs() > 1e-7 {
