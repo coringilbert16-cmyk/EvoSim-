@@ -39,10 +39,16 @@ pub(super) fn one_step_mutations(
             moved.units[unit_index].placement.y += dy;
             out.push((format!("{label} constituent at index {unit_index}"), moved));
         }
-        for (label, delta) in [("rotate +15deg", angle_step), ("rotate -15deg", -angle_step)] {
+        for (label, delta) in [
+            ("rotate +15deg", angle_step),
+            ("rotate -15deg", -angle_step),
+        ] {
             let mut rotated = parent.structure.clone();
             rotated.units[unit_index].placement.rotation_radians += delta;
-            out.push((format!("{label} constituent at index {unit_index}"), rotated));
+            out.push((
+                format!("{label} constituent at index {unit_index}"),
+                rotated,
+            ));
         }
 
         let current_name = parent.structure.units[unit_index]
@@ -51,13 +57,19 @@ pub(super) fn one_step_mutations(
             .first()
             .map(|part| part.0.as_str())
             .unwrap_or("");
-        for resource in catalog.iter().filter(|resource| resource.name != current_name) {
+        for resource in catalog
+            .iter()
+            .filter(|resource| resource.name != current_name)
+        {
             let mut replaced = parent.structure.clone();
             replaced.units[unit_index].material =
                 crate::resources::Material::free_base(resource.name.clone(), 1.0);
             replaced.units[unit_index].geometry = None;
             out.push((
-                format!("replace constituent at index {unit_index} with {}", resource.name),
+                format!(
+                    "replace constituent at index {unit_index} with {}",
+                    resource.name
+                ),
                 replaced,
             ));
         }
@@ -203,4 +215,3 @@ pub(crate) fn mutate_once(
         .map_err(|e| format!("save cavity mutation cursor: {e}"))?;
     Ok(stats)
 }
-
