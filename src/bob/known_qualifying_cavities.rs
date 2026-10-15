@@ -122,7 +122,9 @@ impl StoreLock {
             .open(&path)
             .map_err(|error| {
                 format!(
-                    "known qualifying cavity store lock {} could not be acquired: {error}; if no Bob process is running, inspect and manually remove the stale lock before retrying", path.display()
+                    "known qualifying cavity store lock {} could not be acquired: {error}; \
+                     if no Bob process is running, inspect and manually remove the stale lock before retrying",
+                    path.display()
                 )
             })?;
         Ok(Self { path })
@@ -289,7 +291,9 @@ pub(crate) fn load_records(path: impl AsRef<Path>) -> Result<Vec<KnownQualifying
             ));
         }
         if record.id.trim().is_empty() || !ids.insert(record.id.clone()) {
-            return Err(format!("empty or duplicate cavity candidate ID on line {line_number}"));
+            return Err(format!(
+                "empty or duplicate cavity candidate ID on line {line_number}"
+            ));
         }
         if record.constituent_count != record.structure.units.len() {
             return Err(format!(
@@ -302,7 +306,10 @@ pub(crate) fn load_records(path: impl AsRef<Path>) -> Result<Vec<KnownQualifying
             || !record.minimum_cavity_area.is_finite()
             || record.minimum_cavity_area <= 0.0
         {
-            return Err(format!("cavity candidate {} has invalid stored area metadata", record.id));
+            return Err(format!(
+                "cavity candidate {} has invalid stored area metadata",
+                record.id
+            ));
         }
         if let Some(parent_id) = &record.parent_id {
             if !ids.contains(parent_id) {
@@ -514,7 +521,10 @@ mod tests {
         let _ = fs::remove_file(&path);
         seed_nitrogen_ring(&path, &catalog).expect("valid seed should persist");
         let contents = fs::read_to_string(&path).expect("store should be readable");
-        let corrupted = contents.replace("\\"constituent_count\\":16", "\\"constituent_count\\":15");
+        let corrupted = contents.replace(
+            "\\"constituent_count\\":16",
+            "\\"constituent_count\\":15",
+        );
         assert_ne!(contents, corrupted, "fixture must contain the expected metadata");
         fs::write(&path, corrupted).expect("corrupt test fixture should be writable");
         let error = load_records(&path).expect_err("inconsistent metadata must be rejected");
@@ -529,7 +539,10 @@ mod tests {
         let _ = fs::remove_file(&path);
         seed_nitrogen_ring(&path, &catalog).expect("valid seed should persist");
         let contents = fs::read_to_string(&path).expect("store should be readable");
-        let corrupted = contents.replace("\\"schema_version\\":1", "\\"schema_version\\":999");
+        let corrupted = contents.replace(
+            "\\"schema_version\\":1",
+            "\\"schema_version\\":999",
+        );
         assert_ne!(contents, corrupted, "fixture must contain the expected schema");
         fs::write(&path, corrupted).expect("corrupt test fixture should be writable");
         let error = load_records(&path).expect_err("unknown schema must be rejected");
