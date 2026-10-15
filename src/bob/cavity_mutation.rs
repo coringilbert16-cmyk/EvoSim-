@@ -137,6 +137,8 @@ pub(crate) fn mutate_once(
         % records.len();
 
     let mut known_signatures = std::collections::HashSet::new();
+    let mut known_ids: std::collections::HashSet<String> =
+        records.iter().map(|record| record.id.clone()).collect();
     for record in &records {
         validate_candidate_geometry(&record.structure, catalog).map_err(|error| {
             format!(
@@ -248,7 +250,13 @@ pub(crate) fn mutate_once(
                 stats.stopped_at_candidate_limit = true;
                 break 'parents;
             }
-            let id = format!("cavity-{}", &signature[..24]);
+            // Use the complete digest and guard IDs explicitly before appending.
+            // This keeps the store valid even if a future ID scheme changes.
+            let id = format!("cavity-{signature}");
+            if known_ids.contains(&id) {
+                stats.duplicates += 1;
+                continue;
+            }
             let record = KnownQualifyingCavity {
                 schema_version: SCHEMA_VERSION,
                 id,
@@ -272,6 +280,7 @@ pub(crate) fn mutate_once(
             }
             appended.extend_from_slice(&bytes);
             stored_count += 1;
+            known_ids.insert(id);
             known_signatures.insert(signature);
             stats.accepted += 1;
         }
