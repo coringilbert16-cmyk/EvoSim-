@@ -259,7 +259,7 @@ pub(crate) fn mutate_once(
             }
             let record = KnownQualifyingCavity {
                 schema_version: SCHEMA_VERSION,
-                id,
+                id: id.clone(),
                 parent_id: Some(parent.id.clone()),
                 change,
                 constituent_count: structure.units.len(),
