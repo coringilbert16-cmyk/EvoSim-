@@ -91,7 +91,9 @@ mod tests {
             OrganismViabilityRequirements::default(),
         );
         assert!(
-            result.as_ref().is_err_and(|error| error.contains("genome cavity is not sealed")),
+            result
+                .as_ref()
+                .is_err_and(|error| error.contains("genome cavity is not sealed")),
             "a single missing perimeter bond must invalidate the genome cavity; result={result:?}"
         );
     }
