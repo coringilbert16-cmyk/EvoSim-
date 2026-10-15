@@ -278,7 +278,8 @@ pub(crate) fn load_records(path: impl AsRef<Path>) -> Result<Vec<KnownQualifying
     let mut ids = std::collections::HashSet::new();
     for (index, line) in BufReader::new(file).lines().enumerate() {
         let line_number = index + 1;
-        let line = line.map_err(|error| format!("read cavity store line {line_number}: {error}"))?;
+        let line =
+            line.map_err(|error| format!("read cavity store line {line_number}: {error}"))?;
         if line.trim().is_empty() {
             continue;
         }
@@ -290,7 +291,7 @@ pub(crate) fn load_records(path: impl AsRef<Path>) -> Result<Vec<KnownQualifying
                 record.schema_version
             ));
         }
-        if record.id.trim().is_empty() || !ids.insert(record.id.clone()) {
+        if record.id.trim().is_empty() || ids.contains(&record.id) {
             return Err(format!(
                 "empty or duplicate cavity candidate ID on line {line_number}"
             ));
@@ -319,6 +320,7 @@ pub(crate) fn load_records(path: impl AsRef<Path>) -> Result<Vec<KnownQualifying
                 ));
             }
         }
+        ids.insert(record.id.clone());
         records.push(record);
         if records.len() > MAX_QUALIFYING_CANDIDATES {
             return Err(format!(
@@ -514,6 +516,7 @@ mod tests {
         assert!(!path.exists() || load_records(&path).unwrap().is_empty());
         let _ = fs::remove_file(path);
     }
+
     #[test]
     fn load_records_rejects_inconsistent_constituent_metadata() {
         let catalog = crate::resources::default_catalog();
@@ -522,13 +525,20 @@ mod tests {
         seed_nitrogen_ring(&path, &catalog).expect("valid seed should persist");
         let contents = fs::read_to_string(&path).expect("store should be readable");
         let corrupted = contents.replace(
-            "\\"constituent_count\\":16",
-            "\\"constituent_count\\":15",
+            "\"constituent_count\":16",
+            "\"constituent_count\":15",
         );
-        assert_ne!(contents, corrupted, "fixture must contain the expected metadata");
+        assert_ne!(
+            contents, corrupted,
+            "fixture must contain the expected metadata"
+        );
         fs::write(&path, corrupted).expect("corrupt test fixture should be writable");
-        let error = load_records(&path).expect_err("inconsistent metadata must be rejected");
-        assert!(error.contains("inconsistent constituent_count"), "{error}");
+        let error =
+            load_records(&path).expect_err("inconsistent metadata must be rejected");
+        assert!(
+            error.contains("inconsistent constituent_count"),
+            "{error}"
+        );
         let _ = fs::remove_file(path);
     }
 
@@ -540,13 +550,19 @@ mod tests {
         seed_nitrogen_ring(&path, &catalog).expect("valid seed should persist");
         let contents = fs::read_to_string(&path).expect("store should be readable");
         let corrupted = contents.replace(
-            "\\"schema_version\\":1",
-            "\\"schema_version\\":999",
+            "\"schema_version\":1",
+            "\"schema_version\":999",
         );
-        assert_ne!(contents, corrupted, "fixture must contain the expected schema");
+        assert_ne!(
+            contents, corrupted,
+            "fixture must contain the expected schema"
+        );
         fs::write(&path, corrupted).expect("corrupt test fixture should be writable");
         let error = load_records(&path).expect_err("unknown schema must be rejected");
-        assert!(error.contains("unsupported cavity-store schema version"), "{error}");
+        assert!(
+            error.contains("unsupported cavity-store schema version"),
+            "{error}"
+        );
         let _ = fs::remove_file(path);
     }
 
