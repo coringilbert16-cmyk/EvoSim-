@@ -130,9 +130,7 @@ pub(crate) fn mutate_once(
             )
         })?;
         let cavity = crate::cavity::analyze_genome_cavity(&record.structure, catalog)?
-            .ok_or_else(|| {
-                format!("stored cavity candidate {} no longer qualifies", record.id)
-            })?;
+            .ok_or_else(|| format!("stored cavity candidate {} no longer qualifies", record.id))?;
         if !cavity.qualifies()
             || (cavity.area - record.cavity_area).abs() > 1e-7
             || (cavity.minimum_area - record.minimum_cavity_area).abs() > 1e-7
