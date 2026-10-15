@@ -1797,9 +1797,8 @@ mod tests {
             rotation_radians: stored_candidate.rotation_radians + rotation_delta,
         };
 
-        let suggestions =
-            persisted_pair_formation_placements(
-                "Carbon",
+        let suggestions = persisted_pair_formation_placements(
+            "Carbon",
                 live_anchor,
                 nitrogen,
                 &library,
