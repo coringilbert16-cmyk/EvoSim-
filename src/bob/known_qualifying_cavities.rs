@@ -302,8 +302,6 @@ pub(crate) fn mutate_once(
     let cursor_path = path.with_extension("cursor");
     let start = fs::read_to_string(&cursor_path).ok()
         .and_then(|text| text.trim().parse::<usize>().ok()).unwrap_or(0) % records.len();
-    let mut ordered = records.clone();
-    ordered.rotate_left(start);
 
     let mut known_signatures = std::collections::HashSet::new();
     for record in &records {
@@ -315,7 +313,9 @@ pub(crate) fn mutate_once(
     let mut stored_bytes = fs::metadata(path).map_err(|e| format!("inspect cavity store size: {e}"))?.len();
     let mut parents_processed = 0usize;
 
-    'parents: for parent in &ordered {
+    'parents: for offset in 0..records.len() {
+        let parent_index = (start + offset) % records.len();
+        let parent = &records[parent_index];
         parents_processed += 1;
         let mutations = one_step_mutations(parent, catalog);
         for (change, structure) in mutations {
@@ -334,15 +334,21 @@ pub(crate) fn mutate_once(
             }
             let cavity = match crate::cavity::analyze_genome_cavity(&structure, catalog) {
                 Ok(Some(cavity)) if cavity.qualifies() => cavity,
-                _ => { stats.rejected += 1; continue; }
+                _ => {
+                    stats.rejected += 1;
+                    continue;
+                }
             };
             if crate::organism_viability::validate_realized_organism(
-                &structure, catalog,
+                &structure,
+                catalog,
                 crate::organism_viability::OrganismViabilityRequirements {
                     require_sealed_genome_cavity: true,
                     require_extra_structure: false,
                 },
-            ).is_err() {
+            )
+            .is_err()
+            {
                 stats.rejected += 1;
                 continue;
             }
@@ -364,12 +370,15 @@ pub(crate) fn mutate_once(
             let mut bytes = serde_json::to_vec(&record)
                 .map_err(|e| format!("serialize qualifying mutation: {e}"))?;
             bytes.push(b'\\n');
-            if stored_bytes.saturating_add(appended.len() as u64).saturating_add(bytes.len() as u64) > MAX_STORE_BYTES {
+            if stored_bytes
+                .saturating_add(appended.len() as u64)
+                .saturating_add(bytes.len() as u64)
+                > MAX_STORE_BYTES
+            {
                 stats.stopped_at_storage_limit = true;
                 break 'parents;
             }
             appended.extend_from_slice(&bytes);
-            stored_bytes = stored_bytes.saturating_add(bytes.len() as u64);
             stored_count += 1;
             known_signatures.insert(signature);
             stats.accepted += 1;
@@ -377,10 +386,15 @@ pub(crate) fn mutate_once(
     }
 
     if !appended.is_empty() {
-        let mut file = OpenOptions::new().create(true).append(true).open(path)
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
             .map_err(|e| format!("open cavity store for mutation append: {e}"))?;
-        file.write_all(&appended).map_err(|e| format!("append qualifying mutations: {e}"))?;
-        file.sync_data().map_err(|e| format!("sync qualifying mutations: {e}"))?;
+        file.write_all(&appended)
+            .map_err(|e| format!("append qualifying mutations: {e}"))?;
+        file.sync_data()
+            .map_err(|e| format!("sync qualifying mutations: {e}"))?;
     }
     let next_cursor = (start + parents_processed.max(1)) % records.len();
     fs::write(cursor_path, next_cursor.to_string())
@@ -398,6 +412,36 @@ mod tests {
             std::process::id(),
             std::thread::current().name().unwrap_or("test")
         ))
+    }
+
+    #[test]
+    fn one_step_mutations_never_increase_constituent_count() {
+        let catalog = crate::resources::default_catalog();
+        let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("seed structure should build");
+        let parent = KnownQualifyingCavity {
+            schema_version: SCHEMA_VERSION,
+            id: NITROGEN_RING_SEED_ID.to_string(),
+            parent_id: None,
+            change: "test seed".to_string(),
+            constituent_count: structure.units.len(),
+            cavity_area: 0.0,
+            minimum_cavity_area: 0.0,
+            structure,
+        };
+        let mutations = one_step_mutations(&parent, &catalog);
+        assert!(!mutations.is_empty());
+        assert!(mutations.iter().all(|(_, candidate)| {
+            candidate.units.len() <= parent.constituent_count
+        }));
+        assert!(mutations.iter().any(|(change, candidate)| {
+            change.starts_with("remove constituent")
+                && candidate.units.len() + 1 == parent.constituent_count
+        }));
+        assert!(mutations.iter().any(|(change, candidate)| {
+            change.starts_with("replace constituent")
+                && candidate.units.len() == parent.constituent_count
+        }));
     }
 
     #[test]

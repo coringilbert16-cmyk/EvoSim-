@@ -176,6 +176,17 @@ async fn main() {
         return;
     }
 
+    if command.as_deref() == Some("--bob-cavity-mutate-once") {
+        let catalog = resources::default_catalog();
+        let path = known_qualifying_cavities::default_store_path();
+        let stats = known_qualifying_cavities::mutate_once(&path, &catalog)
+            .expect("bounded cavity mutation batch failed");
+        println!("Known qualifying cavity store: {}", path.display());
+        println!("{stats:?}");
+        return;
+    }
+
+
     if command.as_deref() == Some("--geometry-worker-once") {
         geometry_library_worker::run_once().expect("geometry worker smoke test failed");
         return;
