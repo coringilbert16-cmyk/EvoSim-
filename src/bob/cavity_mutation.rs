@@ -63,6 +63,7 @@ pub(super) fn one_step_mutations(
                 trial.units[unit_index].placement.x += dx;
                 trial.units[unit_index].placement.y += dy;
                 trial.units[unit_index].placement.rotation_radians += rotation_delta;
+                rebuild_replacement_connections(&mut trial, unit_index, catalog);
                 out.push((
                     format!(
                         "replace constituent at index {unit_index} with {} ({pose_label})",
@@ -85,6 +86,41 @@ pub(super) fn one_step_mutations(
     }
 
     out
+}
+
+/// Rebuild connections for a swapped constituent from current physical
+/// contacts. No bond count or old endpoint layout is treated as formation
+/// identity; the ordinary constructor bond transaction remains authoritative.
+fn rebuild_replacement_connections(
+    structure: &mut OrganismStructure,
+    changed_index: usize,
+    catalog: &[BaseResource],
+) {
+    let Some(changed_id) = structure.units.get(changed_index).map(|unit| unit.physical_id) else {
+        return;
+    };
+    structure.bonds.retain(|bond| {
+        bond.endpoint_a.constituent_id != changed_id
+            && bond.endpoint_b.constituent_id != changed_id
+    });
+
+    let mut ledger = crate::energy::EnergyLedger::default();
+    let mut energy = f64::MAX / 4.0;
+    let neighbor_indices = (0..structure.units.len())
+        .filter(|&index| index != changed_index)
+        .collect::<Vec<_>>();
+    for neighbor_index in neighbor_indices {
+        // A non-contact is an expected failed fit, not a mutation-wide error.
+        // Each trial is isolated, so a partial repair cannot leak to another.
+        let _ = crate::initial_organism_constructor::bond_units(
+            structure,
+            changed_index,
+            neighbor_index,
+            catalog,
+            &mut ledger,
+            &mut energy,
+        );
+    }
 }
 
 /// Explore one bounded batch from the persistent cavity frontier. Validation
