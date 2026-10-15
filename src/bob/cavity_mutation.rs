@@ -109,6 +109,12 @@ pub(crate) fn mutate_once(
     if records.is_empty() {
         return Err("known qualifying cavity store has no seed candidates".to_string());
     }
+    if records.len() >= MAX_QUALIFYING_CANDIDATES {
+        return Ok(MutationBatchStats {
+            stopped_at_candidate_limit: true,
+            ..MutationBatchStats::default()
+        });
+    }
     let cursor_path = path.with_extension("cursor");
     let start = fs::read_to_string(&cursor_path)
         .ok()
@@ -154,6 +160,7 @@ pub(crate) fn mutate_once(
             stats.attempts += 1;
             if structure.units.len() > parent.constituent_count {
                 stats.rejected += 1;
+                *stats.rejection_reasons.entry("constituent_count_increased".to_string()).or_default() += 1;
                 continue;
             }
             let signature = geometry_signature(&structure)?;
