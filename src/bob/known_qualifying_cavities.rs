@@ -272,21 +272,54 @@ pub(crate) fn load_records(path: impl AsRef<Path>) -> Result<Vec<KnownQualifying
         return Ok(Vec::new());
     }
     let file = std::fs::File::open(path).map_err(|error| format!("open cavity store: {error}"))?;
-    BufReader::new(file)
-        .lines()
-        .enumerate()
-        .filter_map(|(index, line)| match line {
-            Ok(line) if line.trim().is_empty() => None,
-            Ok(line) => Some(
-                serde_json::from_str(&line)
-                    .map_err(|error| format!("decode cavity store line {}: {error}", index + 1)),
-            ),
-            Err(error) => Some(Err(format!(
-                "read cavity store line {}: {error}",
-                index + 1
-            ))),
-        })
-        .collect()
+    let mut records = Vec::new();
+    let mut ids = std::collections::HashSet::new();
+    for (index, line) in BufReader::new(file).lines().enumerate() {
+        let line_number = index + 1;
+        let line = line.map_err(|error| format!("read cavity store line {line_number}: {error}"))?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let record: KnownQualifyingCavity = serde_json::from_str(&line)
+            .map_err(|error| format!("decode cavity store line {line_number}: {error}"))?;
+        if record.schema_version != SCHEMA_VERSION {
+            return Err(format!(
+                "unsupported cavity-store schema version {} on line {line_number}; expected {SCHEMA_VERSION}",
+                record.schema_version
+            ));
+        }
+        if record.id.trim().is_empty() || !ids.insert(record.id.clone()) {
+            return Err(format!("empty or duplicate cavity candidate ID on line {line_number}"));
+        }
+        if record.constituent_count != record.structure.units.len() {
+            return Err(format!(
+                "cavity candidate {} has inconsistent constituent_count metadata",
+                record.id
+            ));
+        }
+        if !record.cavity_area.is_finite()
+            || record.cavity_area <= 0.0
+            || !record.minimum_cavity_area.is_finite()
+            || record.minimum_cavity_area <= 0.0
+        {
+            return Err(format!("cavity candidate {} has invalid stored area metadata", record.id));
+        }
+        if let Some(parent_id) = &record.parent_id {
+            if !ids.contains(parent_id) {
+                return Err(format!(
+                    "cavity candidate {} references a parent not already present: {}",
+                    record.id, parent_id
+                ));
+            }
+        }
+        records.push(record);
+        if records.len() > MAX_QUALIFYING_CANDIDATES {
+            return Err(format!(
+                "cavity store exceeds hard limit of {MAX_QUALIFYING_CANDIDATES} records"
+            ));
+        }
+    }
+    Ok(records)
 }
 
 #[cfg(test)]
