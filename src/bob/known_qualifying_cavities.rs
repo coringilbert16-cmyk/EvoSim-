@@ -226,7 +226,9 @@ mod tests {
         // Remove the midpoint of a side, not a corner: a corner removal can
         // leave the remaining boundary segments touching at a vertex.
         let removed_id = structure.units[2].physical_id;
-        structure.units.retain(|unit| unit.physical_id != removed_id);
+        structure
+            .units
+            .retain(|unit| unit.physical_id != removed_id);
         structure.bonds.retain(|bond| {
             bond.endpoint_a.constituent_id != removed_id
                 && bond.endpoint_b.constituent_id != removed_id
