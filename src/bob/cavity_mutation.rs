@@ -1,5 +1,6 @@
 use super::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 use rand::seq::SliceRandom;
@@ -18,6 +19,14 @@ pub(crate) struct MutationBatchStats {
     pub rejection_reasons: BTreeMap<String, usize>,
     pub stopped_at_candidate_limit: bool,
     pub stopped_at_storage_limit: bool,
+    pub stopped_at_search_exhaustion: bool,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+struct MutationFrontier {
+    active_parent_id: Option<String>,
+    next_indices: HashMap<String, usize>,
+    exhausted_parent_ids: HashSet<String>,
 }
 
 /// Generate swap-first mutation trials. Each resource substitution owns its
@@ -233,155 +242,167 @@ pub(crate) fn mutate_once(
     let stored_bytes = fs::metadata(path)
         .map_err(|e| format!("inspect cavity store size: {e}"))?
         .len();
-    let mut parent_indices: Vec<usize> = (0..records.len()).collect();
-    parent_indices.shuffle(&mut rand::thread_rng());
+    let frontier_path = path.with_extension("frontier.json");
+    let mut frontier: MutationFrontier = fs::read_to_string(&frontier_path)
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default();
 
-    'parents: for parent_index in parent_indices {
-        let parent = &records[parent_index];
-        let mutations = one_step_mutations(parent, catalog);
-        for (change, mut structure) in mutations {
-            if stats.attempts >= MAX_MUTATION_ATTEMPTS_PER_RUN {
-                break 'parents;
-            }
-            stats.attempts += 1;
-            if change.starts_with("replace constituent")
-                || change.starts_with("translate constituent")
-                || change.starts_with("rotate constituent")
-            {
-                let prefix = if change.starts_with("replace constituent") {
-                    "replace constituent at index "
-                } else if change.starts_with("translate constituent") {
-                    "translate constituent at index "
-                } else {
-                    "rotate constituent at index "
-                };
-                if let Some(unit_index) = change
-                    .strip_prefix(prefix)
-                    .and_then(|rest| rest.split_whitespace().next())
-                    .and_then(|index| index.parse::<usize>().ok())
-                {
-                    if !rebuild_replacement_connections(&mut structure, unit_index, catalog) {
-                        stats.rejected += 1;
-                        stats.geometry_rejections += 1;
-                        *stats
-                            .rejection_reasons
-                            .entry("replacement_has_no_repaired_contact".to_string())
-                            .or_default() += 1;
-                        continue;
-                    }
-                }
-            }
-            if structure.units.len() > parent.constituent_count {
-                stats.rejected += 1;
-                *stats
-                    .rejection_reasons
-                    .entry("constituent_count_increased".to_string())
-                    .or_default() += 1;
-                continue;
-            }
-            let signature = geometry_signature(&structure)?;
-            if known_signatures.contains(&signature) {
-                stats.duplicates += 1;
-                continue;
-            }
-            if let Err(error) = validate_candidate_geometry(&structure, catalog) {
-                stats.rejected += 1;
-                stats.geometry_rejections += 1;
-                let reason = if error.contains("overlap") {
-                    "geometry_overlap"
-                } else if error.contains("bond") {
-                    "geometry_bond"
-                } else {
-                    "geometry_shape"
-                };
-                *stats
-                    .rejection_reasons
-                    .entry(reason.to_string())
-                    .or_default() += 1;
-                continue;
-            }
-            stats.cavity_checks_performed += 1;
-            let cavity = match crate::cavity::analyze_genome_cavity(&structure, catalog) {
-                Ok(Some(cavity)) if cavity.qualifies() => cavity,
-                Ok(_) => {
-                    stats.rejected += 1;
-                    stats.cavity_rejections += 1;
-                    *stats
-                        .rejection_reasons
-                        .entry("cavity_not_qualifying".to_string())
-                        .or_default() += 1;
-                    continue;
-                }
-                Err(error) => {
-                    stats.rejected += 1;
-                    stats.cavity_rejections += 1;
-                    *stats
-                        .rejection_reasons
-                        .entry(format!("cavity_analysis_error: {error}"))
-                        .or_default() += 1;
-                    continue;
-                }
-            };
-            if crate::organism_viability::validate_realized_organism(
-                &structure,
-                catalog,
-                crate::organism_viability::OrganismViabilityRequirements {
-                    require_sealed_genome_cavity: true,
-                    require_extra_structure: false,
-                },
-            )
-            .is_err()
-            {
-                stats.rejected += 1;
-                stats.viability_rejections += 1;
-                *stats
-                    .rejection_reasons
-                    .entry("viability_rejected".to_string())
-                    .or_default() += 1;
-                continue;
-            }
-            if stored_count >= MAX_QUALIFYING_CANDIDATES {
-                stats.stopped_at_candidate_limit = true;
-                break 'parents;
-            }
-            // Use the complete digest and guard IDs explicitly before appending.
-            // This keeps the store valid even if a future ID scheme changes.
-            let id = format!("cavity-{signature}");
-            if known_ids.contains(&id) {
-                stats.duplicates += 1;
-                continue;
-            }
-            let record = KnownQualifyingCavity {
-                schema_version: SCHEMA_VERSION,
-                id: id.clone(),
-                parent_id: Some(parent.id.clone()),
-                change,
-                constituent_count: structure.units.len(),
-                cavity_area: cavity.area,
-                minimum_cavity_area: cavity.minimum_area,
-                structure,
-            };
-            let mut bytes = serde_json::to_vec(&record)
-                .map_err(|e| format!("serialize qualifying mutation: {e}"))?;
-            bytes.push(b'\n');
-            if stored_bytes
-                .saturating_add(appended.len() as u64)
-                .saturating_add(bytes.len() as u64)
-                > MAX_STORE_BYTES
-            {
-                stats.stopped_at_storage_limit = true;
-                break 'parents;
-            }
-            appended.extend_from_slice(&bytes);
-            stored_count += 1;
-            known_ids.insert(id);
-            known_signatures.insert(signature);
-            stats.accepted += 1;
-            // Yield after one discovery. The next call chooses a fresh random
-            // parent from the updated library, including this new formation.
-            break 'parents;
-        }
+    let known_parent_ids: HashSet<&str> = records.iter().map(|record| record.id.as_str()).collect();
+    if frontier.active_parent_id.as_deref().is_some_and(|id| !known_parent_ids.contains(id)) {
+        frontier.active_parent_id = None;
     }
+
+    let selected_parent_id = frontier.active_parent_id.clone().or_else(|| {
+        let mut eligible: Vec<&KnownQualifyingCavity> = records
+            .iter()
+            .filter(|record| !frontier.exhausted_parent_ids.contains(&record.id))
+            .collect();
+        eligible.shuffle(&mut rand::thread_rng());
+        eligible.first().map(|record| record.id.clone())
+    });
+
+    let Some(selected_parent_id) = selected_parent_id else {
+        stats.stopped_at_search_exhaustion = true;
+        fs::write(&frontier_path, serde_json::to_vec_pretty(&frontier)
+            .map_err(|e| format!("serialize cavity mutation frontier: {e}"))?)
+            .map_err(|e| format!("save cavity mutation frontier: {e}"))?;
+        return Ok(stats);
+    };
+    let parent_index = records.iter().position(|record| record.id == selected_parent_id)
+        .ok_or_else(|| format!("active cavity parent {selected_parent_id} is missing"))?;
+    let parent = &records[parent_index];
+    let mutations = one_step_mutations(parent, catalog);
+    let mut next_index = frontier.next_indices.get(&parent.id).copied().unwrap_or(0);
+
+    while next_index < mutations.len() && stats.attempts < MAX_MUTATION_ATTEMPTS_PER_RUN {
+        let (change, mut structure) = mutations[next_index].clone();
+        next_index += 1;
+        frontier.next_indices.insert(parent.id.clone(), next_index);
+        stats.attempts += 1;
+
+        if change.starts_with("replace constituent")
+            || change.starts_with("translate constituent")
+            || change.starts_with("rotate constituent")
+        {
+            let prefix = if change.starts_with("replace constituent") {
+                "replace constituent at index "
+            } else if change.starts_with("translate constituent") {
+                "translate constituent at index "
+            } else {
+                "rotate constituent at index "
+            };
+            if let Some(unit_index) = change
+                .strip_prefix(prefix)
+                .and_then(|rest| rest.split_whitespace().next())
+                .and_then(|index| index.parse::<usize>().ok())
+            {
+                if !rebuild_replacement_connections(&mut structure, unit_index, catalog) {
+                    stats.rejected += 1;
+                    stats.geometry_rejections += 1;
+                    *stats.rejection_reasons.entry("replacement_has_no_repaired_contact".to_string()).or_default() += 1;
+                    continue;
+                }
+            }
+        }
+        if structure.units.len() > parent.constituent_count {
+            stats.rejected += 1;
+            *stats.rejection_reasons.entry("constituent_count_increased".to_string()).or_default() += 1;
+            continue;
+        }
+        let signature = geometry_signature(&structure)?;
+        if known_signatures.contains(&signature) {
+            stats.duplicates += 1;
+            continue;
+        }
+        if let Err(error) = validate_candidate_geometry(&structure, catalog) {
+            stats.rejected += 1;
+            stats.geometry_rejections += 1;
+            let reason = if error.contains("overlap") { "geometry_overlap" }
+                else if error.contains("bond") { "geometry_bond" }
+                else { "geometry_shape" };
+            *stats.rejection_reasons.entry(reason.to_string()).or_default() += 1;
+            continue;
+        }
+        stats.cavity_checks_performed += 1;
+        let cavity = match crate::cavity::analyze_genome_cavity(&structure, catalog) {
+            Ok(Some(cavity)) if cavity.qualifies() => cavity,
+            Ok(_) => {
+                stats.rejected += 1;
+                stats.cavity_rejections += 1;
+                *stats.rejection_reasons.entry("cavity_not_qualifying".to_string()).or_default() += 1;
+                continue;
+            }
+            Err(error) => {
+                stats.rejected += 1;
+                stats.cavity_rejections += 1;
+                *stats.rejection_reasons.entry(format!("cavity_analysis_error: {error}")).or_default() += 1;
+                continue;
+            }
+        };
+        if crate::organism_viability::validate_realized_organism(
+            &structure,
+            catalog,
+            crate::organism_viability::OrganismViabilityRequirements {
+                require_sealed_genome_cavity: true,
+                require_extra_structure: false,
+            },
+        ).is_err() {
+            stats.rejected += 1;
+            stats.viability_rejections += 1;
+            *stats.rejection_reasons.entry("viability_rejected".to_string()).or_default() += 1;
+            continue;
+        }
+        if stored_count >= MAX_QUALIFYING_CANDIDATES {
+            stats.stopped_at_candidate_limit = true;
+            break;
+        }
+        let id = format!("cavity-{signature}");
+        if known_ids.contains(&id) {
+            stats.duplicates += 1;
+            continue;
+        }
+        let record = KnownQualifyingCavity {
+            schema_version: SCHEMA_VERSION,
+            id: id.clone(),
+            parent_id: Some(parent.id.clone()),
+            change,
+            constituent_count: structure.units.len(),
+            cavity_area: cavity.area,
+            minimum_cavity_area: cavity.minimum_area,
+            structure,
+        };
+        let mut bytes = serde_json::to_vec(&record)
+            .map_err(|e| format!("serialize qualifying mutation: {e}"))?;
+        bytes.push(b'\\n');
+        if stored_bytes.saturating_add(appended.len() as u64).saturating_add(bytes.len() as u64) > MAX_STORE_BYTES {
+            stats.stopped_at_storage_limit = true;
+            break;
+        }
+        appended.extend_from_slice(&bytes);
+        stored_count += 1;
+        known_ids.insert(id);
+        known_signatures.insert(signature);
+        stats.accepted += 1;
+        // A discovery ends this parent's turn. Its remaining mutations stay
+        // resumable, but the next call chooses a fresh random parent.
+        frontier.active_parent_id = None;
+        break;
+    }
+
+    if next_index >= mutations.len() {
+        frontier.exhausted_parent_ids.insert(parent.id.clone());
+        frontier.active_parent_id = None;
+    } else if stats.accepted == 0
+        && !stats.stopped_at_storage_limit
+        && !stats.stopped_at_candidate_limit
+    {
+        // Continue this parent's unfinished mutation list on the next batch.
+        frontier.active_parent_id = Some(parent.id.clone());
+    }
+    fs::write(&frontier_path, serde_json::to_vec_pretty(&frontier)
+        .map_err(|e| format!("serialize cavity mutation frontier: {e}"))?)
+        .map_err(|e| format!("save cavity mutation frontier: {e}"))?;
 
     if !appended.is_empty() {
         append_records_atomically(path, &appended)?;
