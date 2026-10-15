@@ -186,6 +186,16 @@ async fn main() {
         return;
     }
 
+    if command.as_deref() == Some("--bob-cavity-mutate-until-full") {
+        let catalog = resources::default_catalog();
+        let path = known_qualifying_cavities::default_store_path();
+        println!("Known qualifying cavity store: {}", path.display());
+        let stats = known_qualifying_cavities::mutate_until_full(&path, &catalog)
+            .expect("cavity mutation search failed");
+        println!("Bob cavity search stopped: {stats:?}");
+        return;
+    }
+
     if command.as_deref() == Some("--geometry-worker-once") {
         geometry_library_worker::run_once().expect("geometry worker smoke test failed");
         return;
