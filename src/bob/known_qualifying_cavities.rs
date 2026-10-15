@@ -476,6 +476,28 @@ mod tests {
     }
 
     #[test]
+    fn replacement_trial_must_rebuild_a_live_physical_contact() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("nitrogen ring seed should build");
+        structure.units[0].material =
+            crate::resources::Material::free_base("Methane".to_string(), 1.0);
+        structure.units[0].geometry = None;
+
+        assert!(
+            cavity_mutation::rebuild_replacement_connections(&mut structure, 0, &catalog),
+            "a replacement is only a viable fit when constructor bond logic repairs a physical contact"
+        );
+        assert!(
+            structure.bonds.iter().any(|bond| {
+                bond.endpoint_a.constituent_id == structure.units[0].physical_id
+                    || bond.endpoint_b.constituent_id == structure.units[0].physical_id
+            }),
+            "the changed constituent should be connected through a live validated bond"
+        );
+    }
+
+    #[test]
     fn mutation_batch_stays_within_candidate_and_attempt_budgets() {
         let catalog = crate::resources::default_catalog();
         let path = temporary_store();
