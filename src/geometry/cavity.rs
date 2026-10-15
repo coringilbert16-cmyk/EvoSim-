@@ -251,9 +251,12 @@ fn boundary_units_have_bonded_shared_edges(
                 continue;
             };
 
-            let shares_edge = a_polygon.iter().enumerate().any(|(i, &a0)| {
-                let a1 = a_polygon[(i + 1) % a_polygon.len()];
-                b_polygon.iter().enumerate().any(|(j, &b0)| {
+            let shares_edge = a_polygon
+                .iter()
+                .enumerate()
+                .any(|(i, &a0)| {
+                    let a1 = a_polygon[(i + 1) % a_polygon.len()];
+                    b_polygon.iter().enumerate().any(|(j, &b0)| {
                     let b1 = b_polygon[(j + 1) % b_polygon.len()];
                     (a0.sub(b0).norm() <= NODE_TOLERANCE
                         && a1.sub(b1).norm() <= NODE_TOLERANCE)
@@ -267,8 +270,11 @@ fn boundary_units_have_bonded_shared_edges(
 
             let a_id = a_unit.physical_id;
             let b_id = b_unit.physical_id;
-            let bonded = structure.bonds.iter().any(|bond| {
-                (bond.endpoint_a.constituent_id == a_id
+            let bonded = structure
+                .bonds
+                .iter()
+                .any(|bond| {
+                    (bond.endpoint_a.constituent_id == a_id
                     && bond.endpoint_b.constituent_id == b_id)
                     || (bond.endpoint_a.constituent_id == b_id
                         && bond.endpoint_b.constituent_id == a_id)
