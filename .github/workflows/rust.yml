@@ -171,6 +171,15 @@ jobs:
           print(f"replacement_count={len(replacements)} distinct_replacement_location/material/area={len(replacement_locations)}")
           print("PASS: unique IDs, seed identity/size, stored metadata, lineage, non-increasing constituent counts, and 5,000-record cap")
           PY
+      # TEMPORARY, ONE-RUN EXPORT: remove this step immediately after the artifact is captured.
+      - name: Upload Bob qualifying-cavity formations (temporary one-run export)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bob-qualifying-cavity-formations-run-${{ github.run_id }}
+          path: ${{ runner.temp }}/evosim-known-cavities-growth/candidates.jsonl
+          if-no-files-found: error
+          retention-days: 7
       # Keep the persisted-pair transform/contact/collision replay independently visible.
       - name: Run persisted-pair replay regression
         timeout-minutes: 5
