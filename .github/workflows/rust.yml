@@ -114,7 +114,8 @@ jobs:
           echo "Stored records are revalidated by the mutator on every invocation."
           python3 - <<'PY'
           import collections, json, pathlib
-          store = pathlib.Path("${RUNNER_TEMP}/evosim-known-cavities-growth/candidates.jsonl")
+          import os
+          store = pathlib.Path(os.environ["RUNNER_TEMP"]) / "evosim-known-cavities-growth" / "candidates.jsonl"
           records = [json.loads(line) for line in store.read_text().splitlines() if line.strip()]
           ids = [record["id"] for record in records]
           by_id = {record["id"]: record for record in records}
