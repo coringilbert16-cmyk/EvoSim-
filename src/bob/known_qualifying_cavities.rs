@@ -223,7 +223,9 @@ mod tests {
         let _ = fs::remove_file(&path);
         let mut structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
             .expect("seed structure should build");
-        let removed_id = structure.units[0].physical_id;
+        // Remove the midpoint of a side, not a corner: a corner removal can
+        // leave the remaining boundary segments touching at a vertex.
+        let removed_id = structure.units[2].physical_id;
         structure.units.retain(|unit| unit.physical_id != removed_id);
         structure.bonds.retain(|bond| {
             bond.endpoint_a.constituent_id != removed_id
