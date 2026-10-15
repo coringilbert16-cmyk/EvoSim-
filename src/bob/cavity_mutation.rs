@@ -19,8 +19,10 @@ pub(crate) struct MutationBatchStats {
     pub stopped_at_storage_limit: bool,
 }
 
-/// Generate a bounded set of one-operation variants. Every operator preserves
-/// or reduces constituent count; replacement swaps one resource in place.
+/// Generate swap-first mutation trials. Each resource substitution owns its
+/// fit search: try the existing pose, then alternate rotations and nearby
+/// translations of that same replacement before moving to the next swap.
+/// Bond validity and cavity qualification remain authoritative downstream.
 pub(super) fn one_step_mutations(
     parent: &KnownQualifyingCavity,
     catalog: &[BaseResource],
@@ -29,8 +31,8 @@ pub(super) fn one_step_mutations(
     let mut out = Vec::new();
     let original_count = parent.structure.units.len();
 
-    // Priority 1: try resource substitutions before changing geometry or
-    // topology. This is deliberately the first mutation family on every parent.
+    // Resource substitutions are the primary mutation. Search the changed
+    // constituent's fit before trying another resource or constituent.
     for unit_index in 0..original_count {
         let current_name = parent.structure.units[unit_index]
             .material
@@ -42,55 +44,39 @@ pub(super) fn one_step_mutations(
             .iter()
             .filter(|resource| resource.name != current_name)
         {
-            let mut replaced = parent.structure.clone();
-            replaced.units[unit_index].material =
-                crate::resources::Material::free_base(resource.name.clone(), 1.0);
-            replaced.units[unit_index].geometry = None;
-            out.push((
-                format!(
-                    "replace constituent at index {unit_index} with {}",
-                    resource.name
-                ),
-                replaced,
-            ));
+            let poses = [
+                ("existing pose", 0.0, 0.0, 0.0),
+                ("rotate +15deg", 0.0, 0.0, angle_step),
+                ("rotate -15deg", 0.0, 0.0, -angle_step),
+                ("rotate +30deg", 0.0, 0.0, angle_step * 2.0),
+                ("rotate -30deg", 0.0, 0.0, -angle_step * 2.0),
+                ("move +x", 0.05, 0.0, 0.0),
+                ("move -x", -0.05, 0.0, 0.0),
+                ("move +y", 0.0, 0.05, 0.0),
+                ("move -y", 0.0, -0.05, 0.0),
+            ];
+            for (pose_label, dx, dy, rotation_delta) in poses {
+                let mut trial = parent.structure.clone();
+                trial.units[unit_index].material =
+                    crate::resources::Material::free_base(resource.name.clone(), 1.0);
+                trial.units[unit_index].geometry = None;
+                trial.units[unit_index].placement.x += dx;
+                trial.units[unit_index].placement.y += dy;
+                trial.units[unit_index].placement.rotation_radians += rotation_delta;
+                out.push((
+                    format!(
+                        "replace constituent at index {unit_index} with {} ({pose_label})",
+                        resource.name
+                    ),
+                    trial,
+                ));
+            }
         }
     }
 
-    // Priority 2: explore small pose changes while retaining all constituents.
-    for unit_index in 0..original_count {
-        for (label, dx, dy) in [
-            ("move +x", 0.05, 0.0),
-            ("move -x", -0.05, 0.0),
-            ("move +y", 0.0, 0.05),
-            ("move -y", 0.0, -0.05),
-        ] {
-            let mut moved = parent.structure.clone();
-            moved.units[unit_index].placement.x += dx;
-            moved.units[unit_index].placement.y += dy;
-            out.push((format!("{label} constituent at index {unit_index}"), moved));
-        }
-        for (label, delta) in [
-            ("rotate +15deg", angle_step),
-            ("rotate -15deg", -angle_step),
-        ] {
-            let mut rotated = parent.structure.clone();
-            rotated.units[unit_index].placement.rotation_radians += delta;
-            out.push((
-                format!("{label} constituent at index {unit_index}"),
-                rotated,
-            ));
-        }
-    }
-
-    // Priority 3: alter topology without deleting material.
-    for bond_index in 0..parent.structure.bonds.len() {
-        let mut changed = parent.structure.clone();
-        changed.break_bond(bond_index);
-        out.push((format!("remove bond at index {bond_index}"), changed));
-    }
-
-    // Priority 4 (last): constituent removal is destructive and should be
-    // considered only after every substitution, pose change, and bond change.
+    // Destructive removal is deliberately last. Bond-only bookkeeping edits
+    // are not mutations: formation identity is determined by material and
+    // realized geometry, and cavity analysis decides whether it qualifies.
     for unit_index in 0..original_count {
         let unit_id = parent.structure.units[unit_index].physical_id;
         let mut removed = parent.structure.clone();
