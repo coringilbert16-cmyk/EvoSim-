@@ -27,6 +27,7 @@ struct MutationFrontier {
     active_parent_id: Option<String>,
     next_indices: HashMap<String, usize>,
     exhausted_parent_ids: HashSet<String>,
+    validated_record_count: usize,
 }
 
 /// Generate swap-first mutation trials. Each resource substitution owns its
@@ -113,9 +114,9 @@ pub(super) fn one_step_mutations(
                 let dx = x_step as f64 * 0.25;
                 let dy = y_step as f64 * 0.25;
                 let label = format!("move dx={dx:.2} dy={dy:.2}");
-            let mut trial = parent.structure.clone();
-            trial.units[unit_index].placement.x += dx;
-            trial.units[unit_index].placement.y += dy;
+                let mut trial = parent.structure.clone();
+                trial.units[unit_index].placement.x += dx;
+                trial.units[unit_index].placement.y += dy;
                 out.push((
                     format!("translate constituent at index {unit_index} ({label})"),
                     trial,
@@ -213,11 +214,18 @@ pub(crate) fn mutate_once(
             ..MutationBatchStats::default()
         });
     }
+    let frontier_path = path.with_extension("frontier.json");
+    let mut frontier: MutationFrontier = fs::read_to_string(&frontier_path)
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default();
+
     let mut known_signatures = std::collections::HashSet::new();
     let mut known_ids: std::collections::HashSet<String> =
         records.iter().map(|record| record.id.clone()).collect();
-    for record in &records {
-        validate_candidate_geometry(&record.structure, catalog).map_err(|error| {
+    for (record_index, record) in records.iter().enumerate() {
+        if record_index >= frontier.validated_record_count {
+            validate_candidate_geometry(&record.structure, catalog).map_err(|error| {
             format!(
                 "stored cavity candidate {} fails live geometry validation: {error}",
                 record.id
@@ -225,14 +233,15 @@ pub(crate) fn mutate_once(
         })?;
         let cavity = crate::cavity::analyze_genome_cavity(&record.structure, catalog)?
             .ok_or_else(|| format!("stored cavity candidate {} no longer qualifies", record.id))?;
-        if !cavity.qualifies()
-            || (cavity.area - record.cavity_area).abs() > 1e-7
-            || (cavity.minimum_area - record.minimum_cavity_area).abs() > 1e-7
-        {
-            return Err(format!(
-                "stored cavity candidate {} has stale or invalid cavity metadata",
-                record.id
-            ));
+            if !cavity.qualifies()
+                || (cavity.area - record.cavity_area).abs() > 1e-7
+                || (cavity.minimum_area - record.minimum_cavity_area).abs() > 1e-7
+            {
+                return Err(format!(
+                    "stored cavity candidate {} has stale or invalid cavity metadata",
+                    record.id
+                ));
+            }
         }
         known_signatures.insert(geometry_signature(&record.structure)?);
     }
@@ -242,12 +251,6 @@ pub(crate) fn mutate_once(
     let stored_bytes = fs::metadata(path)
         .map_err(|e| format!("inspect cavity store size: {e}"))?
         .len();
-    let frontier_path = path.with_extension("frontier.json");
-    let mut frontier: MutationFrontier = fs::read_to_string(&frontier_path)
-        .ok()
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_default();
-
     let known_parent_ids: HashSet<&str> = records.iter().map(|record| record.id.as_str()).collect();
     if frontier.active_parent_id.as_deref().is_some_and(|id| !known_parent_ids.contains(id)) {
         frontier.active_parent_id = None;
@@ -300,14 +303,20 @@ pub(crate) fn mutate_once(
                 if !rebuild_replacement_connections(&mut structure, unit_index, catalog) {
                     stats.rejected += 1;
                     stats.geometry_rejections += 1;
-                    *stats.rejection_reasons.entry("replacement_has_no_repaired_contact".to_string()).or_default() += 1;
+                    *stats
+                        .rejection_reasons
+                        .entry("replacement_has_no_repaired_contact".to_string())
+                        .or_default() += 1;
                     continue;
                 }
             }
         }
         if structure.units.len() > parent.constituent_count {
             stats.rejected += 1;
-            *stats.rejection_reasons.entry("constituent_count_increased".to_string()).or_default() += 1;
+            *stats
+                .rejection_reasons
+                .entry("constituent_count_increased".to_string())
+                .or_default() += 1;
             continue;
         }
         let signature = geometry_signature(&structure)?;
@@ -330,13 +339,19 @@ pub(crate) fn mutate_once(
             Ok(_) => {
                 stats.rejected += 1;
                 stats.cavity_rejections += 1;
-                *stats.rejection_reasons.entry("cavity_not_qualifying".to_string()).or_default() += 1;
+                *stats
+                    .rejection_reasons
+                    .entry("cavity_not_qualifying".to_string())
+                    .or_default() += 1;
                 continue;
             }
             Err(error) => {
                 stats.rejected += 1;
                 stats.cavity_rejections += 1;
-                *stats.rejection_reasons.entry(format!("cavity_analysis_error: {error}")).or_default() += 1;
+                *stats
+                    .rejection_reasons
+                    .entry(format!("cavity_analysis_error: {error}"))
+                    .or_default() += 1;
                 continue;
             }
         };
@@ -375,7 +390,11 @@ pub(crate) fn mutate_once(
         let mut bytes = serde_json::to_vec(&record)
             .map_err(|e| format!("serialize qualifying mutation: {e}"))?;
         bytes.push(b'\\n');
-        if stored_bytes.saturating_add(appended.len() as u64).saturating_add(bytes.len() as u64) > MAX_STORE_BYTES {
+        if stored_bytes
+            .saturating_add(appended.len() as u64)
+            .saturating_add(bytes.len() as u64)
+            > MAX_STORE_BYTES
+        {
             stats.stopped_at_storage_limit = true;
             break;
         }
@@ -402,9 +421,13 @@ pub(crate) fn mutate_once(
     }
     if stats.stopped_at_storage_limit {
         // Retry this exact mutation if the storage budget is raised later.
-        frontier.next_indices.insert(parent.id.clone(), next_index.saturating_sub(1));
+        frontier
+            .next_indices
+            .insert(parent.id.clone(), next_index.saturating_sub(1));
+        frontier.exhausted_parent_ids.remove(&parent.id);
         frontier.active_parent_id = None;
     }
+    frontier.validated_record_count = stored_count;
     if !appended.is_empty() {
         append_records_atomically(path, &appended)?;
     }
