@@ -136,6 +136,7 @@ pub(crate) fn persist_if_qualifying(
     })
 }
 
+#[cfg(test)]
 pub(crate) fn load_records(path: impl AsRef<Path>) -> Result<Vec<KnownQualifyingCavity>, String> {
     let path = path.as_ref();
     if !path.exists() {
