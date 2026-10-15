@@ -2,6 +2,7 @@ use super::*;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::Path;
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct MutationBatchStats {
@@ -9,6 +10,10 @@ pub(crate) struct MutationBatchStats {
     pub accepted: usize,
     pub rejected: usize,
     pub duplicates: usize,
+    pub geometry_rejections: usize,
+    pub cavity_rejections: usize,
+    pub viability_rejections: usize,
+    pub rejection_reasons: BTreeMap<String, usize>,
     pub stopped_at_candidate_limit: bool,
     pub stopped_at_storage_limit: bool,
 }
@@ -113,6 +118,20 @@ pub(crate) fn mutate_once(
 
     let mut known_signatures = std::collections::HashSet::new();
     for record in &records {
+        validate_candidate_geometry(&record.structure, catalog).map_err(|error| {
+            format!("stored cavity candidate {} fails live geometry validation: {error}", record.id)
+        })?;
+        let cavity = crate::cavity::analyze_genome_cavity(&record.structure, catalog)?
+            .ok_or_else(|| format!("stored cavity candidate {} no longer qualifies", record.id))?;
+        if !cavity.qualifies()
+            || (cavity.area - record.cavity_area).abs() > 1e-7
+            || (cavity.minimum_area - record.minimum_cavity_area).abs() > 1e-7
+        {
+            return Err(format!(
+                "stored cavity candidate {} has stale or invalid cavity metadata",
+                record.id
+            ));
+        }
         known_signatures.insert(geometry_signature(&record.structure)?);
     }
     let mut stats = MutationBatchStats::default();
@@ -142,14 +161,31 @@ pub(crate) fn mutate_once(
                 stats.duplicates += 1;
                 continue;
             }
-            if validate_candidate_geometry(&structure, catalog).is_err() {
+            if let Err(error) = validate_candidate_geometry(&structure, catalog) {
                 stats.rejected += 1;
+                stats.geometry_rejections += 1;
+                let reason = if error.contains("overlap") {
+                    "geometry_overlap"
+                } else if error.contains("bond") {
+                    "geometry_bond"
+                } else {
+                    "geometry_shape"
+                };
+                *stats.rejection_reasons.entry(reason.to_string()).or_default() += 1;
                 continue;
             }
             let cavity = match crate::cavity::analyze_genome_cavity(&structure, catalog) {
                 Ok(Some(cavity)) if cavity.qualifies() => cavity,
-                _ => {
+                Ok(_) => {
                     stats.rejected += 1;
+                    stats.cavity_rejections += 1;
+                    *stats.rejection_reasons.entry("cavity_not_qualifying".to_string()).or_default() += 1;
+                    continue;
+                }
+                Err(error) => {
+                    stats.rejected += 1;
+                    stats.cavity_rejections += 1;
+                    *stats.rejection_reasons.entry(format!("cavity_analysis_error: {error}")).or_default() += 1;
                     continue;
                 }
             };
@@ -164,6 +200,8 @@ pub(crate) fn mutate_once(
             .is_err()
             {
                 stats.rejected += 1;
+                stats.viability_rejections += 1;
+                *stats.rejection_reasons.entry("viability_rejected".to_string()).or_default() += 1;
                 continue;
             }
             if stored_count >= MAX_QUALIFYING_CANDIDATES {
