@@ -1799,11 +1799,11 @@ mod tests {
 
         let suggestions = persisted_pair_formation_placements(
             "Carbon",
-                live_anchor,
-                nitrogen,
-                &library,
-                Instant::now() + CONSTRUCTION_TIME_LIMIT,
-            );
+            live_anchor,
+            nitrogen,
+            &library,
+            Instant::now() + CONSTRUCTION_TIME_LIMIT,
+        );
         assert!(
             suggestions.iter().any(|pose| {
                 (pose.x - expected.x).hypot(pose.y - expected.y) < 1e-9
