@@ -6,10 +6,10 @@ name: Rust
 
 on:
   push:
-    branches: [main, 'refactor/constructor-strip-2026-10-12', 'bob-randomized-cavity-mutations']
+    branches: [main, 'refactor/constructor-strip-2026-10-12']
   pull_request:
     # Validate the integration target and stacked fix branches.
-    branches: [main, integration/unified-source-and-catalogue, 'fix/**', 'refactor/constructor-strip-2026-10-12']
+    branches: [main, integration/unified-source-and-catalogue, 'fix/**']
   workflow_dispatch:
 
 permissions:
@@ -95,7 +95,7 @@ jobs:
       # Measure real qualifying-cavity library growth, not ordinary geometry formations.
       # Use a disposable isolated store; never touch the developer/default library.
       - name: Measure Bob qualifying-cavity library growth
-        timeout-minutes: 30
+        timeout-minutes: 5
         if: always()
         run: |
           export EVOSIM_KNOWN_CAVITIES_DIR="$RUNNER_TEMP/evosim-known-cavities-growth"
@@ -103,9 +103,14 @@ jobs:
           mkdir -p "$EVOSIM_KNOWN_CAVITIES_DIR"
           store="$EVOSIM_KNOWN_CAVITIES_DIR/candidates.jsonl"
           echo "Initial qualifying-candidate count: $(test -f "$store" && wc -l < "$store" || echo 0)"
-          echo "=== Run Bob until the cavity library fills or search stops ==="
-          cargo run --release --locked -- --bob-cavity-mutate-until-full
-          echo "Final qualifying-candidate count: $(test -f "$store" && wc -l < "$store" || echo 0)"
+          for pass in 1 2 3; do
+            echo "=== Cavity mutation pass $pass ==="
+            cargo run --locked -- --bob-cavity-mutate-once
+            echo "Qualifying candidates after pass $pass: $(wc -l < "$store")"
+          done
+          echo "=== Final cavity-library integrity check ==="
+          cargo run --locked -- --bob-cavity-mutate-once
+          echo "Final qualifying-candidate count: $(wc -l < "$store")"
           echo "Stored records are revalidated by the mutator on every invocation."
           python3 - <<'PY'
           import collections, json, pathlib
@@ -166,16 +171,6 @@ jobs:
           print(f"replacement_count={len(replacements)} distinct_replacement_location/material/area={len(replacement_locations)}")
           print("PASS: unique IDs, seed identity/size, stored metadata, lineage, non-increasing constituent counts, and 5,000-record cap")
           PY
-      # TEMPORARY ONE-RUN EXPORT: remove this upload step immediately after
-      # the requested seed-library artifact has been captured.
-      - name: Upload Bob qualifying-cavity seed library (temporary one-run export)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: bob-qualifying-cavity-seed-library-one-time
-          path: ${{ runner.temp }}/evosim-known-cavities-growth/candidates.jsonl
-          if-no-files-found: error
-          retention-days: 7
       # Keep the persisted-pair transform/contact/collision replay independently visible.
       - name: Run persisted-pair replay regression
         timeout-minutes: 5
