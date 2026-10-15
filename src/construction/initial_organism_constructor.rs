@@ -876,8 +876,8 @@ fn construct_persisted_bob_structure(
             anchors_considered_total += 1;
             for resource in &structural_resources {
                 if Instant::now() >= deadline {
-                break 'anchors;
-            }
+                    break 'anchors;
+                }
                 placement_queries_total += 1;
                 match try_persisted_bob_attachments(
                     &state.structure,
@@ -892,8 +892,8 @@ fn construct_persisted_bob_structure(
                     Ok(attachments) => {
                         for attachment in attachments {
                             if Instant::now() >= deadline {
-                break 'anchors;
-            }
+                                break 'anchors;
+                            }
                             candidate_states_generated_total += 1;
                             debug_assert!(
                                 attachment.new_unit_index < attachment.structure.units.len()
@@ -924,8 +924,8 @@ fn construct_persisted_bob_structure(
                             ) {
                                 Ok(qualification) => {
                                     if Instant::now() >= deadline {
-                break 'anchors;
-            }
+                                        break 'anchors;
+                                    }
                                     return Ok(ValidConstruction {
                                         structure: next.structure,
                                         energy: next.energy,
@@ -995,8 +995,8 @@ fn construct_persisted_bob_structure(
                     }
                 }
                 if Instant::now() >= deadline {
-                break 'anchors;
-            }
+                    break 'anchors;
+                }
             }
         }
 
