@@ -8,12 +8,16 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::resources::BaseResource;
 use crate::structure::OrganismStructure;
 
 const SCHEMA_VERSION: u32 = 1;
 const NITROGEN_RING_SEED_ID: &str = "nitrogen-ring-seed-v1";
+pub(crate) const MAX_QUALIFYING_CANDIDATES: usize = 5_000;
+pub(crate) const MAX_MUTATION_ATTEMPTS_PER_RUN: usize = 5_000;
+const MAX_STORE_BYTES: u64 = 64 * 1024 * 1024;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct KnownQualifyingCavity {
@@ -37,6 +41,33 @@ pub(crate) enum SeedOutcome {
     AlreadyPresent {
         id: String,
     },
+}
+
+/// Stable signature for a realized geometry, independent of physical IDs.
+/// Unit order is preserved because mutation operators preserve the parent order;
+/// IDs are normalized so the same geometry reached through repeated runs deduplicates.
+fn geometry_signature(structure: &OrganismStructure) -> Result<String, String> {
+    let mut normalized = structure.clone();
+    let mut id_map = std::collections::HashMap::new();
+    for (index, unit) in normalized.units.iter_mut().enumerate() {
+        let old = unit.physical_id;
+        let new = crate::structure::PhysicalConstituentId(index as u64 + 1);
+        id_map.insert(old, new);
+        unit.physical_id = new;
+    }
+    for bond in &mut normalized.bonds {
+        bond.endpoint_a.constituent_id = *id_map
+            .get(&bond.endpoint_a.constituent_id)
+            .ok_or_else(|| "candidate bond references a missing constituent".to_string())?;
+        bond.endpoint_b.constituent_id = *id_map
+            .get(&bond.endpoint_b.constituent_id)
+            .ok_or_else(|| "candidate bond references a missing constituent".to_string())?;
+    }
+    normalized.clear_genome_constituent_ids();
+    let payload = serde_json::to_vec(&(&normalized.units, &normalized.bonds))
+        .map_err(|error| format!("serialize candidate geometry signature: {error}"))?;
+    let digest = Sha256::digest(payload);
+    Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
 pub(crate) fn default_store_path() -> PathBuf {
@@ -99,7 +130,13 @@ pub(crate) fn persist_if_qualifying(
             .map_err(|error| format!("create cavity store directory: {error}"))?;
     }
 
+    let candidate_signature = geometry_signature(&structure)?;
+    let mut existing_count = 0usize;
+    let mut existing_bytes = 0u64;
     if path.exists() {
+        existing_bytes = fs::metadata(path)
+            .map_err(|error| format!("inspect cavity store size: {error}"))?
+            .len();
         let file = std::fs::File::open(path)
             .map_err(|error| format!("open cavity store for duplicate check: {error}"))?;
         for (line_number, line) in BufReader::new(file).lines().enumerate() {
@@ -111,10 +148,15 @@ pub(crate) fn persist_if_qualifying(
             let existing: KnownQualifyingCavity = serde_json::from_str(&line).map_err(|error| {
                 format!("decode cavity store line {}: {error}", line_number + 1)
             })?;
-            if existing.id == id {
-                return Ok(SeedOutcome::AlreadyPresent { id: id.to_string() });
+            existing_count += 1;
+            if existing.id == id || geometry_signature(&existing.structure)? == candidate_signature {
+                return Ok(SeedOutcome::AlreadyPresent { id: existing.id });
             }
         }
+    }
+
+    if existing_count >= MAX_QUALIFYING_CANDIDATES {
+        return Err(format!("known qualifying cavity store reached its hard limit of {MAX_QUALIFYING_CANDIDATES} candidates"));
     }
 
     let record = KnownQualifyingCavity {
@@ -127,14 +169,18 @@ pub(crate) fn persist_if_qualifying(
         minimum_cavity_area: cavity.minimum_area,
         structure,
     };
+    let mut serialized = serde_json::to_vec(&record)
+        .map_err(|error| format!("serialize qualifying cavity: {error}"))?;
+    serialized.push(b'\n');
+    if existing_bytes.saturating_add(serialized.len() as u64) > MAX_STORE_BYTES {
+        return Err(format!("known qualifying cavity store would exceed its hard {} MiB disk budget", MAX_STORE_BYTES / (1024 * 1024)));
+    }
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
         .open(path)
         .map_err(|error| format!("open cavity store for append: {error}"))?;
-    serde_json::to_writer(&mut file, &record)
-        .map_err(|error| format!("serialize qualifying cavity: {error}"))?;
-    file.write_all(b"\n")
+    file.write_all(&serialized)
         .map_err(|error| format!("finish cavity record: {error}"))?;
     file.sync_data()
         .map_err(|error| format!("sync cavity store: {error}"))?;
