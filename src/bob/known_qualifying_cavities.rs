@@ -90,7 +90,9 @@ fn validate_candidate_geometry(
     }
     for (index, bond) in structure.bonds.iter().enumerate() {
         if !structure.is_valid_bond(bond, catalog) {
-            return Err(format!("bond {index} violates physical endpoint/contact rules"));
+            return Err(format!(
+                "bond {index} violates physical endpoint/contact rules"
+            ));
         }
     }
     for left in 0..structure.units.len() {
@@ -215,8 +217,7 @@ pub(crate) fn persist_if_qualifying(
                 format!("decode cavity store line {}: {error}", line_number + 1)
             })?;
             existing_count += 1;
-            if existing.id == id
-                || geometry_signature(&existing.structure)? == candidate_signature
+            if existing.id == id || geometry_signature(&existing.structure)? == candidate_signature
             {
                 return Ok(SeedOutcome::AlreadyPresent { id: existing.id });
             }
@@ -329,9 +330,9 @@ mod tests {
         };
         let mutations = cavity_mutation::one_step_mutations(&parent, &catalog);
         assert!(!mutations.is_empty());
-        assert!(mutations.iter().all(|(_, candidate)| {
-            candidate.units.len() <= parent.constituent_count
-        }));
+        assert!(mutations
+            .iter()
+            .all(|(_, candidate)| { candidate.units.len() <= parent.constituent_count }));
         assert!(mutations.iter().any(|(change, candidate)| {
             change.starts_with("remove constituent")
                 && candidate.units.len() + 1 == parent.constituent_count
