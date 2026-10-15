@@ -379,7 +379,7 @@ pub(crate) fn mutate_once(
             };
             let mut bytes = serde_json::to_vec(&record)
                 .map_err(|e| format!("serialize qualifying mutation: {e}"))?;
-            bytes.push(b'\\n');
+            bytes.push(b'\n');
             if stored_bytes
                 .saturating_add(appended.len() as u64)
                 .saturating_add(bytes.len() as u64)
