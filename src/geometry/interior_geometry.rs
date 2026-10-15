@@ -507,10 +507,26 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let mut structure = OrganismStructure::new();
         let placements = [
-            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-            Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 },
-            Placement { x: 1.0, y: 1.0, rotation_radians: 0.0 },
-            Placement { x: 0.0, y: 1.0, rotation_radians: 0.0 },
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 1.0,
+                y: 1.0,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 0.0,
+                y: 1.0,
+                rotation_radians: 0.0,
+            },
         ];
         let mut indices = Vec::new();
         for (index, placement) in placements.into_iter().enumerate() {
