@@ -103,15 +103,10 @@ jobs:
           mkdir -p "$EVOSIM_KNOWN_CAVITIES_DIR"
           store="$EVOSIM_KNOWN_CAVITIES_DIR/candidates.jsonl"
           echo "Initial qualifying-candidate count: $(test -f "$store" && wc -l < "$store" || echo 0)"
-          for pass in 1 2 3; do
-            echo "=== Cavity mutation pass $pass ==="
-            cargo run --locked -- --bob-cavity-mutate-once
-            echo "Qualifying candidates after pass $pass: $(wc -l < "$store")"
-          done
-          echo "=== Final cavity-library integrity check ==="
-          cargo run --locked -- --bob-cavity-mutate-once
+          echo "=== Bounded diversity search (internal deadline: 240 seconds) ==="
+          cargo run --locked -- --bob-cavity-mutate-until-full
           echo "Final qualifying-candidate count: $(wc -l < "$store")"
-          echo "Stored records are revalidated by the mutator on every invocation."
+          echo "Existing records are revalidated at search start; new records are validated before persistence."
           python3 - <<'PY'
           import collections, json, pathlib
           import os
@@ -140,12 +135,35 @@ jobs:
           areas = [record["cavity_area"] for record in records]
           minima = [record["minimum_cavity_area"] for record in records]
           bond_counts = [len(record["structure"].get("bonds", [])) for record in records]
+          unique_areas = sorted({round(value, 9) for value in areas})
+          fractional_areas = sorted({round(value, 9) for value in areas if abs(value - round(value)) > 1e-6})
+          composition_signatures = set()
+          aspect_buckets = set()
+          lineage_depths = {}
+          for record in records:
+              parent_id = record.get("parent_id")
+              lineage_depths[record["id"]] = lineage_depths[parent_id] + 1 if parent_id else 0
+              composition = collections.Counter(
+                  unit["material"]["parts"][0][0]
+                  for unit in record["structure"]["units"]
+                  if unit.get("material", {}).get("parts")
+              )
+              composition_signatures.add(tuple(sorted(composition.items())))
+              xs = [unit["placement"]["x"] for unit in record["structure"]["units"]]
+              ys = [unit["placement"]["y"] for unit in record["structure"]["units"]]
+              width = max(xs) - min(xs)
+              height = max(ys) - min(ys)
+              aspect = max(width, height) / max(min(width, height), 1e-9)
+              aspect_buckets.add(round(aspect / 0.25))
           print("=== Cavity candidate quality report ===")
           print(f"records={len(records)} unique_ids={len(set(ids))} seed_constituents={records[0]['constituent_count']}")
           print(f"constituent_count_distribution={dict(sorted(counts.items()))}")
           print(f"mutation_operation_distribution={dict(sorted(operations.items()))}")
-          print(f"cavity_area_range={min(areas):.6g}..{max(areas):.6g}; unique_rounded_areas={len({round(value, 6) for value in areas})}")
-          print(f"cavity_areas={sorted({round(value, 9) for value in areas})}")
+          print(f"cavity_area_range={min(areas):.6g}..{max(areas):.6g}; unique_rounded_areas={len(unique_areas)}")
+          print(f"cavity_areas={unique_areas}")
+          print(f"fractional_area_count={sum(abs(value - round(value)) > 1e-6 for value in areas)}; unique_fractional_areas={fractional_areas}")
+          print(f"unique_resource_compositions={len(composition_signatures)}; unique_aspect_buckets={len(aspect_buckets)}")
+          print(f"lineage_depth_distribution={dict(sorted(collections.Counter(lineage_depths.values()).items()))}")
           print(f"minimum_required_area_range={min(minima):.6g}..{max(minima):.6g}")
           print(f"bond_count_range={min(bond_counts)}..{max(bond_counts)}; unique_bond_counts={len(set(bond_counts))}")
           print("=== Accepted lineage changes ===")
