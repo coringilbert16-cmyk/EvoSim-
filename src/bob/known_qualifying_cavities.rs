@@ -1087,14 +1087,12 @@ mod tests {
         reordered.units.reverse();
         assert_eq!(
             original,
-            geometry_signature(&reordered, &catalog)
-                .expect("reordered signature should build"),
+            geometry_signature(&reordered, &catalog).expect("reordered signature should build"),
             "constituent ordering must not define formation identity"
         );
 
         let mut symmetric_piece_rotation = structure.clone();
-        symmetric_piece_rotation.units[0].placement.rotation_radians +=
-            std::f64::consts::FRAC_PI_2;
+        symmetric_piece_rotation.units[0].placement.rotation_radians += std::f64::consts::FRAC_PI_2;
         assert_eq!(
             original,
             geometry_signature(&symmetric_piece_rotation, &catalog)
