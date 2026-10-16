@@ -117,7 +117,9 @@ fn rotational_symmetry_period(form: &Form) -> Option<f64> {
 
 /// Stable physical-formation identity, independent of constituent IDs, unit
 /// ordering, global translation/rotation, and rotations that leave an individual
-/// resource shape unchanged. Bond bookkeeping is intentionally excluded.
+/// resource shape unchanged. Reflections are not normalized as a canonical frame:
+/// mirror arrangements remain distinct unless an allowed rotation/shape symmetry
+/// already makes their physical representation equivalent. Bond bookkeeping is excluded.
 fn geometry_signature(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
@@ -1147,6 +1149,27 @@ mod tests {
             geometry_signature(&meaningful_rotation, &catalog)
                 .expect("distinct rotation signature should build"),
             "a non-symmetric 15-degree rotation must remain a distinct physical formation"
+        );
+    }
+
+    #[test]
+    fn geometry_signature_does_not_implicitly_collapse_mirror_arrangements() {
+        let catalog = crate::resources::default_catalog();
+        let mut asymmetric = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("seed structure should build");
+        asymmetric.units[0].placement.rotation_radians += std::f64::consts::PI / 12.0;
+        let original = geometry_signature(&asymmetric, &catalog)
+            .expect("original signature should build");
+
+        let mut mirrored = asymmetric.clone();
+        for unit in &mut mirrored.units {
+            unit.placement.y = -unit.placement.y;
+            unit.placement.rotation_radians = -unit.placement.rotation_radians;
+        }
+        assert_ne!(
+            original,
+            geometry_signature(&mirrored, &catalog).expect("mirrored signature should build"),
+            "reflection is not a rotation; a chiral placement must not be collapsed implicitly"
         );
     }
 
