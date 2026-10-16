@@ -537,7 +537,7 @@ fn mutate_once_until(
                         stats.geometry_rejections += 1;
                         *stats
                             .rejection_reasons
-                            .entry("replacement_has_no_repaired_contact".to_string())
+                            .entry("mutation_has_no_repaired_contact".to_string())
                             .or_default() += 1;
                         record_mutation_outcome(
                             &mut stats,
@@ -653,7 +653,7 @@ fn mutate_once_until(
                 schema_version: SCHEMA_VERSION,
                 id: id.clone(),
                 parent_id: Some(parent.id.clone()),
-                change,
+                change: change.clone(),
                 constituent_count: structure.units.len(),
                 cavity_area: cavity.area,
                 minimum_cavity_area: cavity.minimum_area,
