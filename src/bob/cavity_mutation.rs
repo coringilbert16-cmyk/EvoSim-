@@ -533,8 +533,30 @@ pub(crate) fn mutate_until_full(
 
 #[cfg(test)]
 mod mutation_priority_tests {
-    use super::constituent_priority_order;
+    use super::{constituent_priority_order, mutate_once_until};
     use std::collections::HashSet;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn expired_deadline_stops_before_mutation_attempts() {
+        let path = std::env::temp_dir().join(format!(
+            "evosim-cavity-deadline-{}.jsonl",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let catalog = crate::resources::default_catalog();
+        let stats = mutate_once_until(
+            &path,
+            &catalog,
+            Instant::now() - Duration::from_secs(1),
+            true,
+        )
+        .expect("expired deadline should be reported as a bounded stop");
+        assert!(stats.stopped_at_deadline);
+        assert_eq!(stats.attempts, 0);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(path.with_extension("cursor"));
+    }
 
     #[test]
     fn constituent_priority_is_stable_and_varies_between_parents() {
