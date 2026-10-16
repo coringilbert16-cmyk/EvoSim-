@@ -483,7 +483,12 @@ fn mutate_once_until(
             let operation = mutation_operation(&change).to_string();
             record_mutation_attempt(&mut stats, &change, &operation);
             if structure.units.len() > parent.constituent_count {
-                record_mutation_outcome(&mut stats, &change, &operation, "constituent_count_increased");
+                record_mutation_outcome(
+                    &mut stats,
+                    &change,
+                    &operation,
+                    "constituent_count_increased",
+                );
                 stats.rejected += 1;
                 *stats
                     .rejection_reasons
@@ -534,7 +539,12 @@ fn mutate_once_until(
                             .rejection_reasons
                             .entry("replacement_has_no_repaired_contact".to_string())
                             .or_default() += 1;
-                        record_mutation_outcome(&mut stats, &change, &operation, "no_repaired_contact");
+                        record_mutation_outcome(
+                            &mut stats,
+                            &change,
+                            &operation,
+                            "no_repaired_contact",
+                        );
                         continue;
                     }
                 }
@@ -574,7 +584,12 @@ fn mutate_once_until(
                         .rejection_reasons
                         .entry("cavity_not_qualifying".to_string())
                         .or_default() += 1;
-                    record_mutation_outcome(&mut stats, &change, &operation, "cavity_not_qualifying");
+                    record_mutation_outcome(
+                        &mut stats,
+                        &change,
+                        &operation,
+                        "cavity_not_qualifying",
+                    );
                     continue;
                 }
                 Err(error) => {
@@ -584,7 +599,12 @@ fn mutate_once_until(
                         .rejection_reasons
                         .entry(format!("cavity_analysis_error: {error}"))
                         .or_default() += 1;
-                    record_mutation_outcome(&mut stats, &change, &operation, "cavity_analysis_error");
+                    record_mutation_outcome(
+                        &mut stats,
+                        &change,
+                        &operation,
+                        "cavity_analysis_error",
+                    );
                     continue;
                 }
             };
