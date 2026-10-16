@@ -49,20 +49,102 @@ fn deepest_lineage_leaf(records: &[KnownQualifyingCavity]) -> usize {
         .unwrap_or(0)
 }
 
+/// Extract the constituent index from the last accepted mutation so the
+/// lineage can continue evolving that same piece before trying unrelated edits.
+fn changed_constituent_index(change: &str) -> Option<usize> {
+    [
+        "replace constituent at index ",
+        "translate constituent at index ",
+        "rotate constituent at index ",
+    ]
+    .iter()
+    .find_map(|prefix| {
+        change
+            .strip_prefix(prefix)
+            .and_then(|rest| rest.split_whitespace().next())
+            .and_then(|index| index.parse::<usize>().ok())
+    })
+}
+
+/// Append independently validated cardinal translations for one constituent.
+fn append_translations(
+    out: &mut Vec<(String, OrganismStructure)>,
+    parent: &KnownQualifyingCavity,
+    catalog: &[BaseResource],
+    unit_index: usize,
+) {
+    for (direction, dx, dy) in [
+        ("+x", 1.0, 0.0),
+        ("-x", -1.0, 0.0),
+        ("+y", 0.0, 1.0),
+        ("-y", 0.0, -1.0),
+    ] {
+        for distance in [0.25_f64, 0.5_f64] {
+            let mut trial = parent.structure.clone();
+            trial.units[unit_index].placement.x += dx * distance;
+            trial.units[unit_index].placement.y += dy * distance;
+            // Test each distance separately: an overlapping 0.5 move must not
+            // suppress a clear 0.25 move in the same direction.
+            if validate_candidate_non_overlap(&trial, catalog).is_ok() {
+                out.push((
+                    format!(
+                        "translate constituent at index {unit_index} {direction} {distance:.2}"
+                    ),
+                    trial,
+                ));
+            }
+        }
+    }
+}
+
+/// Append independently validated in-place rotations for one constituent.
+fn append_rotations(
+    out: &mut Vec<(String, OrganismStructure)>,
+    parent: &KnownQualifyingCavity,
+    catalog: &[BaseResource],
+    unit_index: usize,
+) {
+    let angle_step = std::f64::consts::PI / 12.0;
+    for step in 1..=24 {
+        let angle_degrees = step * 15;
+        let mut trial = parent.structure.clone();
+        trial.units[unit_index].placement.rotation_radians += angle_step * step as f64;
+        if validate_candidate_non_overlap(&trial, catalog).is_ok() {
+            out.push((
+                format!("rotate constituent at index {unit_index} by {angle_degrees}deg"),
+                trial,
+            ));
+        }
+    }
+}
+
 /// Generate single-change mutation trials in deliberate stages:
 /// (1) resource replacement at the existing pose, (2) independent translations,
 /// (3) independent rotations, and (4) removal as the last resort. No trial
-/// combines a replacement with a move or rotation. Full live validation remains
-/// authoritative after each trial.
+/// combines a replacement with a move or rotation. After a successful mutation,
+/// first continue with the same constituent on the next lineage step.
 pub(super) fn one_step_mutations(
     parent: &KnownQualifyingCavity,
     catalog: &[BaseResource],
 ) -> Vec<(String, OrganismStructure)> {
     let mut out = Vec::new();
     let original_count = parent.structure.units.len();
+    let preferred_index = changed_constituent_index(&parent.change)
+        .filter(|&index| index < original_count);
 
-    // Stage 1: change one resource, leaving its pose untouched.
+    // A child continues with its last changed piece first: after a replacement,
+    // try moving that replacement at its existing orientation, then rotating it.
+    if let Some(unit_index) = preferred_index {
+        append_translations(&mut out, parent, catalog, unit_index);
+        append_rotations(&mut out, parent, catalog, unit_index);
+    }
+
+    // Stage 1: change one resource, leaving its pose untouched. Do not immediately
+    // replace the same constituent again before testing its geometric consequences.
     for unit_index in 0..original_count {
+        if Some(unit_index) == preferred_index {
+            continue;
+        }
         let current_name = parent.structure.units[unit_index]
             .material
             .parts
@@ -84,48 +166,17 @@ pub(super) fn one_step_mutations(
         }
     }
 
-    // Stage 2: translate one existing piece by one small cardinal step.
-    // Each distance is tested independently; an overlapping 0.5 move does not
-    // suppress a valid 0.25 move in the same direction.
+    // Stage 2: translations of all other constituents.
     for unit_index in 0..original_count {
-        for (direction, dx, dy) in [
-            ("+x", 1.0, 0.0),
-            ("-x", -1.0, 0.0),
-            ("+y", 0.0, 1.0),
-            ("-y", 0.0, -1.0),
-        ] {
-            for distance in [0.25_f64, 0.5_f64] {
-                let mut trial = parent.structure.clone();
-                trial.units[unit_index].placement.x += dx * distance;
-                trial.units[unit_index].placement.y += dy * distance;
-                if validate_candidate_non_overlap(&trial, catalog).is_ok() {
-                    out.push((
-                        format!(
-                            "translate constituent at index {unit_index} {direction} {distance:.2}"
-                        ),
-                        trial,
-                    ));
-                }
-            }
+        if Some(unit_index) != preferred_index {
+            append_translations(&mut out, parent, catalog, unit_index);
         }
     }
 
-    // Stage 3: rotate one existing piece in place. Rotation is not combined
-    // with translation; the 180-degree case is naturally included at step 12.
-    let angle_step = std::f64::consts::PI / 12.0;
+    // Stage 3: rotations of all other constituents.
     for unit_index in 0..original_count {
-        for step in 1..=24 {
-            let angle_degrees = step * 15;
-            let mut trial = parent.structure.clone();
-            trial.units[unit_index].placement.rotation_radians += angle_step * step as f64;
-            if validate_candidate_non_overlap(&trial, catalog).is_ok() {
-                out.push((
-                    format!(
-                        "rotate constituent at index {unit_index} by {angle_degrees}deg"
-                    ),
-                    trial,
-                ));
-            }
+        if Some(unit_index) != preferred_index {
+            append_rotations(&mut out, parent, catalog, unit_index);
         }
     }
 
