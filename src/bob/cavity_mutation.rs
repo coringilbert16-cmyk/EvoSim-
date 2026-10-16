@@ -763,7 +763,7 @@ fn mutate_once_until_cached(
             parent_id: None,
             change: "initial validated corner-free 12-piece nitrogen cavity ring".to_string(),
             constituent_count: structure.units.len(),
-            cavity_area: cavity.area,
+            cavity_area: super::rounded_cavity_area(cavity.area),
             minimum_cavity_area: cavity.minimum_area,
             structure,
         };
@@ -836,7 +836,7 @@ fn mutate_once_until_cached(
                     format!("stored cavity candidate {} no longer qualifies", record.id)
                 })?;
             if !cavity.qualifies()
-                || (cavity.area - record.cavity_area).abs() > 1e-7
+                || (super::rounded_cavity_area(cavity.area) - super::rounded_cavity_area(record.cavity_area)).abs() > 1e-9
                 || (cavity.minimum_area - record.minimum_cavity_area).abs() > 1e-7
             {
                 return Err(format!(
@@ -1088,7 +1088,7 @@ fn mutate_once_until_cached(
                 parent_id: Some(parent.id.clone()),
                 change: change.to_string(),
                 constituent_count: structure.units.len(),
-                cavity_area: cavity.area,
+                cavity_area: super::rounded_cavity_area(cavity.area),
                 minimum_cavity_area: cavity.minimum_area,
                 structure,
             };
