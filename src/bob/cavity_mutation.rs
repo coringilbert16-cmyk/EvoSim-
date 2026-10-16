@@ -1,5 +1,5 @@
 use super::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::fs;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -484,7 +484,48 @@ pub(super) fn one_step_mutations(
         out.push((format!("remove constituent at index {unit_index}"), removed));
     }
 
-    out
+    fair_mutation_order(out)
+}
+
+/// Interleave replacement, translation, and rotation trials so a large
+/// replacement-pose family cannot consume the whole search budget before the
+/// other non-destructive mutation families are tried. Removal remains last.
+fn fair_mutation_order(
+    mutations: Vec<(String, OrganismStructure)>,
+) -> Vec<(String, OrganismStructure)> {
+    let mut replacements = VecDeque::new();
+    let mut translations = VecDeque::new();
+    let mut rotations = VecDeque::new();
+    let mut removals = VecDeque::new();
+    let mut other = VecDeque::new();
+
+    for mutation in mutations {
+        match mutation_operation(&mutation.0) {
+            "replace" => replacements.push_back(mutation),
+            "translate" => translations.push_back(mutation),
+            "rotate" => rotations.push_back(mutation),
+            "remove" => removals.push_back(mutation),
+            _ => other.push_back(mutation),
+        }
+    }
+
+    let total = replacements.len() + translations.len() + rotations.len()
+        + removals.len() + other.len();
+    let mut ordered = Vec::with_capacity(total);
+    while !replacements.is_empty() || !translations.is_empty() || !rotations.is_empty() {
+        if let Some(mutation) = replacements.pop_front() {
+            ordered.push(mutation);
+        }
+        if let Some(mutation) = translations.pop_front() {
+            ordered.push(mutation);
+        }
+        if let Some(mutation) = rotations.pop_front() {
+            ordered.push(mutation);
+        }
+    }
+    ordered.extend(other);
+    ordered.extend(removals);
+    ordered
 }
 
 /// Rebuild connections for a swapped constituent from current physical
@@ -796,22 +837,30 @@ fn mutate_once_until_cached(
             .ok()
             .and_then(|text| serde_json::from_str(&text).ok())
             .unwrap_or_default();
-    let mut last_parent_id = cursor_text.strip_prefix("diversity:").map(str::to_string);
-    if next_mutation_by_parent.is_empty() {
-        if let Some(rest) = cursor_text.strip_prefix("lineage:") {
-            let (parent, mutation) = rest.split_once(':').unwrap_or((rest, "0"));
+    // Mutation ordering is versioned because persisted numeric cursors refer to
+    // positions in the old replacement-first list. Reset those positions once
+    // when moving to round-robin operation scheduling, but retain the last parent
+    // as a fairness hint.
+    let old_schedule = cursor_text.starts_with("diversity:") || cursor_text.starts_with("lineage:");
+    let mut last_parent_id = cursor_text
+        .strip_prefix("diversity-v2:")
+        .map(str::to_string);
+    if old_schedule {
+        next_mutation_by_parent.clear();
+        if let Some(id) = cursor_text.strip_prefix("diversity:") {
+            last_parent_id = Some(id.to_string());
+        } else if let Some(rest) = cursor_text.strip_prefix("lineage:") {
+            let (parent, _) = rest.split_once(':').unwrap_or((rest, "0"));
             if let Ok(index) = parent.parse::<usize>() {
-                if let Some(record) = records.get(index) {
-                    next_mutation_by_parent
-                        .insert(record.id.clone(), mutation.parse::<usize>().unwrap_or(0));
-                    last_parent_id = Some(record.id.clone());
-                }
+                last_parent_id = records.get(index).map(|record| record.id.clone());
             }
-        } else if !cursor_text.is_empty() && !cursor_text.starts_with("diversity:") {
-            if let Some(record) = records.get(deepest_lineage_leaf(&records)) {
-                next_mutation_by_parent.insert(record.id.clone(), 0);
-                last_parent_id = Some(record.id.clone());
-            }
+        }
+    } else if next_mutation_by_parent.is_empty()
+        && !cursor_text.is_empty()
+        && !cursor_text.starts_with("diversity-v2:")
+    {
+        if let Some(record) = records.get(deepest_lineage_leaf(&records)) {
+            last_parent_id = Some(record.id.clone());
         }
     }
 
@@ -1145,7 +1194,7 @@ fn mutate_once_until_cached(
     fs::write(&frontier_path, frontier_json)
         .map_err(|e| format!("save cavity exploration frontier: {e}"))?;
     if let Some(id) = selected_parent_id {
-        fs::write(cursor_path, format!("diversity:{id}"))
+        fs::write(cursor_path, format!("diversity-v2:{id}"))
             .map_err(|e| format!("save cavity mutation cursor: {e}"))?;
     }
     if selected_parent.is_none() {
@@ -1388,6 +1437,36 @@ mod lineage_tests {
         assert!(methane_exchange
             .iter()
             .all(|(_, candidate)| candidate.units.len() == parent.constituent_count));
+    }
+
+    #[test]
+    fn mutation_order_round_robins_non_destructive_operations_and_leaves_removal_last() {
+        use super::fair_mutation_order;
+
+        let catalog = crate::resources::default_catalog();
+        let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("seed structure should build");
+        let mutations = vec![
+            ("replace constituent at index 0 with Carbon".to_string(), structure.clone()),
+            ("replace constituent at index 1 with Carbon".to_string(), structure.clone()),
+            ("replace constituent at index 2 with Carbon".to_string(), structure.clone()),
+            ("replace constituent at index 3 with Carbon".to_string(), structure.clone()),
+            ("translate constituent at index 0 by north".to_string(), structure.clone()),
+            ("translate constituent at index 1 by south".to_string(), structure.clone()),
+            ("rotate constituent at index 0 by 15deg".to_string(), structure.clone()),
+            ("remove constituent at index 0".to_string(), structure.clone()),
+        ];
+
+        let ordered = fair_mutation_order(mutations);
+        let operations = ordered
+            .iter()
+            .map(|(change, _)| super::mutation_operation(change))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            &operations[..6],
+            &["replace", "translate", "rotate", "replace", "translate", "replace"]
+        );
+        assert_eq!(operations.last(), Some(&"remove"));
     }
 
     #[test]
