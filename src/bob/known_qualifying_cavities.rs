@@ -61,8 +61,16 @@ fn geometry_signature(structure: &OrganismStructure) -> Result<String, String> {
     }
     // Normalize global translation: absolute world coordinates do not define a
     // different formation. Keep relative placements and orientations intact.
-    let min_x = normalized.units.iter().map(|unit| unit.placement.x).fold(f64::INFINITY, f64::min);
-    let min_y = normalized.units.iter().map(|unit| unit.placement.y).fold(f64::INFINITY, f64::min);
+    let min_x = normalized
+        .units
+        .iter()
+        .map(|unit| unit.placement.x)
+        .fold(f64::INFINITY, f64::min);
+    let min_y = normalized
+        .units
+        .iter()
+        .map(|unit| unit.placement.y)
+        .fold(f64::INFINITY, f64::min);
     for unit in &mut normalized.units {
         unit.placement.x -= min_x;
         unit.placement.y -= min_y;
