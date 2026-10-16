@@ -227,7 +227,7 @@ pub(crate) fn seed_nitrogen_ring(
         path,
         NITROGEN_RING_SEED_ID,
         None,
-        "initial validated 5x5 nitrogen perimeter".to_string(),
+        "initial validated corner-free 12-piece nitrogen cavity ring".to_string(),
         structure,
         catalog,
     )
@@ -652,7 +652,7 @@ mod tests {
         assert!(!records.is_empty());
         assert!(records.len() <= MAX_QUALIFYING_CANDIDATES);
         assert_eq!(records[0].id, NITROGEN_RING_SEED_ID);
-        assert!(records.iter().all(|record| record.constituent_count <= 16));
+        assert!(records.iter().all(|record| record.constituent_count <= 12));
 
         let _ = fs::remove_file(path);
         let _ = fs::remove_file(cursor);
@@ -673,7 +673,7 @@ mod tests {
             schema_version: PREVIOUS_SCHEMA_VERSION,
             id: NITROGEN_RING_SEED_ID.to_string(),
             parent_id: None,
-            change: "initial validated 5x5 nitrogen perimeter".to_string(),
+            change: "initial validated corner-free 12-piece nitrogen cavity ring".to_string(),
             constituent_count: seed_structure.units.len(),
             cavity_area: seed_cavity.area,
             minimum_cavity_area: seed_cavity.minimum_area,
@@ -762,13 +762,13 @@ mod tests {
         else {
             panic!("first seed should be added");
         };
-        assert_eq!(constituent_count, 16);
+        assert_eq!(constituent_count, 12);
         assert!(cavity_area >= crate::cavity::minimum_genome_cavity_area(&catalog).unwrap());
 
         let records = load_records(&path).expect("store should reopen");
         assert_eq!(records.len(), 1);
-        assert_eq!(records[0].constituent_count, 16);
-        assert_eq!(records[0].structure.units.len(), 16);
+        assert_eq!(records[0].constituent_count, 12);
+        assert_eq!(records[0].structure.units.len(), 12);
 
         let second = seed_nitrogen_ring(&path, &catalog).expect("repeat seed should be safe");
         assert_eq!(
@@ -842,7 +842,7 @@ mod tests {
         let _ = fs::remove_file(&path);
         seed_nitrogen_ring(&path, &catalog).expect("valid seed should persist");
         let contents = fs::read_to_string(&path).expect("store should be readable");
-        let corrupted = contents.replace("\"constituent_count\":16", "\"constituent_count\":999");
+        let corrupted = contents.replace("\"constituent_count\":12", "\"constituent_count\":999");
         assert_ne!(
             contents, corrupted,
             "fixture must contain the expected metadata"
