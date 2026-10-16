@@ -17,6 +17,18 @@ pub(crate) struct MutationBatchStats {
     pub candidate_generation_micros: u128,
     /// Number of candidate variants materialized in newly constructed parent frontiers.
     pub candidate_variants_generated: usize,
+    /// Time spent canonicalizing candidate geometry signatures.
+    pub signature_micros: u128,
+    /// Time spent on early overlap/non-penetration checks.
+    pub overlap_validation_micros: u128,
+    /// Time spent rebuilding bonds after a mutation.
+    pub contact_rebuild_micros: u128,
+    /// Time spent on full shape and bond validation.
+    pub shape_bond_validation_micros: u128,
+    /// Time spent analyzing and qualifying genome cavities.
+    pub cavity_analysis_micros: u128,
+    /// Time spent checking organism viability.
+    pub viability_validation_micros: u128,
     pub cavity_rejections: usize,
     pub viability_rejections: usize,
     pub rejection_reasons: BTreeMap<String, usize>,
@@ -491,9 +503,9 @@ pub(super) fn one_step_mutations(
     fair_mutation_order(out)
 }
 
-/// Interleave replacement, translation, and rotation trials so a large
-/// replacement-pose family cannot consume the whole search budget before the
-/// other non-destructive mutation families are tried. Removal remains last.
+/// Interleave replacement and translation trials. Rotation is retained as a
+/// fallback after those better-supported operations: recent measurements found
+/// zero accepted rotations despite thousands of attempts. Removal remains last.
 fn fair_mutation_order(
     mutations: Vec<(String, OrganismStructure)>,
 ) -> Vec<(String, OrganismStructure)> {
@@ -516,17 +528,23 @@ fn fair_mutation_order(
     let total =
         replacements.len() + translations.len() + rotations.len() + removals.len() + other.len();
     let mut ordered = Vec::with_capacity(total);
-    while !replacements.is_empty() || !translations.is_empty() || !rotations.is_empty() {
+    while !replacements.is_empty() || !translations.is_empty() {
         if let Some(mutation) = replacements.pop_front() {
+            ordered.push(mutation);
+        }
+        // Two translation opportunities per replacement reflect the latest
+        // run's higher acceptance rate, while replacement remains available
+        // because it contributes composition and cavity-area diversity.
+        if let Some(mutation) = translations.pop_front() {
             ordered.push(mutation);
         }
         if let Some(mutation) = translations.pop_front() {
             ordered.push(mutation);
         }
-        if let Some(mutation) = rotations.pop_front() {
-            ordered.push(mutation);
-        }
     }
+    // Keep rotation proposals as a fallback rather than spending the early
+    // attempt budget on the currently unproductive in-place rotation family.
+    ordered.extend(rotations);
     ordered.extend(other);
     ordered.extend(removals);
     ordered
@@ -616,11 +634,57 @@ fn diversity_features(record: &KnownQualifyingCavity) -> Vec<String> {
         .collect::<Vec<_>>()
         .join(",");
 
+    // Pairwise center-distance quantiles are invariant to global translation
+    // and rotation. They provide a compact coarse morphology descriptor without
+    // treating raw world coordinates or exact poses as diversity categories.
+    let mut pairwise_distances = Vec::new();
+    for left in 0..record.structure.units.len() {
+        for right in (left + 1)..record.structure.units.len() {
+            let a = &record.structure.units[left].placement;
+            let b = &record.structure.units[right].placement;
+            pairwise_distances.push((a.x - b.x).hypot(a.y - b.y));
+        }
+    }
+    pairwise_distances.sort_by(f64::total_cmp);
+    let quantile = |fraction: f64| -> i64 {
+        if pairwise_distances.is_empty() {
+            return 0;
+        }
+        let index = ((pairwise_distances.len() - 1) as f64 * fraction).round() as usize;
+        (pairwise_distances[index] / 0.5).round() as i64
+    };
+
+    // Contact topology is a separate descriptor from shape: preserve the
+    // distribution of how many bonds each constituent participates in.
+    let mut degrees = std::collections::HashMap::new();
+    for unit in &record.structure.units {
+        degrees.entry(unit.physical_id).or_insert(0usize);
+    }
+    for bond in &record.structure.bonds {
+        *degrees.entry(bond.endpoint_a.constituent_id).or_default() += 1;
+        *degrees.entry(bond.endpoint_b.constituent_id).or_default() += 1;
+    }
+    let mut degree_distribution = std::collections::BTreeMap::<usize, usize>::new();
+    for degree in degrees.values() {
+        *degree_distribution.entry(*degree).or_default() += 1;
+    }
+    let degree_signature = degree_distribution
+        .into_iter()
+        .map(|(degree, count)| format!("{degree}:{count}"))
+        .collect::<Vec<_>>()
+        .join(",");
+
     vec![
         format!("area:{area_bucket}"),
         format!("pieces:{}", record.constituent_count),
         format!("aspect:{aspect_bucket}"),
         format!("composition:{composition}"),
+        format!(
+            "spacing:q25-50-75-100:{}-{}-{}-{}",
+            quantile(0.25), quantile(0.50), quantile(0.75), quantile(1.0)
+        ),
+        format!("bond-count:{}", record.structure.bonds.len()),
+        format!("contact-degrees:{degree_signature}"),
     ]
 }
 
@@ -676,6 +740,20 @@ fn select_diverse_parent(
     eligible
         .into_iter()
         .max_by(|(index_a, record_a), (index_b, record_b)| {
+            // Archive novelty is the primary objective. Lineage depth is only a
+            // tie-breaker; otherwise a shallow but redundant family can suppress
+            // a structurally rare candidate in a deeper branch.
+            let score = |index: usize| {
+                features_by_index[&index]
+                    .iter()
+                    .map(|feature| 1.0 / (*frequencies.get(feature).unwrap_or(&1) as f64))
+                    .sum::<f64>()
+            };
+            let score_order = score(*index_a).total_cmp(&score(*index_b));
+            if score_order != std::cmp::Ordering::Equal {
+                return score_order;
+            }
+
             let depth_order = depths[*index_b].cmp(&depths[*index_a]);
             if depth_order != std::cmp::Ordering::Equal {
                 return depth_order;
@@ -692,17 +770,6 @@ fn select_diverse_parent(
             let offset_order = offset_b.cmp(&offset_a);
             if offset_order != std::cmp::Ordering::Equal {
                 return offset_order;
-            }
-
-            let score = |index: usize| {
-                features_by_index[&index]
-                    .iter()
-                    .map(|feature| 1.0 / (*frequencies.get(feature).unwrap_or(&1) as f64))
-                    .sum::<f64>()
-            };
-            let score_order = score(*index_a).total_cmp(&score(*index_b));
-            if score_order != std::cmp::Ordering::Equal {
-                return score_order;
             }
 
             let distance = |index: usize| {
@@ -992,7 +1059,9 @@ fn mutate_once_until_cached(
                     .or_default() += 1;
                 continue;
             }
+            let signature_started = Instant::now();
             let signature = geometry_signature(&structure, catalog)?;
+            stats.signature_micros += signature_started.elapsed().as_micros();
             if cache.known_signatures.contains(&signature) {
                 stats.duplicates += 1;
                 record_mutation_outcome(&mut stats, change, &operation, "duplicate");
@@ -1001,7 +1070,10 @@ fn mutate_once_until_cached(
             // Use the same strict penetration predicate as full validation
             // before expensive live contact reconstruction. Tangent edge/corner
             // contacts remain legal and full bond validation still follows.
-            if let Err(error) = validate_candidate_non_overlap(&structure, catalog) {
+            let overlap_started = Instant::now();
+            let overlap_result = validate_candidate_non_overlap(&structure, catalog);
+            stats.overlap_validation_micros += overlap_started.elapsed().as_micros();
+            if let Err(error) = overlap_result {
                 stats.rejected += 1;
                 stats.geometry_rejections += 1;
                 *stats
@@ -1028,7 +1100,10 @@ fn mutate_once_until_cached(
                     .and_then(|rest| rest.split_whitespace().next())
                     .and_then(|index| index.parse::<usize>().ok())
                 {
-                    if !rebuild_replacement_connections(&mut structure, unit_index, catalog) {
+                    let contact_started = Instant::now();
+                    let repaired = rebuild_replacement_connections(&mut structure, unit_index, catalog);
+                    stats.contact_rebuild_micros += contact_started.elapsed().as_micros();
+                    if !repaired {
                         stats.rejected += 1;
                         stats.geometry_rejections += 1;
                         *stats
@@ -1049,7 +1124,10 @@ fn mutate_once_until_cached(
                 stats.stopped_at_deadline = true;
                 break 'parents;
             }
-            if let Err(error) = validate_candidate_shape_and_bonds(&structure, catalog) {
+            let shape_bond_started = Instant::now();
+            let shape_bond_result = validate_candidate_shape_and_bonds(&structure, catalog);
+            stats.shape_bond_validation_micros += shape_bond_started.elapsed().as_micros();
+            if let Err(error) = shape_bond_result {
                 stats.rejected += 1;
                 stats.geometry_rejections += 1;
                 let reason = if error.contains("bond") {
@@ -1069,7 +1147,10 @@ fn mutate_once_until_cached(
                 break 'parents;
             }
             stats.cavity_checks_performed += 1;
-            let cavity = match crate::cavity::analyze_genome_cavity(&structure, catalog) {
+            let cavity_started = Instant::now();
+            let cavity_result = crate::cavity::analyze_genome_cavity(&structure, catalog);
+            stats.cavity_analysis_micros += cavity_started.elapsed().as_micros();
+            let cavity = match cavity_result {
                 Ok(Some(cavity)) if cavity.qualifies() => cavity,
                 Ok(_) => {
                     stats.rejected += 1;
@@ -1106,16 +1187,17 @@ fn mutate_once_until_cached(
                 stats.stopped_at_deadline = true;
                 break 'parents;
             }
-            if crate::organism_viability::validate_realized_organism(
+            let viability_started = Instant::now();
+            let viability_result = crate::organism_viability::validate_realized_organism(
                 &structure,
                 catalog,
                 crate::organism_viability::OrganismViabilityRequirements {
                     require_sealed_genome_cavity: true,
                     require_extra_structure: false,
                 },
-            )
-            .is_err()
-            {
+            );
+            stats.viability_validation_micros += viability_started.elapsed().as_micros();
+            if viability_result.is_err() {
                 stats.rejected += 1;
                 stats.viability_rejections += 1;
                 *stats
@@ -1239,6 +1321,12 @@ pub(crate) fn mutate_until_full(
         total.cavity_checks_performed += batch.cavity_checks_performed;
         total.candidate_generation_micros += batch.candidate_generation_micros;
         total.candidate_variants_generated += batch.candidate_variants_generated;
+        total.signature_micros += batch.signature_micros;
+        total.overlap_validation_micros += batch.overlap_validation_micros;
+        total.contact_rebuild_micros += batch.contact_rebuild_micros;
+        total.shape_bond_validation_micros += batch.shape_bond_validation_micros;
+        total.cavity_analysis_micros += batch.cavity_analysis_micros;
+        total.viability_validation_micros += batch.viability_validation_micros;
         total.cavity_rejections += batch.cavity_rejections;
         total.viability_rejections += batch.viability_rejections;
         for (reason, count) in batch.rejection_reasons {
@@ -1360,7 +1448,7 @@ mod lineage_tests {
     }
 
     #[test]
-    fn diversity_frontier_prefers_shallower_generation_before_descendants() {
+    fn diversity_frontier_prefers_rare_structure_over_shallower_redundant_family() {
         let catalog = crate::resources::default_catalog();
         let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
             .expect("seed structure should build");
@@ -1375,20 +1463,23 @@ mod lineage_tests {
             structure: structure.clone(),
         };
         let seed = record("seed", 9.0);
-        let mut child = record("child", 9.5);
+        let mut child = record("child", 9.0);
         child.parent_id = Some("seed".to_string());
-        let mut grandchild = record("grandchild", 10.0);
+        let mut grandchild = record("grandchild", 9.0);
         grandchild.parent_id = Some("child".to_string());
-        let records = vec![seed, child, grandchild];
+        let mut rare_sibling = record("rare-sibling", 10.0);
+        rare_sibling.parent_id = Some("seed".to_string());
+        let records = vec![seed, child, grandchild, rare_sibling];
         let mut frontier = std::collections::HashMap::new();
         frontier.insert("seed".to_string(), usize::MAX);
-        frontier.insert("child".to_string(), 1);
+        frontier.insert("child".to_string(), 0);
         frontier.insert("grandchild".to_string(), 0);
+        frontier.insert("rare-sibling".to_string(), 0);
 
         assert_eq!(
             select_diverse_parent(&records, &frontier, Some("grandchild")),
-            Some(1),
-            "Bob should explore the shallower sibling generation before chasing descendants"
+            Some(3),
+            "archive novelty must outweigh lineage depth when the shallow family is redundant"
         );
     }
 
@@ -1501,11 +1592,21 @@ mod lineage_tests {
             &[
                 "replace",
                 "translate",
-                "rotate",
-                "replace",
                 "translate",
+                "replace",
+                "replace",
                 "replace"
             ]
+        );
+        let first_rotation = operations
+            .iter()
+            .position(|operation| *operation == "rotate")
+            .expect("rotation remains available as a fallback");
+        assert!(
+            operations[..first_rotation]
+                .iter()
+                .all(|operation| matches!(*operation, "replace" | "translate")),
+            "higher-yield operations must be attempted before rotations"
         );
         assert_eq!(operations.last(), Some(&"remove"));
     }
