@@ -657,14 +657,21 @@ mod tests {
             structure,
         };
         let mutations = cavity_mutation::one_step_mutations(&parent, &catalog);
-        let first = mutations
-            .first()
-            .expect("lineage continuation should have a mutation");
         assert!(
-            first.0.starts_with("translate constituent at index 3 ")
-                || first.0.starts_with("rotate constituent at index 3 by "),
-            "the next lineage step should explore the recently changed piece first, got {}",
-            first.0
+            mutations[0].0.starts_with("replace constituent at index 3 "),
+            "resource substitutions must remain the first mutation family, got {}",
+            mutations[0].0
+        );
+        let first_non_replacement = mutations
+            .iter()
+            .position(|(change, _)| !change.starts_with("replace constituent"))
+            .expect("lineage frontier should include non-replacement mutations");
+        assert!(
+            mutations[first_non_replacement]
+                .0
+                .starts_with("translate constituent at index 3 "),
+            "after substitutions, continue locally with the recently changed piece first; got {}",
+            mutations[first_non_replacement].0
         );
     }
 
