@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::Path;
-use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct MutationBatchStats {
@@ -23,7 +22,6 @@ pub(crate) struct MutationBatchStats {
     pub stopped_at_candidate_limit: bool,
     pub stopped_at_storage_limit: bool,
     pub stopped_at_search_exhaustion: bool,
-    pub stopped_at_deadline: bool,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -49,21 +47,6 @@ fn shuffle_parent_candidates<T>(values: &mut [T], frontier: &mut MutationFrontie
     }
 }
 
-
-/// Stable parent-specific rotation of constituent priority. This preserves the
-/// swap-first / translate / rotate / remove phases while avoiding index-zero
-/// starvation across newly accepted descendants.
-fn constituent_priority_order(parent_id: &str, constituent_count: usize) -> Vec<usize> {
-    let mut order: Vec<usize> = (0..constituent_count).collect();
-    if constituent_count > 1 {
-        let offset = parent_id.bytes().fold(0usize, |hash, byte| {
-            hash.wrapping_mul(31).wrapping_add(byte as usize)
-        }) % constituent_count;
-        order.rotate_left(offset);
-    }
-    order
-}
-
 /// Generate swap-first mutation trials. Each resource substitution owns its
 /// fit search: try the existing pose, then alternate rotations and nearby
 /// translations of that same replacement before moving to the next swap.
@@ -75,15 +58,10 @@ pub(super) fn one_step_mutations(
     let angle_step = std::f64::consts::PI / 12.0;
     let mut out = Vec::new();
     let original_count = parent.structure.units.len();
-    // Rotate constituent priority by a stable parent-specific offset. This keeps
-    // substitutions first while preventing every fresh descendant from always
-    // starting at constituent zero; the same parent regenerates the same order
-    // on resume, so persisted mutation indices remain meaningful.
-    let unit_order = constituent_priority_order(&parent.id, original_count);
 
     // Resource substitutions are the primary mutation. Search the changed
     // constituent's fit before trying another resource or constituent.
-    for &unit_index in &unit_order {
+    for unit_index in 0..original_count {
         let current_name = parent.structure.units[unit_index]
             .material
             .parts
@@ -144,7 +122,7 @@ pub(super) fn one_step_mutations(
     // independently. Translation is itself a cavity mutation: a boundary
     // piece can move outward, reconnect at different corners, and change the
     // measured enclosed area without changing its material.
-    for &unit_index in &unit_order {
+    for unit_index in 0..original_count {
         for x_step in -6i32..=6 {
             for y_step in -6i32..=6 {
                 if x_step == 0 && y_step == 0 {
@@ -176,7 +154,7 @@ pub(super) fn one_step_mutations(
     // Destructive removal is deliberately last. Bond-only bookkeeping edits
     // are not mutations: formation identity is determined by material and
     // realized geometry, and cavity analysis decides whether it qualifies.
-    for &unit_index in &unit_order {
+    for unit_index in 0..original_count {
         let unit_id = parent.structure.units[unit_index].physical_id;
         let mut removed = parent.structure.clone();
         removed.remove_units_by_physical_ids(&[unit_id]);
@@ -229,19 +207,9 @@ pub(super) fn rebuild_replacement_connections(
 /// Explore a bounded batch from randomly selected known-good parents. A newly
 /// accepted formation is persisted before the next call, so it joins the parent
 /// pool immediately. Live geometry and cavity validation remain authoritative.
-const MAX_CAVITY_MUTATION_RUN: Duration = Duration::from_secs(300);
-
 pub(crate) fn mutate_once(
     path: impl AsRef<Path>,
     catalog: &[BaseResource],
-) -> Result<MutationBatchStats, String> {
-    mutate_once_until(path, catalog, Instant::now() + MAX_CAVITY_MUTATION_RUN)
-}
-
-fn mutate_once_until(
-    path: impl AsRef<Path>,
-    catalog: &[BaseResource],
-    deadline: Instant,
 ) -> Result<MutationBatchStats, String> {
     let path = path.as_ref();
     if !path.exists()
@@ -285,12 +253,6 @@ fn mutate_once_until(
     let mut known_ids: std::collections::HashSet<String> =
         records.iter().map(|record| record.id.clone()).collect();
     for (record_index, record) in records.iter().enumerate() {
-        if Instant::now() >= deadline {
-            return Ok(MutationBatchStats {
-                stopped_at_deadline: true,
-                ..MutationBatchStats::default()
-            });
-        }
         if record_index >= frontier.validated_record_count {
             validate_candidate_geometry(&record.structure, catalog).map_err(|error| {
                 format!(
@@ -369,41 +331,11 @@ fn mutate_once_until(
     let mut next_index = frontier.next_indices.get(&parent.id).copied().unwrap_or(0);
 
     while next_index < mutations.len() && stats.attempts < MAX_MUTATION_ATTEMPTS_PER_RUN {
-        if Instant::now() >= deadline {
-            stats.stopped_at_deadline = true;
-            break;
-        }
         let (change, mut structure) = mutations[next_index].clone();
         next_index += 1;
         frontier.next_indices.insert(parent.id.clone(), next_index);
         stats.attempts += 1;
 
-        if structure.units.len() > parent.constituent_count {
-            stats.rejected += 1;
-            *stats
-                .rejection_reasons
-                .entry("constituent_count_increased".to_string())
-                .or_default() += 1;
-            continue;
-        }
-        // Identity and strict penetration are cheap to check before trying to
-        // reconstruct contacts. The same strict predicate permits legal edge
-        // and corner contacts; live shape/bond validation still runs afterward.
-        let signature = geometry_signature(&structure)?;
-        if known_signatures.contains(&signature) {
-            stats.duplicates += 1;
-            continue;
-        }
-        if let Err(error) = validate_candidate_non_overlap(&structure, catalog) {
-            stats.rejected += 1;
-            stats.geometry_rejections += 1;
-            *stats
-                .rejection_reasons
-                .entry("geometry_overlap".to_string())
-                .or_default() += 1;
-            let _ = error;
-            continue;
-        }
         if change.starts_with("replace constituent")
             || change.starts_with("translate constituent")
             || change.starts_with("rotate constituent")
@@ -431,14 +363,25 @@ fn mutate_once_until(
                 }
             }
         }
-        if let Err(error) = validate_candidate_shape_and_bonds(&structure, catalog) {
+        if structure.units.len() > parent.constituent_count {
+            stats.rejected += 1;
+            *stats
+                .rejection_reasons
+                .entry("constituent_count_increased".to_string())
+                .or_default() += 1;
+            continue;
+        }
+        let signature = geometry_signature(&structure)?;
+        if known_signatures.contains(&signature) {
+            stats.duplicates += 1;
+            continue;
+        }
+        if let Err(error) = validate_candidate_geometry(&structure, catalog) {
             stats.rejected += 1;
             stats.geometry_rejections += 1;
-            let reason = if error.contains("bond") {
-                "geometry_bond"
-            } else {
-                "geometry_shape"
-            };
+            let reason = if error.contains("overlap") { "geometry_overlap" }
+                else if error.contains("bond") { "geometry_bond" }
+                else { "geometry_shape" };
             *stats.rejection_reasons.entry(reason.to_string()).or_default() += 1;
             continue;
         }
@@ -518,9 +461,6 @@ fn mutate_once_until(
         break;
     }
 
-    if Instant::now() >= deadline {
-        stats.stopped_at_deadline = true;
-    }
     if next_index >= mutations.len() {
         frontier
             .exhausted_at_record_count
@@ -561,14 +501,9 @@ pub(crate) fn mutate_until_full(
     catalog: &[BaseResource],
 ) -> Result<MutationBatchStats, String> {
     let path = path.as_ref();
-    let deadline = Instant::now() + MAX_CAVITY_MUTATION_RUN;
     let mut total = MutationBatchStats::default();
     loop {
-        if Instant::now() >= deadline {
-            total.stopped_at_deadline = true;
-            break;
-        }
-        let batch = mutate_once_until(path, catalog, deadline)?;
+        let batch = mutate_once(path, catalog)?;
         total.attempts += batch.attempts;
         total.accepted += batch.accepted;
         total.rejected += batch.rejected;
@@ -583,57 +518,13 @@ pub(crate) fn mutate_until_full(
         total.stopped_at_candidate_limit |= batch.stopped_at_candidate_limit;
         total.stopped_at_storage_limit |= batch.stopped_at_storage_limit;
         total.stopped_at_search_exhaustion |= batch.stopped_at_search_exhaustion;
-        total.stopped_at_deadline |= batch.stopped_at_deadline;
 
         if total.stopped_at_candidate_limit
             || total.stopped_at_storage_limit
             || total.stopped_at_search_exhaustion
-            || total.stopped_at_deadline
         {
             break;
         }
     }
     Ok(total)
-}
-
-
-#[cfg(test)]
-mod mutation_priority_tests {
-    use super::constituent_priority_order;
-    use std::collections::HashSet;
-
-    #[test]
-    fn constituent_priority_is_stable_and_covers_multiple_indices() {
-        let ids = [
-            "nitrogen-ring-seed-v1",
-            "cavity-alpha",
-            "cavity-beta",
-            "cavity-gamma",
-            "cavity-delta",
-            "cavity-epsilon",
-            "cavity-zeta",
-            "cavity-eta",
-        ];
-        let first_indices: HashSet<usize> = ids
-            .iter()
-            .map(|id| {
-                let first_order = constituent_priority_order(id, 16);
-                let repeated_order = constituent_priority_order(id, 16);
-                assert_eq!(
-                    first_order, repeated_order,
-                    "the same parent must regenerate the same mutation order"
-                );
-                first_order[0]
-            })
-            .collect();
-        assert!(
-            first_indices.len() > 1,
-            "fresh parents must not all start at constituent index zero"
-        );
-        for id in ids {
-            let order = constituent_priority_order(id, 16);
-            assert_eq!(order.len(), 16);
-            assert_eq!(order.iter().copied().collect::<HashSet<_>>().len(), 16);
-        }
-    }
 }
