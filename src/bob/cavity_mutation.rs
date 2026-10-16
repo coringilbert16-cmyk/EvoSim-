@@ -23,149 +23,115 @@ pub(crate) struct MutationBatchStats {
     pub stopped_at_deadline: bool,
 }
 
-/// Stable parent-specific rotation of constituent priority. This keeps the
-/// mutation phases ordered but prevents each parent from starting at index 0.
-fn constituent_priority_order(parent_id: &str, constituent_count: usize) -> Vec<usize> {
-    let mut order: Vec<usize> = (0..constituent_count).collect();
-    if constituent_count > 1 {
-        let offset = parent_id.bytes().fold(0usize, |hash, byte| {
-            hash.wrapping_mul(31).wrapping_add(byte as usize)
-        }) % constituent_count;
-        order.rotate_left(offset);
+/// Choose the deepest already-persisted lineage leaf when migrating from the
+/// earlier breadth-first cursor. Ties prefer the most recently stored leaf.
+fn deepest_lineage_leaf(records: &[KnownQualifyingCavity]) -> usize {
+    let mut depths = vec![0usize; records.len()];
+    let mut parent_indices = std::collections::HashSet::new();
+    let index_by_id: std::collections::HashMap<&str, usize> = records
+        .iter()
+        .enumerate()
+        .map(|(index, record)| (record.id.as_str(), index))
+        .collect();
+
+    for (index, record) in records.iter().enumerate() {
+        if let Some(parent_id) = record.parent_id.as_deref() {
+            if let Some(&parent_index) = index_by_id.get(parent_id) {
+                depths[index] = depths[parent_index].saturating_add(1);
+                parent_indices.insert(parent_index);
+            }
+        }
     }
-    order
+
+    (0..records.len())
+        .filter(|index| !parent_indices.contains(index))
+        .max_by_key(|&index| (depths[index], index))
+        .unwrap_or(0)
 }
 
-/// Generate swap-first mutation trials. Each resource substitution owns its
-/// fit search: try the existing pose, then alternate rotations and nearby
-/// translations of that same replacement before moving to the next swap.
-/// Bond validity and cavity qualification remain authoritative downstream.
+/// Generate single-change mutation trials in deliberate stages:
+/// (1) resource replacement at the existing pose, (2) independent translations,
+/// (3) independent rotations, and (4) removal as the last resort. No trial
+/// combines a replacement with a move or rotation. Full live validation remains
+/// authoritative after each trial.
 pub(super) fn one_step_mutations(
     parent: &KnownQualifyingCavity,
     catalog: &[BaseResource],
 ) -> Vec<(String, OrganismStructure)> {
-    let angle_step = std::f64::consts::PI / 12.0;
     let mut out = Vec::new();
     let original_count = parent.structure.units.len();
-    let unit_order = constituent_priority_order(&parent.id, original_count);
 
-    // Resource substitutions are the primary mutation. For each swap and
-    // each 15-degree rotation, test cardinal translations against the actual
-    // rotated geometry. Keep at most two directions that are clear at both
-    // 0.25 and 0.5 units, giving up to 24 × 2 × 2 = 96 poses per exchange.
-    // Overlapping paths are omitted rather than queued for later rejection.
-    for &unit_index in &unit_order {
+    // Stage 1: change one resource, leaving its pose untouched.
+    for unit_index in 0..original_count {
         let current_name = parent.structure.units[unit_index]
             .material
             .parts
             .first()
             .map(|part| part.0.as_str())
             .unwrap_or("");
-        for resource in catalog
-            .iter()
-            .filter(|resource| resource.name != current_name)
-        {
-            let mut base_swap = parent.structure.clone();
-            base_swap.units[unit_index].material =
-                crate::resources::Material::free_base(resource.name.clone(), 1.0);
-            base_swap.units[unit_index].geometry = None;
-
-            let cardinal_directions = [
-                ("+x", 1.0, 0.0),
-                ("-x", -1.0, 0.0),
-                ("+y", 0.0, 1.0),
-                ("-y", 0.0, -1.0),
-            ];
-            for step in 1..=24 {
-                let angle_degrees = step * 15;
-                let rotation_delta = angle_step * step as f64;
-                let mut rotated_swap = base_swap.clone();
-                rotated_swap.units[unit_index].placement.rotation_radians += rotation_delta;
-
-                let mut clear_directions = Vec::new();
-                for (direction, dx, dy) in cardinal_directions {
-                    let clear_at_both_distances = [0.25_f64, 0.5_f64].into_iter().all(|distance| {
-                        let mut probe = rotated_swap.clone();
-                        probe.units[unit_index].placement.x += dx * distance;
-                        probe.units[unit_index].placement.y += dy * distance;
-                        validate_candidate_non_overlap(&probe, catalog).is_ok()
-                    });
-                    if clear_at_both_distances {
-                        clear_directions.push((direction, dx, dy));
-                    }
-                }
-
-                // Preserve deterministic direction ordering and never invent
-                // an overlapping path. Fewer than two clear directions simply
-                // means this rotation contributes fewer than four poses.
-                for &(direction, dx, dy) in clear_directions.iter().take(2) {
-                    for distance in [0.25_f64, 0.5_f64] {
-                        let mut trial = rotated_swap.clone();
-                        trial.units[unit_index].placement.x += dx * distance;
-                        trial.units[unit_index].placement.y += dy * distance;
-                        out.push((
-                            format!(
-                                "replace constituent at index {unit_index} with {} (rotate {angle_degrees}deg, move {direction} {distance:.2})",
-                                resource.name
-                            ),
-                            trial,
-                        ));
-                    }
-                }
-            }
-        }
-    }
-
-    // Translation is itself a cavity mutation. Move each unchanged piece in
-    // cardinal and diagonal directions at 0.25-unit increments, out to 1.5
-    // units. Generate only these eight rays, not the full 13x13 square grid.
-    // This keeps the mutation set broad without exploding CI work.
-    for &unit_index in &unit_order {
-        for step in 1..=6 {
-            let distance = step as f64 * 0.25;
-            for (direction, dx, dy) in [
-                ("+x", distance, 0.0),
-                ("-x", -distance, 0.0),
-                ("+y", 0.0, distance),
-                ("-y", 0.0, -distance),
-                ("+xy", distance, distance),
-                ("+x-y", distance, -distance),
-                ("-x+y", -distance, distance),
-                ("-xy", -distance, -distance),
-            ] {
-                let mut trial = parent.structure.clone();
-                trial.units[unit_index].placement.x += dx;
-                trial.units[unit_index].placement.y += dy;
-                let distance_label = if distance.fract() == 0.0 {
-                    format!("{distance:.1}")
-                } else {
-                    format!("{distance:.2}")
-                };
-                let label = format!("move {direction} {distance_label}");
-                out.push((
-                    format!("translate constituent at index {unit_index} ({label})"),
-                    trial,
-                ));
-            }
-        }
-
-        // Rotation is independent of translation and must also trigger live
-        // contact/bond reconstruction before geometry and cavity validation.
-        for step in 1..=24 {
-            let angle_degrees = step * 15;
+        for resource in catalog.iter().filter(|resource| resource.name != current_name) {
             let mut trial = parent.structure.clone();
-            trial.units[unit_index].placement.rotation_radians += angle_step * step as f64;
+            trial.units[unit_index].material =
+                crate::resources::Material::free_base(resource.name.clone(), 1.0);
+            trial.units[unit_index].geometry = None;
             out.push((
-                format!("rotate constituent at index {unit_index} by {angle_degrees}deg"),
+                format!(
+                    "replace constituent at index {unit_index} with {} (existing pose)",
+                    resource.name
+                ),
                 trial,
             ));
         }
     }
 
-    // Destructive removal is deliberately last. Bond-only bookkeeping edits
-    // are not mutations: formation identity is determined by material and
-    // realized geometry, and cavity analysis decides whether it qualifies.
-    for &unit_index in &unit_order {
+    // Stage 2: translate one existing piece by one small cardinal step.
+    // Each distance is tested independently; an overlapping 0.5 move does not
+    // suppress a valid 0.25 move in the same direction.
+    for unit_index in 0..original_count {
+        for (direction, dx, dy) in [
+            ("+x", 1.0, 0.0),
+            ("-x", -1.0, 0.0),
+            ("+y", 0.0, 1.0),
+            ("-y", 0.0, -1.0),
+        ] {
+            for distance in [0.25_f64, 0.5_f64] {
+                let mut trial = parent.structure.clone();
+                trial.units[unit_index].placement.x += dx * distance;
+                trial.units[unit_index].placement.y += dy * distance;
+                if validate_candidate_non_overlap(&trial, catalog).is_ok() {
+                    out.push((
+                        format!(
+                            "translate constituent at index {unit_index} {direction} {distance:.2}"
+                        ),
+                        trial,
+                    ));
+                }
+            }
+        }
+    }
+
+    // Stage 3: rotate one existing piece in place. Rotation is not combined
+    // with translation; the 180-degree case is naturally included at step 12.
+    let angle_step = std::f64::consts::PI / 12.0;
+    for unit_index in 0..original_count {
+        for step in 1..=24 {
+            let angle_degrees = step * 15;
+            let mut trial = parent.structure.clone();
+            trial.units[unit_index].placement.rotation_radians += angle_step * step as f64;
+            if validate_candidate_non_overlap(&trial, catalog).is_ok() {
+                out.push((
+                    format!(
+                        "rotate constituent at index {unit_index} by {angle_degrees}deg"
+                    ),
+                    trial,
+                ));
+            }
+        }
+    }
+
+    // Stage 4: destructive removal is deliberately last. Adding constituents
+    // is not a mutation in this phase.
+    for unit_index in 0..original_count {
         let unit_id = parent.structure.units[unit_index].physical_id;
         let mut removed = parent.structure.clone();
         removed.remove_units_by_physical_ids(&[unit_id]);
@@ -313,14 +279,18 @@ fn mutate_once_until(
         .ok()
         .map(|text| text.trim().to_string())
         .unwrap_or_default();
-    let (start, start_mutation) = match cursor_text.split_once(':') {
-        Some((parent, mutation)) => (
-            parent.parse::<usize>().unwrap_or(0),
+    // New cursors explicitly track one lineage. A legacy rotating-parent cursor
+    // migrates to the deepest existing leaf rather than returning to the seed.
+    let (start, start_mutation) = if let Some(rest) = cursor_text.strip_prefix("lineage:") {
+        let (parent, mutation) = rest.split_once(':').unwrap_or((rest, "0"));
+        (
+            parent.parse::<usize>().unwrap_or_else(|_| deepest_lineage_leaf(&records))
+                .min(records.len() - 1),
             mutation.parse::<usize>().unwrap_or(0),
-        ),
-        None => (cursor_text.parse::<usize>().unwrap_or(0), 0),
+        )
+    } else {
+        (deepest_lineage_leaf(&records), 0)
     };
-    let start = start % records.len();
 
     let mut known_signatures = std::collections::HashSet::new();
     let mut known_ids: std::collections::HashSet<String> =
@@ -363,9 +333,11 @@ fn mutate_once_until(
         .len();
     let mut next_cursor_parent = start;
     let mut next_cursor_mutation = start_mutation;
+    let mut advanced_to_child = false;
 
-    'parents: for offset in 0..records.len() {
-        let parent_index = (start + offset) % records.len();
+    // Only mutate the current lineage leaf. When one mutation qualifies, stop
+    // this batch and resume from that newly stored child on the next batch.
+    'parents: for parent_index in std::iter::once(start) {
         let parent = &records[parent_index];
         let mutations = one_step_mutations(parent, catalog);
         for (mutation_index, (change, mut structure)) in mutations.into_iter().enumerate() {
@@ -549,9 +521,18 @@ fn mutate_once_until(
             known_ids.insert(id);
             known_signatures.insert(signature);
             stats.accepted += 1;
+
+            // The accepted child becomes the sole parent for the next step.
+            // Stop before trying sibling mutations from the previous parent.
+            next_cursor_parent = stored_count - 1;
+            next_cursor_mutation = 0;
+            advanced_to_child = true;
+            break 'parents;
         }
-        next_cursor_parent = (parent_index + 1) % records.len();
-        next_cursor_mutation = 0;
+        if !advanced_to_child {
+            next_cursor_parent = parent_index;
+            next_cursor_mutation = mutations.len();
+        }
     }
 
     if Instant::now() >= deadline {
@@ -562,7 +543,7 @@ fn mutate_once_until(
     }
     fs::write(
         cursor_path,
-        format!("{next_cursor_parent}:{next_cursor_mutation}"),
+        format!("lineage:{next_cursor_parent}:{next_cursor_mutation}"),
     )
     .map_err(|e| format!("save cavity mutation cursor: {e}"))?;
     Ok(stats)
