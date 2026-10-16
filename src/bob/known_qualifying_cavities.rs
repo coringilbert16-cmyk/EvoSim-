@@ -418,7 +418,7 @@ pub(crate) fn persist_if_qualifying(
     }
 
     let _store_lock = StoreLock::acquire(path)?;
-    let candidate_signature = geometry_signature(&structure)?;
+    let candidate_signature = geometry_signature(&structure, catalog)?;
     let mut existing_count = 0usize;
     let mut existing_bytes = 0u64;
     if path.exists() {
@@ -428,7 +428,7 @@ pub(crate) fn persist_if_qualifying(
         let existing_records = load_records(path)?;
         existing_count = existing_records.len();
         for existing in existing_records {
-            if existing.id == id || geometry_signature(&existing.structure)? == candidate_signature
+            if existing.id == id || geometry_signature(&existing.structure, catalog)? == candidate_signature
             {
                 return Ok(SeedOutcome::AlreadyPresent { id: existing.id });
             }
@@ -1021,12 +1021,12 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
             .expect("seed structure should build");
-        let original = geometry_signature(&structure).expect("signature should build");
+        let original = geometry_signature(&structure, &catalog).expect("signature should build");
         let mut changed_bonds = structure.clone();
         changed_bonds.break_bond(0);
         assert_eq!(
             original,
-            geometry_signature(&changed_bonds).expect("signature should build"),
+            geometry_signature(&changed_bonds, &catalog).expect("signature should build"),
             "bond-only changes must not be counted as a new formation"
         );
         let mut translated = structure.clone();
@@ -1036,7 +1036,7 @@ mod tests {
         }
         assert_eq!(
             original,
-            geometry_signature(&translated).expect("translated signature should build"),
+            geometry_signature(&translated, &catalog).expect("translated signature should build"),
             "global translation must not create a duplicate formation"
         );
     }
@@ -1046,7 +1046,7 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let mut first = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
             .expect("seed structure should build");
-        let original = geometry_signature(&first).expect("signature should build");
+        let original = geometry_signature(&first, &catalog).expect("signature should build");
         let mut id_map = std::collections::HashMap::new();
         for (index, unit) in first.units.iter_mut().enumerate() {
             let old = unit.physical_id;
@@ -1058,7 +1058,7 @@ mod tests {
             bond.endpoint_a.constituent_id = id_map[&bond.endpoint_a.constituent_id];
             bond.endpoint_b.constituent_id = id_map[&bond.endpoint_b.constituent_id];
         }
-        assert_eq!(original, geometry_signature(&first).unwrap());
+        assert_eq!(original, geometry_signature(&first, &catalog).unwrap());
     }
 
     #[test]
