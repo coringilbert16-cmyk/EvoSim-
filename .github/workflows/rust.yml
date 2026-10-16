@@ -194,9 +194,9 @@ jobs:
           print(f"replacement_count={len(replacements)} distinct_replacement_location/material/area={len(replacement_locations)}")
           contact_guided = sum("then align edge" in record.get("change", "") for record in records)
           print(f"accepted_contact_guided_replacements={contact_guided}")
-          assert fractional_areas, "bounded Bob search found no fractional-area cavity"
-          assert len(unique_areas) >= 5, f"cavity-area diversity regressed: {len(unique_areas)} unique areas"
-          assert len(composition_signatures) >= 5, f"resource-composition diversity regressed: {len(composition_signatures)}"
+          assert len(fractional_areas) >= 5, f"fractional cavity diversity regressed: {len(fractional_areas)} unique fractional areas"
+          assert len(unique_areas) >= 10, f"cavity-area diversity regressed: {len(unique_areas)} unique areas"
+          assert len(composition_signatures) >= 10, f"resource-composition diversity regressed: {len(composition_signatures)}"
           assert contact_guided > 0, "no contact-guided replacement produced a qualifying cavity"
           print("PASS: seed identity/size, unique IDs, metadata, lineage, non-increasing constituent counts, storage cap, fractional areas, and diverse cavity families")
           PY
