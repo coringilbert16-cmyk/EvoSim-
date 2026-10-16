@@ -303,13 +303,7 @@ pub(super) fn one_step_mutations(
             .iter()
             .filter(|resource| resource.name != current_name)
         {
-            append_replacement_variants(
-                &mut out,
-                parent,
-                catalog,
-                unit_index,
-                &resource.name,
-            );
+            append_replacement_variants(&mut out, parent, catalog, unit_index, &resource.name);
         }
     }
 
@@ -1093,7 +1087,9 @@ pub(crate) fn mutate_until_full(
 #[cfg(test)]
 mod lineage_tests {
     use super::super::{KnownQualifyingCavity, SCHEMA_VERSION};
-    use super::{deepest_lineage_leaf, mutate_once_until, one_step_mutations, select_diverse_parent};
+    use super::{
+        deepest_lineage_leaf, mutate_once_until, one_step_mutations, select_diverse_parent,
+    };
     use std::time::{Duration, Instant};
 
     #[test]
@@ -1206,9 +1202,7 @@ mod lineage_tests {
         let mutations = one_step_mutations(&parent, &catalog);
         let methane_exchange = mutations
             .iter()
-            .filter(|(change, _)| {
-                change.starts_with("replace constituent at index 0 with Methane")
-            })
+            .filter(|(change, _)| change.starts_with("replace constituent at index 0 with Methane"))
             .collect::<Vec<_>>();
 
         assert!(
