@@ -626,8 +626,11 @@ mod tests {
     #[test]
     fn next_lineage_step_prioritizes_the_constituent_changed_by_its_parent() {
         let catalog = crate::resources::default_catalog();
-        let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+        let mut structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
             .expect("seed structure should build");
+        structure.units[3].material =
+            crate::resources::Material::free_base("Methane".to_string(), 1.0);
+        structure.units[3].geometry = None;
         let parent = KnownQualifyingCavity {
             schema_version: SCHEMA_VERSION,
             id: "lineage-parent".to_string(),
