@@ -58,6 +58,7 @@ fn changed_constituent_index(change: &str) -> Option<usize> {
         "rotate constituent at index ",
     ]
     .iter()
+    .copied()
     .find_map(|prefix| {
         change
             .strip_prefix(prefix)
@@ -335,7 +336,9 @@ fn mutate_once_until(
     let (start, start_mutation) = if let Some(rest) = cursor_text.strip_prefix("lineage:") {
         let (parent, mutation) = rest.split_once(':').unwrap_or((rest, "0"));
         (
-            parent.parse::<usize>().unwrap_or_else(|_| deepest_lineage_leaf(&records))
+            parent
+                .parse::<usize>()
+                .unwrap_or_else(|_| deepest_lineage_leaf(&records))
                 .min(records.len() - 1),
             mutation.parse::<usize>().unwrap_or(0),
         )
