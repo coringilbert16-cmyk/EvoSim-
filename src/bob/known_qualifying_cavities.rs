@@ -562,7 +562,8 @@ mod tests {
             .all(|(change, _)| change.ends_with("(existing pose)")));
 
         let replacement = &mutations[0];
-        let changed_index = replacement.0
+        let changed_index = replacement
+            .0
             .strip_prefix("replace constituent at index ")
             .and_then(|rest| rest.split_whitespace().next())
             .and_then(|index| index.parse::<usize>().ok())
@@ -583,7 +584,8 @@ mod tests {
             .find(|(change, _)| change.contains(" 0.25"))
             .expect("frontier should include an independently tested quarter-unit translation");
         assert!(translated.0.starts_with("translate constituent"));
-        let translated_index = translated.0
+        let translated_index = translated
+            .0
             .strip_prefix("translate constituent at index ")
             .and_then(|rest| rest.split_whitespace().next())
             .and_then(|index| index.parse::<usize>().ok())
@@ -594,8 +596,12 @@ mod tests {
             "translation must not also change the resource"
         );
         assert_eq!(
-            translated.1.units[translated_index].placement.rotation_radians,
-            parent.structure.units[translated_index].placement.rotation_radians,
+            translated.1.units[translated_index]
+                .placement
+                .rotation_radians,
+            parent.structure.units[translated_index]
+                .placement
+                .rotation_radians,
             "translation must not also rotate the constituent"
         );
         assert!(validate_candidate_non_overlap(&translated.1, &catalog).is_ok());
@@ -604,9 +610,18 @@ mod tests {
             .iter()
             .find(|(change, _)| change == "rotate constituent at index 0 by 180deg")
             .expect("frontier should include an independent 180-degree rotation");
-        assert_eq!(rotated.1.units[0].placement.x, parent.structure.units[0].placement.x);
-        assert_eq!(rotated.1.units[0].placement.y, parent.structure.units[0].placement.y);
-        assert_eq!(rotated.1.units[0].material, parent.structure.units[0].material);
+        assert_eq!(
+            rotated.1.units[0].placement.x,
+            parent.structure.units[0].placement.x
+        );
+        assert_eq!(
+            rotated.1.units[0].placement.y,
+            parent.structure.units[0].placement.y
+        );
+        assert_eq!(
+            rotated.1.units[0].material,
+            parent.structure.units[0].material
+        );
         assert!(
             (rotated.1.units[0].placement.rotation_radians
                 - (parent.structure.units[0].placement.rotation_radians + std::f64::consts::PI))
@@ -642,7 +657,9 @@ mod tests {
             structure,
         };
         let mutations = cavity_mutation::one_step_mutations(&parent, &catalog);
-        let first = mutations.first().expect("lineage continuation should have a mutation");
+        let first = mutations
+            .first()
+            .expect("lineage continuation should have a mutation");
         assert!(
             first.0.starts_with("translate constituent at index 3 ")
                 || first.0.starts_with("rotate constituent at index 3 by "),
@@ -667,7 +684,9 @@ mod tests {
             structure,
         };
         let mutations = cavity_mutation::one_step_mutations(&parent, &catalog);
-        let (change, trial) = mutations.first().expect("replacement frontier should not be empty");
+        let (change, trial) = mutations
+            .first()
+            .expect("replacement frontier should not be empty");
         assert!(change.starts_with("replace constituent"));
         assert!(change.ends_with("(existing pose)"));
         assert_eq!(trial.units.len(), parent.structure.units.len());
@@ -676,8 +695,14 @@ mod tests {
             .and_then(|rest| rest.split_whitespace().next())
             .and_then(|value| value.parse::<usize>().ok())
             .expect("replacement label should identify its constituent");
-        assert_eq!(trial.units[index].placement, parent.structure.units[index].placement);
-        assert_ne!(trial.units[index].material, parent.structure.units[index].material);
+        assert_eq!(
+            trial.units[index].placement,
+            parent.structure.units[index].placement
+        );
+        assert_ne!(
+            trial.units[index].material,
+            parent.structure.units[index].material
+        );
     }
 
     #[test]
