@@ -228,17 +228,61 @@ fn mutate_once_until(
         seed_nitrogen_ring(path, catalog)?;
     }
     let _store_lock = StoreLock::acquire(path)?;
-    let records = load_records(path)?;
+    let mut records = load_records(path)?;
     if records.is_empty() {
         return Err("known qualifying cavity store has no seed candidates".to_string());
     }
+
+    // The original 16-piece seed included four non-wall corner units. When an
+    // older store is opened after the corner-free seed change, discard its
+    // descendants and atomically restart from the updated, validated 12-piece
+    // seed rather than silently continuing to train from the obsolete parent.
+    let outdated_seed = records
+        .iter()
+        .find(|record| record.id == NITROGEN_RING_SEED_ID)
+        .is_some_and(|record| record.constituent_count != 12);
+    let cursor_path = path.with_extension("cursor");
+    if outdated_seed {
+        let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(catalog)?;
+        validate_candidate_geometry(&structure, catalog)?;
+        let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)?
+            .ok_or_else(|| "updated corner-free nitrogen seed has no sealed qualifying cavity".to_string())?;
+        if !cavity.qualifies() {
+            return Err("updated corner-free nitrogen seed failed cavity qualification".to_string());
+        }
+        crate::organism_viability::validate_realized_organism(
+            &structure,
+            catalog,
+            crate::organism_viability::OrganismViabilityRequirements {
+                require_sealed_genome_cavity: true,
+                require_extra_structure: false,
+            },
+        )?;
+        let seed = KnownQualifyingCavity {
+            schema_version: SCHEMA_VERSION,
+            id: NITROGEN_RING_SEED_ID.to_string(),
+            parent_id: None,
+            change: "initial validated corner-free 12-piece nitrogen cavity ring".to_string(),
+            constituent_count: structure.units.len(),
+            cavity_area: cavity.area,
+            minimum_cavity_area: cavity.minimum_area,
+            structure,
+        };
+        let mut bytes = serde_json::to_vec(&seed)
+            .map_err(|error| format!("serialize updated nitrogen-ring seed: {error}"))?;
+        bytes.push(b'\\n');
+        replace_records_atomically(path, &bytes)?;
+        fs::write(&cursor_path, "0")
+            .map_err(|error| format!("reset cavity mutation cursor after seed migration: {error}"))?;
+        records = vec![seed];
+    }
+
     if records.len() >= MAX_QUALIFYING_CANDIDATES {
         return Ok(MutationBatchStats {
             stopped_at_candidate_limit: true,
             ..MutationBatchStats::default()
         });
     }
-    let cursor_path = path.with_extension("cursor");
     let start = fs::read_to_string(&cursor_path)
         .ok()
         .and_then(|text| text.trim().parse::<usize>().ok())
