@@ -415,11 +415,11 @@ fn record_mutation_outcome(
     }
 }
 
-/// Generate single-change mutation trials in deliberate stages:
-/// (1) resource replacement at the existing pose, (2) independent translations,
-/// (3) independent rotations, and (4) removal as the last resort. No trial
-/// combines a replacement with a move or rotation. After a successful mutation,
-/// first continue with the same constituent on the next lineage step.
+/// Generate single-change mutation trials in categories: resource replacement,
+/// independent translation, independent rotation, and removal. Before returning,
+/// non-destructive categories are interleaved round-robin; removal remains last.
+/// No trial combines a replacement with a move or rotation. The search continues
+/// from persisted per-parent progress and favors the recently changed constituent.
 pub(super) fn one_step_mutations(
     parent: &KnownQualifyingCavity,
     catalog: &[BaseResource],
@@ -454,8 +454,8 @@ pub(super) fn one_step_mutations(
         }
     }
 
-    // Stage 2: independent translations. Continue locally with the recently
-    // changed piece first, but only after all resource substitutions were tried.
+    // Generate independent translations, preferring the recently changed piece.
+    // fair_mutation_order interleaves these with replacement and rotation trials.
     if let Some(unit_index) = preferred_index {
         append_translations(&mut out, parent, catalog, unit_index);
     }
@@ -465,7 +465,7 @@ pub(super) fn one_step_mutations(
         }
     }
 
-    // Stage 3: independent in-place rotations, again preferring the lineage piece.
+    // Generate independent in-place rotations, again preferring the lineage piece.
     if let Some(unit_index) = preferred_index {
         append_rotations(&mut out, parent, catalog, unit_index);
     }
