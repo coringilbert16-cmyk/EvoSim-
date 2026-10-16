@@ -305,22 +305,52 @@ pub(super) fn rebuild_replacement_connections(
 /// identity or replace the authoritative cavity validator.
 fn diversity_features(record: &KnownQualifyingCavity) -> Vec<String> {
     let area_bucket = (record.cavity_area / 0.25).round() as i64;
-    let min_x = record.structure.units.iter().map(|u| u.placement.x).fold(f64::INFINITY, f64::min);
-    let max_x = record.structure.units.iter().map(|u| u.placement.x).fold(f64::NEG_INFINITY, f64::max);
-    let min_y = record.structure.units.iter().map(|u| u.placement.y).fold(f64::INFINITY, f64::min);
-    let max_y = record.structure.units.iter().map(|u| u.placement.y).fold(f64::NEG_INFINITY, f64::max);
+    let min_x = record
+        .structure
+        .units
+        .iter()
+        .map(|unit| unit.placement.x)
+        .fold(f64::INFINITY, f64::min);
+    let max_x = record
+        .structure
+        .units
+        .iter()
+        .map(|unit| unit.placement.x)
+        .fold(f64::NEG_INFINITY, f64::max);
+    let min_y = record
+        .structure
+        .units
+        .iter()
+        .map(|unit| unit.placement.y)
+        .fold(f64::INFINITY, f64::min);
+    let max_y = record
+        .structure
+        .units
+        .iter()
+        .map(|unit| unit.placement.y)
+        .fold(f64::NEG_INFINITY, f64::max);
     let width = (max_x - min_x).max(1e-9);
     let height = (max_y - min_y).max(1e-9);
     let aspect_bucket = ((width.max(height) / width.min(height)) / 0.25).round() as i64;
+
     let mut composition = std::collections::BTreeMap::<String, usize>::new();
     for unit in &record.structure.units {
         if let Some((name, _)) = unit.material.parts.first() {
             *composition.entry(name.clone()).or_default() += 1;
         }
     }
-    let composition = composition.into_iter().map(|(n, c)| format!("{n}:{c}")).collect::<Vec<_>>().join(",");
-    vec![format!("area:{area_bucket}"), format!("pieces:{}", record.constituent_count),
-         format!("aspect:{aspect_bucket}"), format!("composition:{composition}")]
+    let composition = composition
+        .into_iter()
+        .map(|(name, count)| format!("{name}:{count}"))
+        .collect::<Vec<_>>()
+        .join(",");
+
+    vec![
+        format!("area:{area_bucket}"),
+        format!("pieces:{}", record.constituent_count),
+        format!("aspect:{aspect_bucket}"),
+        format!("composition:{composition}"),
+    ]
 }
 
 fn select_diverse_parent(
@@ -328,30 +358,63 @@ fn select_diverse_parent(
     next_mutation_by_parent: &std::collections::HashMap<String, usize>,
     last_parent_id: Option<&str>,
 ) -> Option<usize> {
-    let eligible = records.iter().enumerate()
-        .filter(|(_, r)| next_mutation_by_parent.get(&r.id).copied() != Some(usize::MAX))
+    let eligible = records
+        .iter()
+        .enumerate()
+        .filter(|(_, record)| {
+            next_mutation_by_parent.get(&record.id).copied() != Some(usize::MAX)
+        })
         .collect::<Vec<_>>();
-    if eligible.is_empty() { return None; }
+    if eligible.is_empty() {
+        return None;
+    }
+
     let mut frequencies = std::collections::HashMap::<String, usize>::new();
     let mut features_by_index = std::collections::HashMap::<usize, Vec<String>>::new();
     for (index, record) in &eligible {
         let features = diversity_features(record);
-        for feature in &features { *frequencies.entry(feature.clone()).or_default() += 1; }
+        for feature in &features {
+            *frequencies.entry(feature.clone()).or_default() += 1;
+        }
         features_by_index.insert(*index, features);
     }
-    let last_index = last_parent_id.and_then(|id| records.iter().position(|r| r.id == id));
-    eligible.into_iter().max_by(|(ia, a), (ib, b)| {
-        let score = |i: usize| features_by_index[&i].iter()
-            .map(|f| 1.0 / (*frequencies.get(f).unwrap_or(&1) as f64)).sum::<f64>();
-        let order = score(*ia).total_cmp(&score(*ib));
-        if order != std::cmp::Ordering::Equal { return order; }
-        let oa = next_mutation_by_parent.get(&a.id).copied().unwrap_or(0);
-        let ob = next_mutation_by_parent.get(&b.id).copied().unwrap_or(0);
-        let order = ob.cmp(&oa);
-        if order != std::cmp::Ordering::Equal { return order; }
-        let distance = |i: usize| last_index.map_or(i, |last| (i + records.len() - last - 1) % records.len());
-        distance(*ib).cmp(&distance(*ia))
-    }).map(|(index, _)| index)
+
+    let last_index = last_parent_id.and_then(|id| records.iter().position(|record| record.id == id));
+    eligible
+        .into_iter()
+        .max_by(|(index_a, record_a), (index_b, record_b)| {
+            let score = |index: usize| {
+                features_by_index[&index]
+                    .iter()
+                    .map(|feature| 1.0 / (*frequencies.get(feature).unwrap_or(&1) as f64))
+                    .sum::<f64>()
+            };
+            let score_order = score(*index_a).total_cmp(&score(*index_b));
+            if score_order != std::cmp::Ordering::Equal {
+                return score_order;
+            }
+
+            let offset_a = next_mutation_by_parent
+                .get(&record_a.id)
+                .copied()
+                .unwrap_or(0);
+            let offset_b = next_mutation_by_parent
+                .get(&record_b.id)
+                .copied()
+                .unwrap_or(0);
+            let offset_order = offset_b.cmp(&offset_a);
+            if offset_order != std::cmp::Ordering::Equal {
+                return offset_order;
+            }
+
+            let distance = |index: usize| {
+                last_index.map_or(index, |last| {
+                    (index + records.len() - last - 1) % records.len()
+                })
+            };
+            distance(*index_b).cmp(&distance(*index_a))
+        })
+        .map(|(index, _)| index)
 }
 
 /// Explore one bounded batch from the persistent cavity frontier. Validation
@@ -459,13 +522,18 @@ fn mutate_once_until(
             .ok()
             .and_then(|text| serde_json::from_str(&text).ok())
             .unwrap_or_default();
-    let mut last_parent_id = cursor_text.strip_prefix("diversity:").map(str::to_string);
+    let mut last_parent_id = cursor_text
+        .strip_prefix("diversity:")
+        .map(str::to_string);
     if next_mutation_by_parent.is_empty() {
         if let Some(rest) = cursor_text.strip_prefix("lineage:") {
             let (parent, mutation) = rest.split_once(':').unwrap_or((rest, "0"));
             if let Ok(index) = parent.parse::<usize>() {
                 if let Some(record) = records.get(index) {
-                    next_mutation_by_parent.insert(record.id.clone(), mutation.parse::<usize>().unwrap_or(0));
+                    next_mutation_by_parent.insert(
+                        record.id.clone(),
+                        mutation.parse::<usize>().unwrap_or(0),
+                    );
                     last_parent_id = Some(record.id.clone());
                 }
             }
@@ -516,8 +584,11 @@ fn mutate_once_until(
     let stored_bytes = fs::metadata(path)
         .map_err(|e| format!("inspect cavity store size: {e}"))?
         .len();
-    let mut next_cursor_mutation = 0usize;
-    let selected_parent = select_diverse_parent(&records, &next_mutation_by_parent, last_parent_id.as_deref());
+    let selected_parent = select_diverse_parent(
+        &records,
+        &next_mutation_by_parent,
+        last_parent_id.as_deref(),
+    );
     let mut selected_parent_id = last_parent_id.clone();
     let mut selected_parent_exhausted = false;
     'parents: {
@@ -529,22 +600,25 @@ fn mutate_once_until(
         selected_parent_id = Some(parent.id.clone());
         let mutations = one_step_mutations(parent, catalog);
         let mutation_count = mutations.len();
-        let start_mutation = next_mutation_by_parent.get(&parent.id).copied().unwrap_or(0).min(mutation_count);
+        let start_mutation = next_mutation_by_parent
+            .get(&parent.id)
+            .copied()
+            .unwrap_or(0)
+            .min(mutation_count);
         for (mutation_index, (change, mut structure)) in mutations.into_iter().enumerate() {
-            if mutation_index < start_mutation { continue; }
-            next_cursor_mutation = mutation_index;
+            if mutation_index < start_mutation {
+                continue;
+            }
             if stats.attempts >= MAX_MUTATION_ATTEMPTS_PER_RUN {
                 stats.stopped_at_attempt_limit = true;
                 break 'parents;
             }
             if Instant::now() >= deadline {
-                next_cursor_mutation = mutation_index;
                 stats.stopped_at_deadline = true;
                 break 'parents;
             }
             stats.attempts += 1;
-            next_cursor_mutation = mutation_index + 1;
-            next_mutation_by_parent.insert(parent.id.clone(), next_cursor_mutation);
+            next_mutation_by_parent.insert(parent.id.clone(), mutation_index + 1);
             let operation = mutation_operation(&change).to_string();
             record_mutation_attempt(&mut stats, &change, &operation);
             if structure.units.len() > parent.constituent_count {
@@ -615,7 +689,6 @@ fn mutate_once_until(
                 }
             }
             if Instant::now() >= deadline {
-                next_cursor_mutation = mutation_index;
                 stats.stopped_at_deadline = true;
                 break 'parents;
             }
@@ -635,7 +708,6 @@ fn mutate_once_until(
                 continue;
             }
             if Instant::now() >= deadline {
-                next_cursor_mutation = mutation_index;
                 stats.stopped_at_deadline = true;
                 break 'parents;
             }
@@ -674,7 +746,6 @@ fn mutate_once_until(
                 }
             };
             if Instant::now() >= deadline {
-                next_cursor_mutation = mutation_index;
                 stats.stopped_at_deadline = true;
                 break 'parents;
             }
@@ -698,7 +769,6 @@ fn mutate_once_until(
                 continue;
             }
             if Instant::now() >= deadline {
-                next_cursor_mutation = mutation_index;
                 stats.stopped_at_deadline = true;
                 break 'parents;
             }
@@ -745,23 +815,31 @@ fn mutate_once_until(
 
             // The new child enters the frontier next batch; continue balancing
             // exploration across stored parents instead of following one lineage.
-            next_cursor_mutation = mutation_index + 1;
-            next_mutation_by_parent.insert(parent.id.clone(), next_cursor_mutation);
+            next_mutation_by_parent.insert(parent.id.clone(), mutation_index + 1);
             selected_parent_exhausted = next_cursor_mutation >= mutation_count;
             break 'parents;
         }
-        if !stats.stopped_at_deadline && !stats.stopped_at_attempt_limit
-            && !stats.stopped_at_candidate_limit && !stats.stopped_at_storage_limit {
+        if !stats.stopped_at_deadline
+            && !stats.stopped_at_attempt_limit
+            && !stats.stopped_at_candidate_limit
+            && !stats.stopped_at_storage_limit
+        {
             next_mutation_by_parent.insert(parent.id.clone(), usize::MAX);
             selected_parent_exhausted = true;
         }
     }
 
-    if Instant::now() >= deadline { stats.stopped_at_deadline = true; }
-    if selected_parent_exhausted {
-        if let Some(id) = selected_parent_id.as_deref() { next_mutation_by_parent.insert(id.to_string(), usize::MAX); }
+    if Instant::now() >= deadline {
+        stats.stopped_at_deadline = true;
     }
-    if !appended.is_empty() { append_records_atomically(path, &appended)?; }
+    if selected_parent_exhausted {
+        if let Some(id) = selected_parent_id.as_deref() {
+            next_mutation_by_parent.insert(id.to_string(), usize::MAX);
+        }
+    }
+    if !appended.is_empty() {
+        append_records_atomically(path, &appended)?;
+    }
     let frontier_json = serde_json::to_string(&next_mutation_by_parent)
         .map_err(|e| format!("serialize cavity exploration frontier: {e}"))?;
     fs::write(&frontier_path, frontier_json)
@@ -770,7 +848,9 @@ fn mutate_once_until(
         fs::write(cursor_path, format!("diversity:{id}"))
             .map_err(|e| format!("save cavity mutation cursor: {e}"))?;
     }
-    if selected_parent.is_none() { stats.stopped_at_search_exhaustion = true; }
+    if selected_parent.is_none() {
+        stats.stopped_at_search_exhaustion = true;
+    }
     Ok(stats)
 }
 
