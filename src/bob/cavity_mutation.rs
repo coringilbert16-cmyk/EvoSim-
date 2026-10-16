@@ -21,11 +21,6 @@ pub(crate) struct MutationBatchStats {
     pub stopped_at_deadline: bool,
 }
 
-/// Generate swap-first mutation trials. Each resource substitution owns its
-/// fit search: try the existing pose, then alternate rotations and nearby
-/// translations of that same replacement before moving to the next swap.
-/// Bond validity and cavity qualification remain authoritative downstream.
-
 /// Stable parent-specific rotation of constituent priority. This keeps the
 /// mutation phases ordered but prevents each parent from starting at index 0.
 fn constituent_priority_order(parent_id: &str, constituent_count: usize) -> Vec<usize> {
@@ -38,6 +33,11 @@ fn constituent_priority_order(parent_id: &str, constituent_count: usize) -> Vec<
     }
     order
 }
+
+/// Generate swap-first mutation trials. Each resource substitution owns its
+/// fit search: try the existing pose, then alternate rotations and nearby
+/// translations of that same replacement before moving to the next swap.
+/// Bond validity and cavity qualification remain authoritative downstream.
 
 pub(super) fn one_step_mutations(
     parent: &KnownQualifyingCavity,
@@ -286,11 +286,11 @@ fn mutate_once_until(
             if stats.attempts >= MAX_MUTATION_ATTEMPTS_PER_RUN {
                 break 'parents;
             }
-            stats.attempts += 1;
             if Instant::now() >= deadline {
                 stats.stopped_at_deadline = true;
                 break 'parents;
             }
+            stats.attempts += 1;
             if structure.units.len() > parent.constituent_count {
                 stats.rejected += 1;
                 *stats
@@ -347,8 +347,15 @@ fn mutate_once_until(
             if let Err(error) = validate_candidate_shape_and_bonds(&structure, catalog) {
                 stats.rejected += 1;
                 stats.geometry_rejections += 1;
-                let reason = if error.contains("bond") { "geometry_bond" } else { "geometry_shape" };
-                *stats.rejection_reasons.entry(reason.to_string()).or_default() += 1;
+                let reason = if error.contains("bond") {
+                    "geometry_bond"
+                } else {
+                    "geometry_shape"
+                };
+                *stats
+                    .rejection_reasons
+                    .entry(reason.to_string())
+                    .or_default() += 1;
                 continue;
             }
             stats.cavity_checks_performed += 1;
