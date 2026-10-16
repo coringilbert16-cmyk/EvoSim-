@@ -660,7 +660,7 @@ pub(crate) fn mutate_until_full(
 #[cfg(test)]
 mod lineage_tests {
     use super::{deepest_lineage_leaf, mutate_once_until};
-    use crate::bob::known_qualifying_cavities::{KnownQualifyingCavity, SCHEMA_VERSION};
+    use super::super::{KnownQualifyingCavity, SCHEMA_VERSION};
     use std::time::{Duration, Instant};
 
     #[test]
