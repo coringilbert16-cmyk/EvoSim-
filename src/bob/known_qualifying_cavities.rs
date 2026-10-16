@@ -693,16 +693,16 @@ mod tests {
             .position(|(change, _)| !change.starts_with("replace constituent"))
             .expect("frontier should include independent translations or rotations");
         assert!(
-            mutations[..first_non_replacement]
+            mutations[first_non_replacement..]
                 .iter()
-                .all(|(change, _)| change.starts_with("replace constituent")),
+                .all(|(change, _)| !change.starts_with("replace constituent")),
             "all resource-exchange pose variants must precede unrelated mutations"
         );
         assert!(
             mutations[..first_non_replacement]
                 .iter()
                 .any(|(change, _)| change.ends_with("(existing pose)")),
-            "each exchange family should include an unchanged-pose trial"
+            "the exchange search should include an unchanged-pose trial"
         );
 
         let replacement = &mutations[0];
@@ -725,7 +725,9 @@ mod tests {
 
         let translated = mutations
             .iter()
-            .find(|(change, _)| change.contains(" 0.25"))
+            .find(|(change, _)| {
+                change.starts_with("translate constituent") && change.contains(" 0.25")
+            })
             .expect("frontier should include an independently tested quarter-unit translation");
         assert!(translated.0.starts_with("translate constituent"));
         let translated_index = translated
@@ -752,7 +754,9 @@ mod tests {
 
         let unit_translation = mutations
             .iter()
-            .find(|(change, _)| change.contains(" 1.00"))
+            .find(|(change, _)| {
+                change.starts_with("translate constituent") && change.contains(" 1.00")
+            })
             .expect(
                 "frontier should include independent one-unit translations when non-overlapping",
             );
