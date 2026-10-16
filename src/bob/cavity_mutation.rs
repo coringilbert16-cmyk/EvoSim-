@@ -84,12 +84,14 @@ pub(super) fn one_step_mutations(
 
                 let mut clear_directions = Vec::new();
                 for (direction, dx, dy) in cardinal_directions {
-                    let clear_at_both_distances = [0.25_f64, 0.5_f64].into_iter().all(|distance| {
-                        let mut probe = rotated_swap.clone();
-                        probe.units[unit_index].placement.x += dx * distance;
-                        probe.units[unit_index].placement.y += dy * distance;
-                        validate_candidate_non_overlap(&probe, catalog).is_ok()
-                    });
+                    let clear_at_both_distances = [0.25_f64, 0.5_f64]
+                        .into_iter()
+                        .all(|distance| {
+                            let mut probe = rotated_swap.clone();
+                            probe.units[unit_index].placement.x += dx * distance;
+                            probe.units[unit_index].placement.y += dy * distance;
+                            validate_candidate_non_overlap(&probe, catalog).is_ok()
+                        });
                     if clear_at_both_distances {
                         clear_directions.push((direction, dx, dy));
                     }
