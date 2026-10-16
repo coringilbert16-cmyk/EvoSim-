@@ -1178,13 +1178,8 @@ pub(crate) fn mutate_until_full(
             total.stopped_at_deadline = true;
             break;
         }
-        let batch = mutate_once_until_cached(
-            path,
-            catalog,
-            deadline,
-            validate_existing,
-            &mut cache,
-        )?;
+        let batch =
+            mutate_once_until_cached(path, catalog, deadline, validate_existing, &mut cache)?;
         validate_existing = false;
         total.attempts += batch.attempts;
         total.accepted += batch.accepted;
