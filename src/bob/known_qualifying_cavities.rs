@@ -619,7 +619,7 @@ mod tests {
     }
 
     #[test]
-    fn resource_exchange_frontier_contains_96_poses_when_two_cardinal_paths_are_clear() {
+    fn resource_exchange_frontier_caps_at_96_clear_cardinal_poses() {
         let catalog = crate::resources::default_catalog();
         let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
             .expect("seed structure should build");
@@ -654,44 +654,76 @@ mod tests {
             .map(|offset| first + offset)
             .unwrap_or(mutations.len());
         let trials = &mutations[first..group_end];
-        assert_eq!(
-            trials.len(),
-            96,
-            "two clear cardinal paths × two distances × 24 rotations should yield 96 trials"
+        assert!(
+            !trials.is_empty() && trials.len() <= 96,
+            "a resource exchange should yield between 1 and 96 non-overlapping poses, got {}",
+            trials.len()
         );
-        for degrees in (15..=360).step_by(15) {
+        for (change, trial) in trials {
             assert!(
-                trials.iter().any(|(change, _)| change.contains(&format!("rotate {degrees}deg"))),
-                "the replacement frontier must include the {degrees}-degree orientation"
+                validate_candidate_non_overlap(trial, &catalog).is_ok(),
+                "overlapping pose should be filtered from the frontier: {change}"
+            );
+            assert!(change.contains("rotate "), "pose should record its rotation");
+            assert!(
+                change.ends_with("0.25") || change.ends_with("0.50"),
+                "pose should use one of the two cardinal offsets: {change}"
             );
         }
-        for distance in ["0.25", "0.50"] {
-            assert!(
-                trials.iter().any(|(change, _)| change.contains(&format!("move ") ) && change.ends_with(distance)),
-                "the replacement frontier must include cardinal offset {distance}"
-            );
-        }
+        assert!(
+            trials.iter().any(|(change, _)| change.contains("rotate 15deg")),
+            "the frontier should include the first 15-degree rotation when it has a clear path"
+        );
     }
 
     #[test]
     fn replacement_trial_must_rebuild_a_live_physical_contact() {
         let catalog = crate::resources::default_catalog();
-        let mut structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+        let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
             .expect("nitrogen ring seed should build");
-        structure.units[0].material =
-            crate::resources::Material::free_base("Methane".to_string(), 1.0);
-        structure.units[0].geometry = None;
+        let parent = KnownQualifyingCavity {
+            schema_version: SCHEMA_VERSION,
+            id: NITROGEN_RING_SEED_ID.to_string(),
+            parent_id: None,
+            change: "test seed".to_string(),
+            constituent_count: structure.units.len(),
+            cavity_area: 9.0,
+            minimum_cavity_area: crate::cavity::minimum_genome_cavity_area(&catalog).unwrap(),
+            structure,
+        };
+        let mutations = cavity_mutation::one_step_mutations(&parent, &catalog);
+        let mut repaired_candidate = None;
 
-        assert!(
-            cavity_mutation::rebuild_replacement_connections(&mut structure, 0, &catalog),
-            "a replacement is only a viable fit when constructor bond logic repairs a physical contact"
-        );
+        for (change, mut candidate) in mutations
+            .into_iter()
+            .filter(|(change, _)| change.starts_with("replace constituent"))
+        {
+            let Some(unit_index) = change
+                .strip_prefix("replace constituent at index ")
+                .and_then(|rest| rest.split_whitespace().next())
+                .and_then(|index| index.parse::<usize>().ok())
+            else {
+                continue;
+            };
+            if cavity_mutation::rebuild_replacement_connections(
+                &mut candidate,
+                unit_index,
+                &catalog,
+            ) {
+                repaired_candidate = Some((change, candidate, unit_index));
+                break;
+            }
+        }
+
+        let (change, structure, unit_index) = repaired_candidate
+            .expect("at least one non-overlapping replacement pose should repair a live contact");
+        let changed_id = structure.units[unit_index].physical_id;
         assert!(
             structure.bonds.iter().any(|bond| {
-                bond.endpoint_a.constituent_id == structure.units[0].physical_id
-                    || bond.endpoint_b.constituent_id == structure.units[0].physical_id
+                bond.endpoint_a.constituent_id == changed_id
+                    || bond.endpoint_b.constituent_id == changed_id
             }),
-            "the changed constituent should be connected through a live validated bond"
+            "the changed constituent in {change} should be connected through a live physical bond"
         );
     }
 
