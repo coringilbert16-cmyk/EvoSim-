@@ -86,7 +86,7 @@ fn rotational_symmetry_period(form: &Form) -> Option<f64> {
         Form::Circle { .. } => None,
         Form::Line { .. } => Some(std::f64::consts::PI),
         Form::Rectangle { width, height } => {
-            if (width - height).abs() <= 1e-9 * width.max(*height).max(1.0) {
+            if (*width - *height).abs() <= 1e-9 * (*width).max(*height).max(1.0) {
                 Some(std::f64::consts::FRAC_PI_2)
             } else {
                 Some(std::f64::consts::PI)
@@ -1059,6 +1059,59 @@ mod tests {
             bond.endpoint_b.constituent_id = id_map[&bond.endpoint_b.constituent_id];
         }
         assert_eq!(original, geometry_signature(&first, &catalog).unwrap());
+    }
+
+    #[test]
+    fn geometry_signature_canonicalizes_equivalent_physical_poses() {
+        let catalog = crate::resources::default_catalog();
+        let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("seed structure should build");
+        let original = geometry_signature(&structure, &catalog).expect("signature should build");
+
+        let global_angle = 0.37_f64;
+        let (sin, cos) = global_angle.sin_cos();
+        let mut globally_rotated = structure.clone();
+        for unit in &mut globally_rotated.units {
+            let x = unit.placement.x;
+            let y = unit.placement.y;
+            unit.placement.x = x * cos - y * sin;
+            unit.placement.y = x * sin + y * cos;
+            unit.placement.rotation_radians += global_angle;
+        }
+        assert_eq!(
+            original,
+            geometry_signature(&globally_rotated, &catalog)
+                .expect("rotated signature should build"),
+            "global rotation must not create a duplicate formation"
+        );
+
+        let mut reordered = structure.clone();
+        reordered.units.reverse();
+        assert_eq!(
+            original,
+            geometry_signature(&reordered, &catalog)
+                .expect("reordered signature should build"),
+            "constituent ordering must not define formation identity"
+        );
+
+        let mut symmetric_piece_rotation = structure.clone();
+        symmetric_piece_rotation.units[0].placement.rotation_radians +=
+            std::f64::consts::FRAC_PI_2;
+        assert_eq!(
+            original,
+            geometry_signature(&symmetric_piece_rotation, &catalog)
+                .expect("symmetry-equivalent signature should build"),
+            "rotating a square nitrogen by 90 degrees must not create a new formation"
+        );
+
+        let mut meaningful_rotation = structure;
+        meaningful_rotation.units[0].placement.rotation_radians += std::f64::consts::PI / 12.0;
+        assert_ne!(
+            original,
+            geometry_signature(&meaningful_rotation, &catalog)
+                .expect("distinct rotation signature should build"),
+            "a non-symmetric 15-degree rotation must remain a distinct physical formation"
+        );
     }
 
     #[test]
