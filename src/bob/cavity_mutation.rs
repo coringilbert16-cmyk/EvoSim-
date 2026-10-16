@@ -453,10 +453,12 @@ pub(super) fn one_step_mutations(
             .first()
             .map(|part| part.0.as_str())
             .unwrap_or("");
-        for resource in catalog
-            .iter()
-            .filter(|resource| resource.name != current_name)
-        {
+        // The cavity validator requires polygonal exposed boundary segments.
+        // Circle-shaped Water cannot own such a segment, so skip impossible
+        // cavity-wall exchanges while keeping Water in Bob's general geometry library.
+        for resource in catalog.iter().filter(|resource| {
+            resource.name != current_name && resource.shape.form.polygon_vertices().is_some()
+        }) {
             append_replacement_variants(&mut out, parent, catalog, unit_index, &resource.name);
         }
     }
