@@ -106,6 +106,93 @@ fn append_translations(
     }
 }
 
+/// Generate a resource exchange together with bounded local pose alternatives.
+/// Replacements are searched before unrelated translations/rotations so a new
+/// material gets a fair chance to form a valid, distinct cavity wall.
+fn append_replacement_variants(
+    out: &mut Vec<(String, OrganismStructure)>,
+    parent: &KnownQualifyingCavity,
+    catalog: &[BaseResource],
+    unit_index: usize,
+    resource_name: &str,
+) {
+    let mut replaced = parent.structure.clone();
+    replaced.units[unit_index].material =
+        crate::resources::Material::free_base(resource_name.to_string(), 1.0);
+    replaced.units[unit_index].geometry = None;
+
+    out.push((
+        format!("replace constituent at index {unit_index} with {resource_name} (existing pose)"),
+        replaced.clone(),
+    ));
+
+    // First search orientation-only alternatives at the existing center.
+    let angle_step = std::f64::consts::PI / 12.0;
+    for step in 1..=24 {
+        let mut trial = replaced.clone();
+        trial.units[unit_index].placement.rotation_radians += angle_step * step as f64;
+        if validate_candidate_non_overlap(&trial, catalog).is_ok() {
+            out.push((
+                format!(
+                    "replace constituent at index {unit_index} with {resource_name} then rotate {}deg",
+                    step * 15
+                ),
+                trial,
+            ));
+        }
+    }
+
+    // Then search cardinal translations at the exchanged piece's orientation.
+    for (direction, dx, dy) in [
+        ("+x", 1.0, 0.0),
+        ("-x", -1.0, 0.0),
+        ("+y", 0.0, 1.0),
+        ("-y", 0.0, -1.0),
+    ] {
+        for distance in [0.25_f64, 0.5_f64, 1.0_f64] {
+            let mut trial = replaced.clone();
+            trial.units[unit_index].placement.x += dx * distance;
+            trial.units[unit_index].placement.y += dy * distance;
+            if validate_candidate_non_overlap(&trial, catalog).is_ok() {
+                out.push((
+                    format!(
+                        "replace constituent at index {unit_index} with {resource_name} then translate {direction} {distance:.2}"
+                    ),
+                    trial,
+                ));
+            }
+        }
+    }
+
+    // Finally combine a representative set of rotations and translations.
+    // This avoids multiplying every possible pose while testing useful local fits.
+    for angle_step_count in [1usize, 3, 6] {
+        for (direction, dx, dy) in [
+            ("+x", 1.0, 0.0),
+            ("-x", -1.0, 0.0),
+            ("+y", 0.0, 1.0),
+            ("-y", 0.0, -1.0),
+        ] {
+            for distance in [0.5_f64, 1.0_f64] {
+                let mut trial = replaced.clone();
+                trial.units[unit_index].placement.rotation_radians +=
+                    angle_step * angle_step_count as f64;
+                trial.units[unit_index].placement.x += dx * distance;
+                trial.units[unit_index].placement.y += dy * distance;
+                if validate_candidate_non_overlap(&trial, catalog).is_ok() {
+                    out.push((
+                        format!(
+                            "replace constituent at index {unit_index} with {resource_name} then rotate {}deg and translate {direction} {distance:.2}",
+                            angle_step_count * 15
+                        ),
+                        trial,
+                    ));
+                }
+            }
+        }
+    }
+}
+
 /// Append independently validated in-place rotations for one constituent.
 fn append_rotations(
     out: &mut Vec<(String, OrganismStructure)>,
@@ -146,7 +233,9 @@ fn replacement_resource(change: &str) -> Option<&str> {
         .strip_prefix("replace constituent at index ")?
         .split_once(" with ")?
         .1
-        .split(" (existing pose)")
+        .split(" then ")
+        .next()?
+        .split(" (")
         .next()
 }
 
@@ -214,17 +303,13 @@ pub(super) fn one_step_mutations(
             .iter()
             .filter(|resource| resource.name != current_name)
         {
-            let mut trial = parent.structure.clone();
-            trial.units[unit_index].material =
-                crate::resources::Material::free_base(resource.name.clone(), 1.0);
-            trial.units[unit_index].geometry = None;
-            out.push((
-                format!(
-                    "replace constituent at index {unit_index} with {} (existing pose)",
-                    resource.name
-                ),
-                trial,
-            ));
+            append_replacement_variants(
+                &mut out,
+                parent,
+                catalog,
+                unit_index,
+                &resource.name,
+            );
         }
     }
 
