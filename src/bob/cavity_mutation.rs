@@ -351,7 +351,6 @@ fn mutate_once_until(
         let parent_index = (start + offset) % records.len();
         let parent = &records[parent_index];
         let mutations = one_step_mutations(parent, catalog);
-        let mut parent_completed = true;
         for (mutation_index, (change, mut structure)) in mutations.into_iter().enumerate() {
             if parent_index == start && mutation_index < start_mutation {
                 continue;
@@ -359,12 +358,10 @@ fn mutate_once_until(
             next_cursor_parent = parent_index;
             next_cursor_mutation = mutation_index;
             if stats.attempts >= MAX_MUTATION_ATTEMPTS_PER_RUN {
-                parent_completed = false;
                 break 'parents;
             }
             if Instant::now() >= deadline {
                 stats.stopped_at_deadline = true;
-                parent_completed = false;
                 break 'parents;
             }
             stats.attempts += 1;
@@ -530,10 +527,8 @@ fn mutate_once_until(
             known_signatures.insert(signature);
             stats.accepted += 1;
         }
-        if parent_completed {
-            next_cursor_parent = (parent_index + 1) % records.len();
-            next_cursor_mutation = 0;
-        }
+        next_cursor_parent = (parent_index + 1) % records.len();
+        next_cursor_mutation = 0;
     }
 
     if Instant::now() >= deadline {
