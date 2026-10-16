@@ -442,11 +442,9 @@ mod tests {
         let first_pose = overlapping.units[0].placement.clone();
         overlapping.units[1].placement.x = first_pose.x;
         overlapping.units[1].placement.y = first_pose.y;
-        assert!(
-            validate_candidate_non_overlap(&overlapping, &catalog)
-                .expect_err("coincident rigid pieces must be rejected")
-                .contains("overlap")
-        );
+        assert!(validate_candidate_non_overlap(&overlapping, &catalog)
+            .expect_err("coincident rigid pieces must be rejected")
+            .contains("overlap"));
         let _ = fs::remove_file(path);
     }
 
@@ -609,18 +607,18 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let mut structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
             .expect("nitrogen ring seed should build");
-        structure.units[0].material =
+        structure.units[1].material =
             crate::resources::Material::free_base("Methane".to_string(), 1.0);
-        structure.units[0].geometry = None;
+        structure.units[1].geometry = None;
 
         assert!(
-            cavity_mutation::rebuild_replacement_connections(&mut structure, 0, &catalog),
+            cavity_mutation::rebuild_replacement_connections(&mut structure, 1, &catalog),
             "a replacement is only a viable fit when constructor bond logic repairs a physical contact"
         );
         assert!(
             structure.bonds.iter().any(|bond| {
-                bond.endpoint_a.constituent_id == structure.units[0].physical_id
-                    || bond.endpoint_b.constituent_id == structure.units[0].physical_id
+                bond.endpoint_a.constituent_id == structure.units[1].physical_id
+                    || bond.endpoint_b.constituent_id == structure.units[1].physical_id
             }),
             "the changed constituent should be connected through a live validated bond"
         );
@@ -788,7 +786,7 @@ mod tests {
             .expect("seed structure should build");
         // Shift one top-edge square into its neighbor; cavity shape alone must
         // not be enough to admit this physically overlapping candidate.
-        structure.units[2].placement.x += 0.25;
+        structure.units[1].placement.x += 0.25;
         assert!(validate_candidate_geometry(&structure, &catalog).is_err());
         let path = temporary_store();
         let _ = fs::remove_file(&path);
