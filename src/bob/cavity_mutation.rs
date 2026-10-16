@@ -231,10 +231,8 @@ fn append_contact_guided_replacements(
                             );
                             let mut trial = replaced.clone();
                             trial.units[unit_index].placement.rotation_radians = rotation;
-                            trial.units[unit_index].placement.x =
-                                target_start.0 - rotated_start.0;
-                            trial.units[unit_index].placement.y =
-                                target_start.1 - rotated_start.1;
+                            trial.units[unit_index].placement.x = target_start.0 - rotated_start.0;
+                            trial.units[unit_index].placement.y = target_start.1 - rotated_start.1;
 
                             if validate_candidate_non_overlap(&trial, catalog).is_ok() {
                                 out.push((
@@ -271,14 +269,7 @@ fn append_replacement_variants(
         format!("replace constituent at index {unit_index} with {resource_name} (existing pose)"),
         replaced.clone(),
     ));
-    append_contact_guided_replacements(
-        out,
-        parent,
-        &replaced,
-        catalog,
-        unit_index,
-        resource_name,
-    );
+    append_contact_guided_replacements(out, parent, &replaced, catalog, unit_index, resource_name);
 
     // First search orientation-only alternatives at the existing center.
     let angle_step = std::f64::consts::PI / 12.0;
