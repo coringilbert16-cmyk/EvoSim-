@@ -369,6 +369,32 @@ fn mutate_once_until(
         frontier.next_indices.insert(parent.id.clone(), next_index);
         stats.attempts += 1;
 
+        if structure.units.len() > parent.constituent_count {
+            stats.rejected += 1;
+            *stats
+                .rejection_reasons
+                .entry("constituent_count_increased".to_string())
+                .or_default() += 1;
+            continue;
+        }
+        // Identity and strict penetration are cheap to check before trying to
+        // reconstruct contacts. The same strict predicate permits legal edge
+        // and corner contacts; live shape/bond validation still runs afterward.
+        let signature = geometry_signature(&structure)?;
+        if known_signatures.contains(&signature) {
+            stats.duplicates += 1;
+            continue;
+        }
+        if let Err(error) = validate_candidate_non_overlap(&structure, catalog) {
+            stats.rejected += 1;
+            stats.geometry_rejections += 1;
+            *stats
+                .rejection_reasons
+                .entry("geometry_overlap".to_string())
+                .or_default() += 1;
+            let _ = error;
+            continue;
+        }
         if change.starts_with("replace constituent")
             || change.starts_with("translate constituent")
             || change.starts_with("rotate constituent")
@@ -396,25 +422,14 @@ fn mutate_once_until(
                 }
             }
         }
-        if structure.units.len() > parent.constituent_count {
-            stats.rejected += 1;
-            *stats
-                .rejection_reasons
-                .entry("constituent_count_increased".to_string())
-                .or_default() += 1;
-            continue;
-        }
-        let signature = geometry_signature(&structure)?;
-        if known_signatures.contains(&signature) {
-            stats.duplicates += 1;
-            continue;
-        }
-        if let Err(error) = validate_candidate_geometry(&structure, catalog) {
+        if let Err(error) = validate_candidate_shape_and_bonds(&structure, catalog) {
             stats.rejected += 1;
             stats.geometry_rejections += 1;
-            let reason = if error.contains("overlap") { "geometry_overlap" }
-                else if error.contains("bond") { "geometry_bond" }
-                else { "geometry_shape" };
+            let reason = if error.contains("bond") {
+                "geometry_bond"
+            } else {
+                "geometry_shape"
+            };
             *stats.rejection_reasons.entry(reason.to_string()).or_default() += 1;
             continue;
         }
