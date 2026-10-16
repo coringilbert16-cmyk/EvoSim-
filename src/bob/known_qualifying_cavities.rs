@@ -624,6 +624,31 @@ mod tests {
     }
 
     #[test]
+    fn next_lineage_step_prioritizes_the_constituent_changed_by_its_parent() {
+        let catalog = crate::resources::default_catalog();
+        let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("seed structure should build");
+        let parent = KnownQualifyingCavity {
+            schema_version: SCHEMA_VERSION,
+            id: "lineage-parent".to_string(),
+            parent_id: Some(NITROGEN_RING_SEED_ID.to_string()),
+            change: "replace constituent at index 3 with Methane (existing pose)".to_string(),
+            constituent_count: structure.units.len(),
+            cavity_area: 9.0,
+            minimum_cavity_area: crate::cavity::minimum_genome_cavity_area(&catalog).unwrap(),
+            structure,
+        };
+        let mutations = cavity_mutation::one_step_mutations(&parent, &catalog);
+        let first = mutations.first().expect("lineage continuation should have a mutation");
+        assert!(
+            first.0.starts_with("translate constituent at index 3 ")
+                || first.0.starts_with("rotate constituent at index 3 by "),
+            "the next lineage step should explore the recently changed piece first, got {}",
+            first.0
+        );
+    }
+
+    #[test]
     fn replacement_trial_is_generated_at_the_original_pose_before_other_mutations() {
         let catalog = crate::resources::default_catalog();
         let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
