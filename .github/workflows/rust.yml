@@ -193,6 +193,7 @@ jobs:
           cargo test --locked viability::tests::
           cargo test --locked corner_free_nitrogen_ring_qualifies_as_genome_cavity
           cargo test --locked known_qualifying_cavities::tests::
+          cargo test --locked known_qualifying_cavities::cavity_mutation::lineage_tests::
       # HOLD: do not run the broad Rust suite while calibrating the cavity contract.
       # A name filter cannot prevent unrelated tests from calling Simulation::new()
       # and invoking the production constructor, so the entire broad suite is paused.
