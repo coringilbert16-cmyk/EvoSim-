@@ -619,6 +619,61 @@ mod tests {
     }
 
     #[test]
+    fn resource_exchange_frontier_contains_96_poses_when_two_cardinal_paths_are_clear() {
+        let catalog = crate::resources::default_catalog();
+        let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("seed structure should build");
+        let parent = KnownQualifyingCavity {
+            schema_version: SCHEMA_VERSION,
+            id: NITROGEN_RING_SEED_ID.to_string(),
+            parent_id: None,
+            change: "test seed".to_string(),
+            constituent_count: structure.units.len(),
+            cavity_area: 9.0,
+            minimum_cavity_area: crate::cavity::minimum_genome_cavity_area(&catalog).unwrap(),
+            structure,
+        };
+        let mutations = cavity_mutation::one_step_mutations(&parent, &catalog);
+        let first = mutations
+            .iter()
+            .position(|(change, _)| change.starts_with("replace constituent"))
+            .expect("resource exchange trials should be generated");
+        let resource = mutations[first]
+            .0
+            .split(" with ")
+            .nth(1)
+            .and_then(|tail| tail.split(" (").next())
+            .expect("replacement label should include the resource")
+            .to_string();
+        let group_end = mutations[first..]
+            .iter()
+            .position(|(change, _)| {
+                !change.starts_with("replace constituent")
+                    || !change.contains(&format!(" with {resource} ("))
+            })
+            .map(|offset| first + offset)
+            .unwrap_or(mutations.len());
+        let trials = &mutations[first..group_end];
+        assert_eq!(
+            trials.len(),
+            96,
+            "two clear cardinal paths × two distances × 24 rotations should yield 96 trials"
+        );
+        for degrees in (15..=360).step_by(15) {
+            assert!(
+                trials.iter().any(|(change, _)| change.contains(&format!("rotate {degrees}deg"))),
+                "the replacement frontier must include the {degrees}-degree orientation"
+            );
+        }
+        for distance in ["0.25", "0.50"] {
+            assert!(
+                trials.iter().any(|(change, _)| change.contains(&format!("move ") ) && change.ends_with(distance)),
+                "the replacement frontier must include cardinal offset {distance}"
+            );
+        }
+    }
+
+    #[test]
     fn replacement_trial_must_rebuild_a_live_physical_contact() {
         let catalog = crate::resources::default_catalog();
         let mut structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
