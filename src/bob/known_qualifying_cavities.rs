@@ -1339,4 +1339,81 @@ mod tests {
         );
         let _ = fs::remove_file(path);
     }
+
+    #[test]
+    fn temporary_rotation_case_diagnostic() {
+        use std::f64::consts::PI;
+
+        let catalog = crate::resources::default_catalog();
+        let seed = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("seed structure should build");
+
+        let inspect = |label: &str, index: usize, resource: &str, degrees: f64| {
+            let mut baseline = seed.clone();
+            baseline.units[index].material =
+                crate::resources::Material::free_base(resource.to_string(), 1.0);
+            baseline.units[index].geometry = None;
+            let baseline_signature = geometry_signature(&baseline, &catalog)
+                .expect("baseline signature should calculate");
+
+            let mut candidate = baseline.clone();
+            candidate.units[index].placement.rotation_radians += degrees.to_radians();
+            let signature = geometry_signature(&candidate, &catalog)
+                .expect("rotated signature should calculate");
+            let overlap = validate_candidate_non_overlap(&candidate, &catalog);
+            let mut repaired_contacts = None;
+            let mut shape_bonds = None;
+            let mut cavity_result = None;
+            if overlap.is_ok() {
+                repaired_contacts = Some(cavity_mutation::rebuild_replacement_connections(
+                    &mut candidate,
+                    index,
+                    &catalog,
+                ));
+                shape_bonds = Some(validate_candidate_shape_and_bonds(&candidate, &catalog));
+                cavity_result = Some(
+                    crate::cavity::analyze_genome_cavity(&candidate, &catalog)
+                        .map(|cavity| cavity.map(|c| (c.area, c.qualifies()))),
+                );
+            }
+            println!(
+                "ROTATION_DIAGNOSTIC label={label} index={index} resource={resource} degrees={degrees} signature_same_as_unrotated={} overlap={} repaired_contacts={repaired_contacts:?} shape_bonds={shape_bonds:?} cavity={cavity_result:?}",
+                signature == baseline_signature,
+                overlap.as_ref().map(|_| "pass").unwrap_or_else(|_| "fail"),
+            );
+            if let Err(error) = overlap {
+                println!("ROTATION_DIAGNOSTIC overlap_error={error}");
+            }
+        };
+
+        // N #3 -> methane at the same center, rotated 180 degrees.
+        inspect("nitrogen_to_methane", 3, "Methane", 180.0);
+        // A corner-position nitrogen -> phosphorus trapezoid, rotated 180 degrees.
+        inspect("corner_to_phosphorus", 0, "Phosphorus", 180.0);
+
+        // Report whether the production frontier emits the exact methane trial.
+        let parent_cavity = crate::cavity::analyze_genome_cavity(&seed, &catalog)
+            .expect("seed cavity analysis should succeed")
+            .expect("seed should qualify");
+        let parent = KnownQualifyingCavity {
+            schema_version: SCHEMA_VERSION,
+            id: NITROGEN_RING_SEED_ID.to_string(),
+            parent_id: None,
+            change: "diagnostic seed".to_string(),
+            constituent_count: seed.units.len(),
+            cavity_area: rounded_cavity_area(parent_cavity.area),
+            minimum_cavity_area: parent_cavity.minimum_area,
+            structure: seed,
+        };
+        let variants = cavity_mutation::one_step_mutations(&parent, &catalog);
+        let exact = variants.iter().find(|(change, _)| {
+            change == "replace constituent at index 3 with Methane then rotate 180deg"
+        });
+        println!(
+            "ROTATION_DIAGNOSTIC methane_180_emitted_by_frontier={} frontier_variants={}",
+            exact.is_some(),
+            variants.len()
+        );
+    }
+
 }
