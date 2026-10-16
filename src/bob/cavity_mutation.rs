@@ -17,6 +17,7 @@ pub(crate) struct MutationBatchStats {
     pub viability_rejections: usize,
     pub rejection_reasons: BTreeMap<String, usize>,
     pub stopped_at_candidate_limit: bool,
+    pub stopped_at_attempt_limit: bool,
     pub stopped_at_storage_limit: bool,
     pub stopped_at_search_exhaustion: bool,
     pub stopped_at_deadline: bool,
@@ -358,6 +359,7 @@ fn mutate_once_until(
             next_cursor_parent = parent_index;
             next_cursor_mutation = mutation_index;
             if stats.attempts >= MAX_MUTATION_ATTEMPTS_PER_RUN {
+                stats.stopped_at_attempt_limit = true;
                 break 'parents;
             }
             if Instant::now() >= deadline {
@@ -575,6 +577,7 @@ pub(crate) fn mutate_until_full(
             *total.rejection_reasons.entry(reason).or_default() += count;
         }
         total.stopped_at_candidate_limit |= batch.stopped_at_candidate_limit;
+        total.stopped_at_attempt_limit |= batch.stopped_at_attempt_limit;
         total.stopped_at_storage_limit |= batch.stopped_at_storage_limit;
         total.stopped_at_search_exhaustion |= batch.stopped_at_search_exhaustion;
         total.stopped_at_deadline |= batch.stopped_at_deadline;

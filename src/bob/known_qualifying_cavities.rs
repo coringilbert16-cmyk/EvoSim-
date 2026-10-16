@@ -650,6 +650,12 @@ mod tests {
 
         let stats = mutate_once(&path, &catalog).expect("bounded mutation batch should complete");
         assert!(stats.attempts <= MAX_MUTATION_ATTEMPTS_PER_RUN);
+        if stats.attempts == MAX_MUTATION_ATTEMPTS_PER_RUN {
+            assert!(
+                stats.stopped_at_attempt_limit,
+                "a batch that reaches its attempt budget must report the stop reason"
+            );
+        }
         assert!(
             stats.cavity_checks_performed > 0,
             "mutator should run cavity analysis on physically valid novel candidates"
