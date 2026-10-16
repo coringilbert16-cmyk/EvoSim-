@@ -379,7 +379,8 @@ fn select_diverse_parent(
         features_by_index.insert(*index, features);
     }
 
-    let last_index = last_parent_id.and_then(|id| records.iter().position(|record| record.id == id));
+    let last_index = last_parent_id
+        .and_then(|id| records.iter().position(|record| record.id == id));
     eligible
         .into_iter()
         .max_by(|(index_a, record_a), (index_b, record_b)| {
@@ -389,11 +390,6 @@ fn select_diverse_parent(
                     .map(|feature| 1.0 / (*frequencies.get(feature).unwrap_or(&1) as f64))
                     .sum::<f64>()
             };
-            let score_order = score(*index_a).total_cmp(&score(*index_b));
-            if score_order != std::cmp::Ordering::Equal {
-                return score_order;
-            }
-
             let offset_a = next_mutation_by_parent
                 .get(&record_a.id)
                 .copied()
@@ -405,6 +401,11 @@ fn select_diverse_parent(
             let offset_order = offset_b.cmp(&offset_a);
             if offset_order != std::cmp::Ordering::Equal {
                 return offset_order;
+            }
+
+            let score_order = score(*index_a).total_cmp(&score(*index_b));
+            if score_order != std::cmp::Ordering::Equal {
+                return score_order;
             }
 
             let distance = |index: usize| {
@@ -816,7 +817,7 @@ fn mutate_once_until(
             // The new child enters the frontier next batch; continue balancing
             // exploration across stored parents instead of following one lineage.
             next_mutation_by_parent.insert(parent.id.clone(), mutation_index + 1);
-            selected_parent_exhausted = next_cursor_mutation >= mutation_count;
+            selected_parent_exhausted = mutation_index + 1 >= mutation_count;
             break 'parents;
         }
         if !stats.stopped_at_deadline
