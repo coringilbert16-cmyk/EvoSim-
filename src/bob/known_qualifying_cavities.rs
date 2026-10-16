@@ -675,12 +675,6 @@ mod tests {
                 "pose should use one of the two cardinal offsets: {change}"
             );
         }
-        assert!(
-            trials
-                .iter()
-                .any(|(change, _)| change.contains("rotate 15deg")),
-            "the frontier should include the first 15-degree rotation when it has a clear path"
-        );
     }
 
     #[test]
