@@ -1042,7 +1042,7 @@ pub(crate) fn mutate_until_full(
 #[cfg(test)]
 mod lineage_tests {
     use super::super::{KnownQualifyingCavity, SCHEMA_VERSION};
-    use super::{deepest_lineage_leaf, mutate_once_until, select_diverse_parent};
+    use super::{deepest_lineage_leaf, mutate_once_until, one_step_mutations, select_diverse_parent};
     use std::time::{Duration, Instant};
 
     #[test]
@@ -1134,6 +1134,59 @@ mod lineage_tests {
             Some(1),
             "Bob should explore the shallower sibling generation before chasing descendants"
         );
+    }
+
+    #[test]
+    fn resource_exchange_searches_placements_and_orientations_of_the_new_piece() {
+        let catalog = crate::resources::default_catalog();
+        let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("seed structure should build");
+        let parent = KnownQualifyingCavity {
+            schema_version: SCHEMA_VERSION,
+            id: "seed".to_string(),
+            parent_id: None,
+            change: "initial validated".to_string(),
+            constituent_count: structure.units.len(),
+            cavity_area: 9.0,
+            minimum_cavity_area: 3.0,
+            structure,
+        };
+
+        let mutations = one_step_mutations(&parent, &catalog);
+        let methane_exchange = mutations
+            .iter()
+            .filter(|(change, _)| {
+                change.starts_with("replace constituent at index 0 with Methane")
+            })
+            .collect::<Vec<_>>();
+
+        assert!(
+            methane_exchange
+                .iter()
+                .any(|(change, _)| change.ends_with("(existing pose)")),
+            "Bob should test the exchanged resource at its original pose first"
+        );
+        assert!(
+            methane_exchange
+                .iter()
+                .any(|(change, _)| change.contains("then rotate")),
+            "Bob should test orientations of the exchanged resource"
+        );
+        assert!(
+            methane_exchange
+                .iter()
+                .any(|(change, _)| change.contains("then translate")),
+            "Bob should test placements of the exchanged resource"
+        );
+        assert!(
+            methane_exchange
+                .iter()
+                .any(|(change, _)| change.contains("and translate")),
+            "Bob should test bounded combined pose changes"
+        );
+        assert!(methane_exchange
+            .iter()
+            .all(|(_, candidate)| candidate.units.len() == parent.constituent_count));
     }
 
     #[test]
