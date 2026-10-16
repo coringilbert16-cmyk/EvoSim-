@@ -836,7 +836,10 @@ fn mutate_once_until_cached(
                     format!("stored cavity candidate {} no longer qualifies", record.id)
                 })?;
             if !cavity.qualifies()
-                || (super::rounded_cavity_area(cavity.area) - super::rounded_cavity_area(record.cavity_area)).abs() > 1e-9
+                || (super::rounded_cavity_area(cavity.area)
+                    - super::rounded_cavity_area(record.cavity_area))
+                    .abs()
+                    > 1e-9
                 || (cavity.minimum_area - record.minimum_cavity_area).abs() > 1e-7
             {
                 return Err(format!(
