@@ -68,9 +68,9 @@ fn polygon_rotation_period(vertices: &[(f64, f64)]) -> f64 {
         let (sin, cos) = angle.sin_cos();
         let symmetric = vertices.iter().all(|&(x, y)| {
             let rotated = (x * cos - y * sin, x * sin + y * cos);
-            vertices.iter().any(|&(other_x, other_y)| {
-                (rotated.0 - other_x).hypot(rotated.1 - other_y) <= 1e-7
-            })
+            vertices
+                .iter()
+                .any(|&(other_x, other_y)| (rotated.0 - other_x).hypot(rotated.1 - other_y) <= 1e-7)
         });
         if symmetric {
             return angle;
@@ -92,9 +92,7 @@ fn rotational_symmetry_period(form: &Form) -> Option<f64> {
                 Some(std::f64::consts::PI)
             }
         }
-        Form::RegularPolygon { sides, .. } => {
-            Some(std::f64::consts::TAU / f64::from(*sides))
-        }
+        Form::RegularPolygon { sides, .. } => Some(std::f64::consts::TAU / f64::from(*sides)),
         Form::Polygon { vertices } => Some(polygon_rotation_period(vertices)),
         Form::Fluid {
             boundary: Some(vertices),
@@ -141,8 +139,7 @@ fn geometry_signature(
         if let Some(period) = rotational_symmetry_period(form) {
             let order = (std::f64::consts::TAU / period).round().max(1.0) as usize;
             for symmetry_step in 0..order {
-                frame_angles
-                    .push(unit.placement.rotation_radians + symmetry_step as f64 * period);
+                frame_angles.push(unit.placement.rotation_radians + symmetry_step as f64 * period);
             }
         }
     }
@@ -428,7 +425,8 @@ pub(crate) fn persist_if_qualifying(
         let existing_records = load_records(path)?;
         existing_count = existing_records.len();
         for existing in existing_records {
-            if existing.id == id || geometry_signature(&existing.structure, catalog)? == candidate_signature
+            if existing.id == id
+                || geometry_signature(&existing.structure, catalog)? == candidate_signature
             {
                 return Ok(SeedOutcome::AlreadyPresent { id: existing.id });
             }
