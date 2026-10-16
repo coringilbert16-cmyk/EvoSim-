@@ -609,7 +609,9 @@ mod tests {
         let unit_translation = mutations
             .iter()
             .find(|(change, _)| change.contains(" 1.00"))
-            .expect("frontier should include independent one-unit translations when non-overlapping");
+            .expect(
+                "frontier should include independent one-unit translations when non-overlapping",
+            );
         assert!(unit_translation.0.starts_with("translate constituent"));
         let unit_translated_index = unit_translation
             .0
