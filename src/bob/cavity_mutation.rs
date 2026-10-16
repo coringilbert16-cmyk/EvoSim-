@@ -363,6 +363,7 @@ fn mutate_once_until(
                 break 'parents;
             }
             if Instant::now() >= deadline {
+                next_cursor_mutation = mutation_index;
                 stats.stopped_at_deadline = true;
                 break 'parents;
             }
@@ -422,6 +423,7 @@ fn mutate_once_until(
                 }
             }
             if Instant::now() >= deadline {
+                next_cursor_mutation = mutation_index;
                 stats.stopped_at_deadline = true;
                 break 'parents;
             }
@@ -440,6 +442,7 @@ fn mutate_once_until(
                 continue;
             }
             if Instant::now() >= deadline {
+                next_cursor_mutation = mutation_index;
                 stats.stopped_at_deadline = true;
                 break 'parents;
             }
@@ -466,6 +469,7 @@ fn mutate_once_until(
                 }
             };
             if Instant::now() >= deadline {
+                next_cursor_mutation = mutation_index;
                 stats.stopped_at_deadline = true;
                 break 'parents;
             }
@@ -488,6 +492,7 @@ fn mutate_once_until(
                 continue;
             }
             if Instant::now() >= deadline {
+                next_cursor_mutation = mutation_index;
                 stats.stopped_at_deadline = true;
                 break 'parents;
             }
