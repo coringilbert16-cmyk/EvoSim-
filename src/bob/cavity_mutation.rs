@@ -16,6 +16,10 @@ pub(crate) struct MutationBatchStats {
     pub cavity_rejections: usize,
     pub viability_rejections: usize,
     pub rejection_reasons: BTreeMap<String, usize>,
+    /// Attempts grouped by mutation family, so a low overall success rate can be diagnosed.
+    pub mutation_attempts_by_operation: BTreeMap<String, usize>,
+    /// Terminal outcome counts keyed as "<operation>:<outcome>".
+    pub mutation_outcomes_by_operation: BTreeMap<String, usize>,
     pub stopped_at_candidate_limit: bool,
     pub stopped_at_attempt_limit: bool,
     pub stopped_at_storage_limit: bool,
@@ -119,6 +123,27 @@ fn append_rotations(
     }
 }
 
+fn mutation_operation(change: &str) -> &'static str {
+    if change.starts_with("replace constituent") {
+        "replace"
+    } else if change.starts_with("translate constituent") {
+        "translate"
+    } else if change.starts_with("rotate constituent") {
+        "rotate"
+    } else if change.starts_with("remove constituent") {
+        "remove"
+    } else {
+        "other"
+    }
+}
+
+fn record_mutation_outcome(stats: &mut MutationBatchStats, operation: &str, outcome: &str) {
+    *stats
+        .mutation_outcomes_by_operation
+        .entry(format!("{operation}:{outcome}"))
+        .or_default() += 1;
+}
+
 /// Generate single-change mutation trials in deliberate stages:
 /// (1) resource replacement at the existing pose, (2) independent translations,
 /// (3) independent rotations, and (4) removal as the last resort. No trial
@@ -133,19 +158,15 @@ pub(super) fn one_step_mutations(
     let preferred_index =
         changed_constituent_index(&parent.change).filter(|&index| index < original_count);
 
-    // A child continues with its last changed piece first: after a replacement,
-    // try moving that replacement at its existing orientation, then rotating it.
-    if let Some(unit_index) = preferred_index {
-        append_translations(&mut out, parent, catalog, unit_index);
-        append_rotations(&mut out, parent, catalog, unit_index);
+    // Stage 1: try every single-resource replacement at its unchanged pose first.
+    // Put the lineage's recently changed constituent first, but do not skip it:
+    // otherwise repeated translations/rotations can starve all substitutions.
+    let mut replacement_indices = Vec::with_capacity(original_count);
+    if let Some(index) = preferred_index {
+        replacement_indices.push(index);
     }
-
-    // Stage 1: change one resource, leaving its pose untouched. Do not immediately
-    // replace the same constituent again before testing its geometric consequences.
-    for unit_index in 0..original_count {
-        if Some(unit_index) == preferred_index {
-            continue;
-        }
+    replacement_indices.extend((0..original_count).filter(|index| Some(*index) != preferred_index));
+    for unit_index in replacement_indices {
         let current_name = parent.structure.units[unit_index]
             .material
             .parts
@@ -170,14 +191,21 @@ pub(super) fn one_step_mutations(
         }
     }
 
-    // Stage 2: translations of all other constituents.
+    // Stage 2: independent translations. Continue locally with the recently
+    // changed piece first, but only after all resource substitutions were tried.
+    if let Some(unit_index) = preferred_index {
+        append_translations(&mut out, parent, catalog, unit_index);
+    }
     for unit_index in 0..original_count {
         if Some(unit_index) != preferred_index {
             append_translations(&mut out, parent, catalog, unit_index);
         }
     }
 
-    // Stage 3: rotations of all other constituents.
+    // Stage 3: independent in-place rotations, again preferring the lineage piece.
+    if let Some(unit_index) = preferred_index {
+        append_rotations(&mut out, parent, catalog, unit_index);
+    }
     for unit_index in 0..original_count {
         if Some(unit_index) != preferred_index {
             append_rotations(&mut out, parent, catalog, unit_index);
@@ -415,7 +443,13 @@ fn mutate_once_until(
             }
             stats.attempts += 1;
             next_cursor_mutation = mutation_index + 1;
+            let operation = mutation_operation(&change).to_string();
+            *stats
+                .mutation_attempts_by_operation
+                .entry(operation.clone())
+                .or_default() += 1;
             if structure.units.len() > parent.constituent_count {
+                record_mutation_outcome(&mut stats, &operation, "constituent_count_increased");
                 stats.rejected += 1;
                 *stats
                     .rejection_reasons
@@ -426,6 +460,7 @@ fn mutate_once_until(
             let signature = geometry_signature(&structure)?;
             if known_signatures.contains(&signature) {
                 stats.duplicates += 1;
+                record_mutation_outcome(&mut stats, &operation, "duplicate");
                 continue;
             }
             // Use the same strict penetration predicate as full validation
@@ -439,6 +474,7 @@ fn mutate_once_until(
                     .entry("geometry_overlap".to_string())
                     .or_default() += 1;
                 let _ = error;
+                record_mutation_outcome(&mut stats, &operation, "geometry_overlap");
                 continue;
             }
             if change.starts_with("replace constituent")
@@ -464,6 +500,7 @@ fn mutate_once_until(
                             .rejection_reasons
                             .entry("replacement_has_no_repaired_contact".to_string())
                             .or_default() += 1;
+                        record_mutation_outcome(&mut stats, &operation, "no_repaired_contact");
                         continue;
                     }
                 }
@@ -485,6 +522,7 @@ fn mutate_once_until(
                     .rejection_reasons
                     .entry(reason.to_string())
                     .or_default() += 1;
+                record_mutation_outcome(&mut stats, &operation, "shape_or_bond_invalid");
                 continue;
             }
             if Instant::now() >= deadline {
@@ -502,6 +540,7 @@ fn mutate_once_until(
                         .rejection_reasons
                         .entry("cavity_not_qualifying".to_string())
                         .or_default() += 1;
+                    record_mutation_outcome(&mut stats, &operation, "cavity_not_qualifying");
                     continue;
                 }
                 Err(error) => {
@@ -511,6 +550,7 @@ fn mutate_once_until(
                         .rejection_reasons
                         .entry(format!("cavity_analysis_error: {error}"))
                         .or_default() += 1;
+                    record_mutation_outcome(&mut stats, &operation, "cavity_analysis_error");
                     continue;
                 }
             };
@@ -535,6 +575,7 @@ fn mutate_once_until(
                     .rejection_reasons
                     .entry("viability_rejected".to_string())
                     .or_default() += 1;
+                record_mutation_outcome(&mut stats, &operation, "viability_rejected");
                 continue;
             }
             if Instant::now() >= deadline {
@@ -551,6 +592,7 @@ fn mutate_once_until(
             let id = format!("cavity-{signature}");
             if known_ids.contains(&id) {
                 stats.duplicates += 1;
+                record_mutation_outcome(&mut stats, &operation, "duplicate_id");
                 continue;
             }
             let record = KnownQualifyingCavity {
@@ -572,6 +614,7 @@ fn mutate_once_until(
                 > MAX_STORE_BYTES
             {
                 stats.stopped_at_storage_limit = true;
+                record_mutation_outcome(&mut stats, &operation, "storage_limit");
                 break 'parents;
             }
             appended.extend_from_slice(&bytes);
@@ -579,6 +622,7 @@ fn mutate_once_until(
             known_ids.insert(id);
             known_signatures.insert(signature);
             stats.accepted += 1;
+            record_mutation_outcome(&mut stats, &operation, "accepted");
 
             // The accepted child becomes the sole parent for the next step.
             // Stop before trying sibling mutations from the previous parent.
@@ -632,6 +676,18 @@ pub(crate) fn mutate_until_full(
         total.viability_rejections += batch.viability_rejections;
         for (reason, count) in batch.rejection_reasons {
             *total.rejection_reasons.entry(reason).or_default() += count;
+        }
+        for (operation, count) in batch.mutation_attempts_by_operation {
+            *total
+                .mutation_attempts_by_operation
+                .entry(operation)
+                .or_default() += count;
+        }
+        for (outcome, count) in batch.mutation_outcomes_by_operation {
+            *total
+                .mutation_outcomes_by_operation
+                .entry(outcome)
+                .or_default() += count;
         }
         total.stopped_at_candidate_limit |= batch.stopped_at_candidate_limit;
         total.stopped_at_attempt_limit |= batch.stopped_at_attempt_limit;
