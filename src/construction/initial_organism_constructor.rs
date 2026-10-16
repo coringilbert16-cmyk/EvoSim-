@@ -2308,7 +2308,10 @@ mod tests {
         let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
             .expect("cavity analysis should complete")
             .expect("corner-free nitrogen ring should enclose a candidate genome cavity");
-        assert!(cavity.qualifies(), "cavity should meet the size/boundary contract");
+        assert!(
+            cavity.qualifies(),
+            "cavity should meet the size/boundary contract"
+        );
         assert_eq!(cavity.boundary_units.len(), 12);
         assert!(
             (cavity.area - 9.0).abs() < 1e-6,
