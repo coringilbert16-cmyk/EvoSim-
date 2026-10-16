@@ -209,13 +209,14 @@ pub(crate) fn mutate_once(
     path: impl AsRef<Path>,
     catalog: &[BaseResource],
 ) -> Result<MutationBatchStats, String> {
-    mutate_once_until(path, catalog, Instant::now() + MAX_CAVITY_MUTATION_RUN)
+    mutate_once_until(path, catalog, Instant::now() + MAX_CAVITY_MUTATION_RUN, true)
 }
 
 fn mutate_once_until(
     path: impl AsRef<Path>,
     catalog: &[BaseResource],
     deadline: Instant,
+    validate_existing: bool,
 ) -> Result<MutationBatchStats, String> {
     let path = path.as_ref();
     if !path.exists()
@@ -249,24 +250,31 @@ fn mutate_once_until(
         records.iter().map(|record| record.id.clone()).collect();
     for record in &records {
         if Instant::now() >= deadline {
-            return Ok(MutationBatchStats { stopped_at_deadline: true, ..MutationBatchStats::default() });
+            return Ok(MutationBatchStats {
+                stopped_at_deadline: true,
+                ..MutationBatchStats::default()
+            });
         }
-        validate_candidate_geometry(&record.structure, catalog).map_err(|error| {
-            format!(
-                "stored cavity candidate {} fails live geometry validation: {error}",
-                record.id
-            )
-        })?;
-        let cavity = crate::cavity::analyze_genome_cavity(&record.structure, catalog)?
-            .ok_or_else(|| format!("stored cavity candidate {} no longer qualifies", record.id))?;
-        if !cavity.qualifies()
-            || (cavity.area - record.cavity_area).abs() > 1e-7
-            || (cavity.minimum_area - record.minimum_cavity_area).abs() > 1e-7
-        {
-            return Err(format!(
-                "stored cavity candidate {} has stale or invalid cavity metadata",
-                record.id
-            ));
+        if validate_existing {
+            validate_candidate_geometry(&record.structure, catalog).map_err(|error| {
+                format!(
+                    "stored cavity candidate {} fails live geometry validation: {error}",
+                    record.id
+                )
+            })?;
+            let cavity = crate::cavity::analyze_genome_cavity(&record.structure, catalog)?
+                .ok_or_else(|| {
+                    format!("stored cavity candidate {} no longer qualifies", record.id)
+                })?;
+            if !cavity.qualifies()
+                || (cavity.area - record.cavity_area).abs() > 1e-7
+                || (cavity.minimum_area - record.minimum_cavity_area).abs() > 1e-7
+            {
+                return Err(format!(
+                    "stored cavity candidate {} has stale or invalid cavity metadata",
+                    record.id
+                ));
+            }
         }
         known_signatures.insert(geometry_signature(&record.structure)?);
     }
@@ -476,13 +484,15 @@ pub(crate) fn mutate_until_full(
     let path = path.as_ref();
     let deadline = Instant::now() + MAX_CAVITY_MUTATION_RUN;
     let mut total = MutationBatchStats::default();
+    let mut validate_existing = true;
 
     loop {
         if Instant::now() >= deadline {
             total.stopped_at_deadline = true;
             break;
         }
-        let batch = mutate_once_until(path, catalog, deadline)?;
+        let batch = mutate_once_until(path, catalog, deadline, validate_existing)?;
+        validate_existing = false;
         total.attempts += batch.attempts;
         total.accepted += batch.accepted;
         total.rejected += batch.rejected;
