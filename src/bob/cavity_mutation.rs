@@ -130,8 +130,8 @@ pub(super) fn one_step_mutations(
 ) -> Vec<(String, OrganismStructure)> {
     let mut out = Vec::new();
     let original_count = parent.structure.units.len();
-    let preferred_index = changed_constituent_index(&parent.change)
-        .filter(|&index| index < original_count);
+    let preferred_index =
+        changed_constituent_index(&parent.change).filter(|&index| index < original_count);
 
     // A child continues with its last changed piece first: after a replacement,
     // try moving that replacement at its existing orientation, then rotating it.
@@ -152,7 +152,10 @@ pub(super) fn one_step_mutations(
             .first()
             .map(|part| part.0.as_str())
             .unwrap_or("");
-        for resource in catalog.iter().filter(|resource| resource.name != current_name) {
+        for resource in catalog
+            .iter()
+            .filter(|resource| resource.name != current_name)
+        {
             let mut trial = parent.structure.clone();
             trial.units[unit_index].material =
                 crate::resources::Material::free_base(resource.name.clone(), 1.0);
