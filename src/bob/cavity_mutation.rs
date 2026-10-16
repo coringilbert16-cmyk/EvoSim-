@@ -84,7 +84,7 @@ fn append_translations(
         ("+y", 0.0, 1.0),
         ("-y", 0.0, -1.0),
     ] {
-        for distance in [0.25_f64, 0.5_f64] {
+        for distance in [0.25_f64, 0.5_f64, 1.0_f64] {
             let mut trial = parent.structure.clone();
             trial.units[unit_index].placement.x += dx * distance;
             trial.units[unit_index].placement.y += dy * distance;
