@@ -2,6 +2,7 @@ use super::*;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct MutationBatchStats {
@@ -17,12 +18,27 @@ pub(crate) struct MutationBatchStats {
     pub rejection_reasons: BTreeMap<String, usize>,
     pub stopped_at_candidate_limit: bool,
     pub stopped_at_storage_limit: bool,
+    pub stopped_at_deadline: bool,
 }
 
 /// Generate swap-first mutation trials. Each resource substitution owns its
 /// fit search: try the existing pose, then alternate rotations and nearby
 /// translations of that same replacement before moving to the next swap.
 /// Bond validity and cavity qualification remain authoritative downstream.
+
+/// Stable parent-specific rotation of constituent priority. This keeps the
+/// mutation phases ordered but prevents each parent from starting at index 0.
+fn constituent_priority_order(parent_id: &str, constituent_count: usize) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..constituent_count).collect();
+    if constituent_count > 1 {
+        let offset = parent_id.bytes().fold(0usize, |hash, byte| {
+            hash.wrapping_mul(31).wrapping_add(byte as usize)
+        }) % constituent_count;
+        order.rotate_left(offset);
+    }
+    order
+}
+
 pub(super) fn one_step_mutations(
     parent: &KnownQualifyingCavity,
     catalog: &[BaseResource],
@@ -30,10 +46,11 @@ pub(super) fn one_step_mutations(
     let angle_step = std::f64::consts::PI / 12.0;
     let mut out = Vec::new();
     let original_count = parent.structure.units.len();
+    let unit_order = constituent_priority_order(&parent.id, original_count);
 
     // Resource substitutions are the primary mutation. Search the changed
     // constituent's fit before trying another resource or constituent.
-    for unit_index in 0..original_count {
+    for &unit_index in &unit_order {
         let current_name = parent.structure.units[unit_index]
             .material
             .parts
@@ -86,7 +103,7 @@ pub(super) fn one_step_mutations(
     // cardinal and diagonal directions at 0.25-unit increments, out to 1.5
     // units. Generate only these eight rays, not the full 13x13 square grid.
     // This keeps the mutation set broad without exploding CI work.
-    for unit_index in 0..original_count {
+    for &unit_index in &unit_order {
         for step in 1..=6 {
             let distance = step as f64 * 0.25;
             for (direction, dx, dy) in [
@@ -131,7 +148,7 @@ pub(super) fn one_step_mutations(
     // Destructive removal is deliberately last. Bond-only bookkeeping edits
     // are not mutations: formation identity is determined by material and
     // realized geometry, and cavity analysis decides whether it qualifies.
-    for unit_index in 0..original_count {
+    for &unit_index in &unit_order {
         let unit_id = parent.structure.units[unit_index].physical_id;
         let mut removed = parent.structure.clone();
         removed.remove_units_by_physical_ids(&[unit_id]);
@@ -185,9 +202,19 @@ pub(super) fn rebuild_replacement_connections(
 /// and duplicate signatures are checked before a candidate is appended. A small
 /// cursor rotates the starting parent between runs so early records do not starve
 /// later candidates once the library grows.
+const MAX_CAVITY_MUTATION_RUN: Duration = Duration::from_secs(300);
+
 pub(crate) fn mutate_once(
     path: impl AsRef<Path>,
     catalog: &[BaseResource],
+) -> Result<MutationBatchStats, String> {
+    mutate_once_until(path, catalog, Instant::now() + MAX_CAVITY_MUTATION_RUN)
+}
+
+fn mutate_once_until(
+    path: impl AsRef<Path>,
+    catalog: &[BaseResource],
+    deadline: Instant,
 ) -> Result<MutationBatchStats, String> {
     let path = path.as_ref();
     if !path.exists()
@@ -220,6 +247,9 @@ pub(crate) fn mutate_once(
     let mut known_ids: std::collections::HashSet<String> =
         records.iter().map(|record| record.id.clone()).collect();
     for record in &records {
+        if Instant::now() >= deadline {
+            return Ok(MutationBatchStats { stopped_at_deadline: true, ..MutationBatchStats::default() });
+        }
         validate_candidate_geometry(&record.structure, catalog).map_err(|error| {
             format!(
                 "stored cavity candidate {} fails live geometry validation: {error}",
@@ -257,6 +287,36 @@ pub(crate) fn mutate_once(
                 break 'parents;
             }
             stats.attempts += 1;
+            if Instant::now() >= deadline {
+                stats.stopped_at_deadline = true;
+                break 'parents;
+            }
+            if structure.units.len() > parent.constituent_count {
+                stats.rejected += 1;
+                *stats
+                    .rejection_reasons
+                    .entry("constituent_count_increased".to_string())
+                    .or_default() += 1;
+                continue;
+            }
+            let signature = geometry_signature(&structure)?;
+            if known_signatures.contains(&signature) {
+                stats.duplicates += 1;
+                continue;
+            }
+            // Use the same strict penetration predicate as full validation
+            // before expensive live contact reconstruction. Tangent edge/corner
+            // contacts remain legal and full bond validation still follows.
+            if let Err(error) = validate_candidate_non_overlap(&structure, catalog) {
+                stats.rejected += 1;
+                stats.geometry_rejections += 1;
+                *stats
+                    .rejection_reasons
+                    .entry("geometry_overlap".to_string())
+                    .or_default() += 1;
+                let _ = error;
+                continue;
+            }
             if change.starts_with("replace constituent")
                 || change.starts_with("translate constituent")
                 || change.starts_with("rotate constituent")
@@ -284,33 +344,11 @@ pub(crate) fn mutate_once(
                     }
                 }
             }
-            if structure.units.len() > parent.constituent_count {
-                stats.rejected += 1;
-                *stats
-                    .rejection_reasons
-                    .entry("constituent_count_increased".to_string())
-                    .or_default() += 1;
-                continue;
-            }
-            let signature = geometry_signature(&structure)?;
-            if known_signatures.contains(&signature) {
-                stats.duplicates += 1;
-                continue;
-            }
-            if let Err(error) = validate_candidate_geometry(&structure, catalog) {
+            if let Err(error) = validate_candidate_shape_and_bonds(&structure, catalog) {
                 stats.rejected += 1;
                 stats.geometry_rejections += 1;
-                let reason = if error.contains("overlap") {
-                    "geometry_overlap"
-                } else if error.contains("bond") {
-                    "geometry_bond"
-                } else {
-                    "geometry_shape"
-                };
-                *stats
-                    .rejection_reasons
-                    .entry(reason.to_string())
-                    .or_default() += 1;
+                let reason = if error.contains("bond") { "geometry_bond" } else { "geometry_shape" };
+                *stats.rejection_reasons.entry(reason.to_string()).or_default() += 1;
                 continue;
             }
             stats.cavity_checks_performed += 1;
@@ -393,6 +431,9 @@ pub(crate) fn mutate_once(
         }
     }
 
+    if Instant::now() >= deadline {
+        stats.stopped_at_deadline = true;
+    }
     if !appended.is_empty() {
         append_records_atomically(path, &appended)?;
     }
