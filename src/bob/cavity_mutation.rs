@@ -18,6 +18,7 @@ pub(crate) struct MutationBatchStats {
     pub rejection_reasons: BTreeMap<String, usize>,
     pub stopped_at_candidate_limit: bool,
     pub stopped_at_storage_limit: bool,
+    pub stopped_at_search_exhaustion: bool,
     pub stopped_at_deadline: bool,
 }
 
@@ -448,6 +449,59 @@ fn mutate_once_until(
     fs::write(cursor_path, next_cursor.to_string())
         .map_err(|e| format!("save cavity mutation cursor: {e}"))?;
     Ok(stats)
+}
+
+/// Continue bounded batches toward the 5,000-candidate cap, sharing one
+/// five-minute deadline across the entire run. No individual batch resets it.
+pub(crate) fn mutate_until_full(
+    path: impl AsRef<Path>,
+    catalog: &[BaseResource],
+) -> Result<MutationBatchStats, String> {
+    let path = path.as_ref();
+    let deadline = Instant::now() + MAX_CAVITY_MUTATION_RUN;
+    let mut total = MutationBatchStats::default();
+
+    loop {
+        if Instant::now() >= deadline {
+            total.stopped_at_deadline = true;
+            break;
+        }
+        let batch = mutate_once_until(path, catalog, deadline)?;
+        total.attempts += batch.attempts;
+        total.accepted += batch.accepted;
+        total.rejected += batch.rejected;
+        total.duplicates += batch.duplicates;
+        total.geometry_rejections += batch.geometry_rejections;
+        total.cavity_checks_performed += batch.cavity_checks_performed;
+        total.cavity_rejections += batch.cavity_rejections;
+        total.viability_rejections += batch.viability_rejections;
+        for (reason, count) in batch.rejection_reasons {
+            *total.rejection_reasons.entry(reason).or_default() += count;
+        }
+        total.stopped_at_candidate_limit |= batch.stopped_at_candidate_limit;
+        total.stopped_at_storage_limit |= batch.stopped_at_storage_limit;
+        total.stopped_at_search_exhaustion |= batch.stopped_at_search_exhaustion;
+        total.stopped_at_deadline |= batch.stopped_at_deadline;
+
+        let stored_count = load_records(path)?.len();
+        if stored_count >= MAX_QUALIFYING_CANDIDATES {
+            total.stopped_at_candidate_limit = true;
+            break;
+        }
+        if total.stopped_at_storage_limit
+            || total.stopped_at_deadline
+            || total.stopped_at_candidate_limit
+        {
+            break;
+        }
+        if batch.attempts == 0
+            || (batch.accepted == 0 && batch.attempts < MAX_MUTATION_ATTEMPTS_PER_RUN)
+        {
+            total.stopped_at_search_exhaustion = true;
+            break;
+        }
+    }
+    Ok(total)
 }
 
 
