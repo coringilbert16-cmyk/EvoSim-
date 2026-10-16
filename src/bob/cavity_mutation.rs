@@ -599,7 +599,7 @@ fn mutate_once_until(
                 ));
             }
         }
-        known_signatures.insert(geometry_signature(&record.structure)?);
+        known_signatures.insert(geometry_signature(&record.structure, catalog)?);
     }
     let mut stats = MutationBatchStats::default();
     let mut appended = Vec::<u8>::new();
@@ -658,7 +658,7 @@ fn mutate_once_until(
                     .or_default() += 1;
                 continue;
             }
-            let signature = geometry_signature(&structure)?;
+            let signature = geometry_signature(&structure, catalog)?;
             if known_signatures.contains(&signature) {
                 stats.duplicates += 1;
                 record_mutation_outcome(&mut stats, &change, &operation, "duplicate");
