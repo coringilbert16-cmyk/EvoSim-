@@ -606,9 +606,9 @@ pub(crate) fn mutate_until_full(
 }
 
 #[cfg(test)]
-mod mutation_priority_tests {
-    use super::{constituent_priority_order, mutate_once_until};
-    use std::collections::HashSet;
+mod lineage_tests {
+    use super::{deepest_lineage_leaf, mutate_once_until};
+    use crate::bob::known_qualifying_cavities::{KnownQualifyingCavity, SCHEMA_VERSION};
     use std::time::{Duration, Instant};
 
     #[test]
@@ -633,37 +633,26 @@ mod mutation_priority_tests {
     }
 
     #[test]
-    fn constituent_priority_is_stable_and_varies_between_parents() {
-        let ids = [
-            "nitrogen-ring-seed-v1",
-            "cavity-alpha",
-            "cavity-beta",
-            "cavity-gamma",
-            "cavity-delta",
-            "cavity-epsilon",
-            "cavity-zeta",
-            "cavity-eta",
+    fn legacy_frontier_migrates_to_deepest_lineage_leaf() {
+        let catalog = crate::resources::default_catalog();
+        let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("seed structure should build");
+        let record = |id: &str, parent_id: Option<&str>| KnownQualifyingCavity {
+            schema_version: SCHEMA_VERSION,
+            id: id.to_string(),
+            parent_id: parent_id.map(str::to_string),
+            change: "test lineage".to_string(),
+            constituent_count: structure.units.len(),
+            cavity_area: 9.0,
+            minimum_cavity_area: 3.0,
+            structure: structure.clone(),
+        };
+        let records = vec![
+            record("seed", None),
+            record("branch-a", Some("seed")),
+            record("branch-b", Some("branch-a")),
+            record("branch-c", Some("seed")),
         ];
-        let first_indices: HashSet<usize> = ids
-            .iter()
-            .map(|id| {
-                let first_order = constituent_priority_order(id, 16);
-                assert_eq!(
-                    first_order,
-                    constituent_priority_order(id, 16),
-                    "the same parent must regenerate the same mutation order"
-                );
-                first_order[0]
-            })
-            .collect();
-        assert!(
-            first_indices.len() > 1,
-            "fresh parents must not all start at constituent index zero"
-        );
-        for id in ids {
-            let order = constituent_priority_order(id, 16);
-            assert_eq!(order.len(), 16);
-            assert_eq!(order.iter().copied().collect::<HashSet<_>>().len(), 16);
-        }
+        assert_eq!(deepest_lineage_leaf(&records), 2);
     }
 }
