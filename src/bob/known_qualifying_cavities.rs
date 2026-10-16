@@ -69,9 +69,28 @@ fn geometry_signature(structure: &OrganismStructure) -> Result<String, String> {
     Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
-/// Reject mutations that violate the live rigid-geometry invariants before cavity analysis.
-/// Cavity qualification alone is not a collision or bond-validity check.
-fn validate_candidate_geometry(
+/// Reject candidates whose placed shapes penetrate. This uses the same strict
+/// overlap predicate as full validation, so legal edge/corner contact remains valid.
+fn validate_candidate_non_overlap(
+    structure: &OrganismStructure,
+    catalog: &[BaseResource],
+) -> Result<(), String> {
+    for left in 0..structure.units.len() {
+        for right in (left + 1)..structure.units.len() {
+            if crate::structure::units_strictly_overlap(
+                &structure.units[left],
+                &structure.units[right],
+                catalog,
+            ) {
+                return Err(format!("constituents {left} and {right} overlap"));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Validate physical shapes and bond endpoints after the early overlap precheck.
+fn validate_candidate_shape_and_bonds(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
 ) -> Result<(), String> {
@@ -90,18 +109,16 @@ fn validate_candidate_geometry(
             ));
         }
     }
-    for left in 0..structure.units.len() {
-        for right in (left + 1)..structure.units.len() {
-            if crate::structure::units_strictly_overlap(
-                &structure.units[left],
-                &structure.units[right],
-                catalog,
-            ) {
-                return Err(format!("constituents {left} and {right} overlap"));
-            }
-        }
-    }
     Ok(())
+}
+
+/// Full validation remains authoritative for stored records and other callers.
+fn validate_candidate_geometry(
+    structure: &OrganismStructure,
+    catalog: &[BaseResource],
+) -> Result<(), String> {
+    validate_candidate_shape_and_bonds(structure, catalog)?;
+    validate_candidate_non_overlap(structure, catalog)
 }
 
 /// Atomically replace a cavity store during schema migration.
