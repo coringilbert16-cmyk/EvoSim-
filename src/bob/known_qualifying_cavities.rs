@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::resources::BaseResource;
+use crate::resources::{BaseResource, Form};
 use crate::structure::OrganismStructure;
 
 #[path = "cavity_mutation.rs"]
@@ -54,32 +54,163 @@ pub(crate) enum SeedOutcome {
 /// by arbitrary bond additions/removals. Stored records must still pass cavity analysis,
 /// so only a bond change that alters cavity qualification can affect whether a record
 /// is eligible for storage; it does not create a second copy of the same formation.
-fn geometry_signature(structure: &OrganismStructure) -> Result<String, String> {
-    let mut normalized = structure.clone();
-    for (index, unit) in normalized.units.iter_mut().enumerate() {
-        unit.physical_id = crate::structure::PhysicalConstituentId(index as u64 + 1);
+fn quantize_signature_value(value: f64) -> i64 {
+    (value * 1_000_000.0).round() as i64
+}
+
+fn polygon_rotation_period(vertices: &[(f64, f64)]) -> f64 {
+    let count = vertices.len();
+    for order in (2..=count).rev() {
+        if count % order != 0 {
+            continue;
+        }
+        let angle = std::f64::consts::TAU / order as f64;
+        let (sin, cos) = angle.sin_cos();
+        let symmetric = vertices.iter().all(|&(x, y)| {
+            let rotated = (x * cos - y * sin, x * sin + y * cos);
+            vertices.iter().any(|&(other_x, other_y)| {
+                (rotated.0 - other_x).hypot(rotated.1 - other_y) <= 1e-7
+            })
+        });
+        if symmetric {
+            return angle;
+        }
     }
-    // Normalize global translation: absolute world coordinates do not define a
-    // different formation. Keep relative placements and orientations intact.
-    let min_x = normalized
+    std::f64::consts::TAU
+}
+
+/// The smallest rotation period that leaves a resource's local physical shape
+/// unchanged. None means the shape has no meaningful orientation.
+fn rotational_symmetry_period(form: &Form) -> Option<f64> {
+    match form {
+        Form::Circle { .. } => None,
+        Form::Line { .. } => Some(std::f64::consts::PI),
+        Form::Rectangle { width, height } => {
+            if (width - height).abs() <= 1e-9 * width.max(*height).max(1.0) {
+                Some(std::f64::consts::FRAC_PI_2)
+            } else {
+                Some(std::f64::consts::PI)
+            }
+        }
+        Form::RegularPolygon { sides, .. } => {
+            Some(std::f64::consts::TAU / f64::from(*sides))
+        }
+        Form::Polygon { vertices } => Some(polygon_rotation_period(vertices)),
+        Form::Fluid {
+            boundary: Some(vertices),
+            arc_boundary: None,
+            multi_contact_boundary: None,
+            ..
+        } => Some(polygon_rotation_period(vertices)),
+        Form::Fluid {
+            boundary: None,
+            arc_boundary: None,
+            multi_contact_boundary: None,
+            ..
+        } => None,
+        Form::Fluid { .. } => Some(std::f64::consts::TAU),
+    }
+}
+
+/// Stable physical-formation identity, independent of constituent IDs, unit
+/// ordering, global translation/rotation, and rotations that leave an individual
+/// resource shape unchanged. Bond bookkeeping is intentionally excluded.
+fn geometry_signature(
+    structure: &OrganismStructure,
+    catalog: &[BaseResource],
+) -> Result<String, String> {
+    type CanonicalUnit = (String, String, i64, i64, i64);
+
+    let forms = structure
         .units
         .iter()
-        .map(|unit| unit.placement.x)
-        .fold(f64::INFINITY, f64::min);
-    let min_y = normalized
-        .units
-        .iter()
-        .map(|unit| unit.placement.y)
-        .fold(f64::INFINITY, f64::min);
-    for unit in &mut normalized.units {
-        unit.placement.x -= min_x;
-        unit.placement.y -= min_y;
+        .map(|unit| {
+            unit.shape(catalog)
+                .map(|shape| shape.form.clone())
+                .ok_or_else(|| {
+                    "candidate formation has a constituent with no physical shape".to_string()
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // A unit's orientation (including every symmetry-equivalent orientation)
+    // and every center-to-center direction can define a global reference frame.
+    // The smallest normalized representation is independent of that choice.
+    let mut frame_angles = Vec::new();
+    for (unit, form) in structure.units.iter().zip(&forms) {
+        if let Some(period) = rotational_symmetry_period(form) {
+            let order = (std::f64::consts::TAU / period).round().max(1.0) as usize;
+            for symmetry_step in 0..order {
+                frame_angles
+                    .push(unit.placement.rotation_radians + symmetry_step as f64 * period);
+            }
+        }
     }
-    // Bond endpoints are deliberately excluded from the identity signature:
-    // adding/removing a bond alone must not fill the library with duplicate formations.
-    // The live candidate validator and cavity analyzer remain authoritative for eligibility.
-    normalized.clear_genome_constituent_ids();
-    let payload = serde_json::to_vec(&normalized.units)
+    for left in 0..structure.units.len() {
+        for right in (left + 1)..structure.units.len() {
+            let dx = structure.units[right].placement.x - structure.units[left].placement.x;
+            let dy = structure.units[right].placement.y - structure.units[left].placement.y;
+            if dx.hypot(dy) > 1e-9 {
+                frame_angles.push(dy.atan2(dx));
+            }
+        }
+    }
+    if frame_angles.is_empty() {
+        frame_angles.push(0.0);
+    }
+
+    let mut representations = Vec::<Vec<CanonicalUnit>>::with_capacity(frame_angles.len());
+    for frame_angle in frame_angles {
+        let (sin, cos) = frame_angle.sin_cos();
+        let transformed_positions = structure
+            .units
+            .iter()
+            .map(|unit| {
+                (
+                    unit.placement.x * cos + unit.placement.y * sin,
+                    -unit.placement.x * sin + unit.placement.y * cos,
+                )
+            })
+            .collect::<Vec<_>>();
+        let min_x = transformed_positions
+            .iter()
+            .map(|(x, _)| *x)
+            .fold(f64::INFINITY, f64::min);
+        let min_y = transformed_positions
+            .iter()
+            .map(|(_, y)| *y)
+            .fold(f64::INFINITY, f64::min);
+
+        let mut canonical_units = Vec::with_capacity(structure.units.len());
+        for (index, unit) in structure.units.iter().enumerate() {
+            let mut parts = unit.material.parts.clone();
+            parts.sort_by(|left, right| {
+                left.0
+                    .cmp(&right.0)
+                    .then_with(|| left.1.total_cmp(&right.1))
+            });
+            let material = serde_json::to_string(&parts)
+                .map_err(|error| format!("serialize candidate material identity: {error}"))?;
+            let form = serde_json::to_string(&forms[index])
+                .map_err(|error| format!("serialize candidate shape identity: {error}"))?;
+            let (x, y) = transformed_positions[index];
+            let angle = rotational_symmetry_period(&forms[index])
+                .map(|period| (unit.placement.rotation_radians - frame_angle).rem_euclid(period))
+                .unwrap_or(0.0);
+            canonical_units.push((
+                material,
+                form,
+                quantize_signature_value(x - min_x),
+                quantize_signature_value(y - min_y),
+                quantize_signature_value(angle),
+            ));
+        }
+        canonical_units.sort();
+        representations.push(canonical_units);
+    }
+
+    let canonical = representations.into_iter().min().unwrap_or_default();
+    let payload = serde_json::to_vec(&canonical)
         .map_err(|error| format!("serialize candidate formation signature: {error}"))?;
     let digest = Sha256::digest(payload);
     Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
