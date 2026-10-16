@@ -686,9 +686,18 @@ mod tests {
             .iter()
             .position(|(change, _)| !change.starts_with("replace constituent"))
             .expect("frontier should include independent translations or rotations");
-        assert!(mutations[..first_non_replacement]
-            .iter()
-            .all(|(change, _)| change.ends_with("(existing pose)")));
+        assert!(
+            mutations[..first_non_replacement]
+                .iter()
+                .all(|(change, _)| change.starts_with("replace constituent")),
+            "all resource-exchange pose variants must precede unrelated mutations"
+        );
+        assert!(
+            mutations[..first_non_replacement]
+                .iter()
+                .any(|(change, _)| change.ends_with("(existing pose)")),
+            "each exchange family should include an unchanged-pose trial"
+        );
 
         let replacement = &mutations[0];
         let changed_index = replacement
