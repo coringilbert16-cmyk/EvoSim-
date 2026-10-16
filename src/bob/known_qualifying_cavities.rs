@@ -15,7 +15,7 @@ use crate::structure::OrganismStructure;
 
 #[path = "cavity_mutation.rs"]
 mod cavity_mutation;
-pub(crate) use cavity_mutation::mutate_once;
+pub(crate) use cavity_mutation::{mutate_once, mutate_until_full};
 
 const SCHEMA_VERSION: u32 = 3;
 const PREVIOUS_SCHEMA_VERSION: u32 = 2;
