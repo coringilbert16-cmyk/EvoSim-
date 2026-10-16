@@ -1101,7 +1101,8 @@ fn mutate_once_until_cached(
                     .and_then(|index| index.parse::<usize>().ok())
                 {
                     let contact_started = Instant::now();
-                    let repaired = rebuild_replacement_connections(&mut structure, unit_index, catalog);
+                    let repaired =
+                        rebuild_replacement_connections(&mut structure, unit_index, catalog);
                     stats.contact_rebuild_micros += contact_started.elapsed().as_micros();
                     if !repaired {
                         stats.rejected += 1;
