@@ -442,3 +442,45 @@ fn mutate_once_until(
         .map_err(|e| format!("save cavity mutation cursor: {e}"))?;
     Ok(stats)
 }
+
+
+#[cfg(test)]
+mod mutation_priority_tests {
+    use super::constituent_priority_order;
+    use std::collections::HashSet;
+
+    #[test]
+    fn constituent_priority_is_stable_and_varies_between_parents() {
+        let ids = [
+            "nitrogen-ring-seed-v1",
+            "cavity-alpha",
+            "cavity-beta",
+            "cavity-gamma",
+            "cavity-delta",
+            "cavity-epsilon",
+            "cavity-zeta",
+            "cavity-eta",
+        ];
+        let first_indices: HashSet<usize> = ids
+            .iter()
+            .map(|id| {
+                let first_order = constituent_priority_order(id, 16);
+                assert_eq!(
+                    first_order,
+                    constituent_priority_order(id, 16),
+                    "the same parent must regenerate the same mutation order"
+                );
+                first_order[0]
+            })
+            .collect();
+        assert!(
+            first_indices.len() > 1,
+            "fresh parents must not all start at constituent index zero"
+        );
+        for id in ids {
+            let order = constituent_priority_order(id, 16);
+            assert_eq!(order.len(), 16);
+            assert_eq!(order.iter().copied().collect::<HashSet<_>>().len(), 16);
+        }
+    }
+}
