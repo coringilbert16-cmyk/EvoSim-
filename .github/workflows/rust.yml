@@ -122,9 +122,9 @@ jobs:
           assert len(records) == len(ids), "duplicate candidate IDs"
           assert len(records) <= 5000, f"hard candidate cap exceeded: {len(records)}"
           assert records and records[0]["id"] == "nitrogen-ring-seed-v1", "nitrogen-ring seed is not first"
-          assert records[0]["constituent_count"] == 16, "seed is not the expected 16-piece ring"
+          assert records[0]["constituent_count"] == 12, "seed is not the expected 12-piece corner-free ring"
           assert all(record["constituent_count"] == len(record["structure"]["units"]) for record in records), "constituent metadata mismatch"
-          assert all(record["constituent_count"] <= 16 for record in records), "candidate grew beyond the 16-piece seed"
+          assert all(record["constituent_count"] <= 12 for record in records), "candidate grew beyond the 12-piece seed"
           for index, record in enumerate(records):
               parent_id = record.get("parent_id")
               if parent_id:
@@ -186,7 +186,7 @@ jobs:
           cargo test --locked cavity_analysis_uses_catalog_shape_when_mutated_unit_geometry_is_missing -- --nocapture
           cargo test --locked cavity::tests::
           cargo test --locked viability::tests::
-          cargo test --locked five_by_five_nitrogen_ring_qualifies_as_genome_cavity
+          cargo test --locked corner_free_nitrogen_ring_qualifies_as_genome_cavity
           cargo test --locked known_qualifying_cavities::tests::
       # HOLD: do not run the broad Rust suite while calibrating the cavity contract.
       # A name filter cannot prevent unrelated tests from calling Simulation::new()
