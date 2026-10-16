@@ -664,7 +664,10 @@ mod tests {
                 validate_candidate_non_overlap(trial, &catalog).is_ok(),
                 "overlapping pose should be filtered from the frontier: {change}"
             );
-            assert!(change.contains("rotate "), "pose should record its rotation");
+            assert!(
+                change.contains("rotate "),
+                "pose should record its rotation"
+            );
             assert!(
                 change.ends_with("0.25") || change.ends_with("0.50"),
                 "pose should use one of the two cardinal offsets: {change}"
