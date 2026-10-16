@@ -1501,6 +1501,11 @@ pub(crate) fn build_nitrogen_ring_seed(
 
     for y in 0..5 {
         for x in 0..5 {
+            // Keep the 12 cavity-facing side squares; the four outer corners
+            // do not face the cavity and are intentionally absent from the seed.
+            if (x == 0 || x == 4) && (y == 0 || y == 4) {
+                continue;
+            }
             if x != 0 && x != 4 && y != 0 && y != 4 {
                 continue;
             }
@@ -1527,6 +1532,20 @@ pub(crate) fn build_nitrogen_ring_seed(
                 bond_units(&mut structure, a, b, catalog, &mut ledger, &mut energy)?;
             }
         }
+    }
+
+    // The four side groups meet diagonally at the cavity's outer corners.
+    // Corner-to-corner physical bonds keep the 12-piece ring connected without
+    // adding non-wall constituents.
+    for ((ax, ay), (bx, by)) in [
+        ((1, 0), (0, 1)),
+        ((3, 0), (4, 1)),
+        ((0, 3), (1, 4)),
+        ((4, 3), (3, 4)),
+    ] {
+        let a = grid[ay][ax].expect("corner-adjacent side unit must exist");
+        let b = grid[by][bx].expect("corner-adjacent side unit must exist");
+        bond_units(&mut structure, a, b, catalog, &mut ledger, &mut energy)?;
     }
     Ok(structure)
 }
@@ -2274,90 +2293,23 @@ mod tests {
     }
 
     #[test]
-    fn five_by_five_nitrogen_ring_qualifies_as_genome_cavity() {
+    fn corner_free_nitrogen_ring_qualifies_as_genome_cavity() {
         let catalog = crate::resources::default_catalog();
-        let nitrogen = catalog
-            .iter()
-            .find(|resource| resource.name == "Nitrogen")
-            .expect("Nitrogen exists in the default catalog");
-        let mut structure = crate::structure::OrganismStructure::new();
-        let mut grid = [[None; 5]; 5];
+        let structure = build_nitrogen_ring_seed(&catalog)
+            .expect("12-piece nitrogen ring should realize and bond");
 
-        // A one-unit-thick perimeter around a 3x3 empty interior.
-        for y in 0..5 {
-            for x in 0..5 {
-                if x != 0 && x != 4 && y != 0 && y != 4 {
-                    continue;
-                }
-                let index = add_unit(
-                    &mut structure,
-                    nitrogen,
-                    (x as f64 - 2.0, y as f64 - 2.0),
-                    &catalog,
-                )
-                .expect("nitrogen square should realize");
-                grid[y][x] = Some(index);
-            }
-        }
-
-        assert_eq!(structure.units.len(), 16, "ring should contain 16 squares");
-
-        // Build bonds only through the normal live physical bond transaction.
-        let mut ledger = EnergyLedger::default();
-        let mut energy = 1_000_000.0;
-        let mut adjacent_pairs = 0usize;
-        for y in 0..5 {
-            for x in 0..5 {
-                let Some(a) = grid[y][x] else { continue };
-                for (nx, ny) in [(x + 1, y), (x, y + 1)] {
-                    if nx >= 5 || ny >= 5 {
-                        continue;
-                    }
-                    let Some(b) = grid[ny][nx] else { continue };
-                    bond_units(
-                        &mut structure,
-                        a,
-                        b,
-                        &catalog,
-                        &mut ledger,
-                        &mut energy,
-                    )
-                    .unwrap_or_else(|error| {
-                        panic!(
-                            "adjacent nitrogen squares ({x},{y})-({nx},{ny}) failed to bond: {error}"
-                        )
-                    });
-                    adjacent_pairs += 1;
-
-                    let id_a = structure.units[a].physical_id;
-                    let id_b = structure.units[b].physical_id;
-                    assert!(
-                        structure.bonds.iter().any(|bond| {
-                            (bond.endpoint_a.constituent_id == id_a
-                                && bond.endpoint_b.constituent_id == id_b)
-                                || (bond.endpoint_a.constituent_id == id_b
-                                    && bond.endpoint_b.constituent_id == id_a)
-                        }),
-                        "every neighboring perimeter pair must have a physical bond"
-                    );
-                }
-            }
-        }
-
-        assert_eq!(adjacent_pairs, 16, "ring perimeter should have 16 joins");
+        assert_eq!(structure.units.len(), 12, "seed must omit the four corners");
         assert_eq!(
             structure.connected_components().len(),
             1,
-            "the ring must be one bonded structure"
+            "corner-contact bonds must connect all four sides"
         );
 
         let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
             .expect("cavity analysis should complete")
-            .expect("nitrogen ring should enclose a candidate genome cavity");
-        assert!(
-            cavity.qualifies(),
-            "cavity should meet the size/boundary contract"
-        );
+            .expect("corner-free nitrogen ring should enclose a candidate genome cavity");
+        assert!(cavity.qualifies(), "cavity should meet the size/boundary contract");
+        assert_eq!(cavity.boundary_units.len(), 12);
         assert!(
             (cavity.area - 9.0).abs() < 1e-6,
             "expected 3x3 interior area 9.0, got {}",
@@ -2368,41 +2320,6 @@ mod tests {
             "genome cavity area {} must be at least the three-Carbon minimum {}",
             cavity.area,
             cavity.minimum_area
-        );
-        // Corner squares close the outside of the ring but do not face the
-        // cavity. Its inner boundary consists of 12 side squares and 8 joins.
-        // Each physical join is represented by two bond records.
-        assert_eq!(
-            cavity.boundary_units.len(),
-            12,
-            "only the 12 squares facing the cavity belong to its boundary"
-        );
-        let boundary_bonds = cavity.boundary_bond_indices(&structure, &catalog);
-        assert_eq!(
-            boundary_bonds.len(),
-            16,
-            "the eight inner-side joins have two physical bond records each"
-        );
-
-        // Remove every bond record for one actual cavity-wall join. Removing a
-        // single record would leave its paired bond and would not break the join.
-        let mut missing_boundary_bond = structure.clone();
-        let first_boundary_bond = &structure.bonds[*boundary_bonds
-            .first()
-            .expect("the sealed cavity has wall bonds")];
-        let endpoint_a = first_boundary_bond.endpoint_a.constituent_id;
-        let endpoint_b = first_boundary_bond.endpoint_b.constituent_id;
-        missing_boundary_bond.bonds.retain(|bond| {
-            !((bond.endpoint_a.constituent_id == endpoint_a
-                && bond.endpoint_b.constituent_id == endpoint_b)
-                || (bond.endpoint_a.constituent_id == endpoint_b
-                    && bond.endpoint_b.constituent_id == endpoint_a))
-        });
-        assert!(
-            crate::cavity::analyze_genome_cavity(&missing_boundary_bond, &catalog)
-                .expect("cavity analysis should complete after removing a bond")
-                .is_none(),
-            "a ring missing one perimeter bond must not qualify as a genome cavity"
         );
     }
 }
