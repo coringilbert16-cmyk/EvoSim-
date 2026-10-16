@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct MutationBatchStats {
@@ -22,6 +23,7 @@ pub(crate) struct MutationBatchStats {
     pub stopped_at_candidate_limit: bool,
     pub stopped_at_storage_limit: bool,
     pub stopped_at_search_exhaustion: bool,
+    pub stopped_at_deadline: bool,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -58,10 +60,21 @@ pub(super) fn one_step_mutations(
     let angle_step = std::f64::consts::PI / 12.0;
     let mut out = Vec::new();
     let original_count = parent.structure.units.len();
+    // Rotate constituent priority by a stable parent-specific offset. This keeps
+    // substitutions first while preventing every fresh descendant from always
+    // starting at constituent zero; the same parent regenerates the same order
+    // on resume, so persisted mutation indices remain meaningful.
+    let mut unit_order: Vec<usize> = (0..original_count).collect();
+    if original_count > 1 {
+        let offset = parent.id.bytes().fold(0usize, |hash, byte| {
+            hash.wrapping_mul(31).wrapping_add(byte as usize)
+        }) % original_count;
+        unit_order.rotate_left(offset);
+    }
 
     // Resource substitutions are the primary mutation. Search the changed
     // constituent's fit before trying another resource or constituent.
-    for unit_index in 0..original_count {
+    for &unit_index in &unit_order {
         let current_name = parent.structure.units[unit_index]
             .material
             .parts
@@ -122,7 +135,7 @@ pub(super) fn one_step_mutations(
     // independently. Translation is itself a cavity mutation: a boundary
     // piece can move outward, reconnect at different corners, and change the
     // measured enclosed area without changing its material.
-    for unit_index in 0..original_count {
+    for &unit_index in &unit_order {
         for x_step in -6i32..=6 {
             for y_step in -6i32..=6 {
                 if x_step == 0 && y_step == 0 {
@@ -154,7 +167,7 @@ pub(super) fn one_step_mutations(
     // Destructive removal is deliberately last. Bond-only bookkeeping edits
     // are not mutations: formation identity is determined by material and
     // realized geometry, and cavity analysis decides whether it qualifies.
-    for unit_index in 0..original_count {
+    for &unit_index in &unit_order {
         let unit_id = parent.structure.units[unit_index].physical_id;
         let mut removed = parent.structure.clone();
         removed.remove_units_by_physical_ids(&[unit_id]);
@@ -207,9 +220,19 @@ pub(super) fn rebuild_replacement_connections(
 /// Explore a bounded batch from randomly selected known-good parents. A newly
 /// accepted formation is persisted before the next call, so it joins the parent
 /// pool immediately. Live geometry and cavity validation remain authoritative.
+const MAX_CAVITY_MUTATION_RUN: Duration = Duration::from_secs(300);
+
 pub(crate) fn mutate_once(
     path: impl AsRef<Path>,
     catalog: &[BaseResource],
+) -> Result<MutationBatchStats, String> {
+    mutate_once_until(path, catalog, Instant::now() + MAX_CAVITY_MUTATION_RUN)
+}
+
+fn mutate_once_until(
+    path: impl AsRef<Path>,
+    catalog: &[BaseResource],
+    deadline: Instant,
 ) -> Result<MutationBatchStats, String> {
     let path = path.as_ref();
     if !path.exists()
@@ -253,6 +276,12 @@ pub(crate) fn mutate_once(
     let mut known_ids: std::collections::HashSet<String> =
         records.iter().map(|record| record.id.clone()).collect();
     for (record_index, record) in records.iter().enumerate() {
+        if Instant::now() >= deadline {
+            return Ok(MutationBatchStats {
+                stopped_at_deadline: true,
+                ..MutationBatchStats::default()
+            });
+        }
         if record_index >= frontier.validated_record_count {
             validate_candidate_geometry(&record.structure, catalog).map_err(|error| {
                 format!(
@@ -331,6 +360,10 @@ pub(crate) fn mutate_once(
     let mut next_index = frontier.next_indices.get(&parent.id).copied().unwrap_or(0);
 
     while next_index < mutations.len() && stats.attempts < MAX_MUTATION_ATTEMPTS_PER_RUN {
+        if Instant::now() >= deadline {
+            stats.stopped_at_deadline = true;
+            break;
+        }
         let (change, mut structure) = mutations[next_index].clone();
         next_index += 1;
         frontier.next_indices.insert(parent.id.clone(), next_index);
@@ -461,6 +494,9 @@ pub(crate) fn mutate_once(
         break;
     }
 
+    if Instant::now() >= deadline {
+        stats.stopped_at_deadline = true;
+    }
     if next_index >= mutations.len() {
         frontier
             .exhausted_at_record_count
@@ -501,9 +537,14 @@ pub(crate) fn mutate_until_full(
     catalog: &[BaseResource],
 ) -> Result<MutationBatchStats, String> {
     let path = path.as_ref();
+    let deadline = Instant::now() + MAX_CAVITY_MUTATION_RUN;
     let mut total = MutationBatchStats::default();
     loop {
-        let batch = mutate_once(path, catalog)?;
+        if Instant::now() >= deadline {
+            total.stopped_at_deadline = true;
+            break;
+        }
+        let batch = mutate_once_until(path, catalog, deadline)?;
         total.attempts += batch.attempts;
         total.accepted += batch.accepted;
         total.rejected += batch.rejected;
@@ -518,10 +559,12 @@ pub(crate) fn mutate_until_full(
         total.stopped_at_candidate_limit |= batch.stopped_at_candidate_limit;
         total.stopped_at_storage_limit |= batch.stopped_at_storage_limit;
         total.stopped_at_search_exhaustion |= batch.stopped_at_search_exhaustion;
+        total.stopped_at_deadline |= batch.stopped_at_deadline;
 
         if total.stopped_at_candidate_limit
             || total.stopped_at_storage_limit
             || total.stopped_at_search_exhaustion
+            || total.stopped_at_deadline
         {
             break;
         }
