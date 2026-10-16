@@ -136,7 +136,7 @@ jobs:
           minima = [record["minimum_cavity_area"] for record in records]
           bond_counts = [len(record["structure"].get("bonds", [])) for record in records]
           unique_areas = sorted({round(value, 4) for value in areas})
-          fractional_areas = sorted({round(value, 4) for value in areas if abs(round(value, 4) - round(round(value, 4))) > 1e-4})
+          fractional_areas = sorted({round(value, 4) for value in areas if round(value, 4) != round(round(value, 4))})
           composition_signatures = set()
           aspect_buckets = set()
           lineage_depths = {}
