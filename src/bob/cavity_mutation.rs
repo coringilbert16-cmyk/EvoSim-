@@ -1374,6 +1374,12 @@ mod lineage_tests {
         assert!(
             methane_exchange
                 .iter()
+                .any(|(change, _)| change.contains("then align edge")),
+            "Bob should generate contact-guided poses for the exchanged resource"
+        );
+        assert!(
+            methane_exchange
+                .iter()
                 .any(|(change, _)| change.contains("then rotate")),
             "Bob should test orientations of the exchanged resource"
         );
