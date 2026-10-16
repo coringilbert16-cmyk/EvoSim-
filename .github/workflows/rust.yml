@@ -135,8 +135,8 @@ jobs:
           areas = [record["cavity_area"] for record in records]
           minima = [record["minimum_cavity_area"] for record in records]
           bond_counts = [len(record["structure"].get("bonds", [])) for record in records]
-          unique_areas = sorted({round(value, 9) for value in areas})
-          fractional_areas = sorted({round(value, 9) for value in areas if abs(value - round(value)) > 1e-6})
+          unique_areas = sorted({round(value, 4) for value in areas})
+          fractional_areas = sorted({round(value, 4) for value in areas if abs(round(value, 4) - round(round(value, 4))) > 1e-4})
           composition_signatures = set()
           aspect_buckets = set()
           lineage_depths = {}
@@ -187,7 +187,7 @@ jobs:
                   new_name = new_unit["material"]["parts"][0][0]
                   pose = old_unit["placement"]
                   location = (round(pose["x"], 4), round(pose["y"], 4))
-                  replacement_locations[(location, old_name, new_name, round(record["cavity_area"], 6))] += 1
+                  replacement_locations[(location, old_name, new_name, round(record["cavity_area"], 4))] += 1
                   print(f"id={record['id']} parent={parent['id']} index={index} pose={location} material={old_name}->{new_name} area={record['cavity_area']:.6g}")
               except (IndexError, KeyError, TypeError, ValueError) as error:
                   print(f"Could not decode replacement {record.get('id')}: {error}")
