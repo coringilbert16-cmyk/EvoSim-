@@ -49,12 +49,11 @@ pub(super) fn one_step_mutations(
     let original_count = parent.structure.units.len();
     let unit_order = constituent_priority_order(&parent.id, original_count);
 
-    // Resource substitutions are the primary mutation. For each swap, find
-    // two cardinal directions that are clear at both 0.25 and 0.5 units in
-    // the unrotated replacement. Then test those four translation poses at
-    // each of 24 rotations (15-degree increments): 24 × 2 directions × 2
-    // distances = 96 poses per resource exchange. Every generated pose still
-    // passes the authoritative overlap check before bond repair and validation.
+    // Resource substitutions are the primary mutation. For each swap and
+    // each 15-degree rotation, test cardinal translations against the actual
+    // rotated geometry. Keep at most two directions that are clear at both
+    // 0.25 and 0.5 units, giving up to 24 × 2 × 2 = 96 poses per exchange.
+    // Overlapping paths are omitted rather than queued for later rejection.
     for &unit_index in &unit_order {
         let current_name = parent.structure.units[unit_index]
             .material
@@ -77,31 +76,33 @@ pub(super) fn one_step_mutations(
                 ("+y", 0.0, 1.0),
                 ("-y", 0.0, -1.0),
             ];
-            let mut clear_directions = Vec::new();
-            for (direction, dx, dy) in cardinal_directions {
-                let clear_at_both_distances = [0.25_f64, 0.5_f64].into_iter().all(|distance| {
-                    let mut probe = base_swap.clone();
-                    probe.units[unit_index].placement.x += dx * distance;
-                    probe.units[unit_index].placement.y += dy * distance;
-                    validate_candidate_non_overlap(&probe, catalog).is_ok()
-                });
-                if clear_at_both_distances {
-                    clear_directions.push((direction, dx, dy));
-                }
-            }
-
-            // Stable cardinal order makes the search reproducible. Normally
-            // two directions are available; if geometry exposes fewer, use
-            // only those paths rather than manufacturing an overlapping one.
             for step in 1..=24 {
                 let angle_degrees = step * 15;
                 let rotation_delta = angle_step * step as f64;
+                let mut rotated_swap = base_swap.clone();
+                rotated_swap.units[unit_index].placement.rotation_radians += rotation_delta;
+
+                let mut clear_directions = Vec::new();
+                for (direction, dx, dy) in cardinal_directions {
+                    let clear_at_both_distances = [0.25_f64, 0.5_f64].into_iter().all(|distance| {
+                        let mut probe = rotated_swap.clone();
+                        probe.units[unit_index].placement.x += dx * distance;
+                        probe.units[unit_index].placement.y += dy * distance;
+                        validate_candidate_non_overlap(&probe, catalog).is_ok()
+                    });
+                    if clear_at_both_distances {
+                        clear_directions.push((direction, dx, dy));
+                    }
+                }
+
+                // Preserve deterministic direction ordering and never invent
+                // an overlapping path. Fewer than two clear directions simply
+                // means this rotation contributes fewer than four poses.
                 for &(direction, dx, dy) in clear_directions.iter().take(2) {
                     for distance in [0.25_f64, 0.5_f64] {
-                        let mut trial = base_swap.clone();
+                        let mut trial = rotated_swap.clone();
                         trial.units[unit_index].placement.x += dx * distance;
                         trial.units[unit_index].placement.y += dy * distance;
-                        trial.units[unit_index].placement.rotation_radians += rotation_delta;
                         out.push((
                             format!(
                                 "replace constituent at index {unit_index} with {} (rotate {angle_degrees}deg, move {direction} {distance:.2})",
