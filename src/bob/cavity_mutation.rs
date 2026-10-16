@@ -17,6 +17,8 @@ pub(crate) struct MutationBatchStats {
     pub candidate_generation_micros: u128,
     /// Number of candidate variants materialized in newly constructed parent frontiers.
     pub candidate_variants_generated: usize,
+    /// Time spent selecting a parent from the archive and scoring its descriptors.
+    pub parent_selection_micros: u128,
     /// Time spent canonicalizing candidate geometry signatures.
     pub signature_micros: u128,
     /// Time spent on early overlap/non-penetration checks.
@@ -681,7 +683,10 @@ fn diversity_features(record: &KnownQualifyingCavity) -> Vec<String> {
         format!("composition:{composition}"),
         format!(
             "spacing:q25-50-75-100:{}-{}-{}-{}",
-            quantile(0.25), quantile(0.50), quantile(0.75), quantile(1.0)
+            quantile(0.25),
+            quantile(0.50),
+            quantile(0.75),
+            quantile(1.0)
         ),
         format!("bond-count:{}", record.structure.bonds.len()),
         format!("contact-degrees:{degree_signature}"),
@@ -692,6 +697,7 @@ fn select_diverse_parent(
     records: &[KnownQualifyingCavity],
     next_mutation_by_parent: &std::collections::HashMap<String, usize>,
     last_parent_id: Option<&str>,
+    feature_cache: &mut std::collections::HashMap<String, Vec<String>>,
 ) -> Option<usize> {
     let eligible = records
         .iter()
@@ -724,14 +730,12 @@ fn select_diverse_parent(
     // Count descriptors across the whole archive, including exhausted parents.
     // Otherwise a well-explored family would falsely appear rare at the frontier.
     let mut frequencies = std::collections::HashMap::<String, usize>::new();
-    let mut features_by_index = std::collections::HashMap::<usize, Vec<String>>::new();
-    for (index, record) in records.iter().enumerate() {
-        let features = diversity_features(record);
-        for feature in &features {
+    for record in records {
+        let features = feature_cache
+            .entry(record.id.clone())
+            .or_insert_with(|| diversity_features(record));
+        for feature in features {
             *frequencies.entry(feature.clone()).or_default() += 1;
-        }
-        if next_mutation_by_parent.get(&record.id).copied() != Some(usize::MAX) {
-            features_by_index.insert(index, features);
         }
     }
 
@@ -743,13 +747,15 @@ fn select_diverse_parent(
             // Archive novelty is the primary objective. Lineage depth is only a
             // tie-breaker; otherwise a shallow but redundant family can suppress
             // a structurally rare candidate in a deeper branch.
-            let score = |index: usize| {
-                features_by_index[&index]
-                    .iter()
+            let score = |record_id: &str| {
+                feature_cache
+                    .get(record_id)
+                    .into_iter()
+                    .flatten()
                     .map(|feature| 1.0 / (*frequencies.get(feature).unwrap_or(&1) as f64))
                     .sum::<f64>()
             };
-            let score_order = score(*index_a).total_cmp(&score(*index_b));
+            let score_order = score(&record_a.id).total_cmp(&score(&record_b.id));
             if score_order != std::cmp::Ordering::Equal {
                 return score_order;
             }
@@ -805,6 +811,7 @@ struct MutationSearchCache {
     known_signatures: std::collections::HashSet<String>,
     known_signature_record_count: usize,
     parent_mutations: Option<(String, Vec<(String, OrganismStructure)>)>,
+    diversity_features: std::collections::HashMap<String, Vec<String>>,
 }
 
 fn mutate_once_until(
@@ -891,6 +898,7 @@ fn mutate_once_until_cached(
         cache.known_signatures.clear();
         cache.known_signature_record_count = 0;
         cache.parent_mutations = None;
+        cache.diversity_features.clear();
     }
 
     if records.len() >= MAX_QUALIFYING_CANDIDATES {
@@ -992,11 +1000,14 @@ fn mutate_once_until_cached(
     let stored_bytes = fs::metadata(path)
         .map_err(|e| format!("inspect cavity store size: {e}"))?
         .len();
+    let selection_started = Instant::now();
     let selected_parent = select_diverse_parent(
         &records,
         &next_mutation_by_parent,
         last_parent_id.as_deref(),
+        &mut cache.diversity_features,
     );
+    stats.parent_selection_micros += selection_started.elapsed().as_micros();
     let mut selected_parent_id = last_parent_id.clone();
     let mut selected_parent_exhausted = false;
     'parents: {
@@ -1322,6 +1333,7 @@ pub(crate) fn mutate_until_full(
         total.cavity_checks_performed += batch.cavity_checks_performed;
         total.candidate_generation_micros += batch.candidate_generation_micros;
         total.candidate_variants_generated += batch.candidate_variants_generated;
+        total.parent_selection_micros += batch.parent_selection_micros;
         total.signature_micros += batch.signature_micros;
         total.overlap_validation_micros += batch.overlap_validation_micros;
         total.contact_rebuild_micros += batch.contact_rebuild_micros;

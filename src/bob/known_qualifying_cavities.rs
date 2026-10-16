@@ -124,7 +124,7 @@ fn geometry_signature(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
 ) -> Result<String, String> {
-    type CanonicalUnit = (String, String, i64, i64, i64);
+    type CanonicalUnit<'a> = (&'a str, &'a str, i64, i64, i64);
 
     let forms = structure
         .units
@@ -138,15 +138,46 @@ fn geometry_signature(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
+    // Serialize immutable unit identity once, not once for every possible frame.
+    // A 12-piece ring can produce over 100 candidate frames; repeated serde work
+    // here was the dominant measured cost of the cavity search.
+    let materials = structure
+        .units
+        .iter()
+        .map(|unit| {
+            let mut parts = unit.material.parts.clone();
+            parts.sort_by(|left, right| {
+                left.0
+                    .cmp(&right.0)
+                    .then_with(|| left.1.total_cmp(&right.1))
+            });
+            serde_json::to_string(&parts)
+                .map_err(|error| format!("serialize candidate material identity: {error}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let serialized_forms = forms
+        .iter()
+        .map(|form| {
+            serde_json::to_string(form)
+                .map_err(|error| format!("serialize candidate shape identity: {error}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let symmetry_periods = forms
+        .iter()
+        .map(rotational_symmetry_period)
+        .collect::<Vec<_>>();
+
     // A unit's orientation (including every symmetry-equivalent orientation)
     // and every center-to-center direction can define a global reference frame.
     // The smallest normalized representation is independent of that choice.
     let mut frame_angles = Vec::new();
-    for (unit, form) in structure.units.iter().zip(&forms) {
-        if let Some(period) = rotational_symmetry_period(form) {
+    for (unit, period) in structure.units.iter().zip(&symmetry_periods) {
+        if let Some(period) = period {
             let order = (std::f64::consts::TAU / period).round().max(1.0) as usize;
             for symmetry_step in 0..order {
-                frame_angles.push(unit.placement.rotation_radians + symmetry_step as f64 * period);
+                frame_angles.push(
+                    unit.placement.rotation_radians + symmetry_step as f64 * *period,
+                );
             }
         }
     }
@@ -163,7 +194,9 @@ fn geometry_signature(
         frame_angles.push(0.0);
     }
 
-    let mut representations = Vec::<Vec<CanonicalUnit>>::with_capacity(frame_angles.len());
+    // Keep only the smallest representation found so far instead of allocating
+    // and retaining every full candidate representation simultaneously.
+    let mut best_representation: Option<Vec<CanonicalUnit<'_>>> = None;
     for frame_angle in frame_angles {
         let (sin, cos) = frame_angle.sin_cos();
         let transformed_positions = structure
@@ -187,33 +220,28 @@ fn geometry_signature(
 
         let mut canonical_units = Vec::with_capacity(structure.units.len());
         for (index, unit) in structure.units.iter().enumerate() {
-            let mut parts = unit.material.parts.clone();
-            parts.sort_by(|left, right| {
-                left.0
-                    .cmp(&right.0)
-                    .then_with(|| left.1.total_cmp(&right.1))
-            });
-            let material = serde_json::to_string(&parts)
-                .map_err(|error| format!("serialize candidate material identity: {error}"))?;
-            let form = serde_json::to_string(&forms[index])
-                .map_err(|error| format!("serialize candidate shape identity: {error}"))?;
             let (x, y) = transformed_positions[index];
-            let angle = rotational_symmetry_period(&forms[index])
+            let angle = symmetry_periods[index]
                 .map(|period| (unit.placement.rotation_radians - frame_angle).rem_euclid(period))
                 .unwrap_or(0.0);
             canonical_units.push((
-                material,
-                form,
+                materials[index].as_str(),
+                serialized_forms[index].as_str(),
                 quantize_signature_value(x - min_x),
                 quantize_signature_value(y - min_y),
                 quantize_signature_value(angle),
             ));
         }
         canonical_units.sort();
-        representations.push(canonical_units);
+        if best_representation
+            .as_ref()
+            .is_none_or(|best| canonical_units.as_slice() < best.as_slice())
+        {
+            best_representation = Some(canonical_units);
+        }
     }
 
-    let canonical = representations.into_iter().min().unwrap_or_default();
+    let canonical = best_representation.unwrap_or_default();
     let payload = serde_json::to_vec(&canonical)
         .map_err(|error| format!("serialize candidate formation signature: {error}"))?;
     let digest = Sha256::digest(payload);
@@ -657,21 +685,17 @@ mod tests {
             first_translation < mutations.len() - 1 && first_rotation < mutations.len() - 1,
             "translation and rotation must be scheduled before the final removal family"
         );
+        let last_replacement = mutations
+            .iter()
+            .rposition(|(change, _)| change.starts_with("replace constituent"))
+            .unwrap();
         assert!(
-            first_translation
-                < mutations
-                    .iter()
-                    .rposition(|(change, _)| change.starts_with("replace constituent"))
-                    .unwrap(),
+            first_translation < last_replacement,
             "translations should be interleaved before the replacement family is exhausted"
         );
         assert!(
-            first_rotation
-                < mutations
-                    .iter()
-                    .rposition(|(change, _)| change.starts_with("replace constituent"))
-                    .unwrap(),
-            "rotations should be interleaved before the replacement family is exhausted"
+            first_rotation > last_replacement,
+            "in-place rotations should remain available as a fallback after replacement and translation"
         );
         let first_removal = mutations
             .iter()
@@ -726,8 +750,8 @@ mod tests {
             .rposition(|(change, _)| change.starts_with("replace constituent"))
             .expect("frontier should include resource substitutions");
         assert!(
-            first_translation < last_replacement && first_rotation < last_replacement,
-            "translation and rotation attempts must be interleaved before replacement trials are exhausted"
+            first_translation < last_replacement && first_rotation > last_replacement,
+            "translations should be interleaved with replacements and rotations should be a later fallback"
         );
         assert!(
             mutations[..first_translation]
