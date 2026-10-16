@@ -301,6 +301,59 @@ pub(super) fn rebuild_replacement_connections(
     structure.bonds.len() > remaining_bond_count
 }
 
+/// Behavioral descriptors allocate search effort; they never define physical
+/// identity or replace the authoritative cavity validator.
+fn diversity_features(record: &KnownQualifyingCavity) -> Vec<String> {
+    let area_bucket = (record.cavity_area / 0.25).round() as i64;
+    let min_x = record.structure.units.iter().map(|u| u.placement.x).fold(f64::INFINITY, f64::min);
+    let max_x = record.structure.units.iter().map(|u| u.placement.x).fold(f64::NEG_INFINITY, f64::max);
+    let min_y = record.structure.units.iter().map(|u| u.placement.y).fold(f64::INFINITY, f64::min);
+    let max_y = record.structure.units.iter().map(|u| u.placement.y).fold(f64::NEG_INFINITY, f64::max);
+    let width = (max_x - min_x).max(1e-9);
+    let height = (max_y - min_y).max(1e-9);
+    let aspect_bucket = ((width.max(height) / width.min(height)) / 0.25).round() as i64;
+    let mut composition = std::collections::BTreeMap::<String, usize>::new();
+    for unit in &record.structure.units {
+        if let Some((name, _)) = unit.material.parts.first() {
+            *composition.entry(name.clone()).or_default() += 1;
+        }
+    }
+    let composition = composition.into_iter().map(|(n, c)| format!("{n}:{c}")).collect::<Vec<_>>().join(",");
+    vec![format!("area:{area_bucket}"), format!("pieces:{}", record.constituent_count),
+         format!("aspect:{aspect_bucket}"), format!("composition:{composition}")]
+}
+
+fn select_diverse_parent(
+    records: &[KnownQualifyingCavity],
+    next_mutation_by_parent: &std::collections::HashMap<String, usize>,
+    last_parent_id: Option<&str>,
+) -> Option<usize> {
+    let eligible = records.iter().enumerate()
+        .filter(|(_, r)| next_mutation_by_parent.get(&r.id).copied() != Some(usize::MAX))
+        .collect::<Vec<_>>();
+    if eligible.is_empty() { return None; }
+    let mut frequencies = std::collections::HashMap::<String, usize>::new();
+    let mut features_by_index = std::collections::HashMap::<usize, Vec<String>>::new();
+    for (index, record) in &eligible {
+        let features = diversity_features(record);
+        for feature in &features { *frequencies.entry(feature.clone()).or_default() += 1; }
+        features_by_index.insert(*index, features);
+    }
+    let last_index = last_parent_id.and_then(|id| records.iter().position(|r| r.id == id));
+    eligible.into_iter().max_by(|(ia, a), (ib, b)| {
+        let score = |i: usize| features_by_index[&i].iter()
+            .map(|f| 1.0 / (*frequencies.get(f).unwrap_or(&1) as f64)).sum::<f64>();
+        let order = score(*ia).total_cmp(&score(*ib));
+        if order != std::cmp::Ordering::Equal { return order; }
+        let oa = next_mutation_by_parent.get(&a.id).copied().unwrap_or(0);
+        let ob = next_mutation_by_parent.get(&b.id).copied().unwrap_or(0);
+        let order = ob.cmp(&oa);
+        if order != std::cmp::Ordering::Equal { return order; }
+        let distance = |i: usize| last_index.map_or(i, |last| (i + records.len() - last - 1) % records.len());
+        distance(*ib).cmp(&distance(*ia))
+    }).map(|(index, _)| index)
+}
+
 /// Explore one bounded batch from the persistent cavity frontier. Validation
 /// and duplicate signatures are checked before a candidate is appended. A small
 /// cursor rotates the starting parent between runs so early records do not starve
@@ -395,24 +448,33 @@ fn mutate_once_until(
             ..MutationBatchStats::default()
         });
     }
+    let frontier_path = path.with_extension("frontier");
     let cursor_text = fs::read_to_string(&cursor_path)
         .ok()
         .map(|text| text.trim().to_string())
         .unwrap_or_default();
-    // New cursors explicitly track one lineage. A legacy rotating-parent cursor
-    // migrates to the deepest existing leaf rather than returning to the seed.
-    let (start, start_mutation) = if let Some(rest) = cursor_text.strip_prefix("lineage:") {
-        let (parent, mutation) = rest.split_once(':').unwrap_or((rest, "0"));
-        (
-            parent
-                .parse::<usize>()
-                .unwrap_or_else(|_| deepest_lineage_leaf(&records))
-                .min(records.len() - 1),
-            mutation.parse::<usize>().unwrap_or(0),
-        )
-    } else {
-        (deepest_lineage_leaf(&records), 0)
-    };
+    let mut next_mutation_by_parent: std::collections::HashMap<String, usize> =
+        fs::read_to_string(&frontier_path)
+            .ok()
+            .and_then(|text| serde_json::from_str(&text).ok())
+            .unwrap_or_default();
+    let mut last_parent_id = cursor_text.strip_prefix("diversity:").map(str::to_string);
+    if next_mutation_by_parent.is_empty() {
+        if let Some(rest) = cursor_text.strip_prefix("lineage:") {
+            let (parent, mutation) = rest.split_once(':').unwrap_or((rest, "0"));
+            if let Ok(index) = parent.parse::<usize>() {
+                if let Some(record) = records.get(index) {
+                    next_mutation_by_parent.insert(record.id.clone(), mutation.parse::<usize>().unwrap_or(0));
+                    last_parent_id = Some(record.id.clone());
+                }
+            }
+        } else if !cursor_text.is_empty() && !cursor_text.starts_with("diversity:") {
+            if let Some(record) = records.get(deepest_lineage_leaf(&records)) {
+                next_mutation_by_parent.insert(record.id.clone(), 0);
+                last_parent_id = Some(record.id.clone());
+            }
+        }
+    }
 
     let mut known_signatures = std::collections::HashSet::new();
     let mut known_ids: std::collections::HashSet<String> =
@@ -453,21 +515,22 @@ fn mutate_once_until(
     let stored_bytes = fs::metadata(path)
         .map_err(|e| format!("inspect cavity store size: {e}"))?
         .len();
-    let mut next_cursor_parent = start;
-    let mut next_cursor_mutation = start_mutation;
-
-    // Only mutate the current lineage leaf. When one mutation qualifies, stop
-    // this batch and resume from that newly stored child on the next batch.
+    let mut next_cursor_mutation = 0usize;
+    let selected_parent = select_diverse_parent(&records, &next_mutation_by_parent, last_parent_id.as_deref());
+    let mut selected_parent_id = last_parent_id.clone();
+    let mut selected_parent_exhausted = false;
     'parents: {
-        let parent_index = start;
+        let Some(parent_index) = selected_parent else {
+            stats.stopped_at_search_exhaustion = true;
+            break 'parents;
+        };
         let parent = &records[parent_index];
+        selected_parent_id = Some(parent.id.clone());
         let mutations = one_step_mutations(parent, catalog);
         let mutation_count = mutations.len();
+        let start_mutation = next_mutation_by_parent.get(&parent.id).copied().unwrap_or(0).min(mutation_count);
         for (mutation_index, (change, mut structure)) in mutations.into_iter().enumerate() {
-            if parent_index == start && mutation_index < start_mutation {
-                continue;
-            }
-            next_cursor_parent = parent_index;
+            if mutation_index < start_mutation { continue; }
             next_cursor_mutation = mutation_index;
             if stats.attempts >= MAX_MUTATION_ATTEMPTS_PER_RUN {
                 stats.stopped_at_attempt_limit = true;
@@ -480,6 +543,7 @@ fn mutate_once_until(
             }
             stats.attempts += 1;
             next_cursor_mutation = mutation_index + 1;
+            next_mutation_by_parent.insert(parent.id.clone(), next_cursor_mutation);
             let operation = mutation_operation(&change).to_string();
             record_mutation_attempt(&mut stats, &change, &operation);
             if structure.units.len() > parent.constituent_count {
@@ -678,27 +742,34 @@ fn mutate_once_until(
             stats.accepted += 1;
             record_mutation_outcome(&mut stats, &change, &operation, "accepted");
 
-            // The accepted child becomes the sole parent for the next step.
-            // Stop before trying sibling mutations from the previous parent.
-            next_cursor_parent = stored_count - 1;
-            next_cursor_mutation = 0;
+            // The new child enters the frontier next batch; continue balancing
+            // exploration across stored parents instead of following one lineage.
+            next_cursor_mutation = mutation_index + 1;
+            next_mutation_by_parent.insert(parent.id.clone(), next_cursor_mutation);
+            selected_parent_exhausted = next_cursor_mutation >= mutation_count;
             break 'parents;
         }
-        next_cursor_parent = parent_index;
-        next_cursor_mutation = mutation_count;
+        if !stats.stopped_at_deadline && !stats.stopped_at_attempt_limit
+            && !stats.stopped_at_candidate_limit && !stats.stopped_at_storage_limit {
+            next_mutation_by_parent.insert(parent.id.clone(), usize::MAX);
+            selected_parent_exhausted = true;
+        }
     }
 
-    if Instant::now() >= deadline {
-        stats.stopped_at_deadline = true;
+    if Instant::now() >= deadline { stats.stopped_at_deadline = true; }
+    if selected_parent_exhausted {
+        if let Some(id) = selected_parent_id.as_deref() { next_mutation_by_parent.insert(id.to_string(), usize::MAX); }
     }
-    if !appended.is_empty() {
-        append_records_atomically(path, &appended)?;
+    if !appended.is_empty() { append_records_atomically(path, &appended)?; }
+    let frontier_json = serde_json::to_string(&next_mutation_by_parent)
+        .map_err(|e| format!("serialize cavity exploration frontier: {e}"))?;
+    fs::write(&frontier_path, frontier_json)
+        .map_err(|e| format!("save cavity exploration frontier: {e}"))?;
+    if let Some(id) = selected_parent_id {
+        fs::write(cursor_path, format!("diversity:{id}"))
+            .map_err(|e| format!("save cavity mutation cursor: {e}"))?;
     }
-    fs::write(
-        cursor_path,
-        format!("lineage:{next_cursor_parent}:{next_cursor_mutation}"),
-    )
-    .map_err(|e| format!("save cavity mutation cursor: {e}"))?;
+    if selected_parent.is_none() { stats.stopped_at_search_exhaustion = true; }
     Ok(stats)
 }
 
