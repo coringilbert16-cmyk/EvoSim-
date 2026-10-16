@@ -532,6 +532,98 @@ mod tests {
     }
 
     #[test]
+    fn mutation_frontier_changes_one_thing_at_a_time_in_stages() {
+        let catalog = crate::resources::default_catalog();
+        let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("seed structure should build");
+        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .expect("cavity analysis should succeed")
+            .expect("seed should have a cavity");
+        let parent = KnownQualifyingCavity {
+            schema_version: SCHEMA_VERSION,
+            id: NITROGEN_RING_SEED_ID.to_string(),
+            parent_id: None,
+            change: "test seed".to_string(),
+            constituent_count: structure.units.len(),
+            cavity_area: cavity.area,
+            minimum_cavity_area: cavity.minimum_area,
+            structure,
+        };
+        let mutations = cavity_mutation::one_step_mutations(&parent, &catalog);
+        assert!(mutations[0].0.starts_with("replace constituent"));
+        assert!(mutations[0].0.ends_with("(existing pose)"));
+
+        let first_non_replacement = mutations
+            .iter()
+            .position(|(change, _)| !change.starts_with("replace constituent"))
+            .expect("frontier should include independent translations or rotations");
+        assert!(mutations[..first_non_replacement]
+            .iter()
+            .all(|(change, _)| change.ends_with("(existing pose)")));
+
+        let replacement = &mutations[0];
+        let changed_index = replacement.0
+            .strip_prefix("replace constituent at index ")
+            .and_then(|rest| rest.split_whitespace().next())
+            .and_then(|index| index.parse::<usize>().ok())
+            .expect("replacement label should identify its constituent");
+        assert_eq!(
+            replacement.1.units[changed_index].placement,
+            parent.structure.units[changed_index].placement,
+            "replacement must first be tested at its unchanged pose"
+        );
+        assert_ne!(
+            replacement.1.units[changed_index].material,
+            parent.structure.units[changed_index].material,
+            "replacement trial should change only the resource"
+        );
+
+        let translated = mutations
+            .iter()
+            .find(|(change, _)| change.contains(" 0.25"))
+            .expect("frontier should include an independently tested quarter-unit translation");
+        assert!(translated.0.starts_with("translate constituent"));
+        let translated_index = translated.0
+            .strip_prefix("translate constituent at index ")
+            .and_then(|rest| rest.split_whitespace().next())
+            .and_then(|index| index.parse::<usize>().ok())
+            .expect("translation label should identify its constituent");
+        assert_eq!(
+            translated.1.units[translated_index].material,
+            parent.structure.units[translated_index].material,
+            "translation must not also change the resource"
+        );
+        assert_eq!(
+            translated.1.units[translated_index].placement.rotation_radians,
+            parent.structure.units[translated_index].placement.rotation_radians,
+            "translation must not also rotate the constituent"
+        );
+        assert!(validate_candidate_non_overlap(&translated.1, &catalog).is_ok());
+
+        let rotated = mutations
+            .iter()
+            .find(|(change, _)| change == "rotate constituent at index 0 by 180deg")
+            .expect("frontier should include an independent 180-degree rotation");
+        assert_eq!(rotated.1.units[0].placement.x, parent.structure.units[0].placement.x);
+        assert_eq!(rotated.1.units[0].placement.y, parent.structure.units[0].placement.y);
+        assert_eq!(rotated.1.units[0].material, parent.structure.units[0].material);
+        assert!(
+            (rotated.1.units[0].placement.rotation_radians
+                - (parent.structure.units[0].placement.rotation_radians + std::f64::consts::PI))
+                .abs()
+                < 1e-10
+        );
+
+        let first_removal = mutations
+            .iter()
+            .position(|(change, _)| change.starts_with("remove constituent"))
+            .expect("removal should remain available as a last resort");
+        assert!(mutations[first_removal..]
+            .iter()
+            .all(|(change, _)| change.starts_with("remove constituent")));
+    }
+
+    #[test]
     fn replacement_trial_is_generated_at_the_original_pose_before_other_mutations() {
         let catalog = crate::resources::default_catalog();
         let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
@@ -560,7 +652,8 @@ mod tests {
         assert_ne!(trial.units[index].material, parent.structure.units[index].material);
     }
 
-fn replacement_trial_must_rebuild_a_live_physical_contact() {
+    #[test]
+    fn replacement_trial_must_rebuild_a_live_physical_contact() {
         let catalog = crate::resources::default_catalog();
         let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
             .expect("nitrogen ring seed should build");
