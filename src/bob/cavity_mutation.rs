@@ -13,6 +13,10 @@ pub(crate) struct MutationBatchStats {
     pub geometry_rejections: usize,
     /// Candidates that passed physical geometry validation and were analyzed for cavity qualification.
     pub cavity_checks_performed: usize,
+    /// Time spent constructing a parent's candidate mutation frontier, including generation-time overlap filtering.
+    pub candidate_generation_micros: u128,
+    /// Number of candidate variants materialized in newly constructed parent frontiers.
+    pub candidate_variants_generated: usize,
     pub cavity_rejections: usize,
     pub viability_rejections: usize,
     pub rejection_reasons: BTreeMap<String, usize>,
@@ -940,7 +944,11 @@ fn mutate_once_until_cached(
             .as_ref()
             .is_none_or(|(cached_parent_id, _)| cached_parent_id != &parent.id)
         {
-            cache.parent_mutations = Some((parent.id.clone(), one_step_mutations(parent, catalog)));
+            let generation_started = Instant::now();
+            let mutations = one_step_mutations(parent, catalog);
+            stats.candidate_generation_micros += generation_started.elapsed().as_micros();
+            stats.candidate_variants_generated += mutations.len();
+            cache.parent_mutations = Some((parent.id.clone(), mutations));
         }
         let mutations = &cache
             .parent_mutations
@@ -1229,6 +1237,8 @@ pub(crate) fn mutate_until_full(
         total.duplicates += batch.duplicates;
         total.geometry_rejections += batch.geometry_rejections;
         total.cavity_checks_performed += batch.cavity_checks_performed;
+        total.candidate_generation_micros += batch.candidate_generation_micros;
+        total.candidate_variants_generated += batch.candidate_variants_generated;
         total.cavity_rejections += batch.cavity_rejections;
         total.viability_rejections += batch.viability_rejections;
         for (reason, count) in batch.rejection_reasons {
