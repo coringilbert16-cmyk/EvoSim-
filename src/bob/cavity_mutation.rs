@@ -367,14 +367,37 @@ fn select_diverse_parent(
         return None;
     }
 
+    // Parent-before-child persistence makes lineage depth cheap to derive.
+    // Exhaust shallower generations before following their descendants, so a
+    // newly found child cannot monopolize the search while siblings wait.
+    let index_by_id = records
+        .iter()
+        .enumerate()
+        .map(|(index, record)| (record.id.as_str(), index))
+        .collect::<std::collections::HashMap<_, _>>();
+    let mut depths = vec![0usize; records.len()];
+    for (index, record) in records.iter().enumerate() {
+        if let Some(parent_id) = record.parent_id.as_deref() {
+            if let Some(&parent_index) = index_by_id.get(parent_id) {
+                if parent_index < index {
+                    depths[index] = depths[parent_index].saturating_add(1);
+                }
+            }
+        }
+    }
+
+    // Count descriptors across the whole archive, including exhausted parents.
+    // Otherwise a well-explored family would falsely appear rare at the frontier.
     let mut frequencies = std::collections::HashMap::<String, usize>::new();
     let mut features_by_index = std::collections::HashMap::<usize, Vec<String>>::new();
-    for (index, record) in &eligible {
+    for (index, record) in records.iter().enumerate() {
         let features = diversity_features(record);
         for feature in &features {
             *frequencies.entry(feature.clone()).or_default() += 1;
         }
-        features_by_index.insert(*index, features);
+        if next_mutation_by_parent.get(&record.id).copied() != Some(usize::MAX) {
+            features_by_index.insert(index, features);
+        }
     }
 
     let last_index =
@@ -382,12 +405,11 @@ fn select_diverse_parent(
     eligible
         .into_iter()
         .max_by(|(index_a, record_a), (index_b, record_b)| {
-            let score = |index: usize| {
-                features_by_index[&index]
-                    .iter()
-                    .map(|feature| 1.0 / (*frequencies.get(feature).unwrap_or(&1) as f64))
-                    .sum::<f64>()
-            };
+            let depth_order = depths[*index_b].cmp(&depths[*index_a]);
+            if depth_order != std::cmp::Ordering::Equal {
+                return depth_order;
+            }
+
             let offset_a = next_mutation_by_parent
                 .get(&record_a.id)
                 .copied()
@@ -401,6 +423,12 @@ fn select_diverse_parent(
                 return offset_order;
             }
 
+            let score = |index: usize| {
+                features_by_index[&index]
+                    .iter()
+                    .map(|feature| 1.0 / (*frequencies.get(feature).unwrap_or(&1) as f64))
+                    .sum::<f64>()
+            };
             let score_order = score(*index_a).total_cmp(&score(*index_b));
             if score_order != std::cmp::Ordering::Equal {
                 return score_order;
@@ -990,6 +1018,39 @@ mod lineage_tests {
             select_diverse_parent(&records, &frontier, Some("area-b")),
             Some(2),
             "exhausted parents must not block an underexplored fractional-area family"
+        );
+    }
+
+    #[test]
+    fn diversity_frontier_prefers_shallower_generation_before_descendants() {
+        let catalog = crate::resources::default_catalog();
+        let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("seed structure should build");
+        let record = |id: &str, area: f64| KnownQualifyingCavity {
+            schema_version: SCHEMA_VERSION,
+            id: id.to_string(),
+            parent_id: None,
+            change: "test generation".to_string(),
+            constituent_count: structure.units.len(),
+            cavity_area: area,
+            minimum_cavity_area: 3.0,
+            structure: structure.clone(),
+        };
+        let seed = record("seed", 9.0);
+        let mut child = record("child", 9.5);
+        child.parent_id = Some("seed".to_string());
+        let mut grandchild = record("grandchild", 10.0);
+        grandchild.parent_id = Some("child".to_string());
+        let records = vec![seed, child, grandchild];
+        let mut frontier = std::collections::HashMap::new();
+        frontier.insert("seed".to_string(), usize::MAX);
+        frontier.insert("child".to_string(), 1);
+        frontier.insert("grandchild".to_string(), 0);
+
+        assert_eq!(
+            select_diverse_parent(&records, &frontier, Some("grandchild")),
+            Some(1),
+            "Bob should explore the shallower sibling generation before chasing descendants"
         );
     }
 
