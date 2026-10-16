@@ -106,6 +106,152 @@ fn append_translations(
     }
 }
 
+/// Place an exchanged piece by aligning one of its edges between vertices of
+/// the original piece's bonded neighbors. This targets real contact constraints
+/// instead of relying only on arbitrary translation increments.
+fn append_contact_guided_replacements(
+    out: &mut Vec<(String, OrganismStructure)>,
+    parent: &KnownQualifyingCavity,
+    replaced: &OrganismStructure,
+    catalog: &[BaseResource],
+    unit_index: usize,
+    resource_name: &str,
+) {
+    let Some(changed_id) = parent
+        .structure
+        .units
+        .get(unit_index)
+        .map(|unit| unit.physical_id)
+    else {
+        return;
+    };
+
+    let mut neighbor_ids = std::collections::HashSet::new();
+    for bond in &parent.structure.bonds {
+        if bond.endpoint_a.constituent_id == changed_id {
+            neighbor_ids.insert(bond.endpoint_b.constituent_id);
+        } else if bond.endpoint_b.constituent_id == changed_id {
+            neighbor_ids.insert(bond.endpoint_a.constituent_id);
+        }
+    }
+    let neighbors = parent
+        .structure
+        .units
+        .iter()
+        .enumerate()
+        .filter(|(_, unit)| neighbor_ids.contains(&unit.physical_id))
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    if neighbors.len() < 2 {
+        return;
+    }
+
+    let Some(candidate_shape) = replaced.units[unit_index].shape(catalog) else {
+        return;
+    };
+    let Some(candidate_vertices) = candidate_shape.form.polygon_vertices() else {
+        return;
+    };
+    if candidate_vertices.len() < 3 {
+        return;
+    }
+
+    for left_position in 0..neighbors.len() {
+        let left_index = neighbors[left_position];
+        let Some(left_unit) = parent.structure.units.get(left_index) else {
+            continue;
+        };
+        let Some(left_shape) = left_unit.shape(catalog) else {
+            continue;
+        };
+        let Some(left_local_vertices) = left_shape.form.polygon_vertices() else {
+            continue;
+        };
+        let (left_sin, left_cos) = left_unit.placement.rotation_radians.sin_cos();
+        let left_vertices = left_local_vertices
+            .into_iter()
+            .map(|(x, y)| {
+                (
+                    left_unit.placement.x + x * left_cos - y * left_sin,
+                    left_unit.placement.y + x * left_sin + y * left_cos,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        for &right_index in &neighbors[(left_position + 1)..] {
+            let Some(right_unit) = parent.structure.units.get(right_index) else {
+                continue;
+            };
+            let Some(right_shape) = right_unit.shape(catalog) else {
+                continue;
+            };
+            let Some(right_local_vertices) = right_shape.form.polygon_vertices() else {
+                continue;
+            };
+            let (right_sin, right_cos) = right_unit.placement.rotation_radians.sin_cos();
+            let right_vertices = right_local_vertices
+                .into_iter()
+                .map(|(x, y)| {
+                    (
+                        right_unit.placement.x + x * right_cos - y * right_sin,
+                        right_unit.placement.y + x * right_sin + y * right_cos,
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            for &left_point in &left_vertices {
+                for &right_point in &right_vertices {
+                    let target_dx = right_point.0 - left_point.0;
+                    let target_dy = right_point.1 - left_point.1;
+                    let target_length = target_dx.hypot(target_dy);
+                    if target_length <= 1e-7 {
+                        continue;
+                    }
+
+                    for edge_index in 0..candidate_vertices.len() {
+                        let local_start = candidate_vertices[edge_index];
+                        let local_end =
+                            candidate_vertices[(edge_index + 1) % candidate_vertices.len()];
+                        let local_dx = local_end.0 - local_start.0;
+                        let local_dy = local_end.1 - local_start.1;
+                        if (local_dx.hypot(local_dy) - target_length).abs() > 1e-5 {
+                            continue;
+                        }
+                        let local_angle = local_dy.atan2(local_dx);
+                        for (target_start, target_end) in
+                            [(left_point, right_point), (right_point, left_point)]
+                        {
+                            let target_angle = (target_end.1 - target_start.1)
+                                .atan2(target_end.0 - target_start.0);
+                            let rotation = target_angle - local_angle;
+                            let (sin, cos) = rotation.sin_cos();
+                            let rotated_start = (
+                                local_start.0 * cos - local_start.1 * sin,
+                                local_start.0 * sin + local_start.1 * cos,
+                            );
+                            let mut trial = replaced.clone();
+                            trial.units[unit_index].placement.rotation_radians = rotation;
+                            trial.units[unit_index].placement.x =
+                                target_start.0 - rotated_start.0;
+                            trial.units[unit_index].placement.y =
+                                target_start.1 - rotated_start.1;
+
+                            if validate_candidate_non_overlap(&trial, catalog).is_ok() {
+                                out.push((
+                                    format!(
+                                        "replace constituent at index {unit_index} with {resource_name} then align edge {edge_index} between neighbors"
+                                    ),
+                                    trial,
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Generate a resource exchange together with bounded local pose alternatives.
 /// Replacements are searched before unrelated translations/rotations so a new
 /// material gets a fair chance to form a valid, distinct cavity wall.
@@ -125,6 +271,14 @@ fn append_replacement_variants(
         format!("replace constituent at index {unit_index} with {resource_name} (existing pose)"),
         replaced.clone(),
     ));
+    append_contact_guided_replacements(
+        out,
+        parent,
+        &replaced,
+        catalog,
+        unit_index,
+        resource_name,
+    );
 
     // First search orientation-only alternatives at the existing center.
     let angle_step = std::f64::consts::PI / 12.0;
