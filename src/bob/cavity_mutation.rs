@@ -49,8 +49,12 @@ pub(super) fn one_step_mutations(
     let original_count = parent.structure.units.len();
     let unit_order = constituent_priority_order(&parent.id, original_count);
 
-    // Resource substitutions are the primary mutation. Search the changed
-    // constituent's fit before trying another resource or constituent.
+    // Resource substitutions are the primary mutation. For each swap, find
+    // two cardinal directions that are clear at both 0.25 and 0.5 units in
+    // the unrotated replacement. Then test those four translation poses at
+    // each of 24 rotations (15-degree increments): 24 × 2 directions × 2
+    // distances = 96 poses per resource exchange. Every generated pose still
+    // passes the authoritative overlap check before bond repair and validation.
     for &unit_index in &unit_order {
         let current_name = parent.structure.units[unit_index]
             .material
@@ -62,40 +66,51 @@ pub(super) fn one_step_mutations(
             .iter()
             .filter(|resource| resource.name != current_name)
         {
-            let poses = [
-                ("existing pose", 0.0, 0.0, 0.0),
-                ("rotate +15deg", 0.0, 0.0, angle_step),
-                ("rotate -15deg", 0.0, 0.0, -angle_step),
-                ("rotate +30deg", 0.0, 0.0, angle_step * 2.0),
-                ("rotate -30deg", 0.0, 0.0, -angle_step * 2.0),
-                ("move +x 0.25", 0.25, 0.0, 0.0),
-                ("move -x 0.25", -0.25, 0.0, 0.0),
-                ("move +y 0.25", 0.0, 0.25, 0.0),
-                ("move -y 0.25", 0.0, -0.25, 0.0),
-                ("move +x 0.5", 0.5, 0.0, 0.0),
-                ("move -x 0.5", -0.5, 0.0, 0.0),
-                ("move +y 0.5", 0.0, 0.5, 0.0),
-                ("move -y 0.5", 0.0, -0.5, 0.0),
-                ("move +xy 0.25", 0.25, 0.25, 0.0),
-                ("move +x-y 0.25", 0.25, -0.25, 0.0),
-                ("move -x+y 0.25", -0.25, 0.25, 0.0),
-                ("move -xy 0.25", -0.25, -0.25, 0.0),
+            let mut base_swap = parent.structure.clone();
+            base_swap.units[unit_index].material =
+                crate::resources::Material::free_base(resource.name.clone(), 1.0);
+            base_swap.units[unit_index].geometry = None;
+
+            let cardinal_directions = [
+                ("+x", 1.0, 0.0),
+                ("-x", -1.0, 0.0),
+                ("+y", 0.0, 1.0),
+                ("-y", 0.0, -1.0),
             ];
-            for (pose_label, dx, dy, rotation_delta) in poses {
-                let mut trial = parent.structure.clone();
-                trial.units[unit_index].material =
-                    crate::resources::Material::free_base(resource.name.clone(), 1.0);
-                trial.units[unit_index].geometry = None;
-                trial.units[unit_index].placement.x += dx;
-                trial.units[unit_index].placement.y += dy;
-                trial.units[unit_index].placement.rotation_radians += rotation_delta;
-                out.push((
-                    format!(
-                        "replace constituent at index {unit_index} with {} ({pose_label})",
-                        resource.name
-                    ),
-                    trial,
-                ));
+            let mut clear_directions = Vec::new();
+            for (direction, dx, dy) in cardinal_directions {
+                let clear_at_both_distances = [0.25_f64, 0.5_f64].into_iter().all(|distance| {
+                    let mut probe = base_swap.clone();
+                    probe.units[unit_index].placement.x += dx * distance;
+                    probe.units[unit_index].placement.y += dy * distance;
+                    validate_candidate_non_overlap(&probe, catalog).is_ok()
+                });
+                if clear_at_both_distances {
+                    clear_directions.push((direction, dx, dy));
+                }
+            }
+
+            // Stable cardinal order makes the search reproducible. Normally
+            // two directions are available; if geometry exposes fewer, use
+            // only those paths rather than manufacturing an overlapping one.
+            for step in 1..=24 {
+                let angle_degrees = step * 15;
+                let rotation_delta = angle_step * step as f64;
+                for &(direction, dx, dy) in clear_directions.iter().take(2) {
+                    for distance in [0.25_f64, 0.5_f64] {
+                        let mut trial = base_swap.clone();
+                        trial.units[unit_index].placement.x += dx * distance;
+                        trial.units[unit_index].placement.y += dy * distance;
+                        trial.units[unit_index].placement.rotation_radians += rotation_delta;
+                        out.push((
+                            format!(
+                                "replace constituent at index {unit_index} with {} (rotate {angle_degrees}deg, move {direction} {distance:.2})",
+                                resource.name
+                            ),
+                            trial,
+                        ));
+                    }
+                }
             }
         }
     }
