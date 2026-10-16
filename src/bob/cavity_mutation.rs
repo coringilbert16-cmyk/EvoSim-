@@ -39,7 +39,6 @@ fn constituent_priority_order(parent_id: &str, constituent_count: usize) -> Vec<
 /// fit search: try the existing pose, then alternate rotations and nearby
 /// translations of that same replacement before moving to the next swap.
 /// Bond validity and cavity qualification remain authoritative downstream.
-
 pub(super) fn one_step_mutations(
     parent: &KnownQualifyingCavity,
     catalog: &[BaseResource],
@@ -293,11 +292,18 @@ fn mutate_once_until(
             ..MutationBatchStats::default()
         });
     }
-    let start = fs::read_to_string(&cursor_path)
+    let cursor_text = fs::read_to_string(&cursor_path)
         .ok()
-        .and_then(|text| text.trim().parse::<usize>().ok())
-        .unwrap_or(0)
-        % records.len();
+        .map(|text| text.trim().to_string())
+        .unwrap_or_default();
+    let (start, start_mutation) = match cursor_text.split_once(':') {
+        Some((parent, mutation)) => (
+            parent.parse::<usize>().unwrap_or(0),
+            mutation.parse::<usize>().unwrap_or(0),
+        ),
+        None => (cursor_text.parse::<usize>().unwrap_or(0), 0),
+    };
+    let start = start % records.len();
 
     let mut known_signatures = std::collections::HashSet::new();
     let mut known_ids: std::collections::HashSet<String> =
@@ -338,22 +344,31 @@ fn mutate_once_until(
     let stored_bytes = fs::metadata(path)
         .map_err(|e| format!("inspect cavity store size: {e}"))?
         .len();
-    let mut parents_processed = 0usize;
+    let mut next_cursor_parent = start;
+    let mut next_cursor_mutation = start_mutation;
 
     'parents: for offset in 0..records.len() {
         let parent_index = (start + offset) % records.len();
         let parent = &records[parent_index];
-        parents_processed += 1;
         let mutations = one_step_mutations(parent, catalog);
-        for (change, mut structure) in mutations {
+        let mut parent_completed = true;
+        for (mutation_index, (change, mut structure)) in mutations.into_iter().enumerate() {
+            if parent_index == start && mutation_index < start_mutation {
+                continue;
+            }
+            next_cursor_parent = parent_index;
+            next_cursor_mutation = mutation_index;
             if stats.attempts >= MAX_MUTATION_ATTEMPTS_PER_RUN {
+                parent_completed = false;
                 break 'parents;
             }
             if Instant::now() >= deadline {
                 stats.stopped_at_deadline = true;
+                parent_completed = false;
                 break 'parents;
             }
             stats.attempts += 1;
+            next_cursor_mutation = mutation_index + 1;
             if structure.units.len() > parent.constituent_count {
                 stats.rejected += 1;
                 *stats
@@ -515,6 +530,10 @@ fn mutate_once_until(
             known_signatures.insert(signature);
             stats.accepted += 1;
         }
+        if parent_completed {
+            next_cursor_parent = (parent_index + 1) % records.len();
+            next_cursor_mutation = 0;
+        }
     }
 
     if Instant::now() >= deadline {
@@ -523,9 +542,11 @@ fn mutate_once_until(
     if !appended.is_empty() {
         append_records_atomically(path, &appended)?;
     }
-    let next_cursor = (start + parents_processed.max(1)) % records.len();
-    fs::write(cursor_path, next_cursor.to_string())
-        .map_err(|e| format!("save cavity mutation cursor: {e}"))?;
+    fs::write(
+        cursor_path,
+        format!("{next_cursor_parent}:{next_cursor_mutation}"),
+    )
+    .map_err(|e| format!("save cavity mutation cursor: {e}"))?;
     Ok(stats)
 }
 

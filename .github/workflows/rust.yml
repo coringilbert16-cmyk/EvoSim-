@@ -135,7 +135,7 @@ jobs:
           operations = collections.Counter()
           for record in records:
               change = record.get("change", "")
-              operation = next((prefix for prefix in ("initial validated", "remove constituent", "move ", "rotate ", "replace constituent", "remove bond") if change.startswith(prefix)), "other")
+              operation = next((prefix for prefix in ("initial validated", "remove constituent", "translate constituent", "move ", "rotate ", "replace constituent", "remove bond") if change.startswith(prefix)), "other")
               operations[operation] += 1
           areas = [record["cavity_area"] for record in records]
           minima = [record["minimum_cavity_area"] for record in records]
@@ -145,6 +145,7 @@ jobs:
           print(f"constituent_count_distribution={dict(sorted(counts.items()))}")
           print(f"mutation_operation_distribution={dict(sorted(operations.items()))}")
           print(f"cavity_area_range={min(areas):.6g}..{max(areas):.6g}; unique_rounded_areas={len({round(value, 6) for value in areas})}")
+          print(f"cavity_areas={sorted({round(value, 9) for value in areas})}")
           print(f"minimum_required_area_range={min(minima):.6g}..{max(minima):.6g}")
           print(f"bond_count_range={min(bond_counts)}..{max(bond_counts)}; unique_bond_counts={len(set(bond_counts))}")
           # Trace accepted substitutions against their exact parent so we can see

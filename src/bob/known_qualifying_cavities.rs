@@ -59,6 +59,14 @@ fn geometry_signature(structure: &OrganismStructure) -> Result<String, String> {
     for (index, unit) in normalized.units.iter_mut().enumerate() {
         unit.physical_id = crate::structure::PhysicalConstituentId(index as u64 + 1);
     }
+    // Normalize global translation: absolute world coordinates do not define a
+    // different formation. Keep relative placements and orientations intact.
+    let min_x = normalized.units.iter().map(|unit| unit.placement.x).fold(f64::INFINITY, f64::min);
+    let min_y = normalized.units.iter().map(|unit| unit.placement.y).fold(f64::INFINITY, f64::min);
+    for unit in &mut normalized.units {
+        unit.placement.x -= min_x;
+        unit.placement.y -= min_y;
+    }
     // Bond endpoints are deliberately excluded from the identity signature:
     // adding/removing a bond alone must not fill the library with duplicate formations.
     // The live candidate validator and cavity analyzer remain authoritative for eligibility.
@@ -439,7 +447,7 @@ mod tests {
         );
 
         let mut overlapping = seed.clone();
-        let first_pose = overlapping.units[0].placement.clone();
+        let first_pose = overlapping.units[0].placement;
         overlapping.units[1].placement.x = first_pose.x;
         overlapping.units[1].placement.y = first_pose.y;
         assert!(validate_candidate_non_overlap(&overlapping, &catalog)
@@ -607,18 +615,18 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let mut structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
             .expect("nitrogen ring seed should build");
-        structure.units[1].material =
+        structure.units[0].material =
             crate::resources::Material::free_base("Methane".to_string(), 1.0);
-        structure.units[1].geometry = None;
+        structure.units[0].geometry = None;
 
         assert!(
-            cavity_mutation::rebuild_replacement_connections(&mut structure, 1, &catalog),
+            cavity_mutation::rebuild_replacement_connections(&mut structure, 0, &catalog),
             "a replacement is only a viable fit when constructor bond logic repairs a physical contact"
         );
         assert!(
             structure.bonds.iter().any(|bond| {
-                bond.endpoint_a.constituent_id == structure.units[1].physical_id
-                    || bond.endpoint_b.constituent_id == structure.units[1].physical_id
+                bond.endpoint_a.constituent_id == structure.units[0].physical_id
+                    || bond.endpoint_b.constituent_id == structure.units[0].physical_id
             }),
             "the changed constituent should be connected through a live validated bond"
         );
@@ -722,6 +730,16 @@ mod tests {
             original,
             geometry_signature(&changed_bonds).expect("signature should build"),
             "bond-only changes must not be counted as a new formation"
+        );
+        let mut translated = structure.clone();
+        for unit in &mut translated.units {
+            unit.placement.x += 17.25;
+            unit.placement.y -= 8.5;
+        }
+        assert_eq!(
+            original,
+            geometry_signature(&translated).expect("translated signature should build"),
+            "global translation must not create a duplicate formation"
         );
     }
 
