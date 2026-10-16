@@ -1342,8 +1342,6 @@ mod tests {
 
     #[test]
     fn temporary_rotation_case_diagnostic() {
-        use std::f64::consts::PI;
-
         let catalog = crate::resources::default_catalog();
         let seed = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
             .expect("seed structure should build");
