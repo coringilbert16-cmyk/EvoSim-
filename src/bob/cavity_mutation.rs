@@ -345,6 +345,10 @@ fn mutate_once_until(
                     }
                 }
             }
+            if Instant::now() >= deadline {
+                stats.stopped_at_deadline = true;
+                break 'parents;
+            }
             if let Err(error) = validate_candidate_shape_and_bonds(&structure, catalog) {
                 stats.rejected += 1;
                 stats.geometry_rejections += 1;
@@ -358,6 +362,10 @@ fn mutate_once_until(
                     .entry(reason.to_string())
                     .or_default() += 1;
                 continue;
+            }
+            if Instant::now() >= deadline {
+                stats.stopped_at_deadline = true;
+                break 'parents;
             }
             stats.cavity_checks_performed += 1;
             let cavity = match crate::cavity::analyze_genome_cavity(&structure, catalog) {
@@ -381,6 +389,10 @@ fn mutate_once_until(
                     continue;
                 }
             };
+            if Instant::now() >= deadline {
+                stats.stopped_at_deadline = true;
+                break 'parents;
+            }
             if crate::organism_viability::validate_realized_organism(
                 &structure,
                 catalog,
@@ -398,6 +410,10 @@ fn mutate_once_until(
                     .entry("viability_rejected".to_string())
                     .or_default() += 1;
                 continue;
+            }
+            if Instant::now() >= deadline {
+                stats.stopped_at_deadline = true;
+                break 'parents;
             }
             if stored_count >= MAX_QUALIFYING_CANDIDATES {
                 stats.stopped_at_candidate_limit = true;
