@@ -340,6 +340,7 @@ fn mutate_once_until(
     'parents: for parent_index in std::iter::once(start) {
         let parent = &records[parent_index];
         let mutations = one_step_mutations(parent, catalog);
+        let mutation_count = mutations.len();
         for (mutation_index, (change, mut structure)) in mutations.into_iter().enumerate() {
             if parent_index == start && mutation_index < start_mutation {
                 continue;
@@ -531,7 +532,7 @@ fn mutate_once_until(
         }
         if !advanced_to_child {
             next_cursor_parent = parent_index;
-            next_cursor_mutation = mutations.len();
+            next_cursor_mutation = mutation_count;
         }
     }
 
