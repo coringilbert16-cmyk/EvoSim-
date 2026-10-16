@@ -671,7 +671,9 @@ mod tests {
             );
         }
         assert!(
-            trials.iter().any(|(change, _)| change.contains("rotate 15deg")),
+            trials
+                .iter()
+                .any(|(change, _)| change.contains("rotate 15deg")),
             "the frontier should include the first 15-degree rotation when it has a clear path"
         );
     }
