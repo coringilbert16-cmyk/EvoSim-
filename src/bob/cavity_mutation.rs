@@ -931,7 +931,7 @@ fn mutate_once_until_cached(
             if structure.units.len() > parent.constituent_count {
                 record_mutation_outcome(
                     &mut stats,
-                    &change,
+                    change,
                     &operation,
                     "constituent_count_increased",
                 );
@@ -987,7 +987,7 @@ fn mutate_once_until_cached(
                             .or_default() += 1;
                         record_mutation_outcome(
                             &mut stats,
-                            &change,
+                            change,
                             &operation,
                             "no_repaired_contact",
                         );
@@ -1030,7 +1030,7 @@ fn mutate_once_until_cached(
                         .or_default() += 1;
                     record_mutation_outcome(
                         &mut stats,
-                        &change,
+                        change,
                         &operation,
                         "cavity_not_qualifying",
                     );
@@ -1045,7 +1045,7 @@ fn mutate_once_until_cached(
                         .or_default() += 1;
                     record_mutation_outcome(
                         &mut stats,
-                        &change,
+                        change,
                         &operation,
                         "cavity_analysis_error",
                     );
