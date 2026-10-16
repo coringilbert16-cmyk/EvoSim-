@@ -547,11 +547,29 @@ pub(crate) fn mutate_once(
     )
 }
 
+#[derive(Default)]
+struct MutationSearchCache {
+    known_signatures: std::collections::HashSet<String>,
+    known_signature_record_count: usize,
+    parent_mutations: Option<(String, Vec<(String, OrganismStructure)>)>,
+}
+
 fn mutate_once_until(
     path: impl AsRef<Path>,
     catalog: &[BaseResource],
     deadline: Instant,
     validate_existing: bool,
+) -> Result<MutationBatchStats, String> {
+    let mut cache = MutationSearchCache::default();
+    mutate_once_until_cached(path, catalog, deadline, validate_existing, &mut cache)
+}
+
+fn mutate_once_until_cached(
+    path: impl AsRef<Path>,
+    catalog: &[BaseResource],
+    deadline: Instant,
+    validate_existing: bool,
+    cache: &mut MutationSearchCache,
 ) -> Result<MutationBatchStats, String> {
     let path = path.as_ref();
     if !path.exists()
@@ -617,6 +635,9 @@ fn mutate_once_until(
         })?;
         let _ = fs::remove_file(&frontier_path);
         records = vec![seed];
+        cache.known_signatures.clear();
+        cache.known_signature_record_count = 0;
+        cache.parent_mutations = None;
     }
 
     if records.len() >= MAX_QUALIFYING_CANDIDATES {
@@ -653,7 +674,6 @@ fn mutate_once_until(
         }
     }
 
-    let mut known_signatures = std::collections::HashSet::new();
     let mut known_ids: std::collections::HashSet<String> =
         records.iter().map(|record| record.id.clone()).collect();
     for record in &records {
@@ -684,8 +704,25 @@ fn mutate_once_until(
                 ));
             }
         }
-        known_signatures.insert(geometry_signature(&record.structure, catalog)?);
     }
+
+    if cache.known_signature_record_count != records.len() {
+        cache.parent_mutations = None;
+        cache.known_signatures.clear();
+        for record in &records {
+            if Instant::now() >= deadline {
+                return Ok(MutationBatchStats {
+                    stopped_at_deadline: true,
+                    ..MutationBatchStats::default()
+                });
+            }
+            cache
+                .known_signatures
+                .insert(geometry_signature(&record.structure, catalog)?);
+        }
+        cache.known_signature_record_count = records.len();
+    }
+
     let mut stats = MutationBatchStats::default();
     let mut appended = Vec::<u8>::new();
     let stored_count = records.len();
@@ -706,14 +743,25 @@ fn mutate_once_until(
         };
         let parent = &records[parent_index];
         selected_parent_id = Some(parent.id.clone());
-        let mutations = one_step_mutations(parent, catalog);
+        if cache
+            .parent_mutations
+            .as_ref()
+            .is_none_or(|(cached_parent_id, _)| cached_parent_id != &parent.id)
+        {
+            cache.parent_mutations = Some((parent.id.clone(), one_step_mutations(parent, catalog)));
+        }
+        let mutations = &cache
+            .parent_mutations
+            .as_ref()
+            .expect("selected parent's mutation list is cached")
+            .1;
         let mutation_count = mutations.len();
         let start_mutation = next_mutation_by_parent
             .get(&parent.id)
             .copied()
             .unwrap_or(0)
             .min(mutation_count);
-        for (mutation_index, (change, mut structure)) in mutations.into_iter().enumerate() {
+        for (mutation_index, (change, candidate_structure)) in mutations.iter().enumerate() {
             if mutation_index < start_mutation {
                 continue;
             }
@@ -727,8 +775,9 @@ fn mutate_once_until(
             }
             stats.attempts += 1;
             next_mutation_by_parent.insert(parent.id.clone(), mutation_index + 1);
-            let operation = mutation_operation(&change).to_string();
-            record_mutation_attempt(&mut stats, &change, &operation);
+            let mut structure = candidate_structure.clone();
+            let operation = mutation_operation(change).to_string();
+            record_mutation_attempt(&mut stats, change, &operation);
             if structure.units.len() > parent.constituent_count {
                 record_mutation_outcome(
                     &mut stats,
@@ -744,9 +793,9 @@ fn mutate_once_until(
                 continue;
             }
             let signature = geometry_signature(&structure, catalog)?;
-            if known_signatures.contains(&signature) {
+            if cache.known_signatures.contains(&signature) {
                 stats.duplicates += 1;
-                record_mutation_outcome(&mut stats, &change, &operation, "duplicate");
+                record_mutation_outcome(&mut stats, change, &operation, "duplicate");
                 continue;
             }
             // Use the same strict penetration predicate as full validation
@@ -760,7 +809,7 @@ fn mutate_once_until(
                     .entry("geometry_overlap".to_string())
                     .or_default() += 1;
                 let _ = error;
-                record_mutation_outcome(&mut stats, &change, &operation, "geometry_overlap");
+                record_mutation_outcome(&mut stats, change, &operation, "geometry_overlap");
                 continue;
             }
             if change.starts_with("replace constituent")
@@ -812,7 +861,7 @@ fn mutate_once_until(
                     .rejection_reasons
                     .entry(reason.to_string())
                     .or_default() += 1;
-                record_mutation_outcome(&mut stats, &change, &operation, "shape_or_bond_invalid");
+                record_mutation_outcome(&mut stats, change, &operation, "shape_or_bond_invalid");
                 continue;
             }
             if Instant::now() >= deadline {
@@ -873,7 +922,7 @@ fn mutate_once_until(
                     .rejection_reasons
                     .entry("viability_rejected".to_string())
                     .or_default() += 1;
-                record_mutation_outcome(&mut stats, &change, &operation, "viability_rejected");
+                record_mutation_outcome(&mut stats, change, &operation, "viability_rejected");
                 continue;
             }
             if Instant::now() >= deadline {
@@ -889,14 +938,14 @@ fn mutate_once_until(
             let id = format!("cavity-{signature}");
             if known_ids.contains(&id) {
                 stats.duplicates += 1;
-                record_mutation_outcome(&mut stats, &change, &operation, "duplicate_id");
+                record_mutation_outcome(&mut stats, change, &operation, "duplicate_id");
                 continue;
             }
             let record = KnownQualifyingCavity {
                 schema_version: SCHEMA_VERSION,
                 id: id.clone(),
                 parent_id: Some(parent.id.clone()),
-                change: change.clone(),
+                change: change.to_string(),
                 constituent_count: structure.units.len(),
                 cavity_area: cavity.area,
                 minimum_cavity_area: cavity.minimum_area,
@@ -911,14 +960,14 @@ fn mutate_once_until(
                 > MAX_STORE_BYTES
             {
                 stats.stopped_at_storage_limit = true;
-                record_mutation_outcome(&mut stats, &change, &operation, "storage_limit");
+                record_mutation_outcome(&mut stats, change, &operation, "storage_limit");
                 break 'parents;
             }
             appended.extend_from_slice(&bytes);
             known_ids.insert(id);
-            known_signatures.insert(signature);
+            cache.known_signatures.insert(signature);
             stats.accepted += 1;
-            record_mutation_outcome(&mut stats, &change, &operation, "accepted");
+            record_mutation_outcome(&mut stats, change, &operation, "accepted");
 
             // The new child enters the frontier next batch; continue balancing
             // exploration across stored parents instead of following one lineage.
@@ -946,6 +995,7 @@ fn mutate_once_until(
     }
     if !appended.is_empty() {
         append_records_atomically(path, &appended)?;
+        cache.known_signature_record_count = records.len() + stats.accepted;
     }
     let frontier_json = serde_json::to_string(&next_mutation_by_parent)
         .map_err(|e| format!("serialize cavity exploration frontier: {e}"))?;
@@ -971,13 +1021,14 @@ pub(crate) fn mutate_until_full(
     let deadline = Instant::now() + MAX_CAVITY_MUTATION_RUN;
     let mut total = MutationBatchStats::default();
     let mut validate_existing = true;
+    let mut cache = MutationSearchCache::default();
 
     loop {
         if Instant::now() >= deadline {
             total.stopped_at_deadline = true;
             break;
         }
-        let batch = mutate_once_until(path, catalog, deadline, validate_existing)?;
+        let batch = mutate_once_until_cached(path, catalog, deadline, validate_existing, &mut cache)?;
         validate_existing = false;
         total.attempts += batch.attempts;
         total.accepted += batch.accepted;
