@@ -18,6 +18,11 @@ mod cavity_mutation;
 pub(crate) use cavity_mutation::{mutate_once, mutate_until_full};
 
 const SCHEMA_VERSION: u32 = 3;
+
+/// Persist cavity-area metadata at four decimal places; geometry remains authoritative.
+fn rounded_cavity_area(area: f64) -> f64 {
+    (area * 10_000.0).round() / 10_000.0
+}
 const PREVIOUS_SCHEMA_VERSION: u32 = 2;
 const LEGACY_SCHEMA_VERSION: u32 = 1;
 const NITROGEN_RING_SEED_ID: &str = "nitrogen-ring-seed-v1";
@@ -445,7 +450,7 @@ pub(crate) fn persist_if_qualifying(
         parent_id,
         change,
         constituent_count: structure.units.len(),
-        cavity_area: cavity.area,
+        cavity_area: rounded_cavity_area(cavity.area),
         minimum_cavity_area: cavity.minimum_area,
         structure,
     };
@@ -674,7 +679,7 @@ mod tests {
             parent_id: None,
             change: "test seed".to_string(),
             constituent_count: structure.units.len(),
-            cavity_area: cavity.area,
+            cavity_area: rounded_cavity_area(cavity.area),
             minimum_cavity_area: cavity.minimum_area,
             structure,
         };
@@ -1127,6 +1132,13 @@ mod tests {
                 .expect("distinct rotation signature should build"),
             "a non-symmetric 15-degree rotation must remain a distinct physical formation"
         );
+    }
+
+    #[test]
+    fn cavity_area_metadata_is_rounded_to_four_decimal_places() {
+        assert_eq!(rounded_cavity_area(7.123456), 7.1235);
+        assert_eq!(rounded_cavity_area(7.12344), 7.1234);
+        assert_eq!(rounded_cavity_area(9.0), 9.0);
     }
 
     #[test]
