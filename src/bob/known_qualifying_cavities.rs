@@ -643,15 +643,25 @@ mod tests {
             mutations[0].0.starts_with("replace constituent"),
             "resource substitution must be the first attempted mutation"
         );
-        let first_non_replacement = mutations
+        let first_translation = mutations
             .iter()
-            .position(|(change, _)| !change.starts_with("replace constituent"))
-            .expect("mutation list should include non-substitution operations");
+            .position(|(change, _)| change.starts_with("translate constituent"))
+            .expect("mutation list should include translation trials");
+        let first_rotation = mutations
+            .iter()
+            .position(|(change, _)| change.starts_with("rotate constituent"))
+            .expect("mutation list should include rotation trials");
         assert!(
-            mutations[..first_non_replacement]
-                .iter()
-                .all(|(change, _)| change.starts_with("replace constituent")),
-            "all resource substitutions must be prioritized before other operations"
+            first_translation < mutations.len() - 1 && first_rotation < mutations.len() - 1,
+            "translation and rotation must be scheduled before the final removal family"
+        );
+        assert!(
+            first_translation < mutations.iter().rposition(|(change, _)| change.starts_with("replace constituent")).unwrap(),
+            "translations should be interleaved before the replacement family is exhausted"
+        );
+        assert!(
+            first_rotation < mutations.iter().rposition(|(change, _)| change.starts_with("replace constituent")).unwrap(),
+            "rotations should be interleaved before the replacement family is exhausted"
         );
         let first_removal = mutations
             .iter()
@@ -693,21 +703,27 @@ mod tests {
         assert!(mutations[0].0.starts_with("replace constituent"));
         assert!(mutations[0].0.ends_with("(existing pose)"));
 
-        let first_non_replacement = mutations
+        let first_translation = mutations
             .iter()
-            .position(|(change, _)| !change.starts_with("replace constituent"))
-            .expect("frontier should include independent translations or rotations");
+            .position(|(change, _)| change.starts_with("translate constituent"))
+            .expect("frontier should include independent translations");
+        let first_rotation = mutations
+            .iter()
+            .position(|(change, _)| change.starts_with("rotate constituent"))
+            .expect("frontier should include independent rotations");
+        let last_replacement = mutations
+            .iter()
+            .rposition(|(change, _)| change.starts_with("replace constituent"))
+            .expect("frontier should include resource substitutions");
         assert!(
-            mutations[first_non_replacement..]
-                .iter()
-                .all(|(change, _)| !change.starts_with("replace constituent")),
-            "all resource-exchange pose variants must precede unrelated mutations"
+            first_translation < last_replacement && first_rotation < last_replacement,
+            "translation and rotation attempts must be interleaved before replacement trials are exhausted"
         );
         assert!(
-            mutations[..first_non_replacement]
+            mutations[..first_translation]
                 .iter()
                 .any(|(change, _)| change.ends_with("(existing pose)")),
-            "the exchange search should include an unchanged-pose trial"
+            "the exchange search should include an unchanged-pose trial before translations"
         );
 
         let replacement = &mutations[0];
