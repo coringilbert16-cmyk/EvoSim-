@@ -877,7 +877,7 @@ fn mutate_once_until(
 }
 
 /// Continue bounded batches toward the 5,000-candidate cap, sharing one
-/// five-minute deadline across the entire run. No individual batch resets it.
+/// four-minute deadline across the entire run. No individual batch resets it.
 pub(crate) fn mutate_until_full(
     path: impl AsRef<Path>,
     catalog: &[BaseResource],
