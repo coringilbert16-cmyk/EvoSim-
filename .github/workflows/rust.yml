@@ -6,7 +6,7 @@ name: Rust
 
 on:
   push:
-    branches: [main, 'refactor/constructor-strip-2026-10-12']
+    branches: [main, 'refactor/constructor-strip-2026-10-12', 'bob-cavity-search-2026-10-16']
   pull_request:
     # Validate the integration target and stacked fix branches.
     branches: [main, integration/unified-source-and-catalogue, 'fix/**']
