@@ -148,6 +148,10 @@ jobs:
           print(f"cavity_areas={sorted({round(value, 9) for value in areas})}")
           print(f"minimum_required_area_range={min(minima):.6g}..{max(minima):.6g}")
           print(f"bond_count_range={min(bond_counts)}..{max(bond_counts)}; unique_bond_counts={len(set(bond_counts))}")
+          print("=== Accepted lineage changes ===")
+          for record in records[1:]:
+              if record.get("parent_id"):
+                  print(f"parent={record['parent_id']} id={record['id']} change={record.get('change', '')!r} area={record['cavity_area']:.9g} minimum={record['minimum_cavity_area']:.9g} constituents={record['constituent_count']}")
           # Trace accepted substitutions against their exact parent so we can see
           # whether cavity-facing pieces ever change and what geometry is persisted.
           replacements = [record for record in records if record.get("change", "").startswith("replace constituent")]
