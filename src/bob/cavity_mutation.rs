@@ -617,13 +617,13 @@ mod mutation_priority_tests {
         let first_indices: HashSet<usize> = ids
             .iter()
             .map(|id| {
-                let first = constituent_priority_order(id, 16)[0];
+                let first_order = constituent_priority_order(id, 16);
+                let repeated_order = constituent_priority_order(id, 16);
                 assert_eq!(
-                    constituent_priority_order(id, 16),
-                    constituent_priority_order(id, 16),
+                    first_order, repeated_order,
                     "the same parent must regenerate the same mutation order"
                 );
-                first
+                first_order[0]
             })
             .collect();
         assert!(
