@@ -209,7 +209,12 @@ pub(crate) fn mutate_once(
     path: impl AsRef<Path>,
     catalog: &[BaseResource],
 ) -> Result<MutationBatchStats, String> {
-    mutate_once_until(path, catalog, Instant::now() + MAX_CAVITY_MUTATION_RUN, true)
+    mutate_once_until(
+        path,
+        catalog,
+        Instant::now() + MAX_CAVITY_MUTATION_RUN,
+        true,
+    )
 }
 
 fn mutate_once_until(
@@ -245,10 +250,14 @@ fn mutate_once_until(
     if outdated_seed {
         let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(catalog)?;
         validate_candidate_geometry(&structure, catalog)?;
-        let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)?
-            .ok_or_else(|| "updated corner-free nitrogen seed has no sealed qualifying cavity".to_string())?;
+        let cavity =
+            crate::cavity::analyze_genome_cavity(&structure, catalog)?.ok_or_else(|| {
+                "updated corner-free nitrogen seed has no sealed qualifying cavity".to_string()
+            })?;
         if !cavity.qualifies() {
-            return Err("updated corner-free nitrogen seed failed cavity qualification".to_string());
+            return Err(
+                "updated corner-free nitrogen seed failed cavity qualification".to_string(),
+            );
         }
         crate::organism_viability::validate_realized_organism(
             &structure,
@@ -272,8 +281,9 @@ fn mutate_once_until(
             .map_err(|error| format!("serialize updated nitrogen-ring seed: {error}"))?;
         bytes.push(b'\n');
         replace_records_atomically(path, &bytes)?;
-        fs::write(&cursor_path, "0")
-            .map_err(|error| format!("reset cavity mutation cursor after seed migration: {error}"))?;
+        fs::write(&cursor_path, "0").map_err(|error| {
+            format!("reset cavity mutation cursor after seed migration: {error}")
+        })?;
         records = vec![seed];
     }
 
@@ -573,7 +583,6 @@ pub(crate) fn mutate_until_full(
     }
     Ok(total)
 }
-
 
 #[cfg(test)]
 mod mutation_priority_tests {
