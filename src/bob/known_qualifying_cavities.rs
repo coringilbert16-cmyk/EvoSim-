@@ -679,6 +679,12 @@ mod tests {
             structure,
         };
         let mutations = cavity_mutation::one_step_mutations(&parent, &catalog);
+        assert!(
+            !mutations
+                .iter()
+                .any(|(change, _)| change.contains(" with Water")),
+            "circle-shaped Water cannot form the polygonal wall required by this cavity validator"
+        );
         assert!(mutations[0].0.starts_with("replace constituent"));
         assert!(mutations[0].0.ends_with("(existing pose)"));
 
