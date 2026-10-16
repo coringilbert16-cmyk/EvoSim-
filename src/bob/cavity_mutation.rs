@@ -20,6 +20,10 @@ pub(crate) struct MutationBatchStats {
     pub mutation_attempts_by_operation: BTreeMap<String, usize>,
     /// Terminal outcome counts keyed as "<operation>:<outcome>".
     pub mutation_outcomes_by_operation: BTreeMap<String, usize>,
+    /// Replacement attempts grouped by target resource name.
+    pub mutation_attempts_by_resource: BTreeMap<String, usize>,
+    /// Replacement outcomes keyed as "<resource>:<outcome>".
+    pub mutation_outcomes_by_resource: BTreeMap<String, usize>,
     pub stopped_at_candidate_limit: bool,
     pub stopped_at_attempt_limit: bool,
     pub stopped_at_storage_limit: bool,
@@ -137,11 +141,44 @@ fn mutation_operation(change: &str) -> &'static str {
     }
 }
 
-fn record_mutation_outcome(stats: &mut MutationBatchStats, operation: &str, outcome: &str) {
+fn replacement_resource(change: &str) -> Option<&str> {
+    change
+        .strip_prefix("replace constituent at index ")?
+        .split_once(" with ")?
+        .1
+        .split(" (existing pose)")
+        .next()
+}
+
+fn record_mutation_attempt(stats: &mut MutationBatchStats, change: &str, operation: &str) {
+    *stats
+        .mutation_attempts_by_operation
+        .entry(operation.to_string())
+        .or_default() += 1;
+    if let Some(resource) = replacement_resource(change) {
+        *stats
+            .mutation_attempts_by_resource
+            .entry(resource.to_string())
+            .or_default() += 1;
+    }
+}
+
+fn record_mutation_outcome(
+    stats: &mut MutationBatchStats,
+    change: &str,
+    operation: &str,
+    outcome: &str,
+) {
     *stats
         .mutation_outcomes_by_operation
         .entry(format!("{operation}:{outcome}"))
         .or_default() += 1;
+    if let Some(resource) = replacement_resource(change) {
+        *stats
+            .mutation_outcomes_by_resource
+            .entry(format!("{resource}:{outcome}"))
+            .or_default() += 1;
+    }
 }
 
 /// Generate single-change mutation trials in deliberate stages:
@@ -444,12 +481,9 @@ fn mutate_once_until(
             stats.attempts += 1;
             next_cursor_mutation = mutation_index + 1;
             let operation = mutation_operation(&change).to_string();
-            *stats
-                .mutation_attempts_by_operation
-                .entry(operation.clone())
-                .or_default() += 1;
+            record_mutation_attempt(&mut stats, &change, &operation);
             if structure.units.len() > parent.constituent_count {
-                record_mutation_outcome(&mut stats, &operation, "constituent_count_increased");
+                record_mutation_outcome(&mut stats, &change, &operation, "constituent_count_increased");
                 stats.rejected += 1;
                 *stats
                     .rejection_reasons
@@ -460,7 +494,7 @@ fn mutate_once_until(
             let signature = geometry_signature(&structure)?;
             if known_signatures.contains(&signature) {
                 stats.duplicates += 1;
-                record_mutation_outcome(&mut stats, &operation, "duplicate");
+                record_mutation_outcome(&mut stats, &change, &operation, "duplicate");
                 continue;
             }
             // Use the same strict penetration predicate as full validation
@@ -474,7 +508,7 @@ fn mutate_once_until(
                     .entry("geometry_overlap".to_string())
                     .or_default() += 1;
                 let _ = error;
-                record_mutation_outcome(&mut stats, &operation, "geometry_overlap");
+                record_mutation_outcome(&mut stats, &change, &operation, "geometry_overlap");
                 continue;
             }
             if change.starts_with("replace constituent")
@@ -500,7 +534,7 @@ fn mutate_once_until(
                             .rejection_reasons
                             .entry("replacement_has_no_repaired_contact".to_string())
                             .or_default() += 1;
-                        record_mutation_outcome(&mut stats, &operation, "no_repaired_contact");
+                        record_mutation_outcome(&mut stats, &change, &operation, "no_repaired_contact");
                         continue;
                     }
                 }
@@ -522,7 +556,7 @@ fn mutate_once_until(
                     .rejection_reasons
                     .entry(reason.to_string())
                     .or_default() += 1;
-                record_mutation_outcome(&mut stats, &operation, "shape_or_bond_invalid");
+                record_mutation_outcome(&mut stats, &change, &operation, "shape_or_bond_invalid");
                 continue;
             }
             if Instant::now() >= deadline {
@@ -540,7 +574,7 @@ fn mutate_once_until(
                         .rejection_reasons
                         .entry("cavity_not_qualifying".to_string())
                         .or_default() += 1;
-                    record_mutation_outcome(&mut stats, &operation, "cavity_not_qualifying");
+                    record_mutation_outcome(&mut stats, &change, &operation, "cavity_not_qualifying");
                     continue;
                 }
                 Err(error) => {
@@ -550,7 +584,7 @@ fn mutate_once_until(
                         .rejection_reasons
                         .entry(format!("cavity_analysis_error: {error}"))
                         .or_default() += 1;
-                    record_mutation_outcome(&mut stats, &operation, "cavity_analysis_error");
+                    record_mutation_outcome(&mut stats, &change, &operation, "cavity_analysis_error");
                     continue;
                 }
             };
@@ -575,7 +609,7 @@ fn mutate_once_until(
                     .rejection_reasons
                     .entry("viability_rejected".to_string())
                     .or_default() += 1;
-                record_mutation_outcome(&mut stats, &operation, "viability_rejected");
+                record_mutation_outcome(&mut stats, &change, &operation, "viability_rejected");
                 continue;
             }
             if Instant::now() >= deadline {
@@ -592,7 +626,7 @@ fn mutate_once_until(
             let id = format!("cavity-{signature}");
             if known_ids.contains(&id) {
                 stats.duplicates += 1;
-                record_mutation_outcome(&mut stats, &operation, "duplicate_id");
+                record_mutation_outcome(&mut stats, &change, &operation, "duplicate_id");
                 continue;
             }
             let record = KnownQualifyingCavity {
@@ -614,7 +648,7 @@ fn mutate_once_until(
                 > MAX_STORE_BYTES
             {
                 stats.stopped_at_storage_limit = true;
-                record_mutation_outcome(&mut stats, &operation, "storage_limit");
+                record_mutation_outcome(&mut stats, &change, &operation, "storage_limit");
                 break 'parents;
             }
             appended.extend_from_slice(&bytes);
@@ -622,7 +656,7 @@ fn mutate_once_until(
             known_ids.insert(id);
             known_signatures.insert(signature);
             stats.accepted += 1;
-            record_mutation_outcome(&mut stats, &operation, "accepted");
+            record_mutation_outcome(&mut stats, &change, &operation, "accepted");
 
             // The accepted child becomes the sole parent for the next step.
             // Stop before trying sibling mutations from the previous parent.
@@ -686,6 +720,18 @@ pub(crate) fn mutate_until_full(
         for (outcome, count) in batch.mutation_outcomes_by_operation {
             *total
                 .mutation_outcomes_by_operation
+                .entry(outcome)
+                .or_default() += count;
+        }
+        for (resource, count) in batch.mutation_attempts_by_resource {
+            *total
+                .mutation_attempts_by_resource
+                .entry(resource)
+                .or_default() += count;
+        }
+        for (outcome, count) in batch.mutation_outcomes_by_resource {
+            *total
+                .mutation_outcomes_by_resource
                 .entry(outcome)
                 .or_default() += count;
         }
