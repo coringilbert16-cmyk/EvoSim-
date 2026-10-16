@@ -49,6 +49,21 @@ fn shuffle_parent_candidates<T>(values: &mut [T], frontier: &mut MutationFrontie
     }
 }
 
+
+/// Stable parent-specific rotation of constituent priority. This preserves the
+/// swap-first / translate / rotate / remove phases while avoiding index-zero
+/// starvation across newly accepted descendants.
+fn constituent_priority_order(parent_id: &str, constituent_count: usize) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..constituent_count).collect();
+    if constituent_count > 1 {
+        let offset = parent_id.bytes().fold(0usize, |hash, byte| {
+            hash.wrapping_mul(31).wrapping_add(byte as usize)
+        }) % constituent_count;
+        order.rotate_left(offset);
+    }
+    order
+}
+
 /// Generate swap-first mutation trials. Each resource substitution owns its
 /// fit search: try the existing pose, then alternate rotations and nearby
 /// translations of that same replacement before moving to the next swap.
@@ -64,13 +79,7 @@ pub(super) fn one_step_mutations(
     // substitutions first while preventing every fresh descendant from always
     // starting at constituent zero; the same parent regenerates the same order
     // on resume, so persisted mutation indices remain meaningful.
-    let mut unit_order: Vec<usize> = (0..original_count).collect();
-    if original_count > 1 {
-        let offset = parent.id.bytes().fold(0usize, |hash, byte| {
-            hash.wrapping_mul(31).wrapping_add(byte as usize)
-        }) % original_count;
-        unit_order.rotate_left(offset);
-    }
+    let unit_order = constituent_priority_order(&parent.id, original_count);
 
     // Resource substitutions are the primary mutation. Search the changed
     // constituent's fit before trying another resource or constituent.
@@ -585,4 +594,46 @@ pub(crate) fn mutate_until_full(
         }
     }
     Ok(total)
+}
+
+
+#[cfg(test)]
+mod mutation_priority_tests {
+    use super::constituent_priority_order;
+    use std::collections::HashSet;
+
+    #[test]
+    fn constituent_priority_is_stable_and_covers_multiple_indices() {
+        let ids = [
+            "nitrogen-ring-seed-v1",
+            "cavity-alpha",
+            "cavity-beta",
+            "cavity-gamma",
+            "cavity-delta",
+            "cavity-epsilon",
+            "cavity-zeta",
+            "cavity-eta",
+        ];
+        let first_indices: HashSet<usize> = ids
+            .iter()
+            .map(|id| {
+                let first = constituent_priority_order(id, 16)[0];
+                assert_eq!(
+                    constituent_priority_order(id, 16),
+                    constituent_priority_order(id, 16),
+                    "the same parent must regenerate the same mutation order"
+                );
+                first
+            })
+            .collect();
+        assert!(
+            first_indices.len() > 1,
+            "fresh parents must not all start at constituent index zero"
+        );
+        for id in ids {
+            let order = constituent_priority_order(id, 16);
+            assert_eq!(order.len(), 16);
+            assert_eq!(order.iter().copied().collect::<HashSet<_>>().len(), 16);
+        }
+    }
 }
