@@ -270,7 +270,7 @@ fn mutate_once_until(
         };
         let mut bytes = serde_json::to_vec(&seed)
             .map_err(|error| format!("serialize updated nitrogen-ring seed: {error}"))?;
-        bytes.push(b'\\n');
+        bytes.push(b'\n');
         replace_records_atomically(path, &bytes)?;
         fs::write(&cursor_path, "0")
             .map_err(|error| format!("reset cavity mutation cursor after seed migration: {error}"))?;
