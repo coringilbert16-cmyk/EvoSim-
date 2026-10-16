@@ -658,11 +658,19 @@ mod tests {
             "translation and rotation must be scheduled before the final removal family"
         );
         assert!(
-            first_translation < mutations.iter().rposition(|(change, _)| change.starts_with("replace constituent")).unwrap(),
+            first_translation
+                < mutations
+                    .iter()
+                    .rposition(|(change, _)| change.starts_with("replace constituent"))
+                    .unwrap(),
             "translations should be interleaved before the replacement family is exhausted"
         );
         assert!(
-            first_rotation < mutations.iter().rposition(|(change, _)| change.starts_with("replace constituent")).unwrap(),
+            first_rotation
+                < mutations
+                    .iter()
+                    .rposition(|(change, _)| change.starts_with("replace constituent"))
+                    .unwrap(),
             "rotations should be interleaved before the replacement family is exhausted"
         );
         let first_removal = mutations
@@ -1155,11 +1163,12 @@ mod tests {
     #[test]
     fn geometry_signature_does_not_implicitly_collapse_mirror_arrangements() {
         let catalog = crate::resources::default_catalog();
-        let mut asymmetric = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
-            .expect("seed structure should build");
+        let mut asymmetric =
+            crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+                .expect("seed structure should build");
         asymmetric.units[0].placement.rotation_radians += std::f64::consts::PI / 12.0;
-        let original = geometry_signature(&asymmetric, &catalog)
-            .expect("original signature should build");
+        let original =
+            geometry_signature(&asymmetric, &catalog).expect("original signature should build");
 
         let mut mirrored = asymmetric.clone();
         for unit in &mut mirrored.units {
