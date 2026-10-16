@@ -2040,4 +2040,29 @@ The previous fixed-seed retirement also exposed a stale dependency in `simulatio
 - **Exact-head verification:** Rust workflow [run #7465](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38597841587), commit `978c56a68b645c3b9335b759b944808f78aa79e9`, passed formatting and the focused Bob persistence, fluid, chemistry, and persisted-pair replay gates. The full Rust suite reported **426 passed, 13 failed, 1 ignored**. Compared with the earlier **416 passed, 23 failed, 1 ignored** baseline, the ten seed-fixture failures are now passes; the remaining 13 failures are separate COMBINE/contact, movement, reproduction, and storage assertions. Strict Clippy remains red on the existing lint backlog (61 application-target and 37 test-target errors).
 - This removes the legacy fixture failure mode; it does **not** claim that the full suite or Clippy is green. The 13 remaining test failures stay visible and are not disabled or reclassified as passing.
 
+## Research references — geometric evolution, cavities, and self-assembly (2026-10-16)
+
+These papers and implementations inform the Bob qualifying-cavity search. They are methodological references, not drop-in algorithms: most use square-grid polyominoes or DNA/protein-scale self-assembly, while EvoSim uses mixed polygonal resources, continuous placements, live contact/bond rules, and a hard cavity-area contract.
+
+1. **Mégane et al. (2026), grammar-guided evolution of polyominoes and modular soft robots.** Useful for separating candidate representation from search, and measuring validity, uniqueness, locality, representation bias, and stagnation.  
+   Paper: https://link.springer.com/article/10.1007/s10710-026-09534-z  
+   Reproducibility code: https://github.com/ericmedvet/paper-polyomino-grammatical-evolution
+
+2. **Malen & Roldán-Roa (2020), *Extremal Topological and Geometric Problems for Polyominoes*.** Useful for distinguishing enclosure/topology from piece count, perimeter, and connectivity proxies. Its square-grid assumptions mean its extremal formulas should not be applied directly to EvoSim's mixed continuous geometry.  
+   Paper: https://www.combinatorics.org/ojs/index.php/eljc/article/view/v27i2p56  
+   Preprint: https://arxiv.org/abs/1910.10342
+
+3. **Exley (2026), minimum polyomino shells for holes of specified size.** Useful as a methodology example for bounded constraint solving, independent geometric verification, exhaustive checks on small cases, and explicitly separating bounded results from general proofs.  
+   Research and implementation: https://github.com/pexley-math/oeis-A283056
+
+4. **Demaine et al., *New Geometric Algorithms for Fully Connected Staged Self-Assembly*.** Useful for distinguishing a target's geometric outline from full physical connectivity, especially when the target contains holes.  
+   Paper: https://arxiv.org/abs/1505.07862
+
+5. **Pinto et al., *Inverse design of self-folding 3D shells*.** Useful for understanding competing assembly outcomes, interaction specificity, constraint-based design, and the trade-off between overlap avoidance and successful closure.  
+   Paper: https://arxiv.org/abs/2310.03537
+
+6. **Programmable DNA-brick self-assembly of 3D nanostructures.** A physically different domain, but a useful example of designing component interactions around a desired cavity-containing target rather than relying on geometry alone.  
+   Paper: https://www.nature.com/articles/nature24648
+
+**Application rule:** use these sources to improve diagnostics and search design, not to weaken EvoSim's live overlap, contact, bond, viability, or minimum-area checks. A candidate generator and an independent reference check should not rely entirely on the same assumptions.
 
