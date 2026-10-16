@@ -609,9 +609,7 @@ mod tests {
         let unit_translation = mutations
             .iter()
             .find(|(change, _)| change.contains(" 1.00"))
-            .expect(
-                "frontier should include independent one-unit translations when non-overlapping",
-            );
+            .expect("frontier should include independent one-unit translations when non-overlapping");
         assert!(unit_translation.0.starts_with("translate constituent"));
         let unit_translated_index = unit_translation
             .0
@@ -628,7 +626,10 @@ mod tests {
             "one-unit translation must move exactly one unit on one axis"
         );
         assert_eq!(after.material, before.material);
-        assert_eq!(after.placement.rotation_radians, before.placement.rotation_radians);
+        assert_eq!(
+            after.placement.rotation_radians,
+            before.placement.rotation_radians
+        );
         assert!(validate_candidate_non_overlap(&unit_translation.1, &catalog).is_ok());
 
         let rotated = mutations
