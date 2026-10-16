@@ -402,6 +402,7 @@ fn mutate_once_until(
         .find(|record| record.id == NITROGEN_RING_SEED_ID)
         .is_some_and(|record| record.constituent_count != 12);
     let cursor_path = path.with_extension("cursor");
+    let frontier_path = path.with_extension("frontier");
     if outdated_seed {
         let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(catalog)?;
         validate_candidate_geometry(&structure, catalog)?;
@@ -439,6 +440,7 @@ fn mutate_once_until(
         fs::write(&cursor_path, "0").map_err(|error| {
             format!("reset cavity mutation cursor after seed migration: {error}")
         })?;
+        let _ = fs::remove_file(&frontier_path);
         records = vec![seed];
     }
 
@@ -448,7 +450,6 @@ fn mutate_once_until(
             ..MutationBatchStats::default()
         });
     }
-    let frontier_path = path.with_extension("frontier");
     let cursor_text = fs::read_to_string(&cursor_path)
         .ok()
         .map(|text| text.trim().to_string())
@@ -856,8 +857,66 @@ pub(crate) fn mutate_until_full(
 #[cfg(test)]
 mod lineage_tests {
     use super::super::{KnownQualifyingCavity, SCHEMA_VERSION};
-    use super::{deepest_lineage_leaf, mutate_once_until};
+    use super::{deepest_lineage_leaf, mutate_once_until, select_diverse_parent};
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn diversity_selection_prefers_an_underrepresented_cavity_area_family() {
+        let catalog = crate::resources::default_catalog();
+        let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("seed structure should build");
+        let record = |id: &str, area: f64| KnownQualifyingCavity {
+            schema_version: SCHEMA_VERSION,
+            id: id.to_string(),
+            parent_id: None,
+            change: "test family".to_string(),
+            constituent_count: structure.units.len(),
+            cavity_area: area,
+            minimum_cavity_area: 3.0,
+            structure: structure.clone(),
+        };
+        let records = vec![
+            record("area-a", 9.0),
+            record("area-b", 9.0),
+            record("area-c", 9.5),
+        ];
+        let frontier = std::collections::HashMap::new();
+        assert_eq!(
+            select_diverse_parent(&records, &frontier, None),
+            Some(2),
+            "a less represented measured-area family should be explored first"
+        );
+    }
+
+    #[test]
+    fn diversity_selection_skips_exhausted_parents_and_keeps_fractional_areas_distinct() {
+        let catalog = crate::resources::default_catalog();
+        let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
+            .expect("seed structure should build");
+        let record = |id: &str, area: f64| KnownQualifyingCavity {
+            schema_version: SCHEMA_VERSION,
+            id: id.to_string(),
+            parent_id: None,
+            change: "test family".to_string(),
+            constituent_count: structure.units.len(),
+            cavity_area: area,
+            minimum_cavity_area: 3.0,
+            structure: structure.clone(),
+        };
+        let records = vec![
+            record("area-a", 9.0),
+            record("area-b", 9.0),
+            record("area-c", 9.125),
+        ];
+        let mut frontier = std::collections::HashMap::new();
+        frontier.insert("area-a".to_string(), usize::MAX);
+        frontier.insert("area-b".to_string(), usize::MAX);
+        assert_eq!(
+            select_diverse_parent(&records, &frontier, Some("area-b")),
+            Some(2),
+            "exhausted parents must not block an underexplored fractional-area family"
+        );
+    }
 
     #[test]
     fn expired_deadline_stops_before_mutation_attempts() {
@@ -878,6 +937,7 @@ mod lineage_tests {
         assert_eq!(stats.attempts, 0);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(path.with_extension("cursor"));
+        let _ = std::fs::remove_file(path.with_extension("frontier"));
     }
 
     #[test]
