@@ -426,6 +426,31 @@ mod tests {
     }
 
     #[test]
+    fn overlap_precheck_preserves_valid_seed_contacts_and_rejects_penetration() {
+        let catalog = crate::resources::default_catalog();
+        let path = temporary_store();
+        let _ = fs::remove_file(&path);
+        seed_nitrogen_ring(&path, &catalog).expect("seed must pass authoritative validation");
+        let records = load_records(&path).expect("seed record should load");
+        let seed = &records[0].structure;
+        assert!(
+            validate_candidate_non_overlap(seed, &catalog).is_ok(),
+            "legal contacts in the qualifying seed must not count as overlap"
+        );
+
+        let mut overlapping = seed.clone();
+        let first_pose = overlapping.units[0].placement.clone();
+        overlapping.units[1].placement.x = first_pose.x;
+        overlapping.units[1].placement.y = first_pose.y;
+        assert!(
+            validate_candidate_non_overlap(&overlapping, &catalog)
+                .expect_err("coincident rigid pieces must be rejected")
+                .contains("overlap")
+        );
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
     fn cavity_store_lock_prevents_concurrent_writers() {
         let path = temporary_store();
         let lock_path = path.with_extension("lock");
