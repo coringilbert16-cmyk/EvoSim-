@@ -669,7 +669,9 @@ mod tests {
                 "pose should record its rotation"
             );
             assert!(
-                change.ends_with("0.25") || change.ends_with("0.50"),
+                ["0.25", "0.50"]
+                    .iter()
+                    .any(|distance| change.ends_with(&format!("{distance})"))),
                 "pose should use one of the two cardinal offsets: {change}"
             );
         }
