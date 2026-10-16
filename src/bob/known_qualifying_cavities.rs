@@ -606,6 +606,29 @@ mod tests {
         );
         assert!(validate_candidate_non_overlap(&translated.1, &catalog).is_ok());
 
+        let unit_translation = mutations
+            .iter()
+            .find(|(change, _)| change.contains(" 1.00"))
+            .expect("frontier should include independent one-unit translations when non-overlapping");
+        assert!(unit_translation.0.starts_with("translate constituent"));
+        let unit_translated_index = unit_translation
+            .0
+            .strip_prefix("translate constituent at index ")
+            .and_then(|rest| rest.split_whitespace().next())
+            .and_then(|index| index.parse::<usize>().ok())
+            .expect("one-unit translation should identify its constituent");
+        let before = &parent.structure.units[unit_translated_index];
+        let after = &unit_translation.1.units[unit_translated_index];
+        let dx = (after.placement.x - before.placement.x).abs();
+        let dy = (after.placement.y - before.placement.y).abs();
+        assert!(
+            (dx - 1.0).abs() < 1e-10 || (dy - 1.0).abs() < 1e-10,
+            "one-unit translation must move exactly one unit on one axis"
+        );
+        assert_eq!(after.material, before.material);
+        assert_eq!(after.placement.rotation_radians, before.placement.rotation_radians);
+        assert!(validate_candidate_non_overlap(&unit_translation.1, &catalog).is_ok());
+
         let rotated = mutations
             .iter()
             .find(|(change, _)| change == "rotate constituent at index 0 by 180deg")
