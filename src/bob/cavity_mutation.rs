@@ -361,9 +361,7 @@ fn select_diverse_parent(
     let eligible = records
         .iter()
         .enumerate()
-        .filter(|(_, record)| {
-            next_mutation_by_parent.get(&record.id).copied() != Some(usize::MAX)
-        })
+        .filter(|(_, record)| next_mutation_by_parent.get(&record.id).copied() != Some(usize::MAX))
         .collect::<Vec<_>>();
     if eligible.is_empty() {
         return None;
@@ -523,18 +521,14 @@ fn mutate_once_until(
             .ok()
             .and_then(|text| serde_json::from_str(&text).ok())
             .unwrap_or_default();
-    let mut last_parent_id = cursor_text
-        .strip_prefix("diversity:")
-        .map(str::to_string);
+    let mut last_parent_id = cursor_text.strip_prefix("diversity:").map(str::to_string);
     if next_mutation_by_parent.is_empty() {
         if let Some(rest) = cursor_text.strip_prefix("lineage:") {
             let (parent, mutation) = rest.split_once(':').unwrap_or((rest, "0"));
             if let Ok(index) = parent.parse::<usize>() {
                 if let Some(record) = records.get(index) {
-                    next_mutation_by_parent.insert(
-                        record.id.clone(),
-                        mutation.parse::<usize>().unwrap_or(0),
-                    );
+                    next_mutation_by_parent
+                        .insert(record.id.clone(), mutation.parse::<usize>().unwrap_or(0));
                     last_parent_id = Some(record.id.clone());
                 }
             }
