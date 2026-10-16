@@ -509,8 +509,8 @@ fn fair_mutation_order(
         }
     }
 
-    let total = replacements.len() + translations.len() + rotations.len()
-        + removals.len() + other.len();
+    let total =
+        replacements.len() + translations.len() + rotations.len() + removals.len() + other.len();
     let mut ordered = Vec::with_capacity(total);
     while !replacements.is_empty() || !translations.is_empty() || !rotations.is_empty() {
         if let Some(mutation) = replacements.pop_front() {
@@ -1447,14 +1447,38 @@ mod lineage_tests {
         let structure = crate::initial_organism_constructor::build_nitrogen_ring_seed(&catalog)
             .expect("seed structure should build");
         let mutations = vec![
-            ("replace constituent at index 0 with Carbon".to_string(), structure.clone()),
-            ("replace constituent at index 1 with Carbon".to_string(), structure.clone()),
-            ("replace constituent at index 2 with Carbon".to_string(), structure.clone()),
-            ("replace constituent at index 3 with Carbon".to_string(), structure.clone()),
-            ("translate constituent at index 0 by north".to_string(), structure.clone()),
-            ("translate constituent at index 1 by south".to_string(), structure.clone()),
-            ("rotate constituent at index 0 by 15deg".to_string(), structure.clone()),
-            ("remove constituent at index 0".to_string(), structure.clone()),
+            (
+                "replace constituent at index 0 with Carbon".to_string(),
+                structure.clone(),
+            ),
+            (
+                "replace constituent at index 1 with Carbon".to_string(),
+                structure.clone(),
+            ),
+            (
+                "replace constituent at index 2 with Carbon".to_string(),
+                structure.clone(),
+            ),
+            (
+                "replace constituent at index 3 with Carbon".to_string(),
+                structure.clone(),
+            ),
+            (
+                "translate constituent at index 0 by north".to_string(),
+                structure.clone(),
+            ),
+            (
+                "translate constituent at index 1 by south".to_string(),
+                structure.clone(),
+            ),
+            (
+                "rotate constituent at index 0 by 15deg".to_string(),
+                structure.clone(),
+            ),
+            (
+                "remove constituent at index 0".to_string(),
+                structure.clone(),
+            ),
         ];
 
         let ordered = fair_mutation_order(mutations);
@@ -1464,7 +1488,14 @@ mod lineage_tests {
             .collect::<Vec<_>>();
         assert_eq!(
             &operations[..6],
-            &["replace", "translate", "rotate", "replace", "translate", "replace"]
+            &[
+                "replace",
+                "translate",
+                "rotate",
+                "replace",
+                "translate",
+                "replace"
+            ]
         );
         assert_eq!(operations.last(), Some(&"remove"));
     }
