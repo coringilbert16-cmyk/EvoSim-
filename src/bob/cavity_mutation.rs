@@ -688,7 +688,7 @@ fn mutate_once_until(
     }
     let mut stats = MutationBatchStats::default();
     let mut appended = Vec::<u8>::new();
-    let mut stored_count = records.len();
+    let stored_count = records.len();
     let stored_bytes = fs::metadata(path)
         .map_err(|e| format!("inspect cavity store size: {e}"))?
         .len();
