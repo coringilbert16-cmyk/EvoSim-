@@ -448,7 +448,7 @@ fn select_diverse_parent(
 /// and duplicate signatures are checked before a candidate is appended. A small
 /// cursor rotates the starting parent between runs so early records do not starve
 /// later candidates once the library grows.
-const MAX_CAVITY_MUTATION_RUN: Duration = Duration::from_secs(300);
+const MAX_CAVITY_MUTATION_RUN: Duration = Duration::from_secs(240);
 
 pub(crate) fn mutate_once(
     path: impl AsRef<Path>,
@@ -830,7 +830,6 @@ fn mutate_once_until(
                 break 'parents;
             }
             appended.extend_from_slice(&bytes);
-            stored_count += 1;
             known_ids.insert(id);
             known_signatures.insert(signature);
             stats.accepted += 1;
@@ -947,9 +946,7 @@ pub(crate) fn mutate_until_full(
         {
             break;
         }
-        if batch.attempts == 0
-            || (batch.accepted == 0 && batch.attempts < MAX_MUTATION_ATTEMPTS_PER_RUN)
-        {
+        if batch.stopped_at_search_exhaustion {
             total.stopped_at_search_exhaustion = true;
             break;
         }
