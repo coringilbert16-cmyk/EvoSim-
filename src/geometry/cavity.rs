@@ -431,11 +431,11 @@ mod tests {
             cavity.area >= minimum_genome_cavity_area(&catalog).unwrap(),
             "realized cavity must meet the three-Carbon minimum"
         );
-        // The four corner squares close the outer perimeter but do not face
-        // the cavity. The 12 side squares contribute 8 adjacent side-to-side
-        // joins; the live bond transaction represents each join with 2 bonds.
+        // The seed has only the 12 cavity-facing squares. Eight side-to-side
+        // joins use two endpoint bonds each; four diagonal corner contacts
+        // connect adjacent sides without adding non-wall constituents.
         assert_eq!(cavity.boundary_units.len(), 12);
-        assert_eq!(cavity.boundary_bond_indices(&structure, &catalog).len(), 16);
+        assert_eq!(cavity.boundary_bond_indices(&structure, &catalog).len(), 20);
     }
 
     #[test]
