@@ -658,7 +658,9 @@ mod tests {
         };
         let mutations = cavity_mutation::one_step_mutations(&parent, &catalog);
         assert!(
-            mutations[0].0.starts_with("replace constituent at index 3 "),
+            mutations[0]
+                .0
+                .starts_with("replace constituent at index 3 "),
             "resource substitutions must remain the first mutation family, got {}",
             mutations[0].0
         );
