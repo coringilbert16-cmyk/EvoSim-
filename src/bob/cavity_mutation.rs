@@ -697,6 +697,20 @@ fn select_diverse_parent(
     records: &[KnownQualifyingCavity],
     next_mutation_by_parent: &std::collections::HashMap<String, usize>,
     last_parent_id: Option<&str>,
+) -> Option<usize> {
+    let mut feature_cache = std::collections::HashMap::new();
+    select_diverse_parent_cached(
+        records,
+        next_mutation_by_parent,
+        last_parent_id,
+        &mut feature_cache,
+    )
+}
+
+fn select_diverse_parent_cached(
+    records: &[KnownQualifyingCavity],
+    next_mutation_by_parent: &std::collections::HashMap<String, usize>,
+    last_parent_id: Option<&str>,
     feature_cache: &mut std::collections::HashMap<String, Vec<String>>,
 ) -> Option<usize> {
     let eligible = records
@@ -734,7 +748,7 @@ fn select_diverse_parent(
         let features = feature_cache
             .entry(record.id.clone())
             .or_insert_with(|| diversity_features(record));
-        for feature in features {
+        for feature in features.iter() {
             *frequencies.entry(feature.clone()).or_default() += 1;
         }
     }
@@ -1001,7 +1015,7 @@ fn mutate_once_until_cached(
         .map_err(|e| format!("inspect cavity store size: {e}"))?
         .len();
     let selection_started = Instant::now();
-    let selected_parent = select_diverse_parent(
+    let selected_parent = select_diverse_parent_cached(
         &records,
         &next_mutation_by_parent,
         last_parent_id.as_deref(),

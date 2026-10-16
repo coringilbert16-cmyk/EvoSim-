@@ -173,7 +173,7 @@ fn geometry_signature(
     let mut frame_angles = Vec::new();
     for (unit, period) in structure.units.iter().zip(&symmetry_periods) {
         if let Some(period) = period {
-            let order = (std::f64::consts::TAU / period).round().max(1.0) as usize;
+            let order = (std::f64::consts::TAU / *period).round().max(1.0) as usize;
             for symmetry_step in 0..order {
                 frame_angles.push(
                     unit.placement.rotation_radians + symmetry_step as f64 * *period,
