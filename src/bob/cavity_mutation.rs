@@ -377,8 +377,8 @@ fn select_diverse_parent(
         features_by_index.insert(*index, features);
     }
 
-    let last_index = last_parent_id
-        .and_then(|id| records.iter().position(|record| record.id == id));
+    let last_index =
+        last_parent_id.and_then(|id| records.iter().position(|record| record.id == id));
     eligible
         .into_iter()
         .max_by(|(index_a, record_a), (index_b, record_b)| {
