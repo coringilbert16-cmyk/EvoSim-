@@ -384,11 +384,11 @@ fn mutate_once_until(
         .len();
     let mut next_cursor_parent = start;
     let mut next_cursor_mutation = start_mutation;
-    let mut advanced_to_child = false;
 
     // Only mutate the current lineage leaf. When one mutation qualifies, stop
     // this batch and resume from that newly stored child on the next batch.
-    'parents: for parent_index in std::iter::once(start) {
+    'parents: {
+        let parent_index = start;
         let parent = &records[parent_index];
         let mutations = one_step_mutations(parent, catalog);
         let mutation_count = mutations.len();
@@ -578,13 +578,10 @@ fn mutate_once_until(
             // Stop before trying sibling mutations from the previous parent.
             next_cursor_parent = stored_count - 1;
             next_cursor_mutation = 0;
-            advanced_to_child = true;
             break 'parents;
         }
-        if !advanced_to_child {
-            next_cursor_parent = parent_index;
-            next_cursor_mutation = mutation_count;
-        }
+        next_cursor_parent = parent_index;
+        next_cursor_mutation = mutation_count;
     }
 
     if Instant::now() >= deadline {
