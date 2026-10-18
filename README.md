@@ -1695,3 +1695,17 @@ The worker's separate multi-contact counters initially required two calls to the
 ### Collinear family work deduplication — 2026-10-11
 
 The exposed-edge generator now keys already-processed line families by quantized direction, offset, and equilibrium contact angle. Edges sharing the same line family no longer repeat the same full exposed-interval alignment and chord-window enumeration. The key uses the library's existing (10^{-9}) geometry quantization, tighter than the candidate collinearity tolerances. This is a search-work reduction only; formation signatures and validation remain unchanged.
+
+### Energy-source contract: inexhaustible imaginary sun — 2026-10-18
+
+**User decision: Option B is definitive.** EvoSim's omnipresent 440 Hz tone is emitted by an imaginary sun whose energy supply never runs out. Do not model depletion of the sun or a finite local environmental energy reservoir as a prerequisite for harvesting.
+
+- The sun is the inexhaustible external energy source; the tone is its omnipresent signal.
+- Organisms do not receive unlimited energy merely because the tone exists. Capture must be a modeled, rate-limited physical transaction governed by chemistry/resonance and any other explicitly defined coupling constraints.
+- Resonance changes capture/coupling effectiveness; it does not create energy.
+- The reaction-driving chemistry accumulator remains distinct from energy and cannot serve as an implicit energy source.
+- Keep one global energy unit and account for all captured energy and subsequent transfers, conversion, work, storage, and dissipation. Conservation is tracked as initial energy plus explicitly recorded external input equals final tracked energy plus explicitly recorded external output; internal transfers cancel.
+- Spatial directionality and shadows may be introduced later; they do not change the inexhaustible-source decision.
+
+Implementation boundary remains unchanged: implement the source/capture contract in the dedicated energy-and-natural-chemistry workstream based on the current #186 integration foundation, keeping PR #196 constructor work independent. This records the source decision only; it does not authorize source-code changes or imply the energy model is implemented.
+
