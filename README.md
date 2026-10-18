@@ -4,6 +4,33 @@
 
 This root `README.md` is the **only authoritative working README** for EvoSim. Subsystem READMEs are being retired; durable decisions, current status, test gates, and operational instructions belong here. Dated audit documents under `docs/` may hold detailed evidence, but they are supporting records—not competing authorities. When a detail conflicts, this README's latest explicit decision/status wins, and stale history must be labelled historical.
 
+## Energy-system boundary and constructor baseline — 2026-10-18
+
+This section records the read-only audit used to decide where the global energy and natural-chemistry work belongs. No source code or tests were changed/run for this audit.
+
+### Constructor PR #196 baseline
+
+- PR [#196](https://github.com/coringilbert16-cmyk/EvoSim-/pull/196) remains open and draft-only. Head: `baa0e2702bcb2223da3e326d9f67833c8a6d5c85` (`refactor/constructor-strip-2026-10-12`). It is a separate constructor/Bob qualifying-cavity workstream; do not use it as the energy-system base.
+- Exact-head run [#38953513843](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38953513843): formatting and compilation passed; focused Bob compact-storage, persistence/reopen, fluid transaction/coalescence/restoration, chemical-BREAK, persisted-pair replay, and genome-cavity checks passed; bounded Bob generation completed; Clippy failed. The broad Rust suite was deliberately held during constructor calibration, so this run does not establish full-suite or constructor viability.
+- The PR description's 338-candidate Bob result is the pre-round-robin scheduling checkpoint, not verification of the newer mutation scheduler. Constructor viability remains unresolved. Do not merge, weaken invariants, or infer life from a qualifying cavity.
+- This baseline is a status snapshot, not a claim that the current head has green CI.
+
+### Integration PR #186 audit
+
+- PR [#186](https://github.com/coringilbert16-cmyk/EvoSim-/pull/186) remains the sole integration target and draft-only. Branch/head: `integration/unified-source-and-catalogue`, `cf773b0a9784f632c0c8bf6f9cb7ae7dde7e44b9`; base: `main`. Its tree is the current runnable source integration, while `main` is not yet a complete runnable checkout.
+- Exact-head Rust workflow [#38727874484](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38727874484) failed overall: formatting, source-size, COMBINE architecture, focused Bob, fluid transaction/coalescence/restoration, and chemical-BREAK steps passed; the broad Rust tests and Clippy failed. Runner validation [#38727874795](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/38727874795) passed. Do not describe #186 as green.
+- The existing `src/chemistry/energy_ledger.rs` is a staged transaction API, not yet a complete simulation-wide energy inventory. It balances individual transactions and can transfer between numeric holders, but a transaction's `potential_released` can be accepted without debiting a named source. The aggregate counters do not yet account for every energy holder globally.
+- `src/chemistry/chemical_reaction.rs` accumulates a reaction-driving quantity from chemistry/contact and can emit a chemical-BREAK event. That accumulator is not itself energy and currently has no explicit energy-source debit. The 440 Hz harmonic model in `src/perception/harmonics.rs` is a perception/resonance model, not an implemented physical energy-capture transaction.
+- Related holders and event paths include COMBINE and both BREAK pathways, organism usable energy, structural bond energy, maintenance, movement, reproduction/developing offspring, decomposing bodies, environmental material, initial bootstrap energy, heat/dissipation, and lifecycle transfers. These require one conservation audit rather than isolated fixes.
+
+### Implementation boundary decision
+
+- Do not implement this work on #196. Keep #196 constructor-only and preserve its baseline.
+- Do not resume old energy branches as implementation bases: `energy-architecture` is 5 commits ahead but 4,657 behind/diverged from the current integration branch; `ci/unified-energy-ledger` is 19 ahead but 3,664 behind/diverged; `energy-model-implementation` is also substantially behind. They may be mined for ideas only after hunk-level review.
+- When implementation is authorized, create **one dedicated energy-and-natural-chemistry PR** from the verified current #186 integration head. Keep it as one workstream with staged commits, not a PR for every subsystem. It will necessarily touch shared files such as the ledger/state, COMBINE/BREAK, harmonics, simulation, movement, decomposition, and reproduction; keep those changes isolated from #196 and reconcile overlapping hunks deliberately later.
+- First implementation gate: specify the world source, every holder, and source-to-destination conservation rules. The working recommendation is an omnipresent 440 Hz reference signal with a separately tracked, externally maintained energy source and finite/rate-limited local capture; resonance changes coupling rate, not the amount of energy available for free. Whether local environmental stores deplete and replenish remains a design decision to settle before coding.
+- Then implement the global accounting authority and atomic settlement; connect existing physical/chemistry events; separately connect tone capture; audit initialization and lifecycle transfers; finally test whole-world conservation and repeated chemistry cycles. The reaction accumulator remains a reaction-driving quantity, never an implicit energy reservoir.
+
 ## PR audit and consolidation — 2026-10-13
 
 ### Stack reconciliation — 2026-10-13
