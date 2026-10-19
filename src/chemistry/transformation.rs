@@ -68,10 +68,10 @@ pub(crate) fn chemical_break_energy_yield(
         .then_some((bond_energy, usable, heat))
 }
 
-/// Apply a chemistry-caused BREAK after the chemistry system has produced a
-/// reaction-energy event. Chemistry supplies the energy; the structure still
-/// decides whether the exact bond exists. No intrinsic bond potential is
-/// released a second time, preventing double-counting.
+/// Apply a chemistry-caused BREAK after the chemistry system has crossed
+/// the activation threshold. Reaction accumulation is a trigger, not an energy
+/// reservoir: disruption work is paid from the removed bond's stored energy
+/// first, with any shortfall debited from the organism's usable-energy holder.
 pub(crate) fn settle_chemical_break_energy(
     organism: &mut Organism,
     bond: crate::structure::Bond,
