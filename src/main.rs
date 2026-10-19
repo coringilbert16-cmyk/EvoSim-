@@ -55,6 +55,8 @@ mod interior_geometry;
 mod juvenile;
 #[path = "geometry/organism_geometry.rs"]
 mod organism_geometry;
+#[path = "geometry/source_exposure.rs"]
+mod source_exposure;
 #[path = "organism/viability.rs"]
 mod organism_viability;
 #[path = "geometry/physical_geometry.rs"]
