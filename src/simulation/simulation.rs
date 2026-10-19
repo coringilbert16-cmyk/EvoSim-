@@ -1241,8 +1241,13 @@ impl Simulation {
                     .then(|| organism.id.clone())
             })
             .collect();
-        self.active_transformations
-            .retain(|t| currently_living_ids.contains(&t.organism_id));
+        // A transformation that was already in flight is a committed physical/
+        // chemical transaction, not ongoing biological decision-making. Let it
+        // settle even if its organism's core has since been breached; dropping it
+        // here could discard reserved material or energy held by the transaction.
+        // New transformations cannot be initiated by breached organisms because
+        // the decision loop is gated by living_ids.
+        let _ = currently_living_ids;
         self.energy_ledger.total_usable_energy_held =
             crate::reproduction::total_usable_energy_held(
                 &self.organisms,
