@@ -190,7 +190,7 @@ pub(crate) fn visible_polygonal_intervals(
                         }
                         let ax = a.0 - source.0;
                         let ay = a.1 - source.1;
-                        let t = (ax * dy - ay * dx) / denominator;
+                        let t = -(ax * dy - ay * dx) / denominator;
                         // Correct signed parameter for source-to-vertex ray:
                         // A + tE = S + u(V-S), with u > 1 beyond the vertex.
                         let u = -(ax * ey - ay * ex) / denominator;
