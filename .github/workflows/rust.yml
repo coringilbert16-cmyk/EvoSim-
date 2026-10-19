@@ -1,0 +1,71 @@
+name: Rust
+
+# CI trigger: validate main pushes and every pull request targeting main.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    # Also validate stacked fix branches against their parent fix branch.
+    branches: [main, integration/unified-source-and-catalogue, 'fix/**']
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Check source file sizes
+        run: bash scripts/check_large_files.sh
+      - name: Check COMBINE architecture
+        run: bash scripts/check_combine_architecture.sh
+      # Run the persistence-specific tests independently so their result is visible
+      # even while the repository's known unrelated baseline tests are failing.
+      - name: Run Bob compact-storage tests
+        run: cargo test --locked compact_family_storage_tests
+      - name: Verify empty Bob library open and reopen without generation
+        run: cargo test --locked fresh_empty_library_opens_and_reopens_without_seeding_geometry
+      - name: Verify concurrent Bob library initialization
+        run: cargo test --locked concurrent_default_store_initialization_does_not_race_on_temp_files
+      # Keep the fluid transaction and three-piece generation gate visible apart
+      # from the known constructor-dependent full-suite backlog.
+      - name: Run focused Bob fluid transaction and three-piece cap tests
+        run: |
+          cargo test --locked multi_contact_fluid_forms_multiple_bonds_to_one_rigid_edge
+          cargo test --locked multi_contact_fluid_commits_all_three_rigid_bonds_together
+          cargo test --locked reopened_two_piece_bob_record_maps_into_transformed_live_parent
+          cargo test --locked restored_multi_contact_fluid_keeps_three_live_rigid_contacts
+          cargo test --locked worker_accepts_three_piece_limit_and_rejects_wider_limits
+          cargo test --locked simultaneous_collinear_solver_builds_one_area_conserving_three_surface_boundary
+      # Exercise the fluid coalescence lifecycle independently of the broad
+      # constructor/lifecycle failures in the full repository suite.
+      - name: Run focused fluid coalescence and restoration tests
+        run: |
+          cargo test --locked live_combine_coalesces_fluid_pair_atomically
+          cargo test --locked coalesced_fluid_boundary_survives_physical_material_roundtrip_and_restore
+          cargo test --locked bonded_fluid_pair_merges_area_and_preserves_rigid_bond
+          cargo test --locked coalescence_remaps_rigid_bonds_from_both_fluid_constituents
+          cargo test --locked fluid_bond_off_shared_interface_rejects_coalescence_atomically
+          cargo test --locked separated_bond_endpoints_on_shared_segment_reject_coalescence_atomically
+          cargo test --locked unsupported_fluid_corner_and_line_endpoints_reject_coalescence_atomically
+          cargo test --locked touching_fluid_boundaries_without_a_bond_do_not_coalesce
+          cargo test --locked failed_live_combine_rolls_back_energy_and_ledger_when_union_is_unsupported
+          cargo test --locked unsupported_fluid_union_rolls_back_structure_and_bond
+      # Keep the chemistry BREAK energy gate visible independently of the
+      # repository's known unrelated baseline failures.
+      - name: Run focused chemical BREAK tests
+        run: cargo test --locked chemical_break_
+      # Expensive headless multigeneration validation is paused while the seed
+      # topology is being finalized. Keep the normal Rust/Clippy gates active.
+      - name: Run Rust tests
+        run: cargo test --locked --all-targets
+      - name: Run Clippy
+        if: always()
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
