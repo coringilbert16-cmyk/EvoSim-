@@ -65,6 +65,47 @@ impl WorldToneRuntimeConfig {
     }
 }
 
+/// Maximum table size keeps unusual, user-supplied periods from allocating
+/// unbounded memory. Longer periods remain correct and use direct sampling.
+pub(crate) const MAX_PRECOMPUTED_WORLD_TONE_SAMPLES: u64 = 65_536;
+
+/// Immutable lookup table for a deterministic source cycle.
+/// The table contains source output only; it does not allocate energy to receivers.
+#[derive(Clone, Debug)]
+pub(crate) struct WorldToneCycle {
+    samples: Vec<WorldToneSample>,
+}
+
+impl WorldToneCycle {
+    pub(crate) fn precompute(
+        config: WorldToneRuntimeConfig,
+        world_width: f64,
+        world_height: f64,
+    ) -> Option<Self> {
+        let period = config.parameters.orbital_period_ticks;
+        if !config.is_valid()
+            || !world_width.is_finite()
+            || !world_height.is_finite()
+            || world_width <= 0.0
+            || world_height <= 0.0
+            || period > MAX_PRECOMPUTED_WORLD_TONE_SAMPLES
+        {
+            return None;
+        }
+
+        let mut samples = Vec::new();
+        samples.try_reserve_exact(usize::try_from(period).ok()?).ok()?;
+        for tick in 0..period {
+            samples.push(config.sample(tick, world_width, world_height)?);
+        }
+        Some(Self { samples })
+    }
+
+    pub(crate) fn sample(&self, tick: u64) -> Option<WorldToneSample> {
+        self.samples.get(usize::try_from(tick % self.samples.len() as u64).ok()?).copied()
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct WorldToneSample {
     pub(crate) source_x: f64,
@@ -210,6 +251,39 @@ mod tests {
             ..config
         };
         assert!(invalid.sample(0, 1_000.0, 800.0).is_none());
+    }
+
+    #[test]
+    fn precomputed_cycle_matches_direct_samples_for_every_tick_and_wraps() {
+        let config = WorldToneRuntimeConfig {
+            parameters: parameters(),
+            orbit_radius: 250.0,
+        };
+        let cycle = WorldToneCycle::precompute(config, 1_000.0, 800.0).unwrap();
+        assert_eq!(cycle.samples.len(), parameters().orbital_period_ticks as usize);
+        for tick in 0..parameters().orbital_period_ticks {
+            assert_eq!(
+                cycle.sample(tick),
+                config.sample(tick, 1_000.0, 800.0),
+                "sample mismatch at tick {tick}"
+            );
+        }
+        assert_eq!(cycle.sample(0), cycle.sample(parameters().orbital_period_ticks));
+        assert_eq!(cycle.sample(2_400), cycle.sample(4_800));
+    }
+
+    #[test]
+    fn oversized_cycle_skips_precomputation_without_rejecting_source() {
+        let config = WorldToneRuntimeConfig {
+            parameters: WorldToneParameters {
+                orbital_period_ticks: MAX_PRECOMPUTED_WORLD_TONE_SAMPLES + 1,
+                ..parameters()
+            },
+            orbit_radius: 10.0,
+        };
+        assert!(config.is_valid());
+        assert!(WorldToneCycle::precompute(config, 100.0, 100.0).is_none());
+        assert!(config.sample(0, 100.0, 100.0).is_some());
     }
 
     #[test]
