@@ -61,6 +61,8 @@ impl EnergySourceBudget {
 pub(crate) struct EnergyAllocation {
     pub(crate) source_energy: f64,
     pub(crate) usable_delta: f64,
+    /// Signed change in energy held by persistent structure: positive when
+    /// stored, negative when an existing structural store is released.
     pub(crate) structural_delta: f64,
     pub(crate) work_expended: f64,
     pub(crate) heat_dissipated: f64,
@@ -74,7 +76,6 @@ impl EnergyAllocation {
             && self.work_expended.is_finite()
             && self.heat_dissipated.is_finite()
             && self.source_energy >= 0.0
-            && self.structural_delta >= 0.0
             && self.work_expended >= 0.0
             && self.heat_dissipated >= 0.0
             && (self.source_energy
@@ -334,7 +335,7 @@ mod tests {
     }
 
     #[test]
-    fn negative_structural_allocation_is_not_a_balanced_transaction() {
+    fn unbalanced_transaction_with_negative_structural_delta_is_rejected() {
         let tx = EnergyTransaction {
             reason: EnergyReason::Break,
             potential_released: 0.0,
@@ -344,6 +345,21 @@ mod tests {
             heat_dissipated: 1.0,
         };
         assert!(!tx.balanced());
+    }
+
+    #[test]
+    fn bond_energy_release_can_be_represented_as_a_negative_structural_delta() {
+        let tx = EnergyTransaction {
+            reason: EnergyReason::Break,
+            potential_released: 0.0,
+            usable_delta: 2.0,
+            structural_delta: -5.0,
+            work_expended: 0.0,
+            heat_dissipated: 3.0,
+        };
+        assert!(tx.balanced());
+        assert_eq!(tx.allocation().source_energy, 0.0);
+        assert_eq!(tx.allocation().structural_delta, -5.0);
     }
 
     #[test]
