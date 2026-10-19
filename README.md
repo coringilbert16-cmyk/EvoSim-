@@ -1709,3 +1709,64 @@ The exposed-edge generator now keys already-processed line families by quantized
 
 Implementation boundary remains unchanged: implement the source/capture contract in the dedicated energy-and-natural-chemistry workstream based on the current #186 integration foundation, keeping PR #196 constructor work independent. This records the source decision only; it does not authorize source-code changes or imply the energy model is implemented.
 
+
+
+## Energy baseline, dissipation/stress, and decomposition design — 2026-10-18
+
+**Status:** Design pass following the user's decisions on 2026-10-18. The rules below are current decisions; decomposition details explicitly marked *proposal / needs approval* are not yet settled. This is documentation only; no simulation source code or tests are changed by this entry.
+
+### 1. Initial energy baseline — decision
+
+- The starting organism receives an explicit, finite initial usable-energy endowment. It is part of the simulation's initial condition, not a reward for constructor work and not derived from the constructor's search budget.
+- The exact numeric endowment remains **OPEN**. It must be a named initial-world/organism parameter chosen for the intended starting conditions and calibrated against the energy costs; do not preserve the old `1.0e12 - remaining construction energy` calculation as a physical-energy rule.
+- Initialize the accounting baseline from the **realized initial state**: initial usable energy plus the energy stored in its realized bonds and any other actual initial energy holders. Do not count the constructor's search budget, genome reproductive allocation by itself, or material `potential_energy` properties as additional energy.
+- If initial bond energy and initial usable energy are declared to be part of the initial state, they belong in `E_initial`; they are not also recorded as captured external input. Future energy captured from the imaginary sun is an explicit external input.
+- Tick-zero reconciliation must include all actual holders. A default-zero aggregate counter is not a valid initial inventory when the organism already holds energy.
+
+### 2. Dissipation and organism stress — decision
+
+- **Heat is not temperature and is not a thermal reservoir.** It denotes energy spent/wasted and no longer available to the simulated biological energy economy.
+- Record dissipated energy as an explicit sink/output in the energy accounting. Do not leave it available for later uptake unless a future, separately approved environmental-energy mechanism explicitly models that return path.
+- When wasted energy occurs inside an organism, the same event may also increase its stress according to the stress rule. The energy flow and stress update are distinct: stress is a biological state/consequence, not an energy holder and not a second energy cost.
+- Unpaid maintenance contributes to the stress mechanic; it is not energy debt by default. Any eventual damage from accumulated stress must use the approved heat-stress structural-damage selection rule in this README.
+- Global reconciliation should therefore be expressed as initial tracked energy + explicit external capture = final tracked energy + explicit dissipated/output energy. Internal transfers cancel. Stress changes do not add another term to this equation.
+
+### 3. COMBINE energy allocation — decision
+
+For every formation, the usable-energy debit must reconcile to distinct destinations:
+
+1. Energy retained as the realized bond's `bond_energy`.
+2. Energy consumed as formation work.
+3. Remaining energy dissipated as waste/output (and, when the waste occurs inside an organism, potentially contributing to stress).
+
+Do not treat the entire formation investment as structural energy if the realized bond retains only part of it. Only introduce different allocation rules for rigid/fluid or other bond types when the modeled physical mechanism requires that difference. Every destination is counted once.
+
+### 4. Source-specific energy conversion — decision
+
+- Do not introduce a universal intermediate-energy pool by default.
+- A realized bond may release its stored bond energy once when it breaks. The receiving destination depends on the specific modeled pathway and must be explicit.
+- Chemical accumulation and resonance are reaction/coupling signals, not energy holders. Chemical BREAK must be funded by already-accounted stored energy, explicitly recorded external capture, or a valid combination; every credited amount needs a corresponding source.
+- The sun's 440 Hz signal is omnipresent and inexhaustible, but capture is explicit and rate-limited. Resonance controls coupling effectiveness; chemistry determines whether/how captured energy can be converted into usable energy.
+
+### 5. Decomposition — design review required; proposed direction is NOT YET APPROVED
+
+The existing decomposition pathway predates the current chemistry model. Do not merely add a distance cutoff to its current nearest-organism transfer.
+
+The redesign must define these phases and their accounting:
+- **Death handoff:** transfer the dying organism's actual structure and usable-energy balance into a decomposing state exactly once; no energy or material may be duplicated or lost on a failed handoff.
+- **Bond breakdown:** remove one realized bond at a time and release that bond's stored `bond_energy` no more than once. Do not regenerate constituent material potential as a second energy reserve.
+- **Material return:** when the physical bonds are gone, return the realized constituent materials to the environment without duplicating, deleting, or changing their identity/quantity.
+- **Energy destination:** specify whether released bond energy is dissipated, retained temporarily by the decomposition process, or transferred/converted through an explicit local chemistry interaction. Do not transfer it to the nearest organism at arbitrary distance.
+- **Locality:** any biological transfer/reuse must follow an explicit physical/chemical interaction rule, not distance ranking alone. No numerical radius is approved by this entry.
+
+**Recommendation for the next decision:** make decomposition primarily a material-recycling process. Release each realized bond's stored energy exactly once; treat it as dissipated unless a real, local, chemistry-authorized interaction explicitly captures/transfers it. Avoid a permanent intermediate pool unless the decomposition mechanism demonstrably needs one. This recommendation needs the user's approval before implementation.
+
+### 6. Remaining design gates before implementation
+
+- Choose the exact starting usable-energy endowment and confirm the initial bond-energy baseline is included in `E_initial`.
+- Approve or revise the proposed decomposition energy destination and local reuse rule.
+- Define the concrete 440 Hz capture eligibility and per-tick rate/capacity; this is still a mechanism design task, not implied by the resonance calculation.
+- Define the remaining movement/maintenance coefficient calibration procedure. The existing constants remain unchanged and are not validated by this design entry.
+- After these are resolved, write transaction invariants and tests for tick-zero reconciliation, COMBINE allocation, BREAK single-release, explicit capture, stress/dissipation, decomposition handoff/rollback, and whole-world reconciliation.
+
+No source-code changes, tests, or constructor PR #196 changes are included in this design entry.
