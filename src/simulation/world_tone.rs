@@ -30,7 +30,6 @@ pub(crate) struct WorldToneParameters {
     pub(crate) envelope_curve: EnvelopeCurve,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
 /// Explicit runtime configuration; no orbit radius or unresolved signal parameters are guessed.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct WorldToneRuntimeConfig {
@@ -49,8 +48,11 @@ impl WorldToneRuntimeConfig {
         world_width: f64,
         world_height: f64,
     ) -> Option<WorldToneSample> {
-        if !self.is_valid() || !world_width.is_finite() || !world_height.is_finite()
-            || world_width <= 0.0 || world_height <= 0.0
+        if !self.is_valid()
+            || !world_width.is_finite()
+            || !world_height.is_finite()
+            || world_width <= 0.0
+            || world_height <= 0.0
         {
             return None;
         }
