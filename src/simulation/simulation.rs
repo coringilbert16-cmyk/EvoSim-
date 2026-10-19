@@ -28,6 +28,13 @@ impl Simulation {
             return false;
         }
         self.world_tone = config;
+        self.world_tone_cycle = config.and_then(|candidate| {
+            crate::world_tone::WorldToneCycle::precompute(
+                candidate,
+                self.environment.width,
+                self.environment.height,
+            )
+        });
         for organism in &mut self.organisms {
             organism.cached_harmonic_key = None;
         }
@@ -58,6 +65,7 @@ impl Simulation {
             decision_parameters: DecisionParameters::default(),
             seed_scale_reference,
             world_tone: None,
+            world_tone_cycle: None,
         }
     }
     fn create_environment() -> Environment {
@@ -588,9 +596,15 @@ impl Simulation {
         // once per simulation tick instead of rebuilding the calibration
         // structure for every organism.
         let seed_reference = self.seed_scale_reference;
-        let world_tone_sample = self.world_tone.and_then(|config| {
-            config.sample(self.tick, self.environment.width, self.environment.height)
-        });
+        let world_tone_sample = self
+            .world_tone_cycle
+            .as_ref()
+            .and_then(|cycle| cycle.sample(self.tick))
+            .or_else(|| {
+                self.world_tone.and_then(|config| {
+                    config.sample(self.tick, self.environment.width, self.environment.height)
+                })
+            });
         for organism in &mut self.organisms {
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
             crate::harmonics::update_organism_harmonics(
