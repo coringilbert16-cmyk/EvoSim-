@@ -1,0 +1,231 @@
+//! Geometry-only measurements for directional environmental input.
+//!
+//! This module intentionally does not allocate energy. Its inputs are boundary
+//! intervals that have already been classified as exposed and unoccluded.
+//! The visibility/interval-discovery stage must provide disjoint intervals so
+//! that overlapping material and shadows cannot be counted twice.
+
+/// A straight, already-exposed boundary interval in world coordinates.
+///
+/// The normal is the outward unit normal for this interval. Curved boundaries
+/// must be split or integrated by their exact arc representation before using
+/// this straight-interval primitive.
+#[allow(dead_code)] // Geometry measurement is staged before live exposure discovery.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ExposedBoundaryInterval {
+    pub start: (f64, f64),
+    pub end: (f64, f64),
+    pub outward_normal: (f64, f64),
+}
+
+/// Return the interval's contribution to projected extent for a directional
+/// source. toward_source is the unit direction from the interval toward the
+/// source. The result is length * max(0, n dot s), the 2-D analogue of
+/// projected surface area. It is zero for edge-on or back-facing intervals.
+///
+/// This does not discover visibility, split partially shadowed edges, integrate
+/// curved boundaries, or credit energy. Callers must supply a finite unit
+/// source direction and non-overlapping intervals; invalid input returns None.
+#[allow(dead_code)] // Used when exact exposed intervals are available.
+pub(crate) fn projected_extent(
+    interval: ExposedBoundaryInterval,
+    toward_source: (f64, f64),
+) -> Option<f64> {
+    let values = [
+        interval.start.0,
+        interval.start.1,
+        interval.end.0,
+        interval.end.1,
+        interval.outward_normal.0,
+        interval.outward_normal.1,
+        toward_source.0,
+        toward_source.1,
+    ];
+    if values.iter().any(|value| !value.is_finite()) {
+        return None;
+    }
+
+    let normal_length = interval.outward_normal.0.hypot(interval.outward_normal.1);
+    let direction_length = toward_source.0.hypot(toward_source.1);
+    if (normal_length - 1.0).abs() > 1e-9
+        || (direction_length - 1.0).abs() > 1e-9
+    {
+        return None;
+    }
+
+    let length = (interval.end.0 - interval.start.0)
+        .hypot(interval.end.1 - interval.start.1);
+    if !length.is_finite() {
+        return None;
+    }
+
+    let facing = (interval.outward_normal.0 * toward_source.0
+        + interval.outward_normal.1 * toward_source.1)
+        .max(0.0);
+    let extent = length * facing;
+    extent.is_finite().then_some(extent)
+}
+
+
+/// Derive visible straight boundary intervals for polygonal bodies.
+///
+/// Visibility changes only where a ray from the source passes through a
+/// blocker vertex. Those rays are intersected analytically with each target
+/// edge to form interval cuts; each resulting open interval is classified at
+/// its midpoint using the realized-geometry occlusion query. This is exact for
+/// polygonal constituents (apart from floating-point tolerances). Returns
+/// None if any constituent has a curved, line-only, or legacy implicit
+/// boundary; those require their own analytic transition construction and must
+/// not be silently approximated by this polygon-only routine.
+#[allow(dead_code)]
+pub(crate) fn visible_polygonal_intervals(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+) -> Option<Vec<ExposedBoundaryInterval>> {
+    if !source.0.is_finite() || !source.1.is_finite() {
+        return None;
+    }
+
+    let mut world_vertices = Vec::new();
+    for (body_index, body) in bodies.iter().enumerate() {
+        for part in &body.parts {
+            let local = part.form.polygon_vertices()?;
+            if local.len() < 3 {
+                return None;
+            }
+            let (sin, cos) = part.rotation_radians.sin_cos();
+            let world = local.into_iter().map(|(x, y)| {
+                (part.x + x * cos - y * sin, part.y + x * sin + y * cos)
+            }).collect::<Vec<_>>();
+            world_vertices.push((body_index, part.unit_index, world));
+        }
+    }
+
+    let mut result = Vec::new();
+    for (body_index, body) in bodies.iter().enumerate() {
+        for part in &body.parts {
+            let local = part.form.polygon_vertices()?;
+            let (sin, cos) = part.rotation_radians.sin_cos();
+            let vertices = local.into_iter().map(|(x, y)| {
+                (part.x + x * cos - y * sin, part.y + x * sin + y * cos)
+            }).collect::<Vec<_>>();
+
+            let signed_area_twice: f64 = vertices.iter().enumerate().map(|(i, &(x1, y1))| {
+                let (x2, y2) = vertices[(i + 1) % vertices.len()];
+                x1 * y2 - x2 * y1
+            }).sum();
+            if !signed_area_twice.is_finite() || signed_area_twice.abs() <= 1e-12 {
+                return None;
+            }
+            let winding = signed_area_twice.signum();
+
+            for edge_index in 0..vertices.len() {
+                let a = vertices[edge_index];
+                let b = vertices[(edge_index + 1) % vertices.len()];
+                let ex = b.0 - a.0;
+                let ey = b.1 - a.1;
+                let edge_length = ex.hypot(ey);
+                if !edge_length.is_finite() || edge_length <= 1e-12 {
+                    continue;
+                }
+                let normal = (winding * ey / edge_length, -winding * ex / edge_length);
+                let midpoint_to_source = (source.0 - (a.0 + b.0) * 0.5,
+                                          source.1 - (a.1 + b.1) * 0.5);
+                if normal.0 * midpoint_to_source.0 + normal.1 * midpoint_to_source.1 <= 1e-10 {
+                    continue;
+                }
+
+                let mut cuts = vec![0.0_f64, 1.0_f64];
+                for (block_body, block_unit, blocker_vertices) in &world_vertices {
+                    if *block_body == body_index && *block_unit == part.unit_index {
+                        continue;
+                    }
+                    for &vertex in blocker_vertices {
+                        let dx = vertex.0 - source.0;
+                        let dy = vertex.1 - source.1;
+                        let denominator = ex * dy - ey * dx;
+                        if denominator.abs() <= 1e-12 {
+                            continue;
+                        }
+                        let ax = a.0 - source.0;
+                        let ay = a.1 - source.1;
+                        let t = (ax * dy - ay * dx) / denominator;
+                        let u = (ax * ey - ay * ex) / denominator;
+                        // Only the continuation beyond the blocker vertex can
+                        // mark an edge point as lying in its source shadow.
+                        if t > 1e-10 && t < 1.0 - 1e-10 && u > 1.0 + 1e-10 {
+                            cuts.push(t);
+                        }
+                    }
+                }
+                cuts.sort_by(f64::total_cmp);
+                cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-10);
+
+                for pair in cuts.windows(2) {
+                    let (t0, t1) = (pair[0], pair[1]);
+                    if t1 - t0 <= 1e-10 {
+                        continue;
+                    }
+                    let t = (t0 + t1) * 0.5;
+                    let point = (a.0 + ex * t, a.1 + ey * t);
+                    if crate::organism_geometry::source_path_blocked(
+                        source, point, bodies, body_index, part.unit_index
+                    ) {
+                        continue;
+                    }
+                    result.push(ExposedBoundaryInterval {
+                        start: (a.0 + ex * t0, a.1 + ey * t0),
+                        end: (a.0 + ex * t1, a.1 + ey * t1),
+                        outward_normal: normal,
+                    });
+                }
+            }
+        }
+    }
+    Some(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn interval(normal: (f64, f64)) -> ExposedBoundaryInterval {
+        ExposedBoundaryInterval {
+            start: (0.0, 0.0),
+            end: (2.0, 0.0),
+            outward_normal: normal,
+        }
+    }
+
+    #[test]
+    fn directly_facing_edge_contributes_its_full_length() {
+        assert_eq!(projected_extent(interval((0.0, 1.0)), (0.0, 1.0)), Some(2.0));
+    }
+
+    #[test]
+    fn edge_on_and_back_facing_edges_contribute_zero() {
+        assert_eq!(projected_extent(interval((1.0, 0.0)), (0.0, 1.0)), Some(0.0));
+        assert_eq!(projected_extent(interval((0.0, -1.0)), (0.0, 1.0)), Some(0.0));
+    }
+
+    #[test]
+    fn oblique_edge_uses_cosine_projection_not_an_arbitrary_weight() {
+        let diagonal = std::f64::consts::FRAC_1_SQRT_2;
+        let oblique = ExposedBoundaryInterval {
+            start: (0.0, 0.0),
+            end: (2.0 * diagonal, -2.0 * diagonal),
+            outward_normal: (diagonal, diagonal),
+        };
+        let extent = projected_extent(oblique, (diagonal, diagonal)).unwrap();
+        assert!((extent - 2.0).abs() < 1e-12);
+
+        let half_projection = projected_extent(oblique, (0.0, 1.0)).unwrap();
+        assert!((half_projection - std::f64::consts::SQRT_2).abs() < 1e-12);
+    }
+
+    #[test]
+    fn rejects_non_unit_normals_and_source_directions() {
+        assert_eq!(projected_extent(interval((0.0, 2.0)), (0.0, 1.0)), None);
+        assert_eq!(projected_extent(interval((0.0, 1.0)), (0.0, 0.0)), None);
+    }
+}
