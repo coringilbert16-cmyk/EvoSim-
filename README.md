@@ -12,6 +12,20 @@ First implementation slice on the dedicated `feature/external-input-ledger` bran
 - Exact-head CI exposed three existing world-tone compile errors: `WorldToneSample` was compared/debug-formatted in tests and passed through the harmonic path without implementing `PartialEq`, `Debug`, or `Copy`. Added those value-type derives so the existing source model and call path compile; this does not change source behavior. Formatting-only corrections were also applied to the ledger expression and source-tone integration. Exact-head verification is still required. Do not treat this ledger primitive alone as proof of whole-world conservation or functional solar capture.
 
 
+## Unified resonance and reflected-tone energy — 2026-10-19
+
+**Decision confirmed by the user:** an interaction may change the frequency composition of the reflected tone. Reflection is not energy-costly tone emission; it is the onward propagation of the energy left from an incoming tone. The reflected tone must be less energetic than its source interaction after capture and losses.
+
+- Reuse the existing harmonic/resonance response rules for incoming tones and reflected tones. Do not create a solar-only reflection system or a second aura propagation mechanism.
+- Material resonance and nonlinear response may reweight frequencies and produce harmonic components in the reflected spectrum. The reflected spectrum may therefore differ from the incoming spectrum.
+- Keep the spectrum as a signal representation and track its physical energy budget separately. Spectral amplitude or `ResonancePerception.magnitude` is not, by itself, captured energy.
+- For each interaction, enforce: incoming energy received = usable energy captured + energy reflected onward + energy lost. Any frequency transformation must remain bounded by the energy available for reflection; it cannot create energy.
+- A downstream organism can harvest only reflected energy that actually reaches it. Directional propagation, attenuation, and obstruction must apply consistently to direct and reflected tones.
+- The existing `material_response_to_drive` and `nonlinear_harmonic_amplitude` functions provide a starting point for spectral transformation, but the current world-tone path only computes perception. It does not create an energy-bearing reflected signal or perform capture.
+- The existing external-input ledger validates one transaction against a caller-supplied availability value. It does not yet allocate a shared per-tick source budget across receivers or prevent repeated claims against the same budget.
+
+**Implementation gate:** before wiring live capture/reflection, define and test a bounded conversion from the existing resonance response to a capture fraction, plus the allocation rule for source energy across spatial receivers. Do not use the unbounded raw resonance response as a capture fraction, do not equate spectral amplitude with energy, and do not add arbitrary reflection/loss constants without calibration. Keep this work in PR #202; leave constructor/Bob PR #196 untouched.
+
 ## Single working authority and directory boundaries
 
 This root `README.md` is the **only authoritative working README** for EvoSim. Subsystem READMEs are being retired; durable decisions, current status, test gates, and operational instructions belong here. Dated audit documents under `docs/` may hold detailed evidence, but they are supporting records—not competing authorities. When a detail conflicts, this README's latest explicit decision/status wins, and stale history must be labelled historical.
