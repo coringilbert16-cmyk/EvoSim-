@@ -510,6 +510,23 @@ impl Simulation {
             self.decomposing_bodies.remove(index);
         }
     }
+    pub(crate) fn living_population(&self) -> usize {
+        self.organisms
+            .iter()
+            .filter(|organism| {
+                match crate::cavity::analyze_genome_cavity(
+                    &organism.structure,
+                    &self.environment.catalog,
+                ) {
+                    Ok(Some(cavity)) => cavity.qualifies(),
+                    Ok(None) => false,
+                    // A geometry-analysis error is not proof that the core was breached.
+                    Err(_) => true,
+                }
+            })
+            .count()
+    }
+
     pub(crate) fn step(&mut self) {
         self.tick += 1;
 
