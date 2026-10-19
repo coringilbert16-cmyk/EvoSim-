@@ -16,7 +16,10 @@ const BUDDING_AVAILABILITY_FRACTION: f64 = 0.90;
 
 impl Simulation {
     /// Configure or disable the rotating source. Invalid values are rejected.
-    #[expect(dead_code, reason = "Runtime configuration remains staged until world geometry and signal bounds are selected")]
+    #[expect(
+        dead_code,
+        reason = "Runtime configuration remains staged until world geometry and signal bounds are selected"
+    )]
     pub(crate) fn configure_world_tone(
         &mut self,
         config: Option<crate::world_tone::WorldToneRuntimeConfig>,
