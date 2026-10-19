@@ -131,14 +131,25 @@ pub(crate) fn visible_polygonal_intervals(
     let mut polygons = Vec::new();
     for (body_index, body) in bodies.iter().enumerate() {
         for part in &body.parts {
+            if !part.x.is_finite()
+                || !part.y.is_finite()
+                || !part.rotation_radians.is_finite()
+            {
+                return None;
+            }
             let local = part.form.polygon_vertices()?;
-            if local.len() < 3 {
+            if local.len() < 3
+                || local.iter().any(|(x, y)| !x.is_finite() || !y.is_finite())
+            {
                 return None;
             }
             let (sin, cos) = part.rotation_radians.sin_cos();
             let vertices = local.into_iter().map(|(x, y)| {
                 (part.x + x * cos - y * sin, part.y + x * sin + y * cos)
             }).collect::<Vec<_>>();
+            if vertices.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) {
+                return None;
+            }
             polygons.push((body_index, part.unit_index, vertices));
         }
     }
@@ -151,6 +162,9 @@ pub(crate) fn visible_polygonal_intervals(
             let vertices = local.into_iter().map(|(x, y)| {
                 (part.x + x * cos - y * sin, part.y + x * sin + y * cos)
             }).collect::<Vec<_>>();
+            if vertices.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) {
+                return None;
+            }
             let area2: f64 = vertices.iter().enumerate().map(|(i, &(x1, y1))| {
                 let (x2, y2) = vertices[(i + 1) % vertices.len()];
                 x1 * y2 - x2 * y1
