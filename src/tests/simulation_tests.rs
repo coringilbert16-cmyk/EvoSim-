@@ -61,7 +61,7 @@ mod integration_tests {
     }
 
     #[test]
-    fn death_with_no_remaining_bonds_releases_realized_structure() {
+    fn breached_genome_core_does_not_remove_or_recycle_physical_organism() {
         let mut s = Simulation::new(41, 10.0);
         let before_environment_amount = s.environment.field.total_amount();
         let organism = &mut s.organisms[0];
@@ -70,24 +70,17 @@ mod integration_tests {
         let initial_units = organism.structure.units.len();
         assert!(initial_units > 0);
 
-        let dead = Simulation::apply_survival_damage(
+        let breached = Simulation::apply_survival_damage(
             &mut s.organisms[0],
             &s.environment,
             &mut s.energy_ledger,
             &mut s.rng,
         );
-        assert!(dead);
-
-        let mut dead_organism = s.organisms.pop().expect("dead organism should be present");
-        let recycled = crate::recycling::recycle_dead_organism(
-            &mut s.environment,
-            &mut dead_organism,
-            &mut s.energy_ledger,
-        );
-        assert!(recycled.is_some());
-        assert!(s.organisms.is_empty());
+        assert!(breached);
+        assert_eq!(s.organisms.len(), 1);
+        assert_eq!(s.organisms[0].structure.units.len(), initial_units);
         assert!(s.decomposing_bodies.is_empty());
-        assert!(s.environment.field.total_amount() > before_environment_amount);
+        assert_eq!(s.environment.field.total_amount(), before_environment_amount);
     }
 
     #[test]
