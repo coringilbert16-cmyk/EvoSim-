@@ -22,6 +22,7 @@ pub(crate) enum EnvelopeCurve {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct WorldToneParameters {
     pub(crate) minimum_frequency_hz: f64,
+    pub(crate) minimum_signal_energy_level: f64,
     pub(crate) maximum_signal_energy_level: f64,
     pub(crate) orbital_period_ticks: u64,
     pub(crate) envelope_curve: EnvelopeCurve,
@@ -43,8 +44,10 @@ impl WorldToneParameters {
         self.minimum_frequency_hz.is_finite()
             && self.minimum_frequency_hz > 0.0
             && self.minimum_frequency_hz <= MAX_WORLD_TONE_FREQUENCY_HZ
+            && self.minimum_signal_energy_level.is_finite()
+            && self.minimum_signal_energy_level >= 0.0
             && self.maximum_signal_energy_level.is_finite()
-            && self.maximum_signal_energy_level > 0.0
+            && self.maximum_signal_energy_level > self.minimum_signal_energy_level
             && self.orbital_period_ticks > 0
     }
 
@@ -78,7 +81,8 @@ impl WorldToneParameters {
             source_x: center_x + orbit_radius * angle.sin(),
             source_y: center_y - orbit_radius * angle.cos(),
             frequency_hz,
-            signal_energy_level: self.maximum_signal_energy_level * envelope,
+            signal_energy_level: self.minimum_signal_energy_level
+                + (self.maximum_signal_energy_level - self.minimum_signal_energy_level) * envelope,
             orbital_phase,
         })
     }
@@ -91,6 +95,7 @@ mod tests {
     fn parameters() -> WorldToneParameters {
         WorldToneParameters {
             minimum_frequency_hz: 110.0,
+            minimum_signal_energy_level: 0.0,
             maximum_signal_energy_level: 8.0,
             orbital_period_ticks: 100,
             envelope_curve: EnvelopeCurve::Cosine,
