@@ -13,7 +13,6 @@ pub(crate) enum EnergyReason {
     Transfer,
 }
 
-
 /// The external source whose energy crosses into a holder. This is kept
 /// separate from bond-energy release: world tone is not chemical potential.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
