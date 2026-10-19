@@ -262,6 +262,12 @@ mod visibility_tests {
     }
 
     #[test]
+    fn polygonal_exposure_fails_closed_on_non_finite_realized_geometry() {
+        let target = rectangle_body(0, f64::INFINITY, 0.0, 2.0, 2.0);
+        assert!(visible_polygonal_intervals((-5.0, 0.0), &[target]).is_none());
+    }
+
+    #[test]
     fn polygonal_exposure_splits_a_partially_shadowed_target_edge() {
         let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
         let blocker = rectangle_body(0, 2.5, 0.0, 0.5, 0.5);
