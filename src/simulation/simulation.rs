@@ -513,6 +513,20 @@ impl Simulation {
     pub(crate) fn step(&mut self) {
         self.tick += 1;
 
+        // Living status is derived from the realized genome core, not a death
+        // flag. Keep breached organisms in the world so their physical
+        // structure and chemistry remain represented.
+        let living_ids: HashSet<String> = self
+            .organisms
+            .iter_mut()
+            .filter_map(|organism| {
+                organism
+                    .genome_cavity_cached_ref(&self.environment.catalog)
+                    .is_some()
+                    .then(|| organism.id.clone())
+            })
+            .collect();
+
         let mut still_active = Vec::new();
         let mut completed = Vec::new();
         for mut transformation in self.active_transformations.drain(..) {
@@ -620,30 +634,35 @@ impl Simulation {
                 })
             });
         for organism in &mut self.organisms {
-            organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
-            crate::harmonics::update_organism_harmonics(
-                organism,
-                &self.environment,
-                world_tone_sample,
-                self.tick,
-            );
-            crate::memory::update_experience_memory(organism, &self.environment);
-            let budding_available = seed_reference
-                .and_then(|reference| {
-                    organism.developmental_realization_cached_for_reference(
-                        &self.environment.catalog,
-                        reference,
-                    )
-                })
-                .is_some_and(|realization| realization.overall > BUDDING_AVAILABILITY_FRACTION);
-            if budding_available && organism.reproductive_construction.is_none() {
-                let _ = crate::reproduction::begin_reproduction(
+            let is_living = living_ids.contains(&organism.id);
+            if is_living {
+                organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
+                crate::harmonics::update_organism_harmonics(
                     organism,
-                    &mut self.rng,
-                    &self.environment.catalog,
-                    &mut self.energy_ledger,
+                    &self.environment,
+                    world_tone_sample,
+                    self.tick,
                 );
+                crate::memory::update_experience_memory(organism, &self.environment);
+                let budding_available = seed_reference
+                    .and_then(|reference| {
+                        organism.developmental_realization_cached_for_reference(
+                            &self.environment.catalog,
+                            reference,
+                        )
+                    })
+                    .is_some_and(|realization| realization.overall > BUDDING_AVAILABILITY_FRACTION);
+                if budding_available && organism.reproductive_construction.is_none() {
+                    let _ = crate::reproduction::begin_reproduction(
+                        organism,
+                        &mut self.rng,
+                        &self.environment.catalog,
+                        &mut self.energy_ledger,
+                    );
+                }
             }
+            // Chemical reactions remain part of the physical world after
+            // organism status ends; biological maintenance and memory do not.
             let chemical_operations = crate::chemical_reaction::accumulate(
                 organism,
                 &self.environment.catalog,
@@ -659,16 +678,18 @@ impl Simulation {
                     crate::chemical_reaction::resolve(operation, organism, &mut self.energy_ledger);
             }
 
-            let stored_amount_before_transfer = organism.stored_material.total_amount();
-            Self::transfer_contained_environmental_material(organism, &mut self.environment);
-            let acquired_amount =
-                (organism.stored_material.total_amount() - stored_amount_before_transfer).max(0.0);
-            if organism.active_movement.is_none() {
-                Self::finalize_pending_movement_experience(
-                    organism,
-                    &self.environment,
-                    acquired_amount,
-                );
+            if is_living {
+                let stored_amount_before_transfer = organism.stored_material.total_amount();
+                Self::transfer_contained_environmental_material(organism, &mut self.environment);
+                let acquired_amount =
+                    (organism.stored_material.total_amount() - stored_amount_before_transfer).max(0.0);
+                if organism.active_movement.is_none() {
+                    Self::finalize_pending_movement_experience(
+                        organism,
+                        &self.environment,
+                        acquired_amount,
+                    );
+                }
             }
         }
         {
@@ -676,14 +697,8 @@ impl Simulation {
             let mut movement_spatial_index =
                 crate::movement::MovementSpatialIndex::new(organisms, environment);
             for index in 0..organisms.len() {
-                if completed_organisms.contains(&organisms[index].id) {
-                    continue;
-                }
-                if organisms[index].structure.bonds.is_empty()
-                    && organisms[index].stress
-                        >= organisms[index]
-                            .stress_threshold
-                            .max(crate::state::MIN_STRESS_THRESHOLD)
+                if !living_ids.contains(&organisms[index].id)
+                    || completed_organisms.contains(&organisms[index].id)
                 {
                     continue;
                 }
@@ -1102,6 +1117,9 @@ impl Simulation {
         let mut offspring = Vec::new();
         let mut next_organism_id = self.next_organism_id;
         for organism in &mut self.organisms {
+            if !living_ids.contains(&organism.id) {
+                continue;
+            }
             if organism.reproductive_construction.is_some() {
                 let Some(parent_body) =
                     crate::reproduction::parent_body_geometry(organism, &self.environment.catalog)
@@ -1151,44 +1169,31 @@ impl Simulation {
         }
         self.next_organism_id = next_organism_id;
         self.organisms.extend(offspring);
-        let mut survivors = Vec::with_capacity(self.organisms.len());
-        for mut organism in self.organisms.drain(..) {
-            let dead = Self::apply_survival_damage(
-                &mut organism,
-                &self.environment,
-                &mut self.energy_ledger,
-                &mut self.rng,
-            );
-            if dead {
-                if organism.reproductive_construction.is_some() {
-                    let child_id = next_organism_id.to_string();
-                    if let Some(child) = crate::reproduction::finish_reproduction(
-                        &mut organism,
-                        child_id,
-                        &self.environment.catalog,
-                        &mut self.energy_ledger,
-                        self.seed_scale_reference,
-                    ) {
-                        next_organism_id += 1;
-                        survivors.push(child);
-                    }
-                }
-                if let Some(body) = crate::recycling::recycle_dead_organism(
-                    &mut self.environment,
-                    &mut organism,
+        // Stress can break the core through ordinary bond-breaking chemistry.
+        // A breached organism remains in the physical world; only living
+        // organisms receive biological stress processing on subsequent ticks.
+        for organism in &mut self.organisms {
+            if living_ids.contains(&organism.id) {
+                let _ = Self::apply_survival_damage(
+                    organism,
+                    &self.environment,
                     &mut self.energy_ledger,
-                ) {
-                    self.decomposing_bodies.push(body);
-                }
-            } else {
-                survivors.push(organism);
+                    &mut self.rng,
+                );
             }
         }
-        self.organisms = survivors;
-        self.process_decomposing_bodies();
-        let live_ids: HashSet<String> = self.organisms.iter().map(|o| o.id.clone()).collect();
+        let currently_living_ids: HashSet<String> = self
+            .organisms
+            .iter_mut()
+            .filter_map(|organism| {
+                organism
+                    .genome_cavity_cached_ref(&self.environment.catalog)
+                    .is_some()
+                    .then(|| organism.id.clone())
+            })
+            .collect();
         self.active_transformations
-            .retain(|t| live_ids.contains(&t.organism_id));
+            .retain(|t| currently_living_ids.contains(&t.organism_id));
         self.energy_ledger.total_usable_energy_held =
             crate::reproduction::total_usable_energy_held(
                 &self.organisms,
@@ -1201,15 +1206,14 @@ impl Simulation {
         ledger: &mut EnergyLedger,
         rng: &mut ChaCha8Rng,
     ) -> bool {
-        let threshold = organism
-            .stress_threshold
-            .max(crate::state::MIN_STRESS_THRESHOLD);
-        let lethal_before_decay = organism.stress >= threshold;
         organism.stress *= crate::state::STRESS_DECAY_PER_TICK;
-        if organism.structure.bonds.is_empty() && lethal_before_decay {
-            return true;
+        let _ = organism.apply_stress_damage(environment, ledger, rng);
+        match crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog) {
+            Ok(Some(cavity)) => !cavity.qualifies(),
+            Ok(None) => true,
+            // Geometry-analysis failure is not evidence of death.
+            Err(_) => false,
         }
-        organism.apply_stress_damage(environment, ledger, rng)
     }
 }
 
