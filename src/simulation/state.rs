@@ -399,6 +399,7 @@ impl Organism {
                 potential_released: 0.0,
                 usable_delta: -attempted_payment,
                 structural_delta: 0.0,
+                work_expended: 0.0,
                 heat_dissipated: attempted_payment,
             };
             if ledger.settle_transaction(&mut self.usable_energy, tx) {
