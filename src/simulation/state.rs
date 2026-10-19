@@ -144,6 +144,8 @@ pub(crate) struct ReproductiveConstruction {
 }
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]
 pub(crate) struct EnergyLedger {
+    /// Explicit non-structural energy sources; stored bond energy release is
+    /// represented by the structural-store delta instead.
     pub(crate) total_potential_energy_released: f64,
     /// Net change in energy stored in realized structure (positive stores, negative releases).
     #[serde(default)]
