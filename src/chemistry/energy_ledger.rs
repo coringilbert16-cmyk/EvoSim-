@@ -59,6 +59,7 @@ impl EnergyTransaction {
             && self.work_expended.is_finite()
             && self.heat_dissipated.is_finite()
             && self.potential_released >= 0.0
+            && self.structural_delta >= 0.0
             && self.work_expended >= 0.0
             && self.heat_dissipated >= 0.0
             && (self.potential_released
@@ -153,6 +154,19 @@ mod tests {
             };
             assert!(tx.balanced());
         }
+    }
+
+    #[test]
+    fn negative_structural_allocation_is_not_a_balanced_transaction() {
+        let tx = EnergyTransaction {
+            reason: EnergyReason::Break,
+            potential_released: 0.0,
+            usable_delta: -2.0,
+            structural_delta: -1.0,
+            work_expended: 0.0,
+            heat_dissipated: 1.0,
+        };
+        assert!(!tx.balanced());
     }
 
     #[test]
