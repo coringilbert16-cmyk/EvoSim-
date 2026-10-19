@@ -451,14 +451,6 @@ impl Simulation {
         let mut finished_indices = Vec::new();
         for index in 0..self.decomposing_bodies.len() {
             if self.decomposing_bodies[index].is_finished() {
-                let position = self.decomposing_bodies[index].position.clone();
-                let materials = self.decomposing_bodies[index]
-                    .release_finished_material(&self.environment.catalog);
-                for material in materials {
-                    self.environment
-                        .field
-                        .deposit(position.x, position.y, material);
-                }
                 finished_indices.push(index);
                 continue;
             }
@@ -472,13 +464,7 @@ impl Simulation {
             // Released usable energy remains with the decomposing body.
             // Distance alone is not an authorized transfer mechanism; a
             // receiver must obtain it through a real, chemistry-authorized path.
-            if let Some(materials) = step.released_material {
-                let position = self.decomposing_bodies[index].position.clone();
-                for material in materials {
-                    self.environment
-                        .field
-                        .deposit(position.x, position.y, material);
-                }
+            if step.released_material.is_some() {
                 finished_indices.push(index);
             }
         }
@@ -486,7 +472,8 @@ impl Simulation {
             let remaining = self.decomposing_bodies[index].energy_budget;
             if !remaining.is_finite() || remaining < 0.0 {
                 // Preserve the holder for diagnosis rather than deleting an
-                // invalid energy balance.
+                // invalid energy balance. Crucially, do not release its
+                // material until this body's finalization can commit.
                 continue;
             }
             if remaining > 0.0 {
@@ -507,6 +494,18 @@ impl Simulation {
                 ) {
                     continue;
                 }
+            }
+
+            // Material release and holder removal happen only after the energy
+            // sink succeeds. Otherwise a retained body would re-release the
+            // same units on a later tick.
+            let position = self.decomposing_bodies[index].position.clone();
+            let materials = self.decomposing_bodies[index]
+                .release_finished_material(&self.environment.catalog);
+            for material in materials {
+                self.environment
+                    .field
+                    .deposit(position.x, position.y, material);
             }
             self.decomposing_bodies.remove(index);
         }
