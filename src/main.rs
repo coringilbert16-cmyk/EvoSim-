@@ -5,8 +5,6 @@
 mod developmental_blueprint;
 #[path = "simulation/environment.rs"]
 mod environment;
-#[path = "simulation/world_tone.rs"]
-mod world_tone;
 #[path = "materials/environmental_materials.rs"]
 mod environmental_materials;
 #[path = "chemistry/expulsion.rs"]
@@ -27,6 +25,8 @@ mod resources;
 mod structure;
 #[path = "geometry/structure_authority.rs"]
 mod structure_authority;
+#[path = "simulation/world_tone.rs"]
+mod world_tone;
 
 // Active physical geometry authority stack.
 #[path = "geometry/capillary_geometry.rs"]

@@ -1,4 +1,7 @@
-#![expect(dead_code, reason = "Staged environmental source model awaiting simulation and energy-ledger integration")]
+#![expect(
+    dead_code,
+    reason = "Staged environmental source model awaiting simulation and energy-ledger integration"
+)]
 //! Parameterized model for EvoSim's single rotating world-tone source.
 //!
 //! This module deliberately models signal position, frequency, and signal-energy
@@ -63,8 +66,8 @@ impl WorldToneParameters {
             return None;
         }
 
-        let orbital_phase = (tick % self.orbital_period_ticks) as f64
-            / self.orbital_period_ticks as f64;
+        let orbital_phase =
+            (tick % self.orbital_period_ticks) as f64 / self.orbital_period_ticks as f64;
         let angle = TAU * orbital_phase;
         let envelope = match self.envelope_curve {
             EnvelopeCurve::Cosine => (1.0 + angle.cos()) * 0.5,
