@@ -150,12 +150,33 @@ pub(crate) fn material_response(
     baselines: ResourceBaselines,
     phase_radians: f64,
 ) -> ToneSpectrum {
+    material_response_to_drive(properties, baselines, WORLD_TONE_HZ, 1.0, phase_radians)
+}
+
+/// Apply the existing material resonance model to a supplied environmental
+/// drive. The signal level scales response; it is not energy captured by the
+/// receiver and must never be credited to an energy ledger by this function.
+fn material_response_to_drive(
+    properties: ResourceProperties,
+    baselines: ResourceBaselines,
+    drive_frequency_hz: f64,
+    signal_level: f64,
+    phase_radians: f64,
+) -> ToneSpectrum {
+    if !drive_frequency_hz.is_finite()
+        || drive_frequency_hz <= 0.0
+        || !signal_level.is_finite()
+        || signal_level <= 0.0
+    {
+        return ToneSpectrum::empty();
+    }
     let natural = natural_frequency_hz(properties, baselines);
     let damping = damping_ratio(properties, baselines);
-    let fundamental = resonance_response(WORLD_TONE_HZ, natural, damping);
+    let fundamental =
+        resonance_response(drive_frequency_hz, natural, damping) * signal_level;
     let mut spectrum = ToneSpectrum {
         components: vec![ToneComponent {
-            frequency_hz: WORLD_TONE_HZ,
+            frequency_hz: drive_frequency_hz,
             amplitude: fundamental,
             phase_radians,
         }],
@@ -165,13 +186,97 @@ pub(crate) fn material_response(
         let amplitude = nonlinear_harmonic_amplitude(fundamental, properties.reactivity, order);
         if amplitude > f64::EPSILON {
             spectrum.components.push(ToneComponent {
-                frequency_hz: WORLD_TONE_HZ * order as f64,
+                frequency_hz: drive_frequency_hz * order as f64,
                 amplitude,
                 phase_radians: phase_radians * order as f64,
             });
         }
     }
+    spectrum.retain_strongest();
     spectrum
+}
+
+/// Receive the rotating world tone through the organism's actual cavity-wall
+/// segments. This is signal perception only: it neither mutates organism energy
+/// nor records energy capture. Each wall segment uses its realized material
+/// properties and the same outward-normal directional coupling as environmental
+/// material reception.
+pub(crate) fn world_tone_cavity_contribution(
+    catalog: &[crate::resources::BaseResource],
+    structure: &crate::structure::OrganismStructure,
+    cavity: &crate::cavity::GenomeCavity,
+    sample: crate::world_tone::WorldToneSample,
+) -> (ToneSpectrum, Vec<ResonancePerception>) {
+    let segments = cavity.boundary_segments();
+    if segments.is_empty() || sample.signal_energy_level <= f64::EPSILON {
+        return (ToneSpectrum::empty(), Vec::new());
+    }
+    let center = cavity_center(cavity);
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    let mut spectrum = ToneSpectrum::empty();
+    let mut perceptions = Vec::new();
+
+    for (a, b, unit_index) in segments {
+        let Some(unit) = structure.units.get(unit_index) else {
+            continue;
+        };
+        let Some(properties) = unit.properties(catalog) else {
+            continue;
+        };
+        let rx = (a.0 + b.0) * 0.5;
+        let ry = (a.1 + b.1) * 0.5;
+        let dx = sample.source_x - rx;
+        let dy = sample.source_y - ry;
+        let distance = dx.hypot(dy);
+        if !distance.is_finite() || distance <= f64::EPSILON {
+            continue;
+        }
+
+        let edge_x = b.0 - a.0;
+        let edge_y = b.1 - a.1;
+        let edge_length = edge_x.hypot(edge_y);
+        if !edge_length.is_finite() || edge_length <= f64::EPSILON {
+            continue;
+        }
+        let mut normal_x = -edge_y / edge_length;
+        let mut normal_y = edge_x / edge_length;
+        if normal_x * (rx - center.0) + normal_y * (ry - center.1) < 0.0 {
+            normal_x = -normal_x;
+            normal_y = -normal_y;
+        }
+        let directional_gain =
+            (normal_x * dx / distance + normal_y * dy / distance).max(0.0);
+        if directional_gain <= f64::EPSILON {
+            continue;
+        }
+        let attenuation = directional_gain / (1.0 + distance);
+        let mut received = material_response_to_drive(
+            properties,
+            baselines,
+            sample.frequency_hz,
+            sample.signal_energy_level * attenuation,
+            0.0,
+        );
+        received.retain_strongest();
+        let magnitude = received
+            .components
+            .iter()
+            .map(|component| component.amplitude.max(0.0))
+            .sum::<f64>();
+        if magnitude <= f64::EPSILON {
+            continue;
+        }
+        add_spectrum(&mut spectrum, &received, 1.0);
+        perceptions.push(ResonancePerception {
+            source_x: sample.source_x,
+            source_y: sample.source_y,
+            extent: 0.0,
+            spectrum: received,
+            magnitude,
+        });
+    }
+    spectrum.retain_strongest();
+    (spectrum, perceptions)
 }
 
 /// Combine two spectral components at the same frequency as phasors.
@@ -584,6 +689,52 @@ mod tests {
             .map(|component| component.amplitude)
             .unwrap_or(0.0);
         assert!(coupled_fundamental > baseline_fundamental);
+    }
+
+    #[test]
+    fn rotating_world_tone_is_filtered_by_cavity_wall_and_keeps_source_location() {
+        let catalog = crate::resources::default_catalog();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
+        let (mut structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
+        for unit in &mut structure.units {
+            unit.placement.x += 500.0;
+            unit.placement.y += 500.0;
+        }
+        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .expect("confirmed seed must contain a genome cavity");
+        let north = crate::world_tone::WorldToneSample {
+            source_x: 500.0,
+            source_y: 0.0,
+            frequency_hz: 440.0,
+            signal_energy_level: 8.0,
+            orbital_phase: 0.0,
+        };
+        let (north_spectrum, north_perceptions) =
+            world_tone_cavity_contribution(&catalog, &structure, &cavity, north);
+        assert!(!north_spectrum.components.is_empty());
+        assert!(!north_perceptions.is_empty());
+        assert!(north_perceptions.iter().all(|perception| {
+            perception.source_x == north.source_x
+                && perception.source_y == north.source_y
+                && perception.magnitude > 0.0
+        }));
+        assert!(north_spectrum
+            .components
+            .iter()
+            .any(|component| (component.frequency_hz - 440.0).abs() < 1e-9));
+
+        let south = crate::world_tone::WorldToneSample {
+            source_x: 500.0,
+            source_y: 1000.0,
+            frequency_hz: 110.0,
+            signal_energy_level: 0.0,
+            orbital_phase: 0.5,
+        };
+        let (south_spectrum, south_perceptions) =
+            world_tone_cavity_contribution(&catalog, &structure, &cavity, south);
+        assert!(south_spectrum.components.is_empty());
+        assert!(south_perceptions.is_empty());
     }
 
     #[test]
