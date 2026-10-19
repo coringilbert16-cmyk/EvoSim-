@@ -478,6 +478,8 @@ pub(crate) struct Simulation {
     pub(crate) seed_scale_reference: Option<(f64, f64)>,
     /// Optional rotating source; absent by default until world geometry and signal bounds are configured.
     pub(crate) world_tone: Option<crate::world_tone::WorldToneRuntimeConfig>,
+    /// Precomputed deterministic source samples for short cycles; long cycles fall back to direct sampling.
+    pub(crate) world_tone_cycle: Option<crate::world_tone::WorldToneCycle>,
 }
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
 pub(crate) const DESIRABILITY_MAX: f64 = 1.0;
