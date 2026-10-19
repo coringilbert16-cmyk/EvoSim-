@@ -88,7 +88,8 @@ pub(crate) fn settle_chemical_break_energy(
         reason: EnergyReason::Break,
         potential_released: gross,
         usable_delta: usable,
-        structural_delta: disruption_cost,
+        structural_delta: 0.0,
+        work_expended: disruption_cost,
         heat_dissipated: heat,
     };
     if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
@@ -117,6 +118,7 @@ fn settle_break_energy(
         potential_released: gross,
         usable_delta: usable,
         structural_delta: 0.0,
+        work_expended: 0.0,
         heat_dissipated: heat,
     };
     if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
@@ -640,6 +642,7 @@ impl Simulation {
             potential_released: gross,
             usable_delta: usable,
             structural_delta: 0.0,
+            work_expended: 0.0,
             heat_dissipated: heat,
         };
         if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
