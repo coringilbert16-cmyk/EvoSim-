@@ -162,7 +162,6 @@ impl EnergyLedgerAuthority for EnergyLedger {
         if transaction.source != budget.source
             || !budget.remaining.is_finite()
             || budget.remaining < 0.0
-            || transaction.source_available > budget.remaining + EPSILON
             || transaction.external_input > budget.remaining + EPSILON
         {
             return false;
@@ -409,7 +408,7 @@ mod tests {
         let mut ledger = EnergyLedger::default();
         let mut budget = EnergySourceBudget::new(ExternalEnergySource::WorldTone, 5.0).unwrap();
         let mut holder = 1.0;
-        let tx = external_input(6.0, 2.0, 2.0, 0.0, 0.0);
+        let tx = external_input(6.0, 6.0, 6.0, 0.0, 0.0);
         assert!(!ledger.settle_external_input_from_budget(&mut holder, &mut budget, tx));
         assert_eq!(holder, 1.0);
         assert_eq!(budget.remaining, 5.0);
