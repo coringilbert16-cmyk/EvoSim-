@@ -65,6 +65,7 @@ impl WorldToneRuntimeConfig {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct WorldToneSample {
     pub(crate) source_x: f64,
     pub(crate) source_y: f64,
