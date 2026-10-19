@@ -61,7 +61,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
 
     report(&simulation, "initial");
 
-    let mut previous_population = simulation.organisms.len();
+    let mut previous_population = simulation.living_population();
     let mut previous_births = simulation.next_organism_id.saturating_sub(2);
 
     for _ in 0..max_ticks {
@@ -81,17 +81,17 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
                 "BIRTH EVENT: tick={} total_births={} population={} new_organism_ids_starting_at={}",
                 simulation.tick,
                 births,
-                simulation.organisms.len(),
+                simulation.living_population(),
                 simulation.next_organism_id.saturating_sub(1)
             );
             previous_births = births;
         }
 
         if simulation.tick % REPORT_INTERVAL == 0
-            || simulation.organisms.len() != previous_population
+            || simulation.living_population() != previous_population
         {
             report(&simulation, "progress");
-            previous_population = simulation.organisms.len();
+            previous_population = simulation.living_population();
         }
 
         if births >= target_births {
@@ -108,19 +108,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
             return;
         }
 
-        if simulation.organisms.is_empty() {
-            report(&simulation, "population extinct");
-            if let Some(diagnostics) = diagnostics.as_mut() {
-                diagnostics
-                    .finish(&mut simulation)
-                    .expect("failed to finalize simulation diagnostics");
-            }
-            println!(
-                "HEADLESS SIMULATION END: population reached zero at tick {}.",
-                simulation.tick
-            );
-            return;
-        }
+        // Continue the physical world even when no living organisms remain.
     }
 
     if let Some(diagnostics) = diagnostics.as_mut() {
@@ -140,13 +128,22 @@ fn report(simulation: &Simulation, label: &str) {
     let reproducing = simulation
         .organisms
         .iter()
-        .filter(|organism| organism.reproductive_construction.is_some())
+        .filter(|organism| {
+            organism.reproductive_construction.is_some()
+                && matches!(
+                    crate::cavity::analyze_genome_cavity(
+                        &organism.structure,
+                        &simulation.environment.catalog,
+                    ),
+                    Ok(Some(ref cavity)) if cavity.qualifies()
+                )
+        })
         .count();
 
     println!(
         "[{label}] tick={} population={} reproducing={}          decomposing_bodies={} active_transformations={} completed_births={}",
         simulation.tick,
-        simulation.organisms.len(),
+        simulation.living_population(),
         reproducing,
         simulation.decomposing_bodies.len(),
         simulation.active_transformations.len(),
