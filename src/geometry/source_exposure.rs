@@ -10,6 +10,7 @@
 /// The normal is the outward unit normal for this interval. Curved boundaries
 /// must be split or integrated by their exact arc representation before using
 /// this straight-interval primitive.
+#[allow(dead_code)] // Geometry measurement is staged before live exposure discovery.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ExposedBoundaryInterval {
     pub start: (f64, f64),
@@ -25,6 +26,7 @@ pub(crate) struct ExposedBoundaryInterval {
 /// This does not discover visibility, split partially shadowed edges, integrate
 /// curved boundaries, or credit energy. Callers must supply a finite unit
 /// source direction and non-overlapping intervals; invalid input returns None.
+#[allow(dead_code)] // Used when exact exposed intervals are available.
 pub(crate) fn projected_extent(
     interval: ExposedBoundaryInterval,
     toward_source: (f64, f64),
@@ -90,12 +92,15 @@ mod tests {
     #[test]
     fn oblique_edge_uses_cosine_projection_not_an_arbitrary_weight() {
         let diagonal = std::f64::consts::FRAC_1_SQRT_2;
-        let extent = projected_extent(interval((diagonal, diagonal)), (diagonal, diagonal))
-            .unwrap();
+        let oblique = ExposedBoundaryInterval {
+            start: (0.0, 0.0),
+            end: (2.0 * diagonal, -2.0 * diagonal),
+            outward_normal: (diagonal, diagonal),
+        };
+        let extent = projected_extent(oblique, (diagonal, diagonal)).unwrap();
         assert!((extent - 2.0).abs() < 1e-12);
 
-        let half_projection =
-            projected_extent(interval((diagonal, diagonal)), (0.0, 1.0)).unwrap();
+        let half_projection = projected_extent(oblique, (0.0, 1.0)).unwrap();
         assert!((half_projection - std::f64::consts::SQRT_2).abs() < 1e-12);
     }
 
