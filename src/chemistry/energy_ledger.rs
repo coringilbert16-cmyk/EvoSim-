@@ -405,15 +405,11 @@ mod tests {
     }
 
     #[test]
-    fn source_budget_rejects_wrong_source_and_preserves_all_state() {
+    fn source_budget_rejects_claim_above_remaining_budget_atomically() {
         let mut ledger = EnergyLedger::default();
         let mut budget = EnergySourceBudget::new(ExternalEnergySource::WorldTone, 5.0).unwrap();
         let mut holder = 1.0;
-        let mut tx = external_input(5.0, 2.0, 2.0, 0.0, 0.0);
-        tx.source = ExternalEnergySource::WorldTone;
-        // The budget must remain unchanged when the transaction is invalid.
-        tx.external_input = 2.0;
-        tx.usable_delta = 1.0;
+        let tx = external_input(6.0, 2.0, 2.0, 0.0, 0.0);
         assert!(!ledger.settle_external_input_from_budget(&mut holder, &mut budget, tx));
         assert_eq!(holder, 1.0);
         assert_eq!(budget.remaining, 5.0);
