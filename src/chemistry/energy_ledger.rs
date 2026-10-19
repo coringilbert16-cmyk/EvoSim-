@@ -52,22 +52,60 @@ impl EnergySourceBudget {
     }
 }
 
+/// Shared accounting destinations for any energy transaction.
+///
+/// Source identity and source-availability rules remain on the concrete
+/// transaction. This common allocation enforces the same balance equation
+/// without treating external input as released chemical potential.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct EnergyAllocation {
+    pub(crate) source_energy: f64,
+    pub(crate) usable_delta: f64,
+    pub(crate) structural_delta: f64,
+    pub(crate) work_expended: f64,
+    pub(crate) heat_dissipated: f64,
+}
+
+impl EnergyAllocation {
+    pub(crate) fn balanced(self) -> bool {
+        self.source_energy.is_finite()
+            && self.usable_delta.is_finite()
+            && self.structural_delta.is_finite()
+            && self.work_expended.is_finite()
+            && self.heat_dissipated.is_finite()
+            && self.source_energy >= 0.0
+            && self.structural_delta >= 0.0
+            && self.work_expended >= 0.0
+            && self.heat_dissipated >= 0.0
+            && (self.source_energy
+                - self.usable_delta
+                - self.structural_delta
+                - self.work_expended
+                - self.heat_dissipated)
+                .abs()
+                <= EPSILON
+    }
+}
+
 impl ExternalInputTransaction {
+    pub(crate) fn allocation(self) -> EnergyAllocation {
+        EnergyAllocation {
+            source_energy: self.external_input,
+            usable_delta: self.usable_delta,
+            structural_delta: 0.0,
+            work_expended: self.work_expended,
+            heat_dissipated: self.heat_dissipated,
+        }
+    }
+
     pub(crate) fn balanced(self) -> bool {
         self.source_available.is_finite()
             && self.source_available >= 0.0
             && self.external_input.is_finite()
             && self.external_input >= 0.0
             && self.external_input <= self.source_available + EPSILON
-            && self.usable_delta.is_finite()
             && self.usable_delta >= 0.0
-            && self.work_expended.is_finite()
-            && self.work_expended >= 0.0
-            && self.heat_dissipated.is_finite()
-            && self.heat_dissipated >= 0.0
-            && (self.external_input - self.usable_delta - self.work_expended - self.heat_dissipated)
-                .abs()
-                <= EPSILON
+            && self.allocation().balanced()
     }
 }
 
@@ -110,23 +148,18 @@ impl EnergyTransaction {
         })
     }
 
+    pub(crate) fn allocation(self) -> EnergyAllocation {
+        EnergyAllocation {
+            source_energy: self.potential_released,
+            usable_delta: self.usable_delta,
+            structural_delta: self.structural_delta,
+            work_expended: self.work_expended,
+            heat_dissipated: self.heat_dissipated,
+        }
+    }
+
     pub(crate) fn balanced(self) -> bool {
-        self.potential_released.is_finite()
-            && self.usable_delta.is_finite()
-            && self.structural_delta.is_finite()
-            && self.work_expended.is_finite()
-            && self.heat_dissipated.is_finite()
-            && self.potential_released >= 0.0
-            && self.structural_delta >= 0.0
-            && self.work_expended >= 0.0
-            && self.heat_dissipated >= 0.0
-            && (self.potential_released
-                - self.usable_delta
-                - self.structural_delta
-                - self.work_expended
-                - self.heat_dissipated)
-                .abs()
-                <= EPSILON
+        self.allocation().balanced()
     }
 }
 
@@ -258,6 +291,26 @@ impl EnergyLedgerAuthority for EnergyLedger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn both_transaction_types_use_the_shared_allocation_balance() {
+        let chemical = EnergyTransaction {
+            reason: EnergyReason::Break,
+            potential_released: 5.0,
+            usable_delta: 2.0,
+            structural_delta: 1.0,
+            work_expended: 1.0,
+            heat_dissipated: 1.0,
+        };
+        let external = external_input(5.0, 5.0, 2.0, 1.0, 2.0);
+
+        assert!(chemical.allocation().balanced());
+        assert!(external.allocation().balanced());
+        assert_eq!(chemical.allocation().source_energy, 5.0);
+        assert_eq!(external.allocation().source_energy, 5.0);
+        assert_eq!(chemical.allocation().structural_delta, 1.0);
+        assert_eq!(external.allocation().structural_delta, 0.0);
+    }
 
     #[test]
     fn transaction_balances_without_reason_specific_accounting() {
