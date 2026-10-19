@@ -224,3 +224,78 @@ pub(crate) fn visible_polygonal_intervals(
     }
     Some(result)
 }
+
+#[cfg(test)]
+mod visibility_tests {
+    use super::*;
+    use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
+    use crate::resources::Form;
+
+    fn rectangle_body(unit_index: usize, x: f64, y: f64, width: f64, height: f64) -> OrganismBodyGeometry {
+        OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index,
+                form: Form::Rectangle { width, height },
+                x,
+                y,
+                rotation_radians: 0.0,
+            }],
+            min_x: x - width * 0.5,
+            max_x: x + width * 0.5,
+            min_y: y - height * 0.5,
+            max_y: y + height * 0.5,
+        }
+    }
+
+    #[test]
+    fn polygonal_exposure_splits_a_partially_shadowed_target_edge() {
+        let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
+        let blocker = rectangle_body(0, 2.5, 0.0, 0.5, 0.5);
+        let intervals = visible_polygonal_intervals((-5.0, 0.0), &[target, blocker])
+            .expect("rectangles have exact polygonal boundaries");
+
+        // The target's left edge faces the source. A smaller blocker shadows
+        // its middle, so both visible shoulders must remain and total exposure
+        // must be strictly between zero and the full edge length.
+        let left_edge: Vec<_> = intervals
+            .iter()
+            .filter(|interval| {
+                (interval.start.0 - 4.0).abs() < 1e-8
+                    && (interval.end.0 - 4.0).abs() < 1e-8
+            })
+            .collect();
+        assert!(left_edge.len() >= 2, "expected separate visible shoulders: {left_edge:?}");
+        let visible_length: f64 = left_edge
+            .iter()
+            .map(|interval| {
+                (interval.end.0 - interval.start.0)
+                    .hypot(interval.end.1 - interval.start.1)
+            })
+            .sum();
+        assert!(visible_length > 0.0, "some of the target edge should remain exposed");
+        assert!(visible_length < 2.0 - 1e-6, "the blocker should shadow part of the edge");
+    }
+
+    #[test]
+    fn polygonal_exposure_keeps_the_full_edge_when_unobstructed() {
+        let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
+        let intervals = visible_polygonal_intervals((-5.0, 0.0), &[target])
+            .expect("rectangle has exact polygonal boundaries");
+        let left_edge: Vec<_> = intervals
+            .iter()
+            .filter(|interval| {
+                (interval.start.0 - 4.0).abs() < 1e-8
+                    && (interval.end.0 - 4.0).abs() < 1e-8
+            })
+            .collect();
+        let visible_length: f64 = left_edge
+            .iter()
+            .map(|interval| {
+                (interval.end.0 - interval.start.0)
+                    .hypot(interval.end.1 - interval.start.1)
+            })
+            .sum();
+        assert!((visible_length - 2.0).abs() < 1e-8);
+        assert_eq!(left_edge.len(), 1, "unobstructed edge should remain one interval");
+    }
+}
