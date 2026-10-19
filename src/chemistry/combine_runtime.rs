@@ -2050,7 +2050,10 @@ mod fluid_coalescence_transaction_tests {
             ledger.total_usable_energy_gained,
             original_ledger.total_usable_energy_gained
         );
-        assert_eq!(ledger.total_work_expended, original_ledger.total_work_expended);
+        assert_eq!(
+            ledger.total_work_expended,
+            original_ledger.total_work_expended
+        );
         assert_eq!(
             ledger.total_heat_dissipated,
             original_ledger.total_heat_dissipated

@@ -353,6 +353,7 @@ impl Simulation {
             potential_released: 0.0,
             usable_delta: -cost,
             structural_delta: 0.0,
+            work_expended: 0.0,
             heat_dissipated: cost,
         };
         if !ledger.settle_transaction(&mut organism.usable_energy, transaction) {

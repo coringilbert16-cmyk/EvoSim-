@@ -546,6 +546,8 @@ impl Simulation {
                     - original_ledger.total_potential_energy_released,
                 total_usable_energy_gained: trial_ledger.total_usable_energy_gained
                     - original_ledger.total_usable_energy_gained,
+                total_work_expended: trial_ledger.total_work_expended
+                    - original_ledger.total_work_expended,
                 total_heat_dissipated: trial_ledger.total_heat_dissipated
                     - original_ledger.total_heat_dissipated,
                 total_usable_energy_held: trial_ledger.total_usable_energy_held
