@@ -636,6 +636,19 @@ impl Simulation {
                 );
             }
         }
+        // A completed physical/chemical transformation may itself breach the
+        // core, so refresh the observed living set before any biological work.
+        living_ids = self
+            .organisms
+            .iter_mut()
+            .filter_map(|organism| {
+                organism
+                    .genome_cavity_cached_ref(&self.environment.catalog)
+                    .is_some()
+                    .then(|| organism.id.clone())
+            })
+            .collect();
+
         let decision_parameters = self.decision_parameters;
         // The confirmed seed scale is deterministic for the catalog. Compute it
         // once per simulation tick instead of rebuilding the calibration
