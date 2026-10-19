@@ -1838,4 +1838,17 @@ No source-code changes, tests, or constructor PR #196 changes are included in th
 - The transaction's `source_available` remains the local availability bound for that capture attempt. The shared budget's `remaining` is the aggregate unclaimed allowance; these are different constraints and are checked separately.
 - Regression tests cover competing claims against one budget, overspending, atomic rejection, and invalid budget initialization.
 
-**Still not implemented:** simulation tick owns no live shared world-tone budget yet; world-tone capture is not wired into the tick; reflection is not an energy-bearing field; and this primitive does not prove whole-world energy conservation. Ordinary chemical transactions still use `EnergyTransaction`, while external input uses `ExternalInputTransaction`. The next unification step is to make their accounting destinations and aggregate reconciliation explicit without conflating external input with released bond potential. No decomposition behavior is changed here.
+**Still not implemented:** simulation tick owns no live shared world-tone budget yet; world-tone capture is not wired into the tick; reflection is not an energy-bearing field; and this primitive does not prove whole-world energy conservation. Ordinary chemical transactions still use `EnergyTransaction`, while external input uses `ExternalInputTransaction`; both now adapt to the same `EnergyAllocation` balance rule. Aggregate reconciliation across all holders and energy sinks remains open. No decomposition behavior is changed here.
+
+## Shared transaction allocation contract — 2026-10-19
+
+Both `EnergyTransaction` (chemical/internal energy) and `ExternalInputTransaction` (source-backed external energy) now expose an `EnergyAllocation` view and use the same balance validation:
+
+`source_energy = usable_delta + structural_delta + work_expended + heat_dissipated`
+
+- For chemical transactions, `source_energy` is the explicitly released chemical/bond potential. A pure expenditure can have zero released potential and a negative `usable_delta`; the holder-funded debit balances the positive structural, work, and dissipation allocations.
+- For external-input transactions, `source_energy` is the explicit external input, and `structural_delta` is zero in this allocation. External input still has its own source identity, local availability bound, and shared-budget settlement path.
+- The common allocation is a validation view, not a new energy reservoir and not permission to substitute one source type for another. It does not merge the two source counters or infer missing energy.
+- A focused regression checks that both transaction types satisfy the same balance primitive while retaining their distinct source and structural-allocation semantics.
+
+**Next boundary:** aggregate reconciliation still needs to include actual initial energy, every live holder, stored bond energy, and explicit dissipated/output energy. The common transaction rule is not itself a whole-world conservation proof. The live tick still does not settle world-tone capture against one shared source budget, and no decomposition behavior is changed by this slice.
