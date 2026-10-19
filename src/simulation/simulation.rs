@@ -516,7 +516,7 @@ impl Simulation {
         // Living status is derived from the realized genome core, not a death
         // flag. Keep breached organisms in the world so their physical
         // structure and chemistry remain represented.
-        let living_ids: HashSet<String> = self
+        let mut living_ids: HashSet<String> = self
             .organisms
             .iter_mut()
             .filter_map(|organism| {
@@ -678,7 +678,15 @@ impl Simulation {
                     crate::chemical_reaction::resolve(operation, organism, &mut self.energy_ledger);
             }
 
-            if is_living {
+            // Recheck immediately after chemistry: if a reaction breached the
+            // genome core this tick, do not perform any later biological work.
+            let core_intact_after_chemistry = organism
+                .genome_cavity_cached_ref(&self.environment.catalog)
+                .is_some();
+            if !core_intact_after_chemistry {
+                living_ids.remove(&organism.id);
+            }
+            if core_intact_after_chemistry {
                 let stored_amount_before_transfer = organism.stored_material.total_amount();
                 Self::transfer_contained_environmental_material(organism, &mut self.environment);
                 let acquired_amount =
