@@ -296,15 +296,7 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
         }
         SimulationCommand::Step => {
             let mut state = runtime.lock();
-            if state.simulation.organisms.is_empty() {
-                return CommandResponse::value(
-                    serde_json::json!({"tick": state.simulation.tick, "running": false}),
-                );
-            }
             state.step();
-            if state.simulation.organisms.is_empty() {
-                state.simulation.running = false;
-            }
             let tick = state.simulation.tick;
             CommandResponse::value(
                 serde_json::json!({"tick": tick, "running": state.simulation.running}),
