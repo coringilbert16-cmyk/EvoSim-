@@ -1912,3 +1912,15 @@ A second lifecycle audit found that a finished `DecomposingBody` could deposit i
 The finalization order now settles residual energy first, then releases material and removes the body. If the holder is invalid or settlement fails, the body and its material remain together. A focused regression test forces an invalid residual-energy holder and checks that the finished body remains and environmental material quantity is unchanged.
 
 **Verification status:** the code and test are committed, but they have not been compiled or run. No PR-triggered workflow run or commit status was returned for this change. This is a source-level correction, not a claim that the branch is green.
+
+## Structural-store energy accounting slice — 2026-10-19
+
+A follow-up audit found that ordinary structural BREAK and the legacy decomposition BREAK path removed a realized bond while recording its bond energy as a generic `potential_released` source and leaving `structural_delta` at zero. That made the transaction look like a newly released source rather than a debit of energy already held in structure.
+
+- `EnergyAllocation` now permits a signed structural-store delta. Positive values represent energy retained in a realized bond; negative values represent removal of a previously stored structural-energy amount.
+- `EnergyLedger` now accumulates `total_structural_energy_delta` separately from non-structural potential release, with a serde default for compatibility.
+- Ordinary structural BREAK and the legacy decomposition BREAK path now record the released bond amount as `structural_delta = -gross` and do not relabel that stored energy as a new source. Prepared transformation ledger deltas preserve this counter.
+- A focused ledger test checks that a five-unit structural debit can fund two units of usable energy and three units of dissipation without incrementing the non-structural source counter.
+- Geometry regression coverage now includes an unobstructed edge, a partially shadowed edge, and a fully occluded edge.
+
+**Important unresolved boundary:** chemistry-caused BREAK still records its reaction-energy quantity as `potential_released` while removing a bond. The relationship between that reaction quantity and the bond's already-stored energy remains unresolved; do not claim global conservation or wire sunlight capture until this path has explicit source provenance and a non-double-counting allocation. The new tests, compilation, formatting, Clippy, and full Rust suite have not been run on this branch head.
