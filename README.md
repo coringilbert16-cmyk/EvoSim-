@@ -12,6 +12,16 @@ First implementation slice on the dedicated `feature/external-input-ledger` bran
 - Exact-head CI exposed three existing world-tone compile errors: `WorldToneSample` was compared/debug-formatted in tests and passed through the harmonic path without implementing `PartialEq`, `Debug`, or `Copy`. Added those value-type derives so the existing source model and call path compile; this does not change source behavior. Formatting-only corrections were also applied to the ledger expression and source-tone integration. Exact-head verification is still required. Do not treat this ledger primitive alone as proof of whole-world conservation or functional solar capture.
 
 
+## Deterministic world-tone cycle cache — 2026-10-19
+
+- The source sample is deterministic for a fixed world size and runtime configuration. `WorldToneCycle` precomputes one sample per tick for cycles up to 65,536 ticks and uses modulo lookup during the simulation tick.
+- The cache stores only source outputs (position, frequency, signal level, available energy, and phase). It does not allocate source energy to organisms, cache live reflections, or replace energy-ledger accounting.
+- The cache is rebuilt when world-tone configuration is applied. Cycles longer than the explicit 65,536-sample memory bound fall back to the existing direct sampler; they remain valid rather than being rejected.
+- Regression tests compare every cached sample against direct sampling for the full 2,400-tick cycle and verify cycle wrap. A separate test checks that oversized cycles fall back safely.
+- **Performance expectation:** this removes repeated trigonometric source sampling from the configured tick path, but it is not yet benchmarked and should not be presented as a major speedup. The source was already sampled only once per tick, not once per organism. Resonance evaluation and live reflection propagation are separate, likely more significant future costs.
+
+**Future library direction (design recommendation, not implementation):** keep Bob focused on geometry. If profiling later justifies reusable harmonic responses, introduce a separate response cache/library keyed by all inputs that affect a deterministic material response (material properties, incoming frequency/composition, and relevant response parameters). Do not store position-dependent energy outcomes or live reflection paths there, and do not duplicate response records in Bob. Keep actual received/captured/reflected/dissipated energy in the live, source-backed accounting path.
+
 ## Unified resonance and reflected-tone energy — 2026-10-19
 
 **Decision confirmed by the user:** an interaction may change the frequency composition of the reflected tone. Reflection is not energy-costly tone emission; it is the onward propagation of the energy left from an incoming tone. The reflected tone must be less energetic than its source interaction after capture and losses.
