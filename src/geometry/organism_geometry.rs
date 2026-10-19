@@ -277,19 +277,22 @@ fn segment_crosses_part(
         Form::Circle { radius } => {
             let dx = b.0 - a.0;
             let dy = b.1 - a.1;
-            let length_squared = dx * dx + dy * dy;
-            if length_squared <= f64::EPSILON {
+            let quadratic = dx * dx + dy * dy;
+            if quadratic <= f64::EPSILON {
                 return false;
             }
-            let t = ((-(a.0 * dx + a.1 * dy)) / length_squared).clamp(0.0, 1.0);
-            let closest = (a.0 + t * dx, a.1 + t * dy);
-            let distance = closest.0.hypot(closest.1);
-            if distance > *radius + 1e-9 {
+            let linear = 2.0 * (a.0 * dx + a.1 * dy);
+            let constant = a.0 * a.0 + a.1 * a.1 - radius * radius;
+            let discriminant = linear * linear - 4.0 * quadratic * constant;
+            if !discriminant.is_finite() || discriminant < -1e-9 {
                 return false;
             }
-            // The closest point must occur before the endpoint; an endpoint
-            // merely touching another surface is not an intervening occluder.
-            t < 1.0 - 1e-9
+            let root = discriminant.max(0.0).sqrt();
+            let entry = (-linear - root) / (2.0 * quadratic);
+            let exit = (-linear + root) / (2.0 * quadratic);
+            [entry, exit]
+                .into_iter()
+                .any(|t| (-1e-9..1.0 - 1e-9).contains(&t))
         }
         Form::Line { length } => {
             intersects_segment((-length * 0.5, 0.0), (length * 0.5, 0.0))
