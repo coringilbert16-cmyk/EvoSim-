@@ -19,31 +19,35 @@ pub(crate) struct EnergyTransaction {
     pub(crate) potential_released: f64,
     pub(crate) usable_delta: f64,
     pub(crate) structural_delta: f64,
+    pub(crate) work_expended: f64,
     pub(crate) heat_dissipated: f64,
 }
 
 impl EnergyTransaction {
-    /// A pure energy expenditure: usable energy is consumed, with the
-    /// structural allocation and dissipated work accounting for the same
-    /// amount. No potential energy is created by the expenditure itself.
+    /// A pure expenditure: usable energy is consumed and allocated exactly
+    /// once among persistent structure, work, and dissipated energy.
     pub(crate) fn expenditure(
         reason: EnergyReason,
         structural_delta: f64,
+        work_expended: f64,
         heat_dissipated: f64,
     ) -> Option<Self> {
         if !structural_delta.is_finite()
             || structural_delta < 0.0
+            || !work_expended.is_finite()
+            || work_expended < 0.0
             || !heat_dissipated.is_finite()
             || heat_dissipated < 0.0
         {
             return None;
         }
-        let cost = structural_delta + heat_dissipated;
+        let cost = structural_delta + work_expended + heat_dissipated;
         cost.is_finite().then_some(Self {
             reason,
             potential_released: 0.0,
             usable_delta: -cost,
             structural_delta,
+            work_expended,
             heat_dissipated,
         })
     }
@@ -52,12 +56,15 @@ impl EnergyTransaction {
         self.potential_released.is_finite()
             && self.usable_delta.is_finite()
             && self.structural_delta.is_finite()
+            && self.work_expended.is_finite()
             && self.heat_dissipated.is_finite()
             && self.potential_released >= 0.0
+            && self.work_expended >= 0.0
             && self.heat_dissipated >= 0.0
             && (self.potential_released
                 - self.usable_delta
                 - self.structural_delta
+                - self.work_expended
                 - self.heat_dissipated)
                 .abs()
                 <= EPSILON
@@ -84,13 +91,19 @@ impl EnergyLedgerAuthority for EnergyLedger {
         }
         let next_released = self.total_potential_energy_released + transaction.potential_released;
         let next_gained = self.total_usable_energy_gained + transaction.usable_delta.max(0.0);
+        let next_work = self.total_work_expended + transaction.work_expended;
         let next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
-        if !next_released.is_finite() || !next_gained.is_finite() || !next_heat.is_finite() {
+        if !next_released.is_finite()
+            || !next_gained.is_finite()
+            || !next_work.is_finite()
+            || !next_heat.is_finite()
+        {
             return false;
         }
         *holder = next_holder.max(0.0);
         self.total_potential_energy_released = next_released;
         self.total_usable_energy_gained = next_gained;
+        self.total_work_expended = next_work;
         self.total_heat_dissipated = next_heat;
         true
     }
@@ -135,6 +148,7 @@ mod tests {
                 potential_released: 5.0,
                 usable_delta: 2.0,
                 structural_delta: 2.0,
+                work_expended: 0.0,
                 heat_dissipated: 1.0,
             };
             assert!(tx.balanced());
@@ -143,11 +157,12 @@ mod tests {
 
     #[test]
     fn pure_expenditure_does_not_release_potential_energy() {
-        let tx = EnergyTransaction::expenditure(EnergyReason::Combine, 3.0, 2.0).unwrap();
+        let tx = EnergyTransaction::expenditure(EnergyReason::Combine, 3.0, 1.0, 2.0).unwrap();
         assert!(tx.balanced());
         assert_eq!(tx.potential_released, 0.0);
-        assert_eq!(tx.usable_delta, -5.0);
+        assert_eq!(tx.usable_delta, -6.0);
         assert_eq!(tx.structural_delta, 3.0);
+        assert_eq!(tx.work_expended, 1.0);
         assert_eq!(tx.heat_dissipated, 2.0);
     }
 
@@ -155,16 +170,18 @@ mod tests {
     fn settlement_uses_transaction_potential_directly() {
         let tx = EnergyTransaction {
             reason: EnergyReason::Combine,
-            potential_released: 10.0,
+            potential_released: 12.0,
             usable_delta: 4.0,
             structural_delta: 5.0,
+            work_expended: 2.0,
             heat_dissipated: 1.0,
         };
         let mut ledger = EnergyLedger::default();
         let mut energy = 10.0;
         assert!(ledger.settle_transaction(&mut energy, tx));
         assert_eq!(energy, 14.0);
-        assert_eq!(ledger.total_potential_energy_released, 10.0);
+        assert_eq!(ledger.total_potential_energy_released, 12.0);
+        assert_eq!(ledger.total_work_expended, 2.0);
     }
 
     #[test]
@@ -176,12 +193,14 @@ mod tests {
             potential_released: 0.0,
             usable_delta: -10.0,
             structural_delta: -4.0,
+            work_expended: 0.0,
             heat_dissipated: 6.0,
         };
         assert!(!ledger.settle_transaction(&mut energy, tx));
         assert_eq!(energy, 1.0);
         assert_eq!(ledger.total_potential_energy_released, 0.0);
         assert_eq!(ledger.total_usable_energy_gained, 0.0);
+        assert_eq!(ledger.total_work_expended, 0.0);
         assert_eq!(ledger.total_heat_dissipated, 0.0);
     }
 
