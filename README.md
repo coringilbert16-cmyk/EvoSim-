@@ -1826,3 +1826,16 @@ No source-code changes, tests, or constructor PR #196 changes are included in th
 - Chemical BREAK records its disruption barrier as work, not as newly retained structural energy. Other BREAK and decomposition transactions explicitly record zero work in this schema; this change does not redesign decomposition.
 - Focused regression assertions verify the allocation and conservation of the existing COMBINE debit, including the transient fluid-bond case. The serialized work counter defaults to zero when reading older ledger state.
 - **Boundary not yet solved:** this is not yet a simulation-wide inventory, source-backed settlement, external sun-capture implementation, or whole-world conservation proof. Those remain subsequent stages; do not claim global conservation from per-transaction balance alone.
+
+
+## Shared external-source budget settlement — 2026-10-19
+
+**Implementation slice on PR #202:** external inputs can now settle against a mutable `EnergySourceBudget` shared by all receivers drawing from the same accounting interval.
+
+- `EnergySourceBudget` validates that its initial allowance is finite and nonnegative.
+- `settle_external_input_from_budget` checks source identity, transaction balance, and remaining budget before settlement. On success it credits the holder, updates the ledger counters, and debits the budget; on failure, neither holder, ledger, nor budget changes.
+- The source allowance is an accounting primitive. The caller must define its scope (for example, a particular source during one tick) and pass the same budget instance to competing receivers. Creating a fresh budget per receiver would defeat shared-budget protection.
+- The transaction's `source_available` remains the local availability bound for that capture attempt. The shared budget's `remaining` is the aggregate unclaimed allowance; these are different constraints and are checked separately.
+- Regression tests cover competing claims against one budget, overspending, atomic rejection, and invalid budget initialization.
+
+**Still not implemented:** simulation tick owns no live shared world-tone budget yet; world-tone capture is not wired into the tick; reflection is not an energy-bearing field; and this primitive does not prove whole-world energy conservation. Ordinary chemical transactions still use `EnergyTransaction`, while external input uses `ExternalInputTransaction`. The next unification step is to make their accounting destinations and aggregate reconciliation explicit without conflating external input with released bond potential. No decomposition behavior is changed here.
