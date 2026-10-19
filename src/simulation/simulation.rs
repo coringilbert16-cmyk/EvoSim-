@@ -484,6 +484,11 @@ impl Simulation {
         }
         for index in finished_indices.into_iter().rev() {
             let remaining = self.decomposing_bodies[index].energy_budget;
+            if !remaining.is_finite() || remaining < 0.0 {
+                // Preserve the holder for diagnosis rather than deleting an
+                // invalid energy balance.
+                continue;
+            }
             if remaining > 0.0 {
                 // A finished body cannot be removed while it still owns usable
                 // energy. Until an authorized receiver/path exists, explicitly
