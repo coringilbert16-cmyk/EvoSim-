@@ -110,3 +110,117 @@ mod tests {
         assert_eq!(projected_extent(interval((0.0, 1.0)), (0.0, 0.0)), None);
     }
 }
+
+
+/// Derive visible straight boundary intervals for polygonal bodies.
+///
+/// Visibility can change only along rays from the source through blocker
+/// vertices. Intersections of those rays with each target edge define exact
+/// interval cuts for polygonal geometry. Midpoints classify each open interval
+/// using the realized-geometry occlusion test. Unsupported constituent shapes
+/// return None rather than being approximated.
+#[allow(dead_code)]
+pub(crate) fn visible_polygonal_intervals(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+) -> Option<Vec<ExposedBoundaryInterval>> {
+    if !source.0.is_finite() || !source.1.is_finite() {
+        return None;
+    }
+
+    let mut polygons = Vec::new();
+    for (body_index, body) in bodies.iter().enumerate() {
+        for part in &body.parts {
+            let local = part.form.polygon_vertices()?;
+            if local.len() < 3 {
+                return None;
+            }
+            let (sin, cos) = part.rotation_radians.sin_cos();
+            let vertices = local.into_iter().map(|(x, y)| {
+                (part.x + x * cos - y * sin, part.y + x * sin + y * cos)
+            }).collect::<Vec<_>>();
+            polygons.push((body_index, part.unit_index, vertices));
+        }
+    }
+
+    let mut result = Vec::new();
+    for (body_index, body) in bodies.iter().enumerate() {
+        for part in &body.parts {
+            let local = part.form.polygon_vertices()?;
+            let (sin, cos) = part.rotation_radians.sin_cos();
+            let vertices = local.into_iter().map(|(x, y)| {
+                (part.x + x * cos - y * sin, part.y + x * sin + y * cos)
+            }).collect::<Vec<_>>();
+            let area2: f64 = vertices.iter().enumerate().map(|(i, &(x1, y1))| {
+                let (x2, y2) = vertices[(i + 1) % vertices.len()];
+                x1 * y2 - x2 * y1
+            }).sum();
+            if !area2.is_finite() || area2.abs() <= 1e-12 {
+                return None;
+            }
+            let winding = area2.signum();
+
+            for edge_index in 0..vertices.len() {
+                let a = vertices[edge_index];
+                let b = vertices[(edge_index + 1) % vertices.len()];
+                let ex = b.0 - a.0;
+                let ey = b.1 - a.1;
+                let edge_length = ex.hypot(ey);
+                if !edge_length.is_finite() || edge_length <= 1e-12 {
+                    continue;
+                }
+                let normal = (winding * ey / edge_length, -winding * ex / edge_length);
+                let midpoint = ((a.0 + b.0) * 0.5, (a.1 + b.1) * 0.5);
+                if normal.0 * (source.0 - midpoint.0)
+                    + normal.1 * (source.1 - midpoint.1) <= 1e-10 {
+                    continue;
+                }
+
+                let mut cuts = vec![0.0_f64, 1.0_f64];
+                for (block_body, block_unit, blocker) in &polygons {
+                    if *block_body == body_index && *block_unit == part.unit_index {
+                        continue;
+                    }
+                    for &(vx, vy) in blocker {
+                        let dx = vx - source.0;
+                        let dy = vy - source.1;
+                        let denominator = ex * dy - ey * dx;
+                        if denominator.abs() <= 1e-12 {
+                            continue;
+                        }
+                        let ax = a.0 - source.0;
+                        let ay = a.1 - source.1;
+                        let t = (ax * dy - ay * dx) / denominator;
+                        // Correct signed parameter for source-to-vertex ray:
+                        // A + tE = S + u(V-S), with u > 1 beyond the vertex.
+                        let u = -(ax * ey - ay * ex) / denominator;
+                        if t > 1e-10 && t < 1.0 - 1e-10 && u > 1.0 + 1e-10 {
+                            cuts.push(t);
+                        }
+                    }
+                }
+                cuts.sort_by(f64::total_cmp);
+                cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-10);
+                for pair in cuts.windows(2) {
+                    let (t0, t1) = (pair[0], pair[1]);
+                    if t1 - t0 <= 1e-10 {
+                        continue;
+                    }
+                    let t = (t0 + t1) * 0.5;
+                    let point = (a.0 + ex * t, a.1 + ey * t);
+                    if crate::organism_geometry::source_path_blocked(
+                        source, point, bodies, body_index, part.unit_index
+                    ) {
+                        continue;
+                    }
+                    result.push(ExposedBoundaryInterval {
+                        start: (a.0 + ex * t0, a.1 + ey * t0),
+                        end: (a.0 + ex * t1, a.1 + ey * t1),
+                        outward_normal: normal,
+                    });
+                }
+            }
+        }
+    }
+    Some(result)
+}
