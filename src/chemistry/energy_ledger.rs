@@ -47,10 +47,7 @@ impl ExternalInputTransaction {
             && self.work_expended >= 0.0
             && self.heat_dissipated.is_finite()
             && self.heat_dissipated >= 0.0
-            && (self.external_input
-                - self.usable_delta
-                - self.work_expended
-                - self.heat_dissipated)
+            && (self.external_input - self.usable_delta - self.work_expended - self.heat_dissipated)
                 .abs()
                 <= EPSILON
     }

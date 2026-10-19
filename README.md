@@ -9,7 +9,7 @@ First implementation slice on the dedicated `feature/external-input-ledger` bran
 - Settlement updates the holder and all affected ledger counters atomically; rejected input leaves both unchanged. The new cumulative external-input counter defaults to zero when deserializing older ledgers.
 - Added focused ledger tests for successful accounting, source-availability rejection, and atomic rejection of an unbalanced input.
 - **Not implemented in this slice:** harmonic-response-to-capture calculation, per-tick capture scheduling, live world-tone energy capture, global inventory/conservation, and capture-efficiency inheritance. The caller must supply a valid local source budget and enforce the once-per-organism-per-tick rule; the ledger cannot infer those from a spectrum.
-- Next gate: inspect the exact diff and run formatting, focused ledger tests, compilation, and Clippy. Do not treat this ledger primitive alone as proof of whole-world conservation or functional solar capture.
+- Exact-head formatting first flagged one new ledger-expression wrap plus two pre-existing source-tone formatting differences in `harmonics.rs` and `simulation.rs`; those are formatting-only corrections in this branch. The next verification must confirm formatting, compilation, focused ledger tests, and Clippy. Do not treat this ledger primitive alone as proof of whole-world conservation or functional solar capture.
 
 
 ## Single working authority and directory boundaries
