@@ -145,6 +145,9 @@ pub(crate) struct ReproductiveConstruction {
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]
 pub(crate) struct EnergyLedger {
     pub(crate) total_potential_energy_released: f64,
+    /// Energy received from explicit external sources, distinct from bond release.
+    #[serde(default)]
+    pub(crate) total_external_energy_input: f64,
     pub(crate) total_usable_energy_gained: f64,
     #[serde(default)]
     pub(crate) total_work_expended: f64,

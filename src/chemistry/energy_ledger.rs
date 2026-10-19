@@ -13,6 +13,50 @@ pub(crate) enum EnergyReason {
     Transfer,
 }
 
+
+/// The external source whose energy crosses into a holder. This is kept
+/// separate from bond-energy release: world tone is not chemical potential.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ExternalEnergySource {
+    WorldTone,
+}
+
+/// An explicit source-backed input. `source_available` is the source's local
+/// per-tick availability for this capture attempt; callers must enforce the
+/// once-per-organism-per-tick capture schedule. Captured input is allocated
+/// exactly among usable energy, work, and immediate dissipation.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ExternalInputTransaction {
+    pub(crate) source: ExternalEnergySource,
+    pub(crate) source_available: f64,
+    pub(crate) external_input: f64,
+    pub(crate) usable_delta: f64,
+    pub(crate) work_expended: f64,
+    pub(crate) heat_dissipated: f64,
+}
+
+impl ExternalInputTransaction {
+    pub(crate) fn balanced(self) -> bool {
+        self.source_available.is_finite()
+            && self.source_available >= 0.0
+            && self.external_input.is_finite()
+            && self.external_input >= 0.0
+            && self.external_input <= self.source_available + EPSILON
+            && self.usable_delta.is_finite()
+            && self.usable_delta >= 0.0
+            && self.work_expended.is_finite()
+            && self.work_expended >= 0.0
+            && self.heat_dissipated.is_finite()
+            && self.heat_dissipated >= 0.0
+            && (self.external_input
+                - self.usable_delta
+                - self.work_expended
+                - self.heat_dissipated)
+                .abs()
+                <= EPSILON
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct EnergyTransaction {
     pub(crate) reason: EnergyReason,
@@ -78,10 +122,44 @@ impl EnergyTransaction {
 /// not contain subsystem-specific rules.
 pub(crate) trait EnergyLedgerAuthority {
     fn settle_transaction(&mut self, holder: &mut f64, transaction: EnergyTransaction) -> bool;
+    fn settle_external_input(
+        &mut self,
+        holder: &mut f64,
+        transaction: ExternalInputTransaction,
+    ) -> bool;
     fn transfer(&mut self, from: &mut f64, to: &mut f64, amount: f64) -> bool;
 }
 
 impl EnergyLedgerAuthority for EnergyLedger {
+    fn settle_external_input(
+        &mut self,
+        holder: &mut f64,
+        transaction: ExternalInputTransaction,
+    ) -> bool {
+        if !holder.is_finite() || *holder < -EPSILON || !transaction.balanced() {
+            return false;
+        }
+        let next_holder = *holder + transaction.usable_delta;
+        let next_external = self.total_external_energy_input + transaction.external_input;
+        let next_gained = self.total_usable_energy_gained + transaction.usable_delta;
+        let next_work = self.total_work_expended + transaction.work_expended;
+        let next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
+        if !next_holder.is_finite()
+            || !next_external.is_finite()
+            || !next_gained.is_finite()
+            || !next_work.is_finite()
+            || !next_heat.is_finite()
+        {
+            return false;
+        }
+        *holder = next_holder.max(0.0);
+        self.total_external_energy_input = next_external;
+        self.total_usable_energy_gained = next_gained;
+        self.total_work_expended = next_work;
+        self.total_heat_dissipated = next_heat;
+        true
+    }
+
     fn settle_transaction(&mut self, holder: &mut f64, transaction: EnergyTransaction) -> bool {
         if !holder.is_finite() || *holder < -EPSILON || !transaction.balanced() {
             return false;
@@ -213,6 +291,62 @@ mod tests {
         assert!(!ledger.settle_transaction(&mut energy, tx));
         assert_eq!(energy, 1.0);
         assert_eq!(ledger.total_potential_energy_released, 0.0);
+        assert_eq!(ledger.total_usable_energy_gained, 0.0);
+        assert_eq!(ledger.total_work_expended, 0.0);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+    }
+
+    fn external_input(
+        source_available: f64,
+        external_input: f64,
+        usable_delta: f64,
+        work_expended: f64,
+        heat_dissipated: f64,
+    ) -> ExternalInputTransaction {
+        ExternalInputTransaction {
+            source: ExternalEnergySource::WorldTone,
+            source_available,
+            external_input,
+            usable_delta,
+            work_expended,
+            heat_dissipated,
+        }
+    }
+
+    #[test]
+    fn external_input_is_separate_from_released_potential_energy() {
+        let mut ledger = EnergyLedger::default();
+        let mut energy = 2.0;
+        let tx = external_input(10.0, 4.0, 2.5, 0.5, 1.0);
+        assert!(ledger.settle_external_input(&mut energy, tx));
+        assert_eq!(energy, 4.5);
+        assert_eq!(ledger.total_external_energy_input, 4.0);
+        assert_eq!(ledger.total_usable_energy_gained, 2.5);
+        assert_eq!(ledger.total_work_expended, 0.5);
+        assert_eq!(ledger.total_heat_dissipated, 1.0);
+        assert_eq!(ledger.total_potential_energy_released, 0.0);
+    }
+
+    #[test]
+    fn external_input_cannot_exceed_source_availability() {
+        let mut ledger = EnergyLedger::default();
+        let mut energy = 1.0;
+        let tx = external_input(3.0, 3.5, 3.5, 0.0, 0.0);
+        assert!(!ledger.settle_external_input(&mut energy, tx));
+        assert_eq!(energy, 1.0);
+        assert_eq!(ledger.total_external_energy_input, 0.0);
+        assert_eq!(ledger.total_usable_energy_gained, 0.0);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+    }
+
+    #[test]
+    fn unbalanced_external_input_is_rejected_atomically() {
+        let mut ledger = EnergyLedger::default();
+        let mut energy = 1.0;
+        let tx = external_input(10.0, 4.0, 2.0, 0.0, 1.0);
+        assert!(!ledger.settle_external_input(&mut energy, tx));
+        assert_eq!(energy, 1.0);
+        assert_eq!(ledger.total_external_energy_input, 0.0);
         assert_eq!(ledger.total_usable_energy_gained, 0.0);
         assert_eq!(ledger.total_work_expended, 0.0);
         assert_eq!(ledger.total_heat_dissipated, 0.0);

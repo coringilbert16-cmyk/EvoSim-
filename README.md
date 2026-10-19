@@ -1,5 +1,17 @@
 # EvoSim
 
+## External-input transaction — 2026-10-19
+
+First implementation slice on the dedicated `feature/external-input-ledger` branch, based on verified integration head `9b34e911c6eb98ff400ecf58dae09884d55f2ceb`.
+
+- Added a distinct `ExternalInputTransaction` and `settle_external_input` path. External input is never recorded as released bond potential.
+- The transaction carries its source, local source availability, captured input, usable-energy gain, work, and heat. It is accepted only when all values are finite/nonnegative, captured input does not exceed the supplied availability, and the energy split balances.
+- Settlement updates the holder and all affected ledger counters atomically; rejected input leaves both unchanged. The new cumulative external-input counter defaults to zero when deserializing older ledgers.
+- Added focused ledger tests for successful accounting, source-availability rejection, and atomic rejection of an unbalanced input.
+- **Not implemented in this slice:** harmonic-response-to-capture calculation, per-tick capture scheduling, live world-tone energy capture, global inventory/conservation, and capture-efficiency inheritance. The caller must supply a valid local source budget and enforce the once-per-organism-per-tick rule; the ledger cannot infer those from a spectrum.
+- Next gate: inspect the exact diff and run formatting, focused ledger tests, compilation, and Clippy. Do not treat this ledger primitive alone as proof of whole-world conservation or functional solar capture.
+
+
 ## Single working authority and directory boundaries
 
 This root `README.md` is the **only authoritative working README** for EvoSim. Subsystem READMEs are being retired; durable decisions, current status, test gates, and operational instructions belong here. Dated audit documents under `docs/` may hold detailed evidence, but they are supporting records—not competing authorities. When a detail conflicts, this README's latest explicit decision/status wins, and stale history must be labelled historical.

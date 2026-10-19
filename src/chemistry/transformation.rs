@@ -544,6 +544,8 @@ impl Simulation {
             let ledger_delta = EnergyLedger {
                 total_potential_energy_released: trial_ledger.total_potential_energy_released
                     - original_ledger.total_potential_energy_released,
+                total_external_energy_input: trial_ledger.total_external_energy_input
+                    - original_ledger.total_external_energy_input,
                 total_usable_energy_gained: trial_ledger.total_usable_energy_gained
                     - original_ledger.total_usable_energy_gained,
                 total_work_expended: trial_ledger.total_work_expended
@@ -581,6 +583,7 @@ impl Simulation {
             let before_stress = organism.stress;
             organism.usable_energy += prepared_energy;
             ledger.total_potential_energy_released += ledger_delta.total_potential_energy_released;
+            ledger.total_external_energy_input += ledger_delta.total_external_energy_input;
             ledger.total_usable_energy_gained += ledger_delta.total_usable_energy_gained;
             ledger.total_heat_dissipated += ledger_delta.total_heat_dissipated;
             ledger.total_usable_energy_held += ledger_delta.total_usable_energy_held;
