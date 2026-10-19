@@ -1212,3 +1212,43 @@ impl Simulation {
         organism.apply_stress_damage(environment, ledger, rng)
     }
 }
+
+#[cfg(test)]
+mod decomposition_finalization_tests {
+    use super::*;
+    use crate::structure::{OrganismStructure, Placement, StructuralUnit};
+
+    #[test]
+    fn failed_finished_body_energy_settlement_does_not_release_material() {
+        let mut simulation = Simulation::new(913, 10.0);
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let mut unit = StructuralUnit::new(
+            "Carbon".to_string(),
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(unit.realize_default_geometry(&catalog));
+        structure.add_unit(unit);
+        let mut body = crate::decomposition::DecomposingBody::new(
+            structure,
+            1.0,
+            Position { x: 500.0, y: 500.0 },
+        )
+        .expect("test body should be valid");
+        // Force the final energy settlement to reject the holder. The body
+        // must remain, and its constituent material must not be deposited yet.
+        body.energy_budget = f64::NAN;
+        simulation.decomposing_bodies.push(body);
+        let before = simulation.environment.field.total_amount();
+
+        simulation.process_decomposing_bodies();
+
+        assert_eq!(simulation.decomposing_bodies.len(), 1);
+        assert!(simulation.decomposing_bodies[0].is_finished());
+        assert_eq!(simulation.environment.field.total_amount(), before);
+    }
+}
