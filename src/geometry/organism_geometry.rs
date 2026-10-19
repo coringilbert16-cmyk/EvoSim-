@@ -218,6 +218,80 @@ fn polygon_contains_vertices(x: f64, y: f64, vertices: &[(f64, f64)]) -> bool {
 }
 
 
+/// A visible, source-facing boundary probe on one realized constituent.
+///
+/// This is a geometric exposure candidate, not an energy allocation: one probe
+/// per constituent does not represent the full exposed surface area.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct SourceFacingSurfacePoint {
+    pub body_index: usize,
+    pub unit_index: usize,
+    pub x: f64,
+    pub y: f64,
+    pub normal_x: f64,
+    pub normal_y: f64,
+}
+
+/// Find one source-facing boundary point per constituent and discard points
+/// whose direct path is shadowed by any other realized material. Boundary
+/// geometry and normals come from the shared continuous surface query.
+#[allow(dead_code)] // Staged exposure query; energy capture is not wired yet.
+pub(crate) fn visible_source_facing_points(
+    source: (f64, f64),
+    bodies: &[OrganismBodyGeometry],
+) -> Vec<SourceFacingSurfacePoint> {
+    if !source.0.is_finite() || !source.1.is_finite() {
+        return Vec::new();
+    }
+
+    let mut visible = Vec::new();
+    for (body_index, body) in bodies.iter().enumerate() {
+        for part in &body.parts {
+            let dx = source.0 - part.x;
+            let dy = source.1 - part.y;
+            let (sin, cos) = part.rotation_radians.sin_cos();
+            let local_source_x = dx * cos + dy * sin;
+            let local_source_y = -dx * sin + dy * cos;
+            let shape = crate::resources::Shape {
+                form: part.form.clone(),
+            };
+            let Some(boundary) = crate::surface_geometry::boundary_point_toward(
+                &shape,
+                local_source_x,
+                local_source_y,
+            ) else {
+                continue;
+            };
+
+            let world_x = part.x + boundary.x * cos - boundary.y * sin;
+            let world_y = part.y + boundary.x * sin + boundary.y * cos;
+            let normal_x = boundary.normal_x * cos - boundary.normal_y * sin;
+            let normal_y = boundary.normal_x * sin + boundary.normal_y * cos;
+            let toward_source_x = source.0 - world_x;
+            let toward_source_y = source.1 - world_y;
+
+            // A tangent/back-facing surface cannot intercept a directional
+            // incoming signal from this source position.
+            if normal_x * toward_source_x + normal_y * toward_source_y <= 1e-9 {
+                continue;
+            }
+            if source_path_blocked(source, (world_x, world_y), bodies, body_index, part.unit_index) {
+                continue;
+            }
+
+            visible.push(SourceFacingSurfacePoint {
+                body_index,
+                unit_index: part.unit_index,
+                x: world_x,
+                y: world_y,
+                normal_x,
+                normal_y,
+            });
+        }
+    }
+    visible
+}
+
 /// Return whether the open segment from the source to a candidate surface point
 /// crosses any realized material before reaching that point. Geometry is tested
 /// in each constituent's local frame; no raster sampling or cell-size heuristic
