@@ -77,6 +77,7 @@ mod integration_tests {
             &mut s.rng,
         );
         assert!(breached);
+        assert_eq!(s.living_population(), 0);
         assert_eq!(s.organisms.len(), 1);
         assert_eq!(s.organisms[0].structure.units.len(), initial_units);
         assert!(s.decomposing_bodies.is_empty());
