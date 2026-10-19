@@ -5,6 +5,8 @@
 mod developmental_blueprint;
 #[path = "simulation/environment.rs"]
 mod environment;
+#[path = "simulation/world_tone.rs"]
+mod world_tone;
 #[path = "materials/environmental_materials.rs"]
 mod environmental_materials;
 #[path = "chemistry/expulsion.rs"]
