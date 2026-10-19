@@ -1219,7 +1219,7 @@ mod decomposition_finalization_tests {
     use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
     #[test]
-    fn failed_finished_body_energy_settlement_does_not_release_material() {
+    fn invalid_finished_body_energy_holder_does_not_release_material() {
         let mut simulation = Simulation::new(913, 10.0);
         let catalog = crate::resources::default_catalog();
         let mut structure = OrganismStructure::new();
