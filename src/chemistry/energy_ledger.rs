@@ -396,6 +396,26 @@ mod tests {
     }
 
     #[test]
+    fn settling_bond_release_debits_structural_store_without_faking_a_source() {
+        let mut ledger = EnergyLedger::default();
+        let mut energy = 0.0;
+        let tx = EnergyTransaction {
+            reason: EnergyReason::Break,
+            potential_released: 0.0,
+            usable_delta: 2.0,
+            structural_delta: -5.0,
+            work_expended: 0.0,
+            heat_dissipated: 3.0,
+        };
+
+        assert!(ledger.settle_transaction(&mut energy, tx));
+        assert_eq!(energy, 2.0);
+        assert_eq!(ledger.total_potential_energy_released, 0.0);
+        assert_eq!(ledger.total_structural_energy_delta, -5.0);
+        assert_eq!(ledger.total_heat_dissipated, 3.0);
+    }
+
+    #[test]
     fn failed_settlement_is_atomic() {
         let mut ledger = EnergyLedger::default();
         let mut energy = 1.0;
@@ -410,6 +430,7 @@ mod tests {
         assert!(!ledger.settle_transaction(&mut energy, tx));
         assert_eq!(energy, 1.0);
         assert_eq!(ledger.total_potential_energy_released, 0.0);
+        assert_eq!(ledger.total_structural_energy_delta, 0.0);
         assert_eq!(ledger.total_usable_energy_gained, 0.0);
         assert_eq!(ledger.total_work_expended, 0.0);
         assert_eq!(ledger.total_heat_dissipated, 0.0);
