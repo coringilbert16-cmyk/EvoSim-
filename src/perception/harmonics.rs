@@ -542,7 +542,11 @@ pub(crate) fn update_organism_harmonics(
         organism.structure_revision,
         organism.position_revision,
         environment.field.revision,
-        if world_tone_sample.is_some() { tick.wrapping_add(1) } else { 0 },
+        if world_tone_sample.is_some() {
+            tick.wrapping_add(1)
+        } else {
+            0
+        },
     );
     if organism.cached_harmonic_key == Some(key) {
         return;
