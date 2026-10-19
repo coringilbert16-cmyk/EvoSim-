@@ -123,6 +123,37 @@ pub(crate) fn resonance_response(
     1.0 / denominator.max(f64::EPSILON)
 }
 
+/// Dimensionless fraction of incident oscillator energy absorbed by damping.
+///
+/// For a driven damped oscillator, the normalized absorbed-power response is
+/// 4*zeta^2*r^2 / ((1-r^2)^2 + 4*zeta^2*r^2), where r is drive/natural
+/// frequency and zeta is the damping ratio. This is bounded to [0, 1] by the
+/// same denominator that defines the resonance response. It is an absorption
+/// fraction, not a spectral amplitude and not a source-energy allocation.
+pub(crate) fn resonant_absorption_fraction(
+    drive_frequency_hz: f64,
+    natural_frequency_hz: f64,
+    damping: f64,
+) -> f64 {
+    if !drive_frequency_hz.is_finite()
+        || !natural_frequency_hz.is_finite()
+        || !damping.is_finite()
+        || drive_frequency_hz <= 0.0
+        || natural_frequency_hz <= 0.0
+        || damping <= 0.0
+    {
+        return 0.0;
+    }
+    let ratio = drive_frequency_hz / natural_frequency_hz;
+    let damped_term = 2.0 * damping * ratio;
+    let numerator = damped_term * damped_term;
+    let denominator = (1.0 - ratio * ratio).powi(2) + numerator;
+    if !numerator.is_finite() || !denominator.is_finite() || denominator <= 0.0 {
+        return 0.0;
+    }
+    (numerator / denominator).clamp(0.0, 1.0)
+}
+
 /// Reactivity-driven nonlinear content. Integer multiples are used because
 /// real nonlinear oscillators commonly produce harmonic overtones.
 pub(crate) fn nonlinear_harmonic_amplitude(
@@ -617,6 +648,27 @@ pub(crate) fn spectral_similarity(a: &ToneSpectrum, b: &ToneSpectrum) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resonant_absorption_fraction_is_bounded_and_peaks_at_resonance() {
+        let damping = 0.2;
+        let resonant = resonant_absorption_fraction(440.0, 440.0, damping);
+        let below = resonant_absorption_fraction(220.0, 440.0, damping);
+        let above = resonant_absorption_fraction(880.0, 440.0, damping);
+        assert!((resonant - 1.0).abs() < 1e-12);
+        assert!((0.0..=1.0).contains(&below));
+        assert!((0.0..=1.0).contains(&above));
+        assert!(resonant > below);
+        assert!(resonant > above);
+    }
+
+    #[test]
+    fn resonant_absorption_fraction_rejects_invalid_inputs() {
+        assert_eq!(resonant_absorption_fraction(0.0, 440.0, 0.2), 0.0);
+        assert_eq!(resonant_absorption_fraction(440.0, f64::NAN, 0.2), 0.0);
+        assert_eq!(resonant_absorption_fraction(440.0, 440.0, 0.0), 0.0);
+        assert_eq!(resonant_absorption_fraction(440.0, 440.0, f64::INFINITY), 0.0);
+    }
 
     #[test]
     fn spectral_similarity_is_symmetric_and_exact_match_is_one() {
