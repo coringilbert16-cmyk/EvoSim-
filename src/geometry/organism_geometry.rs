@@ -396,12 +396,27 @@ fn segment_intersection_before_target(
     let ry = b.1 - a.1;
     let sx = d.0 - c.0;
     let sy = d.1 - c.1;
-    let denominator = rx * sy - ry * sx;
-    if denominator.abs() <= 1e-12 {
-        return false;
-    }
     let qx = c.0 - a.0;
     let qy = c.1 - a.1;
+    let denominator = rx * sy - ry * sx;
+
+    if denominator.abs() <= 1e-12 {
+        // Parallel segments only intersect when collinear. Handle that case
+        // explicitly: a ray running along a polygon edge is still occluded.
+        if (qx * ry - qy * rx).abs() > 1e-9 {
+            return false;
+        }
+        let ray_length_squared = rx * rx + ry * ry;
+        if ray_length_squared <= f64::EPSILON {
+            return false;
+        }
+        let tc = (qx * rx + qy * ry) / ray_length_squared;
+        let td = ((d.0 - a.0) * rx + (d.1 - a.1) * ry) / ray_length_squared;
+        let overlap_start = tc.min(td).max(0.0);
+        let overlap_end = tc.max(td).min(1.0);
+        return overlap_start <= overlap_end && overlap_start < 1.0 - 1e-9;
+    }
+
     let t = (qx * sy - qy * sx) / denominator;
     let u = (qx * ry - qy * rx) / denominator;
     (-1e-9..=1.0 - 1e-9).contains(&t) && (-1e-9..=1.0 + 1e-9).contains(&u)
@@ -426,6 +441,22 @@ mod tests {
             min_y: -10.0,
             max_y: 10.0,
         }
+    }
+
+    #[test]
+    fn collinear_boundary_blocks_before_target_but_not_at_target_only() {
+        assert!(segment_intersection_before_target(
+            (-5.0, 0.0),
+            (5.0, 0.0),
+            (-1.0, 0.0),
+            (1.0, 0.0),
+        ));
+        assert!(!segment_intersection_before_target(
+            (-5.0, 0.0),
+            (5.0, 0.0),
+            (5.0, 0.0),
+            (6.0, 0.0),
+        ));
     }
 
     #[test]
