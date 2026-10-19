@@ -223,6 +223,7 @@ fn polygon_contains_vertices(x: f64, y: f64, vertices: &[(f64, f64)]) -> bool {
 /// in each constituent's local frame; no raster sampling or cell-size heuristic
 /// is used. The candidate constituent itself is excluded because the endpoint
 /// lies on its boundary.
+#[allow(dead_code)] // Staged geometry primitive; live capture wiring follows surface selection.
 pub(crate) fn source_path_blocked(
     source: (f64, f64),
     target: (f64, f64),
@@ -292,7 +293,7 @@ fn segment_crosses_part(
             let exit = (-linear + root) / (2.0 * quadratic);
             [entry, exit]
                 .into_iter()
-                .any(|t| (-1e-9..1.0 - 1e-9).contains(&t))
+                .any(|t| (-1e-9..(1.0 - 1e-9)).contains(&t))
         }
         Form::Line { length } => {
             intersects_segment((-length * 0.5, 0.0), (length * 0.5, 0.0))
@@ -355,9 +356,18 @@ fn segment_crosses_part(
                 if length_squared <= f64::EPSILON {
                     return false;
                 }
-                let t = (-(a.0 * dx + a.1 * dy) / length_squared).clamp(0.0, 1.0);
-                let closest = (a.0 + t * dx, a.1 + t * dy);
-                return closest.0.hypot(closest.1) <= radius + 1e-9 && t < 1.0 - 1e-9;
+                let linear = 2.0 * (a.0 * dx + a.1 * dy);
+                let constant = a.0 * a.0 + a.1 * a.1 - radius * radius;
+                let discriminant = linear * linear - 4.0 * length_squared * constant;
+                if !discriminant.is_finite() || discriminant < -1e-9 {
+                    return false;
+                }
+                let root = discriminant.max(0.0).sqrt();
+                let entry = (-linear - root) / (2.0 * length_squared);
+                let exit = (-linear + root) / (2.0 * length_squared);
+                return [entry, exit]
+                    .into_iter()
+                    .any(|t| (-1e-9..(1.0 - 1e-9)).contains(&t));
             }
             false
         }
