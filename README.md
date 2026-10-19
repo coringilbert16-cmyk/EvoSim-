@@ -1890,3 +1890,11 @@ A follow-up audit found a second holder-transfer gap: recycling a dead organism 
 The decomposing-body usable-energy counter now includes that carried energy while the body exists. A separate remaining boundary is still open: if decomposition finishes while its body retains a positive energy budget that is not harvested by an organism, the current lifecycle removes the body and has no explicit world-level usable-energy sink/store to receive the remainder. Do not claim whole-world conservation until that residual-energy path and bond/material stores are reconciled.
 
 **Verification:** no Rust formatting, compilation, or tests have been run in this GitHub-only pass.
+
+## Finished-body material release ordering — 2026-10-19
+
+A second lifecycle audit found that a finished `DecomposingBody` could deposit its constituent materials before the remaining usable-energy sink succeeded. If the energy holder was invalid or settlement failed, the body was retained but its material had already entered the environment; the next tick could deposit the same material again.
+
+The finalization order now settles residual energy first, then releases material and removes the body. If the holder is invalid or settlement fails, the body and its material remain together. A focused regression test forces an invalid residual-energy holder and checks that the finished body remains and environmental material quantity is unchanged.
+
+**Verification status:** the code and test are committed, but they have not been compiled or run. No PR-triggered workflow run or commit status was returned for this change. This is a source-level correction, not a claim that the branch is green.
