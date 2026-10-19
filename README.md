@@ -1770,3 +1770,14 @@ The redesign must define these phases and their accounting:
 - After these are resolved, write transaction invariants and tests for tick-zero reconciliation, COMBINE allocation, BREAK single-release, explicit capture, stress/dissipation, decomposition handoff/rollback, and whole-world reconciliation.
 
 No source-code changes, tests, or constructor PR #196 changes are included in this design entry.
+
+
+## Energy accounting implementation — transaction allocation slice — 2026-10-18
+
+**Scope:** first implementation slice on PR #186's `integration/unified-source-and-catalogue` branch. PR #196 and constructor/Bob work remain untouched.
+
+- `EnergyTransaction` now balances energy across four explicit quantities: change in usable energy, persistent structural energy, work expended, and dissipated energy. Work has its own aggregate counter rather than being mislabeled as heat.
+- COMBINE now allocates only a surviving realized bond's `bond_energy` to persistent structure. Formation work is recorded as work; the remaining investment is recorded as dissipated energy. For fluid-fluid bonds consumed by immediate coalescence, no structural energy is retained and the transient bond energy is dissipated.
+- Chemical BREAK records its disruption barrier as work, not as newly retained structural energy. Other BREAK and decomposition transactions explicitly record zero work in this schema; this change does not redesign decomposition.
+- Focused regression assertions verify the allocation and conservation of the existing COMBINE debit, including the transient fluid-bond case. The serialized work counter defaults to zero when reading older ledger state.
+- **Boundary not yet solved:** this is not yet a simulation-wide inventory, source-backed settlement, external sun-capture implementation, or whole-world conservation proof. Those remain subsequent stages; do not claim global conservation from per-transaction balance alone.
