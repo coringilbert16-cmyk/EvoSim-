@@ -93,6 +93,7 @@ pub(crate) fn resolve_one_bond_with_ledger(
         potential_released: gross,
         usable_delta: usable,
         structural_delta: 0.0,
+        work_expended: 0.0,
         heat_dissipated: heat,
     };
     if !ledger.settle_transaction(&mut body.energy_budget, transaction) {
