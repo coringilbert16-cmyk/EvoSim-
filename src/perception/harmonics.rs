@@ -172,8 +172,7 @@ fn material_response_to_drive(
     }
     let natural = natural_frequency_hz(properties, baselines);
     let damping = damping_ratio(properties, baselines);
-    let fundamental =
-        resonance_response(drive_frequency_hz, natural, damping) * signal_level;
+    let fundamental = resonance_response(drive_frequency_hz, natural, damping) * signal_level;
     let mut spectrum = ToneSpectrum {
         components: vec![ToneComponent {
             frequency_hz: drive_frequency_hz,
@@ -244,8 +243,7 @@ pub(crate) fn world_tone_cavity_contribution(
             normal_x = -normal_x;
             normal_y = -normal_y;
         }
-        let directional_gain =
-            (normal_x * dx / distance + normal_y * dy / distance).max(0.0);
+        let directional_gain = (normal_x * dx / distance + normal_y * dy / distance).max(0.0);
         if directional_gain <= f64::EPSILON {
             continue;
         }
