@@ -1887,7 +1887,7 @@ The first reconciliation fix now:
 
 A follow-up audit found a second holder-transfer gap: recycling a dead organism transferred its own `usable_energy` into the decomposing body, but dropped `ReproductiveConstruction` without transferring its `developing_energy`. The narrow follow-up fix validates both energy stores before recycling, then transfers both into the body budget. A regression test covers a parent with 5 usable units and 3 developing-offspring units, expecting 8 units in the decomposing body.
 
-The decomposing-body usable-energy counter now includes that carried energy while the body exists. A separate remaining boundary is still open: if decomposition finishes while its body retains a positive energy budget that is not harvested by an organism, the current lifecycle removes the body and has no explicit world-level usable-energy sink/store to receive the remainder. Do not claim whole-world conservation until that residual-energy path and bond/material stores are reconciled.
+The decomposing-body usable-energy counter now includes that carried energy while the body exists. A follow-up lifecycle change now settles positive residual energy as an explicit dissipated-heat sink before removing a finished body; if settlement fails, the body is retained. Material release is also deferred until finalization succeeds to prevent repeated deposits. These changes still require focused and end-to-end tests. Do not claim whole-world conservation until the residual-energy path and bond/material stores are reconciled.
 
 **Verification:** no Rust formatting, compilation, or tests have been run in this GitHub-only pass.
 
