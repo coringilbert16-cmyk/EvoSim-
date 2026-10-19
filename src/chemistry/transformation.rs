@@ -115,9 +115,9 @@ fn settle_break_energy(
     }
     let tx = EnergyTransaction {
         reason: EnergyReason::Break,
-        potential_released: gross,
+        potential_released: 0.0,
         usable_delta: usable,
-        structural_delta: 0.0,
+        structural_delta: -gross,
         work_expended: 0.0,
         heat_dissipated: heat,
     };
@@ -647,9 +647,9 @@ impl Simulation {
 
         let tx = EnergyTransaction {
             reason: EnergyReason::Break,
-            potential_released: gross,
+            potential_released: 0.0,
             usable_delta: usable,
-            structural_delta: 0.0,
+            structural_delta: -gross,
             work_expended: 0.0,
             heat_dissipated: heat,
         };
