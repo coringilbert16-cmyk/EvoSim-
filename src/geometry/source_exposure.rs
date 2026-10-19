@@ -277,6 +277,26 @@ mod visibility_tests {
     }
 
     #[test]
+    fn fully_shadowed_target_edge_has_no_exposed_interval() {
+        let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
+        let blocker = rectangle_body(0, 2.5, 0.0, 0.5, 4.0);
+        let intervals = visible_polygonal_intervals((-5.0, 0.0), &[target, blocker])
+            .expect("rectangles have exact polygonal boundaries");
+
+        let left_edge: Vec<_> = intervals
+            .iter()
+            .filter(|interval| {
+                (interval.start.0 - 4.0).abs() < 1e-8
+                    && (interval.end.0 - 4.0).abs() < 1e-8
+            })
+            .collect();
+        assert!(
+            left_edge.is_empty(),
+            "a fully occluded target edge must not receive exposure: {left_edge:?}"
+        );
+    }
+
+    #[test]
     fn polygonal_exposure_keeps_the_full_edge_when_unobstructed() {
         let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
         let intervals = visible_polygonal_intervals((-5.0, 0.0), &[target])
