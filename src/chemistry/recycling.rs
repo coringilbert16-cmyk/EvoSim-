@@ -53,7 +53,6 @@ pub(crate) fn recycle_dead_organism(
     Some(body)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -62,7 +61,7 @@ mod tests {
 
     #[test]
     fn recycling_preserves_parent_and_developing_offspring_energy() {
-        let mut simulation = Simulation::new(71, 20.0);
+        let mut simulation = Simulation::new(23, 20.0);
         let mut organism = simulation.organisms.remove(0);
         assert!(organism.store_material(Material::free_base("Carbon", 1.0)));
         let mut ledger = EnergyLedger::default();
