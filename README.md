@@ -1758,7 +1758,7 @@ Implementation boundary remains unchanged: implement the source/capture contract
 
 ## Energy baseline, dissipation/stress, and decomposition design — 2026-10-18
 
-**Status:** Design pass following the user's decisions on 2026-10-18. The rules below are current decisions; decomposition details explicitly marked *proposal / needs approval* are not yet settled. This is documentation only; no simulation source code or tests are changed by this entry.
+**Status:** The energy rules below record established decisions. The decomposition proposal that was previously marked *needs approval* was stale and contradicted the already-established architecture; the replacement decision below supersedes it. This is a design/status correction, not authorization to change constructor/Bob PR #196.
 
 ### 1. Initial energy baseline — decision
 
@@ -1793,29 +1793,29 @@ Do not treat the entire formation investment as structural energy if the realize
 - Chemical accumulation and resonance are reaction/coupling signals, not energy holders. Chemical BREAK must be funded by already-accounted stored energy, explicitly recorded external capture, or a valid combination; every credited amount needs a corresponding source.
 - The sun's 440 Hz signal is omnipresent and inexhaustible, but capture is explicit and rate-limited. Resonance controls coupling effectiveness; chemistry determines whether/how captured energy can be converted into usable energy.
 
-### 5. Decomposition — design review required; proposed direction is NOT YET APPROVED
+### 5. Death, bond breaking, and material return — established architecture
 
-The existing decomposition pathway predates the current chemistry model. Do not merely add a distance cutoff to its current nearest-organism transfer.
+**Decision (already established; not an open question): decomposition is not a separate chemistry system to design.** The unified energy ledger and ordinary physical/chemical rules are the mechanism. Do not pause energy unification to invent decomposition-specific behavior, special bond-breaking rules, a nearest-organism transfer policy, or a dedicated decomposition energy pool.
 
-The redesign must define these phases and their accounting:
-- **Death handoff:** transfer the dying organism's actual structure and usable-energy balance into a decomposing state exactly once; no energy or material may be duplicated or lost on a failed handoff.
-- **Bond breakdown:** remove one realized bond at a time and release that bond's stored `bond_energy` no more than once. Do not regenerate constituent material potential as a second energy reserve.
-- **Material return:** when the physical bonds are gone, return the realized constituent materials to the environment without duplicating, deleting, or changing their identity/quantity.
-- **Energy destination:** specify whether released bond energy is dissipated, retained temporarily by the decomposition process, or transferred/converted through an explicit local chemistry interaction. Do not transfer it to the nearest organism at arbitrary distance.
-- **Locality:** any biological transfer/reuse must follow an explicit physical/chemical interaction rule, not distance ranking alone. No numerical radius is approved by this entry.
+- **Death ends organism status, not physical existence.** The organism stops acting as a living agent, while its realized structure and material remain in the world and can be acquired by other organisms. This preserves predation and makes death a consequence of failed maintenance/survival, not a prerequisite for material acquisition.
+- **Existing BREAK is the structural mechanism.** A realized structural bond is broken by the same bond/chemistry rules and energy accounting used elsewhere. Bond energy may be released only once. Do not create a second decomposition-only energy yield or regenerate material potential as energy.
+- **Matter is conserved.** The realized constituent materials persist through structural bond breaking and become ordinary available physical material when no structural bonds remain. Do not duplicate, delete, or silently change material identity/quantity.
+- **Energy has one authority.** A death handoff moves actual usable-energy holdings (including developing-offspring energy) without creating or losing energy. BREAK settlement accounts for released bond energy, usable-energy change, work, and dissipation. Unrecovered energy may be explicitly dissipated as an accounted sink; it must not vanish merely because a lifecycle object is removed.
+- **No arbitrary nearest-organism transfer.** Energy can be reused only through an actual, local, chemistry-authorized interaction or an already-defined physical transfer rule. Distance ranking alone is not an energy-transfer mechanism. Do not add a new radius or special local-capture rule solely for decomposition.
+- **Do not preserve a legacy implementation merely because it exists.** The current code has a `DecomposingBody` lifecycle object and a dedicated bond-resolution path. Treat that as legacy orchestration to audit against the architecture—not as a required new physical or energy concept. Keep a temporary carrier only if the existing tick/lifecycle needs it; it must use ordinary BREAK settlement, preserve all holders/material, and cannot own a separate energy law. Remove or simplify it only after tests show the unified path covers the same lifecycle behavior.
 
-**Recommendation for the next decision:** make decomposition primarily a material-recycling process. Release each realized bond's stored energy exactly once; treat it as dissipated unless a real, local, chemistry-authorized interaction explicitly captures/transfers it. Avoid a permanent intermediate pool unless the decomposition mechanism demonstrably needs one. This recommendation needs the user's approval before implementation.
+This resolves the previous open questions: no additional user approval is needed for the decomposition architecture, energy destination policy, or nearest-organism rule. The remaining work is implementation and verification, not another design round.
 
-### 6. Remaining design gates before implementation
+### 6. Remaining implementation gates — not design questions
 
-- Choose the exact starting usable-energy endowment and confirm the initial bond-energy baseline is included in `E_initial`.
-- Approve or revise the proposed decomposition energy destination and local reuse rule.
-- Define the concrete 440 Hz capture eligibility and per-tick rate/capacity; this is still a mechanism design task, not implied by the resonance calculation.
-- Define the remaining movement/maintenance coefficient calibration procedure. The existing constants remain unchanged and are not validated by this design entry.
-- After these are resolved, write transaction invariants and tests for tick-zero reconciliation, COMBINE allocation, BREAK single-release, explicit capture, stress/dissipation, decomposition handoff/rollback, and whole-world reconciliation.
+1. **Finish the global energy inventory.** Reconcile explicit initial energy plus source-backed external input against every final usable-energy holder, stored bond energy, and explicitly recorded dissipation/output. Internal transfers cancel. Do not mistake per-transaction balance or a partial holder counter for whole-world conservation.
+2. **Audit death handoff atomically.** Verify parent usable energy, developing-offspring energy, structural bonds, stored material, and committed offspring material all survive exactly once on successful death handling; failure must not leave partially drained state. Include rollback/failure-path tests.
+3. **Unify structural BREAK.** Compare voluntary chemical BREAK, other BREAK pathways, and the current decomposing-body bond path. Identify which can call the same authoritative physical/energy settlement and what minimal lifecycle orchestration remains necessary. Preserve the rule that a bond's stored energy is released at most once.
+4. **Close the finished-body energy path.** If a temporary carrier reaches zero bonds with a positive usable-energy balance, explicitly account for the remainder before removing it. Do not silently drop the holder. Prefer an existing valid transfer/sink over a new decomposition-specific reservoir.
+5. **Wire world-tone capture after the ledger boundary is sound.** The source model and cached samples provide deterministic per-tick source values, while external-input transactions and a shared-budget primitive exist. The live tick still needs one shared source allowance, receiver allocation, bounded resonance-to-capture conversion, and source-backed settlement. Reflection must carry only remaining incoming energy and obey the same propagation/obstruction rules.
+6. **Then verify end-to-end.** Add tick-zero inventory, atomic death/handoff, one-time bond release, matter-return, repeated chemistry-cycle, shared-source competition, and whole-world reconciliation tests. Run formatting, compile, focused gates, full Rust tests, and Clippy on the exact resulting head; record results without calling the work green if any gate fails.
 
-No source-code changes, tests, or constructor PR #196 changes are included in this design entry.
-
+**Ordering:** inventory and holder audit first; death/BREAK path audit second; implement the shared accounting/lifecycle correction once; audit the changed paths twice; then wire live world-tone capture. Do not reopen the resolved decomposition design questions, and do not change PR #196.
 
 ## Energy accounting implementation — transaction allocation slice — 2026-10-18
 
