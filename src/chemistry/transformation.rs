@@ -42,25 +42,30 @@ fn break_energy_yield(
 }
 
 pub(crate) fn chemical_break_energy_yield(
-    reaction_energy: f64,
+    bond_energy: f64,
     disruption_cost: f64,
     processing_efficiency: f64,
 ) -> Option<(f64, f64, f64)> {
-    let usable_surplus =
-        crate::chemistry::chemical_break_surplus(reaction_energy, disruption_cost)?;
-    if !crate::chemistry::can_chemical_break(reaction_energy, disruption_cost) {
+    if !bond_energy.is_finite()
+        || bond_energy < 0.0
+        || !disruption_cost.is_finite()
+        || disruption_cost < 0.0
+        || !processing_efficiency.is_finite()
+    {
         return None;
     }
     let efficiency = processing_efficiency.clamp(0.0, 1.0);
-    let usable = usable_surplus * efficiency;
-    // The reaction energy is one conserved source. Bond disruption consumes
-    // disruption_cost from that source; only the remainder can become usable
-    // energy or heat. Do not count the disruption cost as heat as well.
-    let heat = (usable_surplus - usable).max(0.0);
+    // The accumulated reaction quantity is an activation signal, not an
+    // energy reservoir. The removed bond's stored energy pays disruption work
+    // first; any shortfall is charged to the organism's usable-energy holder.
+    let surplus = (bond_energy - disruption_cost).max(0.0);
+    let deficit = (disruption_cost - bond_energy).max(0.0);
+    let usable = surplus * efficiency - deficit;
+    let heat = (surplus - surplus * efficiency).max(0.0);
     (usable.is_finite()
         && heat.is_finite()
-        && (reaction_energy - disruption_cost - usable - heat).abs() <= 1e-9)
-        .then_some((reaction_energy, usable, heat))
+        && (usable - bond_energy + disruption_cost + heat).abs() <= 1e-9)
+        .then_some((bond_energy, usable, heat))
 }
 
 /// Apply a chemistry-caused BREAK after the chemistry system has produced a
@@ -75,8 +80,11 @@ pub(crate) fn settle_chemical_break_energy(
     processing_efficiency: f64,
     ledger: &mut EnergyLedger,
 ) -> bool {
+    if !crate::chemistry::can_chemical_break(reaction_energy, disruption_cost) {
+        return false;
+    }
     let Some((gross, usable, heat)) =
-        chemical_break_energy_yield(reaction_energy, disruption_cost, processing_efficiency)
+        chemical_break_energy_yield(bond.bond_energy, disruption_cost, processing_efficiency)
     else {
         return false;
     };
@@ -86,9 +94,9 @@ pub(crate) fn settle_chemical_break_energy(
     }
     let tx = EnergyTransaction {
         reason: EnergyReason::Break,
-        potential_released: gross,
+        potential_released: 0.0,
         usable_delta: usable,
-        structural_delta: 0.0,
+        structural_delta: -gross,
         work_expended: disruption_cost,
         heat_dissipated: heat,
     };
@@ -862,19 +870,23 @@ mod tests {
     }
 
     #[test]
-    fn chemical_break_requires_reaction_surplus() {
-        assert!(chemical_break_energy_yield(6.0, 5.0, 1.0).is_some());
-        assert!(chemical_break_energy_yield(5.0, 5.0, 1.0).is_some());
-        assert!(chemical_break_energy_yield(4.0, 5.0, 1.0).is_none());
+    fn chemical_break_energy_comes_from_the_removed_bond_not_the_reaction_signal() {
+        let (structural_energy, usable, heat) =
+            chemical_break_energy_yield(10.0, 4.0, 0.5).unwrap();
+        assert!((structural_energy - 10.0).abs() < 1e-12);
+        assert!((usable - 3.0).abs() < 1e-12);
+        assert!((heat - 3.0).abs() < 1e-12);
+        assert!((usable - structural_energy + 4.0 + heat).abs() < 1e-12);
     }
 
     #[test]
-    fn chemical_break_energy_is_conserved_between_disruption_usable_energy_and_heat() {
-        let (released, usable, heat) = chemical_break_energy_yield(10.0, 4.0, 0.5).unwrap();
-        assert!((released - 10.0).abs() < 1e-12);
-        assert!((usable - 3.0).abs() < 1e-12);
-        assert!((heat - 3.0).abs() < 1e-12);
-        assert!((released - 4.0 - usable - heat).abs() < 1e-12);
+    fn chemical_break_charges_a_work_shortfall_to_the_usable_holder() {
+        let (structural_energy, usable, heat) =
+            chemical_break_energy_yield(4.0, 5.0, 0.5).unwrap();
+        assert!((structural_energy - 4.0).abs() < 1e-12);
+        assert!((usable + 1.0).abs() < 1e-12);
+        assert_eq!(heat, 0.0);
+        assert!((usable - structural_energy + 5.0 + heat).abs() < 1e-12);
     }
 
     fn stress_break_test_organism() -> (
