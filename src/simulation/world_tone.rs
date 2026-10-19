@@ -4,10 +4,10 @@
 )]
 //! Parameterized model for EvoSim's single rotating world-tone source.
 //!
-//! This module deliberately models signal position, frequency, and signal-energy
-//! level only. It does not grant energy or mutate an energy ledger. The orbital
-//! period, minimum frequency, signal-energy scale, and envelope curve must be
-//! supplied by the caller; no unresolved world parameter is silently chosen.
+//! This module models source position, frequency, signal level, and the energy
+//! available from the source per tick as separate quantities. It does not grant
+//! captured energy or mutate an energy ledger. Runtime configuration remains
+//! explicit; this model does not silently choose unresolved world parameters.
 
 use std::f64::consts::TAU;
 
@@ -24,6 +24,8 @@ pub(crate) struct WorldToneParameters {
     pub(crate) minimum_frequency_hz: f64,
     pub(crate) minimum_signal_energy_level: f64,
     pub(crate) maximum_signal_energy_level: f64,
+    pub(crate) minimum_available_energy_per_tick: f64,
+    pub(crate) maximum_available_energy_per_tick: f64,
     pub(crate) orbital_period_ticks: u64,
     pub(crate) envelope_curve: EnvelopeCurve,
 }
@@ -35,6 +37,8 @@ pub(crate) struct WorldToneSample {
     pub(crate) frequency_hz: f64,
     /// Environmental signal level, not energy already captured by an organism.
     pub(crate) signal_energy_level: f64,
+    /// Energy available for capture this tick, before organism-specific efficiency.
+    pub(crate) available_energy_per_tick: f64,
     /// Normalized orbital phase: 0 at north, increasing eastward, in [0, 1).
     pub(crate) orbital_phase: f64,
 }
@@ -48,6 +52,10 @@ impl WorldToneParameters {
             && self.minimum_signal_energy_level >= 0.0
             && self.maximum_signal_energy_level.is_finite()
             && self.maximum_signal_energy_level > self.minimum_signal_energy_level
+            && self.minimum_available_energy_per_tick.is_finite()
+            && self.minimum_available_energy_per_tick >= 0.0
+            && self.maximum_available_energy_per_tick.is_finite()
+            && self.maximum_available_energy_per_tick > self.minimum_available_energy_per_tick
             && self.orbital_period_ticks > 0
     }
 
@@ -83,6 +91,9 @@ impl WorldToneParameters {
             frequency_hz,
             signal_energy_level: self.minimum_signal_energy_level
                 + (self.maximum_signal_energy_level - self.minimum_signal_energy_level) * envelope,
+            available_energy_per_tick: self.minimum_available_energy_per_tick
+                + (self.maximum_available_energy_per_tick - self.minimum_available_energy_per_tick)
+                    * envelope,
             orbital_phase,
         })
     }
@@ -97,7 +108,9 @@ mod tests {
             minimum_frequency_hz: 110.0,
             minimum_signal_energy_level: 0.0,
             maximum_signal_energy_level: 8.0,
-            orbital_period_ticks: 100,
+            minimum_available_energy_per_tick: 1.0,
+            maximum_available_energy_per_tick: 10.0,
+            orbital_period_ticks: 2_400,
             envelope_curve: EnvelopeCurve::Cosine,
         }
     }
@@ -106,10 +119,10 @@ mod tests {
     fn source_orbits_clockwise_and_returns_to_north() {
         let params = parameters();
         let north = params.sample(0, 50.0, 50.0, 10.0).unwrap();
-        let east = params.sample(25, 50.0, 50.0, 10.0).unwrap();
-        let south = params.sample(50, 50.0, 50.0, 10.0).unwrap();
-        let west = params.sample(75, 50.0, 50.0, 10.0).unwrap();
-        let next_north = params.sample(100, 50.0, 50.0, 10.0).unwrap();
+        let east = params.sample(600, 50.0, 50.0, 10.0).unwrap();
+        let south = params.sample(1_200, 50.0, 50.0, 10.0).unwrap();
+        let west = params.sample(1_800, 50.0, 50.0, 10.0).unwrap();
+        let next_north = params.sample(2_400, 50.0, 50.0, 10.0).unwrap();
 
         assert_eq!((north.source_x, north.source_y), (50.0, 40.0));
         assert!((east.source_x - 60.0).abs() < 1e-9);
@@ -125,20 +138,24 @@ mod tests {
     fn frequency_and_signal_level_co_vary_but_remain_separate_outputs() {
         let params = parameters();
         let north = params.sample(0, 0.0, 0.0, 1.0).unwrap();
-        let east = params.sample(25, 0.0, 0.0, 1.0).unwrap();
-        let south = params.sample(50, 0.0, 0.0, 1.0).unwrap();
-        let west = params.sample(75, 0.0, 0.0, 1.0).unwrap();
+        let east = params.sample(600, 0.0, 0.0, 1.0).unwrap();
+        let south = params.sample(1_200, 0.0, 0.0, 1.0).unwrap();
+        let west = params.sample(1_800, 0.0, 0.0, 1.0).unwrap();
 
         assert_eq!(north.frequency_hz, 440.0);
         assert_eq!(north.signal_energy_level, 8.0);
+        assert_eq!(north.available_energy_per_tick, 10.0);
         assert_eq!(south.frequency_hz, 110.0);
         assert_eq!(south.signal_energy_level, 0.0);
+        assert_eq!(south.available_energy_per_tick, 1.0);
         assert!(north.frequency_hz > east.frequency_hz);
         assert!(east.frequency_hz > south.frequency_hz);
         assert!(south.frequency_hz < west.frequency_hz);
         assert!(west.frequency_hz < north.frequency_hz);
         assert_eq!(east.signal_energy_level, 4.0);
         assert_eq!(west.signal_energy_level, 4.0);
+        assert_eq!(east.available_energy_per_tick, 5.5);
+        assert_eq!(west.available_energy_per_tick, 5.5);
     }
 
     #[test]
