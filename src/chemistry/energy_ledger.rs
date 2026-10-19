@@ -34,6 +34,24 @@ pub(crate) struct ExternalInputTransaction {
     pub(crate) heat_dissipated: f64,
 }
 
+/// Mutable source allowance shared by all receivers drawing from the same
+/// source budget during an accounting interval (for example, one source/tick).
+/// This is an accounting primitive; callers define the physical scope of a budget.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct EnergySourceBudget {
+    pub(crate) source: ExternalEnergySource,
+    pub(crate) remaining: f64,
+}
+
+impl EnergySourceBudget {
+    pub(crate) fn new(source: ExternalEnergySource, available: f64) -> Option<Self> {
+        (available.is_finite() && available >= 0.0).then_some(Self {
+            source,
+            remaining: available,
+        })
+    }
+}
+
 impl ExternalInputTransaction {
     pub(crate) fn balanced(self) -> bool {
         self.source_available.is_finite()
@@ -123,10 +141,43 @@ pub(crate) trait EnergyLedgerAuthority {
         holder: &mut f64,
         transaction: ExternalInputTransaction,
     ) -> bool;
+    fn settle_external_input_from_budget(
+        &mut self,
+        holder: &mut f64,
+        budget: &mut EnergySourceBudget,
+        transaction: ExternalInputTransaction,
+    ) -> bool;
     fn transfer(&mut self, from: &mut f64, to: &mut f64, amount: f64) -> bool;
 }
 
 impl EnergyLedgerAuthority for EnergyLedger {
+    fn settle_external_input_from_budget(
+        &mut self,
+        holder: &mut f64,
+        budget: &mut EnergySourceBudget,
+        transaction: ExternalInputTransaction,
+    ) -> bool {
+        // Validate every budget constraint before settling either object, so a
+        // failed claim cannot credit the holder or consume source availability.
+        if transaction.source != budget.source
+            || !budget.remaining.is_finite()
+            || budget.remaining < 0.0
+            || transaction.source_available > budget.remaining + EPSILON
+            || transaction.external_input > budget.remaining + EPSILON
+        {
+            return false;
+        }
+        let next_remaining = budget.remaining - transaction.external_input;
+        if !next_remaining.is_finite() || next_remaining < -EPSILON {
+            return false;
+        }
+        if !self.settle_external_input(holder, transaction) {
+            return false;
+        }
+        budget.remaining = next_remaining.max(0.0);
+        true
+    }
+
     fn settle_external_input(
         &mut self,
         holder: &mut f64,
@@ -333,6 +384,46 @@ mod tests {
         assert_eq!(ledger.total_external_energy_input, 0.0);
         assert_eq!(ledger.total_usable_energy_gained, 0.0);
         assert_eq!(ledger.total_heat_dissipated, 0.0);
+    }
+
+    #[test]
+    fn shared_source_budget_prevents_double_claims() {
+        let mut ledger = EnergyLedger::default();
+        let mut budget = EnergySourceBudget::new(ExternalEnergySource::WorldTone, 5.0).unwrap();
+        let mut first_holder = 0.0;
+        let mut second_holder = 0.0;
+        let first = external_input(5.0, 3.0, 3.0, 0.0, 0.0);
+        let second = external_input(5.0, 3.0, 3.0, 0.0, 0.0);
+
+        assert!(ledger.settle_external_input_from_budget(&mut first_holder, &mut budget, first));
+        assert_eq!(budget.remaining, 2.0);
+        assert!(!ledger.settle_external_input_from_budget(&mut second_holder, &mut budget, second));
+        assert_eq!(first_holder, 3.0);
+        assert_eq!(second_holder, 0.0);
+        assert_eq!(budget.remaining, 2.0);
+        assert_eq!(ledger.total_external_energy_input, 3.0);
+    }
+
+    #[test]
+    fn source_budget_rejects_wrong_source_and_preserves_all_state() {
+        let mut ledger = EnergyLedger::default();
+        let mut budget = EnergySourceBudget::new(ExternalEnergySource::WorldTone, 5.0).unwrap();
+        let mut holder = 1.0;
+        let mut tx = external_input(5.0, 2.0, 2.0, 0.0, 0.0);
+        tx.source = ExternalEnergySource::WorldTone;
+        // The budget must remain unchanged when the transaction is invalid.
+        tx.external_input = 2.0;
+        tx.usable_delta = 1.0;
+        assert!(!ledger.settle_external_input_from_budget(&mut holder, &mut budget, tx));
+        assert_eq!(holder, 1.0);
+        assert_eq!(budget.remaining, 5.0);
+        assert_eq!(ledger.total_external_energy_input, 0.0);
+    }
+
+    #[test]
+    fn invalid_source_budget_is_rejected() {
+        assert!(EnergySourceBudget::new(ExternalEnergySource::WorldTone, f64::NAN).is_none());
+        assert!(EnergySourceBudget::new(ExternalEnergySource::WorldTone, -1.0).is_none());
     }
 
     #[test]
