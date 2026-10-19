@@ -90,9 +90,9 @@ pub(crate) fn resolve_one_bond_with_ledger(
         crate::transformation::bond_break_energy_yield(target.bond_energy, 1.0)?;
     let transaction = EnergyTransaction {
         reason: EnergyReason::Decomposition,
-        potential_released: gross,
+        potential_released: 0.0,
         usable_delta: usable,
-        structural_delta: 0.0,
+        structural_delta: -gross,
         work_expended: 0.0,
         heat_dissipated: heat,
     };
