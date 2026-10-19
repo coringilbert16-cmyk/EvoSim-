@@ -585,6 +585,7 @@ impl Simulation {
             ledger.total_potential_energy_released += ledger_delta.total_potential_energy_released;
             ledger.total_external_energy_input += ledger_delta.total_external_energy_input;
             ledger.total_usable_energy_gained += ledger_delta.total_usable_energy_gained;
+            ledger.total_work_expended += ledger_delta.total_work_expended;
             ledger.total_heat_dissipated += ledger_delta.total_heat_dissipated;
             ledger.total_usable_energy_held += ledger_delta.total_usable_energy_held;
             transformation.prepared_energy = Some((before_energy, before_stress, 0.0));
