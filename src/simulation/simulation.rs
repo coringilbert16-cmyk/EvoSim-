@@ -510,6 +510,20 @@ impl Simulation {
             self.decomposing_bodies.remove(index);
         }
     }
+    fn has_intact_genome_core(organism: &mut Organism, catalog: &[crate::resources::BaseResource]) -> bool {
+        if let Some(cavity) = organism.genome_cavity_cached_ref(catalog) {
+            return cavity.qualifies();
+        }
+        // The cache API currently collapses analysis errors and a missing
+        // cavity. Distinguish them here so malformed geometry is not silently
+        // classified as death.
+        match crate::cavity::analyze_genome_cavity(&organism.structure, catalog) {
+            Ok(Some(cavity)) => cavity.qualifies(),
+            Ok(None) => false,
+            Err(_) => true,
+        }
+    }
+
     pub(crate) fn living_population(&self) -> usize {
         self.organisms
             .iter()
@@ -537,9 +551,7 @@ impl Simulation {
             .organisms
             .iter_mut()
             .filter_map(|organism| {
-                organism
-                    .genome_cavity_cached_ref(&self.environment.catalog)
-                    .is_some()
+                Self::has_intact_genome_core(organism, &self.environment.catalog)
                     .then(|| organism.id.clone())
             })
             .collect();
@@ -642,9 +654,7 @@ impl Simulation {
             .organisms
             .iter_mut()
             .filter_map(|organism| {
-                organism
-                    .genome_cavity_cached_ref(&self.environment.catalog)
-                    .is_some()
+                Self::has_intact_genome_core(organism, &self.environment.catalog)
                     .then(|| organism.id.clone())
             })
             .collect();
@@ -710,9 +720,8 @@ impl Simulation {
 
             // Recheck immediately after chemistry: if a reaction breached the
             // genome core this tick, do not perform any later biological work.
-            let core_intact_after_chemistry = organism
-                .genome_cavity_cached_ref(&self.environment.catalog)
-                .is_some();
+            let core_intact_after_chemistry =
+                Self::has_intact_genome_core(organism, &self.environment.catalog);
             if !core_intact_after_chemistry {
                 living_ids.remove(&organism.id);
             }
@@ -1224,9 +1233,7 @@ impl Simulation {
             .organisms
             .iter_mut()
             .filter_map(|organism| {
-                organism
-                    .genome_cavity_cached_ref(&self.environment.catalog)
-                    .is_some()
+                Self::has_intact_genome_core(organism, &self.environment.catalog)
                     .then(|| organism.id.clone())
             })
             .collect();
