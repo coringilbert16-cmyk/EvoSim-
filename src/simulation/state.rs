@@ -146,6 +146,8 @@ pub(crate) struct ReproductiveConstruction {
 pub(crate) struct EnergyLedger {
     pub(crate) total_potential_energy_released: f64,
     pub(crate) total_usable_energy_gained: f64,
+    #[serde(default)]
+    pub(crate) total_work_expended: f64,
     pub(crate) total_heat_dissipated: f64,
     pub(crate) total_usable_energy_held: f64,
 }
