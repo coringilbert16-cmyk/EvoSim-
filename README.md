@@ -1866,3 +1866,12 @@ The first reconciliation fix now:
 **Scope boundary:** this counter is still not a whole-world energy inventory. It measures usable energy held in these three holder classes only. It does not yet include energy retained structurally in bonds, quantify energy remaining in an active source/reflection field, or reconcile all historical flows against initial energy plus external input. Structural bond energy is a distinct store and must be inventoried without double-counting the released-potential flow counter. Initial construction also uses a very large starting allocation formula, so the initial baseline must be made explicit before a global conservation assertion is designed.
 
 **Verification:** source changes are committed on PR #202 only. Rust formatting, compilation, focused tests, and full tests have not been run in this GitHub-only pass; do not interpret this change as verified or as proof of conservation.
+
+
+## Deceased reproductive energy audit — 2026-10-19
+
+A follow-up audit found a second holder-transfer gap: recycling a dead organism transferred its own `usable_energy` into the decomposing body, but dropped `ReproductiveConstruction` without transferring its `developing_energy`. The narrow follow-up fix validates both energy stores before recycling, then transfers both into the body budget. A regression test covers a parent with 5 usable units and 3 developing-offspring units, expecting 8 units in the decomposing body.
+
+The decomposing-body usable-energy counter now includes that carried energy while the body exists. A separate remaining boundary is still open: if decomposition finishes while its body retains a positive energy budget that is not harvested by an organism, the current lifecycle removes the body and has no explicit world-level usable-energy sink/store to receive the remainder. Do not claim whole-world conservation until that residual-energy path and bond/material stores are reconciled.
+
+**Verification:** no Rust formatting, compilation, or tests have been run in this GitHub-only pass.
