@@ -544,6 +544,8 @@ impl Simulation {
             let ledger_delta = EnergyLedger {
                 total_potential_energy_released: trial_ledger.total_potential_energy_released
                     - original_ledger.total_potential_energy_released,
+                total_structural_energy_delta: trial_ledger.total_structural_energy_delta
+                    - original_ledger.total_structural_energy_delta,
                 total_external_energy_input: trial_ledger.total_external_energy_input
                     - original_ledger.total_external_energy_input,
                 total_usable_energy_gained: trial_ledger.total_usable_energy_gained
