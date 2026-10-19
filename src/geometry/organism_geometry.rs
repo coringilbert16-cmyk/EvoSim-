@@ -217,6 +217,183 @@ fn polygon_contains_vertices(x: f64, y: f64, vertices: &[(f64, f64)]) -> bool {
     inside
 }
 
+
+/// Return whether the open segment from the source to a candidate surface point
+/// crosses any realized material before reaching that point. Geometry is tested
+/// in each constituent's local frame; no raster sampling or cell-size heuristic
+/// is used. The candidate constituent itself is excluded because the endpoint
+/// lies on its boundary.
+pub(crate) fn source_path_blocked(
+    source: (f64, f64),
+    target: (f64, f64),
+    bodies: &[OrganismBodyGeometry],
+    target_body_index: usize,
+    target_unit_index: usize,
+) -> bool {
+    if !source.0.is_finite()
+        || !source.1.is_finite()
+        || !target.0.is_finite()
+        || !target.1.is_finite()
+        || (target.0 - source.0).hypot(target.1 - source.1) <= f64::EPSILON
+    {
+        return true;
+    }
+
+    for (body_index, body) in bodies.iter().enumerate() {
+        for part in &body.parts {
+            if body_index == target_body_index && part.unit_index == target_unit_index {
+                continue;
+            }
+            if segment_crosses_part(source, target, part) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn segment_crosses_part(
+    source: (f64, f64),
+    target: (f64, f64),
+    part: &PlacedForm,
+) -> bool {
+    let to_local = |point: (f64, f64)| {
+        let dx = point.0 - part.x;
+        let dy = point.1 - part.y;
+        let (sin, cos) = part.rotation_radians.sin_cos();
+        (dx * cos + dy * sin, -dx * sin + dy * cos)
+    };
+    let a = to_local(source);
+    let b = to_local(target);
+    if form_contains_point(&part.form, 0.0, 0.0, 0.0, a.0, a.1) {
+        return true;
+    }
+
+    let intersects_segment = |c: (f64, f64), d: (f64, f64)| {
+        segment_intersection_before_target(a, b, c, d)
+    };
+
+    match &part.form {
+        Form::Circle { radius } => {
+            let dx = b.0 - a.0;
+            let dy = b.1 - a.1;
+            let length_squared = dx * dx + dy * dy;
+            if length_squared <= f64::EPSILON {
+                return false;
+            }
+            let t = ((-(a.0 * dx + a.1 * dy)) / length_squared).clamp(0.0, 1.0);
+            let closest = (a.0 + t * dx, a.1 + t * dy);
+            let distance = closest.0.hypot(closest.1);
+            if distance > *radius + 1e-9 {
+                return false;
+            }
+            // The closest point must occur before the endpoint; an endpoint
+            // merely touching another surface is not an intervening occluder.
+            t < 1.0 - 1e-9
+        }
+        Form::Line { length } => {
+            intersects_segment((-length * 0.5, 0.0), (length * 0.5, 0.0))
+        }
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
+            let Some(vertices) = part.form.polygon_vertices() else {
+                return false;
+            };
+            vertices.iter().enumerate().any(|(index, &start)| {
+                intersects_segment(start, vertices[(index + 1) % vertices.len()])
+            })
+        }
+        Form::Fluid {
+            nominal_area,
+            boundary,
+            arc_boundary,
+            multi_contact_boundary,
+        } => {
+            if let Some(vertices) = boundary {
+                if vertices.iter().enumerate().any(|(index, &start)| {
+                    intersects_segment(start, vertices[(index + 1) % vertices.len()])
+                }) {
+                    return true;
+                }
+            }
+            if let Some(arc) = arc_boundary {
+                if arc.segment_intersections(a.0, a.1, b.0, b.1).is_some_and(|hits| {
+                    hits.into_iter().any(|point| parameter_before_target(a, b, point))
+                }) {
+                    return true;
+                }
+            }
+            if let Some(multi) = multi_contact_boundary {
+                for piece in &multi.pieces {
+                    match piece {
+                        crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                            start_x, start_y, end_x, end_y, ..
+                        } => {
+                            if intersects_segment((*start_x, *start_y), (*end_x, *end_y)) {
+                                return true;
+                            }
+                        }
+                        crate::capillary_geometry::FluidBoundaryPiece::FreeArc(arc) => {
+                            if arc.segment_intersections(a.0, a.1, b.0, b.1).is_some_and(|hits| {
+                                hits.into_iter().any(|point| parameter_before_target(a, b, point))
+                            }) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            // Legacy fluid without an explicit boundary uses its nominal-area
+            // circular realization, consistent with form containment.
+            if boundary.is_none() && arc_boundary.is_none() && multi_contact_boundary.is_none() {
+                let radius = (nominal_area / std::f64::consts::PI).sqrt();
+                let dx = b.0 - a.0;
+                let dy = b.1 - a.1;
+                let length_squared = dx * dx + dy * dy;
+                if length_squared <= f64::EPSILON {
+                    return false;
+                }
+                let t = (-(a.0 * dx + a.1 * dy) / length_squared).clamp(0.0, 1.0);
+                let closest = (a.0 + t * dx, a.1 + t * dy);
+                return closest.0.hypot(closest.1) <= radius + 1e-9 && t < 1.0 - 1e-9;
+            }
+            false
+        }
+    }
+}
+
+fn parameter_before_target(
+    a: (f64, f64),
+    b: (f64, f64),
+    point: (f64, f64),
+) -> bool {
+    let dx = b.0 - a.0;
+    let dy = b.1 - a.1;
+    let length_squared = dx * dx + dy * dy;
+    length_squared > f64::EPSILON
+        && ((point.0 - a.0) * dx + (point.1 - a.1) * dy) / length_squared < 1.0 - 1e-9
+}
+
+fn segment_intersection_before_target(
+    a: (f64, f64),
+    b: (f64, f64),
+    c: (f64, f64),
+    d: (f64, f64),
+) -> bool {
+    let rx = b.0 - a.0;
+    let ry = b.1 - a.1;
+    let sx = d.0 - c.0;
+    let sy = d.1 - c.1;
+    let denominator = rx * sy - ry * sx;
+    if denominator.abs() <= 1e-12 {
+        return false;
+    }
+    let qx = c.0 - a.0;
+    let qy = c.1 - a.1;
+    let t = (qx * sy - qy * sx) / denominator;
+    let u = (qx * ry - qy * rx) / denominator;
+    (-1e-9..=1.0 - 1e-9).contains(&t) && (-1e-9..=1.0 + 1e-9).contains(&u)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -236,6 +413,53 @@ mod tests {
             min_y: -10.0,
             max_y: 10.0,
         }
+    }
+
+    #[test]
+    fn source_path_detects_an_intervening_circle_without_raster_sampling() {
+        let target_body = body(Form::Circle { radius: 1.0 });
+        let blocker = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Circle { radius: 1.0 },
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: -1.0,
+            max_x: 1.0,
+            min_y: -1.0,
+            max_y: 1.0,
+        };
+        assert!(source_path_blocked(
+            (-5.0, 0.0),
+            (5.0, 0.0),
+            &[blocker.clone(), target_body.clone()],
+            1,
+            0,
+        ));
+        assert!(!source_path_blocked(
+            (-5.0, 4.0),
+            (5.0, 4.0),
+            &[blocker, target_body],
+            1,
+            0,
+        ));
+    }
+
+    #[test]
+    fn source_path_ignores_only_the_target_surface_constituent() {
+        let target = body(Form::Rectangle {
+            width: 2.0,
+            height: 1.0,
+        });
+        assert!(!source_path_blocked(
+            (-5.0, 0.0),
+            (-1.0, 0.0),
+            &[target],
+            0,
+            0,
+        ));
     }
 
     #[test]
