@@ -510,7 +510,10 @@ impl Simulation {
             self.decomposing_bodies.remove(index);
         }
     }
-    fn has_intact_genome_core(organism: &mut Organism, catalog: &[crate::resources::BaseResource]) -> bool {
+    fn has_intact_genome_core(
+        organism: &mut Organism,
+        catalog: &[crate::resources::BaseResource],
+    ) -> bool {
         if let Some(cavity) = organism.genome_cavity_cached_ref(catalog) {
             return cavity.qualifies();
         }
@@ -728,8 +731,9 @@ impl Simulation {
             if core_intact_after_chemistry {
                 let stored_amount_before_transfer = organism.stored_material.total_amount();
                 Self::transfer_contained_environmental_material(organism, &mut self.environment);
-                let acquired_amount =
-                    (organism.stored_material.total_amount() - stored_amount_before_transfer).max(0.0);
+                let acquired_amount = (organism.stored_material.total_amount()
+                    - stored_amount_before_transfer)
+                    .max(0.0);
                 if organism.active_movement.is_none() {
                     Self::finalize_pending_movement_experience(
                         organism,
