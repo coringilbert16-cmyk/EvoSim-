@@ -1233,21 +1233,11 @@ impl Simulation {
                 );
             }
         }
-        let currently_living_ids: HashSet<String> = self
-            .organisms
-            .iter_mut()
-            .filter_map(|organism| {
-                Self::has_intact_genome_core(organism, &self.environment.catalog)
-                    .then(|| organism.id.clone())
-            })
-            .collect();
-        // A transformation that was already in flight is a committed physical/
-        // chemical transaction, not ongoing biological decision-making. Let it
-        // settle even if its organism's core has since been breached; dropping it
-        // here could discard reserved material or energy held by the transaction.
-        // New transformations cannot be initiated by breached organisms because
-        // the decision loop is gated by living_ids.
-        let _ = currently_living_ids;
+        // Keep in-flight physical/chemical transactions even if their organism's
+        // core has since been breached. Dropping one here could discard reserved
+        // material or energy held by the transaction. New transformations cannot
+        // be initiated by breached organisms because the decision loop is gated
+        // by living_ids. Existing BREAK/COMBINE transactions still settle normally.
         self.energy_ledger.total_usable_energy_held =
             crate::reproduction::total_usable_energy_held(
                 &self.organisms,
