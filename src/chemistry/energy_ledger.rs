@@ -401,6 +401,18 @@ mod tests {
         assert_eq!(second_holder, 0.0);
         assert_eq!(budget.remaining, 2.0);
         assert_eq!(ledger.total_external_energy_input, 3.0);
+
+        // Local availability may exceed the aggregate remainder; a smaller
+        // claim is still valid when it fits both constraints.
+        let smaller_claim = external_input(5.0, 1.0, 1.0, 0.0, 0.0);
+        assert!(ledger.settle_external_input_from_budget(
+            &mut second_holder,
+            &mut budget,
+            smaller_claim
+        ));
+        assert_eq!(second_holder, 1.0);
+        assert_eq!(budget.remaining, 1.0);
+        assert_eq!(ledger.total_external_energy_input, 4.0);
     }
 
     #[test]
