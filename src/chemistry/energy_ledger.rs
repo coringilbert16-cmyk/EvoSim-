@@ -249,10 +249,13 @@ impl EnergyLedgerAuthority for EnergyLedger {
             return false;
         }
         let next_released = self.total_potential_energy_released + transaction.potential_released;
+        let next_structural =
+            self.total_structural_energy_delta + transaction.structural_delta;
         let next_gained = self.total_usable_energy_gained + transaction.usable_delta.max(0.0);
         let next_work = self.total_work_expended + transaction.work_expended;
         let next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
         if !next_released.is_finite()
+            || !next_structural.is_finite()
             || !next_gained.is_finite()
             || !next_work.is_finite()
             || !next_heat.is_finite()
@@ -261,6 +264,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         }
         *holder = next_holder.max(0.0);
         self.total_potential_energy_released = next_released;
+        self.total_structural_energy_delta = next_structural;
         self.total_usable_energy_gained = next_gained;
         self.total_work_expended = next_work;
         self.total_heat_dissipated = next_heat;
