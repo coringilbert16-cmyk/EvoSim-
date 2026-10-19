@@ -208,7 +208,7 @@ pub(crate) struct Organism {
     #[serde(default)]
     pub(crate) peak_developmental_realization: f64,
     #[serde(skip)]
-    pub(crate) cached_harmonic_key: Option<(u64, u64, u64)>,
+    pub(crate) cached_harmonic_key: Option<(u64, u64, u64, u64)>,
     #[serde(skip)]
     pub(crate) last_movement_attempt: Option<MovementAttemptDiagnostic>,
 }
@@ -473,6 +473,8 @@ pub(crate) struct Simulation {
     /// Cached once at simulation creation so the tick hot path never rebuilds
     /// the confirmed seed structure.
     pub(crate) seed_scale_reference: Option<(f64, f64)>,
+    /// Optional rotating source; absent by default until world geometry and signal bounds are configured.
+    pub(crate) world_tone: Option<crate::world_tone::WorldToneRuntimeConfig>,
 }
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
 pub(crate) const DESIRABILITY_MAX: f64 = 1.0;

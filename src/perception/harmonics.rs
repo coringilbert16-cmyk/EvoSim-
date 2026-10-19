@@ -534,21 +534,34 @@ pub(crate) fn organism_resonance_perceptions(
 pub(crate) fn update_organism_harmonics(
     organism: &mut crate::state::Organism,
     environment: &crate::state::Environment,
+    world_tone_sample: Option<crate::world_tone::WorldToneSample>,
+    tick: u64,
 ) {
     let cavity = organism.genome_cavity_cached(&environment.catalog);
     let key = (
         organism.structure_revision,
         organism.position_revision,
         environment.field.revision,
+        if world_tone_sample.is_some() { tick.wrapping_add(1) } else { 0 },
     );
     if organism.cached_harmonic_key == Some(key) {
         return;
     }
 
-    let spectrum = cavity
+    let mut spectrum = cavity
         .as_ref()
         .map(|cavity| genome_cavity_spectrum(&environment.catalog, &environment.field, cavity))
         .unwrap_or_default();
+
+    if let (Some(sample), Some(cavity)) = (world_tone_sample, cavity.as_ref()) {
+        let (world_spectrum, _) = world_tone_cavity_contribution(
+            &environment.catalog,
+            &organism.structure,
+            cavity,
+            sample,
+        );
+        spectrum.merge_from(&world_spectrum, 1.0);
+    }
 
     organism.harmonic_spectrum = spectrum;
     organism.cached_harmonic_key = Some(key);
@@ -706,6 +719,7 @@ mod tests {
             source_y: 0.0,
             frequency_hz: 440.0,
             signal_energy_level: 8.0,
+            available_energy_per_tick: 10.0,
             orbital_phase: 0.0,
         };
         let (north_spectrum, north_perceptions) =
@@ -727,6 +741,7 @@ mod tests {
             source_y: 1000.0,
             frequency_hz: 110.0,
             signal_energy_level: 0.0,
+            available_energy_per_tick: 1.0,
             orbital_phase: 0.5,
         };
         let (south_spectrum, south_perceptions) =

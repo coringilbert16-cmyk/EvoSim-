@@ -15,6 +15,22 @@ use crate::structure::Placement;
 const BUDDING_AVAILABILITY_FRACTION: f64 = 0.90;
 
 impl Simulation {
+    /// Configure or disable the rotating source. Invalid values are rejected.
+    #[expect(dead_code, reason = "Runtime configuration remains staged until world geometry and signal bounds are selected")]
+    pub(crate) fn configure_world_tone(
+        &mut self,
+        config: Option<crate::world_tone::WorldToneRuntimeConfig>,
+    ) -> bool {
+        if config.is_some_and(|candidate| !candidate.is_valid()) {
+            return false;
+        }
+        self.world_tone = config;
+        for organism in &mut self.organisms {
+            organism.cached_harmonic_key = None;
+        }
+        true
+    }
+
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
         let rng = ChaCha8Rng::seed_from_u64(seed);
         let environment = Self::create_environment();
@@ -38,6 +54,7 @@ impl Simulation {
             rng,
             decision_parameters: DecisionParameters::default(),
             seed_scale_reference,
+            world_tone: None,
         }
     }
     fn create_environment() -> Environment {
@@ -568,9 +585,17 @@ impl Simulation {
         // once per simulation tick instead of rebuilding the calibration
         // structure for every organism.
         let seed_reference = self.seed_scale_reference;
+        let world_tone_sample = self.world_tone.and_then(|config| {
+            config.sample(self.tick, self.environment.width, self.environment.height)
+        });
         for organism in &mut self.organisms {
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
-            crate::harmonics::update_organism_harmonics(organism, &self.environment);
+            crate::harmonics::update_organism_harmonics(
+                organism,
+                &self.environment,
+                world_tone_sample,
+                self.tick,
+            );
             crate::memory::update_experience_memory(organism, &self.environment);
             let budding_available = seed_reference
                 .and_then(|reference| {

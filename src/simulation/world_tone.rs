@@ -31,6 +31,38 @@ pub(crate) struct WorldToneParameters {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+/// Explicit runtime configuration; no orbit radius or unresolved signal parameters are guessed.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct WorldToneRuntimeConfig {
+    pub(crate) parameters: WorldToneParameters,
+    pub(crate) orbit_radius: f64,
+}
+
+impl WorldToneRuntimeConfig {
+    pub(crate) fn is_valid(self) -> bool {
+        self.parameters.is_valid() && self.orbit_radius.is_finite() && self.orbit_radius >= 0.0
+    }
+
+    pub(crate) fn sample(
+        self,
+        tick: u64,
+        world_width: f64,
+        world_height: f64,
+    ) -> Option<WorldToneSample> {
+        if !self.is_valid() || !world_width.is_finite() || !world_height.is_finite()
+            || world_width <= 0.0 || world_height <= 0.0
+        {
+            return None;
+        }
+        self.parameters.sample(
+            tick,
+            world_width * 0.5,
+            world_height * 0.5,
+            self.orbit_radius,
+        )
+    }
+}
+
 pub(crate) struct WorldToneSample {
     pub(crate) source_x: f64,
     pub(crate) source_y: f64,
@@ -156,6 +188,25 @@ mod tests {
         assert_eq!(west.signal_energy_level, 4.0);
         assert_eq!(east.available_energy_per_tick, 5.5);
         assert_eq!(west.available_energy_per_tick, 5.5);
+    }
+
+    #[test]
+    fn runtime_configuration_uses_world_center_and_explicit_orbit_radius() {
+        let config = WorldToneRuntimeConfig {
+            parameters: parameters(),
+            orbit_radius: 250.0,
+        };
+        let north = config.sample(0, 1_000.0, 800.0).unwrap();
+        let east = config.sample(600, 1_000.0, 800.0).unwrap();
+        assert_eq!((north.source_x, north.source_y), (500.0, 150.0));
+        assert!((east.source_x - 750.0).abs() < 1e-9);
+        assert!((east.source_y - 400.0).abs() < 1e-9);
+
+        let invalid = WorldToneRuntimeConfig {
+            orbit_radius: -1.0,
+            ..config
+        };
+        assert!(invalid.sample(0, 1_000.0, 800.0).is_none());
     }
 
     #[test]
