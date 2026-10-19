@@ -1698,16 +1698,22 @@ The exposed-edge generator now keys already-processed line families by quantized
 
 ### Energy-source contract: inexhaustible imaginary sun — 2026-10-18
 
-**User decision: Option B is definitive.** EvoSim's omnipresent 440 Hz tone is emitted by an imaginary sun whose energy supply never runs out. Do not model depletion of the sun or a finite local environmental energy reservoir as a prerequisite for harvesting.
+**User decision: the imaginary sun is the inexhaustible external energy source.** Do not model depletion of the sun or a finite local environmental energy reservoir as a prerequisite for harvesting.
 
-- The sun is the inexhaustible external energy source; the tone is its omnipresent signal.
-- Organisms do not receive unlimited energy merely because the tone exists. Capture must be a modeled, rate-limited physical transaction governed by chemistry/resonance and any other explicitly defined coupling constraints.
-- Resonance changes capture/coupling effectiveness; it does not create energy.
-- The reaction-driving chemistry accumulator remains distinct from energy and cannot serve as an implicit energy source.
+**Updated user decision — rotating, position-dependent world tone (2026-10-19):** replace the earlier assumption of a constant, omnipresent 440 Hz tone with one directional signal emitted by a source that rotates around a circular world.
+
+- The source follows one circular orbit around the world. Its signal is directional; this is not a spatial gradient radiating from the source and not two simultaneous opposing signals.
+- At the northern apex of the orbit, the signal reaches its highest frequency/pitch of **440 Hz** and its maximum signal-energy level.
+- As the source moves east and then south, both frequency/pitch and signal-energy level decrease smoothly. At the southern point, both reach their minimum.
+- As the source moves west and then north, both rise smoothly back to 440 Hz and the maximum signal-energy level.
+- Frequency and signal-energy level are separate model quantities that co-vary over this positional cycle. Do not assume that changing frequency physically determines energy level; their shared cycle is an EvoSim environmental rule.
+- The exact minimum frequency, mathematical interpolation curve, orbital period/speed, and numerical scale for signal-energy level remain **OPEN**. Do not invent values while implementing unrelated accounting work.
+- The source is inexhaustible. Organisms do not receive unlimited energy merely because the signal exists: capture must be a modeled, rate-limited physical transaction governed by chemistry/resonance and explicitly defined coupling constraints.
+- Resonance changes capture/coupling effectiveness; it does not create energy. The reaction-driving chemistry accumulator remains distinct from energy and cannot serve as an implicit energy source.
 - Keep one global energy unit and account for all captured energy and subsequent transfers, conversion, work, storage, and dissipation. Conservation is tracked as initial energy plus explicitly recorded external input equals final tracked energy plus explicitly recorded external output; internal transfers cancel.
-- Spatial directionality and shadows may be introduced later; they do not change the inexhaustible-source decision.
+- The current harmonic code's fixed 440 Hz constant is a reference/legacy implementation, not evidence that the new orbital cycle is implemented. The environment currently has spatial material-field cells and world coordinates, but this audit has not established a world-tone orbital source or capture mechanism in code.
 
-Implementation boundary remains unchanged: implement the source/capture contract in the dedicated energy-and-natural-chemistry workstream based on the current #186 integration foundation, keeping PR #196 constructor work independent. This records the source decision only; it does not authorize source-code changes or imply the energy model is implemented.
+Implementation boundary remains unchanged: implement the source/capture contract in the dedicated energy-and-natural-chemistry workstream based on the current #186 integration foundation, keeping PR #196 constructor work independent. This decision updates the environmental source model; it does not by itself authorize or establish a complete energy-accounting implementation.
 
 
 
