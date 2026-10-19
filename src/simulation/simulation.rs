@@ -469,22 +469,9 @@ impl Simulation {
             ) else {
                 continue;
             };
-            if step.net_energy > 0.0 {
-                if let Some(organism_index) = crate::decomposition::harvestable_decomposition_energy(
-                    &self.organisms,
-                    &self.decomposing_bodies[index].position,
-                ) {
-                    let amount = step
-                        .net_energy
-                        .min(self.decomposing_bodies[index].energy_budget);
-                    let (body, organism) = {
-                        let body = &mut self.decomposing_bodies[index].energy_budget;
-                        let organism = &mut self.organisms[organism_index].usable_energy;
-                        (body, organism)
-                    };
-                    let _ = self.energy_ledger.transfer(body, organism, amount);
-                }
-            }
+            // Released usable energy remains with the decomposing body.
+            // Distance alone is not an authorized transfer mechanism; a
+            // receiver must obtain it through a real, chemistry-authorized path.
             if let Some(materials) = step.released_material {
                 let position = self.decomposing_bodies[index].position.clone();
                 for material in materials {
@@ -496,6 +483,26 @@ impl Simulation {
             }
         }
         for index in finished_indices.into_iter().rev() {
+            let remaining = self.decomposing_bodies[index].energy_budget;
+            if remaining > 0.0 {
+                // A finished body cannot be removed while it still owns usable
+                // energy. Until an authorized receiver/path exists, explicitly
+                // settle the remainder as a sink rather than silently losing it.
+                let sink = crate::energy_ledger::EnergyTransaction {
+                    reason: crate::energy_ledger::EnergyReason::Decomposition,
+                    potential_released: 0.0,
+                    usable_delta: -remaining,
+                    structural_delta: 0.0,
+                    work_expended: 0.0,
+                    heat_dissipated: remaining,
+                };
+                if !self.energy_ledger.settle_transaction(
+                    &mut self.decomposing_bodies[index].energy_budget,
+                    sink,
+                ) {
+                    continue;
+                }
+            }
             self.decomposing_bodies.remove(index);
         }
     }
