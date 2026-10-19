@@ -73,17 +73,17 @@ fn combine_energy_transaction(
     {
         return None;
     }
-    // A fluid-fluid bond is consumed by coalescence immediately after formation.
-    // Its intrinsic potential is therefore dissipated, not retained as structural
-    // energy on a bond that no longer exists. Total expenditure stays unchanged.
-    let (structural_allocation, dissipated_heat) = if transient_fluid_bond {
-        (investment, work + bond_energy)
+    // Only a bond that survives COMBINE retains structural energy. Formation
+    // work is tracked separately; investment not retained as a bond is waste.
+    let (structural_allocation, work_expended, dissipated_heat) = if transient_fluid_bond {
+        (0.0, work, investment + bond_energy)
     } else {
-        (investment + bond_energy, work)
+        (bond_energy, work, investment)
     };
     EnergyTransaction::expenditure(
         EnergyReason::Combine,
         structural_allocation,
+        work_expended,
         dissipated_heat,
     )
 }
@@ -1973,10 +1973,12 @@ mod fluid_coalescence_transaction_tests {
         assert!(rigid_tx.balanced());
         assert_eq!(fluid_tx.usable_delta, -9.0);
         assert_eq!(rigid_tx.usable_delta, -9.0);
-        assert_eq!(fluid_tx.structural_delta, 2.0);
-        assert_eq!(fluid_tx.heat_dissipated, 7.0);
-        assert_eq!(rigid_tx.structural_delta, 5.0);
-        assert_eq!(rigid_tx.heat_dissipated, 4.0);
+        assert_eq!(fluid_tx.structural_delta, 0.0);
+        assert_eq!(fluid_tx.work_expended, 4.0);
+        assert_eq!(fluid_tx.heat_dissipated, 5.0);
+        assert_eq!(rigid_tx.structural_delta, 3.0);
+        assert_eq!(rigid_tx.work_expended, 4.0);
+        assert_eq!(rigid_tx.heat_dissipated, 2.0);
     }
 
     #[test]
@@ -2048,6 +2050,7 @@ mod fluid_coalescence_transaction_tests {
             ledger.total_usable_energy_gained,
             original_ledger.total_usable_energy_gained
         );
+        assert_eq!(ledger.total_work_expended, original_ledger.total_work_expended);
         assert_eq!(
             ledger.total_heat_dissipated,
             original_ledger.total_heat_dissipated
