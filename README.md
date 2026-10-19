@@ -1852,3 +1852,17 @@ Both `EnergyTransaction` (chemical/internal energy) and `ExternalInputTransactio
 - A focused regression checks that both transaction types satisfy the same balance primitive while retaining their distinct source and structural-allocation semantics.
 
 **Next boundary:** aggregate reconciliation still needs to include actual initial energy, every live holder, stored bond energy, and explicit dissipated/output energy. The common transaction rule is not itself a whole-world conservation proof. The live tick still does not settle world-tone capture against one shared source budget, and no decomposition behavior is changed by this slice.
+
+
+## Energy-holder audit and first reconciliation fix — 2026-10-19
+
+Audit of PR #202 at `24fbe6b741ad29e970e02311c14509e378e3d082` found that `total_usable_energy_held` counted live organisms and their developing offspring, but omitted the usable-energy budgets held by `DecomposingBody` instances. That made the held-energy counter drop when a dying organism transferred its usable energy into decomposition, even though the transfer created or destroyed no energy. The counter was also left at its default zero until the first lifecycle refresh, despite the initial organism receiving an explicit usable-energy allocation.
+
+The first reconciliation fix now:
+- includes live-organism usable energy, developing-offspring usable energy, and decomposing-body energy budgets in the same held-usable-energy total;
+- initializes that total when a simulation is created, using the initial organism's actual assigned energy;
+- refreshes the same total after the lifecycle processes deaths and decomposition.
+
+**Scope boundary:** this counter is still not a whole-world energy inventory. It measures usable energy held in these three holder classes only. It does not yet include energy retained structurally in bonds, quantify energy remaining in an active source/reflection field, or reconcile all historical flows against initial energy plus external input. Structural bond energy is a distinct store and must be inventoried without double-counting the released-potential flow counter. Initial construction also uses a very large starting allocation formula, so the initial baseline must be made explicit before a global conservation assertion is designed.
+
+**Verification:** source changes are committed on PR #202 only. Rust formatting, compilation, focused tests, and full tests have not been run in this GitHub-only pass; do not interpret this change as verified or as proof of conservation.

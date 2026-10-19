@@ -47,6 +47,9 @@ impl Simulation {
         let seed_scale_reference =
             crate::juvenile::confirmed_seed_scale_reference(&environment.catalog).ok();
         let organism = Self::create_initial_organism();
+        let mut energy_ledger = EnergyLedger::default();
+        energy_ledger.total_usable_energy_held =
+            crate::reproduction::total_usable_energy_held(std::slice::from_ref(&organism), &[]);
         Self {
             tick: 0,
             ticks_per_second,
@@ -58,7 +61,7 @@ impl Simulation {
             chemistry_library: crate::chemistry_library::open_default_library()
                 .expect("chemistry library must open"),
             decomposing_bodies: Vec::new(),
-            energy_ledger: EnergyLedger::default(),
+            energy_ledger,
             next_organism_id: 2,
             next_transformation_id: 1,
             rng,
@@ -1176,7 +1179,10 @@ impl Simulation {
         self.active_transformations
             .retain(|t| live_ids.contains(&t.organism_id));
         self.energy_ledger.total_usable_energy_held =
-            crate::reproduction::total_usable_energy_held(&self.organisms);
+            crate::reproduction::total_usable_energy_held(
+                &self.organisms,
+                &self.decomposing_bodies,
+            );
     }
     pub(crate) fn apply_survival_damage(
         organism: &mut Organism,

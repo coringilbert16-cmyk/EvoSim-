@@ -520,8 +520,11 @@ fn anchor_structure(
     }
     Some((child.structure, child.stored_material, anchor_unit_index))
 }
-pub(crate) fn total_usable_energy_held(organisms: &[Organism]) -> f64 {
-    organisms
+pub(crate) fn total_usable_energy_held(
+    organisms: &[Organism],
+    decomposing_bodies: &[crate::decomposition::DecomposingBody],
+) -> f64 {
+    let organism_energy: f64 = organisms
         .iter()
         .map(|organism| {
             organism.usable_energy
@@ -530,7 +533,12 @@ pub(crate) fn total_usable_energy_held(organisms: &[Organism]) -> f64 {
                     .as_ref()
                     .map_or(0.0, |construction| construction.developing_energy)
         })
-        .sum()
+        .sum();
+    let decomposition_energy: f64 = decomposing_bodies
+        .iter()
+        .map(|body| body.energy_budget)
+        .sum();
+    organism_energy + decomposition_energy
 }
 
 pub(crate) fn begin_reproduction(
