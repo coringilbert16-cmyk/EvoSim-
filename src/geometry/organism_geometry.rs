@@ -534,6 +534,31 @@ mod tests {
     }
 
     #[test]
+    fn visible_source_facing_points_respect_shadowing() {
+        let mut blocker = body(Form::Circle { radius: 0.75 });
+        blocker.parts[0].x = -3.0;
+        let target = body(Form::Circle { radius: 1.0 });
+
+        let visible = visible_source_facing_points((-5.0, 0.0), &[blocker, target]);
+        assert_eq!(visible.len(), 1);
+        assert_eq!(visible[0].body_index, 0);
+        assert!(visible[0].normal_x < -0.99);
+        assert!(visible[0].x < -3.0);
+    }
+
+    #[test]
+    fn visible_source_facing_points_reject_back_facing_geometry() {
+        let geometry = body(Form::Rectangle {
+            width: 2.0,
+            height: 1.0,
+        });
+        let visible = visible_source_facing_points((5.0, 0.0), &[geometry]);
+        assert_eq!(visible.len(), 1);
+        assert!(visible[0].normal_x > 0.99);
+        assert!(visible[0].x > 0.9);
+    }
+
+    #[test]
     fn source_path_detects_an_intervening_circle_without_raster_sampling() {
         let target_body = body(Form::Circle { radius: 1.0 });
         let blocker = OrganismBodyGeometry {
