@@ -94,6 +94,65 @@ impl OrganismBodyGeometry {
         })
     }
 
+    /// Build a world-space body from every physically realized constituent.
+    ///
+    /// Unlike `from_structure`, this includes unbonded units as well as bonded
+    /// structural components. Sunlight occlusion follows physical presence, not
+    /// the organism's current connectivity classification.
+    pub(crate) fn from_all_realized_units(
+        structure: &OrganismStructure,
+        catalog: &[BaseResource],
+    ) -> Option<Self> {
+        if structure.units.is_empty() {
+            return None;
+        }
+
+        let mut parts = Vec::with_capacity(structure.units.len());
+        let (mut min_x, mut max_x, mut min_y, mut max_y) = (
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+        );
+
+        for (unit_index, unit) in structure.units.iter().enumerate() {
+            let geometry = unit.geometry.as_ref()?;
+            let shape = geometry.shape();
+            let placement = unit.placement;
+            if !shape.is_valid()
+                || !placement.x.is_finite()
+                || !placement.y.is_finite()
+                || !placement.rotation_radians.is_finite()
+            {
+                return None;
+            }
+
+            let radius = shape.form.bounding_radius();
+            if !radius.is_finite() || radius < 0.0 {
+                return None;
+            }
+            min_x = min_x.min(placement.x - radius);
+            max_x = max_x.max(placement.x + radius);
+            min_y = min_y.min(placement.y - radius);
+            max_y = max_y.max(placement.y + radius);
+            parts.push(PlacedForm {
+                unit_index,
+                form: shape.form.clone(),
+                x: placement.x,
+                y: placement.y,
+                rotation_radians: placement.rotation_radians,
+            });
+        }
+
+        Some(Self {
+            parts,
+            min_x,
+            max_x,
+            min_y,
+            max_y,
+        })
+    }
+
     /// Build aggregate geometry for a physically realized material in world coordinates.
     ///
     /// Unlike logical material stock, this object has constituent placements and may

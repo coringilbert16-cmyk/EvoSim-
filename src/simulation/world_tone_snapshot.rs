@@ -41,14 +41,11 @@ impl WorldToneOccluderSnapshot {
         // Every organism remains a physical occluder regardless of whether its
         // genome is still intact. Structure placements are already world-space.
         for (organism_index, organism) in simulation.organisms.iter().enumerate() {
-            if organism
-                .structure
-                .structural_unit_indices(catalog)
-                .is_empty()
-            {
+            if organism.structure.units.is_empty() {
                 continue;
             }
-            let body = OrganismBodyGeometry::from_structure(&organism.structure, catalog)?;
+            let body =
+                OrganismBodyGeometry::from_all_realized_units(&organism.structure, catalog)?;
             organism_body_indices[organism_index] = Some(bodies.len());
             bodies.push(body);
         }
@@ -66,14 +63,10 @@ impl WorldToneOccluderSnapshot {
         // Legacy decomposing carriers are still physical structures if present;
         // this does not invoke their separate BREAK pathway.
         for decomposing in &simulation.decomposing_bodies {
-            if decomposing
-                .structure
-                .structural_unit_indices(catalog)
-                .is_empty()
-            {
+            if decomposing.structure.units.is_empty() {
                 continue;
             }
-            bodies.push(OrganismBodyGeometry::from_structure(
+            bodies.push(OrganismBodyGeometry::from_all_realized_units(
                 &decomposing.structure,
                 catalog,
             )?);
