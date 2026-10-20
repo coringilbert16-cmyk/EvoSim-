@@ -27,6 +27,8 @@ mod structure;
 mod structure_authority;
 #[path = "simulation/world_tone.rs"]
 mod world_tone;
+#[path = "simulation/world_tone_snapshot.rs"]
+mod world_tone_snapshot;
 
 // Active physical geometry authority stack.
 #[path = "geometry/capillary_geometry.rs"]
