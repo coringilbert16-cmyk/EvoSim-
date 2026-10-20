@@ -246,109 +246,20 @@ impl WorldToneCaptureFrame {
         sample: crate::world_tone::WorldToneSample,
         bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     ) -> Option<Self> {
-        if !sample.is_valid() {
+        if !sample.is_valid()
+            || bodies
+                .iter()
+                .any(|body| body.contains_point(sample.source_x, sample.source_y))
+        {
             return None;
         }
-        let intervals = match crate::source_exposure::visible_polygonal_intervals(
-            (sample.source_x, sample.source_y),
-            bodies,
-        ) {
-            Some(intervals) => intervals,
-            None => {
-                // Keep this fallback restricted to snapshots made entirely
-                // of exact circular boundaries. Mixed straight/curved targets
-                // still need one combined interval set before the frame can
-                // safely assign every body's exposure.
-                let mut part_count = 0usize;
-                for body in bodies {
-                    for part in &body.parts {
-                        part_count += 1;
-                        if !part.x.is_finite()
-                            || !part.y.is_finite()
-                            || !part.rotation_radians.is_finite()
-                        {
-                            return None;
-                        }
-                        let supported = matches!(
-                            &part.form,
-                            crate::resources::Form::Circle { .. }
-                                | crate::resources::Form::Fluid {
-                                    boundary: None,
-                                    arc_boundary: None,
-                                    multi_contact_boundary: None,
-                                    ..
-                                }
-                                | crate::resources::Form::Fluid {
-                                    boundary: None,
-                                    arc_boundary: Some(_),
-                                    multi_contact_boundary: None,
-                                    ..
-                                }
-                                | crate::resources::Form::Fluid {
-                                    boundary: None,
-                                    arc_boundary: None,
-                                    multi_contact_boundary: Some(_),
-                                    ..
-                                }
-                        );
-                        if !supported {
-                            return None;
-                        }
-                    }
-                    if body.contains_point(sample.source_x, sample.source_y) {
-                        return None;
-                    }
-                }
-                if part_count == 0 {
-                    return None;
-                }
 
-                let intervals = crate::source_exposure::visible_circular_arc_intervals(
-                    (sample.source_x, sample.source_y),
-                    bodies,
-                )?;
-                let mut projected_widths = vec![0.0; bodies.len()];
-                let mut projected_widths_by_unit: Vec<Vec<(usize, f64)>> = bodies
-                    .iter()
-                    .map(|body| {
-                        body.parts
-                            .iter()
-                            .map(|part| (part.unit_index, 0.0))
-                            .collect()
-                    })
-                    .collect();
-                for interval in intervals {
-                    let width = crate::source_exposure::point_source_projected_arc_extent(
-                        interval.arc,
-                        (sample.source_x, sample.source_y),
-                    )?;
-                    if !width.is_finite() || width < 0.0 {
-                        return None;
-                    }
-                    *projected_widths.get_mut(interval.body_index)? += width;
-                    let (_, unit_width) = projected_widths_by_unit
-                        .get_mut(interval.body_index)?
-                        .iter_mut()
-                        .find(|(unit_index, _)| *unit_index == interval.unit_index)?;
-                    *unit_width += width;
-                }
-                if projected_widths.iter().any(|width| !width.is_finite())
-                    || projected_widths_by_unit
-                        .iter()
-                        .flatten()
-                        .any(|(_, width)| !width.is_finite())
-                {
-                    return None;
-                }
-                return Some(Self {
-                    sample,
-                    projected_widths,
-                    projected_widths_by_unit,
-                    settled_receivers: vec![false; bodies.len()],
-                    settled_units: vec![Vec::new(); bodies.len()],
-                });
-            }
-        };
+        let source = (sample.source_x, sample.source_y);
+        let straight_intervals =
+            crate::source_exposure::visible_polygonal_intervals(source, bodies)?;
+        let curved_intervals =
+            crate::source_exposure::visible_circular_arc_intervals(source, bodies)?;
+
         let mut projected_widths = vec![0.0; bodies.len()];
         let mut projected_widths_by_unit: Vec<Vec<(usize, f64)>> = bodies
             .iter()
@@ -359,38 +270,43 @@ impl WorldToneCaptureFrame {
                     .collect()
             })
             .collect();
-        for interval in intervals {
-            let midpoint = (
-                (interval.start.0 + interval.end.0) * 0.5,
-                (interval.start.1 + interval.end.1) * 0.5,
-            );
-            let dx = sample.source_x - midpoint.0;
-            let dy = sample.source_y - midpoint.1;
-            let distance = dx.hypot(dy);
-            if !distance.is_finite() || distance <= f64::EPSILON {
-                return None;
-            }
-            let extent =
-                crate::source_exposure::projected_extent(interval, (dx / distance, dy / distance))?;
-            let body_width = projected_widths.get_mut(interval.body_index)?;
-            *body_width += extent;
-            if !body_width.is_finite() {
-                return None;
-            }
 
-            let unit_widths = projected_widths_by_unit.get_mut(interval.body_index)?;
-            if let Some((_, width)) = unit_widths
-                .iter_mut()
-                .find(|(unit_index, _)| *unit_index == interval.unit_index)
-            {
-                *width += extent;
-                if !width.is_finite() {
-                    return None;
-                }
-            } else {
+        for interval in straight_intervals {
+            let extent = crate::source_exposure::point_source_projected_extent(interval, source)?;
+            if !extent.is_finite() || extent < 0.0 {
                 return None;
             }
+            *projected_widths.get_mut(interval.body_index)? += extent;
+            let (_, unit_width) = projected_widths_by_unit
+                .get_mut(interval.body_index)?
+                .iter_mut()
+                .find(|(unit_index, _)| *unit_index == interval.unit_index)?;
+            *unit_width += extent;
         }
+
+        for interval in curved_intervals {
+            let extent =
+                crate::source_exposure::point_source_projected_arc_extent(interval.arc, source)?;
+            if !extent.is_finite() || extent < 0.0 {
+                return None;
+            }
+            *projected_widths.get_mut(interval.body_index)? += extent;
+            let (_, unit_width) = projected_widths_by_unit
+                .get_mut(interval.body_index)?
+                .iter_mut()
+                .find(|(unit_index, _)| *unit_index == interval.unit_index)?;
+            *unit_width += extent;
+        }
+
+        if projected_widths.iter().any(|width| !width.is_finite())
+            || projected_widths_by_unit
+                .iter()
+                .flatten()
+                .any(|(_, width)| !width.is_finite())
+        {
+            return None;
+        }
+
         Some(Self {
             sample,
             projected_widths,
