@@ -1951,11 +1951,9 @@ The common rule is: every credited energy amount must have been explicitly alloc
 
 **First narrow implementation:** stored environmental compounds have pre-existing internal connection endpoints, but no energy allocation was recorded when those bonds were created. Their restoration into organism structure likewise assigns zero bond energy. Stored-material BREAK now changes connectivity without crediting usable energy, structural release, or heat. Ordinary structural bonds with a recorded `bond_energy` continue to release that recorded amount through the existing transaction rule. This removes the concrete unallocated-energy credit without adding a second storage model.
 
-**Second transition finding:** COMBINE settles its energy transaction when a replacement structure is prepared, one tick before that structure is committed. The end-of-tick inventory previously counted the old live graph during this interval, temporarily missing the newly allocated bond energy. Structural inventory now counts the prepared replacement graph instead of the live graph for that organism until commit; it does not count both graphs.
+**Second transition fix:** COMBINE now prepares and commits its replacement structure on the same completion tick. This removes the interval in which energy had been settled but the old structure remained live, and prevents chemical or stress-driven BREAK from mutating the live graph between preparation and commit. The inventory therefore stays simple: it counts the live committed graph and does not need to understand pending replacement graphs.
 
-**Regression coverage added (not yet run):**
-- `src/tests/simulation_tests.rs::stored_material_break_does_not_credit_unallocated_energy` directly checks that stored-material BREAK changes neither usable energy nor ledger source, work, heat, or structural-energy counters.
-- `src/simulation/simulation.rs::structural_inventory_counts_prepared_structure_without_double_counting_live_graph` checks that staged COMBINE energy is included once during the prepare/commit interval.
+**Regression coverage added (not yet run):** `src/tests/simulation_tests.rs::stored_material_break_does_not_credit_unallocated_energy` directly checks that stored-material BREAK changes neither usable energy nor ledger source, work, heat, or structural-energy counters. The staged-inventory-only test was removed because the staged state no longer exists in the intended lifecycle.
 
 Next, run focused tests, formatting, compilation, and Clippy on the exact PR head. Then continue auditing ordinary BREAK, chemical BREAK, decomposition, maintenance, movement, material storage/restoration, and world-tone input against the same rule. Do not enable live world-tone capture until the complete cycle reconciles.
 
