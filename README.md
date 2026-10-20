@@ -22,7 +22,7 @@ First implementation slice on the dedicated `feature/external-input-ledger` bran
 ## Deterministic world-tone cycle cache — 2026-10-19
 
 - The source sample is deterministic for a fixed world size and runtime configuration. `WorldToneCycle` precomputes one sample per tick for cycles up to 65,536 ticks and uses modulo lookup during the simulation tick.
-- The cache stores only source outputs (position, frequency, signal level, available energy, and phase). It does not allocate source energy to organisms, cache live reflections, or replace energy-ledger accounting.
+- The cache stores only source outputs (position, frequency, signal level, energy intensity per tick per unit of exposed projected width, and phase). It does not allocate incident energy to organisms, cache live reflections, or replace energy-ledger accounting.
 - The cache is rebuilt when world-tone configuration is applied. Cycles longer than the explicit 65,536-sample memory bound fall back to the existing direct sampler; they remain valid rather than being rejected.
 - Regression tests compare every cached sample against direct sampling for the full 2,400-tick cycle and verify cycle wrap. A separate test checks that oversized cycles fall back safely.
 - **Performance expectation:** this removes repeated trigonometric source sampling from the configured tick path, but it is not yet benchmarked and should not be presented as a major speedup. The source was already sampled only once per tick, not once per organism. Resonance evaluation and live reflection propagation are separate, likely more significant future costs.
