@@ -447,6 +447,8 @@ mod integration_tests {
         s.step();
         assert!(s.organisms[0].active_transformation_id.is_none());
         assert_eq!(s.organisms[0].stored_material.physical_count(), 2);
+        assert!(s.organisms[0].usable_energy <= 100.0);
+        assert_eq!(s.energy_ledger.total_structural_energy_delta, 0.0);
         assert!(s.organisms[0]
             .decision_history
             .has_knowledge(ActionKind::Break, Some("stored:0:bond:0")));
