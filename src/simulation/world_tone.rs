@@ -581,6 +581,12 @@ mod tests {
         }
     }
 
+    // Finite point-source projection of the exposed x=4 face spanning y=[-1, 1],
+    // with the source at (-5, 0): h * (asinh(1/h) + asinh(1/h)), h=9.
+    fn expected_front_face_projected_width() -> f64 {
+        18.0 * (1.0_f64 / 9.0).asinh()
+    }
+
     #[test]
     fn source_orbits_clockwise_and_returns_to_north() {
         let params = parameters();
@@ -1146,22 +1152,23 @@ mod tests {
         };
         let mut frame = WorldToneCaptureFrame::from_geometry(sample, &[receiver])
             .expect("valid polygonal receiver should produce exposure frame");
+        let expected_width = expected_front_face_projected_width();
         let mut holder = 1.0;
         let mut ledger = crate::state::EnergyLedger::default();
         let result = frame
             .settle_receiver(0, 0.5, 0.8, &mut holder, &mut ledger)
             .expect("valid receiver should capture");
-        assert!((result.projected_width - 2.0).abs() < 1e-8);
-        assert!((frame.projected_width_for_unit(0, 0).unwrap() - 2.0).abs() < 1e-8);
-        assert!((result.incident_energy - 20.0).abs() < 1e-7);
-        assert!((result.absorbed_energy - 10.0).abs() < 1e-7);
-        assert!((result.unabsorbed_energy - 10.0).abs() < 1e-7);
-        assert!((result.usable_energy - 8.0).abs() < 1e-7);
-        assert!((result.heat_dissipated - 2.0).abs() < 1e-7);
-        assert!((holder - 9.0).abs() < 1e-7);
-        assert!((ledger.total_external_energy_input - 10.0).abs() < 1e-7);
-        assert!((ledger.total_usable_energy_gained - 8.0).abs() < 1e-7);
-        assert!((ledger.total_heat_dissipated - 2.0).abs() < 1e-7);
+        assert!((result.projected_width - expected_width).abs() < 1e-8);
+        assert!((frame.projected_width_for_unit(0, 0).unwrap() - expected_width).abs() < 1e-8);
+        assert!((result.incident_energy - 10.0 * expected_width).abs() < 1e-7);
+        assert!((result.absorbed_energy - 5.0 * expected_width).abs() < 1e-7);
+        assert!((result.unabsorbed_energy - 5.0 * expected_width).abs() < 1e-7);
+        assert!((result.usable_energy - 4.0 * expected_width).abs() < 1e-7);
+        assert!((result.heat_dissipated - expected_width).abs() < 1e-7);
+        assert!((holder - (1.0 + 4.0 * expected_width)).abs() < 1e-7);
+        assert!((ledger.total_external_energy_input - 5.0 * expected_width).abs() < 1e-7);
+        assert!((ledger.total_usable_energy_gained - 4.0 * expected_width).abs() < 1e-7);
+        assert!((ledger.total_heat_dissipated - expected_width).abs() < 1e-7);
     }
 
     #[test]
@@ -1205,13 +1212,14 @@ mod tests {
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.0,
         };
+        let expected_width = expected_front_face_projected_width();
         let frame = WorldToneCaptureFrame::from_geometry(sample, &[body]).unwrap();
 
-        assert!((frame.projected_width_for_unit(0, 0).unwrap() - 2.0).abs() < 1e-7);
+        assert!((frame.projected_width_for_unit(0, 0).unwrap() - expected_width).abs() < 1e-7);
         assert_eq!(frame.projected_width_for_unit(0, 1), Some(0.0));
         assert_eq!(frame.projected_width_for_unit(0, 99), None);
         assert_eq!(frame.projected_width_for_unit(99, 0), None);
-        assert!((frame.projected_widths[0] - 2.0).abs() < 1e-7);
+        assert!((frame.projected_widths[0] - expected_width).abs() < 1e-7);
     }
 
     #[test]
@@ -1242,6 +1250,7 @@ mod tests {
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.0,
         };
+        let expected_width = expected_front_face_projected_width();
         let frame = WorldToneCaptureFrame::from_geometry(sample, &[receiver]).unwrap();
         let properties = ResourceProperties {
             mass: 1.0,
@@ -1259,10 +1268,10 @@ mod tests {
         let response = frame
             .surface_response_for_unit(0, 0, properties, baselines)
             .unwrap();
-        assert!((response.projected_width - 2.0).abs() < 1e-7);
-        assert!((response.incident_energy - 20.0).abs() < 1e-7);
+        assert!((response.projected_width - expected_width).abs() < 1e-7);
+        assert!((response.incident_energy - 10.0 * expected_width).abs() < 1e-7);
         assert!((response.absorption_fraction - 1.0).abs() < 1e-7);
-        assert!((response.absorbed_by_damping - 20.0).abs() < 1e-7);
+        assert!((response.absorbed_by_damping - 10.0 * expected_width).abs() < 1e-7);
         assert!(response.unabsorbed.abs() < 1e-7);
         assert!(
             (response.absorbed_by_damping + response.unabsorbed - response.incident_energy).abs()
@@ -1309,6 +1318,7 @@ mod tests {
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.0,
         };
+        let expected_width = expected_front_face_projected_width();
         let mut frame = WorldToneCaptureFrame::from_geometry(sample, &[body]).unwrap();
         let properties = ResourceProperties {
             mass: 1.0,
@@ -1328,14 +1338,14 @@ mod tests {
         let result = frame
             .settle_surface_response(0, 0, properties, baselines, 0.75, &mut holder, &mut ledger)
             .unwrap();
-        assert!((result.incident_energy - 20.0).abs() < 1e-7);
-        assert!((result.absorbed_energy - 20.0).abs() < 1e-7);
-        assert!((result.usable_energy - 15.0).abs() < 1e-7);
-        assert!((result.heat_dissipated - 5.0).abs() < 1e-7);
-        assert!((holder - 15.0).abs() < 1e-7);
-        assert!((ledger.total_external_energy_input - 20.0).abs() < 1e-7);
-        assert!((ledger.total_usable_energy_gained - 15.0).abs() < 1e-7);
-        assert!((ledger.total_heat_dissipated - 5.0).abs() < 1e-7);
+        assert!((result.incident_energy - 10.0 * expected_width).abs() < 1e-7);
+        assert!((result.absorbed_energy - 10.0 * expected_width).abs() < 1e-7);
+        assert!((result.usable_energy - 7.5 * expected_width).abs() < 1e-7);
+        assert!((result.heat_dissipated - 2.5 * expected_width).abs() < 1e-7);
+        assert!((holder - 7.5 * expected_width).abs() < 1e-7);
+        assert!((ledger.total_external_energy_input - 10.0 * expected_width).abs() < 1e-7);
+        assert!((ledger.total_usable_energy_gained - 7.5 * expected_width).abs() < 1e-7);
+        assert!((ledger.total_heat_dissipated - 2.5 * expected_width).abs() < 1e-7);
         assert!(frame
             .settle_surface_response(0, 0, properties, baselines, 0.75, &mut holder, &mut ledger,)
             .is_none());
@@ -1372,6 +1382,7 @@ mod tests {
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.0,
         };
+        let expected_width = expected_front_face_projected_width();
         let mut frame = WorldToneCaptureFrame::from_geometry(sample, &[receiver]).unwrap();
         let mut holder = 0.0;
         let mut ledger = crate::state::EnergyLedger::default();
@@ -1381,8 +1392,8 @@ mod tests {
         assert!(frame
             .settle_receiver(0, 1.0, 1.0, &mut holder, &mut ledger)
             .is_none());
-        assert!((holder - 20.0).abs() < 1e-7);
-        assert!((ledger.total_external_energy_input - 20.0).abs() < 1e-7);
+        assert!((holder - 10.0 * expected_width).abs() < 1e-7);
+        assert!((ledger.total_external_energy_input - 10.0 * expected_width).abs() < 1e-7);
     }
 
     #[test]
