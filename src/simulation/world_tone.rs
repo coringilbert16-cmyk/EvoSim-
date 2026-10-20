@@ -193,6 +193,8 @@ pub(crate) struct WorldToneCaptureResult {
 pub(crate) struct WorldToneCaptureFrame {
     sample: crate::world_tone::WorldToneSample,
     projected_widths: Vec<f64>,
+    /// Exposure attributed to each constituent, preserving material provenance.
+    projected_widths_by_unit: Vec<Vec<(usize, f64)>>,
     settled_receivers: Vec<bool>,
 }
 
@@ -208,8 +210,8 @@ impl WorldToneCaptureFrame {
             bodies,
         )?;
         let mut projected_widths = vec![0.0; bodies.len()];
+        let mut projected_widths_by_unit = vec![Vec::new(); bodies.len()];
         for interval in intervals {
-            let width = projected_widths.get_mut(interval.body_index)?;
             let midpoint = (
                 (interval.start.0 + interval.end.0) * 0.5,
                 (interval.start.1 + interval.end.1) * 0.5,
@@ -222,16 +224,47 @@ impl WorldToneCaptureFrame {
             }
             let extent =
                 crate::source_exposure::projected_extent(interval, (dx / distance, dy / distance))?;
-            *width += extent;
-            if !width.is_finite() {
+            let body_width = projected_widths.get_mut(interval.body_index)?;
+            *body_width += extent;
+            if !body_width.is_finite() {
                 return None;
+            }
+
+            let unit_widths = projected_widths_by_unit.get_mut(interval.body_index)?;
+            if let Some((_, width)) = unit_widths
+                .iter_mut()
+                .find(|(unit_index, _)| *unit_index == interval.unit_index)
+            {
+                *width += extent;
+                if !width.is_finite() {
+                    return None;
+                }
+            } else {
+                unit_widths.push((interval.unit_index, extent));
             }
         }
         Some(Self {
             sample,
             projected_widths,
+            projected_widths_by_unit,
             settled_receivers: vec![false; bodies.len()],
         })
+    }
+
+    /// Return cached exposure for a constituent. Some(0.0) means no visible
+    /// source-facing area; None means the body index is absent.
+    pub(crate) fn projected_width_for_unit(
+        &self,
+        receiver_body_index: usize,
+        unit_index: usize,
+    ) -> Option<f64> {
+        let units = self.projected_widths_by_unit.get(receiver_body_index)?;
+        Some(
+            units
+                .iter()
+                .find(|(candidate, _)| *candidate == unit_index)
+                .map_or(0.0, |(_, width)| *width),
+        )
     }
 
     /// Settle one receiver's absorbed input atomically. Fractions remain explicit
@@ -571,6 +604,7 @@ mod tests {
             .settle_receiver(0, 0.5, 0.8, &mut holder, &mut ledger)
             .expect("valid receiver should capture");
         assert!((result.projected_width - 2.0).abs() < 1e-8);
+        assert!((frame.projected_width_for_unit(0, 0).unwrap() - 2.0).abs() < 1e-8);
         assert!((result.incident_energy - 20.0).abs() < 1e-7);
         assert!((result.absorbed_energy - 10.0).abs() < 1e-7);
         assert!((result.unabsorbed_energy - 10.0).abs() < 1e-7);
@@ -582,6 +616,39 @@ mod tests {
         assert!((ledger.total_heat_dissipated - 2.0).abs() < 1e-7);
     }
 
+    #[test]
+    fn world_tone_capture_preserves_surface_exposure_by_constituent() {
+        use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
+        use crate::resources::Form;
+
+        let body = OrganismBodyGeometry {
+            parts: vec![
+                PlacedForm {
+                    unit_index: 0,
+                    form: Form::Rectangle { width: 2.0, height: 2.0 },
+                    x: 5.0, y: 0.0, rotation_radians: 0.0,
+                },
+                PlacedForm {
+                    unit_index: 1,
+                    form: Form::Rectangle { width: 2.0, height: 2.0 },
+                    x: 7.0, y: 0.0, rotation_radians: 0.0,
+                },
+            ],
+            min_x: 4.0, max_x: 8.0, min_y: -1.0, max_y: 1.0,
+        };
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0, source_y: 0.0, frequency_hz: 440.0,
+            signal_energy_level: 8.0, energy_intensity_per_tick_per_width: 10.0,
+            orbital_phase: 0.0,
+        };
+        let frame = WorldToneCaptureFrame::from_geometry(sample, &[body]).unwrap();
+
+        assert!((frame.projected_width_for_unit(0, 0).unwrap() - 2.0).abs() < 1e-7);
+        assert_eq!(frame.projected_width_for_unit(0, 1), Some(0.0));
+        assert_eq!(frame.projected_width_for_unit(0, 99), Some(0.0));
+        assert_eq!(frame.projected_width_for_unit(99, 0), None);
+        assert!((frame.projected_widths[0] - 2.0).abs() < 1e-7);
+    }
     #[test]
     fn world_tone_capture_frame_prevents_duplicate_receiver_credit() {
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
