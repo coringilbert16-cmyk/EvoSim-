@@ -2,6 +2,16 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 
+fn should_prepare_transformation(
+    kind: crate::state::TransformationKind,
+    remaining_ticks: u64,
+) -> bool {
+    match kind {
+        crate::state::TransformationKind::Combine => remaining_ticks == 0,
+        _ => remaining_ticks == 1,
+    }
+}
+
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
 use crate::decision_runtime::{
     select_action_with_developmental_scores, ActionCandidate, DecisionContext,
@@ -570,15 +580,10 @@ impl Simulation {
             if transformation.remaining_ticks > 0 {
                 transformation.remaining_ticks -= 1
             }
-            let combine_completes_now = matches!(
+            if should_prepare_transformation(
                 transformation.kind,
-                crate::state::TransformationKind::Combine
-            ) && transformation.remaining_ticks == 0;
-            let other_transformation_prepares_now = !matches!(
-                transformation.kind,
-                crate::state::TransformationKind::Combine
-            ) && transformation.remaining_ticks == 1;
-            if combine_completes_now || other_transformation_prepares_now {
+                transformation.remaining_ticks,
+            ) {
                 if let Some(organism) = self
                     .organisms
                     .iter_mut()
@@ -1316,6 +1321,28 @@ impl Simulation {
 
 #[cfg(test)]
 mod decomposition_finalization_tests {
+    #[test]
+    fn combine_prepares_at_completion_without_changing_break_timing() {
+        use crate::state::TransformationKind;
+
+        assert!(!super::should_prepare_transformation(
+            TransformationKind::Combine,
+            1,
+        ));
+        assert!(super::should_prepare_transformation(
+            TransformationKind::Combine,
+            0,
+        ));
+        assert!(super::should_prepare_transformation(
+            TransformationKind::Break,
+            1,
+        ));
+        assert!(!super::should_prepare_transformation(
+            TransformationKind::Break,
+            0,
+        ));
+    }
+
     use super::*;
     use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
