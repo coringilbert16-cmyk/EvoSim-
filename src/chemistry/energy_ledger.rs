@@ -407,7 +407,10 @@ pub(crate) fn settle_world_tone_capture(
         bodies,
     )?;
     let mut projected_width = 0.0;
-    for interval in intervals.iter().filter(|interval| interval.body_index == receiver_body_index) {
+    for interval in intervals
+        .iter()
+        .filter(|interval| interval.body_index == receiver_body_index)
+    {
         let midpoint = (
             (interval.start.0 + interval.end.0) * 0.5,
             (interval.start.1 + interval.end.1) * 0.5,
@@ -418,7 +421,10 @@ pub(crate) fn settle_world_tone_capture(
         if !distance.is_finite() || distance <= f64::EPSILON {
             return None;
         }
-        let extent = crate::source_exposure::projected_extent(*interval, (dx / distance, dy / distance))?;
+        let extent = crate::source_exposure::projected_extent(
+            *interval,
+            (dx / distance, dy / distance),
+        )?;
         projected_width += extent;
         if !projected_width.is_finite() {
             return None;
@@ -431,7 +437,8 @@ pub(crate) fn settle_world_tone_capture(
     let usable_energy = absorbed_energy * usable_fraction;
     let heat_dissipated = absorbed_energy - usable_energy;
     if [absorbed_energy, unabsorbed_energy, usable_energy, heat_dissipated]
-        .iter().any(|value| !value.is_finite() || *value < 0.0)
+        .iter()
+        .any(|value| !value.is_finite() || *value < 0.0)
     {
         return None;
     }
@@ -449,8 +456,12 @@ pub(crate) fn settle_world_tone_capture(
     }
 
     Some(WorldToneCaptureResult {
-        projected_width, incident_energy, absorbed_energy, unabsorbed_energy,
-        usable_energy, heat_dissipated,
+        projected_width,
+        incident_energy,
+        absorbed_energy,
+        unabsorbed_energy,
+        usable_energy,
+        heat_dissipated,
     })
 }
 
@@ -765,14 +776,41 @@ mod tests {
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
         use crate::resources::Form;
         let receiver = OrganismBodyGeometry {
-            parts: vec![PlacedForm { unit_index: 0, form: Form::Rectangle { width: 2.0, height: 2.0 }, x: 5.0, y: 0.0, rotation_radians: 0.0 }],
-            min_x: 4.0, max_x: 6.0, min_y: -1.0, max_y: 1.0,
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Rectangle {
+                    width: 2.0,
+                    height: 2.0,
+                },
+                x: 5.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: 4.0,
+            max_x: 6.0,
+            min_y: -1.0,
+            max_y: 1.0,
         };
-        let sample = crate::world_tone::WorldToneSample { source_x: -5.0, source_y: 0.0, frequency_hz: 440.0, signal_energy_level: 8.0, energy_intensity_per_tick_per_width: 10.0, orbital_phase: 0.0 };
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0,
+            source_y: 0.0,
+            frequency_hz: 440.0,
+            signal_energy_level: 8.0,
+            energy_intensity_per_tick_per_width: 10.0,
+            orbital_phase: 0.0,
+        };
         let mut holder = 1.0;
         let mut ledger = EnergyLedger::default();
-        let result = settle_world_tone_capture(sample, &[receiver], 0, 0.5, 0.8, &mut holder, &mut ledger)
-            .expect("valid polygonal receiver should capture");
+        let result = settle_world_tone_capture(
+            sample,
+            &[receiver],
+            0,
+            0.5,
+            0.8,
+            &mut holder,
+            &mut ledger,
+        )
+        .expect("valid polygonal receiver should capture");
         assert!((result.projected_width - 2.0).abs() < 1e-8);
         assert!((result.incident_energy - 20.0).abs() < 1e-7);
         assert!((result.absorbed_energy - 10.0).abs() < 1e-7);
@@ -790,15 +828,42 @@ mod tests {
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
         use crate::resources::Form;
         let body = |x| OrganismBodyGeometry {
-            parts: vec![PlacedForm { unit_index: 0, form: Form::Rectangle { width: 2.0, height: 2.0 }, x, y: 0.0, rotation_radians: 0.0 }],
-            min_x: x - 1.0, max_x: x + 1.0, min_y: -1.0, max_y: 1.0,
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Rectangle {
+                    width: 2.0,
+                    height: 2.0,
+                },
+                x,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: x - 1.0,
+            max_x: x + 1.0,
+            min_y: -1.0,
+            max_y: 1.0,
         };
         let bodies = [body(5.0), body(10.0)];
-        let sample = crate::world_tone::WorldToneSample { source_x: -5.0, source_y: 0.0, frequency_hz: 440.0, signal_energy_level: 8.0, energy_intensity_per_tick_per_width: 10.0, orbital_phase: 0.0 };
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0,
+            source_y: 0.0,
+            frequency_hz: 440.0,
+            signal_energy_level: 8.0,
+            energy_intensity_per_tick_per_width: 10.0,
+            orbital_phase: 0.0,
+        };
         let mut holder = 1.0;
         let mut ledger = EnergyLedger::default();
-        let result = settle_world_tone_capture(sample, &bodies, 1, 1.0, 1.0, &mut holder, &mut ledger)
-            .expect("valid polygonal receiver should capture");
+        let result = settle_world_tone_capture(
+            sample,
+            &bodies,
+            1,
+            1.0,
+            1.0,
+            &mut holder,
+            &mut ledger,
+        )
+        .expect("valid polygonal receiver should capture");
         assert_eq!(result.projected_width, 0.0);
         assert_eq!(result.incident_energy, 0.0);
         assert_eq!(result.absorbed_energy, 0.0);
@@ -808,10 +873,19 @@ mod tests {
 
     #[test]
     fn world_tone_capture_rejects_undefined_material_fractions_without_credit() {
-        let sample = crate::world_tone::WorldToneSample { source_x: -5.0, source_y: 0.0, frequency_hz: 440.0, signal_energy_level: 8.0, energy_intensity_per_tick_per_width: 10.0, orbital_phase: 0.0 };
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0,
+            source_y: 0.0,
+            frequency_hz: 440.0,
+            signal_energy_level: 8.0,
+            energy_intensity_per_tick_per_width: 10.0,
+            orbital_phase: 0.0,
+        };
         let mut holder = 1.0;
         let mut ledger = EnergyLedger::default();
-        assert!(settle_world_tone_capture(sample, &[], 0, 0.5, 0.8, &mut holder, &mut ledger).is_none());
+        assert!(
+            settle_world_tone_capture(sample, &[], 0, 0.5, 0.8, &mut holder, &mut ledger).is_none()
+        );
         assert_eq!(holder, 1.0);
         assert_eq!(ledger.total_external_energy_input, 0.0);
     }

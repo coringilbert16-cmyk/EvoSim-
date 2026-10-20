@@ -1997,3 +1997,16 @@ Exact-head CI run [39458264248](https://github.com/coringilbert16-cmyk/EvoSim-/a
 - **Energy-system boundary:** this run does not enable or verify live sunlight capture, a shared per-tick receiver scheduler, or end-to-end world conservation. Keep capture disabled until transition-level and tick-level reconciliation pass.
 
 This entry supersedes earlier statements that no exact-head CI result was available at the time those historical notes were written. PR202 remains open and Draft; PR196 is unchanged.
+
+
+## Visible world-tone capture primitive — 2026-10-20
+
+The latest implementation adds the first explicit geometry-to-ledger solar capture path, but does not yet enable it in the live tick scheduler.
+
+- Exposed polygon intervals now retain their owning body and constituent indices. This lets the capture path count only the receiver's visible surface instead of accidentally crediting a blocker or another body.
+- `settle_world_tone_capture` computes polygonal visibility against the supplied bodies, sums the receiver's unshadowed projected extent, converts it to incident energy using the configured intensity-per-width rule, and settles absorbed energy through the external-input ledger.
+- The absorbed input is split between usable energy and immediate heat using explicit caller-supplied fractions. No resource-specific absorption constants are invented. Unabsorbed energy is returned as a result but is not yet propagated/reflected to downstream bodies.
+- Unsupported geometry and invalid fractions fail closed before ledger credit. The operation is receiver-local, not a finite global solar pool; the future scheduler must invoke it at most once per receiver per tick.
+- Added focused tests for projected-width scaling and balanced ledger settlement, body ownership (a fully shadowed body receives no credit), and fail-closed validation.
+
+**Still outstanding:** select absorption/usable fractions from approved material properties, integrate this primitive into the simulation tick with a per-receiver deduplication guard, account for reflected/unabsorbed energy where applicable, and prove tick/world inventory conservation. This commit does not claim live solar capture is active.
