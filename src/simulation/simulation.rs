@@ -1248,6 +1248,10 @@ impl Simulation {
                 &self.organisms,
                 &self.decomposing_bodies,
             );
+        self.energy_ledger.total_structural_energy_held = Self::structural_energy_held(
+            &self.organisms,
+            &self.decomposing_bodies,
+        );
     }
     pub(crate) fn apply_survival_damage(
         organism: &mut Organism,
