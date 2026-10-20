@@ -659,12 +659,22 @@ fn realized_circle_arcs(
             arc_boundary,
             multi_contact_boundary,
         } => {
-            if multi_contact_boundary.is_some() {
-                // Multi-contact fluid remains an occluder through the exact
-                // segment/arc queries, but is not yet a supported target: its
-                // complete boundary must be analyzed together to prevent
-                // self-occlusion from being mistaken for exposed surface.
-                return Some(Vec::new());
+            if let Some(multi) = multi_contact_boundary {
+                for piece in &multi.pieces {
+                    if let crate::capillary_geometry::FluidBoundaryPiece::FreeArc(arc) = piece {
+                        if !arc.is_valid() {
+                            return None;
+                        }
+                        add(
+                            arc.center_x,
+                            arc.center_y,
+                            arc.radius,
+                            arc.start_angle_radians,
+                            arc.sweep_radians,
+                        )?;
+                    }
+                }
+                return Some(arcs);
             }
             if let Some(vertices) = boundary {
                 // A polygonal fluid boundary is handled by the polygon solver,
@@ -675,7 +685,7 @@ fn realized_circle_arcs(
                 return None;
             }
             if let Some(arc) = arc_boundary {
-                if !arc.is_valid() || arc.sweep_radians > std::f64::consts::PI + 1e-10 {
+                if !arc.is_valid() {
                     return None;
                 }
                 add(
@@ -782,7 +792,7 @@ pub(crate) fn visible_circular_arc_intervals(
                         }
                     }
                     if let Some(arc) = arc_boundary {
-                        if !arc.is_valid() || arc.sweep_radians > std::f64::consts::PI + 1e-10 {
+                        if !arc.is_valid() {
                             return None;
                         }
                         let world = arc.transformed(part.x, part.y, part.rotation_radians)?;
@@ -949,12 +959,16 @@ pub(crate) fn visible_circular_arc_intervals(
             {
                 continue;
             }
+            // Include the target constituent in this query: its own other
+            // boundary pieces must be allowed to occlude a concave/compound
+            // fluid arc. The target endpoint itself is excluded by the strict
+            // before-target intersection checks in the exact geometry queries.
             if crate::organism_geometry::source_path_blocked(
                 source,
                 point,
                 bodies,
-                target.body_index,
-                target.unit_index,
+                usize::MAX,
+                usize::MAX,
             ) {
                 continue;
             }
