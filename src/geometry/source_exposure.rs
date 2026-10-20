@@ -835,7 +835,7 @@ mod visibility_tests {
     }
 
     #[test]
-    fn polygonal_exposure_fails_closed_for_curved_boundaries() {
+    fn straight_boundary_query_skips_curved_targets_without_polygonization() {
         let circle = OrganismBodyGeometry {
             parts: vec![PlacedForm {
                 unit_index: 0,
@@ -850,8 +850,10 @@ mod visibility_tests {
             max_y: 1.0,
         };
         assert!(
-            visible_polygonal_intervals((-5.0, 0.0), &[circle]).is_none(),
-            "curved geometry must not silently become zero exposure or an invented polygon"
+            visible_polygonal_intervals((-5.0, 0.0), &[circle])
+                .expect("curved targets are handled by the companion arc query")
+                .is_empty(),
+            "straight query must not invent polygon edges for a circle"
         );
 
         let family = crate::capillary_geometry::CapillaryContactFamily::solve(
@@ -880,8 +882,10 @@ mod visibility_tests {
             max_y: 1.0,
         };
         assert!(
-            visible_polygonal_intervals((-5.0, 0.0), &[fluid]).is_none(),
-            "exact fluid arcs need analytic interval handling before exposure can be credited"
+            visible_polygonal_intervals((-5.0, 0.0), &[fluid])
+                .expect("exact fluid arcs are handled by the companion arc query")
+                .is_empty(),
+            "straight query must not invent polygon edges for an exact fluid arc"
         );
     }
 }
