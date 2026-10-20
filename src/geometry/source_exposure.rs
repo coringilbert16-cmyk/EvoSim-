@@ -13,6 +13,10 @@
 #[allow(dead_code)] // Geometry measurement is staged before live exposure discovery.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ExposedBoundaryInterval {
+    /// Index into the body slice passed to visible_polygonal_intervals.
+    pub body_index: usize,
+    /// Realized constituent index within that body.
+    pub unit_index: usize,
     pub start: (f64, f64),
     pub end: (f64, f64),
     pub outward_normal: (f64, f64),
@@ -69,6 +73,8 @@ mod tests {
 
     fn interval(normal: (f64, f64)) -> ExposedBoundaryInterval {
         ExposedBoundaryInterval {
+            body_index: 0,
+            unit_index: 0,
             start: (0.0, 0.0),
             end: (2.0, 0.0),
             outward_normal: normal,
@@ -99,6 +105,8 @@ mod tests {
     fn oblique_edge_uses_cosine_projection_not_an_arbitrary_weight() {
         let diagonal = std::f64::consts::FRAC_1_SQRT_2;
         let oblique = ExposedBoundaryInterval {
+            body_index: 0,
+            unit_index: 0,
             start: (0.0, 0.0),
             end: (2.0 * diagonal, -2.0 * diagonal),
             outward_normal: (diagonal, diagonal),
@@ -244,6 +252,8 @@ pub(crate) fn visible_polygonal_intervals(
                         continue;
                     }
                     result.push(ExposedBoundaryInterval {
+                        body_index,
+                        unit_index: part.unit_index,
                         start: (a.0 + ex * t0, a.1 + ey * t0),
                         end: (a.0 + ex * t1, a.1 + ey * t1),
                         outward_normal: normal,
