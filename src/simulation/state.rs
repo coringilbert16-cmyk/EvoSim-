@@ -158,6 +158,15 @@ pub(crate) struct EnergyLedger {
     pub(crate) total_work_expended: f64,
     pub(crate) total_heat_dissipated: f64,
     pub(crate) total_usable_energy_held: f64,
+    /// Usable-energy baseline captured at simulation tick zero.
+    #[serde(default)]
+    pub(crate) initial_usable_energy_held: f64,
+    /// Current stored bond energy across realized live and decomposing structures.
+    #[serde(default)]
+    pub(crate) total_structural_energy_held: f64,
+    /// Stored bond-energy baseline captured at simulation tick zero.
+    #[serde(default)]
+    pub(crate) initial_structural_energy_held: f64,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct Organism {
