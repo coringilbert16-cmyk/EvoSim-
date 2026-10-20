@@ -277,7 +277,7 @@ impl WorldToneCaptureFrame {
                 }
                 let (width, center, exclusion_radius) = match &part.form {
                     crate::resources::Form::Circle { radius } => {
-                        (2.0 * radius, (part.x, part.y), *radius)
+                        (2.0 * *radius, (part.x, part.y), *radius)
                     }
                     crate::resources::Form::Fluid {
                         nominal_area,
@@ -297,7 +297,7 @@ impl WorldToneCaptureFrame {
                         let arc_area = arc.segment_area()?;
                         if !nominal_area.is_finite()
                             || *nominal_area <= 0.0
-                            || (arc_area - nominal_area).abs() > 1e-10 * nominal_area.max(1.0)
+                            || (arc_area - *nominal_area).abs() > 1e-10 * (*nominal_area).max(1.0)
                         {
                             return None;
                         }
