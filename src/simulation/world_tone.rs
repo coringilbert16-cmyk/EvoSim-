@@ -1029,8 +1029,7 @@ mod tests {
         )
         .unwrap();
         let parallel_ray_approximation =
-            crate::source_exposure::projected_arc_extent(expected_world_arc, (-1.0, 0.0))
-                .unwrap();
+            crate::source_exposure::projected_arc_extent(expected_world_arc, (-1.0, 0.0)).unwrap();
         assert!(
             (expected - parallel_ray_approximation).abs() > 1e-5,
             "finite point-source geometry should not silently collapse to parallel rays"
