@@ -1964,4 +1964,4 @@ The simulation tick now invokes decomposition processing before refreshing curre
 
 
 
-**Verification status:** this GitHub-only pass has not run Rust commands or tests, and no CI status checks have been reported for the latest branch snapshot. The stored-material, decomposition, stress-driven BREAK, and simulation-tick decomposition regressions are added but unverified. The COMBINE prepare/commit timing change has been code-audited but has no dedicated integration regression yet. Whole-world conservation is not yet proven.
+**Verification status:** this GitHub-only pass has not run Rust commands or tests, and no CI status checks have been reported for the latest branch snapshot. The stored-material, legacy-carrier BREAK, and stress-driven BREAK regressions are added but unverified. The incorrect simulation-tick regression that treated legacy decomposition as a separate production process has been removed. The COMBINE prepare/commit timing change has been code-audited but has no dedicated integration regression yet. Whole-world conservation is not yet proven.
