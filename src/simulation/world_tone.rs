@@ -255,10 +255,10 @@ impl WorldToneCaptureFrame {
         ) {
             Some(intervals) => intervals,
             None => {
-                // A lone circle has an exact directional projected width of
-                // its diameter. Handle it analytically rather than tessellating
-                // it into polygon edges. With any other constituent present,
-                // curved-boundary occlusion must be solved before crediting.
+                // A lone circle or legacy circular fluid has projected width
+                // equal to its diameter. Exact curved-arc fluid boundaries use
+                // point-source visibility and projection below; mixed polygon /
+                // curve frame integration remains unsupported and fails closed.
                 let mut only_part = None;
                 for (body_index, body) in bodies.iter().enumerate() {
                     for part in &body.parts {
@@ -976,7 +976,7 @@ mod tests {
     }
 
     #[test]
-    fn standalone_circular_fluid_arc_uses_analytic_projected_extent() {
+    fn standalone_circular_fluid_arc_uses_finite_point_source_projection() {
         use crate::capillary_geometry::CircularArcBoundary;
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
         use crate::resources::Form;
@@ -1023,8 +1023,11 @@ mod tests {
             start_angle_radians: arc.start_angle_radians + 0.25,
             ..arc
         };
-        let expected =
-            crate::source_exposure::projected_arc_extent(expected_world_arc, (-1.0, 0.0)).unwrap();
+        let expected = crate::source_exposure::point_source_projected_arc_extent(
+            expected_world_arc,
+            (sample.source_x, sample.source_y),
+        )
+        .unwrap();
         assert!((frame.projected_widths[0] - expected).abs() < 1e-12);
         assert_eq!(frame.projected_width_for_unit(0, 2), Some(expected));
     }
