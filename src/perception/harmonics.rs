@@ -785,7 +785,7 @@ mod tests {
             source_y: 0.0,
             frequency_hz: 440.0,
             signal_energy_level: 8.0,
-            available_energy_per_tick: 10.0,
+            energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.0,
         };
         let (north_spectrum, north_perceptions) =
@@ -807,7 +807,7 @@ mod tests {
             source_y: 1000.0,
             frequency_hz: 110.0,
             signal_energy_level: 0.0,
-            available_energy_per_tick: 1.0,
+            energy_intensity_per_tick_per_width: 1.0,
             orbital_phase: 0.5,
         };
         let (south_spectrum, south_perceptions) =
