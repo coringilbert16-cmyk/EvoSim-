@@ -430,3 +430,101 @@ mod visibility_tests {
         );
     }
 }
+
+
+/// Exact projected extent of a fully exposed circular free-boundary arc.
+///
+/// The arc is represented analytically; no polygonal tessellation is used.
+/// Its outward normal is radial from the circle center. The integral clips
+/// back-facing portions to zero, matching the straight-boundary primitive.
+/// This measures projection only: callers must still discover visible arc
+/// intervals and subtract occluded portions before using the result.
+pub(crate) fn projected_arc_extent(
+    arc: crate::capillary_geometry::CircularArcBoundary,
+    toward_source: (f64, f64),
+) -> Option<f64> {
+    if !arc.is_valid()
+        || !toward_source.0.is_finite()
+        || !toward_source.1.is_finite()
+    {
+        return None;
+    }
+    let direction_length = toward_source.0.hypot(toward_source.1);
+    if (direction_length - 1.0).abs() > 1e-9 {
+        return None;
+    }
+
+    let start = arc.start_angle_radians;
+    let end = start + arc.sweep_radians;
+    let source_angle = toward_source.1.atan2(toward_source.0);
+    let mut cuts = vec![start, end];
+
+    // cos(theta - source_angle) changes sign at these exact angles.
+    let first = ((start - source_angle - std::f64::consts::FRAC_PI_2)
+        / std::f64::consts::PI)
+        .floor() as i64
+        - 1;
+    let last = ((end - source_angle - std::f64::consts::FRAC_PI_2)
+        / std::f64::consts::PI)
+        .ceil() as i64
+        + 1;
+    for k in first..=last {
+        let angle = source_angle + std::f64::consts::FRAC_PI_2 + k as f64 * std::f64::consts::PI;
+        if angle > start && angle < end {
+            cuts.push(angle);
+        }
+    }
+    cuts.sort_by(f64::total_cmp);
+
+    let mut integral = 0.0;
+    for pair in cuts.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        if (a + b) * 0.5 - source_angle .cos() > 0.0 {
+            // Integral cos(theta - alpha) dtheta = sin(theta - alpha).
+            integral += (b - source_angle).sin() - (a - source_angle).sin();
+        }
+    }
+    let extent = arc.radius * integral.max(0.0);
+    extent.is_finite().then_some(extent)
+}
+
+#[cfg(test)]
+mod exact_arc_projection_tests {
+    use super::projected_arc_extent;
+    use crate::capillary_geometry::CircularArcBoundary;
+
+    #[test]
+    fn exact_arc_projection_matches_analytic_semicircle_and_quarter_arc() {
+        let semicircle = CircularArcBoundary {
+            center_x: 0.0,
+            center_y: 0.0,
+            radius: 2.0,
+            start_angle_radians: -std::f64::consts::FRAC_PI_2,
+            sweep_radians: std::f64::consts::PI,
+        };
+        // For a right-facing semicircle, integral of max(cos(theta), 0) is 2.
+        assert!((projected_arc_extent(semicircle, (1.0, 0.0)).unwrap() - 4.0).abs() < 1e-12);
+
+        let quarter = CircularArcBoundary {
+            start_angle_radians: 0.0,
+            sweep_radians: std::f64::consts::FRAC_PI_2,
+            ..semicircle
+        };
+        // Integral of cos(theta) from 0 to pi/2 is 1.
+        assert!((projected_arc_extent(quarter, (1.0, 0.0)).unwrap() - 2.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn exact_arc_projection_clips_back_facing_arc_and_rejects_invalid_direction() {
+        let arc = CircularArcBoundary {
+            center_x: 0.0,
+            center_y: 0.0,
+            radius: 3.0,
+            start_angle_radians: std::f64::consts::FRAC_PI_2,
+            sweep_radians: std::f64::consts::FRAC_PI_2,
+        };
+        assert_eq!(projected_arc_extent(arc, (1.0, 0.0)), Some(0.0));
+        assert_eq!(projected_arc_extent(arc, (0.0, 0.0)), None);
+        assert_eq!(projected_arc_extent(arc, (0.0, 2.0)), None);
+    }
+}
