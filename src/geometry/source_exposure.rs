@@ -1852,10 +1852,7 @@ mod point_source_curve_visibility_tests {
             let c = offset.0 * offset.0 + offset.1 * offset.1 - 1.0;
             let discriminant = b * b - 4.0 * a * c;
             let t = (-b - discriminant.sqrt()) / (2.0 * a);
-            let point = (
-                source.0 + t * direction.0,
-                source.1 + t * direction.1,
-            );
+            let point = (source.0 + t * direction.0, source.1 + t * direction.1);
             (point.1 - center.1)
                 .atan2(point.0 - center.0)
                 .rem_euclid(std::f64::consts::TAU)
