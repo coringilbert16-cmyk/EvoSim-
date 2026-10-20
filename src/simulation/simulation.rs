@@ -1390,6 +1390,7 @@ mod decomposition_finalization_tests {
             .stored_material
             .take_physical_at(original_count)
             .expect("test source should be removable from storage");
+        let expected_placements = removed.placements.clone();
         let transformation = crate::state::ActiveTransformation {
             id: 999,
             organism_id: simulation.organisms[0].id.clone(),
@@ -1430,10 +1431,7 @@ mod decomposition_finalization_tests {
                 .iter()
                 .any(|entry| match entry {
                     crate::material_storage::StoredMaterial::Physical(instance) => {
-                        instance
-                            .placements
-                            .as_ref()
-                            .is_some_and(|placements| placements.contains(&placement))
+                        instance.placements.as_ref() == expected_placements.as_ref()
                             && (instance.material.total_amount() - amount).abs() < 1e-12
                     }
                 }),
