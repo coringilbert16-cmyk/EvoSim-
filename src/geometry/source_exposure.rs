@@ -462,16 +462,15 @@ pub(crate) fn projected_arc_extent(
     let mut cuts = vec![start, end];
 
     // cos(theta - source_angle) changes sign at these exact angles.
-    let first = ((start - source_angle - std::f64::consts::FRAC_PI_2)
-        / std::f64::consts::PI)
+    let first = ((start - source_angle - std::f64::consts::FRAC_PI_2) / std::f64::consts::PI)
         .floor() as i64
         - 1;
-    let last = ((end - source_angle - std::f64::consts::FRAC_PI_2)
-        / std::f64::consts::PI)
+    let last = ((end - source_angle - std::f64::consts::FRAC_PI_2) / std::f64::consts::PI)
         .ceil() as i64
         + 1;
     for k in first..=last {
-        let angle = source_angle + std::f64::consts::FRAC_PI_2 + k as f64 * std::f64::consts::PI;
+        let angle =
+            source_angle + std::f64::consts::FRAC_PI_2 + k as f64 * std::f64::consts::PI;
         if angle > start && angle < end {
             cuts.push(angle);
         }
@@ -514,6 +513,20 @@ mod exact_arc_projection_tests {
         };
         // Integral of cos(theta) from 0 to pi/2 is 1.
         assert!((projected_arc_extent(quarter, (1.0, 0.0)).unwrap() - 2.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn exact_arc_projection_normalizes_large_finite_start_angles() {
+        let arc = CircularArcBoundary {
+            center_x: 0.0,
+            center_y: 0.0,
+            radius: 2.0,
+            start_angle_radians: 1.0e100,
+            sweep_radians: std::f64::consts::FRAC_PI_2,
+        };
+        let extent = projected_arc_extent(arc, (1.0, 0.0))
+            .expect("finite large start angles must not overflow projection bounds");
+        assert!(extent.is_finite() && extent >= 0.0);
     }
 
     #[test]
