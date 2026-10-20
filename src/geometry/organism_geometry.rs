@@ -114,6 +114,12 @@ impl OrganismBodyGeometry {
         );
 
         for (unit_index, unit) in structure.units.iter().enumerate() {
+            // A single StructuralUnit cannot faithfully expose a composite
+            // Material's separate constituent surfaces. Reject even stale cached
+            // geometry rather than treating it as an authoritative composite.
+            if unit.material.has_internal_structure() {
+                return None;
+            }
             let geometry = unit.geometry.as_ref()?;
             let shape = geometry.shape();
             let placement = unit.placement;

@@ -351,6 +351,29 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_fails_closed_on_unexpanded_composite_structural_units() {
+        use crate::resources::InternalBond;
+
+        let mut simulation = Simulation::new(75, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        replace_with_nitrogen_square(&mut simulation.organisms[0], 5.0, 0.0, &catalog);
+        simulation.organisms[0].structure.units[0].material = Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
+        simulation.organisms[0].mark_structure_changed();
+
+        assert!(
+            WorldToneOccluderSnapshot::from_simulation(sample(), &simulation).is_none(),
+            "a cached single-resource shape must not stand in for a composite material"
+        );
+    }
+
+    #[test]
     fn developing_offspring_and_its_stored_material_remain_world_occluders() {
         let mut simulation = Simulation::new(73, 1.0);
         clear_environment_physical_material(&mut simulation);
