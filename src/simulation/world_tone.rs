@@ -222,8 +222,7 @@ impl WorldToneCaptureFrame {
             bodies,
         )?;
         let mut projected_widths = vec![0.0; bodies.len()];
-        let mut projected_widths_by_unit: Vec<Vec<(usize, f64)>> =
-            vec![Vec::new(); bodies.len()];
+        let mut projected_widths_by_unit: Vec<Vec<(usize, f64)>> = vec![Vec::new(); bodies.len()];
         for interval in intervals {
             let midpoint = (
                 (interval.start.0 + interval.end.0) * 0.5,
