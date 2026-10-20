@@ -255,107 +255,86 @@ impl WorldToneCaptureFrame {
         ) {
             Some(intervals) => intervals,
             None => {
-                // A lone circle or legacy circular fluid has projected width
-                // equal to its diameter. Exact curved-arc fluid boundaries use
-                // point-source visibility and projection below; mixed polygon /
-                // curve frame integration remains unsupported and fails closed.
-                let mut only_part = None;
-                for (body_index, body) in bodies.iter().enumerate() {
+                // Keep this fallback restricted to snapshots made entirely
+                // of exact circular boundaries. Mixed straight/curved targets
+                // still need one combined interval set before the frame can
+                // safely assign every body's exposure.
+                let mut part_count = 0usize;
+                for body in bodies {
                     for part in &body.parts {
-                        if only_part.is_some() {
-                            return None;
-                        }
-                        only_part = Some((body_index, part));
-                    }
-                }
-                let (body_index, part) = only_part?;
-                if !part.x.is_finite() || !part.y.is_finite() || !part.rotation_radians.is_finite()
-                {
-                    return None;
-                }
-                let (width, center) = match &part.form {
-                    crate::resources::Form::Circle { radius }
-                        if radius.is_finite() && *radius > 0.0 =>
-                    {
-                        (2.0 * *radius, (part.x, part.y))
-                    }
-                    crate::resources::Form::Fluid {
-                        nominal_area,
-                        boundary: None,
-                        arc_boundary: None,
-                        multi_contact_boundary: None,
-                    } if nominal_area.is_finite() && *nominal_area > 0.0 => {
-                        let radius = (nominal_area / std::f64::consts::PI).sqrt();
-                        (2.0 * radius, (part.x, part.y))
-                    }
-                    crate::resources::Form::Fluid {
-                        nominal_area,
-                        boundary: None,
-                        arc_boundary: Some(arc),
-                        multi_contact_boundary: None,
-                    } if arc.is_valid() => {
-                        let arc_area = arc.segment_area()?;
-                        if !nominal_area.is_finite()
-                            || *nominal_area <= 0.0
-                            || (arc_area - *nominal_area).abs() > 1e-10 * (*nominal_area).max(1.0)
+                        part_count += 1;
+                        if !part.x.is_finite()
+                            || !part.y.is_finite()
+                            || !part.rotation_radians.is_finite()
                         {
                             return None;
                         }
-                        let intervals = crate::source_exposure::visible_circular_arc_intervals(
-                            (sample.source_x, sample.source_y),
-                            bodies,
-                        )?;
-                        let width = intervals
-                            .iter()
-                            .filter(|interval| {
-                                interval.body_index == body_index
-                                    && interval.unit_index == part.unit_index
-                            })
-                            .map(|interval| {
-                                crate::source_exposure::point_source_projected_arc_extent(
-                                    interval.arc,
-                                    (sample.source_x, sample.source_y),
-                                )
-                            })
-                            .collect::<Option<Vec<_>>>()?
-                            .into_iter()
-                            .sum::<f64>();
-                        (width, (part.x, part.y))
+                        let supported = matches!(
+                            &part.form,
+                            crate::resources::Form::Circle { .. }
+                                | crate::resources::Form::Fluid {
+                                    boundary: None,
+                                    arc_boundary: None,
+                                    multi_contact_boundary: None,
+                                    ..
+                                }
+                                | crate::resources::Form::Fluid {
+                                    boundary: None,
+                                    arc_boundary: Some(_),
+                                    multi_contact_boundary: None,
+                                    ..
+                                }
+                                | crate::resources::Form::Fluid {
+                                    boundary: None,
+                                    arc_boundary: None,
+                                    multi_contact_boundary: Some(_),
+                                    ..
+                                }
+                        );
+                        if !supported {
+                            return None;
+                        }
                     }
-                    _ => return None,
-                };
-                let source_distance =
-                    (sample.source_x - center.0).hypot(sample.source_y - center.1);
-                if !width.is_finite()
-                    || width < 0.0
-                    || !source_distance.is_finite()
-                    || bodies[body_index].contains_point(sample.source_x, sample.source_y)
+                    if body.contains_point(sample.source_x, sample.source_y) {
+                        return None;
+                    }
+                }
+                if part_count == 0 {
+                    return None;
+                }
+
+                let intervals = crate::source_exposure::visible_circular_arc_intervals(
+                    (sample.source_x, sample.source_y),
+                    bodies,
+                )?;
+                let mut projected_widths = vec![0.0; bodies.len()];
+                let mut projected_widths_by_unit: Vec<Vec<(usize, f64)>> = bodies
+                    .iter()
+                    .map(|body| body.parts.iter().map(|part| (part.unit_index, 0.0)).collect())
+                    .collect();
+                for interval in intervals {
+                    let width = crate::source_exposure::point_source_projected_arc_extent(
+                        interval.arc,
+                        (sample.source_x, sample.source_y),
+                    )?;
+                    if !width.is_finite() || width < 0.0 {
+                        return None;
+                    }
+                    *projected_widths.get_mut(interval.body_index)? += width;
+                    let (_, unit_width) = projected_widths_by_unit
+                        .get_mut(interval.body_index)?
+                        .iter_mut()
+                        .find(|(unit_index, _)| *unit_index == interval.unit_index)?;
+                    *unit_width += width;
+                }
+                if projected_widths.iter().any(|width| !width.is_finite())
+                    || projected_widths_by_unit
+                        .iter()
+                        .flatten()
+                        .any(|(_, width)| !width.is_finite())
                 {
                     return None;
                 }
-                let mut projected_widths = vec![0.0; bodies.len()];
-                projected_widths[body_index] = width;
-                let projected_widths_by_unit = bodies
-                    .iter()
-                    .enumerate()
-                    .map(|(index, body)| {
-                        body.parts
-                            .iter()
-                            .map(|candidate| {
-                                (
-                                    candidate.unit_index,
-                                    if index == body_index
-                                        && candidate.unit_index == part.unit_index
-                                    {
-                                        width
-                                    } else {
-                                        0.0
-                                    },
-                                )
-                            })
-                            .collect()
-                    })
-                    .collect();
                 return Some(Self {
                     sample,
                     projected_widths,
