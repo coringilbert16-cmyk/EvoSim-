@@ -275,26 +275,66 @@ impl WorldToneCaptureFrame {
                 {
                     return None;
                 }
-                let radius = match &part.form {
-                    crate::resources::Form::Circle { radius } => *radius,
+                let (width, center, exclusion_radius) = match &part.form {
+                    crate::resources::Form::Circle { radius } => {
+                        (2.0 * radius, (part.x, part.y), *radius)
+                    }
                     crate::resources::Form::Fluid {
                         nominal_area,
                         boundary: None,
                         arc_boundary: None,
                         multi_contact_boundary: None,
                     } if nominal_area.is_finite() && *nominal_area > 0.0 => {
-                        (nominal_area / std::f64::consts::PI).sqrt()
+                        let radius = (nominal_area / std::f64::consts::PI).sqrt();
+                        (2.0 * radius, (part.x, part.y), radius)
+                    }
+                    crate::resources::Form::Fluid {
+                        boundary: None,
+                        arc_boundary: Some(arc),
+                        multi_contact_boundary: None,
+                        ..
+                    } if arc.is_valid() => {
+                        let (sin, cos) = part.rotation_radians.sin_cos();
+                        let center = (
+                            part.x + arc.center_x * cos - arc.center_y * sin,
+                            part.y + arc.center_x * sin + arc.center_y * cos,
+                        );
+                        let world_arc = crate::capillary_geometry::CircularArcBoundary {
+                            center_x: center.0,
+                            center_y: center.1,
+                            radius: arc.radius,
+                            start_angle_radians: (arc.start_angle_radians
+                                + part.rotation_radians)
+                                .rem_euclid(std::f64::consts::TAU),
+                            sweep_radians: arc.sweep_radians,
+                        };
+                        let source_dx = sample.source_x - center.0;
+                        let source_dy = sample.source_y - center.1;
+                        let source_distance = source_dx.hypot(source_dy);
+                        if !center.0.is_finite()
+                            || !center.1.is_finite()
+                            || !source_distance.is_finite()
+                            || source_distance <= arc.radius
+                        {
+                            return None;
+                        }
+                        let toward_source = (source_dx / source_distance, source_dy / source_distance);
+                        let width = crate::source_exposure::projected_arc_extent(
+                            world_arc,
+                            toward_source,
+                        )?;
+                        (width, center, arc.radius)
                     }
                     _ => return None,
                 };
                 let source_distance =
-                    (sample.source_x - part.x).hypot(sample.source_y - part.y);
-                let width = 2.0 * radius;
-                if !radius.is_finite()
-                    || radius <= 0.0
+                    (sample.source_x - center.0).hypot(sample.source_y - center.1);
+                if !width.is_finite()
+                    || width < 0.0
+                    || !exclusion_radius.is_finite()
+                    || exclusion_radius <= 0.0
                     || !source_distance.is_finite()
-                    || source_distance <= radius
-                    || !width.is_finite()
+                    || source_distance <= exclusion_radius
                 {
                     return None;
                 }
@@ -883,6 +923,53 @@ mod tests {
             .expect("an isolated, externally illuminated circle has an exact projected width");
         assert_eq!(frame.projected_widths, vec![2.5]);
         assert_eq!(frame.projected_width_for_unit(0, 7), Some(2.5));
+    }
+
+    #[test]
+    fn standalone_circular_fluid_arc_uses_analytic_projected_extent() {
+        use crate::capillary_geometry::CircularArcBoundary;
+        use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
+        use crate::resources::Form;
+
+        let arc = CircularArcBoundary {
+            center_x: 0.0,
+            center_y: 0.0,
+            radius: 2.0,
+            start_angle_radians: 3.0 * std::f64::consts::FRAC_PI_4,
+            sweep_radians: std::f64::consts::FRAC_PI_2,
+        };
+        let area = arc.segment_area().unwrap();
+        let body = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 2,
+                form: Form::Fluid {
+                    nominal_area: area,
+                    boundary: None,
+                    arc_boundary: Some(arc),
+                    multi_contact_boundary: None,
+                },
+                x: 5.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: 3.0,
+            max_x: 7.0,
+            min_y: -2.0,
+            max_y: 2.0,
+        };
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0,
+            source_y: 0.0,
+            frequency_hz: 440.0,
+            signal_energy_level: 8.0,
+            energy_intensity_per_tick_per_width: 10.0,
+            orbital_phase: 0.0,
+        };
+        let frame = WorldToneCaptureFrame::from_geometry(sample, &[body])
+            .expect("an isolated exact circular free boundary can be integrated analytically");
+        let expected = crate::source_exposure::projected_arc_extent(arc, (-1.0, 0.0)).unwrap();
+        assert!((frame.projected_widths[0] - expected).abs() < 1e-12);
+        assert_eq!(frame.projected_width_for_unit(0, 2), Some(expected));
     }
 
     #[test]
