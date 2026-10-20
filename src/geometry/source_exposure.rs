@@ -1350,6 +1350,30 @@ mod point_source_curve_visibility_tests {
     }
 
     #[test]
+    fn point_source_circle_visibility_splits_at_circle_circle_intersections() {
+        let blocker = body(Form::Circle { radius: 1.0 }, 4.0, 0.0);
+        let target = body(Form::Circle { radius: 1.0 }, 5.0, 0.0);
+        let intervals = visible_circular_arc_intervals((-5.0, 0.0), &[blocker, target])
+            .expect("intersecting circular boundaries are classified analytically");
+        let target_intervals: Vec<_> = intervals
+            .iter()
+            .filter(|interval| interval.body_index == 1)
+            .collect();
+        assert!(!target_intervals.is_empty());
+        let has_shared_boundary_endpoint = target_intervals.iter().any(|interval| {
+            let start = interval.arc.start_point();
+            let end = interval.arc.end_point();
+            [start, end].iter().any(|point| {
+                ((point.0 - 4.0).powi(2) + point.1.powi(2) - 1.0).abs() < 1e-7
+            })
+        });
+        assert!(
+            has_shared_boundary_endpoint,
+            "visible interval should terminate at a target/blocker circle intersection"
+        );
+    }
+
+    #[test]
     fn point_source_circle_visibility_adds_intersections_with_straight_boundaries() {
         let target = body(Form::Circle { radius: 1.0 }, 5.0, 0.0);
         let blocker = body(
