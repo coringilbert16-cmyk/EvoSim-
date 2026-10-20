@@ -991,11 +991,19 @@ pub(crate) fn visible_circular_arc_intervals(
                 Form::Line { length } => {
                     local_edges.push(((-length * 0.5, 0.0), (*length * 0.5, 0.0)));
                 }
-                Form::Fluid { boundary, multi_contact_boundary, .. } => {
+                Form::Fluid {
+                    boundary,
+                    arc_boundary,
+                    multi_contact_boundary,
+                    ..
+                } => {
                     if let Some(vertices) = boundary {
                         for index in 0..vertices.len() {
                             local_edges.push((vertices[index], vertices[(index + 1) % vertices.len()]));
                         }
+                    }
+                    if let Some(arc) = arc_boundary {
+                        local_edges.push((arc.start_point(), arc.end_point()));
                     }
                     if let Some(multi) = multi_contact_boundary {
                         for piece in &multi.pieces {
