@@ -177,8 +177,8 @@ pub(crate) fn point_source_projected_extent(
     let tangent = (dx / length, dy / length);
     let source_offset = (source.0 - interval.start.0, source.1 - interval.start.1);
     let along = source_offset.0 * tangent.0 + source_offset.1 * tangent.1;
-    let normal_distance = source_offset.0 * interval.outward_normal.0
-        + source_offset.1 * interval.outward_normal.1;
+    let normal_distance =
+        source_offset.0 * interval.outward_normal.0 + source_offset.1 * interval.outward_normal.1;
     if !along.is_finite() || !normal_distance.is_finite() {
         return None;
     }
@@ -343,7 +343,10 @@ pub(crate) fn visible_polygonal_intervals(
                     .into_iter()
                     .map(|(x, y)| (part.x + x * cos - y * sin, part.y + x * sin + y * cos))
                     .collect::<Vec<_>>();
-                if vertices.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) {
+                if vertices
+                    .iter()
+                    .any(|(x, y)| !x.is_finite() || !y.is_finite())
+                {
                     return None;
                 }
                 critical_points.extend(vertices.iter().copied());
@@ -775,6 +778,45 @@ mod visibility_tests {
     }
 
     #[test]
+    fn line_boundary_intersection_splits_a_straight_receiver_interval() {
+        let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
+        let line = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 1,
+                form: Form::Line { length: 4.0 },
+                x: 4.0,
+                y: 0.0,
+                rotation_radians: std::f64::consts::FRAC_PI_4,
+            }],
+            min_x: 2.0,
+            max_x: 6.0,
+            min_y: -2.0,
+            max_y: 2.0,
+        };
+        let intervals = visible_polygonal_intervals((-5.0, 0.0), &[target, line])
+            .expect("finite line boundaries must participate in interval partitioning");
+        let left_edge: Vec<_> = intervals
+            .iter()
+            .filter(|interval| {
+                (interval.start.0 - 4.0).abs() < 1e-8
+                    && (interval.end.0 - 4.0).abs() < 1e-8
+            })
+            .collect();
+        assert!(
+            left_edge.iter().any(|interval| {
+                interval.start.1.abs() < 1e-8 || interval.end.1.abs() < 1e-8
+            }),
+            "the exact line/receiver intersection at y=0 must be a partition boundary: {left_edge:?}"
+        );
+        assert!(
+            left_edge.iter().all(|interval| {
+                (interval.start.1 + interval.end.1) * 0.5 >= -1e-8
+            }),
+            "the line lies before the receiver for y<0 and behind it for y>0: {left_edge:?}"
+        );
+    }
+
+    #[test]
     fn polygonal_exposure_keeps_the_full_edge_when_unobstructed() {
         let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
         let intervals = visible_polygonal_intervals((-5.0, 0.0), &[target])
@@ -993,8 +1035,19 @@ fn realized_circle_arcs(
             arc_boundary,
             multi_contact_boundary,
         } => {
+            if !nominal_area.is_finite() || *nominal_area <= 0.0 {
+                return None;
+            }
+            if (boundary.is_some() && (arc_boundary.is_some() || multi_contact_boundary.is_some()))
+                || (arc_boundary.is_some() && multi_contact_boundary.is_some())
+            {
+                return None;
+            }
             if let Some(multi) = multi_contact_boundary {
-                if !multi.is_valid() {
+                if !multi.is_valid()
+                    || (multi.nominal_area - *nominal_area).abs()
+                        > 1e-10 * nominal_area.abs().max(1.0)
+                {
                     return None;
                 }
                 for piece in &multi.pieces {
@@ -1018,13 +1071,18 @@ fn realized_circle_arcs(
             if let Some(vertices) = boundary {
                 // A polygonal fluid boundary is handled by the polygon solver,
                 // not by this circular-arc path.
-                if vertices.len() >= 3 {
+                if vertices.len() >= 3
+                    && vertices.iter().all(|(x, y)| x.is_finite() && y.is_finite())
+                {
                     return Some(Vec::new());
                 }
                 return None;
             }
             if let Some(arc) = arc_boundary {
-                if !arc.is_valid() {
+                if !arc.is_valid()
+                    || (arc.segment_area()? - *nominal_area).abs()
+                        > 1e-10 * nominal_area.abs().max(1.0)
+                {
                     return None;
                 }
                 push_world_circle_arc(
@@ -1037,9 +1095,6 @@ fn realized_circle_arcs(
                     arc.sweep_radians,
                 )?;
             } else {
-                if !nominal_area.is_finite() || *nominal_area <= 0.0 {
-                    return None;
-                }
                 let radius = (nominal_area / std::f64::consts::PI).sqrt();
                 push_world_circle_arc(
                     &mut arcs,
@@ -1624,6 +1679,62 @@ mod point_source_curve_visibility_tests {
             min_y: y - radius,
             max_y: y + radius,
         }
+    }
+
+    #[test]
+    fn curved_visibility_rejects_inconsistent_fluid_area_descriptors() {
+        use crate::capillary_geometry::{CircularArcBoundary, FluidBoundaryPiece, MultiContactFluidBoundary};
+
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            0.5,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .expect("valid capillary family");
+        let arc = CircularArcBoundary::from_flat_contact(family).expect("valid exact arc");
+        let inconsistent_arc = body(
+            Form::Fluid {
+                nominal_area: 0.75,
+                boundary: None,
+                arc_boundary: Some(arc),
+                multi_contact_boundary: None,
+            },
+            5.0,
+            0.0,
+        );
+        assert!(
+            visible_circular_arc_intervals((-5.0, 0.0), &[inconsistent_arc]).is_none(),
+            "a curved receiver must not disagree with the area represented by its exact arc"
+        );
+
+        let start = arc.start_point();
+        let end = arc.end_point();
+        let boundary = MultiContactFluidBoundary {
+            nominal_area: family.area,
+            pieces: vec![
+                FluidBoundaryPiece::FreeArc(arc),
+                FluidBoundaryPiece::SolidContact {
+                    start_x: end.0,
+                    start_y: end.1,
+                    end_x: start.0,
+                    end_y: start.1,
+                    contact_angle_radians: family.contact_angle_radians,
+                },
+            ],
+        };
+        let inconsistent_multi = body(
+            Form::Fluid {
+                nominal_area: family.area + 0.25,
+                boundary: None,
+                arc_boundary: None,
+                multi_contact_boundary: Some(boundary),
+            },
+            5.0,
+            0.0,
+        );
+        assert!(
+            visible_circular_arc_intervals((-5.0, 0.0), &[inconsistent_multi]).is_none(),
+            "compound fluid nominal area must agree with its validated boundary"
+        );
     }
 
     #[test]
