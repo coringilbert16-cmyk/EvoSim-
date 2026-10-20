@@ -671,8 +671,8 @@ pub(crate) fn resolve_transformation(
             return;
         };
 
-        // Tick 3: commit the physical mutation selected on tick 1 and
-        // prepared on tick 2.
+        // Commit the prepared physical mutation on the same completion
+        // tick as its energy transaction, before chemistry or stress can run.
         organism.structure = structure.clone();
         organism.stored_material = stored_material.clone();
         if stress.is_finite() {
