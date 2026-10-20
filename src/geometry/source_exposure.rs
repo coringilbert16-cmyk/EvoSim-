@@ -429,5 +429,4 @@ mod visibility_tests {
             "exact fluid arcs need analytic interval handling before exposure can be credited"
         );
     }
-
 }
