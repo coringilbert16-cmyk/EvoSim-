@@ -1959,6 +1959,4 @@ Next, run focused tests, formatting, compilation, and Clippy on the exact PR hea
 
 
 
-**Remaining staged-state risk found in the second audit:** after COMBINE preparation, same-tick chemical BREAK or stress-driven BREAK can still mutate the live graph before the prepared graph is committed. The current staged inventory treatment assumes those graphs remain equivalent apart from the prepared COMBINE additions; if a concurrent break occurs, the prepared graph can become stale and later overwrite that break. Do not treat the staged-inventory fix as complete until the pending COMBINE path preserves concurrent structural changes or makes the commit atomic. This is separate from the energy allocation rule and remains a blocker before world-tone integration.
-
-**Verification status:** latest head before this README note was `c8358ad4c77b6d20de77646893b5c1e27f48acd4`. The GitHub-only pass has not run Rust commands or tests, and no CI status checks have been reported for this head. These tests are added but unverified; whole-world conservation is not yet proven.
+**Verification status at commit `951d7e0a29c16167601f4c7f7d54c9864a63a4c4`:** the GitHub-only pass has not run Rust commands or tests, and no CI status checks have been reported for this head. The stored-material regression is added but unverified. The COMBINE prepare/commit timing change has been code-audited but has no dedicated integration regression yet. Whole-world conservation is not yet proven.
