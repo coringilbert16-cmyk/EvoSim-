@@ -1298,7 +1298,10 @@ impl Simulation {
             .sum();
         organism_energy + decomposition_energy
     }
-    #[expect(dead_code, reason = "Energy reconciliation snapshot is exercised by tests before live capture is enabled")]
+    #[expect(
+        dead_code,
+        reason = "Energy reconciliation snapshot is exercised by tests before live capture is enabled"
+    )]
     pub(crate) fn energy_inventory_snapshot(
         &self,
     ) -> crate::energy_ledger::EnergyInventorySnapshot {
