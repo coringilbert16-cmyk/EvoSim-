@@ -657,7 +657,7 @@ mod tests {
     fn precomputed_cycle_matches_direct_samples_for_every_tick_and_wraps() {
         let config = WorldToneRuntimeConfig {
             parameters: parameters(),
-            orbit_radius: 250.0,
+            orbit_radius: 700.0,
         };
         let cycle = WorldToneCycle::precompute(config, 1_000.0, 800.0).unwrap();
         assert_eq!(
