@@ -22,6 +22,13 @@ First implementation slice on the dedicated `feature/external-input-ledger` bran
 
 **Future library direction (design recommendation, not implementation):** keep Bob focused on geometry. If profiling later justifies reusable harmonic responses, introduce a separate response cache/library keyed by all inputs that affect a deterministic material response (material properties, incoming frequency/composition, and relevant response parameters). Do not store position-dependent energy outcomes or live reflection paths there, and do not duplicate response records in Bob. Keep actual received/captured/reflected/dissipated energy in the live, source-backed accounting path.
 
+## World energy inventory reconciliation primitive — 2026-10-20
+
+- Added `EnergyInventorySnapshot` in `src/chemistry/energy_ledger.rs`. It expresses the world-scale invariant: change in usable energy + change in stored structural/bond energy + work + heat = external input + explicitly non-structural released energy.
+- Added focused unit tests for a balanced external-input case, a bond-breakdown case where stored bond energy decreases exactly once, and unbalanced/non-finite snapshots.
+- Internal transfers are intentionally absent from this world-level equation because they cancel between holders. Bond breakdown belongs in the structural-energy decrease, not in `other_energy_released`.
+- **Scope limit:** this is a tested-by-design reconciliation primitive, not yet a live whole-world inventory. The simulation does not yet independently compute tick-zero/current structural bond-energy totals and pass them through this snapshot. Tests were added but have not been run; no successful exact-head CI result is available yet. Do not treat this commit as proof of runtime conservation or functional sunlight capture.
+
 ## Unified resonance and reflected-tone energy — 2026-10-19
 
 **Decision confirmed by the user:** an interaction may change the frequency composition of the reflected tone. Reflection is not energy-costly tone emission; it is the onward propagation of the energy left from an incoming tone. The reflected tone must be less energetic than its source interaction after capture and losses.
