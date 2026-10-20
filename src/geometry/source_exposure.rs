@@ -614,8 +614,8 @@ struct WorldCircleArc {
     sweep: f64,
 }
 
-/// Return a world-space circular boundary for a constituent. Curved fluids
-/// whose boundary may self-occlude are rejected rather than approximated.
+/// Return the realized circular boundary pieces for a constituent. Compound
+/// fluid pieces are kept separate so their mutual occlusion can be classified.
 fn push_world_circle_arc(
     arcs: &mut Vec<WorldCircleArc>,
     body_index: usize,
@@ -851,7 +851,7 @@ fn add_circle_circle_intersections(
 /// a finite point source. Visibility can change only along rays through polygon
 /// vertices, circular-arc endpoints, or circle tangencies. Those critical rays
 /// cut the target arc; an exact geometry query classifies each resulting interval.
-/// Unsupported/self-occluding curved fluid boundaries return None.
+/// Compound boundaries are tested against all realized pieces; invalid geometry returns None.
 #[allow(dead_code)]
 pub(crate) fn visible_circular_arc_intervals(
     source: (f64, f64),
