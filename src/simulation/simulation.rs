@@ -87,7 +87,12 @@ impl Simulation {
         &mut self,
         config: Option<crate::world_tone::WorldToneRuntimeConfig>,
     ) -> bool {
-        if config.is_some_and(|candidate| !candidate.is_valid()) {
+        if config.is_some_and(|candidate| {
+            !candidate.is_valid()
+                || candidate
+                    .sample(0, self.environment.width, self.environment.height)
+                    .is_none()
+        }) {
             return false;
         }
         self.world_tone = config;
@@ -1437,6 +1442,26 @@ mod decomposition_finalization_tests {
                 }),
             "failed BREAK source should be restored with its original amount"
         );
+    }
+
+    #[test]
+    fn world_tone_configuration_rejects_an_orbit_inside_the_world() {
+        let mut simulation = Simulation::new(917, 10.0);
+        let config = crate::world_tone::WorldToneRuntimeConfig {
+            parameters: crate::world_tone::WorldToneParameters {
+                minimum_signal_energy_level: 0.0,
+                maximum_signal_energy_level: 8.0,
+                minimum_energy_intensity_per_tick_per_width: 1.0,
+                maximum_energy_intensity_per_tick_per_width: 10.0,
+                orbital_period_ticks: 2_400,
+                envelope_curve: crate::world_tone::EnvelopeCurve::Cosine,
+            },
+            orbit_radius: 0.0,
+        };
+
+        assert!(!simulation.configure_world_tone(Some(config)));
+        assert!(simulation.world_tone.is_none());
+        assert!(simulation.world_tone_cycle.is_none());
     }
 
     #[test]
