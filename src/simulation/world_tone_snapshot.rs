@@ -65,7 +65,9 @@ impl WorldToneOccluderSnapshot {
             if decomposing.structure.units.is_empty() {
                 continue;
             }
-            bodies.push(OrganismBodyGeometry::from_all_realized_units(&decomposing.structure)?);
+            bodies.push(OrganismBodyGeometry::from_all_realized_units(
+                &decomposing.structure,
+            )?);
         }
 
         // Stored objects are physically present at owner-relative positions.

@@ -100,9 +100,7 @@ impl OrganismBodyGeometry {
     /// structural components. Sunlight occlusion follows physical presence, not
     /// the organism's current connectivity classification.
     #[allow(dead_code)] // Consumed by the staged world-tone snapshot.
-    pub(crate) fn from_all_realized_units(
-        structure: &OrganismStructure,
-    ) -> Option<Self> {
+    pub(crate) fn from_all_realized_units(structure: &OrganismStructure) -> Option<Self> {
         if structure.units.is_empty() {
             return None;
         }
