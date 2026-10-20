@@ -759,24 +759,29 @@ pub(crate) fn visible_circular_arc_intervals(
             if let Some(vertices) = part.form.polygon_vertices() {
                 let (sin, cos) = part.rotation_radians.sin_cos();
                 for (x, y) in vertices {
-                    critical_points.push((
-                        part.x + x * cos - y * sin,
-                        part.y + x * sin + y * cos,
-                    ));
+                    critical_points.push((part.x + x * cos - y * sin, part.y + x * sin + y * cos));
                 }
             }
             match &part.form {
                 Form::Circle { radius } => {
-                    add_circle_tangent_points((part.x, part.y), *radius, source, &mut critical_points);
+                    add_circle_tangent_points(
+                        (part.x, part.y),
+                        *radius,
+                        source,
+                        &mut critical_points,
+                    );
                 }
-                Form::Fluid { boundary, arc_boundary, multi_contact_boundary, .. } => {
+                Form::Fluid {
+                    boundary,
+                    arc_boundary,
+                    multi_contact_boundary,
+                    ..
+                } => {
                     if let Some(verts) = boundary {
                         let (sin, cos) = part.rotation_radians.sin_cos();
                         for &(x, y) in verts {
-                            critical_points.push((
-                                part.x + x * cos - y * sin,
-                                part.y + x * sin + y * cos,
-                            ));
+                            critical_points
+                                .push((part.x + x * cos - y * sin, part.y + x * sin + y * cos));
                         }
                     }
                     if let Some(arc) = arc_boundary {
@@ -796,7 +801,13 @@ pub(crate) fn visible_circular_arc_intervals(
                     if let Some(multi) = multi_contact_boundary {
                         for piece in &multi.pieces {
                             match piece {
-                                FluidBoundaryPiece::SolidContact { start_x, start_y, end_x, end_y, .. } => {
+                                FluidBoundaryPiece::SolidContact {
+                                    start_x,
+                                    start_y,
+                                    end_x,
+                                    end_y,
+                                    ..
+                                } => {
                                     let (sin, cos) = part.rotation_radians.sin_cos();
                                     for (x, y) in [(*start_x, *start_y), (*end_x, *end_y)] {
                                         critical_points.push((
@@ -806,7 +817,8 @@ pub(crate) fn visible_circular_arc_intervals(
                                     }
                                 }
                                 FluidBoundaryPiece::FreeArc(arc) => {
-                                    let world = arc.transformed(part.x, part.y, part.rotation_radians)?;
+                                    let world =
+                                        arc.transformed(part.x, part.y, part.rotation_radians)?;
                                     critical_points.push(world.start_point());
                                     critical_points.push(world.end_point());
                                     add_circle_tangent_points(
@@ -850,8 +862,11 @@ pub(crate) fn visible_circular_arc_intervals(
         for point in target_tangencies {
             let angle = (point.1 - target.center.1).atan2(point.0 - target.center.0);
             if arc_has_angle(target, angle) {
-                let unwrapped = target.start + (angle - target.start).rem_euclid(std::f64::consts::TAU);
-                if unwrapped > target.start + 1e-10 && unwrapped < target.start + target.sweep - 1e-10 {
+                let unwrapped =
+                    target.start + (angle - target.start).rem_euclid(std::f64::consts::TAU);
+                if unwrapped > target.start + 1e-10
+                    && unwrapped < target.start + target.sweep - 1e-10
+                {
                     cuts.push(unwrapped);
                 }
             }
@@ -882,7 +897,8 @@ pub(crate) fn visible_circular_arc_intervals(
                 let y = source.1 + t * direction.1;
                 let angle = (y - target.center.1).atan2(x - target.center.0);
                 if arc_has_angle(target, angle) {
-                    let unwrapped = target.start + (angle - target.start).rem_euclid(std::f64::consts::TAU);
+                    let unwrapped =
+                        target.start + (angle - target.start).rem_euclid(std::f64::consts::TAU);
                     if unwrapped > target.start + 1e-10
                         && unwrapped < target.start + target.sweep - 1e-10
                     {
@@ -914,7 +930,11 @@ pub(crate) fn visible_circular_arc_intervals(
                 continue;
             }
             if crate::organism_geometry::source_path_blocked(
-                source, point, bodies, target.body_index, target.unit_index,
+                source,
+                point,
+                bodies,
+                target.body_index,
+                target.unit_index,
             ) {
                 continue;
             }
@@ -961,7 +981,15 @@ pub(crate) fn point_source_projected_arc_extent(
         value.is_finite().then_some(value)
     }
     fn integrate<F: Fn(f64) -> Option<f64>>(
-        f: &F, a: f64, b: f64, fa: f64, fm: f64, fb: f64, whole: f64, tolerance: f64, depth: u8,
+        f: &F,
+        a: f64,
+        b: f64,
+        fa: f64,
+        fm: f64,
+        fb: f64,
+        whole: f64,
+        tolerance: f64,
+        depth: u8,
     ) -> Option<f64> {
         let mid = (a + b) * 0.5;
         let left_mid = (a + mid) * 0.5;
@@ -986,7 +1014,17 @@ pub(crate) fn point_source_projected_arc_extent(
     let fm = integrand(mid)?;
     let fb = integrand(b)?;
     let whole = simpson(a, b, fa, fm, fb)?;
-    let extent = integrate(&integrand, a, b, fa, fm, fb, whole, 1e-10 * whole.abs().max(1.0), 20)?;
+    let extent = integrate(
+        &integrand,
+        a,
+        b,
+        fa,
+        fm,
+        fb,
+        whole,
+        1e-10 * whole.abs().max(1.0),
+        20,
+    )?;
     (extent.is_finite() && extent >= -1e-10).then_some(extent.max(0.0))
 }
 
@@ -1023,13 +1061,14 @@ mod point_source_curve_visibility_tests {
         let intervals = visible_circular_arc_intervals((-5.0, 0.0), &[target])
             .expect("circle boundary and point-source visibility are supported");
         assert!(!intervals.is_empty());
-        let sweep: f64 = intervals.iter().map(|interval| interval.arc.sweep_radians).sum();
+        let sweep: f64 = intervals
+            .iter()
+            .map(|interval| interval.arc.sweep_radians)
+            .sum();
         assert!(sweep > 0.0 && sweep < std::f64::consts::PI);
         let extent: f64 = intervals
             .iter()
-            .map(|interval| {
-                point_source_projected_arc_extent(interval.arc, (-5.0, 0.0)).unwrap()
-            })
+            .map(|interval| point_source_projected_arc_extent(interval.arc, (-5.0, 0.0)).unwrap())
             .sum();
         assert!(extent.is_finite() && extent > 0.0);
     }
@@ -1051,7 +1090,10 @@ mod point_source_curve_visibility_tests {
             .iter()
             .filter(|interval| interval.body_index == 0 && interval.unit_index == 0)
             .collect();
-        assert!(!target_intervals.is_empty(), "unshadowed shoulders remain exposed");
+        assert!(
+            !target_intervals.is_empty(),
+            "unshadowed shoulders remain exposed"
+        );
         let sweep: f64 = target_intervals
             .iter()
             .map(|interval| interval.arc.sweep_radians)
