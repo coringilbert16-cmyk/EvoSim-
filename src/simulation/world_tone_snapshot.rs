@@ -49,6 +49,31 @@ impl WorldToneOccluderSnapshot {
             bodies.push(body);
         }
 
+        // A developing offspring is a separate physical structure even
+        // before it is admitted to simulation.organisms. Its committed storage
+        // remains physical too and is anchored to the offspring's own origin.
+        for organism in &simulation.organisms {
+            let Some(construction) = &organism.reproductive_construction else {
+                continue;
+            };
+            if !construction.developing_structure.units.is_empty() {
+                bodies.push(OrganismBodyGeometry::from_all_realized_units(
+                    &construction.developing_structure,
+                )?);
+            }
+            if !construction.committed_material.entries.is_empty() {
+                let anchor = Placement {
+                    x: construction.developmental_origin.x,
+                    y: construction.developmental_origin.y,
+                    rotation_radians: 0.0,
+                };
+                for entry in &construction.committed_material.entries {
+                    let StoredMaterial::Physical(physical) = entry;
+                    bodies.push(body_from_owner_relative_material(physical, anchor, catalog)?);
+                }
+            }
+        }
+
         // Physical field objects retain their world placements. Do not invent
         // geometry for aggregate logical stock.
         for cell in &simulation.environment.field.cells {
@@ -321,6 +346,65 @@ mod tests {
         assert!((body.parts[0].x - 15.0).abs() < 1e-10);
         assert!((body.parts[0].y - 2.0).abs() < 1e-10);
         assert!((body.parts[0].rotation_radians - std::f64::consts::FRAC_PI_2).abs() < 1e-10);
+    }
+
+    #[test]
+    fn developing_offspring_and_its_stored_material_remain_world_occluders() {
+        let mut simulation = Simulation::new(73, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        replace_with_nitrogen_square(&mut simulation.organisms[0], 5.0, 0.0, &catalog);
+
+        let mut developing_structure = OrganismStructure::new();
+        let mut anchor_unit = StructuralUnit::from_material(
+            Material::free_base("Nitrogen", 1.0),
+            Placement {
+                x: 20.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        )
+        .expect("developing anchor should be constructible");
+        assert!(anchor_unit.realize_default_geometry(&catalog));
+        developing_structure.add_unit(anchor_unit);
+
+        let stored_physical = PhysicalMaterial::realized(
+            Material::free_base("Hydrogen", 1.0),
+            vec![Placement {
+                x: 21.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("developing stored material should be physically realized");
+        let mut committed_material = crate::material_storage::MaterialStorage::default();
+        assert!(committed_material.store_physical_instance_at_owner_anchor(
+            stored_physical,
+            Placement {
+                x: 20.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        simulation.organisms[0].reproductive_construction =
+            Some(crate::state::ReproductiveConstruction {
+                committed_material,
+                developing_structure,
+                child_genome: simulation.organisms[0].genome.clone(),
+                developmental_origin: Position { x: 20.0, y: 0.0 },
+                developmental_orientation_radians: 0.0,
+                developing_stress: 0.0,
+                anchor_unit_index: 0,
+                developing_energy: 0.0,
+                developing_maintenance_debt: 0.0,
+                needs_space: false,
+            });
+
+        let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
+            .expect("developing physical material must be represented");
+        assert_eq!(snapshot.occluder_count, 3);
+        assert_eq!(snapshot.body_index_for_organism(0), Some(0));
     }
 
     #[test]
