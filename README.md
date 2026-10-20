@@ -1959,4 +1959,8 @@ The common rule is: every credited energy amount must have been explicitly alloc
 
 Next, run focused tests, formatting, compilation, and Clippy on the exact PR head. Then continue auditing ordinary BREAK, chemical BREAK, decomposition, maintenance, movement, material storage/restoration, and world-tone input against the same rule. Do not enable live world-tone capture until the complete cycle reconciles.
 
-**Verification status:** latest head is `c8358ad4c77b6d20de77646893b5c1e27f48acd4`. The GitHub-only pass has not run Rust commands or tests, and no CI status checks have been reported for this head. These tests are added but unverified; whole-world conservation is not yet proven.
+
+
+**Remaining staged-state risk found in the second audit:** after COMBINE preparation, same-tick chemical BREAK or stress-driven BREAK can still mutate the live graph before the prepared graph is committed. The current staged inventory treatment assumes those graphs remain equivalent apart from the prepared COMBINE additions; if a concurrent break occurs, the prepared graph can become stale and later overwrite that break. Do not treat the staged-inventory fix as complete until the pending COMBINE path preserves concurrent structural changes or makes the commit atomic. This is separate from the energy allocation rule and remains a blocker before world-tone integration.
+
+**Verification status:** latest head before this README note was `c8358ad4c77b6d20de77646893b5c1e27f48acd4`. The GitHub-only pass has not run Rust commands or tests, and no CI status checks have been reported for this head. These tests are added but unverified; whole-world conservation is not yet proven.
