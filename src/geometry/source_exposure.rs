@@ -378,4 +378,56 @@ mod visibility_tests {
             "unobstructed edge should remain one interval"
         );
     }
+
+    #[test]
+    fn polygonal_exposure_fails_closed_for_curved_boundaries() {
+        let circle = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Circle { radius: 1.0 },
+                x: 5.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: 4.0,
+            max_x: 6.0,
+            min_y: -1.0,
+            max_y: 1.0,
+        };
+        assert!(
+            visible_polygonal_intervals((-5.0, 0.0), &[circle]).is_none(),
+            "curved geometry must not silently become zero exposure or an invented polygon"
+        );
+
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            0.5,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .expect("valid capillary family");
+        let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family)
+            .expect("valid exact circular arc");
+        let fluid = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Fluid {
+                    nominal_area: 0.5,
+                    boundary: None,
+                    arc_boundary: Some(arc),
+                    multi_contact_boundary: None,
+                },
+                x: 5.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: 4.0,
+            max_x: 6.0,
+            min_y: -1.0,
+            max_y: 1.0,
+        };
+        assert!(
+            visible_polygonal_intervals((-5.0, 0.0), &[fluid]).is_none(),
+            "exact fluid arcs need analytic interval handling before exposure can be credited"
+        );
+    }
+
 }
