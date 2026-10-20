@@ -827,8 +827,7 @@ fn add_circle_circle_intersections(
     {
         return Some(());
     }
-    let along = (first_radius * first_radius - second_radius * second_radius
-        + distance * distance)
+    let along = (first_radius * first_radius - second_radius * second_radius + distance * distance)
         / (2.0 * distance);
     let height_squared = first_radius * first_radius - along * along;
     if !along.is_finite() || !height_squared.is_finite() {
@@ -999,7 +998,8 @@ pub(crate) fn visible_circular_arc_intervals(
                 } => {
                     if let Some(vertices) = boundary {
                         for index in 0..vertices.len() {
-                            local_edges.push((vertices[index], vertices[(index + 1) % vertices.len()]));
+                            local_edges
+                                .push((vertices[index], vertices[(index + 1) % vertices.len()]));
                         }
                     }
                     if let Some(arc) = arc_boundary {
@@ -1008,8 +1008,13 @@ pub(crate) fn visible_circular_arc_intervals(
                     if let Some(multi) = multi_contact_boundary {
                         for piece in &multi.pieces {
                             if let FluidBoundaryPiece::SolidContact {
-                                start_x, start_y, end_x, end_y, ..
-                            } = piece {
+                                start_x,
+                                start_y,
+                                end_x,
+                                end_y,
+                                ..
+                            } = piece
+                            {
                                 local_edges.push(((*start_x, *start_y), (*end_x, *end_y)));
                             }
                         }
@@ -1365,7 +1370,10 @@ mod point_source_curve_visibility_tests {
         assert!(visible.iter().all(|interval| interval.arc.is_valid()));
         // The blocker touches/overlaps the receiver's left boundary, so exact
         // circle/segment intersections must be among the partition cuts.
-        let total_sweep: f64 = visible.iter().map(|interval| interval.arc.sweep_radians).sum();
+        let total_sweep: f64 = visible
+            .iter()
+            .map(|interval| interval.arc.sweep_radians)
+            .sum();
         assert!(total_sweep > 0.0 && total_sweep < std::f64::consts::PI);
     }
 
