@@ -933,6 +933,44 @@ mod tests {
     }
 
     #[test]
+    fn standalone_legacy_fluid_uses_exact_nominal_circle_width() {
+        use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
+        use crate::resources::Form;
+
+        let area = 0.5;
+        let radius = (area / std::f64::consts::PI).sqrt();
+        let body = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 3,
+                form: Form::Fluid {
+                    nominal_area: area,
+                    boundary: None,
+                    arc_boundary: None,
+                    multi_contact_boundary: None,
+                },
+                x: 5.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: 5.0 - radius,
+            max_x: 5.0 + radius,
+            min_y: -radius,
+            max_y: radius,
+        };
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0,
+            source_y: 0.0,
+            frequency_hz: 440.0,
+            signal_energy_level: 8.0,
+            energy_intensity_per_tick_per_width: 10.0,
+            orbital_phase: 0.0,
+        };
+        let frame = WorldToneCaptureFrame::from_geometry(sample, &[body])
+            .expect("legacy circular fluid has an exact analytic realization");
+        assert!((frame.projected_width_for_unit(0, 3).unwrap() - 2.0 * radius).abs() < 1e-12);
+    }
+
+    #[test]
     fn standalone_circular_fluid_arc_uses_analytic_projected_extent() {
         use crate::capillary_geometry::CircularArcBoundary;
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
@@ -957,7 +995,7 @@ mod tests {
                 },
                 x: 5.0,
                 y: 0.0,
-                rotation_radians: 0.0,
+                rotation_radians: 0.25,
             }],
             min_x: 3.0,
             max_x: 7.0,
@@ -974,7 +1012,14 @@ mod tests {
         };
         let frame = WorldToneCaptureFrame::from_geometry(sample, &[body])
             .expect("an isolated exact circular free boundary can be integrated analytically");
-        let expected = crate::source_exposure::projected_arc_extent(arc, (-1.0, 0.0)).unwrap();
+        let expected_world_arc = CircularArcBoundary {
+            center_x: 5.0,
+            center_y: 0.0,
+            start_angle_radians: arc.start_angle_radians + 0.25,
+            ..arc
+        };
+        let expected =
+            crate::source_exposure::projected_arc_extent(expected_world_arc, (-1.0, 0.0)).unwrap();
         assert!((frame.projected_widths[0] - expected).abs() < 1e-12);
         assert_eq!(frame.projected_width_for_unit(0, 2), Some(expected));
     }
