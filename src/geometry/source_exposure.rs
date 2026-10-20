@@ -1069,6 +1069,7 @@ mod point_source_curve_visibility_tests {
             boundary: None,
             arc_boundary: None,
             multi_contact_boundary: Some(crate::capillary_geometry::MultiContactFluidBoundary {
+                nominal_area: 0.5,
                 pieces: vec![],
             }),
         };
