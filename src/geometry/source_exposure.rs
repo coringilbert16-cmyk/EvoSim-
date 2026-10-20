@@ -990,6 +990,94 @@ pub(crate) fn point_source_projected_arc_extent(
 }
 
 #[cfg(test)]
+mod point_source_curve_visibility_tests {
+    use super::{point_source_projected_arc_extent, visible_circular_arc_intervals};
+    use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
+    use crate::resources::Form;
+
+    fn body(form: Form, x: f64, y: f64) -> OrganismBodyGeometry {
+        let radius = match &form {
+            Form::Circle { radius } => *radius,
+            Form::Rectangle { width, height } => width.hypot(*height) * 0.5,
+            _ => 10.0,
+        };
+        OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form,
+                x,
+                y,
+                rotation_radians: 0.0,
+            }],
+            min_x: x - radius,
+            max_x: x + radius,
+            min_y: y - radius,
+            max_y: y + radius,
+        }
+    }
+
+    #[test]
+    fn point_source_circle_exposure_is_exactly_partitioned_without_a_blocker() {
+        let target = body(Form::Circle { radius: 1.0 }, 5.0, 0.0);
+        let intervals = visible_circular_arc_intervals((-5.0, 0.0), &[target])
+            .expect("circle boundary and point-source visibility are supported");
+        assert!(!intervals.is_empty());
+        let sweep: f64 = intervals.iter().map(|interval| interval.arc.sweep_radians).sum();
+        assert!(sweep > 0.0 && sweep < std::f64::consts::PI);
+        let extent: f64 = intervals
+            .iter()
+            .map(|interval| {
+                point_source_projected_arc_extent(interval.arc, (-5.0, 0.0)).unwrap()
+            })
+            .sum();
+        assert!(extent.is_finite() && extent > 0.0);
+    }
+
+    #[test]
+    fn point_source_circle_boundary_splits_around_a_polygonal_shadow() {
+        let target = body(Form::Circle { radius: 1.0 }, 5.0, 0.0);
+        let blocker = body(
+            Form::Rectangle {
+                width: 1.0,
+                height: 1.0,
+            },
+            0.0,
+            0.0,
+        );
+        let intervals = visible_circular_arc_intervals((-5.0, 0.0), &[target, blocker])
+            .expect("polygon blockers and circular targets are supported");
+        let target_intervals: Vec<_> = intervals
+            .iter()
+            .filter(|interval| interval.body_index == 0 && interval.unit_index == 0)
+            .collect();
+        assert!(!target_intervals.is_empty(), "unshadowed shoulders remain exposed");
+        let sweep: f64 = target_intervals
+            .iter()
+            .map(|interval| interval.arc.sweep_radians)
+            .sum();
+        assert!(sweep > 0.0 && sweep < std::f64::consts::PI);
+        assert!(
+            target_intervals.len() >= 2,
+            "shadow transition rays must split the visible circular boundary"
+        );
+    }
+
+    #[test]
+    fn point_source_curve_query_fails_closed_for_multi_contact_fluid() {
+        let fluid = Form::Fluid {
+            nominal_area: 0.5,
+            boundary: None,
+            arc_boundary: None,
+            multi_contact_boundary: Some(crate::capillary_geometry::MultiContactFluidBoundary {
+                pieces: vec![],
+            }),
+        };
+        let target = body(fluid, 5.0, 0.0);
+        assert!(visible_circular_arc_intervals((-5.0, 0.0), &[target]).is_none());
+    }
+}
+
+#[cfg(test)]
 mod exact_arc_projection_tests {
     use super::projected_arc_extent;
     use crate::capillary_geometry::CircularArcBoundary;
