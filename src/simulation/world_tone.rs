@@ -143,6 +143,24 @@ pub(crate) struct WorldToneInteraction {
 }
 
 impl WorldToneSample {
+    /// Reject manually constructed samples that violate the source contract.
+    ///
+    /// Runtime-configured samples already satisfy these bounds; checking again
+    /// at the capture boundary prevents test, deserialized, or future internal
+    /// callers from crediting energy from an invalid source state.
+    pub(crate) fn is_valid(self) -> bool {
+        self.source_x.is_finite()
+            && self.source_y.is_finite()
+            && self.frequency_hz.is_finite()
+            && self.frequency_hz > 0.0
+            && self.signal_energy_level.is_finite()
+            && self.signal_energy_level >= 0.0
+            && self.energy_intensity_per_tick_per_width.is_finite()
+            && (1.0..=10.0).contains(&self.energy_intensity_per_tick_per_width)
+            && self.orbital_phase.is_finite()
+            && (0.0..1.0).contains(&self.orbital_phase)
+    }
+
     /// Energy incident on an exposed projected width during this tick.
     ///
     /// Visibility/shadowing must be applied when computing the width; this
@@ -228,6 +246,9 @@ impl WorldToneCaptureFrame {
         sample: crate::world_tone::WorldToneSample,
         bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     ) -> Option<Self> {
+        if !sample.is_valid() {
+            return None;
+        }
         let intervals = crate::source_exposure::visible_polygonal_intervals(
             (sample.source_x, sample.source_y),
             bodies,
@@ -613,6 +634,21 @@ mod tests {
         assert!(sample.interact_with_absorption(1.0, -0.1).is_none());
         assert!(sample.interact_with_absorption(1.0, 1.1).is_none());
         assert!(sample.interact_with_absorption(1.0, f64::NAN).is_none());
+    }
+
+    #[test]
+    fn invalid_manual_world_tone_samples_fail_before_geometry_is_cached() {
+        let valid = parameters().sample(0, 0.0, 0.0, 1.0).unwrap();
+        assert!(valid.is_valid());
+        for sample in [
+            WorldToneSample { frequency_hz: 0.0, ..valid },
+            WorldToneSample { frequency_hz: f64::NAN, ..valid },
+            WorldToneSample { signal_energy_level: -1.0, ..valid },
+            WorldToneSample { orbital_phase: 1.0, ..valid },
+            WorldToneSample { source_x: f64::INFINITY, ..valid },
+        ] {
+            assert!(!sample.is_valid());
+        }
     }
 
     #[test]
