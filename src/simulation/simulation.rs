@@ -1315,6 +1315,22 @@ mod decomposition_finalization_tests {
     use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
     #[test]
+    fn initial_world_energy_inventory_uses_tick_zero_baseline() {
+        let simulation = Simulation::new(914, 10.0);
+        let inventory = simulation.energy_inventory_snapshot();
+
+        assert_eq!(
+            inventory.initial_usable_energy,
+            inventory.current_usable_energy
+        );
+        assert_eq!(
+            inventory.initial_structural_energy,
+            inventory.current_structural_energy
+        );
+        assert!(inventory.is_balanced(1e-9));
+    }
+
+    #[test]
     fn invalid_finished_body_energy_holder_does_not_release_material() {
         let mut simulation = Simulation::new(913, 10.0);
         let catalog = crate::resources::default_catalog();
