@@ -169,7 +169,6 @@ impl EnergyTransaction {
     }
 }
 
-
 /// A point-in-time inventory used to reconcile world-level energy accounting.
 ///
 /// Structural energy is the total energy currently stored in realized bonds,
@@ -203,13 +202,15 @@ impl EnergyInventorySnapshot {
             self.work_expended,
             self.heat_dissipated,
         ];
-        if values.iter().any(|value| !value.is_finite() || *value < 0.0) {
+        if values
+            .iter()
+            .any(|value| !value.is_finite() || *value < 0.0)
+        {
             return None;
         }
         let usable_delta = self.current_usable_energy - self.initial_usable_energy;
         let structural_delta = self.current_structural_energy - self.initial_structural_energy;
-        let residual = usable_delta + structural_delta + self.work_expended
-            + self.heat_dissipated
+        let residual = usable_delta + structural_delta + self.work_expended + self.heat_dissipated
             - self.external_energy_input
             - self.other_energy_released;
         residual.is_finite().then_some(residual)
@@ -218,7 +219,9 @@ impl EnergyInventorySnapshot {
     pub(crate) fn is_balanced(self, tolerance: f64) -> bool {
         tolerance.is_finite()
             && tolerance >= 0.0
-            && self.residual().is_some_and(|residual| residual.abs() <= tolerance)
+            && self
+                .residual()
+                .is_some_and(|residual| residual.abs() <= tolerance)
     }
 }
 
@@ -307,8 +310,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
             return false;
         }
         let next_released = self.total_potential_energy_released + transaction.potential_released;
-        let next_structural =
-            self.total_structural_energy_delta + transaction.structural_delta;
+        let next_structural = self.total_structural_energy_delta + transaction.structural_delta;
         let next_gained = self.total_usable_energy_gained + transaction.usable_delta.max(0.0);
         let next_work = self.total_work_expended + transaction.work_expended;
         let next_heat = self.total_heat_dissipated + transaction.heat_dissipated;

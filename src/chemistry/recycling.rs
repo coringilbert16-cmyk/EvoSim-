@@ -78,12 +78,8 @@ mod tests {
             .expect("construction started")
             .developing_energy = 3.0;
 
-        let body = recycle_dead_organism(
-            &mut simulation.environment,
-            &mut organism,
-            &mut ledger,
-        )
-        .expect("organism can be recycled");
+        let body = recycle_dead_organism(&mut simulation.environment, &mut organism, &mut ledger)
+            .expect("organism can be recycled");
 
         assert_eq!(body.energy_budget, 8.0);
         assert_eq!(organism.usable_energy, 0.0);

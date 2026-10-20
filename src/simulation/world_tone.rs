@@ -94,7 +94,9 @@ impl WorldToneCycle {
         }
 
         let mut samples = Vec::new();
-        samples.try_reserve_exact(usize::try_from(period).ok()?).ok()?;
+        samples
+            .try_reserve_exact(usize::try_from(period).ok()?)
+            .ok()?;
         for tick in 0..period {
             samples.push(config.sample(tick, world_width, world_height)?);
         }
@@ -102,7 +104,9 @@ impl WorldToneCycle {
     }
 
     pub(crate) fn sample(&self, tick: u64) -> Option<WorldToneSample> {
-        self.samples.get(usize::try_from(tick % self.samples.len() as u64).ok()?).copied()
+        self.samples
+            .get(usize::try_from(tick % self.samples.len() as u64).ok()?)
+            .copied()
     }
 }
 
@@ -260,7 +264,10 @@ mod tests {
             orbit_radius: 250.0,
         };
         let cycle = WorldToneCycle::precompute(config, 1_000.0, 800.0).unwrap();
-        assert_eq!(cycle.samples.len(), parameters().orbital_period_ticks as usize);
+        assert_eq!(
+            cycle.samples.len(),
+            parameters().orbital_period_ticks as usize
+        );
         for tick in 0..parameters().orbital_period_ticks {
             assert_eq!(
                 cycle.sample(tick),
@@ -268,7 +275,10 @@ mod tests {
                 "sample mismatch at tick {tick}"
             );
         }
-        assert_eq!(cycle.sample(0), cycle.sample(parameters().orbital_period_ticks));
+        assert_eq!(
+            cycle.sample(0),
+            cycle.sample(parameters().orbital_period_ticks)
+        );
         assert_eq!(cycle.sample(2_400), cycle.sample(4_800));
     }
 

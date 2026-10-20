@@ -217,7 +217,6 @@ fn polygon_contains_vertices(x: f64, y: f64, vertices: &[(f64, f64)]) -> bool {
     inside
 }
 
-
 /// A visible, source-facing boundary probe on one realized constituent.
 ///
 /// This is a geometric exposure candidate, not an energy allocation: one probe
@@ -275,7 +274,13 @@ pub(crate) fn visible_source_facing_points(
             if normal_x * toward_source_x + normal_y * toward_source_y <= 1e-9 {
                 continue;
             }
-            if source_path_blocked(source, (world_x, world_y), bodies, body_index, part.unit_index) {
+            if source_path_blocked(
+                source,
+                (world_x, world_y),
+                bodies,
+                body_index,
+                part.unit_index,
+            ) {
                 continue;
             }
 
@@ -327,11 +332,7 @@ pub(crate) fn source_path_blocked(
     false
 }
 
-fn segment_crosses_part(
-    source: (f64, f64),
-    target: (f64, f64),
-    part: &PlacedForm,
-) -> bool {
+fn segment_crosses_part(source: (f64, f64), target: (f64, f64), part: &PlacedForm) -> bool {
     let to_local = |point: (f64, f64)| {
         let dx = point.0 - part.x;
         let dy = point.1 - part.y;
@@ -344,9 +345,8 @@ fn segment_crosses_part(
         return true;
     }
 
-    let intersects_segment = |c: (f64, f64), d: (f64, f64)| {
-        segment_intersection_before_target(a, b, c, d)
-    };
+    let intersects_segment =
+        |c: (f64, f64), d: (f64, f64)| segment_intersection_before_target(a, b, c, d);
 
     match &part.form {
         Form::Circle { radius } => {
@@ -369,9 +369,7 @@ fn segment_crosses_part(
                 .into_iter()
                 .any(|t| (-1e-9..(1.0 - 1e-9)).contains(&t))
         }
-        Form::Line { length } => {
-            intersects_segment((-length * 0.5, 0.0), (length * 0.5, 0.0))
-        }
+        Form::Line { length } => intersects_segment((-length * 0.5, 0.0), (length * 0.5, 0.0)),
         Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
             let Some(vertices) = part.form.polygon_vertices() else {
                 return false;
@@ -394,9 +392,13 @@ fn segment_crosses_part(
                 }
             }
             if let Some(arc) = arc_boundary {
-                if arc.segment_intersections(a.0, a.1, b.0, b.1).is_some_and(|hits| {
-                    hits.into_iter().any(|point| parameter_before_target(a, b, point))
-                }) {
+                if arc
+                    .segment_intersections(a.0, a.1, b.0, b.1)
+                    .is_some_and(|hits| {
+                        hits.into_iter()
+                            .any(|point| parameter_before_target(a, b, point))
+                    })
+                {
                     return true;
                 }
             }
@@ -404,16 +406,24 @@ fn segment_crosses_part(
                 for piece in &multi.pieces {
                     match piece {
                         crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
-                            start_x, start_y, end_x, end_y, ..
+                            start_x,
+                            start_y,
+                            end_x,
+                            end_y,
+                            ..
                         } => {
                             if intersects_segment((*start_x, *start_y), (*end_x, *end_y)) {
                                 return true;
                             }
                         }
                         crate::capillary_geometry::FluidBoundaryPiece::FreeArc(arc) => {
-                            if arc.segment_intersections(a.0, a.1, b.0, b.1).is_some_and(|hits| {
-                                hits.into_iter().any(|point| parameter_before_target(a, b, point))
-                            }) {
+                            if arc
+                                .segment_intersections(a.0, a.1, b.0, b.1)
+                                .is_some_and(|hits| {
+                                    hits.into_iter()
+                                        .any(|point| parameter_before_target(a, b, point))
+                                })
+                            {
                                 return true;
                             }
                         }
@@ -448,11 +458,7 @@ fn segment_crosses_part(
     }
 }
 
-fn parameter_before_target(
-    a: (f64, f64),
-    b: (f64, f64),
-    point: (f64, f64),
-) -> bool {
+fn parameter_before_target(a: (f64, f64), b: (f64, f64), point: (f64, f64)) -> bool {
     let dx = b.0 - a.0;
     let dy = b.1 - a.1;
     let length_squared = dx * dx + dy * dy;

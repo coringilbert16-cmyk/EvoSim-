@@ -667,7 +667,10 @@ mod tests {
         assert_eq!(resonant_absorption_fraction(0.0, 440.0, 0.2), 0.0);
         assert_eq!(resonant_absorption_fraction(440.0, f64::NAN, 0.2), 0.0);
         assert_eq!(resonant_absorption_fraction(440.0, 440.0, 0.0), 0.0);
-        assert_eq!(resonant_absorption_fraction(440.0, 440.0, f64::INFINITY), 0.0);
+        assert_eq!(
+            resonant_absorption_fraction(440.0, 440.0, f64::INFINITY),
+            0.0
+        );
     }
 
     #[test]

@@ -46,7 +46,9 @@ fn restore_failed_transformation_material(
             .as_ref()
             .and_then(|placements| placements.first())
         {
-            let _ = environment.field.deposit(placement.x, placement.y, source.clone());
+            let _ = environment
+                .field
+                .deposit(placement.x, placement.y, source.clone());
         }
         return;
     }
@@ -55,12 +57,21 @@ fn restore_failed_transformation_material(
     // organism's storage when the transformation starts. If preparation fails,
     // put that exact source back instead of silently dropping it.
     if let Some(organism) = organism {
-        if organism.stored_material.store_physical_instance(source.clone()) {
+        if organism
+            .stored_material
+            .store_physical_instance(source.clone())
+        {
             return;
         }
     }
-    if let Some(placement) = source.placements.as_ref().and_then(|placements| placements.first()) {
-        let _ = environment.field.deposit(placement.x, placement.y, source.clone());
+    if let Some(placement) = source
+        .placements
+        .as_ref()
+        .and_then(|placements| placements.first())
+    {
+        let _ = environment
+            .field
+            .deposit(placement.x, placement.y, source.clone());
     }
 }
 
@@ -101,10 +112,13 @@ impl Simulation {
         energy_ledger.total_usable_energy_held =
             crate::reproduction::total_usable_energy_held(std::slice::from_ref(&organism), &[]);
         energy_ledger.initial_usable_energy_held = energy_ledger.total_usable_energy_held;
-        energy_ledger.total_structural_energy_held =
-            organism.structure.bonds.iter().map(|bond| bond.bond_energy).sum();
-        energy_ledger.initial_structural_energy_held =
-            energy_ledger.total_structural_energy_held;
+        energy_ledger.total_structural_energy_held = organism
+            .structure
+            .bonds
+            .iter()
+            .map(|bond| bond.bond_energy)
+            .sum();
+        energy_ledger.initial_structural_energy_held = energy_ledger.total_structural_energy_held;
         Self {
             tick: 0,
             ticks_per_second,
@@ -544,10 +558,10 @@ impl Simulation {
                     work_expended: 0.0,
                     heat_dissipated: remaining,
                 };
-                if !self.energy_ledger.settle_transaction(
-                    &mut self.decomposing_bodies[index].energy_budget,
-                    sink,
-                ) {
+                if !self
+                    .energy_ledger
+                    .settle_transaction(&mut self.decomposing_bodies[index].energy_budget, sink)
+                {
                     continue;
                 }
             }
@@ -556,8 +570,8 @@ impl Simulation {
             // sink succeeds. Otherwise a retained body would re-release the
             // same units on a later tick.
             let position = self.decomposing_bodies[index].position.clone();
-            let materials = self.decomposing_bodies[index]
-                .release_finished_material(&self.environment.catalog);
+            let materials =
+                self.decomposing_bodies[index].release_finished_material(&self.environment.catalog);
             for material in materials {
                 self.environment
                     .field
@@ -621,10 +635,7 @@ impl Simulation {
             if transformation.remaining_ticks > 0 {
                 transformation.remaining_ticks -= 1
             }
-            if should_prepare_transformation(
-                &transformation.kind,
-                transformation.remaining_ticks,
-            ) {
+            if should_prepare_transformation(&transformation.kind, transformation.remaining_ticks) {
                 if let Some(organism) = self
                     .organisms
                     .iter_mut()
@@ -1267,11 +1278,10 @@ impl Simulation {
         // material or energy held by the transaction. New transformations cannot
         // be initiated by breached organisms because the decision loop is gated
         // by living_ids. Existing BREAK/COMBINE transactions still settle normally.
-        self.energy_ledger.total_usable_energy_held =
-            crate::reproduction::total_usable_energy_held(
-                &self.organisms,
-                &self.decomposing_bodies,
-            );
+        self.energy_ledger.total_usable_energy_held = crate::reproduction::total_usable_energy_held(
+            &self.organisms,
+            &self.decomposing_bodies,
+        );
         self.energy_ledger.total_structural_energy_held =
             Self::structural_energy_held(&self.organisms, &self.decomposing_bodies);
     }
@@ -1287,9 +1297,12 @@ impl Simulation {
             .iter()
             .map(|organism| {
                 graph_energy(&organism.structure)
-                    + organism.reproductive_construction.as_ref().map_or(0.0, |construction| {
-                        graph_energy(&construction.developing_structure)
-                    })
+                    + organism
+                        .reproductive_construction
+                        .as_ref()
+                        .map_or(0.0, |construction| {
+                            graph_energy(&construction.developing_structure)
+                        })
             })
             .sum();
         let decomposition_energy: f64 = decomposing_bodies
@@ -1451,7 +1464,11 @@ mod decomposition_finalization_tests {
     fn live_stress_break_reconciles_world_energy_inventory() {
         let mut simulation = Simulation::new(915, 10.0);
         let before = simulation.energy_inventory_snapshot();
-        assert!(before.is_balanced(1e-9), "initial inventory: {:?}", before.residual());
+        assert!(
+            before.is_balanced(1e-9),
+            "initial inventory: {:?}",
+            before.residual()
+        );
 
         assert!(crate::transformation::resolve_stress_break(
             &mut simulation.organisms[0],
@@ -1465,11 +1482,10 @@ mod decomposition_finalization_tests {
                 &simulation.organisms,
                 &simulation.decomposing_bodies,
             );
-        simulation.energy_ledger.total_structural_energy_held =
-            Simulation::structural_energy_held(
-                &simulation.organisms,
-                &simulation.decomposing_bodies,
-            );
+        simulation.energy_ledger.total_structural_energy_held = Simulation::structural_energy_held(
+            &simulation.organisms,
+            &simulation.decomposing_bodies,
+        );
 
         let after = simulation.energy_inventory_snapshot();
         assert!(

@@ -55,15 +55,15 @@ mod interior_geometry;
 mod juvenile;
 #[path = "geometry/organism_geometry.rs"]
 mod organism_geometry;
-#[path = "geometry/source_exposure.rs"]
-#[allow(dead_code)] // Projected-extent primitive is staged before exact exposure discovery.
-mod source_exposure;
 #[path = "organism/viability.rs"]
 mod organism_viability;
 #[path = "geometry/physical_geometry.rs"]
 mod physical_geometry;
 #[path = "geometry/rigid_boundary.rs"]
 mod rigid_boundary;
+#[path = "geometry/source_exposure.rs"]
+#[allow(dead_code)] // Projected-extent primitive is staged before exact exposure discovery.
+mod source_exposure;
 #[path = "geometry/surface_geometry.rs"]
 mod surface_geometry;
 

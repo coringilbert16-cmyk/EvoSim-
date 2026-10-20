@@ -47,14 +47,11 @@ pub(crate) fn projected_extent(
 
     let normal_length = interval.outward_normal.0.hypot(interval.outward_normal.1);
     let direction_length = toward_source.0.hypot(toward_source.1);
-    if (normal_length - 1.0).abs() > 1e-9
-        || (direction_length - 1.0).abs() > 1e-9
-    {
+    if (normal_length - 1.0).abs() > 1e-9 || (direction_length - 1.0).abs() > 1e-9 {
         return None;
     }
 
-    let length = (interval.end.0 - interval.start.0)
-        .hypot(interval.end.1 - interval.start.1);
+    let length = (interval.end.0 - interval.start.0).hypot(interval.end.1 - interval.start.1);
     if !length.is_finite() {
         return None;
     }
@@ -80,13 +77,22 @@ mod tests {
 
     #[test]
     fn directly_facing_edge_contributes_its_full_length() {
-        assert_eq!(projected_extent(interval((0.0, 1.0)), (0.0, 1.0)), Some(2.0));
+        assert_eq!(
+            projected_extent(interval((0.0, 1.0)), (0.0, 1.0)),
+            Some(2.0)
+        );
     }
 
     #[test]
     fn edge_on_and_back_facing_edges_contribute_zero() {
-        assert_eq!(projected_extent(interval((1.0, 0.0)), (0.0, 1.0)), Some(0.0));
-        assert_eq!(projected_extent(interval((0.0, -1.0)), (0.0, 1.0)), Some(0.0));
+        assert_eq!(
+            projected_extent(interval((1.0, 0.0)), (0.0, 1.0)),
+            Some(0.0)
+        );
+        assert_eq!(
+            projected_extent(interval((0.0, -1.0)), (0.0, 1.0)),
+            Some(0.0)
+        );
     }
 
     #[test]
@@ -111,7 +117,6 @@ mod tests {
     }
 }
 
-
 /// Derive visible straight boundary intervals for polygonal bodies.
 ///
 /// Visibility can change only along rays from the source through blocker
@@ -131,23 +136,22 @@ pub(crate) fn visible_polygonal_intervals(
     let mut polygons = Vec::new();
     for (body_index, body) in bodies.iter().enumerate() {
         for part in &body.parts {
-            if !part.x.is_finite()
-                || !part.y.is_finite()
-                || !part.rotation_radians.is_finite()
-            {
+            if !part.x.is_finite() || !part.y.is_finite() || !part.rotation_radians.is_finite() {
                 return None;
             }
             let local = part.form.polygon_vertices()?;
-            if local.len() < 3
-                || local.iter().any(|(x, y)| !x.is_finite() || !y.is_finite())
-            {
+            if local.len() < 3 || local.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) {
                 return None;
             }
             let (sin, cos) = part.rotation_radians.sin_cos();
-            let vertices = local.into_iter().map(|(x, y)| {
-                (part.x + x * cos - y * sin, part.y + x * sin + y * cos)
-            }).collect::<Vec<_>>();
-            if vertices.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) {
+            let vertices = local
+                .into_iter()
+                .map(|(x, y)| (part.x + x * cos - y * sin, part.y + x * sin + y * cos))
+                .collect::<Vec<_>>();
+            if vertices
+                .iter()
+                .any(|(x, y)| !x.is_finite() || !y.is_finite())
+            {
                 return None;
             }
             polygons.push((body_index, part.unit_index, vertices));
@@ -159,16 +163,24 @@ pub(crate) fn visible_polygonal_intervals(
         for part in &body.parts {
             let local = part.form.polygon_vertices()?;
             let (sin, cos) = part.rotation_radians.sin_cos();
-            let vertices = local.into_iter().map(|(x, y)| {
-                (part.x + x * cos - y * sin, part.y + x * sin + y * cos)
-            }).collect::<Vec<_>>();
-            if vertices.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) {
+            let vertices = local
+                .into_iter()
+                .map(|(x, y)| (part.x + x * cos - y * sin, part.y + x * sin + y * cos))
+                .collect::<Vec<_>>();
+            if vertices
+                .iter()
+                .any(|(x, y)| !x.is_finite() || !y.is_finite())
+            {
                 return None;
             }
-            let area2: f64 = vertices.iter().enumerate().map(|(i, &(x1, y1))| {
-                let (x2, y2) = vertices[(i + 1) % vertices.len()];
-                x1 * y2 - x2 * y1
-            }).sum();
+            let area2: f64 = vertices
+                .iter()
+                .enumerate()
+                .map(|(i, &(x1, y1))| {
+                    let (x2, y2) = vertices[(i + 1) % vertices.len()];
+                    x1 * y2 - x2 * y1
+                })
+                .sum();
             if !area2.is_finite() || area2.abs() <= 1e-12 {
                 return None;
             }
@@ -185,8 +197,8 @@ pub(crate) fn visible_polygonal_intervals(
                 }
                 let normal = (winding * ey / edge_length, -winding * ex / edge_length);
                 let midpoint = ((a.0 + b.0) * 0.5, (a.1 + b.1) * 0.5);
-                if normal.0 * (source.0 - midpoint.0)
-                    + normal.1 * (source.1 - midpoint.1) <= 1e-10 {
+                if normal.0 * (source.0 - midpoint.0) + normal.1 * (source.1 - midpoint.1) <= 1e-10
+                {
                     continue;
                 }
 
@@ -223,7 +235,11 @@ pub(crate) fn visible_polygonal_intervals(
                     let t = (t0 + t1) * 0.5;
                     let point = (a.0 + ex * t, a.1 + ey * t);
                     if crate::organism_geometry::source_path_blocked(
-                        source, point, bodies, body_index, part.unit_index
+                        source,
+                        point,
+                        bodies,
+                        body_index,
+                        part.unit_index,
                     ) {
                         continue;
                     }
@@ -245,7 +261,13 @@ mod visibility_tests {
     use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
     use crate::resources::Form;
 
-    fn rectangle_body(unit_index: usize, x: f64, y: f64, width: f64, height: f64) -> OrganismBodyGeometry {
+    fn rectangle_body(
+        unit_index: usize,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+    ) -> OrganismBodyGeometry {
         OrganismBodyGeometry {
             parts: vec![PlacedForm {
                 unit_index,
@@ -280,20 +302,27 @@ mod visibility_tests {
         let left_edge: Vec<_> = intervals
             .iter()
             .filter(|interval| {
-                (interval.start.0 - 4.0).abs() < 1e-8
-                    && (interval.end.0 - 4.0).abs() < 1e-8
+                (interval.start.0 - 4.0).abs() < 1e-8 && (interval.end.0 - 4.0).abs() < 1e-8
             })
             .collect();
-        assert!(left_edge.len() >= 2, "expected separate visible shoulders: {left_edge:?}");
+        assert!(
+            left_edge.len() >= 2,
+            "expected separate visible shoulders: {left_edge:?}"
+        );
         let visible_length: f64 = left_edge
             .iter()
             .map(|interval| {
-                (interval.end.0 - interval.start.0)
-                    .hypot(interval.end.1 - interval.start.1)
+                (interval.end.0 - interval.start.0).hypot(interval.end.1 - interval.start.1)
             })
             .sum();
-        assert!(visible_length > 0.0, "some of the target edge should remain exposed");
-        assert!(visible_length < 2.0 - 1e-6, "the blocker should shadow part of the edge");
+        assert!(
+            visible_length > 0.0,
+            "some of the target edge should remain exposed"
+        );
+        assert!(
+            visible_length < 2.0 - 1e-6,
+            "the blocker should shadow part of the edge"
+        );
     }
 
     #[test]
@@ -306,8 +335,7 @@ mod visibility_tests {
         let left_edge: Vec<_> = intervals
             .iter()
             .filter(|interval| {
-                (interval.start.0 - 4.0).abs() < 1e-8
-                    && (interval.end.0 - 4.0).abs() < 1e-8
+                (interval.start.0 - 4.0).abs() < 1e-8 && (interval.end.0 - 4.0).abs() < 1e-8
             })
             .collect();
         assert!(
@@ -324,18 +352,20 @@ mod visibility_tests {
         let left_edge: Vec<_> = intervals
             .iter()
             .filter(|interval| {
-                (interval.start.0 - 4.0).abs() < 1e-8
-                    && (interval.end.0 - 4.0).abs() < 1e-8
+                (interval.start.0 - 4.0).abs() < 1e-8 && (interval.end.0 - 4.0).abs() < 1e-8
             })
             .collect();
         let visible_length: f64 = left_edge
             .iter()
             .map(|interval| {
-                (interval.end.0 - interval.start.0)
-                    .hypot(interval.end.1 - interval.start.1)
+                (interval.end.0 - interval.start.0).hypot(interval.end.1 - interval.start.1)
             })
             .sum();
         assert!((visible_length - 2.0).abs() < 1e-8);
-        assert_eq!(left_edge.len(), 1, "unobstructed edge should remain one interval");
+        assert_eq!(
+            left_edge.len(),
+            1,
+            "unobstructed edge should remain one interval"
+        );
     }
 }

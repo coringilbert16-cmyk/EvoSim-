@@ -832,8 +832,7 @@ mod tests {
 
     #[test]
     fn chemical_break_charges_a_work_shortfall_to_the_usable_holder() {
-        let (structural_energy, usable, heat) =
-            chemical_break_energy_yield(4.0, 5.0, 0.5).unwrap();
+        let (structural_energy, usable, heat) = chemical_break_energy_yield(4.0, 5.0, 0.5).unwrap();
         assert!((structural_energy - 4.0).abs() < 1e-12);
         assert!((usable + 1.0).abs() < 1e-12);
         assert_eq!(heat, 0.0);

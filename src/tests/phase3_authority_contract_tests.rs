@@ -66,13 +66,20 @@ mod tests {
         let mut ledger = EnergyLedger::default();
 
         let step = resolve_one_bond_with_ledger(&mut body, &environment, &mut ledger).unwrap();
-        let remaining_structural_energy: f64 =
-            body.structure.bonds.iter().map(|bond| bond.bond_energy).sum();
+        let remaining_structural_energy: f64 = body
+            .structure
+            .bonds
+            .iter()
+            .map(|bond| bond.bond_energy)
+            .sum();
         let residual = (body.energy_budget - initial_usable_energy)
             + (remaining_structural_energy - initial_structural_energy)
             + step.heat;
 
-        assert!(residual.abs() <= 1e-9, "decomposition energy residual: {residual}");
+        assert!(
+            residual.abs() <= 1e-9,
+            "decomposition energy residual: {residual}"
+        );
         assert_eq!(ledger.total_potential_energy_released, 0.0);
         assert!((ledger.total_structural_energy_delta + initial_structural_energy).abs() <= 1e-9);
         assert!((ledger.total_heat_dissipated - step.heat).abs() <= 1e-9);
@@ -88,8 +95,12 @@ mod tests {
         organism.usable_energy = 1000.0;
         assert!(!organism.structure.bonds.is_empty());
         let initial_usable_energy = organism.usable_energy;
-        let initial_structural_energy: f64 =
-            organism.structure.bonds.iter().map(|bond| bond.bond_energy).sum();
+        let initial_structural_energy: f64 = organism
+            .structure
+            .bonds
+            .iter()
+            .map(|bond| bond.bond_energy)
+            .sum();
         let environment = Environment {
             width: 1000.0,
             height: 1000.0,
@@ -106,19 +117,27 @@ mod tests {
             &mut rng,
         ));
 
-        let remaining_structural_energy: f64 =
-            organism.structure.bonds.iter().map(|bond| bond.bond_energy).sum();
+        let remaining_structural_energy: f64 = organism
+            .structure
+            .bonds
+            .iter()
+            .map(|bond| bond.bond_energy)
+            .sum();
         let residual = (organism.usable_energy - initial_usable_energy)
             + (remaining_structural_energy - initial_structural_energy)
             + ledger.total_work_expended
             + ledger.total_heat_dissipated;
 
-        assert!(residual.abs() <= 1e-9, "stress-break energy residual: {residual}");
+        assert!(
+            residual.abs() <= 1e-9,
+            "stress-break energy residual: {residual}"
+        );
         assert_eq!(ledger.total_potential_energy_released, 0.0);
-        assert!((ledger.total_structural_energy_delta
-            - (remaining_structural_energy - initial_structural_energy))
-            .abs()
-            <= 1e-9);
+        assert!(
+            (ledger.total_structural_energy_delta
+                - (remaining_structural_energy - initial_structural_energy))
+                .abs()
+                <= 1e-9
+        );
     }
-
 }

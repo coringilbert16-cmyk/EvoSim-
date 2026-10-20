@@ -81,7 +81,10 @@ mod integration_tests {
         assert_eq!(s.organisms.len(), 1);
         assert_eq!(s.organisms[0].structure.units.len(), initial_units);
         assert!(s.decomposing_bodies.is_empty());
-        assert_eq!(s.environment.field.total_amount(), before_environment_amount);
+        assert_eq!(
+            s.environment.field.total_amount(),
+            before_environment_amount
+        );
     }
 
     #[test]
@@ -469,10 +472,16 @@ mod integration_tests {
         ));
         assert_eq!(s.organisms[0].usable_energy, 100.0);
         assert_eq!(s.energy_ledger.total_usable_energy_gained, before_gained);
-        assert_eq!(s.energy_ledger.total_structural_energy_delta, before_structural);
+        assert_eq!(
+            s.energy_ledger.total_structural_energy_delta,
+            before_structural
+        );
         assert_eq!(s.energy_ledger.total_work_expended, before_work);
         assert_eq!(s.energy_ledger.total_heat_dissipated, before_heat);
-        assert_eq!(s.energy_ledger.total_potential_energy_released, before_released);
+        assert_eq!(
+            s.energy_ledger.total_potential_energy_released,
+            before_released
+        );
 
         crate::transformation::resolve_transformation(
             &transformation,
@@ -483,10 +492,7 @@ mod integration_tests {
         assert_eq!(s.organisms[0].stored_material.physical_count(), 2);
         assert_eq!(s.organisms[0].usable_energy, 100.0);
         s.energy_ledger.total_usable_energy_held =
-            crate::reproduction::total_usable_energy_held(
-                &s.organisms,
-                &s.decomposing_bodies,
-            );
+            crate::reproduction::total_usable_energy_held(&s.organisms, &s.decomposing_bodies);
         s.energy_ledger.total_structural_energy_held =
             Simulation::structural_energy_held(&s.organisms, &s.decomposing_bodies);
         let inventory = s.energy_inventory_snapshot();
