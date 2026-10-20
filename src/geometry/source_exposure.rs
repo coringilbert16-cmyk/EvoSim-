@@ -838,15 +838,20 @@ pub(crate) fn visible_circular_arc_intervals(
         }
     }
 
+    if critical_points
+        .iter()
+        .any(|(x, y)| !x.is_finite() || !y.is_finite())
+    {
+        return None;
+    }
+
     let mut output = Vec::new();
     for target in all_arcs {
         // If the source is inside the target material, its boundary cannot be
         // safely interpreted as an externally illuminated surface.
         if let Some(body) = bodies.get(target.body_index) {
-            if let Some(part) = body.parts.iter().find(|p| p.unit_index == target.unit_index) {
-                if body.contains_point(source.0, source.1) {
-                    continue;
-                }
+            if body.contains_point(source.0, source.1) {
+                continue;
             }
         }
 
