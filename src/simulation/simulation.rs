@@ -1368,6 +1368,53 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn simulation_step_advances_decomposition_before_inventory_refresh() {
+        let mut simulation = Simulation::new(915, 10.0);
+        simulation.organisms.clear();
+
+        let catalog = crate::resources::default_catalog();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
+        let mut structure = blueprint.realize(&catalog).unwrap();
+        assert!(structure.bonds.len() >= 2);
+        structure.bonds.truncate(2);
+
+        let initial_structural_energy: f64 =
+            structure.bonds.iter().map(|bond| bond.bond_energy).sum();
+        let initial_usable_energy = 1000.0;
+        let body = crate::decomposition::DecomposingBody::new(
+            structure,
+            initial_usable_energy,
+            Position { x: 500.0, y: 500.0 },
+        )
+        .unwrap();
+        simulation.decomposing_bodies.push(body);
+        simulation.energy_ledger.initial_usable_energy_held = initial_usable_energy;
+        simulation.energy_ledger.total_usable_energy_held = initial_usable_energy;
+        simulation.energy_ledger.initial_structural_energy_held = initial_structural_energy;
+        simulation.energy_ledger.total_structural_energy_held = initial_structural_energy;
+
+        simulation.step();
+
+        assert_eq!(simulation.decomposing_bodies.len(), 1);
+        assert_eq!(simulation.decomposing_bodies[0].structure.bonds.len(), 1);
+        let inventory = simulation.energy_inventory_snapshot();
+        assert_eq!(
+            inventory.current_usable_energy,
+            simulation.decomposing_bodies[0].energy_budget
+        );
+        assert_eq!(
+            inventory.current_structural_energy,
+            simulation.decomposing_bodies[0]
+                .structure
+                .bonds
+                .iter()
+                .map(|bond| bond.bond_energy)
+                .sum::<f64>()
+        );
+        assert!(inventory.is_balanced(1e-9));
+    }
+
+    #[test]
     fn invalid_finished_body_energy_holder_does_not_release_material() {
         let mut simulation = Simulation::new(913, 10.0);
         let catalog = crate::resources::default_catalog();
