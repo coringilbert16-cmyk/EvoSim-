@@ -639,6 +639,27 @@ mod tests {
         }
     }
 
+    fn circle_body(
+        unit_index: usize,
+        x: f64,
+        y: f64,
+        radius: f64,
+    ) -> crate::organism_geometry::OrganismBodyGeometry {
+        crate::organism_geometry::OrganismBodyGeometry {
+            parts: vec![crate::organism_geometry::PlacedForm {
+                unit_index,
+                form: crate::resources::Form::Circle { radius },
+                x,
+                y,
+                rotation_radians: 0.0,
+            }],
+            min_x: x - radius,
+            max_x: x + radius,
+            min_y: y - radius,
+            max_y: y + radius,
+        }
+    }
+
     #[test]
     fn source_orbits_clockwise_and_returns_to_north() {
         let params = parameters();
@@ -1063,6 +1084,42 @@ mod tests {
             WorldToneCaptureFrame::from_geometry(sample, &[circle, blocker]).is_none(),
             "partial shadowing of curved targets must not be approximated"
         );
+    }
+
+    #[test]
+    fn curved_only_frame_fully_shadows_circle_behind_circle() {
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0,
+            source_y: 0.0,
+            frequency_hz: 440.0,
+            signal_energy_level: 8.0,
+            energy_intensity_per_tick_per_width: 10.0,
+            orbital_phase: 0.0,
+        };
+        let blocker = circle_body(0, 0.0, 0.0, 1.0);
+        let target = circle_body(0, 5.0, 0.0, 1.0);
+        let frame = WorldToneCaptureFrame::from_geometry(sample, &[blocker, target])
+            .expect("circle boundaries can cast exact point-source shadows");
+        assert!((frame.projected_widths[0] - 2.0).abs() < 1e-6);
+        assert_eq!(frame.projected_widths[1], 0.0);
+    }
+
+    #[test]
+    fn curved_only_frame_preserves_partial_circle_shadow() {
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0,
+            source_y: 0.0,
+            frequency_hz: 440.0,
+            signal_energy_level: 8.0,
+            energy_intensity_per_tick_per_width: 10.0,
+            orbital_phase: 0.0,
+        };
+        let blocker = circle_body(0, 0.0, 0.7, 0.5);
+        let target = circle_body(0, 5.0, 0.0, 1.0);
+        let frame = WorldToneCaptureFrame::from_geometry(sample, &[blocker, target])
+            .expect("circle boundaries can cast exact point-source shadows");
+        assert!(frame.projected_widths[1] > 0.0);
+        assert!(frame.projected_widths[1] < 2.0);
     }
 
     #[test]
