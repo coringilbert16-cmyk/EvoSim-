@@ -123,6 +123,21 @@ mod tests {
         assert_eq!(projected_extent(interval((0.0, 2.0)), (0.0, 1.0)), None);
         assert_eq!(projected_extent(interval((0.0, 1.0)), (0.0, 0.0)), None);
     }
+
+    #[test]
+    fn point_source_projection_integrates_varying_direction_along_a_straight_edge() {
+        let interval = ExposedBoundaryInterval {
+            body_index: 0,
+            unit_index: 0,
+            start: (-1.0, 0.0),
+            end: (1.0, 0.0),
+            outward_normal: (0.0, 1.0),
+        };
+        let extent = point_source_projected_extent(interval, (0.0, 10.0)).unwrap();
+        let expected = 20.0 * 0.1_f64.asinh();
+        assert!((extent - expected).abs() < 1e-12);
+        assert!(extent < 2.0, "point-source projection must not assume parallel rays");
+    }
 }
 
 /// Project a straight boundary interval using the finite point source's
