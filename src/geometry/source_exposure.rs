@@ -1064,7 +1064,7 @@ mod point_source_curve_visibility_tests {
     }
 
     #[test]
-    fn point_source_curve_query_fails_closed_for_multi_contact_fluid() {
+    fn multi_contact_fluid_is_not_credited_as_a_target_but_remains_valid_geometry() {
         let fluid = Form::Fluid {
             nominal_area: 0.5,
             boundary: None,
@@ -1075,7 +1075,9 @@ mod point_source_curve_visibility_tests {
             }),
         };
         let target = body(fluid, 5.0, 0.0);
-        assert!(visible_circular_arc_intervals((-5.0, 0.0), &[target]).is_none());
+        let intervals = visible_circular_arc_intervals((-5.0, 0.0), &[target])
+            .expect("unsupported target boundary is excluded without invalidating other geometry");
+        assert!(intervals.is_empty());
     }
 }
 
