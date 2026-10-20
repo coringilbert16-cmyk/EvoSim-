@@ -361,7 +361,7 @@ mod tests {
     fn world_inventory_reconciles_external_input_work_and_heat() {
         let inventory = EnergyInventorySnapshot {
             initial_usable_energy: 10.0,
-            current_usable_energy: 14.0,
+            current_usable_energy: 12.0,
             initial_structural_energy: 8.0,
             current_structural_energy: 9.0,
             external_energy_input: 7.0,
