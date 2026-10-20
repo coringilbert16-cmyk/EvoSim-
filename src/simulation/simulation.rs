@@ -570,7 +570,15 @@ impl Simulation {
             if transformation.remaining_ticks > 0 {
                 transformation.remaining_ticks -= 1
             }
-            if transformation.remaining_ticks == 0 {
+            let combine_completes_now = matches!(
+                transformation.kind,
+                crate::state::TransformationKind::Combine
+            ) && transformation.remaining_ticks == 0;
+            let other_transformation_prepares_now = !matches!(
+                transformation.kind,
+                crate::state::TransformationKind::Combine
+            ) && transformation.remaining_ticks == 1;
+            if combine_completes_now || other_transformation_prepares_now {
                 if let Some(organism) = self
                     .organisms
                     .iter_mut()
