@@ -828,6 +828,68 @@ mod tests {
     }
 
     #[test]
+    fn stored_material_break_does_not_credit_unallocated_bond_energy() {
+        let (mut organism, mut environment, _) = stress_break_test_organism();
+        let catalog = environment.catalog.clone();
+        let material = crate::resources::Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![crate::resources::InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
+        let physical = crate::physical_material::PhysicalMaterial::realized(
+            material,
+            vec![
+                crate::structure::Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("internally bonded physical material should be realizable");
+        assert!(organism.stored_material.store_physical_instance(physical));
+
+        let decision = crate::decision_runtime::ActionCandidate {
+            action: crate::decision::ActionKind::Break,
+            context_key: Some("stored:0:bond:0".into()),
+        };
+        let mut next_id = 1;
+        let mut transformation = Simulation::try_start_transformation(
+            &mut organism,
+            &catalog,
+            &mut next_id,
+            &decision,
+        )
+        .expect("stored internal bond should be a BREAK candidate");
+        let before_energy = organism.usable_energy;
+        let mut ledger = crate::state::EnergyLedger::default();
+        let before_ledger = ledger;
+
+        assert!(Simulation::prepare_transformation(
+            &mut transformation,
+            &mut organism,
+            &mut environment,
+            &mut ledger,
+            None,
+        ));
+        assert_eq!(organism.usable_energy, before_energy);
+        assert_eq!(transformation.prepared_energy, Some((before_energy, 0.0, 0.0)));
+        assert_eq!(ledger.total_potential_energy_released, before_ledger.total_potential_energy_released);
+        assert_eq!(ledger.total_external_energy_input, before_ledger.total_external_energy_input);
+        assert_eq!(ledger.total_work_expended, before_ledger.total_work_expended);
+        assert_eq!(ledger.total_heat_dissipated, before_ledger.total_heat_dissipated);
+        assert_eq!(ledger.total_structural_energy_delta, before_ledger.total_structural_energy_delta);
+    }
+
+    #[test]
     fn chemical_break_energy_comes_from_the_removed_bond_not_the_reaction_signal() {
         let (structural_energy, usable, heat) =
             chemical_break_energy_yield(10.0, 4.0, 0.5).unwrap();
