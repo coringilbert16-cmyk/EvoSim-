@@ -641,7 +641,7 @@ pub(crate) fn resolve_transformation(
     transformation: &ActiveTransformation,
     organism: &mut Organism,
     environment: &mut Environment,
-    _ledger: &mut EnergyLedger,
+    ledger: &mut EnergyLedger,
 ) {
     if matches!(
         transformation.kind,
@@ -652,6 +652,26 @@ pub(crate) fn resolve_transformation(
             transformation.prepared_stored_material.as_ref(),
             transformation.prepared_stress,
         ) else {
+            // Preparation settles the energy transaction before the physical
+            // mutation is committed. If the prepared physical state is missing,
+            // reverse that staged settlement as well as restoring any reserved
+            // environmental source; otherwise a failed COMBINE can spend energy
+            // and ledger-account it without ever creating the bond.
+            if let Some(delta) = transformation.prepared_usable_energy {
+                organism.usable_energy -= delta;
+            }
+            if let Some(delta) = transformation.prepared_stress {
+                organism.stress -= delta;
+            }
+            if let Some(delta) = transformation.prepared_ledger.as_ref() {
+                ledger.total_potential_energy_released -= delta.total_potential_energy_released;
+                ledger.total_structural_energy_delta -= delta.total_structural_energy_delta;
+                ledger.total_external_energy_input -= delta.total_external_energy_input;
+                ledger.total_usable_energy_gained -= delta.total_usable_energy_gained;
+                ledger.total_work_expended -= delta.total_work_expended;
+                ledger.total_heat_dissipated -= delta.total_heat_dissipated;
+                ledger.total_usable_energy_held -= delta.total_usable_energy_held;
+            }
             if let Some((cell_index, source)) = transformation.combine_environmental_source.as_ref()
             {
                 // Restore to the exact field cell from which the source was
