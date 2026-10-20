@@ -804,16 +804,9 @@ mod tests {
         };
         let mut holder = 1.0;
         let mut ledger = EnergyLedger::default();
-        let result = settle_world_tone_capture(
-            sample,
-            &[receiver],
-            0,
-            0.5,
-            0.8,
-            &mut holder,
-            &mut ledger,
-        )
-        .expect("valid polygonal receiver should capture");
+        let result =
+            settle_world_tone_capture(sample, &[receiver], 0, 0.5, 0.8, &mut holder, &mut ledger)
+                .expect("valid polygonal receiver should capture");
         assert!((result.projected_width - 2.0).abs() < 1e-8);
         assert!((result.incident_energy - 20.0).abs() < 1e-7);
         assert!((result.absorbed_energy - 10.0).abs() < 1e-7);
@@ -857,16 +850,9 @@ mod tests {
         };
         let mut holder = 1.0;
         let mut ledger = EnergyLedger::default();
-        let result = settle_world_tone_capture(
-            sample,
-            &bodies,
-            1,
-            1.0,
-            1.0,
-            &mut holder,
-            &mut ledger,
-        )
-        .expect("valid polygonal receiver should capture");
+        let result =
+            settle_world_tone_capture(sample, &bodies, 1, 1.0, 1.0, &mut holder, &mut ledger)
+                .expect("valid polygonal receiver should capture");
         assert_eq!(result.projected_width, 0.0);
         assert_eq!(result.incident_energy, 0.0);
         assert_eq!(result.absorbed_energy, 0.0);
