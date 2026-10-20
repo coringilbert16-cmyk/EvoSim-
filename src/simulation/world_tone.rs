@@ -186,6 +186,18 @@ pub(crate) struct WorldToneCaptureResult {
     pub(crate) heat_dissipated: f64,
 }
 
+/// Energy response of one exposed material constituent to the current source sample.
+/// The absorbed term follows the existing damped-resonator model; it is not yet
+/// a usable-energy credit. The unabsorbed term remains available for a future
+/// reflection/propagation path.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct WorldToneSurfaceResponse {
+    pub(crate) projected_width: f64,
+    pub(crate) incident_energy: f64,
+    pub(crate) absorption_fraction: f64,
+    pub(crate) absorbed_by_damping: f64,
+    pub(crate) unabsorbed: f64,
+}
 /// A per-tick geometry snapshot. Build it once from all relevant bodies, then
 /// settle each receiver against the cached exposure so visibility is not
 /// recomputed for every organism. A receiver can be settled only once per frame.
@@ -267,6 +279,42 @@ impl WorldToneCaptureFrame {
         )
     }
 
+    /// Evaluate one constituent using its existing catalog-normalized material
+    /// resonance and damping properties. This is a read-only response: callers
+    /// must not credit energy until the absorbed/reflected/usable split is settled.
+    pub(crate) fn surface_response_for_unit(
+        &self,
+        receiver_body_index: usize,
+        unit_index: usize,
+        properties: crate::resources::ResourceProperties,
+        baselines: crate::resources::ResourceBaselines,
+    ) -> Option<WorldToneSurfaceResponse> {
+        let projected_width = self.projected_width_for_unit(receiver_body_index, unit_index)?;
+        let incident_energy = self.sample.incident_energy_for_projected_width(projected_width)?;
+        let natural_frequency =
+            crate::harmonics::natural_frequency_hz(properties, baselines);
+        let damping = crate::harmonics::damping_ratio(properties, baselines);
+        let absorption_fraction = crate::harmonics::resonant_absorption_fraction(
+            self.sample.frequency_hz,
+            natural_frequency,
+            damping,
+        );
+        let absorbed_by_damping = incident_energy * absorption_fraction;
+        let unabsorbed = incident_energy - absorbed_by_damping;
+        if [absorption_fraction, absorbed_by_damping, unabsorbed]
+            .iter()
+            .any(|value| !value.is_finite() || *value < 0.0)
+        {
+            return None;
+        }
+        Some(WorldToneSurfaceResponse {
+            projected_width,
+            incident_energy,
+            absorption_fraction,
+            absorbed_by_damping,
+            unabsorbed,
+        })
+    }
     /// Settle one receiver's absorbed input atomically. Fractions remain explicit
     /// until resource-specific absorption/retention properties are approved.
     pub(crate) fn settle_receiver(
@@ -665,6 +713,56 @@ mod tests {
         assert!((frame.projected_widths[0] - 2.0).abs() < 1e-7);
     }
 
+    #[test]
+    fn surface_response_uses_existing_material_resonance_for_energy_split() {
+        use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
+        use crate::resources::{Form, ResourceBaselines, ResourceProperties};
+        let receiver = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Rectangle {
+                    width: 2.0,
+                    height: 2.0,
+                },
+                x: 5.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: 4.0,
+            max_x: 6.0,
+            min_y: -1.0,
+            max_y: 1.0,
+        };
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0,
+            source_y: 0.0,
+            frequency_hz: 440.0,
+            signal_energy_level: 8.0,
+            energy_intensity_per_tick_per_width: 10.0,
+            orbital_phase: 0.0,
+        };
+        let frame = WorldToneCaptureFrame::from_geometry(sample, &[receiver]).unwrap();
+        let properties = ResourceProperties {
+            mass: 1.0,
+            potential_energy: 1.0,
+            reactivity: 1.0,
+            chemical_position: Some(7.0),
+            cohesion: 1.0,
+        };
+        let baselines = ResourceBaselines {
+            mass: 1.0,
+            potential_energy: 1.0,
+            reactivity: 1.0,
+            cohesion: 1.0,
+        };
+        let response = frame.surface_response_for_unit(0, 0, properties, baselines).unwrap();
+        assert!((response.projected_width - 2.0).abs() < 1e-7);
+        assert!((response.incident_energy - 20.0).abs() < 1e-7);
+        assert!((response.absorption_fraction - 1.0).abs() < 1e-7);
+        assert!((response.absorbed_by_damping - 20.0).abs() < 1e-7);
+        assert!(response.unabsorbed.abs() < 1e-7);
+        assert!((response.absorbed_by_damping + response.unabsorbed - response.incident_energy).abs() < 1e-7);
+    }
     #[test]
     fn world_tone_capture_frame_prevents_duplicate_receiver_credit() {
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
