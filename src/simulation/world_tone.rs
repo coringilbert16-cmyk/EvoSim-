@@ -149,7 +149,7 @@ impl WorldToneSample {
     /// helper does not discover exposed geometry.
     pub(crate) fn incident_energy_for_projected_width(self, projected_width: f64) -> Option<f64> {
         if !self.energy_intensity_per_tick_per_width.is_finite()
-            || self.energy_intensity_per_tick_per_width < 0.0
+            || !(1.0..=10.0).contains(&self.energy_intensity_per_tick_per_width)
             || !projected_width.is_finite()
             || projected_width < 0.0
         {
@@ -613,6 +613,24 @@ mod tests {
         assert!(sample.interact_with_absorption(1.0, -0.1).is_none());
         assert!(sample.interact_with_absorption(1.0, 1.1).is_none());
         assert!(sample.interact_with_absorption(1.0, f64::NAN).is_none());
+    }
+
+    #[test]
+    fn incident_energy_rejects_out_of_contract_intensity_even_for_manual_samples() {
+        let valid = parameters().sample(0, 0.0, 0.0, 1.0).unwrap();
+        assert_eq!(valid.incident_energy_for_projected_width(1.0), Some(10.0));
+
+        for intensity in [0.0, 0.999, 10.001, 11.0, f64::NAN, f64::INFINITY] {
+            let sample = WorldToneSample {
+                energy_intensity_per_tick_per_width: intensity,
+                ..valid
+            };
+            assert_eq!(
+                sample.incident_energy_for_projected_width(1.0),
+                None,
+                "out-of-contract intensity {intensity:?} must not be credited"
+            );
+        }
     }
 
     #[test]
