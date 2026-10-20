@@ -541,6 +541,10 @@ impl Simulation {
                     - original_ledger.total_heat_dissipated,
                 total_usable_energy_held: trial_ledger.total_usable_energy_held
                     - original_ledger.total_usable_energy_held,
+                // This value is a transaction delta, not a live inventory snapshot.
+                initial_usable_energy_held: 0.0,
+                total_structural_energy_held: 0.0,
+                initial_structural_energy_held: 0.0,
             };
             if let Some((cell_index, source)) = _attempt.environmental_source.as_ref() {
                 let Some(cell) = environment.field.cells.get_mut(*cell_index) else {
