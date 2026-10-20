@@ -1352,7 +1352,7 @@ mod tests {
         assert!(frame
             .settle_receiver(0, 1.0, 1.0, &mut holder, &mut ledger)
             .is_none());
-        assert!((holder - 15.0).abs() < 1e-7);
+        assert!((holder - 7.5 * expected_width).abs() < 1e-7);
     }
     #[test]
     fn world_tone_capture_frame_prevents_duplicate_receiver_credit() {
