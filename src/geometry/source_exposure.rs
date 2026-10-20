@@ -771,10 +771,10 @@ pub(crate) fn visible_circular_arc_intervals(
                     );
                 }
                 Form::Fluid {
+                    nominal_area,
                     boundary,
                     arc_boundary,
                     multi_contact_boundary,
-                    ..
                 } => {
                     if let Some(verts) = boundary {
                         let (sin, cos) = part.rotation_radians.sin_cos();
@@ -829,6 +829,21 @@ pub(crate) fn visible_circular_arc_intervals(
                                 }
                             }
                         }
+                    }
+                    if boundary.is_none()
+                        && arc_boundary.is_none()
+                        && multi_contact_boundary.is_none()
+                    {
+                        if !nominal_area.is_finite() || *nominal_area <= 0.0 {
+                            return None;
+                        }
+                        let radius = (*nominal_area / std::f64::consts::PI).sqrt();
+                        add_circle_tangent_points(
+                            (part.x, part.y),
+                            radius,
+                            source,
+                            &mut critical_points,
+                        );
                     }
                 }
                 _ => {}
