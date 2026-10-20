@@ -26,21 +26,6 @@ pub(crate) fn bond_break_energy_yield(
         .then_some((bond_energy, usable, heat))
 }
 
-/// Resolve the intrinsic potential of a pre-bonded stored-material interface
-/// through the same chemistry authority used when forming bonds. Physical
-/// stored-material bonds currently retain endpoint identity but not a cached
-/// energy value, so this adapter derives the potential from the canonical
-/// material properties rather than duplicating the chemistry equation.
-fn break_energy_yield(
-    a: crate::resources::ResourceProperties,
-    b: crate::resources::ResourceProperties,
-    processing_efficiency: f64,
-) -> Option<(f64, f64, f64)> {
-    let strength = crate::combine::bond_strength(a, b);
-    let potential = crate::combine::intrinsic_bond_potential(a, b, strength);
-    bond_break_energy_yield(potential, processing_efficiency)
-}
-
 pub(crate) fn chemical_break_energy_yield(
     bond_energy: f64,
     disruption_cost: f64,
@@ -610,43 +595,10 @@ impl Simulation {
             organism.active_transformation_id = None;
             return false;
         };
-        let Some(a) = stored
-            .material
-            .parts
-            .get(target.part_a)
-            .and_then(|(name, _)| {
-                environment
-                    .catalog
-                    .iter()
-                    .find(|resource| resource.name == *name)
-                    .map(|r| r.properties)
-            })
-        else {
-            organism.active_transformation_id = None;
-            return false;
-        };
-        let Some(b) = stored
-            .material
-            .parts
-            .get(target.part_b)
-            .and_then(|(name, _)| {
-                environment
-                    .catalog
-                    .iter()
-                    .find(|resource| resource.name == *name)
-                    .map(|r| r.properties)
-            })
-        else {
-            organism.active_transformation_id = None;
-            return false;
-        };
-        let Some((gross, usable, heat)) =
-            break_energy_yield(a, b, organism.genome.processing_efficiency())
-        else {
-            organism.active_transformation_id = None;
-            return false;
-        };
-
+        // Stored environmental compounds retain their bond endpoints, but
+        // no energy was allocated when those pre-existing bonds were created.
+        // Breaking one therefore changes connectivity only; deriving a fresh
+        // energy credit from resource properties would create energy.
         // Validate the exact bond before settling the transaction. The physical
         // structure itself is not changed until the following tick.
         if stored.break_internal_bond(target).is_none() {
@@ -654,20 +606,23 @@ impl Simulation {
             return false;
         }
 
+        let before_energy = organism.usable_energy;
         let tx = EnergyTransaction {
             reason: EnergyReason::Break,
             potential_released: 0.0,
-            usable_delta: usable,
-            structural_delta: -gross,
+            usable_delta: 0.0,
+            structural_delta: 0.0,
             work_expended: 0.0,
-            heat_dissipated: heat,
+            heat_dissipated: 0.0,
         };
         if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
             organism.active_transformation_id = None;
             return false;
         }
 
-        transformation.prepared_energy = Some((gross, usable, heat));
+        // Preserve the usual completion marker without claiming that stored
+        // material released usable energy or heat.
+        transformation.prepared_energy = Some((before_energy, 0.0, 0.0));
         true
     }
 }
