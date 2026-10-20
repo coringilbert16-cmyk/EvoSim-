@@ -1334,6 +1334,31 @@ mod point_source_curve_visibility_tests {
     }
 
     #[test]
+    fn point_source_circle_visibility_adds_intersections_with_straight_boundaries() {
+        let target = body(Form::Circle { radius: 1.0 }, 5.0, 0.0);
+        let blocker = body(
+            Form::Rectangle {
+                width: 1.0,
+                height: 0.25,
+            },
+            4.0,
+            0.0,
+        );
+        let intervals = visible_circular_arc_intervals((-5.0, 0.0), &[target, blocker])
+            .expect("circle and polygon boundaries are supported");
+        let visible: Vec<_> = intervals
+            .iter()
+            .filter(|interval| interval.body_index == 0)
+            .collect();
+        assert!(!visible.is_empty());
+        assert!(visible.iter().all(|interval| interval.arc.is_valid()));
+        // The blocker touches/overlaps the receiver's left boundary, so exact
+        // circle/segment intersections must be among the partition cuts.
+        let total_sweep: f64 = visible.iter().map(|interval| interval.arc.sweep_radians).sum();
+        assert!(total_sweep > 0.0 && total_sweep < std::f64::consts::PI);
+    }
+
+    #[test]
     fn legacy_circular_fluid_casts_tangent_defined_shadows_on_a_circle() {
         let blocker = body(
             Form::Fluid {
