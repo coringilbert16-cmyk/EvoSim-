@@ -1342,6 +1342,68 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn structural_inventory_counts_prepared_structure_without_double_counting_live_graph() {
+        let mut simulation = Simulation::new(915, 10.0);
+        let catalog = simulation.environment.catalog.clone();
+        simulation.organisms[0].stored_material.entries.clear();
+        let material = crate::resources::Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![crate::resources::InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
+        let physical = crate::physical_material::PhysicalMaterial::realized(
+            material,
+            vec![
+                Placement {
+                    x: 504.0,
+                    y: 500.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 505.0,
+                    y: 500.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("test compound should be physically realizable");
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(physical));
+        let candidate = crate::decision_runtime::ActionCandidate {
+            action: crate::decision::ActionKind::Break,
+            context_key: Some("stored:0:bond:0".into()),
+        };
+        let mut transformation = Simulation::try_start_transformation(
+            &mut simulation.organisms[0],
+            &catalog,
+            &mut simulation.next_transformation_id,
+            &candidate,
+        )
+        .expect("test transformation should start");
+        transformation.kind = crate::state::TransformationKind::Combine;
+        let mut prepared = simulation.organisms[0].structure.clone();
+        prepared.bonds[0].bond_energy += 7.0;
+        transformation.prepared_structure = Some(prepared);
+
+        let live_energy: f64 = simulation.organisms[0]
+            .structure
+            .bonds
+            .iter()
+            .map(|bond| bond.bond_energy)
+            .sum();
+        let held = Simulation::structural_energy_held(
+            &simulation.organisms,
+            &simulation.decomposing_bodies,
+            std::slice::from_ref(&transformation),
+        );
+        assert!((held - (live_energy + 7.0)).abs() < 1e-9);
+    }
+
+    #[test]
     fn invalid_finished_body_energy_holder_does_not_release_material() {
         let mut simulation = Simulation::new(913, 10.0);
         let catalog = crate::resources::default_catalog();
