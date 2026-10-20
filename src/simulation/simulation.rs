@@ -24,6 +24,42 @@ fn should_prepare_transformation(
 
 const BUDDING_AVAILABILITY_FRACTION: f64 = 0.90;
 
+fn restore_failed_transformation_material(
+    transformation: &crate::state::ActiveTransformation,
+    organism: Option<&mut Organism>,
+    environment: &mut Environment,
+) {
+    if let Some((cell_index, source)) = transformation.combine_environmental_source.as_ref() {
+        if let Some(cell) = environment.field.cells.get_mut(*cell_index) {
+            cell.physical_materials.push(source.clone());
+            environment.field.mark_changed_at_index(*cell_index);
+        }
+        return;
+    }
+
+    let Some(source) = transformation.stored_material.as_ref() else {
+        return;
+    };
+    if transformation.environmental_source {
+        if let Some(placement) = source.placements.as_ref().and_then(|placements| placements.first()) {
+            let _ = environment.field.deposit(placement.x, placement.y, source.clone());
+        }
+        return;
+    }
+
+    // A stored-material BREAK temporarily removes its source from the
+    // organism's storage when the transformation starts. If preparation fails,
+    // put that exact source back instead of silently dropping it.
+    if let Some(organism) = organism {
+        if organism.stored_material.store_physical_instance(source.clone()) {
+            return;
+        }
+    }
+    if let Some(placement) = source.placements.as_ref().and_then(|placements| placements.first()) {
+        let _ = environment.field.deposit(placement.x, placement.y, source.clone());
+    }
+}
+
 impl Simulation {
     /// Configure or disable the rotating source. Invalid values are rejected.
     #[expect(
@@ -597,53 +633,19 @@ impl Simulation {
                         &mut self.energy_ledger,
                         self.seed_scale_reference,
                     ) {
-                        if let Some((cell_index, source)) =
-                            transformation.combine_environmental_source.as_ref()
-                        {
-                            if let Some(cell) = self.environment.field.cells.get_mut(*cell_index) {
-                                cell.physical_materials.push(source.clone());
-                                self.environment.field.mark_changed_at_index(*cell_index);
-                            }
-                        } else if transformation.environmental_source {
-                            if let Some(source) = transformation.stored_material.as_ref() {
-                                if let Some(placement) = source
-                                    .placements
-                                    .as_ref()
-                                    .and_then(|placements| placements.first())
-                                {
-                                    let _ = self.environment.field.deposit(
-                                        placement.x,
-                                        placement.y,
-                                        source.clone(),
-                                    );
-                                }
-                            }
-                        }
+                        restore_failed_transformation_material(
+                            &transformation,
+                            Some(organism),
+                            &mut self.environment,
+                        );
                         continue;
                     }
                 } else {
-                    if let Some((cell_index, source)) =
-                        transformation.combine_environmental_source.as_ref()
-                    {
-                        if let Some(cell) = self.environment.field.cells.get_mut(*cell_index) {
-                            cell.physical_materials.push(source.clone());
-                            self.environment.field.mark_changed_at_index(*cell_index);
-                        }
-                    } else if transformation.environmental_source {
-                        if let Some(source) = transformation.stored_material.as_ref() {
-                            if let Some(placement) = source
-                                .placements
-                                .as_ref()
-                                .and_then(|placements| placements.first())
-                            {
-                                let _ = self.environment.field.deposit(
-                                    placement.x,
-                                    placement.y,
-                                    source.clone(),
-                                );
-                            }
-                        }
-                    }
+                    restore_failed_transformation_material(
+                        &transformation,
+                        None,
+                        &mut self.environment,
+                    );
                     continue;
                 }
             }
