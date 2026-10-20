@@ -2070,3 +2070,14 @@ The latest implementation adds the first explicit geometry-to-ledger solar captu
 - Formatting failures in `src/geometry/source_exposure.rs` and `src/simulation/world_tone.rs` were corrected in commits `08cbe3f5b1cf9ec1483804dbf2f14c00a5fa91ef` and `fa01c57919ed5853fa3b60167d6f6c9adbb6a238`. The workflow triggered after those corrections advanced past formatting and the focused gates into Rust tests; its final result was still pending at this note.
 - Commit `75cef0f3cf6f96a01883fee2c1a6419996b29d63` makes polygonal visibility fail closed for non-convex target geometry. The current solver excludes a target constituent from its own occlusion test, which is safe for convex targets but could over-credit a concave target that shadows itself. A regression test covers the rejection.
 - This is a conservative correctness boundary, not general concave/self-occluding visibility support. Curved receiver visibility under blockers, complete world occluder snapshots, live tick integration, and whole-world energy reconciliation remain open. The latest commit's formatting and tests still require exact-head CI verification.
+
+
+## PR #202 implementation pass 4 — finite point-source curved visibility — 2026-10-20
+
+- The source model is a finite point source at the sun's center. Rays diverge from that position; the curved-boundary query does not substitute a single parallel direction for the whole arc.
+- Added `visible_circular_arc_intervals` in `src/geometry/source_exposure.rs`. It partitions supported circular receivers at critical rays through polygon vertices, circular-arc endpoints, and circle tangencies, then classifies each resulting interval against the realized occluder geometry. Returned intervals are exact circular arcs in world coordinates; no tessellated polygon is used.
+- Added `point_source_projected_arc_extent`, which integrates the local outward-normal projection using the actual source-to-boundary direction along each arc, with adaptive Simpson integration. It is a geometry measurement only and does not allocate or settle energy.
+- Supported as curved targets: circles, legacy nominal-area circular fluids, and single convex circular-segment fluid arcs. Multi-contact fluid boundaries remain exact occluders but are not credited as curved targets yet because their full compound boundary must be analyzed together to prove self-visibility. Invalid geometry fails closed.
+- Added tests for unoccluded point-source circle exposure, polygon-shadow splitting of a circle, point-source projected extent, and conservative multi-contact target handling.
+- This geometry query is not wired into live tick capture. Complete world occluder inventory/transforms, straight contact-edge exposure for compound fluid boundaries, approved energy/heat allocation, and whole-world conservation remain outstanding.
+- Exact-head CI is pending; do not treat earlier formatting or Clippy results as verification of this pass.
