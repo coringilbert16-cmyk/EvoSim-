@@ -78,4 +78,47 @@ mod tests {
         assert!((ledger.total_heat_dissipated - step.heat).abs() <= 1e-9);
     }
 
+    #[test]
+    fn stress_break_reconciles_usable_and_structural_energy() {
+        use rand::SeedableRng;
+        use rand_chacha::ChaCha8Rng;
+
+        let catalog = default_catalog();
+        let mut organism = crate::state::Simulation::create_initial_organism();
+        organism.usable_energy = 1000.0;
+        assert!(!organism.structure.bonds.is_empty());
+        let initial_usable_energy = organism.usable_energy;
+        let initial_structural_energy: f64 =
+            organism.structure.bonds.iter().map(|bond| bond.bond_energy).sum();
+        let environment = Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog: catalog.clone(),
+            field: ActiveMaterialField::new(1000.0, 1000.0, 10.0),
+        };
+        let mut ledger = EnergyLedger::default();
+        let mut rng = ChaCha8Rng::seed_from_u64(19);
+
+        assert!(crate::transformation::resolve_stress_break(
+            &mut organism,
+            &environment,
+            &mut ledger,
+            &mut rng,
+        ));
+
+        let remaining_structural_energy: f64 =
+            organism.structure.bonds.iter().map(|bond| bond.bond_energy).sum();
+        let residual = (organism.usable_energy - initial_usable_energy)
+            + (remaining_structural_energy - initial_structural_energy)
+            + ledger.total_work_expended
+            + ledger.total_heat_dissipated;
+
+        assert!(residual.abs() <= 1e-9, "stress-break energy residual: {residual}");
+        assert_eq!(ledger.total_potential_energy_released, 0.0);
+        assert!((ledger.total_structural_energy_delta
+            - (remaining_structural_energy - initial_structural_energy))
+            .abs()
+            <= 1e-9);
+    }
+
 }
