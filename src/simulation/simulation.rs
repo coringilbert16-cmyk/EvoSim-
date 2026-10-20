@@ -462,6 +462,7 @@ impl Simulation {
             })
             .collect()
     }
+    #[cfg(test)]
     fn process_decomposing_bodies(&mut self) {
         let mut finished_indices = Vec::new();
         for index in 0..self.decomposing_bodies.len() {
