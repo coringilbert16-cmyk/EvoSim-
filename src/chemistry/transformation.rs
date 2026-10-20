@@ -627,17 +627,18 @@ impl Simulation {
 /// incomplete. Deltas are applied independently because serialized/corrupt
 /// prepared state may have lost one optional field.
 fn rollback_prepared_combine(
-    organism: &mut Organism,
+    usable_energy: &mut f64,
+    stress: &mut f64,
     ledger: &mut EnergyLedger,
     energy_delta: Option<f64>,
     stress_delta: Option<f64>,
     ledger_delta: Option<&EnergyLedger>,
 ) {
     if let Some(delta) = energy_delta {
-        organism.usable_energy -= delta;
+        *usable_energy -= delta;
     }
     if let Some(delta) = stress_delta {
-        organism.stress -= delta;
+        *stress -= delta;
     }
     if let Some(delta) = ledger_delta {
         ledger.total_potential_energy_released -= delta.total_potential_energy_released;
@@ -685,7 +686,8 @@ pub(crate) fn resolve_transformation(
             // environmental source; otherwise a failed COMBINE can spend energy
             // and ledger-account it without ever creating the bond.
             rollback_prepared_combine(
-                organism,
+                &mut organism.usable_energy,
+                &mut organism.stress,
                 ledger,
                 transformation.prepared_usable_energy,
                 transformation.prepared_stress,
@@ -852,20 +854,8 @@ mod tests {
 
     #[test]
     fn failed_prepared_combine_rolls_back_energy_and_every_ledger_delta() {
-        let mut organism = crate::state::Organism {
-            id: "combine-rollback-test".into(),
-            developmental_origin: crate::state::Position { x: 0.0, y: 0.0 },
-            occupied_cells: Vec::new(),
-            genome: crate::genome::initial_genome(),
-            harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
-            experience_memory: crate::memory::ExperienceMemory::default(),
-            pending_movement_experience: None,
-            decision_history: crate::decision::DecisionHistory::default(),
-            usable_energy: 13.0,
-            stress: 4.0,
-            maintenance_debt: 0.0,
-            ..crate::state::Organism::test_defaults()
-        };
+        let mut usable_energy = 13.0;
+        let mut stress = 4.0;
         let mut ledger = EnergyLedger {
             total_potential_energy_released: 2.0,
             total_structural_energy_delta: 5.0,
@@ -887,10 +877,17 @@ mod tests {
             ..EnergyLedger::default()
         };
 
-        rollback_prepared_combine(&mut organism, &mut ledger, Some(5.0), Some(1.5), Some(&delta));
+        rollback_prepared_combine(
+            &mut usable_energy,
+            &mut stress,
+            &mut ledger,
+            Some(5.0),
+            Some(1.5),
+            Some(&delta),
+        );
 
-        assert_eq!(organism.usable_energy, 8.0);
-        assert_eq!(organism.stress, 2.5);
+        assert_eq!(usable_energy, 8.0);
+        assert_eq!(stress, 2.5);
         assert_eq!(ledger.total_potential_energy_released, 1.0);
         assert_eq!(ledger.total_structural_energy_delta, 3.0);
         assert_eq!(ledger.total_external_energy_input, 2.0);
