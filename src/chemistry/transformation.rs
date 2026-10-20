@@ -16,10 +16,7 @@ pub(crate) fn bond_break_energy_yield(
     bond_energy: f64,
     processing_efficiency: f64,
 ) -> Option<(f64, f64, f64)> {
-    if !bond_energy.is_finite()
-        || bond_energy < 0.0
-        || !processing_efficiency.is_finite()
-    {
+    if !bond_energy.is_finite() || bond_energy < 0.0 || !processing_efficiency.is_finite() {
         return None;
     }
     let efficiency = processing_efficiency.clamp(0.0, 1.0);
