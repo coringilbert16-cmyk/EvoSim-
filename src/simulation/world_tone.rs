@@ -56,6 +56,15 @@ impl WorldToneRuntimeConfig {
         {
             return None;
         }
+
+        // The source must remain outside the entire rectangular world, not
+        // merely outside its center or one edge. A circular orbit whose radius
+        // exceeds half the world diagonal is strictly outside all four corners.
+        let minimum_outside_radius = 0.5 * world_width.hypot(world_height);
+        if !minimum_outside_radius.is_finite() || self.orbit_radius <= minimum_outside_radius {
+            return None;
+        }
+
         self.parameters.sample(
             tick,
             world_width * 0.5,
@@ -620,12 +629,12 @@ mod tests {
     fn runtime_configuration_uses_world_center_and_explicit_orbit_radius() {
         let config = WorldToneRuntimeConfig {
             parameters: parameters(),
-            orbit_radius: 250.0,
+            orbit_radius: 700.0,
         };
         let north = config.sample(0, 1_000.0, 800.0).unwrap();
         let east = config.sample(600, 1_000.0, 800.0).unwrap();
-        assert_eq!((north.source_x, north.source_y), (500.0, 150.0));
-        assert!((east.source_x - 750.0).abs() < 1e-9);
+        assert_eq!((north.source_x, north.source_y), (500.0, -300.0));
+        assert!((east.source_x - 1_200.0).abs() < 1e-9);
         assert!((east.source_y - 400.0).abs() < 1e-9);
 
         let invalid = WorldToneRuntimeConfig {
@@ -633,6 +642,15 @@ mod tests {
             ..config
         };
         assert!(invalid.sample(0, 1_000.0, 800.0).is_none());
+
+        let inside_world = WorldToneRuntimeConfig {
+            orbit_radius: 250.0,
+            ..config
+        };
+        assert!(
+            inside_world.sample(0, 1_000.0, 800.0).is_none(),
+            "the source orbit must clear the entire world rectangle, including corners"
+        );
     }
 
     #[test]
@@ -667,7 +685,7 @@ mod tests {
                 orbital_period_ticks: MAX_PRECOMPUTED_WORLD_TONE_SAMPLES + 1,
                 ..parameters()
             },
-            orbit_radius: 10.0,
+            orbit_radius: 100.0,
         };
         assert!(config.is_valid());
         assert!(WorldToneCycle::precompute(config, 100.0, 100.0).is_none());
