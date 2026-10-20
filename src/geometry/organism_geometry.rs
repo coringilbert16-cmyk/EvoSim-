@@ -94,6 +94,61 @@ impl OrganismBodyGeometry {
         })
     }
 
+    /// Build aggregate geometry for a physically realized environmental/stored material.
+    ///
+    /// Unlike a logical material stock, this object has constituent placements and
+    /// may cast shadows. Placements are already expressed in world coordinates; the
+    /// catalog is used only to validate and resolve each constituent's realized shape.
+    pub(crate) fn from_physical_material(
+        physical: &crate::physical_material::PhysicalMaterial,
+        catalog: &[BaseResource],
+    ) -> Option<Self> {
+        let placements = physical.placements.as_ref()?;
+        if placements.is_empty() || placements.len() != physical.material.parts.len() {
+            return None;
+        }
+
+        let mut parts = Vec::with_capacity(placements.len());
+        let (mut min_x, mut max_x, mut min_y, mut max_y) = (
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+        );
+        for (unit_index, placement) in placements.iter().copied().enumerate() {
+            if !placement.x.is_finite()
+                || !placement.y.is_finite()
+                || !placement.rotation_radians.is_finite()
+            {
+                return None;
+            }
+            let shape = physical.realized_shape_for_part(unit_index, catalog)?;
+            let radius = shape.form.bounding_radius();
+            if !radius.is_finite() || radius < 0.0 {
+                return None;
+            }
+            min_x = min_x.min(placement.x - radius);
+            max_x = max_x.max(placement.x + radius);
+            min_y = min_y.min(placement.y - radius);
+            max_y = max_y.max(placement.y + radius);
+            parts.push(PlacedForm {
+                unit_index,
+                form: shape.form,
+                x: placement.x,
+                y: placement.y,
+                rotation_radians: placement.rotation_radians,
+            });
+        }
+
+        Some(Self {
+            parts,
+            min_x,
+            max_x,
+            min_y,
+            max_y,
+        })
+    }
+
     /// Test physical containment against the realized constituent geometry.
     ///
     /// The organism boundary is the union of its realized material geometry;
@@ -521,6 +576,32 @@ mod tests {
             min_y: -10.0,
             max_y: 10.0,
         }
+    }
+
+    #[test]
+    fn physical_material_geometry_preserves_realized_shapes_and_world_placements() {
+        let catalog = crate::resources::default_catalog();
+        let physical = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon".to_owned(), 1.0),
+            vec![crate::structure::Placement {
+                x: 12.0,
+                y: -4.0,
+                rotation_radians: 0.25,
+            }],
+            &catalog,
+        )
+        .expect("catalog material should have a valid physical realization");
+
+        let geometry = OrganismBodyGeometry::from_physical_material(&physical, &catalog)
+            .expect("realized physical material should expose blocker geometry");
+        assert_eq!(geometry.parts.len(), 1);
+        assert_eq!(geometry.parts[0].unit_index, 0);
+        assert_eq!(geometry.parts[0].x, 12.0);
+        assert_eq!(geometry.parts[0].y, -4.0);
+        assert_eq!(geometry.parts[0].rotation_radians, 0.25);
+        assert_eq!(geometry.parts[0].form, catalog.iter().find(|r| r.name == "Carbon").unwrap().shape.form);
+        assert!(geometry.min_x < 12.0 && geometry.max_x > 12.0);
+        assert!(geometry.min_y < -4.0 && geometry.max_y > -4.0);
     }
 
     #[test]
