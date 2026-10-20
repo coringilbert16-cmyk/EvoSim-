@@ -431,7 +431,6 @@ mod visibility_tests {
     }
 }
 
-
 /// Exact projected extent of a fully exposed circular free-boundary arc.
 ///
 /// The arc is represented analytically; no polygonal tessellation is used.
@@ -443,10 +442,7 @@ pub(crate) fn projected_arc_extent(
     arc: crate::capillary_geometry::CircularArcBoundary,
     toward_source: (f64, f64),
 ) -> Option<f64> {
-    if !arc.is_valid()
-        || !toward_source.0.is_finite()
-        || !toward_source.1.is_finite()
-    {
+    if !arc.is_valid() || !toward_source.0.is_finite() || !toward_source.1.is_finite() {
         return None;
     }
     let direction_length = toward_source.0.hypot(toward_source.1);
@@ -465,12 +461,11 @@ pub(crate) fn projected_arc_extent(
     let first = ((start - source_angle - std::f64::consts::FRAC_PI_2) / std::f64::consts::PI)
         .floor() as i64
         - 1;
-    let last = ((end - source_angle - std::f64::consts::FRAC_PI_2) / std::f64::consts::PI)
-        .ceil() as i64
+    let last = ((end - source_angle - std::f64::consts::FRAC_PI_2) / std::f64::consts::PI).ceil()
+        as i64
         + 1;
     for k in first..=last {
-        let angle =
-            source_angle + std::f64::consts::FRAC_PI_2 + k as f64 * std::f64::consts::PI;
+        let angle = source_angle + std::f64::consts::FRAC_PI_2 + k as f64 * std::f64::consts::PI;
         if angle > start && angle < end {
             cuts.push(angle);
         }
