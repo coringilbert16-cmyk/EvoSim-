@@ -20,10 +20,12 @@ pub(crate) enum ExternalEnergySource {
     WorldTone,
 }
 
-/// An explicit source-backed input. `source_available` is the source's local
-/// per-tick availability for this capture attempt; callers must enforce the
-/// once-per-organism-per-tick capture schedule. Captured input is allocated
-/// exactly among usable energy, work, and immediate dissipation.
+/// An explicit source-backed input. `source_available` is this receiver's
+/// local incident-energy allowance for the tick, derived from its unshadowed
+/// projected exposure and source intensity; it is not necessarily a global
+/// source pool. Callers must prevent duplicate claims within that receiver's
+/// capture scope. Absorbed input is allocated exactly among usable energy,
+/// work, and immediate dissipation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ExternalInputTransaction {
     pub(crate) source: ExternalEnergySource,
@@ -34,11 +36,15 @@ pub(crate) struct ExternalInputTransaction {
     pub(crate) heat_dissipated: f64,
 }
 
-/// Mutable source allowance shared by all receivers drawing from the same
-/// source budget during an accounting interval (for example, one source/tick).
-/// This is an accounting primitive; callers define the physical scope of a budget.
-/// Intentionally not `Copy` or `Clone`: callers must pass the same mutable
-/// allowance between receivers rather than accidentally duplicating its balance.
+/// Mutable allowance shared by receivers drawing from the same finite
+/// allocation budget during an accounting interval. This is an accounting
+/// primitive; callers define the physical scope. In particular, the sun's
+/// configured output is an intensity per tick per unit of exposed projected
+/// width, not one finite world-wide pool to divide among every receiver. Solar
+/// callers must derive local allowances from unique, unshadowed exposure and
+/// prevent duplicate claims within that scope.
+/// Intentionally not `Copy` or `Clone`: a genuinely shared finite allowance
+/// must be passed by mutable reference rather than accidentally duplicated.
 #[derive(Debug, PartialEq)]
 pub(crate) struct EnergySourceBudget {
     pub(crate) source: ExternalEnergySource,
