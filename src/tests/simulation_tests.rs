@@ -471,7 +471,7 @@ mod integration_tests {
         assert_eq!(s.energy_ledger.total_heat_dissipated, before_heat);
         assert_eq!(s.energy_ledger.total_potential_energy_released, before_released);
 
-        resolve_transformation(
+        crate::transformation::resolve_transformation(
             &transformation,
             &mut s.organisms[0],
             &mut s.environment,
