@@ -1253,6 +1253,45 @@ impl Simulation {
             &self.decomposing_bodies,
         );
     }
+    fn structural_energy_held(
+        organisms: &[crate::state::Organism],
+        decomposing_bodies: &[crate::decomposition::DecomposingBody],
+    ) -> f64 {
+        fn graph_energy(structure: &crate::structure::OrganismStructure) -> f64 {
+            structure.bonds.iter().map(|bond| bond.bond_energy).sum()
+        }
+
+        let organism_energy: f64 = organisms
+            .iter()
+            .map(|organism| {
+                graph_energy(&organism.structure)
+                    + organism.reproductive_construction.as_ref().map_or(0.0, |construction| {
+                        graph_energy(&construction.developing_structure)
+                    })
+            })
+            .sum();
+        let decomposition_energy: f64 = decomposing_bodies
+            .iter()
+            .map(|body| graph_energy(&body.structure))
+            .sum();
+        organism_energy + decomposition_energy
+    }
+
+    pub(crate) fn energy_inventory_snapshot(
+        &self,
+    ) -> crate::energy_ledger::EnergyInventorySnapshot {
+        crate::energy_ledger::EnergyInventorySnapshot {
+            initial_usable_energy: self.energy_ledger.initial_usable_energy_held,
+            current_usable_energy: self.energy_ledger.total_usable_energy_held,
+            initial_structural_energy: self.energy_ledger.initial_structural_energy_held,
+            current_structural_energy: self.energy_ledger.total_structural_energy_held,
+            external_energy_input: self.energy_ledger.total_external_energy_input,
+            other_energy_released: self.energy_ledger.total_potential_energy_released,
+            work_expended: self.energy_ledger.total_work_expended,
+            heat_dissipated: self.energy_ledger.total_heat_dissipated,
+        }
+    }
+
     pub(crate) fn apply_survival_damage(
         organism: &mut Organism,
         environment: &Environment,
