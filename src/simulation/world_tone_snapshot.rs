@@ -41,7 +41,11 @@ impl WorldToneOccluderSnapshot {
         // Every organism remains a physical occluder regardless of whether its
         // genome is still intact. Structure placements are already world-space.
         for (organism_index, organism) in simulation.organisms.iter().enumerate() {
-            if organism.structure.structural_unit_indices(catalog).is_empty() {
+            if organism
+                .structure
+                .structural_unit_indices(catalog)
+                .is_empty()
+            {
                 continue;
             }
             let body = OrganismBodyGeometry::from_structure(&organism.structure, catalog)?;
@@ -118,10 +122,14 @@ impl WorldToneOccluderSnapshot {
                     catalog,
                 )?);
             }
-            if let Some((cell_index, physical)) =
-                &transformation.combine_environmental_source
-            {
-                if simulation.environment.field.cells.get(*cell_index).is_none() {
+            if let Some((cell_index, physical)) = &transformation.combine_environmental_source {
+                if simulation
+                    .environment
+                    .field
+                    .cells
+                    .get(*cell_index)
+                    .is_none()
+                {
                     return None;
                 }
                 bodies.push(OrganismBodyGeometry::from_physical_material(
@@ -140,7 +148,10 @@ impl WorldToneOccluderSnapshot {
     }
 
     pub(crate) fn body_index_for_organism(&self, organism_index: usize) -> Option<usize> {
-        self.organism_body_indices.get(organism_index).copied().flatten()
+        self.organism_body_indices
+            .get(organism_index)
+            .copied()
+            .flatten()
     }
 
     pub(crate) fn projected_width_for_organism_unit(
@@ -274,7 +285,10 @@ mod tests {
             &catalog,
         )
         .expect("hydrogen blocker should be physically realized");
-        assert!(simulation.environment.field.deposit_physical(2.5, 0.0, blocker));
+        assert!(simulation
+            .environment
+            .field
+            .deposit_physical(2.5, 0.0, blocker));
 
         let obstructed = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
             .expect("physical field objects must join the world snapshot");
@@ -356,8 +370,10 @@ mod tests {
         let owner_id = simulation.organisms[0].id.clone();
         simulation.organisms[0].active_transformation_id = Some(17);
 
-        simulation.active_transformations.push(crate::state::ActiveTransformation {
-            id: 17,
+        simulation
+            .active_transformations
+            .push(crate::state::ActiveTransformation {
+                id: 17,
             organism_id: owner_id,
             kind: crate::state::TransformationKind::Break,
             material: Material::free_base("Hydrogen", 1.0),
