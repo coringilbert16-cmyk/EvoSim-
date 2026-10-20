@@ -125,6 +125,60 @@ mod tests {
     }
 }
 
+/// Project a straight boundary interval using the finite point source's
+/// direction at every point along the interval. Because the outward normal is
+/// constant along a straight edge, the integral has a closed-form asinh result.
+#[allow(dead_code)]
+pub(crate) fn point_source_projected_extent(
+    interval: ExposedBoundaryInterval,
+    source: (f64, f64),
+) -> Option<f64> {
+    let values = [
+        interval.start.0,
+        interval.start.1,
+        interval.end.0,
+        interval.end.1,
+        interval.outward_normal.0,
+        interval.outward_normal.1,
+        source.0,
+        source.1,
+    ];
+    if values.iter().any(|value| !value.is_finite()) {
+        return None;
+    }
+    let normal_length = interval
+        .outward_normal
+        .0
+        .hypot(interval.outward_normal.1);
+    if (normal_length - 1.0).abs() > 1e-9 {
+        return None;
+    }
+    let dx = interval.end.0 - interval.start.0;
+    let dy = interval.end.1 - interval.start.1;
+    let length = dx.hypot(dy);
+    if !length.is_finite() || length <= 1e-12 {
+        return None;
+    }
+    let tangent = (dx / length, dy / length);
+    let source_offset = (
+        source.0 - interval.start.0,
+        source.1 - interval.start.1,
+    );
+    let along = source_offset.0 * tangent.0 + source_offset.1 * tangent.1;
+    let normal_distance = source_offset.0 * interval.outward_normal.0
+        + source_offset.1 * interval.outward_normal.1;
+    if !along.is_finite() || !normal_distance.is_finite() {
+        return None;
+    }
+    if normal_distance <= 0.0 {
+        return Some(0.0);
+    }
+    let extent = normal_distance
+        * ((length - along) / normal_distance).asinh()
+        + normal_distance * (along / normal_distance).asinh();
+    (extent.is_finite() && extent >= 0.0).then_some(extent)
+}
+
 fn polygon_is_convex(vertices: &[(f64, f64)]) -> bool {
     if vertices.len() < 3 {
         return false;
