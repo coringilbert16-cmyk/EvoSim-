@@ -269,6 +269,12 @@ impl WorldToneCaptureFrame {
                     }
                 }
                 let (body_index, part) = only_part?;
+                if !part.x.is_finite()
+                    || !part.y.is_finite()
+                    || !part.rotation_radians.is_finite()
+                {
+                    return None;
+                }
                 let radius = match &part.form {
                     crate::resources::Form::Circle { radius } => *radius,
                     crate::resources::Form::Fluid {
