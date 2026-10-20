@@ -2,6 +2,9 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 
+#[cfg(test)]
+use crate::energy_ledger::EnergyLedgerAuthority;
+
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
 use crate::decision_runtime::{
     select_action_with_developmental_scores, ActionCandidate, DecisionContext,
