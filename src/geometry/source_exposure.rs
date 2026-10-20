@@ -1322,8 +1322,8 @@ mod point_source_curve_visibility_tests {
         let target = body(Form::Circle { radius: 1.0 }, 5.0, 0.0);
         let blocker = body(
             Form::Rectangle {
-                width: 1.0,
-                height: 1.0,
+                width: 0.5,
+                height: 0.25,
             },
             0.0,
             0.0,
@@ -1504,7 +1504,7 @@ mod point_source_curve_visibility_tests {
             5.0,
             0.0,
         );
-        let intervals = visible_circular_arc_intervals((-5.0, 0.0), &[target])
+        let intervals = visible_circular_arc_intervals((5.0, 10.0), &[target])
             .expect("compound fluid arcs are supported as exact curved targets");
         assert!(!intervals.is_empty());
         assert!(intervals.iter().all(|interval| interval.arc.is_valid()));
