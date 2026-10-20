@@ -890,9 +890,7 @@ mod tests {
         let mut holder = 0.0;
         let mut ledger = crate::state::EnergyLedger::default();
         let result = frame
-            .settle_surface_response(
-                0, 0, properties, baselines, 0.75, &mut holder, &mut ledger,
-            )
+            .settle_surface_response(0, 0, properties, baselines, 0.75, &mut holder, &mut ledger)
             .unwrap();
         assert!((result.incident_energy - 20.0).abs() < 1e-7);
         assert!((result.absorbed_energy - 20.0).abs() < 1e-7);
@@ -903,9 +901,7 @@ mod tests {
         assert!((ledger.total_usable_energy_gained - 15.0).abs() < 1e-7);
         assert!((ledger.total_heat_dissipated - 5.0).abs() < 1e-7);
         assert!(frame
-            .settle_surface_response(
-                0, 0, properties, baselines, 0.75, &mut holder, &mut ledger,
-            )
+            .settle_surface_response(0, 0, properties, baselines, 0.75, &mut holder, &mut ledger,)
             .is_none());
         assert!(frame
             .settle_receiver(0, 1.0, 1.0, &mut holder, &mut ledger)
