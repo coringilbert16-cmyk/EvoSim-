@@ -1838,6 +1838,47 @@ mod point_source_curve_visibility_tests {
             visible_target.len() >= 2,
             "line endpoint rays must split the arc"
         );
+
+        // Each finite endpoint defines an exact ray from the sun. Verify that
+        // both rays intersect the receiver at a returned arc boundary; merely
+        // returning multiple intervals would not prove the split is correct.
+        let source = (-5.0_f64, 0.0_f64);
+        let center = (5.0_f64, 0.0_f64);
+        let endpoint_angles = [-0.5_f64, 0.5_f64].map(|endpoint_y| {
+            let direction = (2.5 - source.0, endpoint_y - source.1);
+            let offset = (source.0 - center.0, source.1 - center.1);
+            let a = direction.0 * direction.0 + direction.1 * direction.1;
+            let b = 2.0 * (offset.0 * direction.0 + offset.1 * direction.1);
+            let c = offset.0 * offset.0 + offset.1 * offset.1 - 1.0;
+            let discriminant = b * b - 4.0 * a * c;
+            let t = (-b - discriminant.sqrt()) / (2.0 * a);
+            let point = (
+                source.0 + t * direction.0,
+                source.1 + t * direction.1,
+            );
+            (point.1 - center.1)
+                .atan2(point.0 - center.0)
+                .rem_euclid(std::f64::consts::TAU)
+        });
+        let returned_boundaries: Vec<_> = visible_target
+            .iter()
+            .flat_map(|interval| {
+                [
+                    interval.arc.start_angle_radians.rem_euclid(std::f64::consts::TAU),
+                    (interval.arc.start_angle_radians + interval.arc.sweep_radians)
+                        .rem_euclid(std::f64::consts::TAU),
+                ]
+            })
+            .collect();
+        for expected in endpoint_angles {
+            assert!(
+                returned_boundaries.iter().any(|actual| {
+                    let delta = (actual - expected).abs();
+                    delta.min(std::f64::consts::TAU - delta) < 1e-8
+                }),
+                "expected a visible-arc boundary at the exact line-endpoint ray angle {expected}; got {returned_boundaries:?}"
+            );
+        }
         assert!(visible_sweep > 0.0 && visible_sweep < unoccluded_sweep);
     }
 
