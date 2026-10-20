@@ -1251,6 +1251,11 @@ impl Simulation {
                 );
             }
         }
+        // Advance any bodies already in the decomposition lifecycle before
+        // refreshing the inventory snapshot. This keeps each tick's stored
+        // usable and structural totals aligned with the structures actually held.
+        self.process_decomposing_bodies();
+
         // Keep in-flight physical/chemical transactions even if their organism's
         // core has since been breached. Dropping one here could discard reserved
         // material or energy held by the transaction. New transformations cannot
