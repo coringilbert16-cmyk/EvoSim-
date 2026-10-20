@@ -1942,3 +1942,15 @@ A follow-up audit found that ordinary structural BREAK and the legacy decomposit
 - Geometry regression coverage now includes an unobstructed edge, a partially shadowed edge, and a fully occluded edge.
 
 **Chemical BREAK source boundary updated in the follow-up:** reaction accumulation now serves only as the activation signal. The transaction debits the removed bond's stored energy through a negative structural delta, spends disruption work from that store first, and charges any work shortfall to the organism's usable-energy holder. The new focused tests cover the allocation equation and work-shortfall case. This is source-reviewed only: tests, compilation, formatting, Clippy, and the full Rust suite have not been run on this branch head. Whole-world conservation and live sunlight capture remain unverified.
+
+## Simplified unified energy rule — 2026-10-20
+
+**Design decision:** do not add density-based energy storage or a new per-element energy subsystem yet. Keep the existing usable-energy holder, explicitly allocated structural bond energy, and shared transaction authority. Resource-type potential describes what could be available; it is not itself energy currently held.
+
+The common rule is: every credited energy amount must have been explicitly allocated or received from a tracked source. A transformation moves energy between existing stores, spends it as work, or dissipates it as heat. It must not derive a fresh energy credit from material properties merely because a bond is broken.
+
+**First narrow implementation:** stored environmental compounds have pre-existing internal connection endpoints, but no energy allocation was recorded when those bonds were created. Their restoration into organism structure likewise assigns zero bond energy. Stored-material BREAK now changes connectivity without crediting usable energy, structural release, or heat. Ordinary structural bonds with a recorded `bond_energy` continue to release that recorded amount through the existing transaction rule. This removes the concrete unallocated-energy credit without adding a second storage model.
+
+**Next gate:** add or confirm a regression that performs a stored-material BREAK and proves usable energy does not increase from the break itself, then run focused tests, formatting, compilation, and Clippy on the exact PR head. After that, audit COMBINE, ordinary BREAK, chemical BREAK, decomposition, material storage/restoration, and world-tone input against the same rule. Do not enable live world-tone capture until the complete cycle reconciles.
+
+**Verification status:** the implementation commit is `7d1fec8a055a1ff43ddab64361f3edab4b476de3`. This GitHub-only pass has not run Rust commands or tests. A balanced zero-valued transaction is not proof of whole-world conservation, and the branch remains unverified.
