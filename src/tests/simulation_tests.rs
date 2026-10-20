@@ -440,6 +440,9 @@ mod integration_tests {
         }
         add_test_break_bond(&mut s);
         s.organisms[0].usable_energy = 100.0;
+        // This test sets a controlled holder balance after construction.
+        s.energy_ledger.initial_usable_energy_held = 100.0;
+        s.energy_ledger.total_usable_energy_held = 100.0;
         let candidate = crate::decision_runtime::ActionCandidate {
             action: ActionKind::Break,
             context_key: Some("stored:0:bond:0".into()),
@@ -479,6 +482,19 @@ mod integration_tests {
         );
         assert_eq!(s.organisms[0].stored_material.physical_count(), 2);
         assert_eq!(s.organisms[0].usable_energy, 100.0);
+        s.energy_ledger.total_usable_energy_held =
+            crate::reproduction::total_usable_energy_held(
+                &s.organisms,
+                &s.decomposing_bodies,
+            );
+        s.energy_ledger.total_structural_energy_held =
+            Simulation::structural_energy_held(&s.organisms, &s.decomposing_bodies);
+        let inventory = s.energy_inventory_snapshot();
+        assert!(
+            inventory.is_balanced(1e-9),
+            "stored-material BREAK must not create energy: {:?}",
+            inventory.residual()
+        );
     }
 
     #[test]
