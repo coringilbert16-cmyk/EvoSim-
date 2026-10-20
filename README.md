@@ -2026,3 +2026,12 @@ The latest implementation adds the first explicit geometry-to-ledger solar captu
 - Transaction-level balance and these focused geometry/settlement tests are not proof of whole-world conservation. Reconcile all holders, stored bond energy, work, heat, external input, and any modeled output before claiming conservation.
 
 **Next implementation step:** audit the exact realized geometry and world-material inventory APIs, then add visibility support that preserves exact circle/fluid boundary semantics (or keep the entire capture frame fail-closed until it can). After that, connect the source to the tick and add tick-level conservation tests. Do not choose a polygonization tolerance or material retention fraction without an explicit design basis.
+
+
+## PR #202 follow-up audit — 2026-10-20 (latest observed head)
+
+- Head: `0ebb9542ebc9f735d62a1e91aef2f02d991d78b5`.
+- Exact-head CI run [39468731106](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39468731106) completed with failure. Formatting, source-size, COMBINE architecture, and all focused Bob/fluid/chemical gates passed. Rust tests: **465 passed, 28 failed, 1 ignored**. The new `physical_material_geometry_preserves_realized_shapes_and_world_placements` test passed. Compared with the previously recorded 457-pass baseline, there are eight additional passes and the same 28 failures; this comparison is not a green suite and does not establish the failures are unrelated without a controlled same-revision baseline. Clippy also failed.
+- The geometry helper adds no visibility behavior yet. It only converts realized physical material into placed constituent geometry, and requires the caller to resolve storage-intrinsic coordinates before use.
+- Exact fluid primitives already exist in `capillary_geometry.rs` (`CircularArcBoundary` and `MultiContactFluidBoundary`), but source-exposure discovery does not consume those exact boundaries. The right next step is to adapt exposure/occlusion around these existing analytic primitives rather than introduce sampled polygons or arbitrary tolerances.
+- Live capture remains disabled. The outstanding integration requirements remain: exact curved-boundary visibility, a complete world occluder inventory with correct transforms, an approved usable-energy/heat allocation rule, tick-level deduplication, and whole-world conservation tests.
