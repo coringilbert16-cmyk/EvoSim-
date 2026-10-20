@@ -2054,3 +2054,12 @@ The latest implementation adds the first explicit geometry-to-ledger solar captu
 - Updated runtime-configuration and precomputed-cycle test fixtures to use a radius outside the 1000×800 world, and added a negative test for an orbit inside the world. The low-level parameter sampler remains geometry-agnostic; the world-bound rule belongs at the runtime configuration layer where width and height are known.
 - This is a bounded correctness fix, not live capture integration. The simulation still does not settle world-tone energy, and the exact-geometry/snapshot/energy-allocation blockers above remain.
 - Verification status at documentation time: GitHub Actions was still running a workflow triggered by the preceding commit, so this latest commit's full test result is **not yet verified**. Do not treat formatting or test success from the earlier head as verification of this change.
+
+
+## PR #202 implementation pass 2 — configuration activation guard — 2026-10-20
+
+- Commit: `21723d6251c389fc5cb203c45eb1fbad70e973d5`.
+- The runtime configuration entry point now validates the orbit against the actual environment dimensions before storing it. Previously, `configure_world_tone` checked only dimension-independent parameter validity, then could return success while precomputation rejected an orbit that crossed the world. It now rejects that configuration before changing the active source or cycle.
+- Added a focused regression test asserting that an inside-world orbit is rejected and leaves both runtime source and precomputed cycle unset.
+- Audit result: this closes the activation inconsistency introduced by the new radius invariant. It does **not** solve source integration, curved visibility, full-world occluder collection, or energy-allocation policy.
+- Exact-head CI is still unverified. The currently visible in-progress workflow was triggered before these latest commits; its success/failure cannot be used as evidence for commit `21723d6`.
