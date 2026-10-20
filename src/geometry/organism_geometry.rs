@@ -99,9 +99,9 @@ impl OrganismBodyGeometry {
     /// Unlike `from_structure`, this includes unbonded units as well as bonded
     /// structural components. Sunlight occlusion follows physical presence, not
     /// the organism's current connectivity classification.
+    #[allow(dead_code)] // Consumed by the staged world-tone snapshot.
     pub(crate) fn from_all_realized_units(
         structure: &OrganismStructure,
-        catalog: &[BaseResource],
     ) -> Option<Self> {
         if structure.units.is_empty() {
             return None;

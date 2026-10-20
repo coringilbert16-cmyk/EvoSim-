@@ -44,8 +44,7 @@ impl WorldToneOccluderSnapshot {
             if organism.structure.units.is_empty() {
                 continue;
             }
-            let body =
-                OrganismBodyGeometry::from_all_realized_units(&organism.structure, catalog)?;
+            let body = OrganismBodyGeometry::from_all_realized_units(&organism.structure)?;
             organism_body_indices[organism_index] = Some(bodies.len());
             bodies.push(body);
         }
@@ -66,10 +65,7 @@ impl WorldToneOccluderSnapshot {
             if decomposing.structure.units.is_empty() {
                 continue;
             }
-            bodies.push(OrganismBodyGeometry::from_all_realized_units(
-                &decomposing.structure,
-                catalog,
-            )?);
+            bodies.push(OrganismBodyGeometry::from_all_realized_units(&decomposing.structure)?);
         }
 
         // Stored objects are physically present at owner-relative positions.
@@ -116,15 +112,7 @@ impl WorldToneOccluderSnapshot {
                 )?);
             }
             if let Some((cell_index, physical)) = &transformation.combine_environmental_source {
-                if simulation
-                    .environment
-                    .field
-                    .cells
-                    .get(*cell_index)
-                    .is_none()
-                {
-                    return None;
-                }
+                let _ = simulation.environment.field.cells.get(*cell_index)?;
                 bodies.push(OrganismBodyGeometry::from_physical_material(
                     physical, catalog,
                 )?);

@@ -28,6 +28,7 @@ mod structure_authority;
 #[path = "simulation/world_tone.rs"]
 mod world_tone;
 #[path = "simulation/world_tone_snapshot.rs"]
+#[allow(dead_code)] // Snapshot is staged before live-tick energy settlement.
 mod world_tone_snapshot;
 
 // Active physical geometry authority stack.
