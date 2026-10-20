@@ -1126,6 +1126,36 @@ mod point_source_curve_visibility_tests {
     }
 
     #[test]
+    fn single_convex_fluid_arc_uses_its_exact_boundary_under_point_source() {
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            0.5,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .expect("valid capillary family");
+        let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family)
+            .expect("valid exact arc");
+        let target = body(
+            Form::Fluid {
+                nominal_area: 0.5,
+                boundary: None,
+                arc_boundary: Some(arc),
+                multi_contact_boundary: None,
+            },
+            5.0,
+            0.0,
+        );
+        let intervals = visible_circular_arc_intervals((-5.0, 0.0), &[target])
+            .expect("single convex circular-segment fluid boundary is supported");
+        assert!(!intervals.is_empty());
+        assert!(intervals.iter().all(|interval| interval.arc.is_valid()));
+        let extent: f64 = intervals
+            .iter()
+            .map(|interval| point_source_projected_arc_extent(interval.arc, (-5.0, 0.0)).unwrap())
+            .sum();
+        assert!(extent.is_finite() && extent > 0.0);
+    }
+
+    #[test]
     fn multi_contact_fluid_is_not_credited_as_a_target_but_remains_valid_geometry() {
         let fluid = Form::Fluid {
             nominal_area: 0.5,
