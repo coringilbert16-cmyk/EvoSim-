@@ -124,7 +124,7 @@ pub(crate) struct WorldToneSample {
 
 impl WorldToneParameters {
     pub(crate) fn is_valid(self) -> bool {
-            && self.minimum_signal_energy_level.is_finite()
+        self.minimum_signal_energy_level.is_finite()
             && self.minimum_signal_energy_level >= 0.0
             && self.maximum_signal_energy_level.is_finite()
             && self.maximum_signal_energy_level > self.minimum_signal_energy_level
