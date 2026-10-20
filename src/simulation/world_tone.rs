@@ -425,6 +425,31 @@ impl WorldToneCaptureFrame {
             heat_dissipated,
         })
     }
+    /// Settle one organism constituent using the genome's existing processing
+    /// efficiency for the usable-energy/heat split. Material resonance still
+    /// determines how much incident energy is absorbed; the unabsorbed remainder
+    /// is returned for later reflection/propagation rather than credited twice.
+    pub(crate) fn settle_organism_surface_response(
+        &mut self,
+        receiver_body_index: usize,
+        unit_index: usize,
+        properties: crate::resources::ResourceProperties,
+        baselines: crate::resources::ResourceBaselines,
+        organism: &mut crate::state::Organism,
+        ledger: &mut crate::state::EnergyLedger,
+    ) -> Option<WorldToneCaptureResult> {
+        let usable_fraction = organism.genome.processing_efficiency();
+        self.settle_surface_response(
+            receiver_body_index,
+            unit_index,
+            properties,
+            baselines,
+            usable_fraction,
+            &mut organism.usable_energy,
+            ledger,
+        )
+    }
+
     /// Settle one receiver's absorbed input atomically. Fractions remain explicit
     /// until resource-specific absorption/retention properties are approved.
     pub(crate) fn settle_receiver(
@@ -1354,6 +1379,79 @@ mod tests {
             .is_none());
         assert!((holder - 7.5 * expected_width).abs() < 1e-7);
     }
+    #[test]
+    fn organism_surface_settlement_uses_existing_processing_efficiency() {
+        use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
+        use crate::resources::{Form, ResourceBaselines, ResourceProperties};
+        let receiver = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Rectangle {
+                    width: 2.0,
+                    height: 2.0,
+                },
+                x: 5.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: 4.0,
+            max_x: 6.0,
+            min_y: -1.0,
+            max_y: 1.0,
+        };
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0,
+            source_y: 0.0,
+            frequency_hz: 440.0,
+            signal_energy_level: 8.0,
+            energy_intensity_per_tick_per_width: 10.0,
+            orbital_phase: 0.0,
+        };
+        let mut frame = WorldToneCaptureFrame::from_geometry(sample, &[receiver]).unwrap();
+        let properties = ResourceProperties {
+            mass: 1.0,
+            potential_energy: 1.0,
+            reactivity: 1.0,
+            chemical_position: Some(7.0),
+            cohesion: 1.0,
+        };
+        let baselines = ResourceBaselines {
+            mass: 1.0,
+            potential_energy: 1.0,
+            reactivity: 1.0,
+            cohesion: 1.0,
+        };
+        let mut simulation = crate::state::Simulation::new(74, 1.0);
+        let organism = &mut simulation.organisms[0];
+        let efficiency = organism.genome.processing_efficiency();
+        let initial_usable = organism.usable_energy;
+        let mut ledger = crate::state::EnergyLedger::default();
+
+        let result = frame
+            .settle_organism_surface_response(
+                0,
+                0,
+                properties,
+                baselines,
+                organism,
+                &mut ledger,
+            )
+            .expect("valid organism surface response should settle");
+
+        assert!(
+            (result.usable_energy - result.absorbed_energy * efficiency).abs() < 1e-7
+        );
+        assert!(
+            (result.heat_dissipated - result.absorbed_energy * (1.0 - efficiency)).abs() < 1e-7
+        );
+        assert!(
+            (organism.usable_energy - initial_usable - result.usable_energy).abs() < 1e-7
+        );
+        assert!((ledger.total_external_energy_input - result.absorbed_energy).abs() < 1e-7);
+        assert!((ledger.total_usable_energy_gained - result.usable_energy).abs() < 1e-7);
+        assert!((ledger.total_heat_dissipated - result.heat_dissipated).abs() < 1e-7);
+    }
+
     #[test]
     fn world_tone_capture_frame_prevents_duplicate_receiver_credit() {
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
