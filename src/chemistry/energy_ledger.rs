@@ -372,100 +372,116 @@ pub(crate) struct WorldToneCaptureResult {
     pub(crate) heat_dissipated: f64,
 }
 
-/// Calculate the visible projected boundary of one receiver and settle its
-/// absorbed world-tone energy exactly once into its usable-energy holder.
-///
-/// `bodies` must include the receiver and all relevant polygonal occluders;
-/// `receiver_body_index` identifies that receiver in the slice. The exposure
-/// routine splits partially shadowed edges and tags each interval with its owner,
-/// so another body's visible surface cannot be credited to this one. Call this
-/// at most once per receiver per tick. Absorption and usable fractions are
-/// supplied explicitly because resource-specific coefficients are not yet
-/// defined by the model; no default material behavior is invented here.
-///
-/// This is a receiver-local calculation, not a finite global solar budget.
-pub(crate) fn settle_world_tone_capture(
+/// A per-tick geometry snapshot. Build it once from all relevant bodies, then
+/// settle each receiver against the cached exposure so visibility is not
+/// recomputed for every organism. A receiver can be settled only once per frame.
+#[derive(Debug)]
+pub(crate) struct WorldToneCaptureFrame {
     sample: crate::world_tone::WorldToneSample,
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
-    receiver_body_index: usize,
-    absorption_fraction: f64,
-    usable_fraction: f64,
-    holder: &mut f64,
-    ledger: &mut EnergyLedger,
-) -> Option<WorldToneCaptureResult> {
-    if receiver_body_index >= bodies.len()
-        || !absorption_fraction.is_finite()
-        || !(0.0..=1.0).contains(&absorption_fraction)
-        || !usable_fraction.is_finite()
-        || !(0.0..=1.0).contains(&usable_fraction)
-    {
-        return None;
+    projected_widths: Vec<f64>,
+    settled_receivers: Vec<bool>,
+}
+
+impl WorldToneCaptureFrame {
+    /// Discover polygonal visibility and cache each body's unique projected width.
+    /// Unsupported geometry fails closed; callers should rebuild this frame next tick.
+    pub(crate) fn from_geometry(
+        sample: crate::world_tone::WorldToneSample,
+        bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    ) -> Option<Self> {
+        let intervals = crate::source_exposure::visible_polygonal_intervals(
+            (sample.source_x, sample.source_y),
+            bodies,
+        )?;
+        let mut projected_widths = vec![0.0; bodies.len()];
+        for interval in intervals {
+            let width = projected_widths.get_mut(interval.body_index)?;
+            let midpoint = (
+                (interval.start.0 + interval.end.0) * 0.5,
+                (interval.start.1 + interval.end.1) * 0.5,
+            );
+            let dx = sample.source_x - midpoint.0;
+            let dy = sample.source_y - midpoint.1;
+            let distance = dx.hypot(dy);
+            if !distance.is_finite() || distance <= f64::EPSILON {
+                return None;
+            }
+            let extent = crate::source_exposure::projected_extent(
+                interval,
+                (dx / distance, dy / distance),
+            )?;
+            *width += extent;
+            if !width.is_finite() {
+                return None;
+            }
+        }
+        Some(Self {
+            sample,
+            projected_widths,
+            settled_receivers: vec![false; bodies.len()],
+        })
     }
 
-    let intervals = crate::source_exposure::visible_polygonal_intervals(
-        (sample.source_x, sample.source_y),
-        bodies,
-    )?;
-    let mut projected_width = 0.0;
-    for interval in intervals
+    /// Settle one receiver's absorbed input atomically. Fractions remain explicit
+    /// until resource-specific absorption/retention properties are approved.
+    pub(crate) fn settle_receiver(
+        &mut self,
+        receiver_body_index: usize,
+        absorption_fraction: f64,
+        usable_fraction: f64,
+        holder: &mut f64,
+        ledger: &mut EnergyLedger,
+    ) -> Option<WorldToneCaptureResult> {
+        let settled = *self.settled_receivers.get(receiver_body_index)?;
+        if settled
+            || !absorption_fraction.is_finite()
+            || !(0.0..=1.0).contains(&absorption_fraction)
+            || !usable_fraction.is_finite()
+            || !(0.0..=1.0).contains(&usable_fraction)
+        {
+            return None;
+        }
+
+        let projected_width = *self.projected_widths.get(receiver_body_index)?;
+        let incident_energy = self.sample.incident_energy_for_projected_width(projected_width)?;
+        let absorbed_energy = incident_energy * absorption_fraction;
+        let unabsorbed_energy = incident_energy - absorbed_energy;
+        let usable_energy = absorbed_energy * usable_fraction;
+        let heat_dissipated = absorbed_energy - usable_energy;
+        if [
+            absorbed_energy,
+            unabsorbed_energy,
+            usable_energy,
+            heat_dissipated,
+        ]
         .iter()
-        .filter(|interval| interval.body_index == receiver_body_index)
-    {
-        let midpoint = (
-            (interval.start.0 + interval.end.0) * 0.5,
-            (interval.start.1 + interval.end.1) * 0.5,
-        );
-        let dx = sample.source_x - midpoint.0;
-        let dy = sample.source_y - midpoint.1;
-        let distance = dx.hypot(dy);
-        if !distance.is_finite() || distance <= f64::EPSILON {
+        .any(|value| !value.is_finite() || *value < 0.0)
+        {
             return None;
         }
-        let extent =
-            crate::source_exposure::projected_extent(*interval, (dx / distance, dy / distance))?;
-        projected_width += extent;
-        if !projected_width.is_finite() {
+
+        let transaction = ExternalInputTransaction {
+            source: ExternalEnergySource::WorldTone,
+            source_available: incident_energy,
+            external_input: absorbed_energy,
+            usable_delta: usable_energy,
+            work_expended: 0.0,
+            heat_dissipated,
+        };
+        if !ledger.settle_external_input(holder, transaction) {
             return None;
         }
-    }
+        self.settled_receivers[receiver_body_index] = true;
 
-    let incident_energy = sample.incident_energy_for_projected_width(projected_width)?;
-    let absorbed_energy = incident_energy * absorption_fraction;
-    let unabsorbed_energy = incident_energy - absorbed_energy;
-    let usable_energy = absorbed_energy * usable_fraction;
-    let heat_dissipated = absorbed_energy - usable_energy;
-    if [
-        absorbed_energy,
-        unabsorbed_energy,
-        usable_energy,
-        heat_dissipated,
-    ]
-    .iter()
-    .any(|value| !value.is_finite() || *value < 0.0)
-    {
-        return None;
+        Some(WorldToneCaptureResult {
+            projected_width,
+            incident_energy,
+            absorbed_energy,
+            unabsorbed_energy,
+            usable_energy,
+            heat_dissipated,
+        })
     }
-
-    let transaction = ExternalInputTransaction {
-        source: ExternalEnergySource::WorldTone,
-        source_available: incident_energy,
-        external_input: absorbed_energy,
-        usable_delta: usable_energy,
-        work_expended: 0.0,
-        heat_dissipated,
-    };
-    if !ledger.settle_external_input(holder, transaction) {
-        return None;
-    }
-
-    Some(WorldToneCaptureResult {
-        projected_width,
-        incident_energy,
-        absorbed_energy,
-        unabsorbed_energy,
-        usable_energy,
-        heat_dissipated,
-    })
 }
 
 #[cfg(test)]
@@ -781,32 +797,23 @@ mod tests {
         let receiver = OrganismBodyGeometry {
             parts: vec![PlacedForm {
                 unit_index: 0,
-                form: Form::Rectangle {
-                    width: 2.0,
-                    height: 2.0,
-                },
+                form: Form::Rectangle { width: 2.0, height: 2.0 },
                 x: 5.0,
                 y: 0.0,
                 rotation_radians: 0.0,
             }],
-            min_x: 4.0,
-            max_x: 6.0,
-            min_y: -1.0,
-            max_y: 1.0,
+            min_x: 4.0, max_x: 6.0, min_y: -1.0, max_y: 1.0,
         };
         let sample = crate::world_tone::WorldToneSample {
-            source_x: -5.0,
-            source_y: 0.0,
-            frequency_hz: 440.0,
-            signal_energy_level: 8.0,
-            energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.0,
+            source_x: -5.0, source_y: 0.0, frequency_hz: 440.0, signal_energy_level: 8.0,
+            energy_intensity_per_tick_per_width: 10.0, orbital_phase: 0.0,
         };
+        let mut frame = WorldToneCaptureFrame::from_geometry(sample, &[receiver])
+            .expect("valid polygonal receiver should produce exposure frame");
         let mut holder = 1.0;
         let mut ledger = EnergyLedger::default();
-        let result =
-            settle_world_tone_capture(sample, &[receiver], 0, 0.5, 0.8, &mut holder, &mut ledger)
-                .expect("valid polygonal receiver should capture");
+        let result = frame.settle_receiver(0, 0.5, 0.8, &mut holder, &mut ledger)
+            .expect("valid receiver should capture");
         assert!((result.projected_width - 2.0).abs() < 1e-8);
         assert!((result.incident_energy - 20.0).abs() < 1e-7);
         assert!((result.absorbed_energy - 10.0).abs() < 1e-7);
@@ -820,39 +827,51 @@ mod tests {
     }
 
     #[test]
-    fn world_tone_capture_does_not_credit_a_different_visible_body() {
+    fn world_tone_capture_frame_prevents_duplicate_receiver_credit() {
+        use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
+        use crate::resources::Form;
+        let receiver = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Rectangle { width: 2.0, height: 2.0 },
+                x: 5.0, y: 0.0, rotation_radians: 0.0,
+            }],
+            min_x: 4.0, max_x: 6.0, min_y: -1.0, max_y: 1.0,
+        };
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0, source_y: 0.0, frequency_hz: 440.0, signal_energy_level: 8.0,
+            energy_intensity_per_tick_per_width: 10.0, orbital_phase: 0.0,
+        };
+        let mut frame = WorldToneCaptureFrame::from_geometry(sample, &[receiver]).unwrap();
+        let mut holder = 0.0;
+        let mut ledger = EnergyLedger::default();
+        assert!(frame.settle_receiver(0, 1.0, 1.0, &mut holder, &mut ledger).is_some());
+        assert!(frame.settle_receiver(0, 1.0, 1.0, &mut holder, &mut ledger).is_none());
+        assert!((holder - 20.0).abs() < 1e-7);
+        assert!((ledger.total_external_energy_input - 20.0).abs() < 1e-7);
+    }
+
+    #[test]
+    fn world_tone_capture_does_not_credit_a_different_shadowed_body() {
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
         use crate::resources::Form;
         let body = |x| OrganismBodyGeometry {
             parts: vec![PlacedForm {
                 unit_index: 0,
-                form: Form::Rectangle {
-                    width: 2.0,
-                    height: 2.0,
-                },
-                x,
-                y: 0.0,
-                rotation_radians: 0.0,
+                form: Form::Rectangle { width: 2.0, height: 2.0 },
+                x, y: 0.0, rotation_radians: 0.0,
             }],
-            min_x: x - 1.0,
-            max_x: x + 1.0,
-            min_y: -1.0,
-            max_y: 1.0,
+            min_x: x - 1.0, max_x: x + 1.0, min_y: -1.0, max_y: 1.0,
         };
         let bodies = [body(5.0), body(10.0)];
         let sample = crate::world_tone::WorldToneSample {
-            source_x: -5.0,
-            source_y: 0.0,
-            frequency_hz: 440.0,
-            signal_energy_level: 8.0,
-            energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.0,
+            source_x: -5.0, source_y: 0.0, frequency_hz: 440.0, signal_energy_level: 8.0,
+            energy_intensity_per_tick_per_width: 10.0, orbital_phase: 0.0,
         };
+        let mut frame = WorldToneCaptureFrame::from_geometry(sample, &bodies).unwrap();
         let mut holder = 1.0;
         let mut ledger = EnergyLedger::default();
-        let result =
-            settle_world_tone_capture(sample, &bodies, 1, 1.0, 1.0, &mut holder, &mut ledger)
-                .expect("valid polygonal receiver should capture");
+        let result = frame.settle_receiver(1, 1.0, 1.0, &mut holder, &mut ledger).unwrap();
         assert_eq!(result.projected_width, 0.0);
         assert_eq!(result.incident_energy, 0.0);
         assert_eq!(result.absorbed_energy, 0.0);
@@ -861,21 +880,27 @@ mod tests {
     }
 
     #[test]
-    fn world_tone_capture_rejects_undefined_material_fractions_without_credit() {
-        let sample = crate::world_tone::WorldToneSample {
-            source_x: -5.0,
-            source_y: 0.0,
-            frequency_hz: 440.0,
-            signal_energy_level: 8.0,
-            energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.0,
+    fn world_tone_capture_rejects_invalid_fractions_without_credit_or_claim() {
+        use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
+        use crate::resources::Form;
+        let receiver = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Rectangle { width: 2.0, height: 2.0 },
+                x: 5.0, y: 0.0, rotation_radians: 0.0,
+            }],
+            min_x: 4.0, max_x: 6.0, min_y: -1.0, max_y: 1.0,
         };
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0, source_y: 0.0, frequency_hz: 440.0, signal_energy_level: 8.0,
+            energy_intensity_per_tick_per_width: 10.0, orbital_phase: 0.0,
+        };
+        let mut frame = WorldToneCaptureFrame::from_geometry(sample, &[receiver]).unwrap();
         let mut holder = 1.0;
         let mut ledger = EnergyLedger::default();
-        assert!(
-            settle_world_tone_capture(sample, &[], 0, 0.5, 0.8, &mut holder, &mut ledger).is_none()
-        );
+        assert!(frame.settle_receiver(0, f64::NAN, 0.8, &mut holder, &mut ledger).is_none());
         assert_eq!(holder, 1.0);
         assert_eq!(ledger.total_external_energy_input, 0.0);
+        assert!(frame.settle_receiver(0, 0.5, 0.8, &mut holder, &mut ledger).is_some());
     }
 }
