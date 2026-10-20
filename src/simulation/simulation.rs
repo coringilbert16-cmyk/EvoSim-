@@ -1275,7 +1275,7 @@ impl Simulation {
         self.energy_ledger.total_structural_energy_held =
             Self::structural_energy_held(&self.organisms, &self.decomposing_bodies);
     }
-    fn structural_energy_held(
+    pub(crate) fn structural_energy_held(
         organisms: &[crate::state::Organism],
         decomposing_bodies: &[crate::decomposition::DecomposingBody],
     ) -> f64 {
