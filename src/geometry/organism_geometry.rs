@@ -94,11 +94,12 @@ impl OrganismBodyGeometry {
         })
     }
 
-    /// Build aggregate geometry for a physically realized environmental/stored material.
+    /// Build aggregate geometry for a physically realized material in world coordinates.
     ///
-    /// Unlike a logical material stock, this object has constituent placements and
-    /// may cast shadows. Placements are already expressed in world coordinates; the
-    /// catalog is used only to validate and resolve each constituent's realized shape.
+    /// Unlike logical material stock, this object has constituent placements and may
+    /// cast shadows. This helper does not apply owner-relative storage transforms:
+    /// callers must resolve those transforms before passing stored material here.
+    /// The catalog validates and resolves each constituent's realized shape.
     #[allow(dead_code)] // Consumed by the forthcoming all-world occluder snapshot.
     pub(crate) fn from_physical_material(
         physical: &crate::physical_material::PhysicalMaterial,
