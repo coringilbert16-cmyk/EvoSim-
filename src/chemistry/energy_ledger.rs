@@ -37,7 +37,9 @@ pub(crate) struct ExternalInputTransaction {
 /// Mutable source allowance shared by all receivers drawing from the same
 /// source budget during an accounting interval (for example, one source/tick).
 /// This is an accounting primitive; callers define the physical scope of a budget.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// Intentionally not `Copy` or `Clone`: callers must pass the same mutable
+/// allowance between receivers rather than accidentally duplicating its balance.
+#[derive(Debug, PartialEq)]
 pub(crate) struct EnergySourceBudget {
     pub(crate) source: ExternalEnergySource,
     pub(crate) remaining: f64,
