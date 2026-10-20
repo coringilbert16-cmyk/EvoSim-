@@ -674,6 +674,7 @@ fn realized_circle_arcs(
                         )?;
                     }
                 }
+                drop(add);
                 return Some(arcs);
             }
             if let Some(vertices) = boundary {
