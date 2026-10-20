@@ -269,9 +269,7 @@ impl WorldToneCaptureFrame {
                     }
                 }
                 let (body_index, part) = only_part?;
-                if !part.x.is_finite()
-                    || !part.y.is_finite()
-                    || !part.rotation_radians.is_finite()
+                if !part.x.is_finite() || !part.y.is_finite() || !part.rotation_radians.is_finite()
                 {
                     return None;
                 }
@@ -310,8 +308,7 @@ impl WorldToneCaptureFrame {
                             center_x: center.0,
                             center_y: center.1,
                             radius: arc.radius,
-                            start_angle_radians: (arc.start_angle_radians
-                                + part.rotation_radians)
+                            start_angle_radians: (arc.start_angle_radians + part.rotation_radians)
                                 .rem_euclid(std::f64::consts::TAU),
                             sweep_radians: arc.sweep_radians,
                         };
@@ -325,11 +322,10 @@ impl WorldToneCaptureFrame {
                         {
                             return None;
                         }
-                        let toward_source = (source_dx / source_distance, source_dy / source_distance);
-                        let width = crate::source_exposure::projected_arc_extent(
-                            world_arc,
-                            toward_source,
-                        )?;
+                        let toward_source =
+                            (source_dx / source_distance, source_dy / source_distance);
+                        let width =
+                            crate::source_exposure::projected_arc_extent(world_arc, toward_source)?;
                         (width, center, arc.radius)
                     }
                     _ => return None,
@@ -356,7 +352,9 @@ impl WorldToneCaptureFrame {
                             .map(|candidate| {
                                 (
                                     candidate.unit_index,
-                                    if index == body_index && candidate.unit_index == part.unit_index {
+                                    if index == body_index
+                                        && candidate.unit_index == part.unit_index
+                                    {
                                         width
                                     } else {
                                         0.0
@@ -763,11 +761,26 @@ mod tests {
         let valid = parameters().sample(0, 0.0, 0.0, 1.0).unwrap();
         assert!(valid.is_valid());
         for sample in [
-            WorldToneSample { frequency_hz: 0.0, ..valid },
-            WorldToneSample { frequency_hz: f64::NAN, ..valid },
-            WorldToneSample { signal_energy_level: -1.0, ..valid },
-            WorldToneSample { orbital_phase: 1.0, ..valid },
-            WorldToneSample { source_x: f64::INFINITY, ..valid },
+            WorldToneSample {
+                frequency_hz: 0.0,
+                ..valid
+            },
+            WorldToneSample {
+                frequency_hz: f64::NAN,
+                ..valid
+            },
+            WorldToneSample {
+                signal_energy_level: -1.0,
+                ..valid
+            },
+            WorldToneSample {
+                orbital_phase: 1.0,
+                ..valid
+            },
+            WorldToneSample {
+                source_x: f64::INFINITY,
+                ..valid
+            },
         ] {
             assert!(!sample.is_valid());
         }
@@ -1045,7 +1058,10 @@ mod tests {
         let blocker = OrganismBodyGeometry {
             parts: vec![PlacedForm {
                 unit_index: 0,
-                form: Form::Rectangle { width: 1.0, height: 1.0 },
+                form: Form::Rectangle {
+                    width: 1.0,
+                    height: 1.0,
+                },
                 x: 2.5,
                 y: 0.0,
                 rotation_radians: 0.0,
