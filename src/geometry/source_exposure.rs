@@ -454,7 +454,9 @@ pub(crate) fn projected_arc_extent(
         return None;
     }
 
-    let start = arc.start_angle_radians;
+    // Normalize first so valid but very large finite angle values cannot
+    // overflow the integer bounds used to enumerate sign changes.
+    let start = arc.start_angle_radians.rem_euclid(std::f64::consts::TAU);
     let end = start + arc.sweep_radians;
     let source_angle = toward_source.1.atan2(toward_source.0);
     let mut cuts = vec![start, end];
