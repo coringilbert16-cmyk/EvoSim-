@@ -1251,11 +1251,13 @@ impl Simulation {
         self.energy_ledger.total_structural_energy_held = Self::structural_energy_held(
             &self.organisms,
             &self.decomposing_bodies,
+            &self.active_transformations,
         );
     }
     fn structural_energy_held(
         organisms: &[crate::state::Organism],
         decomposing_bodies: &[crate::decomposition::DecomposingBody],
+        active_transformations: &[crate::state::ActiveTransformation],
     ) -> f64 {
         fn graph_energy(structure: &crate::structure::OrganismStructure) -> f64 {
             structure.bonds.iter().map(|bond| bond.bond_energy).sum()
@@ -1264,7 +1266,16 @@ impl Simulation {
         let organism_energy: f64 = organisms
             .iter()
             .map(|organism| {
-                graph_energy(&organism.structure)
+                // COMBINE settles energy when the replacement structure is
+                // prepared, one tick before that structure is committed. During
+                // that interval count the prepared graph instead of counting
+                // both it and the still-live graph.
+                let structure = active_transformations
+                    .iter()
+                    .find(|transformation| transformation.organism_id == organism.id)
+                    .and_then(|transformation| transformation.prepared_structure.as_ref())
+                    .unwrap_or(&organism.structure);
+                graph_energy(structure)
                     + organism.reproductive_construction.as_ref().map_or(0.0, |construction| {
                         graph_energy(&construction.developing_structure)
                     })
