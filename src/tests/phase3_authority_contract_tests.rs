@@ -84,7 +84,7 @@ mod tests {
         use rand_chacha::ChaCha8Rng;
 
         let catalog = default_catalog();
-        let mut organism = crate::simulation::Simulation::create_initial_organism();
+        let mut organism = crate::state::Simulation::create_initial_organism();
         organism.usable_energy = 1000.0;
         assert!(!organism.structure.bonds.is_empty());
         let initial_usable_energy = organism.usable_energy;
