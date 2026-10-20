@@ -79,9 +79,12 @@ fn restore_failed_transformation_material(
 
 impl Simulation {
     /// Configure or disable the rotating source. Invalid values are rejected.
-    #[expect(
-        dead_code,
-        reason = "Runtime configuration remains staged until world geometry and signal bounds are selected"
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Runtime configuration remains staged until live world-tone capture is integrated"
+        )
     )]
     pub(crate) fn configure_world_tone(
         &mut self,
