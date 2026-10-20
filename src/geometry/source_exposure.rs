@@ -681,6 +681,9 @@ fn realized_circle_arcs(
             multi_contact_boundary,
         } => {
             if let Some(multi) = multi_contact_boundary {
+                if !multi.is_valid() {
+                    return None;
+                }
                 for piece in &multi.pieces {
                     if let crate::capillary_geometry::FluidBoundaryPiece::FreeArc(arc) = piece {
                         if !arc.is_valid() {
