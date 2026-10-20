@@ -50,6 +50,11 @@ impl Simulation {
         let mut energy_ledger = EnergyLedger::default();
         energy_ledger.total_usable_energy_held =
             crate::reproduction::total_usable_energy_held(std::slice::from_ref(&organism), &[]);
+        energy_ledger.initial_usable_energy_held = energy_ledger.total_usable_energy_held;
+        energy_ledger.total_structural_energy_held =
+            organism.structure.bonds.iter().map(|bond| bond.bond_energy).sum();
+        energy_ledger.initial_structural_energy_held =
+            energy_ledger.total_structural_energy_held;
         Self {
             tick: 0,
             ticks_per_second,
