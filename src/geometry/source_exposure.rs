@@ -798,8 +798,7 @@ mod visibility_tests {
         let left_edge: Vec<_> = intervals
             .iter()
             .filter(|interval| {
-                (interval.start.0 - 4.0).abs() < 1e-8
-                    && (interval.end.0 - 4.0).abs() < 1e-8
+                (interval.start.0 - 4.0).abs() < 1e-8 && (interval.end.0 - 4.0).abs() < 1e-8
             })
             .collect();
         assert!(
@@ -809,9 +808,9 @@ mod visibility_tests {
             "the exact line/receiver intersection at y=0 must be a partition boundary: {left_edge:?}"
         );
         assert!(
-            left_edge.iter().all(|interval| {
-                (interval.start.1 + interval.end.1) * 0.5 >= -1e-8
-            }),
+            left_edge
+                .iter()
+                .all(|interval| { (interval.start.1 + interval.end.1) * 0.5 >= -1e-8 }),
             "the line lies before the receiver for y<0 and behind it for y>0: {left_edge:?}"
         );
     }
@@ -1683,7 +1682,9 @@ mod point_source_curve_visibility_tests {
 
     #[test]
     fn curved_visibility_rejects_inconsistent_fluid_area_descriptors() {
-        use crate::capillary_geometry::{CircularArcBoundary, FluidBoundaryPiece, MultiContactFluidBoundary};
+        use crate::capillary_geometry::{
+            CircularArcBoundary, FluidBoundaryPiece, MultiContactFluidBoundary,
+        };
 
         let family = crate::capillary_geometry::CapillaryContactFamily::solve(
             0.5,
