@@ -12,6 +12,13 @@ First implementation slice on the dedicated `feature/external-input-ledger` bran
 - Exact-head CI exposed three existing world-tone compile errors: `WorldToneSample` was compared/debug-formatted in tests and passed through the harmonic path without implementing `PartialEq`, `Debug`, or `Copy`. Added those value-type derives so the existing source model and call path compile; this does not change source behavior. Formatting-only corrections were also applied to the ledger expression and source-tone integration. Exact-head verification is still required. Do not treat this ledger primitive alone as proof of whole-world conservation or functional solar capture.
 
 
+## Energy-path audit — 2026-10-20
+
+- The shared `EnergySourceBudget` is intentionally not `Copy` or `Clone`, preventing accidental duplication of a shared remaining allowance. This is an API guard, not a live source scheduler: callers still have to create one correctly scoped budget and pass that same mutable budget to every receiver.
+- Source audit confirms maintenance, realized-bond chemical BREAK, stress BREAK, and the staged legacy decomposition helper submit balanced ledger transactions. Chemical and stress BREAK share a graph-validation/settlement/commit path. The legacy decomposition helper remains test-only and is not invoked by the production tick.
+- The live tick still has no world-tone capture call and no source-budget scheduling across receivers. Directional exposure geometry is staged separately and does not credit energy. Keep capture disabled until the complete live energy inventory reconciles under exact-head tests.
+- Verification limitation: GitHub reports no Actions run/status for the current PR head, and local test execution could not clone the repository because this environment could not resolve `github.com`. The source-budget change is source-audited but not compiled or tested here; do not infer a passing exact-head gate.
+
 ## Deterministic world-tone cycle cache — 2026-10-19
 
 - The source sample is deterministic for a fixed world size and runtime configuration. `WorldToneCycle` precomputes one sample per tick for cycles up to 65,536 ticks and uses modulo lookup during the simulation tick.
