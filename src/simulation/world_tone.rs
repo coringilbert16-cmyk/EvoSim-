@@ -273,9 +273,11 @@ impl WorldToneCaptureFrame {
                 {
                     return None;
                 }
-                let (width, center, exclusion_radius) = match &part.form {
-                    crate::resources::Form::Circle { radius } => {
-                        (2.0 * *radius, (part.x, part.y), *radius)
+                let (width, center) = match &part.form {
+                    crate::resources::Form::Circle { radius }
+                        if radius.is_finite() && *radius > 0.0 =>
+                    {
+                        (2.0 * *radius, (part.x, part.y))
                     }
                     crate::resources::Form::Fluid {
                         nominal_area,
@@ -284,7 +286,7 @@ impl WorldToneCaptureFrame {
                         multi_contact_boundary: None,
                     } if nominal_area.is_finite() && *nominal_area > 0.0 => {
                         let radius = (nominal_area / std::f64::consts::PI).sqrt();
-                        (2.0 * radius, (part.x, part.y), radius)
+                        (2.0 * radius, (part.x, part.y))
                     }
                     crate::resources::Form::Fluid {
                         nominal_area,
@@ -299,34 +301,26 @@ impl WorldToneCaptureFrame {
                         {
                             return None;
                         }
-                        let (sin, cos) = part.rotation_radians.sin_cos();
-                        let center = (
-                            part.x + arc.center_x * cos - arc.center_y * sin,
-                            part.y + arc.center_x * sin + arc.center_y * cos,
-                        );
-                        let world_arc = crate::capillary_geometry::CircularArcBoundary {
-                            center_x: center.0,
-                            center_y: center.1,
-                            radius: arc.radius,
-                            start_angle_radians: (arc.start_angle_radians + part.rotation_radians)
-                                .rem_euclid(std::f64::consts::TAU),
-                            sweep_radians: arc.sweep_radians,
-                        };
-                        let source_dx = sample.source_x - center.0;
-                        let source_dy = sample.source_y - center.1;
-                        let source_distance = source_dx.hypot(source_dy);
-                        if !center.0.is_finite()
-                            || !center.1.is_finite()
-                            || !source_distance.is_finite()
-                            || source_distance <= arc.radius
-                        {
-                            return None;
-                        }
-                        let toward_source =
-                            (source_dx / source_distance, source_dy / source_distance);
-                        let width =
-                            crate::source_exposure::projected_arc_extent(world_arc, toward_source)?;
-                        (width, center, arc.radius)
+                        let intervals = crate::source_exposure::visible_circular_arc_intervals(
+                            (sample.source_x, sample.source_y),
+                            bodies,
+                        )?;
+                        let width = intervals
+                            .iter()
+                            .filter(|interval| {
+                                interval.body_index == body_index
+                                    && interval.unit_index == part.unit_index
+                            })
+                            .map(|interval| {
+                                crate::source_exposure::point_source_projected_arc_extent(
+                                    interval.arc,
+                                    (sample.source_x, sample.source_y),
+                                )
+                            })
+                            .collect::<Option<Vec<_>>>()?
+                            .into_iter()
+                            .sum::<f64>();
+                        (width, (part.x, part.y))
                     }
                     _ => return None,
                 };
@@ -334,10 +328,8 @@ impl WorldToneCaptureFrame {
                     (sample.source_x - center.0).hypot(sample.source_y - center.1);
                 if !width.is_finite()
                     || width < 0.0
-                    || !exclusion_radius.is_finite()
-                    || exclusion_radius <= 0.0
                     || !source_distance.is_finite()
-                    || source_distance <= exclusion_radius
+                    || bodies[body_index].contains_point(sample.source_x, sample.source_y)
                 {
                     return None;
                 }
