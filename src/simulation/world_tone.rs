@@ -208,6 +208,8 @@ pub(crate) struct WorldToneCaptureFrame {
     /// Exposure attributed to each constituent, preserving material provenance.
     projected_widths_by_unit: Vec<Vec<(usize, f64)>>,
     settled_receivers: Vec<bool>,
+    /// Per-constituent claims are tracked separately from aggregate-body claims.
+    settled_units: Vec<Vec<usize>>,
 }
 
 impl WorldToneCaptureFrame {
@@ -260,6 +262,7 @@ impl WorldToneCaptureFrame {
             projected_widths,
             projected_widths_by_unit,
             settled_receivers: vec![false; bodies.len()],
+            settled_units: vec![Vec::new(); bodies.len()],
         })
     }
 
@@ -316,6 +319,64 @@ impl WorldToneCaptureFrame {
             unabsorbed,
         })
     }
+    /// Settle one constituent's response using an explicit downstream usable fraction.
+    /// This prevents unlike materials on the same body from being forced into one
+    /// averaged absorption response. The caller must supply the retention decision;
+    /// this method deliberately does not invent one.
+    pub(crate) fn settle_surface_response(
+        &mut self,
+        receiver_body_index: usize,
+        unit_index: usize,
+        properties: crate::resources::ResourceProperties,
+        baselines: crate::resources::ResourceBaselines,
+        usable_fraction: f64,
+        holder: &mut f64,
+        ledger: &mut crate::state::EnergyLedger,
+    ) -> Option<WorldToneCaptureResult> {
+        if *self.settled_receivers.get(receiver_body_index)?
+            || !usable_fraction.is_finite()
+            || !(0.0..=1.0).contains(&usable_fraction)
+            || self
+                .settled_units
+                .get(receiver_body_index)?
+                .contains(&unit_index)
+        {
+            return None;
+        }
+        let response =
+            self.surface_response_for_unit(receiver_body_index, unit_index, properties, baselines)?;
+        let usable_energy = response.absorbed_by_damping * usable_fraction;
+        let heat_dissipated = response.absorbed_by_damping - usable_energy;
+        if !usable_energy.is_finite()
+            || !heat_dissipated.is_finite()
+            || usable_energy < 0.0
+            || heat_dissipated < 0.0
+        {
+            return None;
+        }
+        let transaction = ExternalInputTransaction {
+            source: ExternalEnergySource::WorldTone,
+            source_available: response.incident_energy,
+            external_input: response.absorbed_by_damping,
+            usable_delta: usable_energy,
+            work_expended: 0.0,
+            heat_dissipated,
+        };
+        if !ledger.settle_external_input(holder, transaction) {
+            return None;
+        }
+        self.settled_units
+            .get_mut(receiver_body_index)?
+            .push(unit_index);
+        Some(WorldToneCaptureResult {
+            projected_width: response.projected_width,
+            incident_energy: response.incident_energy,
+            absorbed_energy: response.absorbed_by_damping,
+            unabsorbed_energy: response.unabsorbed,
+            usable_energy,
+            heat_dissipated,
+        })
+    }
     /// Settle one receiver's absorbed input atomically. Fractions remain explicit
     /// until resource-specific absorption/retention properties are approved.
     pub(crate) fn settle_receiver(
@@ -328,6 +389,7 @@ impl WorldToneCaptureFrame {
     ) -> Option<WorldToneCaptureResult> {
         let settled = *self.settled_receivers.get(receiver_body_index)?;
         if settled
+            || !self.settled_units.get(receiver_body_index)?.is_empty()
             || !absorption_fraction.is_finite()
             || !(0.0..=1.0).contains(&absorption_fraction)
             || !usable_fraction.is_finite()
@@ -768,6 +830,85 @@ mod tests {
             (response.absorbed_by_damping + response.unabsorbed - response.incident_energy).abs()
                 < 1e-7
         );
+    }
+    #[test]
+    fn surface_settlement_uses_per_material_response_and_prevents_double_credit() {
+        use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
+        use crate::resources::{Form, ResourceBaselines, ResourceProperties};
+        let body = OrganismBodyGeometry {
+            parts: vec![
+                PlacedForm {
+                    unit_index: 0,
+                    form: Form::Rectangle {
+                        width: 2.0,
+                        height: 2.0,
+                    },
+                    x: 5.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                PlacedForm {
+                    unit_index: 1,
+                    form: Form::Rectangle {
+                        width: 2.0,
+                        height: 2.0,
+                    },
+                    x: 7.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            min_x: 4.0,
+            max_x: 8.0,
+            min_y: -1.0,
+            max_y: 1.0,
+        };
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0,
+            source_y: 0.0,
+            frequency_hz: 440.0,
+            signal_energy_level: 8.0,
+            energy_intensity_per_tick_per_width: 10.0,
+            orbital_phase: 0.0,
+        };
+        let mut frame = WorldToneCaptureFrame::from_geometry(sample, &[body]).unwrap();
+        let properties = ResourceProperties {
+            mass: 1.0,
+            potential_energy: 1.0,
+            reactivity: 1.0,
+            chemical_position: Some(7.0),
+            cohesion: 1.0,
+        };
+        let baselines = ResourceBaselines {
+            mass: 1.0,
+            potential_energy: 1.0,
+            reactivity: 1.0,
+            cohesion: 1.0,
+        };
+        let mut holder = 0.0;
+        let mut ledger = crate::state::EnergyLedger::default();
+        let result = frame
+            .settle_surface_response(
+                0, 0, properties, baselines, 0.75, &mut holder, &mut ledger,
+            )
+            .unwrap();
+        assert!((result.incident_energy - 20.0).abs() < 1e-7);
+        assert!((result.absorbed_energy - 20.0).abs() < 1e-7);
+        assert!((result.usable_energy - 15.0).abs() < 1e-7);
+        assert!((result.heat_dissipated - 5.0).abs() < 1e-7);
+        assert!((holder - 15.0).abs() < 1e-7);
+        assert!((ledger.total_external_energy_input - 20.0).abs() < 1e-7);
+        assert!((ledger.total_usable_energy_gained - 15.0).abs() < 1e-7);
+        assert!((ledger.total_heat_dissipated - 5.0).abs() < 1e-7);
+        assert!(frame
+            .settle_surface_response(
+                0, 0, properties, baselines, 0.75, &mut holder, &mut ledger,
+            )
+            .is_none());
+        assert!(frame
+            .settle_receiver(0, 1.0, 1.0, &mut holder, &mut ledger)
+            .is_none());
+        assert!((holder - 15.0).abs() < 1e-7);
     }
     #[test]
     fn world_tone_capture_frame_prevents_duplicate_receiver_credit() {
