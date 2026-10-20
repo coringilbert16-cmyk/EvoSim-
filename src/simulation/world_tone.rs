@@ -294,8 +294,7 @@ impl WorldToneCaptureFrame {
         let incident_energy = self
             .sample
             .incident_energy_for_projected_width(projected_width)?;
-        let natural_frequency =
-            crate::harmonics::natural_frequency_hz(properties, baselines);
+        let natural_frequency = crate::harmonics::natural_frequency_hz(properties, baselines);
         let damping = crate::harmonics::damping_ratio(properties, baselines);
         let absorption_fraction = crate::harmonics::resonant_absorption_fraction(
             self.sample.frequency_hz,
