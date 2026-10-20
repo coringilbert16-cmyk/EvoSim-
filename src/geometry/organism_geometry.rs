@@ -99,6 +99,7 @@ impl OrganismBodyGeometry {
     /// Unlike a logical material stock, this object has constituent placements and
     /// may cast shadows. Placements are already expressed in world coordinates; the
     /// catalog is used only to validate and resolve each constituent's realized shape.
+    #[allow(dead_code)] // Consumed by the forthcoming all-world occluder snapshot.
     pub(crate) fn from_physical_material(
         physical: &crate::physical_material::PhysicalMaterial,
         catalog: &[BaseResource],
@@ -599,7 +600,15 @@ mod tests {
         assert_eq!(geometry.parts[0].x, 12.0);
         assert_eq!(geometry.parts[0].y, -4.0);
         assert_eq!(geometry.parts[0].rotation_radians, 0.25);
-        assert_eq!(geometry.parts[0].form, catalog.iter().find(|r| r.name == "Carbon").unwrap().shape.form);
+        assert_eq!(
+            geometry.parts[0].form,
+            catalog
+                .iter()
+                .find(|resource| resource.name == "Carbon")
+                .unwrap()
+                .shape
+                .form
+        );
         assert!(geometry.min_x < 12.0 && geometry.max_x > 12.0);
         assert!(geometry.min_y < -4.0 && geometry.max_y > -4.0);
     }
