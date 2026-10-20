@@ -90,7 +90,7 @@ pub(crate) struct ActiveTransformation {
     pub(crate) complexity: f64,
     pub(crate) duration_ticks: u64,
     pub(crate) remaining_ticks: u64,
-    /// Energy transaction prepared during the middle tick, before structural mutation.
+    /// Energy transaction prepared on the completion tick before atomic commit.
     #[serde(default)]
     pub(crate) prepared_energy: Option<(f64, f64, f64)>,
     /// Perception and needs captured when a voluntary BREAK begins.
