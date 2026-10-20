@@ -128,7 +128,11 @@ impl WorldToneSample {
     /// other interaction losses. Visibility/shadowing must be applied when
     /// computing the width; this helper does not discover exposed geometry.
     pub(crate) fn incident_energy_for_projected_width(self, projected_width: f64) -> Option<f64> {
-        if !projected_width.is_finite() || projected_width < 0.0 {
+        if !self.energy_intensity_per_tick_per_width.is_finite()
+            || self.energy_intensity_per_tick_per_width < 0.0
+            || !projected_width.is_finite()
+            || projected_width < 0.0
+        {
             return None;
         }
         let energy = self.energy_intensity_per_tick_per_width * projected_width;
