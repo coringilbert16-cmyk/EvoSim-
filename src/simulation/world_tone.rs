@@ -224,7 +224,10 @@ impl WorldToneCaptureFrame {
             bodies,
         )?;
         let mut projected_widths = vec![0.0; bodies.len()];
-        let mut projected_widths_by_unit: Vec<Vec<(usize, f64)>> = vec![Vec::new(); bodies.len()];
+        let mut projected_widths_by_unit: Vec<Vec<(usize, f64)>> = bodies
+            .iter()
+            .map(|body| body.parts.iter().map(|part| (part.unit_index, 0.0)).collect())
+            .collect();
         for interval in intervals {
             let midpoint = (
                 (interval.start.0 + interval.end.0) * 0.5,
@@ -254,7 +257,7 @@ impl WorldToneCaptureFrame {
                     return None;
                 }
             } else {
-                unit_widths.push((interval.unit_index, extent));
+                return None;
             }
         }
         Some(Self {
@@ -274,12 +277,10 @@ impl WorldToneCaptureFrame {
         unit_index: usize,
     ) -> Option<f64> {
         let units = self.projected_widths_by_unit.get(receiver_body_index)?;
-        Some(
-            units
-                .iter()
-                .find(|(candidate, _)| *candidate == unit_index)
-                .map_or(0.0, |(_, width)| *width),
-        )
+        units
+            .iter()
+            .find(|(candidate, _)| *candidate == unit_index)
+            .map(|(_, width)| *width)
     }
 
     /// Evaluate one constituent using its existing catalog-normalized material
@@ -772,6 +773,7 @@ mod tests {
 
         assert!((frame.projected_width_for_unit(0, 0).unwrap() - 2.0).abs() < 1e-7);
         assert_eq!(frame.projected_width_for_unit(0, 1), Some(0.0));
+        assert_eq!(frame.projected_width_for_unit(0, 99), None);
         assert_eq!(frame.projected_width_for_unit(99, 0), None);
         assert!((frame.projected_widths[0] - 2.0).abs() < 1e-7);
     }
