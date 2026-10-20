@@ -140,7 +140,6 @@ impl WorldToneSample {
     }
 }
 
-
 impl WorldToneParameters {
     pub(crate) fn is_valid(self) -> bool {
         self.minimum_signal_energy_level.is_finite()
@@ -150,7 +149,8 @@ impl WorldToneParameters {
             && self.minimum_energy_intensity_per_tick_per_width.is_finite()
             && self.minimum_energy_intensity_per_tick_per_width >= 0.0
             && self.maximum_energy_intensity_per_tick_per_width.is_finite()
-            && self.maximum_energy_intensity_per_tick_per_width > self.minimum_energy_intensity_per_tick_per_width
+            && self.maximum_energy_intensity_per_tick_per_width
+                > self.minimum_energy_intensity_per_tick_per_width
             && self.orbital_period_ticks > 0
     }
 
@@ -186,7 +186,8 @@ impl WorldToneParameters {
             signal_energy_level: self.minimum_signal_energy_level
                 + (self.maximum_signal_energy_level - self.minimum_signal_energy_level) * envelope,
             energy_intensity_per_tick_per_width: self.minimum_energy_intensity_per_tick_per_width
-                + (self.maximum_energy_intensity_per_tick_per_width - self.minimum_energy_intensity_per_tick_per_width)
+                + (self.maximum_energy_intensity_per_tick_per_width
+                    - self.minimum_energy_intensity_per_tick_per_width)
                     * envelope,
             orbital_phase,
         })
@@ -267,7 +268,10 @@ mod tests {
         let sample = parameters().sample(0, 0.0, 0.0, 1.0).unwrap();
         assert_eq!(sample.incident_energy_for_projected_width(-0.1), None);
         assert_eq!(sample.incident_energy_for_projected_width(f64::NAN), None);
-        assert_eq!(sample.incident_energy_for_projected_width(f64::INFINITY), None);
+        assert_eq!(
+            sample.incident_energy_for_projected_width(f64::INFINITY),
+            None
+        );
     }
 
     #[test]
