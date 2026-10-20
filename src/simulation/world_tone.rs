@@ -121,12 +121,22 @@ pub(crate) struct WorldToneSample {
     /// Normalized orbital phase: 0 at north, increasing eastward, in [0, 1).
     pub(crate) orbital_phase: f64,
 }
+/// Energy split for one material interaction with the incoming world tone.
+///
+/// The unabsorbed amount is not automatically reflected or lost: downstream
+/// propagation, reflection, and attenuation must explicitly account for it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct WorldToneInteraction {
+    pub(crate) incident_energy: f64,
+    pub(crate) absorbed_energy: f64,
+    pub(crate) unabsorbed_energy: f64,
+}
+
 impl WorldToneSample {
     /// Energy incident on an exposed projected width during this tick.
     ///
-    /// This is incoming energy before material absorption, reflection, or
-    /// other interaction losses. Visibility/shadowing must be applied when
-    /// computing the width; this helper does not discover exposed geometry.
+    /// Visibility/shadowing must be applied when computing the width; this
+    /// helper does not discover exposed geometry.
     pub(crate) fn incident_energy_for_projected_width(self, projected_width: f64) -> Option<f64> {
         if !self.energy_intensity_per_tick_per_width.is_finite()
             || self.energy_intensity_per_tick_per_width < 0.0
@@ -137,6 +147,28 @@ impl WorldToneSample {
         }
         let energy = self.energy_intensity_per_tick_per_width * projected_width;
         energy.is_finite().then_some(energy)
+    }
+
+    /// Partition intercepted energy using a supplied material absorption
+    /// fraction. This does not choose material parameters or settle a ledger.
+    pub(crate) fn interact_with_absorption(
+        self,
+        projected_width: f64,
+        absorption_fraction: f64,
+    ) -> Option<WorldToneInteraction> {
+        if !absorption_fraction.is_finite() || !(0.0..=1.0).contains(&absorption_fraction) {
+            return None;
+        }
+        let incident_energy = self.incident_energy_for_projected_width(projected_width)?;
+        let absorbed_energy = incident_energy * absorption_fraction;
+        let unabsorbed_energy = incident_energy - absorbed_energy;
+        (absorbed_energy.is_finite() && unabsorbed_energy.is_finite()).then_some(
+            WorldToneInteraction {
+                incident_energy,
+                absorbed_energy,
+                unabsorbed_energy,
+            },
+        )
     }
 }
 
@@ -261,6 +293,40 @@ mod tests {
         let minimum = params.sample(1_200, 0.0, 0.0, 1.0).unwrap();
         assert_eq!(minimum.energy_intensity_per_tick_per_width, 1.0);
         assert_eq!(minimum.incident_energy_for_projected_width(0.5), Some(0.5));
+    }
+
+    #[test]
+    fn material_interaction_partitions_incident_energy_without_creating_energy() {
+        let sample = parameters().sample(0, 0.0, 0.0, 1.0).unwrap();
+        let interaction = sample.interact_with_absorption(1.0, 0.3).unwrap();
+        assert_eq!(interaction.incident_energy, 10.0);
+        assert!((interaction.absorbed_energy - 3.0).abs() < 1e-12);
+        assert!((interaction.unabsorbed_energy - 7.0).abs() < 1e-12);
+        assert!(
+            (interaction.absorbed_energy + interaction.unabsorbed_energy
+                - interaction.incident_energy)
+                .abs()
+                < 1e-12
+        );
+    }
+
+    #[test]
+    fn material_interaction_accepts_zero_and_full_absorption() {
+        let sample = parameters().sample(0, 0.0, 0.0, 1.0).unwrap();
+        let none = sample.interact_with_absorption(0.5, 0.0).unwrap();
+        assert_eq!(none.absorbed_energy, 0.0);
+        assert_eq!(none.unabsorbed_energy, 5.0);
+        let all = sample.interact_with_absorption(0.5, 1.0).unwrap();
+        assert_eq!(all.absorbed_energy, 5.0);
+        assert_eq!(all.unabsorbed_energy, 0.0);
+    }
+
+    #[test]
+    fn material_interaction_rejects_invalid_absorption_fraction() {
+        let sample = parameters().sample(0, 0.0, 0.0, 1.0).unwrap();
+        assert!(sample.interact_with_absorption(1.0, -0.1).is_none());
+        assert!(sample.interact_with_absorption(1.0, 1.1).is_none());
+        assert!(sample.interact_with_absorption(1.0, f64::NAN).is_none());
     }
 
     #[test]
