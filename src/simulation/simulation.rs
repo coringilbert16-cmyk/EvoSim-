@@ -2,16 +2,6 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 
-fn should_prepare_transformation(
-    kind: crate::state::TransformationKind,
-    remaining_ticks: u64,
-) -> bool {
-    match kind {
-        crate::state::TransformationKind::Combine => remaining_ticks == 0,
-        _ => remaining_ticks == 1,
-    }
-}
-
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
 use crate::decision_runtime::{
     select_action_with_developmental_scores, ActionCandidate, DecisionContext,
@@ -21,6 +11,16 @@ use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::genome::initial_genome;
 use crate::state::{EnergyLedger, Environment, Organism, Position, Simulation};
 use crate::structure::Placement;
+
+fn should_prepare_transformation(
+    kind: &crate::state::TransformationKind,
+    remaining_ticks: u64,
+) -> bool {
+    match kind {
+        crate::state::TransformationKind::Combine => remaining_ticks == 0,
+        _ => remaining_ticks == 1,
+    }
+}
 
 const BUDDING_AVAILABILITY_FRACTION: f64 = 0.90;
 
@@ -581,7 +581,7 @@ impl Simulation {
                 transformation.remaining_ticks -= 1
             }
             if should_prepare_transformation(
-                transformation.kind,
+                &transformation.kind,
                 transformation.remaining_ticks,
             ) {
                 if let Some(organism) = self
@@ -1326,19 +1326,19 @@ mod decomposition_finalization_tests {
         use crate::state::TransformationKind;
 
         assert!(!super::should_prepare_transformation(
-            TransformationKind::Combine,
+            &TransformationKind::Combine,
             1,
         ));
         assert!(super::should_prepare_transformation(
-            TransformationKind::Combine,
+            &TransformationKind::Combine,
             0,
         ));
         assert!(super::should_prepare_transformation(
-            TransformationKind::Break,
+            &TransformationKind::Break,
             1,
         ));
         assert!(!super::should_prepare_transformation(
-            TransformationKind::Break,
+            &TransformationKind::Break,
             0,
         ));
     }
