@@ -1262,7 +1262,10 @@ mod point_source_curve_visibility_tests {
                 },
             ],
         };
-        assert!(boundary.is_valid(), "fixture must be a closed exact boundary");
+        assert!(
+            boundary.is_valid(),
+            "fixture must be a closed exact boundary"
+        );
         let target = body(
             Form::Fluid {
                 nominal_area: family.area,
