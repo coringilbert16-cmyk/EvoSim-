@@ -1963,4 +1963,4 @@ Next, run focused tests, formatting, compilation, and Clippy on the exact PR hea
 
 
 
-**Verification status:** this GitHub-only pass has not run Rust commands or tests, and no CI status checks have been reported for the latest branch snapshot. The stored-material regression is added but unverified. The COMBINE prepare/commit timing change has been code-audited but has no dedicated integration regression yet. Whole-world conservation is not yet proven.
+**Verification status:** this GitHub-only pass has not run Rust commands or tests, and no CI status checks have been reported for the latest branch snapshot. The stored-material, decomposition, and stress-driven BREAK regressions are added but unverified. The COMBINE prepare/commit timing change has been code-audited but has no dedicated integration regression yet. Whole-world conservation is not yet proven.
