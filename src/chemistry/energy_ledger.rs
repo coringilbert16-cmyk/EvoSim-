@@ -167,6 +167,59 @@ impl EnergyTransaction {
     }
 }
 
+
+/// A point-in-time inventory used to reconcile world-level energy accounting.
+///
+/// Structural energy is the total energy currently stored in realized bonds,
+/// counted once across all structures. The initial values are the tick-zero
+/// baseline; cumulative flows are totals since that baseline. Transfers among
+/// internal holders are intentionally absent because they cancel at world scale.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct EnergyInventorySnapshot {
+    pub(crate) initial_usable_energy: f64,
+    pub(crate) current_usable_energy: f64,
+    pub(crate) initial_structural_energy: f64,
+    pub(crate) current_structural_energy: f64,
+    pub(crate) external_energy_input: f64,
+    /// Explicit non-structural sources only; never count bond breakdown here.
+    pub(crate) other_energy_released: f64,
+    pub(crate) work_expended: f64,
+    pub(crate) heat_dissipated: f64,
+}
+
+impl EnergyInventorySnapshot {
+    /// Signed conservation residual. A value of zero means the change in
+    /// usable and stored energy plus work and heat equals all external sources.
+    pub(crate) fn residual(self) -> Option<f64> {
+        let values = [
+            self.initial_usable_energy,
+            self.current_usable_energy,
+            self.initial_structural_energy,
+            self.current_structural_energy,
+            self.external_energy_input,
+            self.other_energy_released,
+            self.work_expended,
+            self.heat_dissipated,
+        ];
+        if values.iter().any(|value| !value.is_finite() || *value < 0.0) {
+            return None;
+        }
+        let usable_delta = self.current_usable_energy - self.initial_usable_energy;
+        let structural_delta = self.current_structural_energy - self.initial_structural_energy;
+        let residual = usable_delta + structural_delta + self.work_expended
+            + self.heat_dissipated
+            - self.external_energy_input
+            - self.other_energy_released;
+        residual.is_finite().then_some(residual)
+    }
+
+    pub(crate) fn is_balanced(self, tolerance: f64) -> bool {
+        tolerance.is_finite()
+            && tolerance >= 0.0
+            && self.residual().is_some_and(|residual| residual.abs() <= tolerance)
+    }
+}
+
 /// Simulation-wide energy accounting infrastructure.
 /// Every subsystem calculates its physical transaction and submits the same
 /// transaction shape here. The ledger owns the accounting mutation; it does
@@ -299,6 +352,57 @@ impl EnergyLedgerAuthority for EnergyLedger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn world_inventory_reconciles_external_input_work_and_heat() {
+        let inventory = EnergyInventorySnapshot {
+            initial_usable_energy: 10.0,
+            current_usable_energy: 14.0,
+            initial_structural_energy: 8.0,
+            current_structural_energy: 9.0,
+            external_energy_input: 7.0,
+            other_energy_released: 0.0,
+            work_expended: 2.0,
+            heat_dissipated: 2.0,
+        };
+        assert_eq!(inventory.residual(), Some(0.0));
+        assert!(inventory.is_balanced(1e-12));
+    }
+
+    #[test]
+    fn world_inventory_counts_bond_breakdown_as_structural_decrease_once() {
+        let inventory = EnergyInventorySnapshot {
+            initial_usable_energy: 0.0,
+            current_usable_energy: 2.0,
+            initial_structural_energy: 5.0,
+            current_structural_energy: 0.0,
+            external_energy_input: 0.0,
+            other_energy_released: 0.0,
+            work_expended: 0.0,
+            heat_dissipated: 3.0,
+        };
+        assert_eq!(inventory.residual(), Some(0.0));
+        assert!(inventory.is_balanced(1e-12));
+    }
+
+    #[test]
+    fn world_inventory_rejects_unbalanced_or_non_finite_snapshots() {
+        let mut inventory = EnergyInventorySnapshot {
+            initial_usable_energy: 10.0,
+            current_usable_energy: 14.0,
+            initial_structural_energy: 8.0,
+            current_structural_energy: 9.0,
+            external_energy_input: 7.0,
+            other_energy_released: 0.0,
+            work_expended: 2.0,
+            heat_dissipated: 2.0,
+        };
+        inventory.current_usable_energy += 1.0;
+        assert!(!inventory.is_balanced(1e-12));
+        inventory.current_usable_energy = f64::NAN;
+        assert_eq!(inventory.residual(), None);
+        assert!(!inventory.is_balanced(f64::NAN));
+    }
 
     #[test]
     fn both_transaction_types_use_the_shared_allocation_balance() {
