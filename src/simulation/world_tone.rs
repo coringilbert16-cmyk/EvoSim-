@@ -290,7 +290,9 @@ impl WorldToneCaptureFrame {
         baselines: crate::resources::ResourceBaselines,
     ) -> Option<WorldToneSurfaceResponse> {
         let projected_width = self.projected_width_for_unit(receiver_body_index, unit_index)?;
-        let incident_energy = self.sample.incident_energy_for_projected_width(projected_width)?;
+        let incident_energy = self
+            .sample
+            .incident_energy_for_projected_width(projected_width)?;
         let natural_frequency =
             crate::harmonics::natural_frequency_hz(properties, baselines);
         let damping = crate::harmonics::damping_ratio(properties, baselines);
@@ -755,13 +757,18 @@ mod tests {
             reactivity: 1.0,
             cohesion: 1.0,
         };
-        let response = frame.surface_response_for_unit(0, 0, properties, baselines).unwrap();
+        let response = frame
+            .surface_response_for_unit(0, 0, properties, baselines)
+            .unwrap();
         assert!((response.projected_width - 2.0).abs() < 1e-7);
         assert!((response.incident_energy - 20.0).abs() < 1e-7);
         assert!((response.absorption_fraction - 1.0).abs() < 1e-7);
         assert!((response.absorbed_by_damping - 20.0).abs() < 1e-7);
         assert!(response.unabsorbed.abs() < 1e-7);
-        assert!((response.absorbed_by_damping + response.unabsorbed - response.incident_energy).abs() < 1e-7);
+        assert!(
+            (response.absorbed_by_damping + response.unabsorbed - response.incident_energy).abs()
+                < 1e-7
+        );
     }
     #[test]
     fn world_tone_capture_frame_prevents_duplicate_receiver_credit() {
