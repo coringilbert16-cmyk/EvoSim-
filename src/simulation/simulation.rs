@@ -1363,7 +1363,6 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
-    #[test]
     fn invalid_finished_body_energy_holder_does_not_release_material() {
         let mut simulation = Simulation::new(913, 10.0);
         let catalog = crate::resources::default_catalog();
