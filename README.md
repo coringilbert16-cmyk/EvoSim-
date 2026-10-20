@@ -1978,9 +1978,9 @@ The common rule is: every credited energy amount must have been explicitly alloc
 
 ## User-approved solar intensity and interception rule — 2026-10-20
 
-**Decision confirmed by the user:** the sun's 1–10 energy-unit output range is an intensity per tick per 1.0 unit of exposed projected width. The 2,400-tick cycle determines the current intensity (I_t); the meaning of the unit is constant across the cycle.
+**Decision confirmed by the user:** the sun's 1–10 energy-unit output range is an intensity per tick per 1.0 unit of exposed projected width. The 2,400-tick cycle determines the current intensity $I_t$; the meaning of the unit is constant across the cycle.
 
-- Incident energy for an element is (E_{\mathrm{incident},i}=I_t L_{\mathrm{exposed},i}), where (L_{\mathrm{exposed},i}) is its unshadowed projected width perpendicular to the directional sunlight. At intensity 10, projected exposed width 1.0 intercepts 10 energy units per tick; width 0.5 intercepts 5.
+- Incident energy for an element is $E_{\mathrm{incident},i}=I_t L_{\mathrm{exposed},i}$, where $L_{\mathrm{exposed},i}$ is its unshadowed projected width perpendicular to the directional sunlight. At intensity 10, projected exposed width 1.0 intercepts 10 energy units per tick; width 0.5 intercepts 5.
 - This is an energy-flux rule, not a fixed energy pool divided equally among all visible elements. The model must not grant the same incident energy to overlapping/occluded elements or double-count the same incoming path.
 - Use directional geometric visibility and projected extent rather than detailed photon/ray simulation. Existing geometry primitives are groundwork only; the full exposure-to-energy allocation is not yet live.
 - Incident energy is not automatically absorbed energy. Material-specific resonance/chemistry determines the absorbed fraction; any energy not absorbed must remain unclaimed, continue onward, or enter an explicitly modeled reflection/loss path. The incoming energy balance must reconcile.
