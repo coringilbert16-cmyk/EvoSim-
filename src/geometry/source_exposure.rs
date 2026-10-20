@@ -616,42 +616,63 @@ struct WorldCircleArc {
 
 /// Return a world-space circular boundary for a constituent. Curved fluids
 /// whose boundary may self-occlude are rejected rather than approximated.
+fn push_world_circle_arc(
+    arcs: &mut Vec<WorldCircleArc>,
+    body_index: usize,
+    part: &crate::organism_geometry::PlacedForm,
+    center_local: (f64, f64),
+    radius: f64,
+    start: f64,
+    sweep: f64,
+) -> Option<()> {
+    let (sin, cos) = part.rotation_radians.sin_cos();
+    let center = (
+        part.x + center_local.0 * cos - center_local.1 * sin,
+        part.y + center_local.0 * sin + center_local.1 * cos,
+    );
+    let normalized_start = (start.rem_euclid(std::f64::consts::TAU)
+        + part.rotation_radians.rem_euclid(std::f64::consts::TAU))
+    .rem_euclid(std::f64::consts::TAU);
+    if !center.0.is_finite()
+        || !center.1.is_finite()
+        || !radius.is_finite()
+        || radius <= 0.0
+        || !start.is_finite()
+        || !normalized_start.is_finite()
+        || !sweep.is_finite()
+        || sweep <= 0.0
+        || sweep > std::f64::consts::TAU
+    {
+        return None;
+    }
+    arcs.push(WorldCircleArc {
+        body_index,
+        unit_index: part.unit_index,
+        center,
+        radius,
+        start: normalized_start,
+        sweep,
+    });
+    Some(())
+}
+
 fn realized_circle_arcs(
     body_index: usize,
     part: &crate::organism_geometry::PlacedForm,
 ) -> Option<Vec<WorldCircleArc>> {
     use crate::resources::Form;
-    let (sin, cos) = part.rotation_radians.sin_cos();
     let mut arcs = Vec::new();
-    let mut add = |center_x: f64, center_y: f64, radius: f64, start: f64, sweep: f64| {
-        let center = (
-            part.x + center_x * cos - center_y * sin,
-            part.y + center_x * sin + center_y * cos,
-        );
-        let normalized_start = (start.rem_euclid(std::f64::consts::TAU)
-            + part.rotation_radians.rem_euclid(std::f64::consts::TAU))
-        .rem_euclid(std::f64::consts::TAU);
-        let arc = WorldCircleArc {
-            body_index,
-            unit_index: part.unit_index,
-            center,
-            radius,
-            start: normalized_start,
-            sweep,
-        };
-        (center.0.is_finite()
-            && center.1.is_finite()
-            && radius.is_finite()
-            && radius > 0.0
-            && start.is_finite()
-            && sweep.is_finite()
-            && sweep > 0.0
-            && sweep <= std::f64::consts::TAU)
-            .then(|| arcs.push(arc))
-    };
     match &part.form {
         Form::Circle { radius } => {
-            add(0.0, 0.0, *radius, 0.0, std::f64::consts::TAU)?;
+            push_world_circle_arc(
+                &mut arcs,
+                body_index,
+                part,
+                (0.0, 0.0),
+                *radius,
+                0.0,
+                std::f64::consts::TAU,
+            )?;
         }
         Form::Fluid {
             nominal_area,
@@ -665,16 +686,17 @@ fn realized_circle_arcs(
                         if !arc.is_valid() {
                             return None;
                         }
-                        add(
-                            arc.center_x,
-                            arc.center_y,
+                        push_world_circle_arc(
+                            &mut arcs,
+                            body_index,
+                            part,
+                            (arc.center_x, arc.center_y),
                             arc.radius,
                             arc.start_angle_radians,
                             arc.sweep_radians,
                         )?;
                     }
                 }
-                drop(add);
                 return Some(arcs);
             }
             if let Some(vertices) = boundary {
@@ -689,9 +711,11 @@ fn realized_circle_arcs(
                 if !arc.is_valid() {
                     return None;
                 }
-                add(
-                    arc.center_x,
-                    arc.center_y,
+                push_world_circle_arc(
+                    &mut arcs,
+                    body_index,
+                    part,
+                    (arc.center_x, arc.center_y),
                     arc.radius,
                     arc.start_angle_radians,
                     arc.sweep_radians,
@@ -701,7 +725,15 @@ fn realized_circle_arcs(
                     return None;
                 }
                 let radius = (nominal_area / std::f64::consts::PI).sqrt();
-                add(0.0, 0.0, radius, 0.0, std::f64::consts::TAU)?;
+                push_world_circle_arc(
+                    &mut arcs,
+                    body_index,
+                    part,
+                    (0.0, 0.0),
+                    radius,
+                    0.0,
+                    std::f64::consts::TAU,
+                )?;
             }
         }
         _ => return Some(Vec::new()),
