@@ -11,7 +11,7 @@
 
 use std::f64::consts::TAU;
 
-pub(crate) const MAX_WORLD_TONE_FREQUENCY_HZ: f64 = 440.0;
+pub(crate) const WORLD_TONE_FREQUENCY_HZ: f64 = 440.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum EnvelopeCurve {
@@ -21,7 +21,6 @@ pub(crate) enum EnvelopeCurve {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct WorldToneParameters {
-    pub(crate) minimum_frequency_hz: f64,
     pub(crate) minimum_signal_energy_level: f64,
     pub(crate) maximum_signal_energy_level: f64,
     pub(crate) minimum_available_energy_per_tick: f64,
@@ -125,9 +124,6 @@ pub(crate) struct WorldToneSample {
 
 impl WorldToneParameters {
     pub(crate) fn is_valid(self) -> bool {
-        self.minimum_frequency_hz.is_finite()
-            && self.minimum_frequency_hz > 0.0
-            && self.minimum_frequency_hz <= MAX_WORLD_TONE_FREQUENCY_HZ
             && self.minimum_signal_energy_level.is_finite()
             && self.minimum_signal_energy_level >= 0.0
             && self.maximum_signal_energy_level.is_finite()
@@ -163,8 +159,7 @@ impl WorldToneParameters {
         let envelope = match self.envelope_curve {
             EnvelopeCurve::Cosine => (1.0 + angle.cos()) * 0.5,
         };
-        let frequency_hz = self.minimum_frequency_hz
-            + (MAX_WORLD_TONE_FREQUENCY_HZ - self.minimum_frequency_hz) * envelope;
+        let frequency_hz = WORLD_TONE_FREQUENCY_HZ;
         Some(WorldToneSample {
             source_x: center_x + orbit_radius * angle.sin(),
             source_y: center_y - orbit_radius * angle.cos(),
@@ -185,7 +180,6 @@ mod tests {
 
     fn parameters() -> WorldToneParameters {
         WorldToneParameters {
-            minimum_frequency_hz: 110.0,
             minimum_signal_energy_level: 0.0,
             maximum_signal_energy_level: 8.0,
             minimum_available_energy_per_tick: 1.0,
@@ -215,23 +209,21 @@ mod tests {
     }
 
     #[test]
-    fn frequency_and_signal_level_co_vary_but_remain_separate_outputs() {
+    fn frequency_stays_440_while_signal_and_energy_levels_cycle() {
         let params = parameters();
         let north = params.sample(0, 0.0, 0.0, 1.0).unwrap();
         let east = params.sample(600, 0.0, 0.0, 1.0).unwrap();
         let south = params.sample(1_200, 0.0, 0.0, 1.0).unwrap();
         let west = params.sample(1_800, 0.0, 0.0, 1.0).unwrap();
 
-        assert_eq!(north.frequency_hz, 440.0);
+        assert_eq!(north.frequency_hz, WORLD_TONE_FREQUENCY_HZ);
         assert_eq!(north.signal_energy_level, 8.0);
         assert_eq!(north.available_energy_per_tick, 10.0);
-        assert_eq!(south.frequency_hz, 110.0);
+        assert_eq!(south.frequency_hz, WORLD_TONE_FREQUENCY_HZ);
         assert_eq!(south.signal_energy_level, 0.0);
         assert_eq!(south.available_energy_per_tick, 1.0);
-        assert!(north.frequency_hz > east.frequency_hz);
-        assert!(east.frequency_hz > south.frequency_hz);
-        assert!(south.frequency_hz < west.frequency_hz);
-        assert!(west.frequency_hz < north.frequency_hz);
+        assert_eq!(east.frequency_hz, WORLD_TONE_FREQUENCY_HZ);
+        assert_eq!(west.frequency_hz, WORLD_TONE_FREQUENCY_HZ);
         assert!((east.signal_energy_level - 4.0).abs() < 1e-12);
         assert!((west.signal_energy_level - 4.0).abs() < 1e-12);
         assert!((east.available_energy_per_tick - 5.5).abs() < 1e-12);
@@ -299,7 +291,7 @@ mod tests {
     #[test]
     fn invalid_or_unresolved_parameters_fail_closed() {
         let mut params = parameters();
-        params.minimum_frequency_hz = 0.0;
+        params.minimum_available_energy_per_tick = -1.0;
         assert!(params.sample(0, 0.0, 0.0, 1.0).is_none());
 
         params = parameters();
