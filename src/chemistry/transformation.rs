@@ -862,13 +862,9 @@ mod tests {
             context_key: Some("stored:0:bond:0".into()),
         };
         let mut next_id = 1;
-        let mut transformation = Simulation::try_start_transformation(
-            &mut organism,
-            &catalog,
-            &mut next_id,
-            &decision,
-        )
-        .expect("stored internal bond should be a BREAK candidate");
+        let mut transformation =
+            Simulation::try_start_transformation(&mut organism, &catalog, &mut next_id, &decision)
+                .expect("stored internal bond should be a BREAK candidate");
         let before_energy = organism.usable_energy;
         let mut ledger = crate::state::EnergyLedger::default();
         let before_ledger = ledger;
@@ -881,12 +877,30 @@ mod tests {
             None,
         ));
         assert_eq!(organism.usable_energy, before_energy);
-        assert_eq!(transformation.prepared_energy, Some((before_energy, 0.0, 0.0)));
-        assert_eq!(ledger.total_potential_energy_released, before_ledger.total_potential_energy_released);
-        assert_eq!(ledger.total_external_energy_input, before_ledger.total_external_energy_input);
-        assert_eq!(ledger.total_work_expended, before_ledger.total_work_expended);
-        assert_eq!(ledger.total_heat_dissipated, before_ledger.total_heat_dissipated);
-        assert_eq!(ledger.total_structural_energy_delta, before_ledger.total_structural_energy_delta);
+        assert_eq!(
+            transformation.prepared_energy,
+            Some((before_energy, 0.0, 0.0))
+        );
+        assert_eq!(
+            ledger.total_potential_energy_released,
+            before_ledger.total_potential_energy_released
+        );
+        assert_eq!(
+            ledger.total_external_energy_input,
+            before_ledger.total_external_energy_input
+        );
+        assert_eq!(
+            ledger.total_work_expended,
+            before_ledger.total_work_expended
+        );
+        assert_eq!(
+            ledger.total_heat_dissipated,
+            before_ledger.total_heat_dissipated
+        );
+        assert_eq!(
+            ledger.total_structural_energy_delta,
+            before_ledger.total_structural_energy_delta
+        );
     }
 
     #[test]
