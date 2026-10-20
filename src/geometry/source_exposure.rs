@@ -595,6 +595,402 @@ pub(crate) fn projected_arc_extent(
     extent.is_finite().then_some(extent)
 }
 
+
+/// A visible sub-arc of a realized circular boundary in world coordinates.
+/// Each returned arc is disjoint from the others on its source constituent.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ExposedCircularArcInterval {
+    pub body_index: usize,
+    pub unit_index: usize,
+    pub arc: crate::capillary_geometry::CircularArcBoundary,
+}
+
+#[derive(Clone, Copy)]
+struct WorldCircleArc {
+    body_index: usize,
+    unit_index: usize,
+    center: (f64, f64),
+    radius: f64,
+    start: f64,
+    sweep: f64,
+}
+
+/// Return a world-space circular boundary for a constituent. Curved fluids
+/// whose boundary may self-occlude are rejected rather than approximated.
+fn realized_circle_arcs(
+    body_index: usize,
+    part: &crate::organism_geometry::PlacedForm,
+) -> Option<Vec<WorldCircleArc>> {
+    use crate::capillary_geometry::{CircularArcBoundary, FluidBoundaryPiece};
+    use crate::resources::Form;
+    let (sin, cos) = part.rotation_radians.sin_cos();
+    let mut arcs = Vec::new();
+    let mut add = |center_x: f64, center_y: f64, radius: f64, start: f64, sweep: f64| {
+        let center = (
+            part.x + center_x * cos - center_y * sin,
+            part.y + center_x * sin + center_y * cos,
+        );
+        let arc = WorldCircleArc {
+            body_index,
+            unit_index: part.unit_index,
+            center,
+            radius,
+            start: (start + part.rotation_radians).rem_euclid(std::f64::consts::TAU),
+            sweep,
+        };
+        (center.0.is_finite()
+            && center.1.is_finite()
+            && radius.is_finite()
+            && radius > 0.0
+            && start.is_finite()
+            && sweep.is_finite()
+            && sweep > 0.0
+            && sweep <= std::f64::consts::TAU)
+            .then(|| arcs.push(arc))
+    };
+    match &part.form {
+        Form::Circle { radius } => {
+            add(0.0, 0.0, *radius, 0.0, std::f64::consts::TAU)?;
+        }
+        Form::Fluid {
+            nominal_area,
+            boundary,
+            arc_boundary,
+            multi_contact_boundary,
+        } => {
+            if multi_contact_boundary.is_some() {
+                // A multi-contact fluid can have several free arcs and contact
+                // edges. Until self-visibility across that complete boundary is
+                // classified, crediting one arc independently could over-credit.
+                return None;
+            }
+            if let Some(vertices) = boundary {
+                // A polygonal fluid boundary is handled by the polygon solver,
+                // not by this circular-arc path.
+                if vertices.len() >= 3 {
+                    return Some(Vec::new());
+                }
+                return None;
+            }
+            if let Some(arc) = arc_boundary {
+                if !arc.is_valid() || arc.sweep_radians > std::f64::consts::PI + 1e-10 {
+                    return None;
+                }
+                add(
+                    arc.center_x,
+                    arc.center_y,
+                    arc.radius,
+                    arc.start_angle_radians,
+                    arc.sweep_radians,
+                )?;
+            } else {
+                if !nominal_area.is_finite() || *nominal_area <= 0.0 {
+                    return None;
+                }
+                let radius = (nominal_area / std::f64::consts::PI).sqrt();
+                add(0.0, 0.0, radius, 0.0, std::f64::consts::TAU)?;
+            }
+        }
+        _ => return Some(Vec::new()),
+    }
+    // Keep the import's type checked here: all exact fluid arcs are represented
+    // by the same descriptor that physical geometry and persistence use.
+    let _ = std::mem::size_of::<CircularArcBoundary>();
+    let _ = std::mem::size_of::<FluidBoundaryPiece>();
+    Some(arcs)
+}
+
+fn arc_has_angle(arc: WorldCircleArc, angle: f64) -> bool {
+    (angle - arc.start).rem_euclid(std::f64::consts::TAU) <= arc.sweep + 1e-10
+}
+
+fn add_circle_tangent_points(
+    center: (f64, f64),
+    radius: f64,
+    source: (f64, f64),
+    points: &mut Vec<(f64, f64)>,
+) {
+    let dx = source.0 - center.0;
+    let dy = source.1 - center.1;
+    let distance = dx.hypot(dy);
+    if !distance.is_finite() || !radius.is_finite() || radius <= 0.0 || distance <= radius {
+        return;
+    }
+    let base = dy.atan2(dx);
+    let offset = (radius / distance).clamp(-1.0, 1.0).acos();
+    for angle in [base - offset, base + offset] {
+        points.push((
+            center.0 + radius * angle.cos(),
+            center.1 + radius * angle.sin(),
+        ));
+    }
+}
+
+/// Exact visibility partitioning for circle and circular-fluid boundaries under
+/// a finite point source. Visibility can change only along rays through polygon
+/// vertices, circular-arc endpoints, or circle tangencies. Those critical rays
+/// cut the target arc; an exact geometry query classifies each resulting interval.
+/// Unsupported/self-occluding curved fluid boundaries return None.
+#[allow(dead_code)]
+pub(crate) fn visible_circular_arc_intervals(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+) -> Option<Vec<ExposedCircularArcInterval>> {
+    use crate::capillary_geometry::FluidBoundaryPiece;
+    use crate::resources::Form;
+    if !source.0.is_finite() || !source.1.is_finite() {
+        return None;
+    }
+
+    let mut all_arcs = Vec::new();
+    let mut critical_points = Vec::new();
+    for (body_index, body) in bodies.iter().enumerate() {
+        let mut seen = Vec::with_capacity(body.parts.len());
+        for part in &body.parts {
+            if seen.contains(&part.unit_index)
+                || !part.x.is_finite()
+                || !part.y.is_finite()
+                || !part.rotation_radians.is_finite()
+            {
+                return None;
+            }
+            seen.push(part.unit_index);
+            if let Some(vertices) = part.form.polygon_vertices() {
+                let (sin, cos) = part.rotation_radians.sin_cos();
+                for (x, y) in vertices {
+                    critical_points.push((
+                        part.x + x * cos - y * sin,
+                        part.y + x * sin + y * cos,
+                    ));
+                }
+            }
+            match &part.form {
+                Form::Circle { radius } => {
+                    add_circle_tangent_points((part.x, part.y), *radius, source, &mut critical_points);
+                }
+                Form::Fluid { boundary, arc_boundary, multi_contact_boundary, .. } => {
+                    if let Some(verts) = boundary {
+                        let (sin, cos) = part.rotation_radians.sin_cos();
+                        for &(x, y) in verts {
+                            critical_points.push((
+                                part.x + x * cos - y * sin,
+                                part.y + x * sin + y * cos,
+                            ));
+                        }
+                    }
+                    if let Some(arc) = arc_boundary {
+                        if !arc.is_valid() || arc.sweep_radians > std::f64::consts::PI + 1e-10 {
+                            return None;
+                        }
+                        let world = arc.transformed(part.x, part.y, part.rotation_radians)?;
+                        critical_points.push(world.start_point());
+                        critical_points.push(world.end_point());
+                        add_circle_tangent_points(
+                            (world.center_x, world.center_y),
+                            world.radius,
+                            source,
+                            &mut critical_points,
+                        );
+                    }
+                    if let Some(multi) = multi_contact_boundary {
+                        for piece in &multi.pieces {
+                            match piece {
+                                FluidBoundaryPiece::SolidContact { start_x, start_y, end_x, end_y, .. } => {
+                                    let (sin, cos) = part.rotation_radians.sin_cos();
+                                    for (x, y) in [(*start_x, *start_y), (*end_x, *end_y)] {
+                                        critical_points.push((
+                                            part.x + x * cos - y * sin,
+                                            part.y + x * sin + y * cos,
+                                        ));
+                                    }
+                                }
+                                FluidBoundaryPiece::FreeArc(arc) => {
+                                    let world = arc.transformed(part.x, part.y, part.rotation_radians)?;
+                                    critical_points.push(world.start_point());
+                                    critical_points.push(world.end_point());
+                                    add_circle_tangent_points(
+                                        (world.center_x, world.center_y),
+                                        world.radius,
+                                        source,
+                                        &mut critical_points,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+            all_arcs.extend(realized_circle_arcs(body_index, part)?);
+        }
+    }
+
+    let mut output = Vec::new();
+    for target in all_arcs {
+        // If the source is inside the target material, its boundary cannot be
+        // safely interpreted as an externally illuminated surface.
+        if let Some(body) = bodies.get(target.body_index) {
+            if let Some(part) = body.parts.iter().find(|p| p.unit_index == target.unit_index) {
+                if crate::organism_geometry::form_contains_point(
+                    &part.form, part.x, part.y, part.rotation_radians, source.0, source.1,
+                ) {
+                    continue;
+                }
+            }
+        }
+
+        let mut cuts = vec![target.start, target.start + target.sweep];
+        if target.sweep >= std::f64::consts::TAU - 1e-10 {
+            cuts.push(target.start + target.sweep * 0.5);
+        }
+
+        // Tangencies on the target circle are exact transitions between
+        // front-facing and back-facing boundary normals for a point source.
+        let mut target_tangencies = Vec::new();
+        add_circle_tangent_points(target.center, target.radius, source, &mut target_tangencies);
+        for point in target_tangencies {
+            let angle = (point.1 - target.center.1).atan2(point.0 - target.center.0);
+            if arc_has_angle(target, angle) {
+                let unwrapped = target.start + (angle - target.start).rem_euclid(std::f64::consts::TAU);
+                if unwrapped > target.start + 1e-10 && unwrapped < target.start + target.sweep - 1e-10 {
+                    cuts.push(unwrapped);
+                }
+            }
+        }
+
+        for point in &critical_points {
+            let dx = point.0 - source.0;
+            let dy = point.1 - source.1;
+            if dx.hypot(dy) <= 1e-12 {
+                continue;
+            }
+            let direction = (dx, dy);
+            let ox = source.0 - target.center.0;
+            let oy = source.1 - target.center.1;
+            let a = direction.0 * direction.0 + direction.1 * direction.1;
+            let b = 2.0 * (ox * direction.0 + oy * direction.1);
+            let c = ox * ox + oy * oy - target.radius * target.radius;
+            let discriminant = b * b - 4.0 * a * c;
+            if !discriminant.is_finite() || discriminant < -1e-10 {
+                continue;
+            }
+            let root = discriminant.max(0.0).sqrt();
+            for t in [(-b - root) / (2.0 * a), (-b + root) / (2.0 * a)] {
+                if t <= 1e-10 {
+                    continue;
+                }
+                let x = source.0 + t * direction.0;
+                let y = source.1 + t * direction.1;
+                let angle = (y - target.center.1).atan2(x - target.center.0);
+                if arc_has_angle(target, angle) {
+                    let unwrapped = target.start + (angle - target.start).rem_euclid(std::f64::consts::TAU);
+                    if unwrapped > target.start + 1e-10
+                        && unwrapped < target.start + target.sweep - 1e-10
+                    {
+                        cuts.push(unwrapped);
+                    }
+                }
+            }
+        }
+        cuts.sort_by(f64::total_cmp);
+        cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-10);
+
+        for pair in cuts.windows(2) {
+            let (start, end) = (pair[0], pair[1]);
+            if end - start <= 1e-10 || end - start >= std::f64::consts::TAU {
+                continue;
+            }
+            let angle = (start + end) * 0.5;
+            let point = (
+                target.center.0 + target.radius * angle.cos(),
+                target.center.1 + target.radius * angle.sin(),
+            );
+            let normal = (angle.cos(), angle.sin());
+            let toward = (source.0 - point.0, source.1 - point.1);
+            let distance = toward.0.hypot(toward.1);
+            if !distance.is_finite()
+                || distance <= 1e-12
+                || normal.0 * toward.0 + normal.1 * toward.1 <= 1e-10
+            {
+                continue;
+            }
+            if crate::organism_geometry::source_path_blocked(
+                source, point, bodies, target.body_index, target.unit_index,
+            ) {
+                continue;
+            }
+            output.push(ExposedCircularArcInterval {
+                body_index: target.body_index,
+                unit_index: target.unit_index,
+                arc: crate::capillary_geometry::CircularArcBoundary {
+                    center_x: target.center.0,
+                    center_y: target.center.1,
+                    radius: target.radius,
+                    start_angle_radians: start.rem_euclid(std::f64::consts::TAU),
+                    sweep_radians: end - start,
+                },
+            });
+        }
+    }
+    Some(output)
+}
+
+/// Projected extent for a visible circular interval under a finite point source.
+/// The pointwise source direction varies along the arc, so this uses adaptive
+/// Simpson integration rather than substituting a single direction for the arc.
+#[allow(dead_code)]
+pub(crate) fn point_source_projected_arc_extent(
+    arc: crate::capillary_geometry::CircularArcBoundary,
+    source: (f64, f64),
+) -> Option<f64> {
+    if !arc.is_valid() || !source.0.is_finite() || !source.1.is_finite() {
+        return None;
+    }
+    let integrand = |angle: f64| {
+        let x = arc.center_x + arc.radius * angle.cos();
+        let y = arc.center_y + arc.radius * angle.sin();
+        let toward_x = source.0 - x;
+        let toward_y = source.1 - y;
+        let distance = toward_x.hypot(toward_y);
+        if !distance.is_finite() || distance <= 1e-12 {
+            return None;
+        }
+        Some(arc.radius * ((angle.cos() * toward_x + angle.sin() * toward_y) / distance).max(0.0))
+    };
+    fn simpson<F: Fn(f64) -> Option<f64>>(f: &F, a: f64, b: f64, fa: f64, fm: f64, fb: f64) -> Option<f64> {
+        let value = (b - a) * (fa + 4.0 * fm + fb) / 6.0;
+        value.is_finite().then_some(value)
+    }
+    fn integrate<F: Fn(f64) -> Option<f64>>(
+        f: &F, a: f64, b: f64, fa: f64, fm: f64, fb: f64, whole: f64, tolerance: f64, depth: u8,
+    ) -> Option<f64> {
+        let mid = (a + b) * 0.5;
+        let left_mid = (a + mid) * 0.5;
+        let right_mid = (mid + b) * 0.5;
+        let flm = f(left_mid)?;
+        let frm = f(right_mid)?;
+        let left = simpson(f, a, mid, fa, flm, fm)?;
+        let right = simpson(f, mid, b, fm, frm, fb)?;
+        let delta = left + right - whole;
+        if depth == 0 || delta.abs() <= 15.0 * tolerance {
+            return Some(left + right + delta / 15.0);
+        }
+        Some(
+            integrate(f, a, mid, fa, flm, fm, left, tolerance * 0.5, depth - 1)?
+                + integrate(f, mid, b, fm, frm, fb, right, tolerance * 0.5, depth - 1)?,
+        )
+    }
+    let a = arc.start_angle_radians;
+    let b = a + arc.sweep_radians;
+    let mid = (a + b) * 0.5;
+    let fa = integrand(a)?;
+    let fm = integrand(mid)?;
+    let fb = integrand(b)?;
+    let whole = simpson(&integrand, a, b, fa, fm, fb)?;
+    let extent = integrate(&integrand, a, b, fa, fm, fb, whole, 1e-10 * whole.abs().max(1.0), 20)?;
+    (extent.is_finite() && extent >= -1e-10).then_some(extent.max(0.0))
+}
+
 #[cfg(test)]
 mod exact_arc_projection_tests {
     use super::projected_arc_extent;
