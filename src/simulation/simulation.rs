@@ -1413,7 +1413,7 @@ mod decomposition_finalization_tests {
             .stored_material
             .first_material()
             .expect("failed BREAK source should remain stored");
-        assert!((restored.material.total_amount() - amount).abs() < 1e-12);
+        assert!((restored.total_amount() - amount).abs() < 1e-12);
     }
 
     #[test]
