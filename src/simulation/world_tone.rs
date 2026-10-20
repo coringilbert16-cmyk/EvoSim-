@@ -697,11 +697,17 @@ mod tests {
     fn energy_intensity_is_constrained_to_the_approved_one_to_ten_range() {
         let mut params = parameters();
         params.minimum_energy_intensity_per_tick_per_width = 0.999;
-        assert!(!params.is_valid(), "intensity below 1 is outside the approved range");
+        assert!(
+            !params.is_valid(),
+            "intensity below 1 is outside the approved range"
+        );
 
         params = parameters();
         params.maximum_energy_intensity_per_tick_per_width = 10.001;
-        assert!(!params.is_valid(), "intensity above 10 is outside the approved range");
+        assert!(
+            !params.is_valid(),
+            "intensity above 10 is outside the approved range"
+        );
 
         params = parameters();
         assert!(params.is_valid(), "the exact 1-to-10 range is valid");
