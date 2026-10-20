@@ -230,13 +230,11 @@ fn polygon_is_convex(vertices: &[(f64, f64)]) -> bool {
     true
 }
 
-/// Derive visible straight boundary intervals for polygonal bodies.
-///
-/// Visibility can change only along rays from the source through blocker
-/// vertices. Intersections of those rays with each target edge define exact
-/// interval cuts for polygonal geometry. Midpoints classify each open interval
-/// using the realized-geometry occlusion test. Unsupported constituent shapes
-/// return None rather than being approximated.
+/// Derive visible straight boundary intervals for polygonal and polygon-boundary
+/// fluid targets. Curved and line constituents remain in the occluder snapshot:
+/// tangencies, endpoints, and boundary intersections split straight targets
+/// before exact realized-geometry occlusion classifies each open interval.
+/// Curved receiver intervals are returned separately by the arc query.
 #[allow(dead_code)]
 pub(crate) fn visible_polygonal_intervals(
     source: (f64, f64),
