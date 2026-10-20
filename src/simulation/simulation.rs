@@ -1423,15 +1423,18 @@ mod decomposition_finalization_tests {
             simulation.organisms[0].stored_material.physical_count(),
             original_count + 1
         );
-        assert!(simulation.organisms[0]
-            .stored_material
-            .entries
-            .iter()
-            .any(|entry| match entry {
-                crate::material_storage::StoredMaterial::Physical(instance) => {
-                    (instance.material.total_amount() - amount).abs() < 1e-12
-                }
-            }), "failed BREAK source should be restored with its original amount");
+        assert!(
+            simulation.organisms[0]
+                .stored_material
+                .entries
+                .iter()
+                .any(|entry| match entry {
+                    crate::material_storage::StoredMaterial::Physical(instance) => {
+                        (instance.material.total_amount() - amount).abs() < 1e-12
+                    }
+                }),
+            "failed BREAK source should be restored with its original amount"
+        );
     }
 
     #[test]
