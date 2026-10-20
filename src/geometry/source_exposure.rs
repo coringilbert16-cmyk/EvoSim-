@@ -595,7 +595,6 @@ pub(crate) fn projected_arc_extent(
     extent.is_finite().then_some(extent)
 }
 
-
 /// A visible sub-arc of a realized circular boundary in world coordinates.
 /// Each returned arc is disjoint from the others on its source constituent.
 #[derive(Clone, Copy, Debug, PartialEq)]
