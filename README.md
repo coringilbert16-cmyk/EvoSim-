@@ -1986,3 +1986,14 @@ The common rule is: every credited energy amount must have been explicitly alloc
 - Incident energy is not automatically absorbed energy. Material-specific resonance/chemistry determines the absorbed fraction; any energy not absorbed must remain unclaimed, continue onward, or enter an explicitly modeled reflection/loss path. The incoming energy balance must reconcile.
 - Do not apply a second independent incidence-angle multiplier if projected geometry already includes that effect. Do not invent per-material absorption constants without a defensible derivation/calibration.
 - This decision clarifies the previously recorded 1–10 source range: it is per tick per unit of exposed projected width, not the total energy budget for the entire map. The live simulation still does not perform solar capture or settlement; implementation and conservation tests remain required.
+
+## Latest exact-head verification — 2026-10-20
+
+Exact-head CI run [39458264248](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39458264248), commit `1fec8cdb244c7b5358d6534c76922378afa62b57`, completed with an overall **failure** result.
+
+- **Passed:** formatting, source-file-size check, COMBINE architecture check, Bob compact-storage checks, empty-library open/reopen, concurrent Bob initialization, focused Bob/fluid transaction and three-piece-cap checks, focused fluid coalescence/restoration checks, and focused chemical BREAK checks.
+- **Rust suite:** 457 passed, 28 failed, 1 ignored. The new `transformation::tests::stored_material_break_does_not_credit_unallocated_bond_energy` regression passed. The failure count remains 28, matching the earlier baseline of 28 failures; the suite is not green.
+- **Clippy:** failed with 60 production-binary errors and 38 test-compilation errors, primarily warnings promoted to errors across existing Bob, constructor, and other code. These are not treated as evidence that the energy-accounting change caused those issues; isolate them against a known baseline before cleanup.
+- **Energy-system boundary:** this run does not enable or verify live sunlight capture, a shared per-tick receiver scheduler, or end-to-end world conservation. Keep capture disabled until transition-level and tick-level reconciliation pass.
+
+This entry supersedes earlier statements that no exact-head CI result was available at the time those historical notes were written. PR202 remains open and Draft; PR196 is unchanged.
