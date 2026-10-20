@@ -9,8 +9,8 @@
 //! captured energy or mutate an energy ledger. Runtime configuration remains
 //! explicit; this model does not silently choose unresolved world parameters.
 
-use std::f64::consts::TAU;
 use crate::energy_ledger::{EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction};
+use std::f64::consts::TAU;
 
 pub(crate) const WORLD_TONE_FREQUENCY_HZ: f64 = 440.0;
 
@@ -297,7 +297,6 @@ impl WorldToneCaptureFrame {
         })
     }
 }
-
 
 impl WorldToneParameters {
     pub(crate) fn is_valid(self) -> bool {

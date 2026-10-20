@@ -359,7 +359,6 @@ impl EnergyLedgerAuthority for EnergyLedger {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -666,5 +665,4 @@ mod tests {
         assert!(ledger.transfer(&mut a, &mut b, 4.0));
         assert_eq!(a + b, 12.0);
     }
-
 }
