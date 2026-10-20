@@ -232,10 +232,10 @@ mod tests {
         assert!(east.frequency_hz > south.frequency_hz);
         assert!(south.frequency_hz < west.frequency_hz);
         assert!(west.frequency_hz < north.frequency_hz);
-        assert_eq!(east.signal_energy_level, 4.0);
-        assert_eq!(west.signal_energy_level, 4.0);
-        assert_eq!(east.available_energy_per_tick, 5.5);
-        assert_eq!(west.available_energy_per_tick, 5.5);
+        assert!((east.signal_energy_level - 4.0).abs() < 1e-12);
+        assert!((west.signal_energy_level - 4.0).abs() < 1e-12);
+        assert!((east.available_energy_per_tick - 5.5).abs() < 1e-12);
+        assert!((west.available_energy_per_tick - 5.5).abs() < 1e-12);
     }
 
     #[test]
