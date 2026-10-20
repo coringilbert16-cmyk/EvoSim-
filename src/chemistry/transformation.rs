@@ -467,8 +467,9 @@ impl Simulation {
             transformation.kind,
             crate::state::TransformationKind::Combine
         ) {
-            // Tick 2: resolve the candidate and settle its transaction. The
-            // resulting physical structure is held until Tick 3.
+            // Resolve and commit on the same completion tick. Preparing a
+            // replacement graph one tick early would leave it stale while
+            // chemical or stress-driven BREAK can still mutate the live graph.
             let mut trial_organism = organism.clone();
             // Candidate COMBINE only touches material in the organism's local
             // field bounds. Keep the trial environment sparse so a large
