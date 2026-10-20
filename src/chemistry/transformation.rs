@@ -73,10 +73,6 @@ pub(crate) fn settle_chemical_break_energy(
     else {
         return false;
     };
-    let mut trial_structure = organism.structure.clone();
-    if trial_structure.break_matching_bond(bond).is_none() {
-        return false;
-    }
     let tx = EnergyTransaction {
         reason: EnergyReason::Break,
         potential_released: 0.0,
@@ -85,41 +81,28 @@ pub(crate) fn settle_chemical_break_energy(
         work_expended: disruption_cost,
         heat_dissipated: heat,
     };
-    if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
-        return false;
-    }
-    organism.structure = trial_structure;
-    organism.mark_structure_changed();
-    organism.add_transaction_stress(heat);
-    true
+    settle_break_transaction(organism, bond, tx, ledger)
 }
 
-fn settle_break_energy(
+/// Shared commit path for every BREAK of a realized structural bond. The
+/// candidate graph is validated before settlement; only a successful ledger
+/// transaction is followed by committing the graph mutation and heat stress.
+fn settle_break_transaction(
     organism: &mut Organism,
     bond: crate::structure::Bond,
-    usable: f64,
-    gross: f64,
-    heat: f64,
+    transaction: EnergyTransaction,
     ledger: &mut EnergyLedger,
 ) -> bool {
     let mut trial_structure = organism.structure.clone();
     if trial_structure.break_matching_bond(bond).is_none() {
         return false;
     }
-    let tx = EnergyTransaction {
-        reason: EnergyReason::Break,
-        potential_released: 0.0,
-        usable_delta: usable,
-        structural_delta: -gross,
-        work_expended: 0.0,
-        heat_dissipated: heat,
-    };
-    if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
+    if !ledger.settle_transaction(&mut organism.usable_energy, transaction) {
         return false;
     }
     organism.structure = trial_structure;
     organism.mark_structure_changed();
-    organism.add_transaction_stress(heat);
+    organism.add_transaction_stress(transaction.heat_dissipated);
     true
 }
 
@@ -168,7 +151,15 @@ pub(crate) fn resolve_stress_break(
     else {
         return false;
     };
-    settle_break_energy(organism, target, usable, gross, heat, ledger)
+    let transaction = EnergyTransaction {
+        reason: EnergyReason::Break,
+        potential_released: 0.0,
+        usable_delta: usable,
+        structural_delta: -gross,
+        work_expended: 0.0,
+        heat_dissipated: heat,
+    };
+    settle_break_transaction(organism, target, transaction, ledger)
 }
 
 impl Simulation {
