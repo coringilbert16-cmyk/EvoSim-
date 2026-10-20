@@ -6,7 +6,6 @@ use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParam
 use crate::decision_runtime::{
     select_action_with_developmental_scores, ActionCandidate, DecisionContext,
 };
-use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::genome::initial_genome;
 use crate::state::{EnergyLedger, Environment, Organism, Position, Simulation};
@@ -617,18 +616,6 @@ impl Simulation {
     pub(crate) fn step(&mut self) {
         self.tick += 1;
 
-        // Living status is derived from the realized genome core, not a death
-        // flag. Keep breached organisms in the world so their physical
-        // structure and chemistry remain represented.
-        let mut living_ids: HashSet<String> = self
-            .organisms
-            .iter_mut()
-            .filter_map(|organism| {
-                Self::has_intact_genome_core(organism, &self.environment.catalog)
-                    .then(|| organism.id.clone())
-            })
-            .collect();
-
         let mut still_active = Vec::new();
         let mut completed = Vec::new();
         for mut transformation in self.active_transformations.drain(..) {
@@ -689,7 +676,7 @@ impl Simulation {
         }
         // A completed physical/chemical transformation may itself breach the
         // core, so refresh the observed living set before any biological work.
-        living_ids = self
+        let mut living_ids = self
             .organisms
             .iter_mut()
             .filter_map(|organism| {
@@ -1311,6 +1298,7 @@ impl Simulation {
             .sum();
         organism_energy + decomposition_energy
     }
+    #[expect(dead_code, reason = "Energy reconciliation snapshot is exercised by tests before live capture is enabled")]
     pub(crate) fn energy_inventory_snapshot(
         &self,
     ) -> crate::energy_ledger::EnergyInventorySnapshot {
