@@ -308,14 +308,20 @@ mod visibility_tests {
             parts: vec![
                 PlacedForm {
                     unit_index: 4,
-                    form: Form::Rectangle { width: 2.0, height: 2.0 },
+                    form: Form::Rectangle {
+                        width: 2.0,
+                        height: 2.0,
+                    },
                     x: 5.0,
                     y: 0.0,
                     rotation_radians: 0.0,
                 },
                 PlacedForm {
                     unit_index: 4,
-                    form: Form::Rectangle { width: 1.0, height: 1.0 },
+                    form: Form::Rectangle {
+                        width: 1.0,
+                        height: 1.0,
+                    },
                     x: 8.0,
                     y: 0.0,
                     rotation_radians: 0.0,
