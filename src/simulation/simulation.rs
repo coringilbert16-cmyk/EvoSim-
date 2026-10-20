@@ -676,7 +676,7 @@ impl Simulation {
         }
         // A completed physical/chemical transformation may itself breach the
         // core, so refresh the observed living set before any biological work.
-        let mut living_ids = self
+        let mut living_ids: HashSet<String> = self
             .organisms
             .iter_mut()
             .filter_map(|organism| {
@@ -1298,9 +1298,12 @@ impl Simulation {
             .sum();
         organism_energy + decomposition_energy
     }
-    #[expect(
-        dead_code,
-        reason = "Energy reconciliation snapshot is exercised by tests before live capture is enabled"
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Energy reconciliation snapshot is exercised by tests before live capture is enabled"
+        )
     )]
     pub(crate) fn energy_inventory_snapshot(
         &self,
