@@ -1127,6 +1127,39 @@ mod point_source_curve_visibility_tests {
     }
 
     #[test]
+    fn legacy_circular_fluid_casts_tangent_defined_shadows_on_a_circle() {
+        let blocker = body(
+            Form::Fluid {
+                nominal_area: std::f64::consts::PI * 0.25,
+                boundary: None,
+                arc_boundary: None,
+                multi_contact_boundary: None,
+            },
+            0.0,
+            0.0,
+        );
+        let target = body(Form::Circle { radius: 1.0 }, 5.0, 0.0);
+        let intervals = visible_circular_arc_intervals((-5.0, 0.0), &[blocker, target])
+            .expect("legacy circular fluid is an exact circular occluder");
+        let visible_target_sweep: f64 = intervals
+            .iter()
+            .filter(|interval| interval.body_index == 1)
+            .map(|interval| interval.arc.sweep_radians)
+            .sum();
+        let unoccluded = visible_circular_arc_intervals(
+            (-5.0, 0.0),
+            &[body(Form::Circle { radius: 1.0 }, 5.0, 0.0)],
+        )
+        .expect("isolated circle visibility is supported");
+        let unoccluded_sweep: f64 = unoccluded
+            .iter()
+            .map(|interval| interval.arc.sweep_radians)
+            .sum();
+        assert!(visible_target_sweep > 0.0);
+        assert!(visible_target_sweep < unoccluded_sweep);
+    }
+
+    #[test]
     fn single_convex_fluid_arc_uses_its_exact_boundary_under_point_source() {
         let family = crate::capillary_geometry::CapillaryContactFamily::solve(
             0.5,
