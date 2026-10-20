@@ -249,10 +249,79 @@ impl WorldToneCaptureFrame {
         if !sample.is_valid() {
             return None;
         }
-        let intervals = crate::source_exposure::visible_polygonal_intervals(
+        let intervals = match crate::source_exposure::visible_polygonal_intervals(
             (sample.source_x, sample.source_y),
             bodies,
-        )?;
+        ) {
+            Some(intervals) => intervals,
+            None => {
+                // A lone circle has an exact directional projected width of
+                // its diameter. Handle it analytically rather than tessellating
+                // it into polygon edges. With any other constituent present,
+                // curved-boundary occlusion must be solved before crediting.
+                let mut only_part = None;
+                for (body_index, body) in bodies.iter().enumerate() {
+                    for part in &body.parts {
+                        if only_part.is_some() {
+                            return None;
+                        }
+                        only_part = Some((body_index, part));
+                    }
+                }
+                let (body_index, part) = only_part?;
+                let radius = match &part.form {
+                    crate::resources::Form::Circle { radius } => *radius,
+                    crate::resources::Form::Fluid {
+                        nominal_area,
+                        boundary: None,
+                        arc_boundary: None,
+                        multi_contact_boundary: None,
+                    } if nominal_area.is_finite() && *nominal_area > 0.0 => {
+                        (nominal_area / std::f64::consts::PI).sqrt()
+                    }
+                    _ => return None,
+                };
+                let source_distance =
+                    (sample.source_x - part.x).hypot(sample.source_y - part.y);
+                let width = 2.0 * radius;
+                if !radius.is_finite()
+                    || radius <= 0.0
+                    || !source_distance.is_finite()
+                    || source_distance <= radius
+                    || !width.is_finite()
+                {
+                    return None;
+                }
+                let mut projected_widths = vec![0.0; bodies.len()];
+                projected_widths[body_index] = width;
+                let projected_widths_by_unit = bodies
+                    .iter()
+                    .enumerate()
+                    .map(|(index, body)| {
+                        body.parts
+                            .iter()
+                            .map(|candidate| {
+                                (
+                                    candidate.unit_index,
+                                    if index == body_index && candidate.unit_index == part.unit_index {
+                                        width
+                                    } else {
+                                        0.0
+                                    },
+                                )
+                            })
+                            .collect()
+                    })
+                    .collect();
+                return Some(Self {
+                    sample,
+                    projected_widths,
+                    projected_widths_by_unit,
+                    settled_receivers: vec![false; bodies.len()],
+                    settled_units: vec![Vec::new(); bodies.len()],
+                });
+            }
+        };
         let mut projected_widths = vec![0.0; bodies.len()];
         let mut projected_widths_by_unit: Vec<Vec<(usize, f64)>> = bodies
             .iter()
@@ -778,6 +847,83 @@ mod tests {
         assert!(params.sample(0, 0.0, 0.0, 1.0).is_none());
         assert!(parameters().sample(0, 0.0, 0.0, -1.0).is_none());
     }
+    #[test]
+    fn standalone_circle_uses_exact_diameter_without_polygon_approximation() {
+        use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
+        use crate::resources::Form;
+
+        let body = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 7,
+                form: Form::Circle { radius: 1.25 },
+                x: 5.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: 3.75,
+            max_x: 6.25,
+            min_y: -1.25,
+            max_y: 1.25,
+        };
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0,
+            source_y: 0.0,
+            frequency_hz: 440.0,
+            signal_energy_level: 8.0,
+            energy_intensity_per_tick_per_width: 10.0,
+            orbital_phase: 0.0,
+        };
+        let frame = WorldToneCaptureFrame::from_geometry(sample, &[body])
+            .expect("an isolated, externally illuminated circle has an exact projected width");
+        assert_eq!(frame.projected_widths, vec![2.5]);
+        assert_eq!(frame.projected_width_for_unit(0, 7), Some(2.5));
+    }
+
+    #[test]
+    fn circle_exposure_fails_closed_when_an_occluder_requires_curved_visibility() {
+        use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
+        use crate::resources::Form;
+
+        let circle = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Circle { radius: 1.0 },
+                x: 5.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: 4.0,
+            max_x: 6.0,
+            min_y: -1.0,
+            max_y: 1.0,
+        };
+        let blocker = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Rectangle { width: 1.0, height: 1.0 },
+                x: 2.5,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: 2.0,
+            max_x: 3.0,
+            min_y: -0.5,
+            max_y: 0.5,
+        };
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0,
+            source_y: 0.0,
+            frequency_hz: 440.0,
+            signal_energy_level: 8.0,
+            energy_intensity_per_tick_per_width: 10.0,
+            orbital_phase: 0.0,
+        };
+        assert!(
+            WorldToneCaptureFrame::from_geometry(sample, &[circle, blocker]).is_none(),
+            "partial shadowing of curved targets must not be approximated"
+        );
+    }
+
     #[test]
     fn world_tone_capture_uses_visible_receiver_geometry_and_settles_balanced_input() {
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
