@@ -8,8 +8,8 @@ mod tests {
     #[test]
     fn decomposition_release_returns_realized_material_to_environment() {
         let catalog = default_catalog();
-        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
-        let mut structure = blueprint.realize(&catalog).unwrap();
+        let simulation = crate::state::Simulation::new(902, 10.0);
+        let mut structure = simulation.organisms[0].structure.clone();
         assert!(!structure.bonds.is_empty());
         structure.bonds.truncate(1);
         let expected_units = structure.units.len();
@@ -42,8 +42,8 @@ mod tests {
     #[test]
     fn decomposition_break_reconciles_usable_and_structural_energy() {
         let catalog = default_catalog();
-        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
-        let mut structure = blueprint.realize(&catalog).unwrap();
+        let simulation = crate::state::Simulation::new(902, 10.0);
+        let mut structure = simulation.organisms[0].structure.clone();
         assert!(!structure.bonds.is_empty());
         structure.bonds.truncate(1);
 
@@ -91,7 +91,8 @@ mod tests {
         use rand_chacha::ChaCha8Rng;
 
         let catalog = default_catalog();
-        let mut organism = crate::state::Simulation::create_initial_organism();
+        let mut simulation = crate::state::Simulation::new(903, 10.0);
+        let mut organism = simulation.organisms.remove(0);
         organism.usable_energy = 1000.0;
         assert!(!organism.structure.bonds.is_empty());
         let initial_usable_energy = organism.usable_energy;

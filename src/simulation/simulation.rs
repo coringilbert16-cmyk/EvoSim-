@@ -1382,12 +1382,13 @@ mod decomposition_finalization_tests {
         )
         .expect("single resource should be physically realizable");
         let amount = source.material.total_amount();
+        let original_count = simulation.organisms[0].stored_material.physical_count();
         assert!(simulation.organisms[0]
             .stored_material
             .store_physical_instance(source.clone()));
         let removed = simulation.organisms[0]
             .stored_material
-            .take_physical_at(0)
+            .take_physical_at(original_count)
             .expect("test source should be removable from storage");
         let transformation = crate::state::ActiveTransformation {
             id: 999,
@@ -1418,12 +1419,20 @@ mod decomposition_finalization_tests {
             &mut simulation.environment,
         );
 
-        assert_eq!(simulation.organisms[0].stored_material.physical_count(), 1);
-        let restored = simulation.organisms[0]
+        assert_eq!(
+            simulation.organisms[0].stored_material.physical_count(),
+            original_count + 1
+        );
+        assert!(simulation.organisms[0]
             .stored_material
-            .first_material()
-            .expect("failed BREAK source should remain stored");
-        assert!((restored.total_amount() - amount).abs() < 1e-12);
+            .entries
+            .iter()
+            .any(|entry| match entry {
+                crate::material_storage::StoredMaterial::Physical(instance) => {
+                    (instance.material.total_amount() - amount).abs() < 1e-12
+                }
+                crate::material_storage::StoredMaterial::Logical(_) => false,
+            }), "failed BREAK source should be restored with its original amount");
     }
 
     #[test]
