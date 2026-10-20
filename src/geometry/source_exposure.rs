@@ -659,10 +659,11 @@ fn realized_circle_arcs(
             multi_contact_boundary,
         } => {
             if multi_contact_boundary.is_some() {
-                // A multi-contact fluid can have several free arcs and contact
-                // edges. Until self-visibility across that complete boundary is
-                // classified, crediting one arc independently could over-credit.
-                return None;
+                // Multi-contact fluid remains an occluder through the exact
+                // segment/arc queries, but is not yet a supported target: its
+                // complete boundary must be analyzed together to prevent
+                // self-occlusion from being mistaken for exposed surface.
+                return Some(Vec::new());
             }
             if let Some(vertices) = boundary {
                 // A polygonal fluid boundary is handled by the polygon solver,
