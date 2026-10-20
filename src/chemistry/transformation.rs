@@ -847,7 +847,7 @@ mod tests {
             maintenance_debt: 0.0,
             stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
             stored_material: crate::material_storage::MaterialStorage::default(),
-            structure: crate::structure::Structure::default(),
+            structure: crate::structure::OrganismStructure::new(),
             active_transformation_id: None,
             active_movement: None,
             reproductive_construction: None,
