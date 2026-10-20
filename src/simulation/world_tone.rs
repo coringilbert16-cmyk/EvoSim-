@@ -992,7 +992,7 @@ mod tests {
     }
 
     #[test]
-    fn circle_exposure_fails_closed_when_an_occluder_requires_curved_visibility() {
+    fn mixed_frame_supports_a_circle_receiver_shadowed_by_a_polygon() {
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
         use crate::resources::Form;
 
@@ -1033,10 +1033,50 @@ mod tests {
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.0,
         };
-        assert!(
-            WorldToneCaptureFrame::from_geometry(sample, &[circle, blocker]).is_none(),
-            "partial shadowing of curved targets must not be approximated"
-        );
+        let frame = WorldToneCaptureFrame::from_geometry(sample, &[circle.clone(), blocker])
+            .expect("mixed curved receivers and polygonal occluders are supported");
+        let unoccluded = WorldToneCaptureFrame::from_geometry(sample, &[circle])
+            .expect("isolated circle visibility is supported");
+        assert!(frame.projected_widths[0] > 0.0);
+        assert!(frame.projected_widths[0] < unoccluded.projected_widths[0]);
+    }
+
+    #[test]
+    fn mixed_frame_supports_a_straight_receiver_shadowed_by_a_circle() {
+        use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
+        use crate::resources::Form;
+
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0,
+            source_y: 0.0,
+            frequency_hz: 440.0,
+            signal_energy_level: 8.0,
+            energy_intensity_per_tick_per_width: 10.0,
+            orbital_phase: 0.0,
+        };
+        let blocker = circle_body(0, 0.0, 0.0, 0.5);
+        let receiver = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 1,
+                form: Form::Rectangle {
+                    width: 2.0,
+                    height: 2.0,
+                },
+                x: 5.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: 4.0,
+            max_x: 6.0,
+            min_y: -1.0,
+            max_y: 1.0,
+        };
+        let frame = WorldToneCaptureFrame::from_geometry(sample, &[blocker, receiver.clone()])
+            .expect("circle blockers split straight receiver edges analytically");
+        let unoccluded = WorldToneCaptureFrame::from_geometry(sample, &[receiver])
+            .expect("isolated straight receiver is supported");
+        assert!(frame.projected_widths[1] > 0.0);
+        assert!(frame.projected_widths[1] < unoccluded.projected_widths[0]);
     }
 
     #[test]
