@@ -41,7 +41,11 @@ fn restore_failed_transformation_material(
         return;
     };
     if transformation.environmental_source {
-        if let Some(placement) = source.placements.as_ref().and_then(|placements| placements.first()) {
+        if let Some(placement) = source
+            .placements
+            .as_ref()
+            .and_then(|placements| placements.first())
+        {
             let _ = environment.field.deposit(placement.x, placement.y, source.clone());
         }
         return;
@@ -1352,6 +1356,65 @@ mod decomposition_finalization_tests {
 
     use super::*;
     use crate::structure::{OrganismStructure, Placement, StructuralUnit};
+
+    #[test]
+    fn failed_stored_break_restores_material_to_organism_storage() {
+        let mut simulation = Simulation::new(917, 10.0);
+        let placement = Placement {
+            x: 20.0,
+            y: 20.0,
+            rotation_radians: 0.0,
+        };
+        let source = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![placement],
+            &simulation.environment.catalog,
+        )
+        .expect("single resource should be physically realizable");
+        let amount = source.material.total_amount();
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(source.clone()));
+        let removed = simulation.organisms[0]
+            .stored_material
+            .take_physical_at(0)
+            .expect("test source should be removable from storage");
+        let transformation = crate::state::ActiveTransformation {
+            id: 999,
+            organism_id: simulation.organisms[0].id.clone(),
+            kind: crate::state::TransformationKind::Break,
+            material: crate::resources::Material::free_base("", 0.0),
+            bond: None,
+            stored_material: Some(removed),
+            stored_bond: None,
+            environmental_source: false,
+            complexity: 1.0,
+            duration_ticks: 1,
+            remaining_ticks: 1,
+            prepared_energy: None,
+            pending_experience: None,
+            decision_context_key: Some("stored:0:bond:0".into()),
+            prepared_structure: None,
+            prepared_stored_material: None,
+            prepared_usable_energy: None,
+            prepared_stress: None,
+            prepared_ledger: None,
+            combine_environmental_source: None,
+        };
+
+        restore_failed_transformation_material(
+            &transformation,
+            Some(&mut simulation.organisms[0]),
+            &mut simulation.environment,
+        );
+
+        assert_eq!(simulation.organisms[0].stored_material.physical_count(), 1);
+        let restored = simulation.organisms[0]
+            .stored_material
+            .first_material()
+            .expect("failed BREAK source should remain stored");
+        assert!((restored.material.total_amount() - amount).abs() < 1e-12);
+    }
 
     #[test]
     fn initial_world_energy_inventory_uses_tick_zero_baseline() {
