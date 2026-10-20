@@ -911,7 +911,7 @@ mod tests {
         assert!(parameters().sample(0, 0.0, 0.0, -1.0).is_none());
     }
     #[test]
-    fn standalone_circle_uses_exact_diameter_without_polygon_approximation() {
+    fn standalone_circle_uses_point_source_projection_without_polygon_approximation() {
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
         use crate::resources::Form;
 
@@ -936,14 +936,30 @@ mod tests {
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.0,
         };
+        let intervals = crate::source_exposure::visible_circular_arc_intervals(
+            (sample.source_x, sample.source_y),
+            &[body.clone()],
+        )
+        .expect("circle boundary visibility is analytic");
+        let expected: f64 = intervals
+            .iter()
+            .map(|interval| {
+                crate::source_exposure::point_source_projected_arc_extent(
+                    interval.arc,
+                    (sample.source_x, sample.source_y),
+                )
+                .unwrap()
+            })
+            .sum();
         let frame = WorldToneCaptureFrame::from_geometry(sample, &[body])
-            .expect("an isolated, externally illuminated circle has an exact projected width");
-        assert_eq!(frame.projected_widths, vec![2.5]);
-        assert_eq!(frame.projected_width_for_unit(0, 7), Some(2.5));
+            .expect("an isolated, externally illuminated circle has point-source exposure");
+        assert!(expected > 0.0 && expected < 2.5);
+        assert!((frame.projected_widths[0] - expected).abs() < 1e-12);
+        assert!((frame.projected_width_for_unit(0, 7).unwrap() - expected).abs() < 1e-12);
     }
 
     #[test]
-    fn standalone_legacy_fluid_uses_exact_nominal_circle_width() {
+    fn standalone_legacy_fluid_uses_point_source_projection_of_nominal_circle() {
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
         use crate::resources::Form;
 
@@ -975,9 +991,25 @@ mod tests {
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.0,
         };
+        let intervals = crate::source_exposure::visible_circular_arc_intervals(
+            (sample.source_x, sample.source_y),
+            &[body.clone()],
+        )
+        .expect("legacy circular fluid visibility is analytic");
+        let expected: f64 = intervals
+            .iter()
+            .map(|interval| {
+                crate::source_exposure::point_source_projected_arc_extent(
+                    interval.arc,
+                    (sample.source_x, sample.source_y),
+                )
+                .unwrap()
+            })
+            .sum();
         let frame = WorldToneCaptureFrame::from_geometry(sample, &[body])
-            .expect("legacy circular fluid has an exact analytic realization");
-        assert!((frame.projected_width_for_unit(0, 3).unwrap() - 2.0 * radius).abs() < 1e-12);
+            .expect("legacy circular fluid has a point-source realization");
+        assert!(expected > 0.0 && expected < 2.0 * radius);
+        assert!((frame.projected_width_for_unit(0, 3).unwrap() - expected).abs() < 1e-12);
     }
 
     #[test]
