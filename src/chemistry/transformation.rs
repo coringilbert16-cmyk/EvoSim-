@@ -829,8 +829,48 @@ mod tests {
 
     #[test]
     fn stored_material_break_does_not_credit_unallocated_bond_energy() {
-        let (mut organism, mut environment, _) = stress_break_test_organism();
-        let catalog = environment.catalog.clone();
+        // Keep this accounting regression independent of the calibrated
+        // developmental constructor; it needs a holder and storage, not a genome.
+        let catalog = crate::resources::default_catalog();
+        let mut organism = crate::state::Organism {
+            id: "stored-break-accounting-test".into(),
+            developmental_origin: crate::state::Position { x: 0.0, y: 0.0 },
+            developmental_orientation_radians: 0.0,
+            occupied_cells: Vec::new(),
+            genome: crate::genome::initial_genome(),
+            harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+            experience_memory: crate::memory::ExperienceMemory::default(),
+            pending_movement_experience: None,
+            decision_history: crate::decision::DecisionHistory::default(),
+            usable_energy: 100.0,
+            stress: 0.0,
+            maintenance_debt: 0.0,
+            stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
+            stored_material: crate::material_storage::MaterialStorage::default(),
+            structure: crate::structure::Structure::default(),
+            active_transformation_id: None,
+            active_movement: None,
+            reproductive_construction: None,
+            structure_revision: 0,
+            position_revision: 0,
+            cached_cavity_revision: None,
+            cached_cavity: None,
+            cached_developmental_revision: None,
+            cached_developmental_realization: None,
+            peak_developmental_realization: 0.0,
+            cached_harmonic_key: None,
+            last_movement_attempt: None,
+        };
+        let mut environment = crate::state::Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog: catalog.clone(),
+            field: crate::environment::ActiveMaterialField::new(
+                1000.0,
+                1000.0,
+                crate::environment::DEFAULT_CELL_SIZE,
+            ),
+        };
         let material = crate::resources::Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
             internal_bonds: vec![crate::resources::InternalBond {
