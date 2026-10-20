@@ -143,8 +143,7 @@ fn polygon_is_convex(vertices: &[(f64, f64)]) -> bool {
             if other_index == index || other_index == (index + 1) % vertices.len() {
                 continue;
             }
-            let cross =
-                (b.0 - a.0) * (point.1 - a.1) - (b.1 - a.1) * (point.0 - a.0);
+            let cross = (b.0 - a.0) * (point.1 - a.1) - (b.1 - a.1) * (point.0 - a.0);
             if !cross.is_finite() {
                 return false;
             }
