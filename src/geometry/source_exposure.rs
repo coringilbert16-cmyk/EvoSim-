@@ -1206,7 +1206,20 @@ pub(crate) fn point_source_projected_arc_extent(
     arc: crate::capillary_geometry::CircularArcBoundary,
     source: (f64, f64),
 ) -> Option<f64> {
-    if !arc.is_valid() || !source.0.is_finite() || !source.1.is_finite() {
+    // Visible sub-arcs can be arbitrarily short; CircularArcBoundary::is_valid
+    // also enforces a minimum enclosed segment area, which is inappropriate
+    // for a visibility interval cut from a larger valid boundary.
+    if !arc.center_x.is_finite()
+        || !arc.center_y.is_finite()
+        || !arc.radius.is_finite()
+        || arc.radius <= 0.0
+        || !arc.start_angle_radians.is_finite()
+        || !arc.sweep_radians.is_finite()
+        || arc.sweep_radians <= 0.0
+        || arc.sweep_radians > std::f64::consts::TAU
+        || !source.0.is_finite()
+        || !source.1.is_finite()
+    {
         return None;
     }
     let integrand = |angle: f64| {
