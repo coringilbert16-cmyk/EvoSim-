@@ -289,11 +289,18 @@ impl WorldToneCaptureFrame {
                         (2.0 * radius, (part.x, part.y), radius)
                     }
                     crate::resources::Form::Fluid {
+                        nominal_area,
                         boundary: None,
                         arc_boundary: Some(arc),
                         multi_contact_boundary: None,
-                        ..
                     } if arc.is_valid() => {
+                        let arc_area = arc.segment_area()?;
+                        if !nominal_area.is_finite()
+                            || *nominal_area <= 0.0
+                            || (arc_area - nominal_area).abs() > 1e-10 * nominal_area.max(1.0)
+                        {
+                            return None;
+                        }
                         let (sin, cos) = part.rotation_radians.sin_cos();
                         let center = (
                             part.x + arc.center_x * cos - arc.center_y * sin,
