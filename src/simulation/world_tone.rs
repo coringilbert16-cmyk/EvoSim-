@@ -1028,6 +1028,13 @@ mod tests {
             (sample.source_x, sample.source_y),
         )
         .unwrap();
+        let parallel_ray_approximation =
+            crate::source_exposure::projected_arc_extent(expected_world_arc, (-1.0, 0.0))
+                .unwrap();
+        assert!(
+            (expected - parallel_ray_approximation).abs() > 1e-5,
+            "finite point-source geometry should not silently collapse to parallel rays"
+        );
         assert!((frame.projected_widths[0] - expected).abs() < 1e-12);
         assert_eq!(frame.projected_width_for_unit(0, 2), Some(expected));
     }
