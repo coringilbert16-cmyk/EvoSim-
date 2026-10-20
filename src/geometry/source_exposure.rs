@@ -767,6 +767,84 @@ fn add_circle_tangent_points(
     }
 }
 
+fn add_circle_segment_intersections(
+    center: (f64, f64),
+    radius: f64,
+    start: (f64, f64),
+    end: (f64, f64),
+    points: &mut Vec<(f64, f64)>,
+) -> Option<()> {
+    let dx = end.0 - start.0;
+    let dy = end.1 - start.1;
+    let fx = start.0 - center.0;
+    let fy = start.1 - center.1;
+    let a = dx * dx + dy * dy;
+    if !a.is_finite() || a <= f64::EPSILON {
+        return Some(());
+    }
+    let b = 2.0 * (fx * dx + fy * dy);
+    let c = fx * fx + fy * fy - radius * radius;
+    let discriminant = b * b - 4.0 * a * c;
+    if !b.is_finite() || !c.is_finite() || !discriminant.is_finite() {
+        return None;
+    }
+    if discriminant < -1e-10 {
+        return Some(());
+    }
+    let root = discriminant.max(0.0).sqrt();
+    for t in [(-b - root) / (2.0 * a), (-b + root) / (2.0 * a)] {
+        if (-1e-10..=1.0 + 1e-10).contains(&t) {
+            points.push((start.0 + t * dx, start.1 + t * dy));
+        }
+    }
+    Some(())
+}
+
+fn add_circle_circle_intersections(
+    first: (f64, f64),
+    first_radius: f64,
+    second: (f64, f64),
+    second_radius: f64,
+    points: &mut Vec<(f64, f64)>,
+) -> Option<()> {
+    let dx = second.0 - first.0;
+    let dy = second.1 - first.1;
+    let distance = dx.hypot(dy);
+    if !distance.is_finite()
+        || !first_radius.is_finite()
+        || !second_radius.is_finite()
+        || first_radius <= 0.0
+        || second_radius <= 0.0
+    {
+        return None;
+    }
+    if distance <= 1e-12
+        || distance > first_radius + second_radius + 1e-10
+        || distance < (first_radius - second_radius).abs() - 1e-10
+    {
+        return Some(());
+    }
+    let along = (first_radius * first_radius - second_radius * second_radius
+        + distance * distance)
+        / (2.0 * distance);
+    let height_squared = first_radius * first_radius - along * along;
+    if !along.is_finite() || !height_squared.is_finite() {
+        return None;
+    }
+    if height_squared < -1e-9 {
+        return Some(());
+    }
+    let height = height_squared.max(0.0).sqrt();
+    let ux = dx / distance;
+    let uy = dy / distance;
+    let base = (first.0 + along * ux, first.1 + along * uy);
+    points.push((base.0 - height * uy, base.1 + height * ux));
+    if height > 1e-10 {
+        points.push((base.0 + height * uy, base.1 - height * ux));
+    }
+    Some(())
+}
+
 /// Exact visibility partitioning for circle and circular-fluid boundaries under
 /// a finite point source. Visibility can change only along rays through polygon
 /// vertices, circular-arc endpoints, or circle tangencies. Those critical rays
@@ -893,9 +971,91 @@ pub(crate) fn visible_circular_arc_intervals(
         }
     }
 
+    // Visibility changes where a target circle crosses a straight boundary
+    // or another circular boundary, as well as at blocker silhouettes. Add
+    // those exact intersections as critical rays before classifying intervals.
+    let mut straight_edges = Vec::new();
+    for body in bodies {
+        for part in &body.parts {
+            let (sin, cos) = part.rotation_radians.sin_cos();
+            let mut local_edges = Vec::new();
+            if let Some(vertices) = part.form.polygon_vertices() {
+                for index in 0..vertices.len() {
+                    local_edges.push((vertices[index], vertices[(index + 1) % vertices.len()]));
+                }
+            }
+            match &part.form {
+                Form::Line { length } => {
+                    local_edges.push(((-length * 0.5, 0.0), (*length * 0.5, 0.0)));
+                }
+                Form::Fluid { boundary, multi_contact_boundary, .. } => {
+                    if let Some(vertices) = boundary {
+                        for index in 0..vertices.len() {
+                            local_edges.push((vertices[index], vertices[(index + 1) % vertices.len()]));
+                        }
+                    }
+                    if let Some(multi) = multi_contact_boundary {
+                        for piece in &multi.pieces {
+                            if let FluidBoundaryPiece::SolidContact {
+                                start_x, start_y, end_x, end_y, ..
+                            } = piece {
+                                local_edges.push(((*start_x, *start_y), (*end_x, *end_y)));
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+            for (a, b) in local_edges {
+                let world = |point: (f64, f64)| {
+                    (
+                        part.x + point.0 * cos - point.1 * sin,
+                        part.y + point.0 * sin + point.1 * cos,
+                    )
+                };
+                straight_edges.push((world(a), world(b)));
+            }
+        }
+    }
+    for target in &all_arcs {
+        for &(start, end) in &straight_edges {
+            add_circle_segment_intersections(
+                target.center,
+                target.radius,
+                start,
+                end,
+                &mut critical_points,
+            )?;
+        }
+    }
+    for first_index in 0..all_arcs.len() {
+        for second_index in (first_index + 1)..all_arcs.len() {
+            let first = all_arcs[first_index];
+            let second = all_arcs[second_index];
+            let mut intersections = Vec::with_capacity(2);
+            add_circle_circle_intersections(
+                first.center,
+                first.radius,
+                second.center,
+                second.radius,
+                &mut intersections,
+            )?;
+            for point in intersections {
+                let first_angle = (point.1 - first.center.1).atan2(point.0 - first.center.0);
+                let second_angle = (point.1 - second.center.1).atan2(point.0 - second.center.0);
+                if arc_has_angle(first, first_angle) && arc_has_angle(second, second_angle) {
+                    critical_points.push(point);
+                }
+            }
+        }
+    }
+
     if critical_points
         .iter()
         .any(|(x, y)| !x.is_finite() || !y.is_finite())
+        || straight_edges.iter().any(|(a, b)| {
+            !a.0.is_finite() || !a.1.is_finite() || !b.0.is_finite() || !b.1.is_finite()
+        })
     {
         return None;
     }
