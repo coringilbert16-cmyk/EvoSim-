@@ -1237,20 +1237,46 @@ mod point_source_curve_visibility_tests {
     }
 
     #[test]
-    fn multi_contact_fluid_is_not_credited_as_a_target_but_remains_valid_geometry() {
-        let fluid = Form::Fluid {
-            nominal_area: 0.5,
-            boundary: None,
-            arc_boundary: None,
-            multi_contact_boundary: Some(crate::capillary_geometry::MultiContactFluidBoundary {
-                nominal_area: 0.5,
-                pieces: vec![],
-            }),
+    fn multi_contact_fluid_arc_is_visible_with_its_contact_chord_checked_for_self_shadow() {
+        use crate::capillary_geometry::{FluidBoundaryPiece, MultiContactFluidBoundary};
+
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            0.5,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .expect("valid capillary family");
+        let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family)
+            .expect("valid exact arc");
+        let start = arc.start_point();
+        let end = arc.end_point();
+        let boundary = MultiContactFluidBoundary {
+            nominal_area: family.area,
+            pieces: vec![
+                FluidBoundaryPiece::FreeArc(arc),
+                FluidBoundaryPiece::SolidContact {
+                    start_x: end.0,
+                    start_y: end.1,
+                    end_x: start.0,
+                    end_y: start.1,
+                    contact_angle_radians: family.contact_angle_radians,
+                },
+            ],
         };
-        let target = body(fluid, 5.0, 0.0);
+        assert!(boundary.is_valid(), "fixture must be a closed exact boundary");
+        let target = body(
+            Form::Fluid {
+                nominal_area: family.area,
+                boundary: None,
+                arc_boundary: None,
+                multi_contact_boundary: Some(boundary),
+            },
+            5.0,
+            0.0,
+        );
         let intervals = visible_circular_arc_intervals((-5.0, 0.0), &[target])
-            .expect("unsupported target boundary is excluded without invalidating other geometry");
-        assert!(intervals.is_empty());
+            .expect("compound fluid arcs are supported as exact curved targets");
+        assert!(!intervals.is_empty());
+        assert!(intervals.iter().all(|interval| interval.arc.is_valid()));
     }
 }
 
