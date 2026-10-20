@@ -567,7 +567,7 @@ mod tests {
         let mut frame = WorldToneCaptureFrame::from_geometry(sample, &[receiver])
             .expect("valid polygonal receiver should produce exposure frame");
         let mut holder = 1.0;
-        let mut ledger = EnergyLedger::default();
+        let mut ledger = crate::state::EnergyLedger::default();
         let result = frame
             .settle_receiver(0, 0.5, 0.8, &mut holder, &mut ledger)
             .expect("valid receiver should capture");
@@ -613,7 +613,7 @@ mod tests {
         };
         let mut frame = WorldToneCaptureFrame::from_geometry(sample, &[receiver]).unwrap();
         let mut holder = 0.0;
-        let mut ledger = EnergyLedger::default();
+        let mut ledger = crate::state::EnergyLedger::default();
         assert!(frame
             .settle_receiver(0, 1.0, 1.0, &mut holder, &mut ledger)
             .is_some());
@@ -655,7 +655,7 @@ mod tests {
         };
         let mut frame = WorldToneCaptureFrame::from_geometry(sample, &bodies).unwrap();
         let mut holder = 1.0;
-        let mut ledger = EnergyLedger::default();
+        let mut ledger = crate::state::EnergyLedger::default();
         let result = frame
             .settle_receiver(1, 1.0, 1.0, &mut holder, &mut ledger)
             .unwrap();
@@ -696,7 +696,7 @@ mod tests {
         };
         let mut frame = WorldToneCaptureFrame::from_geometry(sample, &[receiver]).unwrap();
         let mut holder = 1.0;
-        let mut ledger = EnergyLedger::default();
+        let mut ledger = crate::state::EnergyLedger::default();
         assert!(frame
             .settle_receiver(0, f64::NAN, 0.8, &mut holder, &mut ledger)
             .is_none());
