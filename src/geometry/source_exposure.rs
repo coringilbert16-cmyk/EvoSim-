@@ -985,6 +985,7 @@ pub(crate) fn point_source_projected_arc_extent(
         let value = (b - a) * (fa + 4.0 * fm + fb) / 6.0;
         value.is_finite().then_some(value)
     }
+    #[allow(clippy::too_many_arguments)]
     fn integrate<F: Fn(f64) -> Option<f64>>(
         f: &F,
         a: f64,
