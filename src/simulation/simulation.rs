@@ -1368,6 +1368,38 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn live_stress_break_reconciles_world_energy_inventory() {
+        let mut simulation = Simulation::new(915, 10.0);
+        let before = simulation.energy_inventory_snapshot();
+        assert!(before.is_balanced(1e-9), "initial inventory: {:?}", before.residual());
+
+        assert!(crate::transformation::resolve_stress_break(
+            &mut simulation.organisms[0],
+            &simulation.environment,
+            &mut simulation.energy_ledger,
+            &mut simulation.rng,
+        ));
+
+        simulation.energy_ledger.total_usable_energy_held =
+            crate::reproduction::total_usable_energy_held(
+                &simulation.organisms,
+                &simulation.decomposing_bodies,
+            );
+        simulation.energy_ledger.total_structural_energy_held =
+            Simulation::structural_energy_held(
+                &simulation.organisms,
+                &simulation.decomposing_bodies,
+            );
+
+        let after = simulation.energy_inventory_snapshot();
+        assert!(
+            after.is_balanced(1e-9),
+            "world inventory residual after live stress BREAK: {:?}",
+            after.residual()
+        );
+    }
+
+    #[test]
     fn invalid_finished_body_energy_holder_does_not_release_material() {
         let mut simulation = Simulation::new(913, 10.0);
         let catalog = crate::resources::default_catalog();
