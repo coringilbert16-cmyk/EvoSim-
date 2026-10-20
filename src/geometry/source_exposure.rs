@@ -227,138 +227,413 @@ pub(crate) fn visible_polygonal_intervals(
     source: (f64, f64),
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
 ) -> Option<Vec<ExposedBoundaryInterval>> {
+    use crate::capillary_geometry::FluidBoundaryPiece;
+    use crate::resources::Form;
+
     if !source.0.is_finite() || !source.1.is_finite() {
         return None;
     }
 
-    let mut polygons = Vec::new();
+    let mut straight_targets = Vec::new();
+    let mut straight_edges = Vec::new();
+    let mut critical_points = Vec::new();
+
     for (body_index, body) in bodies.iter().enumerate() {
-        // Unit indices are the identity key used to exclude a target from its
-        // own occlusion test and to attribute projected width to a constituent.
-        // Duplicate identities would make both operations ambiguous, so reject
-        // the entire geometry snapshot rather than risk double-counting it.
         let mut seen_unit_indices = Vec::with_capacity(body.parts.len());
         for part in &body.parts {
-            if seen_unit_indices.contains(&part.unit_index) {
+            if seen_unit_indices.contains(&part.unit_index)
+                || !part.x.is_finite()
+                || !part.y.is_finite()
+                || !part.rotation_radians.is_finite()
+            {
                 return None;
             }
             seen_unit_indices.push(part.unit_index);
-            if !part.x.is_finite() || !part.y.is_finite() || !part.rotation_radians.is_finite() {
-                return None;
+
+            let straight_local = match &part.form {
+                Form::Fluid {
+                    nominal_area,
+                    boundary: Some(vertices),
+                    arc_boundary: None,
+                    multi_contact_boundary: None,
+                } => {
+                    if !nominal_area.is_finite()
+                        || *nominal_area <= 0.0
+                        || vertices.len() < 3
+                    {
+                        return None;
+                    }
+                    Some(vertices.clone())
+                }
+                Form::Fluid {
+                    nominal_area,
+                    boundary: None,
+                    arc_boundary: Some(arc),
+                    multi_contact_boundary: None,
+                } => {
+                    if !nominal_area.is_finite()
+                        || *nominal_area <= 0.0
+                        || !arc.is_valid()
+                        || (arc.segment_area()? - *nominal_area).abs()
+                            > 1e-10 * nominal_area.abs().max(1.0)
+                    {
+                        return None;
+                    }
+                    None
+                }
+                Form::Fluid {
+                    nominal_area,
+                    boundary: None,
+                    arc_boundary: None,
+                    multi_contact_boundary: Some(multi),
+                } => {
+                    if !nominal_area.is_finite()
+                        || *nominal_area <= 0.0
+                        || !multi.is_valid()
+                        || (multi.nominal_area - *nominal_area).abs()
+                            > 1e-10 * nominal_area.abs().max(1.0)
+                    {
+                        return None;
+                    }
+                    None
+                }
+                Form::Fluid {
+                    nominal_area,
+                    boundary: None,
+                    arc_boundary: None,
+                    multi_contact_boundary: None,
+                } => {
+                    if !nominal_area.is_finite() || *nominal_area <= 0.0 {
+                        return None;
+                    }
+                    None
+                }
+                Form::Fluid { .. } => return None,
+                Form::Circle { radius } => {
+                    if !radius.is_finite() || *radius <= 0.0 {
+                        return None;
+                    }
+                    None
+                }
+                Form::Line { length } => {
+                    if !length.is_finite() || *length <= 0.0 {
+                        return None;
+                    }
+                    None
+                }
+                _ => part.form.polygon_vertices(),
+            };
+
+            if let Some(local_vertices) = straight_local {
+                if local_vertices.len() < 3
+                    || local_vertices
+                        .iter()
+                        .any(|(x, y)| !x.is_finite() || !y.is_finite())
+                {
+                    return None;
+                }
+                let (sin, cos) = part.rotation_radians.sin_cos();
+                let vertices = local_vertices
+                    .into_iter()
+                    .map(|(x, y)| {
+                        (
+                            part.x + x * cos - y * sin,
+                            part.y + x * sin + y * cos,
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                if vertices.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) {
+                    return None;
+                }
+                critical_points.extend(vertices.iter().copied());
+                for index in 0..vertices.len() {
+                    straight_edges.push((
+                        body_index,
+                        part.unit_index,
+                        vertices[index],
+                        vertices[(index + 1) % vertices.len()],
+                    ));
+                }
+                straight_targets.push((body_index, part.unit_index, vertices));
+                continue;
             }
-            let local = part.form.polygon_vertices()?;
-            if local.len() < 3 || local.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) {
-                return None;
+
+            match &part.form {
+                Form::Circle { radius } => {
+                    add_circle_tangent_points(
+                        (part.x, part.y),
+                        *radius,
+                        source,
+                        &mut critical_points,
+                    );
+                }
+                Form::Line { length } => {
+                    let half = *length * 0.5;
+                    let (sin, cos) = part.rotation_radians.sin_cos();
+                    let transform = |x: f64| {
+                        (part.x + x * cos, part.y + x * sin)
+                    };
+                    let start = transform(-half);
+                    let end = transform(half);
+                    critical_points.extend([start, end]);
+                    straight_edges.push((body_index, part.unit_index, start, end));
+                }
+                Form::Fluid {
+                    nominal_area,
+                    boundary,
+                    arc_boundary,
+                    multi_contact_boundary,
+                } => {
+                    if let Some(vertices) = boundary {
+                        let (sin, cos) = part.rotation_radians.sin_cos();
+                        let world = vertices
+                            .iter()
+                            .map(|&(x, y)| {
+                                (
+                                    part.x + x * cos - y * sin,
+                                    part.y + x * sin + y * cos,
+                                )
+                            })
+                            .collect::<Vec<_>>();
+                        if world.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) {
+                            return None;
+                        }
+                        critical_points.extend(world.iter().copied());
+                        for index in 0..world.len() {
+                            straight_edges.push((
+                                body_index,
+                                part.unit_index,
+                                world[index],
+                                world[(index + 1) % world.len()],
+                            ));
+                        }
+                    }
+                    if let Some(arc) = arc_boundary {
+                        let world = arc.transformed(part.x, part.y, part.rotation_radians)?;
+                        critical_points.extend([world.start_point(), world.end_point()]);
+                        add_circle_tangent_points(
+                            (world.center_x, world.center_y),
+                            world.radius,
+                            source,
+                            &mut critical_points,
+                        );
+                        straight_edges.push((
+                            body_index,
+                            part.unit_index,
+                            world.start_point(),
+                            world.end_point(),
+                        ));
+                    }
+                    if let Some(multi) = multi_contact_boundary {
+                        for piece in &multi.pieces {
+                            match piece {
+                                FluidBoundaryPiece::SolidContact {
+                                    start_x,
+                                    start_y,
+                                    end_x,
+                                    end_y,
+                                    ..
+                                } => {
+                                    let (sin, cos) = part.rotation_radians.sin_cos();
+                                    let transform = |x: f64, y: f64| {
+                                        (
+                                            part.x + x * cos - y * sin,
+                                            part.y + x * sin + y * cos,
+                                        )
+                                    };
+                                    let start = transform(*start_x, *start_y);
+                                    let end = transform(*end_x, *end_y);
+                                    critical_points.extend([start, end]);
+                                    straight_edges.push((
+                                        body_index,
+                                        part.unit_index,
+                                        start,
+                                        end,
+                                    ));
+                                }
+                                FluidBoundaryPiece::FreeArc(arc) => {
+                                    let world =
+                                        arc.transformed(part.x, part.y, part.rotation_radians)?;
+                                    critical_points
+                                        .extend([world.start_point(), world.end_point()]);
+                                    add_circle_tangent_points(
+                                        (world.center_x, world.center_y),
+                                        world.radius,
+                                        source,
+                                        &mut critical_points,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    if boundary.is_none()
+                        && arc_boundary.is_none()
+                        && multi_contact_boundary.is_none()
+                    {
+                        let radius = (nominal_area / std::f64::consts::PI).sqrt();
+                        add_circle_tangent_points(
+                            (part.x, part.y),
+                            radius,
+                            source,
+                            &mut critical_points,
+                        );
+                    }
+                }
+                _ => {}
             }
-            let (sin, cos) = part.rotation_radians.sin_cos();
-            let vertices = local
-                .into_iter()
-                .map(|(x, y)| (part.x + x * cos - y * sin, part.y + x * sin + y * cos))
-                .collect::<Vec<_>>();
-            if vertices
-                .iter()
-                .any(|(x, y)| !x.is_finite() || !y.is_finite())
-            {
-                return None;
-            }
-            polygons.push((body_index, part.unit_index, vertices));
         }
     }
 
+    if critical_points
+        .iter()
+        .any(|(x, y)| !x.is_finite() || !y.is_finite())
+        || straight_edges.iter().any(|(_, _, a, b)| {
+            !a.0.is_finite() || !a.1.is_finite() || !b.0.is_finite() || !b.1.is_finite()
+        })
+    {
+        return None;
+    }
+
     let mut result = Vec::new();
-    for (body_index, body) in bodies.iter().enumerate() {
-        for part in &body.parts {
-            let local = part.form.polygon_vertices()?;
-            let (sin, cos) = part.rotation_radians.sin_cos();
-            let vertices = local
-                .into_iter()
-                .map(|(x, y)| (part.x + x * cos - y * sin, part.y + x * sin + y * cos))
-                .collect::<Vec<_>>();
-            if vertices
-                .iter()
-                .any(|(x, y)| !x.is_finite() || !y.is_finite())
-                || !polygon_is_convex(&vertices)
-            {
-                return None;
-            }
-            let area2: f64 = vertices
-                .iter()
-                .enumerate()
-                .map(|(i, &(x1, y1))| {
-                    let (x2, y2) = vertices[(i + 1) % vertices.len()];
-                    x1 * y2 - x2 * y1
-                })
-                .sum();
-            if !area2.is_finite() || area2.abs() <= 1e-12 {
-                return None;
-            }
-            let winding = area2.signum();
+    for (body_index, unit_index, vertices) in straight_targets {
+        if !polygon_is_convex(&vertices) {
+            return None;
+        }
+        let area2: f64 = vertices
+            .iter()
+            .enumerate()
+            .map(|(index, &(x1, y1))| {
+                let (x2, y2) = vertices[(index + 1) % vertices.len()];
+                x1 * y2 - x2 * y1
+            })
+            .sum();
+        if !area2.is_finite() || area2.abs() <= 1e-12 {
+            return None;
+        }
+        let winding = area2.signum();
 
-            for edge_index in 0..vertices.len() {
-                let a = vertices[edge_index];
-                let b = vertices[(edge_index + 1) % vertices.len()];
-                let ex = b.0 - a.0;
-                let ey = b.1 - a.1;
-                let edge_length = ex.hypot(ey);
-                if !edge_length.is_finite() || edge_length <= 1e-12 {
+        for edge_index in 0..vertices.len() {
+            let a = vertices[edge_index];
+            let b = vertices[(edge_index + 1) % vertices.len()];
+            let ex = b.0 - a.0;
+            let ey = b.1 - a.1;
+            let edge_length = ex.hypot(ey);
+            if !edge_length.is_finite() || edge_length <= 1e-12 {
+                continue;
+            }
+            let normal = (winding * ey / edge_length, -winding * ex / edge_length);
+            let midpoint = ((a.0 + b.0) * 0.5, (a.1 + b.1) * 0.5);
+            if normal.0 * (source.0 - midpoint.0) + normal.1 * (source.1 - midpoint.1) <= 1e-10 {
+                continue;
+            }
+
+            let mut cuts = vec![0.0_f64, 1.0_f64];
+            for &(vx, vy) in &critical_points {
+                let dx = vx - source.0;
+                let dy = vy - source.1;
+                let denominator = ex * dy - ey * dx;
+                if denominator.abs() <= 1e-12 {
                     continue;
                 }
-                let normal = (winding * ey / edge_length, -winding * ex / edge_length);
-                let midpoint = ((a.0 + b.0) * 0.5, (a.1 + b.1) * 0.5);
-                if normal.0 * (source.0 - midpoint.0) + normal.1 * (source.1 - midpoint.1) <= 1e-10
+                let ax = a.0 - source.0;
+                let ay = a.1 - source.1;
+                let t = -(ax * dy - ay * dx) / denominator;
+                let u = -(ax * ey - ay * ex) / denominator;
+                if t > 1e-10 && t < 1.0 - 1e-10 && u > 1.0 + 1e-10 {
+                    cuts.push(t);
+                }
+            }
+
+            // Directly split at straight-boundary intersections, including
+            // contact chords. Collinear overlaps are split at both endpoints.
+            for &(block_body, block_unit, c, d) in &straight_edges {
+                if block_body == body_index && block_unit == unit_index {
+                    continue;
+                }
+                let sx = d.0 - c.0;
+                let sy = d.1 - c.1;
+                let qx = c.0 - a.0;
+                let qy = c.1 - a.1;
+                let denominator = ex * sy - ey * sx;
+                if denominator.abs() <= 1e-12 {
+                    if (qx * ey - qy * ex).abs() <= 1e-9 {
+                        let length_squared = ex * ex + ey * ey;
+                        for point in [c, d] {
+                            let t = ((point.0 - a.0) * ex + (point.1 - a.1) * ey)
+                                / length_squared;
+                            if t > 1e-10 && t < 1.0 - 1e-10 {
+                                cuts.push(t);
+                            }
+                        }
+                    }
+                    continue;
+                }
+                let t = (qx * sy - qy * sx) / denominator;
+                let u = (qx * ey - qy * ex) / denominator;
+                if t > 1e-10
+                    && t < 1.0 - 1e-10
+                    && (-1e-10..=1.0 + 1e-10).contains(&u)
                 {
+                    cuts.push(t);
+                }
+            }
+
+            // Curved-boundary intersections with this straight target edge are
+            // exact cut points, not a reason to approximate the curve.
+            for (block_body_index, block_body) in bodies.iter().enumerate() {
+                for blocker in &block_body.parts {
+                    if block_body_index == body_index && blocker.unit_index == unit_index {
+                        continue;
+                    }
+                    for arc in realized_circle_arcs(block_body_index, blocker)? {
+                        let mut intersections = Vec::with_capacity(2);
+                        add_circle_segment_intersections(
+                            arc.center,
+                            arc.radius,
+                            a,
+                            b,
+                            &mut intersections,
+                        )?;
+                        for point in intersections {
+                            let angle = (point.1 - arc.center.1).atan2(point.0 - arc.center.0);
+                            if !arc_has_angle(arc, angle) {
+                                continue;
+                            }
+                            let t = ((point.0 - a.0) * ex + (point.1 - a.1) * ey)
+                                / (edge_length * edge_length);
+                            if t > 1e-10 && t < 1.0 - 1e-10 {
+                                cuts.push(t);
+                            }
+                        }
+                    }
+                }
+            }
+
+            cuts.sort_by(f64::total_cmp);
+            cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-10);
+            for pair in cuts.windows(2) {
+                let (t0, t1) = (pair[0], pair[1]);
+                if t1 - t0 <= 1e-10 {
                     continue;
                 }
-
-                let mut cuts = vec![0.0_f64, 1.0_f64];
-                for (block_body, block_unit, blocker) in &polygons {
-                    if *block_body == body_index && *block_unit == part.unit_index {
-                        continue;
-                    }
-                    for &(vx, vy) in blocker {
-                        let dx = vx - source.0;
-                        let dy = vy - source.1;
-                        let denominator = ex * dy - ey * dx;
-                        if denominator.abs() <= 1e-12 {
-                            continue;
-                        }
-                        let ax = a.0 - source.0;
-                        let ay = a.1 - source.1;
-                        let t = -(ax * dy - ay * dx) / denominator;
-                        // Correct signed parameter for source-to-vertex ray:
-                        // A + tE = S + u(V-S), with u > 1 beyond the vertex.
-                        let u = -(ax * ey - ay * ex) / denominator;
-                        if t > 1e-10 && t < 1.0 - 1e-10 && u > 1.0 + 1e-10 {
-                            cuts.push(t);
-                        }
-                    }
+                let t = (t0 + t1) * 0.5;
+                let point = (a.0 + ex * t, a.1 + ey * t);
+                if crate::organism_geometry::source_path_blocked(
+                    source,
+                    point,
+                    bodies,
+                    body_index,
+                    unit_index,
+                ) {
+                    continue;
                 }
-                cuts.sort_by(f64::total_cmp);
-                cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-10);
-                for pair in cuts.windows(2) {
-                    let (t0, t1) = (pair[0], pair[1]);
-                    if t1 - t0 <= 1e-10 {
-                        continue;
-                    }
-                    let t = (t0 + t1) * 0.5;
-                    let point = (a.0 + ex * t, a.1 + ey * t);
-                    if crate::organism_geometry::source_path_blocked(
-                        source,
-                        point,
-                        bodies,
-                        body_index,
-                        part.unit_index,
-                    ) {
-                        continue;
-                    }
-                    result.push(ExposedBoundaryInterval {
-                        body_index,
-                        unit_index: part.unit_index,
-                        start: (a.0 + ex * t0, a.1 + ey * t0),
-                        end: (a.0 + ex * t1, a.1 + ey * t1),
-                        outward_normal: normal,
-                    });
-                }
+                result.push(ExposedBoundaryInterval {
+                    body_index,
+                    unit_index,
+                    start: (a.0 + ex * t0, a.1 + ey * t0),
+                    end: (a.0 + ex * t1, a.1 + ey * t1),
+                    outward_normal: normal,
+                });
             }
         }
     }
