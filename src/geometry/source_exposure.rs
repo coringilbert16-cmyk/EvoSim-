@@ -359,6 +359,21 @@ pub(crate) fn visible_polygonal_intervals(
             }
 
             match &part.form {
+                Form::Line { length } => {
+                    if !length.is_finite() || *length <= 0.0 {
+                        return None;
+                    }
+                    let (sin, cos) = part.rotation_radians.sin_cos();
+                    let half = *length * 0.5;
+                    critical_points.push((
+                        part.x - half * cos,
+                        part.y - half * sin,
+                    ));
+                    critical_points.push((
+                        part.x + half * cos,
+                        part.y + half * sin,
+                    ));
+                }
                 Form::Circle { radius } => {
                     add_circle_tangent_points(
                         (part.x, part.y),
