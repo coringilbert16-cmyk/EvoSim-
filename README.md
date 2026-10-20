@@ -22,6 +22,15 @@ First implementation slice on the dedicated `feature/external-input-ledger` bran
 
 **Future library direction (design recommendation, not implementation):** keep Bob focused on geometry. If profiling later justifies reusable harmonic responses, introduce a separate response cache/library keyed by all inputs that affect a deterministic material response (material properties, incoming frequency/composition, and relevant response parameters). Do not store position-dependent energy outcomes or live reflection paths there, and do not duplicate response records in Bob. Keep actual received/captured/reflected/dissipated energy in the live, source-backed accounting path.
 
+## Live world energy inventory — 2026-10-20
+
+- `EnergyLedger` now retains tick-zero baselines for usable energy and stored bond energy, alongside current world totals.
+- Simulation initialization captures the initial usable-energy and structural-energy baseline. End-of-tick accounting refreshes current usable energy across organisms, developing offspring, and decomposing bodies, and sums each realized graph bond's `bond_energy` across organism structures, developing offspring structures, and decomposing structures.
+- `Simulation::energy_inventory_snapshot()` exposes those current values with cumulative external input, explicitly non-structural energy release, work, and heat to the shared conservation check.
+- Added a simulation test that checks the tick-zero inventory starts balanced, in addition to the three ledger-level reconciliation tests.
+- **Important boundary:** the model currently stores bond energy only on realized graph bonds. Internal connections inside `PhysicalMaterial` have no independent energy value, so they are not separately counted as stored bond energy. That representation must be resolved before claiming the inventory covers every possible stored-material state.
+- **Verification:** changes are committed to the existing PR #202 branch. The environment still has no local GitHub checkout, and no workflow/status check has reported a run for the current head. The new tests have not been executed. Tick-zero baseline wiring is implemented; runtime conservation over actual chemical transitions remains unverified. Do not connect live sunlight capture until the full Rust test/Clippy gate and transition-level reconciliation pass.
+
 ## World energy inventory reconciliation primitive — 2026-10-20
 
 - Added `EnergyInventorySnapshot` in `src/chemistry/energy_ledger.rs`. It expresses the world-scale invariant: change in usable energy + change in stored structural/bond energy + work + heat = external input + explicitly non-structural released energy.
