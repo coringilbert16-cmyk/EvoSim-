@@ -421,10 +421,8 @@ pub(crate) fn settle_world_tone_capture(
         if !distance.is_finite() || distance <= f64::EPSILON {
             return None;
         }
-        let extent = crate::source_exposure::projected_extent(
-            *interval,
-            (dx / distance, dy / distance),
-        )?;
+        let extent =
+            crate::source_exposure::projected_extent(*interval, (dx / distance, dy / distance))?;
         projected_width += extent;
         if !projected_width.is_finite() {
             return None;
@@ -436,9 +434,14 @@ pub(crate) fn settle_world_tone_capture(
     let unabsorbed_energy = incident_energy - absorbed_energy;
     let usable_energy = absorbed_energy * usable_fraction;
     let heat_dissipated = absorbed_energy - usable_energy;
-    if [absorbed_energy, unabsorbed_energy, usable_energy, heat_dissipated]
-        .iter()
-        .any(|value| !value.is_finite() || *value < 0.0)
+    if [
+        absorbed_energy,
+        unabsorbed_energy,
+        usable_energy,
+        heat_dissipated,
+    ]
+    .iter()
+    .any(|value| !value.is_finite() || *value < 0.0)
     {
         return None;
     }
