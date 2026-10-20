@@ -848,10 +848,10 @@ fn add_circle_circle_intersections(
 }
 
 /// Exact visibility partitioning for circle and circular-fluid boundaries under
-/// a finite point source. Visibility changes only along rays through straight-
-/// boundary vertices and intersections, circular-arc endpoints and intersections,
-/// or circle tangencies. Those critical rays cut the target arc; exact geometry
-/// queries classify each resulting interval.
+/// a finite point source. Visibility changes only along rays through straight-boundary
+/// vertices and intersections, circular-arc endpoints and intersections, or circle
+/// tangencies. Those critical rays cut the target arc; exact geometry queries
+/// classify each resulting interval.
 /// Compound boundaries are tested against all realized pieces; invalid geometry returns None.
 #[allow(dead_code)]
 pub(crate) fn visible_circular_arc_intervals(
