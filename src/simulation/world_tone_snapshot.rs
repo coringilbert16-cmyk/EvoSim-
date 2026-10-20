@@ -69,7 +69,9 @@ impl WorldToneOccluderSnapshot {
                 };
                 for entry in &construction.committed_material.entries {
                     let StoredMaterial::Physical(physical) = entry;
-                    bodies.push(body_from_owner_relative_material(physical, anchor, catalog)?);
+                    bodies.push(body_from_owner_relative_material(
+                        physical, anchor, catalog,
+                    )?);
                 }
             }
         }
