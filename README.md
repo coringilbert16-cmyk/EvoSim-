@@ -2010,3 +2010,19 @@ The latest implementation adds the first explicit geometry-to-ledger solar captu
 - Added focused tests for projected-width scaling and balanced ledger settlement, body ownership (a fully shadowed body receives no credit), and fail-closed validation.
 
 **Still outstanding:** select absorption/usable fractions from approved material properties, integrate this primitive into the simulation tick with a per-receiver deduplication guard, account for reflected/unabsorbed energy where applicable, and prove tick/world inventory conservation. This commit does not claim live solar capture is active.
+
+
+## PR #202 current audit checkpoint — 2026-10-20 (supersedes earlier status notes)
+
+**Verified head at audit start:** `e4d0f2a495c028be8647cc6830990e9e4e00f211`. The geometry-to-ledger prototype now supports aggregate receiver settlement and per-constituent settlement using each constituent's own projected exposure and existing resonance/damping response. The frame tracks hidden constituents at zero exposure, rejects unknown constituent indices, and prevents duplicate or mixed aggregate/per-constituent credits within one frame. The caller still supplies the usable-energy fraction; no retention coefficient has been invented.
+
+**Exact-head CI result:** formatting passed. Rust tests completed with **464 passed, 28 failed, 1 ignored**. The previous observed baseline was **457 passed, 28 failed, 1 ignored**, so this run adds seven passing tests without increasing the failure count; the 28 failures are in existing construction, geometry/contact, cavity/viability, harmonics, movement, reproduction, and storage paths, and are not claimed as fixed by PR #202. Clippy failed with broad existing production/test lint debt (60 production errors and 38 test-compilation errors in this run); it is not a green gate. Do not infer the PR-specific tests are all green solely from the aggregate comparison.
+
+**Hard blockers before live capture:**
+
+- Exposure discovery currently requires polygonizable realized boundaries. Circles, lines, and fluid boundaries with exact arcs or multi-contact geometry fail closed. This is intentionally safer than approximating them, but it means many valid realized bodies cannot receive capture yet.
+- The exposure snapshot is built from supplied organism-body geometry; live integration must audit and include every relevant physical occluder, including environmental and stored/decomposing material where physically present. Omitting blockers can create false sunlight exposure.
+- The tick still does not settle world-tone capture. Do not wire the prototype into the live tick until boundary visibility and world-wide blocker coverage are sound, and usable-versus-heat allocation is defined from approved rules.
+- Transaction-level balance and these focused geometry/settlement tests are not proof of whole-world conservation. Reconcile all holders, stored bond energy, work, heat, external input, and any modeled output before claiming conservation.
+
+**Next implementation step:** audit the exact realized geometry and world-material inventory APIs, then add visibility support that preserves exact circle/fluid boundary semantics (or keep the entire capture frame fail-closed until it can). After that, connect the source to the tick and add tick-level conservation tests. Do not choose a polygonization tolerance or material retention fraction without an explicit design basis.
