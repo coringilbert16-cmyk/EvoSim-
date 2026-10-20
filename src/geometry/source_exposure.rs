@@ -628,12 +628,15 @@ fn realized_circle_arcs(
             part.x + center_x * cos - center_y * sin,
             part.y + center_x * sin + center_y * cos,
         );
+        let normalized_start = (start.rem_euclid(std::f64::consts::TAU)
+            + part.rotation_radians.rem_euclid(std::f64::consts::TAU))
+        .rem_euclid(std::f64::consts::TAU);
         let arc = WorldCircleArc {
             body_index,
             unit_index: part.unit_index,
             center,
             radius,
-            start: (start + part.rotation_radians).rem_euclid(std::f64::consts::TAU),
+            start: normalized_start,
             sweep,
         };
         (center.0.is_finite()
@@ -899,7 +902,10 @@ pub(crate) fn visible_circular_arc_intervals(
             let b = 2.0 * (ox * direction.0 + oy * direction.1);
             let c = ox * ox + oy * oy - target.radius * target.radius;
             let discriminant = b * b - 4.0 * a * c;
-            if !discriminant.is_finite() || discriminant < -1e-10 {
+            if !discriminant.is_finite() {
+                return None;
+            }
+            if discriminant < -1e-10 {
                 continue;
             }
             let root = discriminant.max(0.0).sqrt();
