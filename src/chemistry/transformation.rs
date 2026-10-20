@@ -16,7 +16,10 @@ pub(crate) fn bond_break_energy_yield(
     bond_energy: f64,
     processing_efficiency: f64,
 ) -> Option<(f64, f64, f64)> {
-    if !bond_energy.is_finite() || bond_energy < 0.0 {
+    if !bond_energy.is_finite()
+        || bond_energy < 0.0
+        || !processing_efficiency.is_finite()
+    {
         return None;
     }
     let efficiency = processing_efficiency.clamp(0.0, 1.0);
@@ -818,6 +821,13 @@ mod tests {
         assert_eq!(usable, 2.0);
         assert_eq!(heat, 2.0);
         assert!((gross - usable - heat).abs() < 1e-12);
+    }
+
+    #[test]
+    fn bond_break_rejects_non_finite_processing_efficiency() {
+        assert!(bond_break_energy_yield(4.0, f64::NAN).is_none());
+        assert!(bond_break_energy_yield(4.0, f64::INFINITY).is_none());
+        assert!(bond_break_energy_yield(4.0, f64::NEG_INFINITY).is_none());
     }
 
     #[test]
