@@ -2063,3 +2063,10 @@ The latest implementation adds the first explicit geometry-to-ledger solar captu
 - Added a focused regression test asserting that an inside-world orbit is rejected and leaves both runtime source and precomputed cycle unset.
 - Audit result: this closes the activation inconsistency introduced by the new radius invariant. It does **not** solve source integration, curved visibility, full-world occluder collection, or energy-allocation policy.
 - Exact-head CI is still unverified. The currently visible in-progress workflow was triggered before these latest commits; its success/failure cannot be used as evidence for commit `21723d6`.
+
+
+## PR #202 implementation pass 3 — geometry safety and formatting — 2026-10-20
+
+- Formatting failures in `src/geometry/source_exposure.rs` and `src/simulation/world_tone.rs` were corrected in commits `08cbe3f5b1cf9ec1483804dbf2f14c00a5fa91ef` and `fa01c57919ed5853fa3b60167d6f6c9adbb6a238`. The workflow triggered after those corrections advanced past formatting and the focused gates into Rust tests; its final result was still pending at this note.
+- Commit `75cef0f3cf6f96a01883fee2c1a6419996b29d63` makes polygonal visibility fail closed for non-convex target geometry. The current solver excludes a target constituent from its own occlusion test, which is safe for convex targets but could over-credit a concave target that shadows itself. A regression test covers the rejection.
+- This is a conservative correctness boundary, not general concave/self-occluding visibility support. Curved receiver visibility under blockers, complete world occluder snapshots, live tick integration, and whole-world energy reconciliation remain open. The latest commit's formatting and tests still require exact-head CI verification.
