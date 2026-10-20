@@ -143,7 +143,16 @@ pub(crate) fn visible_polygonal_intervals(
 
     let mut polygons = Vec::new();
     for (body_index, body) in bodies.iter().enumerate() {
+        // Unit indices are the identity key used to exclude a target from its
+        // own occlusion test and to attribute projected width to a constituent.
+        // Duplicate identities would make both operations ambiguous, so reject
+        // the entire geometry snapshot rather than risk double-counting it.
+        let mut seen_unit_indices = Vec::with_capacity(body.parts.len());
         for part in &body.parts {
+            if seen_unit_indices.contains(&part.unit_index) {
+                return None;
+            }
+            seen_unit_indices.push(part.unit_index);
             if !part.x.is_finite() || !part.y.is_finite() || !part.rotation_radians.is_finite() {
                 return None;
             }
@@ -291,6 +300,36 @@ mod visibility_tests {
             min_y: y - height * 0.5,
             max_y: y + height * 0.5,
         }
+    }
+
+    #[test]
+    fn polygonal_exposure_rejects_duplicate_constituent_identity() {
+        let body = OrganismBodyGeometry {
+            parts: vec![
+                PlacedForm {
+                    unit_index: 4,
+                    form: Form::Rectangle { width: 2.0, height: 2.0 },
+                    x: 5.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                PlacedForm {
+                    unit_index: 4,
+                    form: Form::Rectangle { width: 1.0, height: 1.0 },
+                    x: 8.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            min_x: 4.0,
+            max_x: 8.5,
+            min_y: -1.0,
+            max_y: 1.0,
+        };
+        assert!(
+            visible_polygonal_intervals((-5.0, 0.0), &[body]).is_none(),
+            "duplicate unit identities make occlusion exclusion and exposure attribution ambiguous"
+        );
     }
 
     #[test]
