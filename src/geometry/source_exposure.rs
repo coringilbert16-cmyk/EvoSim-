@@ -125,6 +125,43 @@ mod tests {
     }
 }
 
+fn polygon_is_convex(vertices: &[(f64, f64)]) -> bool {
+    if vertices.len() < 3 {
+        return false;
+    }
+
+    // The visibility solver excludes the target constituent from its own
+    // occlusion test. That is correct for convex material, but a concave or
+    // self-intersecting target can shadow itself and would be over-credited.
+    // Require every vertex to lie on one side of each edge; ambiguous shapes
+    // fail closed instead of being approximated.
+    for index in 0..vertices.len() {
+        let a = vertices[index];
+        let b = vertices[(index + 1) % vertices.len()];
+        let mut side = 0.0_f64;
+        for (other_index, &point) in vertices.iter().enumerate() {
+            if other_index == index || other_index == (index + 1) % vertices.len() {
+                continue;
+            }
+            let cross =
+                (b.0 - a.0) * (point.1 - a.1) - (b.1 - a.1) * (point.0 - a.0);
+            if !cross.is_finite() {
+                return false;
+            }
+            if cross != 0.0 {
+                if side != 0.0 && cross.signum() != side.signum() {
+                    return false;
+                }
+                side = cross;
+            }
+        }
+        if side == 0.0 {
+            return false;
+        }
+    }
+    true
+}
+
 /// Derive visible straight boundary intervals for polygonal bodies.
 ///
 /// Visibility can change only along rays from the source through blocker
@@ -187,6 +224,7 @@ pub(crate) fn visible_polygonal_intervals(
             if vertices
                 .iter()
                 .any(|(x, y)| !x.is_finite() || !y.is_finite())
+                || !polygon_is_convex(&vertices)
             {
                 return None;
             }
@@ -335,6 +373,35 @@ mod visibility_tests {
         assert!(
             visible_polygonal_intervals((-5.0, 0.0), &[body]).is_none(),
             "duplicate unit identities make occlusion exclusion and exposure attribution ambiguous"
+        );
+    }
+
+    #[test]
+    fn polygonal_exposure_fails_closed_for_concave_target_that_can_self_occlude() {
+        let concave = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Polygon {
+                    vertices: vec![
+                        (-2.0, -1.0),
+                        (2.0, -1.0),
+                        (2.0, 1.0),
+                        (0.0, 0.0),
+                        (-2.0, 1.0),
+                    ],
+                },
+                x: 5.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: 3.0,
+            max_x: 7.0,
+            min_y: -1.0,
+            max_y: 1.0,
+        };
+        assert!(
+            visible_polygonal_intervals((-5.0, 0.0), &[concave]).is_none(),
+            "concave targets require self-occlusion handling before exposure can be credited"
         );
     }
 
