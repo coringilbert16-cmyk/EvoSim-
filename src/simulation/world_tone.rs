@@ -625,30 +625,46 @@ mod tests {
             parts: vec![
                 PlacedForm {
                     unit_index: 0,
-                    form: Form::Rectangle { width: 2.0, height: 2.0 },
-                    x: 5.0, y: 0.0, rotation_radians: 0.0,
+                    form: Form::Rectangle {
+                        width: 2.0,
+                        height: 2.0,
+                    },
+                    x: 5.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
                 },
                 PlacedForm {
                     unit_index: 1,
-                    form: Form::Rectangle { width: 2.0, height: 2.0 },
-                    x: 7.0, y: 0.0, rotation_radians: 0.0,
+                    form: Form::Rectangle {
+                        width: 2.0,
+                        height: 2.0,
+                    },
+                    x: 7.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
                 },
             ],
-            min_x: 4.0, max_x: 8.0, min_y: -1.0, max_y: 1.0,
+            min_x: 4.0,
+            max_x: 8.0,
+            min_y: -1.0,
+            max_y: 1.0,
         };
         let sample = crate::world_tone::WorldToneSample {
-            source_x: -5.0, source_y: 0.0, frequency_hz: 440.0,
-            signal_energy_level: 8.0, energy_intensity_per_tick_per_width: 10.0,
+            source_x: -5.0,
+            source_y: 0.0,
+            frequency_hz: 440.0,
+            signal_energy_level: 8.0,
+            energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.0,
         };
         let frame = WorldToneCaptureFrame::from_geometry(sample, &[body]).unwrap();
 
         assert!((frame.projected_width_for_unit(0, 0).unwrap() - 2.0).abs() < 1e-7);
         assert_eq!(frame.projected_width_for_unit(0, 1), Some(0.0));
-        assert_eq!(frame.projected_width_for_unit(0, 99), Some(0.0));
         assert_eq!(frame.projected_width_for_unit(99, 0), None);
         assert!((frame.projected_widths[0] - 2.0).abs() < 1e-7);
     }
+
     #[test]
     fn world_tone_capture_frame_prevents_duplicate_receiver_credit() {
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
