@@ -23,8 +23,8 @@ pub(crate) enum EnvelopeCurve {
 pub(crate) struct WorldToneParameters {
     pub(crate) minimum_signal_energy_level: f64,
     pub(crate) maximum_signal_energy_level: f64,
-    pub(crate) minimum_available_energy_per_tick: f64,
-    pub(crate) maximum_available_energy_per_tick: f64,
+    pub(crate) minimum_energy_intensity_per_tick_per_width: f64,
+    pub(crate) maximum_energy_intensity_per_tick_per_width: f64,
     pub(crate) orbital_period_ticks: u64,
     pub(crate) envelope_curve: EnvelopeCurve,
 }
@@ -116,11 +116,26 @@ pub(crate) struct WorldToneSample {
     pub(crate) frequency_hz: f64,
     /// Environmental signal level, not energy already captured by an organism.
     pub(crate) signal_energy_level: f64,
-    /// Energy available for capture this tick, before organism-specific efficiency.
-    pub(crate) available_energy_per_tick: f64,
+    /// Incoming energy intensity per tick per unit of exposed projected width, before absorption.
+    pub(crate) energy_intensity_per_tick_per_width: f64,
     /// Normalized orbital phase: 0 at north, increasing eastward, in [0, 1).
     pub(crate) orbital_phase: f64,
 }
+impl WorldToneSample {
+    /// Energy incident on an exposed projected width during this tick.
+    ///
+    /// This is incoming energy before material absorption, reflection, or
+    /// other interaction losses. Visibility/shadowing must be applied when
+    /// computing the width; this helper does not discover exposed geometry.
+    pub(crate) fn incident_energy_for_projected_width(self, projected_width: f64) -> Option<f64> {
+        if !projected_width.is_finite() || projected_width < 0.0 {
+            return None;
+        }
+        let energy = self.energy_intensity_per_tick_per_width * projected_width;
+        energy.is_finite().then_some(energy)
+    }
+}
+
 
 impl WorldToneParameters {
     pub(crate) fn is_valid(self) -> bool {
@@ -128,10 +143,10 @@ impl WorldToneParameters {
             && self.minimum_signal_energy_level >= 0.0
             && self.maximum_signal_energy_level.is_finite()
             && self.maximum_signal_energy_level > self.minimum_signal_energy_level
-            && self.minimum_available_energy_per_tick.is_finite()
-            && self.minimum_available_energy_per_tick >= 0.0
-            && self.maximum_available_energy_per_tick.is_finite()
-            && self.maximum_available_energy_per_tick > self.minimum_available_energy_per_tick
+            && self.minimum_energy_intensity_per_tick_per_width.is_finite()
+            && self.minimum_energy_intensity_per_tick_per_width >= 0.0
+            && self.maximum_energy_intensity_per_tick_per_width.is_finite()
+            && self.maximum_energy_intensity_per_tick_per_width > self.minimum_energy_intensity_per_tick_per_width
             && self.orbital_period_ticks > 0
     }
 
@@ -166,8 +181,8 @@ impl WorldToneParameters {
             frequency_hz,
             signal_energy_level: self.minimum_signal_energy_level
                 + (self.maximum_signal_energy_level - self.minimum_signal_energy_level) * envelope,
-            available_energy_per_tick: self.minimum_available_energy_per_tick
-                + (self.maximum_available_energy_per_tick - self.minimum_available_energy_per_tick)
+            energy_intensity_per_tick_per_width: self.minimum_energy_intensity_per_tick_per_width
+                + (self.maximum_energy_intensity_per_tick_per_width - self.minimum_energy_intensity_per_tick_per_width)
                     * envelope,
             orbital_phase,
         })
@@ -182,8 +197,8 @@ mod tests {
         WorldToneParameters {
             minimum_signal_energy_level: 0.0,
             maximum_signal_energy_level: 8.0,
-            minimum_available_energy_per_tick: 1.0,
-            maximum_available_energy_per_tick: 10.0,
+            minimum_energy_intensity_per_tick_per_width: 1.0,
+            maximum_energy_intensity_per_tick_per_width: 10.0,
             orbital_period_ticks: 2_400,
             envelope_curve: EnvelopeCurve::Cosine,
         }
@@ -218,16 +233,37 @@ mod tests {
 
         assert_eq!(north.frequency_hz, WORLD_TONE_FREQUENCY_HZ);
         assert_eq!(north.signal_energy_level, 8.0);
-        assert_eq!(north.available_energy_per_tick, 10.0);
+        assert_eq!(north.energy_intensity_per_tick_per_width, 10.0);
         assert_eq!(south.frequency_hz, WORLD_TONE_FREQUENCY_HZ);
         assert_eq!(south.signal_energy_level, 0.0);
-        assert_eq!(south.available_energy_per_tick, 1.0);
+        assert_eq!(south.energy_intensity_per_tick_per_width, 1.0);
         assert_eq!(east.frequency_hz, WORLD_TONE_FREQUENCY_HZ);
         assert_eq!(west.frequency_hz, WORLD_TONE_FREQUENCY_HZ);
         assert!((east.signal_energy_level - 4.0).abs() < 1e-12);
         assert!((west.signal_energy_level - 4.0).abs() < 1e-12);
-        assert!((east.available_energy_per_tick - 5.5).abs() < 1e-12);
-        assert!((west.available_energy_per_tick - 5.5).abs() < 1e-12);
+        assert!((east.energy_intensity_per_tick_per_width - 5.5).abs() < 1e-12);
+        assert!((west.energy_intensity_per_tick_per_width - 5.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn incident_energy_scales_with_exposed_projected_width() {
+        let params = parameters();
+        let peak = params.sample(0, 0.0, 0.0, 1.0).unwrap();
+        assert_eq!(peak.energy_intensity_per_tick_per_width, 10.0);
+        assert_eq!(peak.incident_energy_for_projected_width(1.0), Some(10.0));
+        assert_eq!(peak.incident_energy_for_projected_width(0.5), Some(5.0));
+
+        let minimum = params.sample(1_200, 0.0, 0.0, 1.0).unwrap();
+        assert_eq!(minimum.energy_intensity_per_tick_per_width, 1.0);
+        assert_eq!(minimum.incident_energy_for_projected_width(0.5), Some(0.5));
+    }
+
+    #[test]
+    fn incident_energy_rejects_invalid_projected_width() {
+        let sample = parameters().sample(0, 0.0, 0.0, 1.0).unwrap();
+        assert_eq!(sample.incident_energy_for_projected_width(-0.1), None);
+        assert_eq!(sample.incident_energy_for_projected_width(f64::NAN), None);
+        assert_eq!(sample.incident_energy_for_projected_width(f64::INFINITY), None);
     }
 
     #[test]
@@ -291,7 +327,7 @@ mod tests {
     #[test]
     fn invalid_or_unresolved_parameters_fail_closed() {
         let mut params = parameters();
-        params.minimum_available_energy_per_tick = -1.0;
+        params.minimum_energy_intensity_per_tick_per_width = -1.0;
         assert!(params.sample(0, 0.0, 0.0, 1.0).is_none());
 
         params = parameters();
