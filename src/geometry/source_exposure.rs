@@ -1130,7 +1130,7 @@ mod point_source_curve_visibility_tests {
     fn legacy_circular_fluid_casts_tangent_defined_shadows_on_a_circle() {
         let blocker = body(
             Form::Fluid {
-                nominal_area: std::f64::consts::PI * 0.25,
+                nominal_area: std::f64::consts::PI * 0.0625,
                 boundary: None,
                 arc_boundary: None,
                 multi_contact_boundary: None,
