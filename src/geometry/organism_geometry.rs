@@ -449,6 +449,15 @@ fn segment_crosses_part(source: (f64, f64), target: (f64, f64), part: &PlacedFor
                 }
             }
             if let Some(arc) = arc_boundary {
+                // The free circular interface and its flat contact chord
+                // jointly bound the fluid segment. The chord is not exposed
+                // fluid surface, but it must still block rays that enter the
+                // fluid through the contact edge.
+                let chord_start = arc.start_point();
+                let chord_end = arc.end_point();
+                if intersects_segment(chord_start, chord_end) {
+                    return true;
+                }
                 if arc
                     .segment_intersections(a.0, a.1, b.0, b.1)
                     .is_some_and(|hits| {
