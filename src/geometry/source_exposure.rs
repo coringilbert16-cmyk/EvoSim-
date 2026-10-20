@@ -136,7 +136,10 @@ mod tests {
         let extent = point_source_projected_extent(interval, (0.0, 10.0)).unwrap();
         let expected = 20.0 * 0.1_f64.asinh();
         assert!((extent - expected).abs() < 1e-12);
-        assert!(extent < 2.0, "point-source projection must not assume parallel rays");
+        assert!(
+            extent < 2.0,
+            "point-source projection must not assume parallel rays"
+        );
     }
 }
 
@@ -161,10 +164,7 @@ pub(crate) fn point_source_projected_extent(
     if values.iter().any(|value| !value.is_finite()) {
         return None;
     }
-    let normal_length = interval
-        .outward_normal
-        .0
-        .hypot(interval.outward_normal.1);
+    let normal_length = interval.outward_normal.0.hypot(interval.outward_normal.1);
     if (normal_length - 1.0).abs() > 1e-9 {
         return None;
     }
@@ -175,10 +175,7 @@ pub(crate) fn point_source_projected_extent(
         return None;
     }
     let tangent = (dx / length, dy / length);
-    let source_offset = (
-        source.0 - interval.start.0,
-        source.1 - interval.start.1,
-    );
+    let source_offset = (source.0 - interval.start.0, source.1 - interval.start.1);
     let along = source_offset.0 * tangent.0 + source_offset.1 * tangent.1;
     let normal_distance = source_offset.0 * interval.outward_normal.0
         + source_offset.1 * interval.outward_normal.1;
@@ -188,8 +185,7 @@ pub(crate) fn point_source_projected_extent(
     if normal_distance <= 0.0 {
         return Some(0.0);
     }
-    let extent = normal_distance
-        * ((length - along) / normal_distance).asinh()
+    let extent = normal_distance * ((length - along) / normal_distance).asinh()
         + normal_distance * (along / normal_distance).asinh();
     (extent.is_finite() && extent >= 0.0).then_some(extent)
 }
@@ -270,10 +266,7 @@ pub(crate) fn visible_polygonal_intervals(
                     arc_boundary: None,
                     multi_contact_boundary: None,
                 } => {
-                    if !nominal_area.is_finite()
-                        || *nominal_area <= 0.0
-                        || vertices.len() < 3
-                    {
+                    if !nominal_area.is_finite() || *nominal_area <= 0.0 || vertices.len() < 3 {
                         return None;
                     }
                     Some(vertices.clone())
@@ -348,12 +341,7 @@ pub(crate) fn visible_polygonal_intervals(
                 let (sin, cos) = part.rotation_radians.sin_cos();
                 let vertices = local_vertices
                     .into_iter()
-                    .map(|(x, y)| {
-                        (
-                            part.x + x * cos - y * sin,
-                            part.y + x * sin + y * cos,
-                        )
-                    })
+                    .map(|(x, y)| (part.x + x * cos - y * sin, part.y + x * sin + y * cos))
                     .collect::<Vec<_>>();
                 if vertices.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) {
                     return None;
@@ -378,14 +366,10 @@ pub(crate) fn visible_polygonal_intervals(
                     }
                     let (sin, cos) = part.rotation_radians.sin_cos();
                     let half = *length * 0.5;
-                    critical_points.push((
-                        part.x - half * cos,
-                        part.y - half * sin,
-                    ));
-                    critical_points.push((
-                        part.x + half * cos,
-                        part.y + half * sin,
-                    ));
+                    let start = (part.x - half * cos, part.y - half * sin);
+                    let end = (part.x + half * cos, part.y + half * sin);
+                    critical_points.extend([start, end]);
+                    straight_edges.push((body_index, part.unit_index, start, end));
                 }
                 Form::Circle { radius } => {
                     add_circle_tangent_points(
@@ -394,17 +378,6 @@ pub(crate) fn visible_polygonal_intervals(
                         source,
                         &mut critical_points,
                     );
-                }
-                Form::Line { length } => {
-                    let half = *length * 0.5;
-                    let (sin, cos) = part.rotation_radians.sin_cos();
-                    let transform = |x: f64| {
-                        (part.x + x * cos, part.y + x * sin)
-                    };
-                    let start = transform(-half);
-                    let end = transform(half);
-                    critical_points.extend([start, end]);
-                    straight_edges.push((body_index, part.unit_index, start, end));
                 }
                 Form::Fluid {
                     nominal_area,
@@ -416,12 +389,7 @@ pub(crate) fn visible_polygonal_intervals(
                         let (sin, cos) = part.rotation_radians.sin_cos();
                         let world = vertices
                             .iter()
-                            .map(|&(x, y)| {
-                                (
-                                    part.x + x * cos - y * sin,
-                                    part.y + x * sin + y * cos,
-                                )
-                            })
+                            .map(|&(x, y)| (part.x + x * cos - y * sin, part.y + x * sin + y * cos))
                             .collect::<Vec<_>>();
                         if world.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) {
                             return None;
@@ -464,20 +432,12 @@ pub(crate) fn visible_polygonal_intervals(
                                 } => {
                                     let (sin, cos) = part.rotation_radians.sin_cos();
                                     let transform = |x: f64, y: f64| {
-                                        (
-                                            part.x + x * cos - y * sin,
-                                            part.y + x * sin + y * cos,
-                                        )
+                                        (part.x + x * cos - y * sin, part.y + x * sin + y * cos)
                                     };
                                     let start = transform(*start_x, *start_y);
                                     let end = transform(*end_x, *end_y);
                                     critical_points.extend([start, end]);
-                                    straight_edges.push((
-                                        body_index,
-                                        part.unit_index,
-                                        start,
-                                        end,
-                                    ));
+                                    straight_edges.push((body_index, part.unit_index, start, end));
                                 }
                                 FluidBoundaryPiece::FreeArc(arc) => {
                                     let world =
@@ -587,8 +547,7 @@ pub(crate) fn visible_polygonal_intervals(
                     if (qx * ey - qy * ex).abs() <= 1e-9 {
                         let length_squared = ex * ex + ey * ey;
                         for point in [c, d] {
-                            let t = ((point.0 - a.0) * ex + (point.1 - a.1) * ey)
-                                / length_squared;
+                            let t = ((point.0 - a.0) * ex + (point.1 - a.1) * ey) / length_squared;
                             if t > 1e-10 && t < 1.0 - 1e-10 {
                                 cuts.push(t);
                             }
@@ -598,10 +557,7 @@ pub(crate) fn visible_polygonal_intervals(
                 }
                 let t = (qx * sy - qy * sx) / denominator;
                 let u = (qx * ey - qy * ex) / denominator;
-                if t > 1e-10
-                    && t < 1.0 - 1e-10
-                    && (-1e-10..=1.0 + 1e-10).contains(&u)
-                {
+                if t > 1e-10 && t < 1.0 - 1e-10 && (-1e-10..=1.0 + 1e-10).contains(&u) {
                     cuts.push(t);
                 }
             }
@@ -647,11 +603,7 @@ pub(crate) fn visible_polygonal_intervals(
                 let t = (t0 + t1) * 0.5;
                 let point = (a.0 + ex * t, a.1 + ey * t);
                 if crate::organism_geometry::source_path_blocked(
-                    source,
-                    point,
-                    bodies,
-                    body_index,
-                    unit_index,
+                    source, point, bodies, body_index, unit_index,
                 ) {
                     continue;
                 }
