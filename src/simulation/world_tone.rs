@@ -466,8 +466,7 @@ impl WorldToneParameters {
             && self.minimum_energy_intensity_per_tick_per_width.is_finite()
             && self.minimum_energy_intensity_per_tick_per_width >= 1.0
             && self.maximum_energy_intensity_per_tick_per_width.is_finite()
-            && self.maximum_energy_intensity_per_tick_per_width
-                <= 10.0
+            && self.maximum_energy_intensity_per_tick_per_width <= 10.0
             && self.maximum_energy_intensity_per_tick_per_width
                 > self.minimum_energy_intensity_per_tick_per_width
             && self.orbital_period_ticks > 0
