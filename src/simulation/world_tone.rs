@@ -464,8 +464,10 @@ impl WorldToneParameters {
             && self.maximum_signal_energy_level.is_finite()
             && self.maximum_signal_energy_level > self.minimum_signal_energy_level
             && self.minimum_energy_intensity_per_tick_per_width.is_finite()
-            && self.minimum_energy_intensity_per_tick_per_width >= 0.0
+            && self.minimum_energy_intensity_per_tick_per_width >= 1.0
             && self.maximum_energy_intensity_per_tick_per_width.is_finite()
+            && self.maximum_energy_intensity_per_tick_per_width
+                <= 10.0
             && self.maximum_energy_intensity_per_tick_per_width
                 > self.minimum_energy_intensity_per_tick_per_width
             && self.orbital_period_ticks > 0
@@ -690,6 +692,20 @@ mod tests {
         assert!(config.is_valid());
         assert!(WorldToneCycle::precompute(config, 100.0, 100.0).is_none());
         assert!(config.sample(0, 100.0, 100.0).is_some());
+    }
+
+    #[test]
+    fn energy_intensity_is_constrained_to_the_approved_one_to_ten_range() {
+        let mut params = parameters();
+        params.minimum_energy_intensity_per_tick_per_width = 0.999;
+        assert!(!params.is_valid(), "intensity below 1 is outside the approved range");
+
+        params = parameters();
+        params.maximum_energy_intensity_per_tick_per_width = 10.001;
+        assert!(!params.is_valid(), "intensity above 10 is outside the approved range");
+
+        params = parameters();
+        assert!(params.is_valid(), "the exact 1-to-10 range is valid");
     }
 
     #[test]
