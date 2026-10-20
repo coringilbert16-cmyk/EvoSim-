@@ -1430,7 +1430,11 @@ mod decomposition_finalization_tests {
                 .iter()
                 .any(|entry| match entry {
                     crate::material_storage::StoredMaterial::Physical(instance) => {
-                        (instance.material.total_amount() - amount).abs() < 1e-12
+                        instance
+                            .placements
+                            .as_ref()
+                            .is_some_and(|placements| placements.contains(&placement))
+                            && (instance.material.total_amount() - amount).abs() < 1e-12
                     }
                 }),
             "failed BREAK source should be restored with its original amount"
