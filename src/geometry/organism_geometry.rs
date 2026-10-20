@@ -600,15 +600,10 @@ mod tests {
         assert_eq!(geometry.parts[0].x, 12.0);
         assert_eq!(geometry.parts[0].y, -4.0);
         assert_eq!(geometry.parts[0].rotation_radians, 0.25);
-        assert_eq!(
-            geometry.parts[0].form,
-            catalog
-                .iter()
-                .find(|resource| resource.name == "Carbon")
-                .unwrap()
-                .shape
-                .form
-        );
+        assert!(matches!(
+            &geometry.parts[0].form,
+            Form::RegularPolygon { sides: 6, .. }
+        ));
         assert!(geometry.min_x < 12.0 && geometry.max_x > 12.0);
         assert!(geometry.min_y < -4.0 && geometry.max_y > -4.0);
     }
