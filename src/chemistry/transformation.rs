@@ -623,6 +623,33 @@ impl Simulation {
     }
 }
 
+/// Reverse a staged COMBINE settlement when its physical commit state is
+/// incomplete. Deltas are applied independently because serialized/corrupt
+/// prepared state may have lost one optional field.
+fn rollback_prepared_combine(
+    organism: &mut Organism,
+    ledger: &mut EnergyLedger,
+    energy_delta: Option<f64>,
+    stress_delta: Option<f64>,
+    ledger_delta: Option<&EnergyLedger>,
+) {
+    if let Some(delta) = energy_delta {
+        organism.usable_energy -= delta;
+    }
+    if let Some(delta) = stress_delta {
+        organism.stress -= delta;
+    }
+    if let Some(delta) = ledger_delta {
+        ledger.total_potential_energy_released -= delta.total_potential_energy_released;
+        ledger.total_structural_energy_delta -= delta.total_structural_energy_delta;
+        ledger.total_external_energy_input -= delta.total_external_energy_input;
+        ledger.total_usable_energy_gained -= delta.total_usable_energy_gained;
+        ledger.total_work_expended -= delta.total_work_expended;
+        ledger.total_heat_dissipated -= delta.total_heat_dissipated;
+        ledger.total_usable_energy_held -= delta.total_usable_energy_held;
+    }
+}
+
 fn pending_energy_delta(transformation: &ActiveTransformation, organism: &Organism) -> f64 {
     transformation
         .prepared_energy
@@ -657,21 +684,13 @@ pub(crate) fn resolve_transformation(
             // reverse that staged settlement as well as restoring any reserved
             // environmental source; otherwise a failed COMBINE can spend energy
             // and ledger-account it without ever creating the bond.
-            if let Some(delta) = transformation.prepared_usable_energy {
-                organism.usable_energy -= delta;
-            }
-            if let Some(delta) = transformation.prepared_stress {
-                organism.stress -= delta;
-            }
-            if let Some(delta) = transformation.prepared_ledger.as_ref() {
-                ledger.total_potential_energy_released -= delta.total_potential_energy_released;
-                ledger.total_structural_energy_delta -= delta.total_structural_energy_delta;
-                ledger.total_external_energy_input -= delta.total_external_energy_input;
-                ledger.total_usable_energy_gained -= delta.total_usable_energy_gained;
-                ledger.total_work_expended -= delta.total_work_expended;
-                ledger.total_heat_dissipated -= delta.total_heat_dissipated;
-                ledger.total_usable_energy_held -= delta.total_usable_energy_held;
-            }
+            rollback_prepared_combine(
+                organism,
+                ledger,
+                transformation.prepared_usable_energy,
+                transformation.prepared_stress,
+                transformation.prepared_ledger.as_ref(),
+            );
             if let Some((cell_index, source)) = transformation.combine_environmental_source.as_ref()
             {
                 // Restore to the exact field cell from which the source was
@@ -830,6 +849,56 @@ pub(crate) fn resolve_transformation(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn failed_prepared_combine_rolls_back_energy_and_every_ledger_delta() {
+        let mut organism = crate::state::Organism {
+            id: "combine-rollback-test".into(),
+            developmental_origin: crate::state::Position { x: 0.0, y: 0.0 },
+            occupied_cells: Vec::new(),
+            genome: crate::genome::initial_genome(),
+            harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+            experience_memory: crate::memory::ExperienceMemory::default(),
+            pending_movement_experience: None,
+            decision_history: crate::decision::DecisionHistory::default(),
+            usable_energy: 13.0,
+            stress: 4.0,
+            maintenance_debt: 0.0,
+            ..crate::state::Organism::test_defaults()
+        };
+        let mut ledger = EnergyLedger {
+            total_potential_energy_released: 2.0,
+            total_structural_energy_delta: 5.0,
+            total_external_energy_input: 3.0,
+            total_usable_energy_gained: 7.0,
+            total_work_expended: 11.0,
+            total_heat_dissipated: 17.0,
+            total_usable_energy_held: 19.0,
+            ..EnergyLedger::default()
+        };
+        let delta = EnergyLedger {
+            total_potential_energy_released: 1.0,
+            total_structural_energy_delta: 2.0,
+            total_external_energy_input: 1.0,
+            total_usable_energy_gained: 3.0,
+            total_work_expended: 5.0,
+            total_heat_dissipated: 7.0,
+            total_usable_energy_held: 11.0,
+            ..EnergyLedger::default()
+        };
+
+        rollback_prepared_combine(&mut organism, &mut ledger, Some(5.0), Some(1.5), Some(&delta));
+
+        assert_eq!(organism.usable_energy, 8.0);
+        assert_eq!(organism.stress, 2.5);
+        assert_eq!(ledger.total_potential_energy_released, 1.0);
+        assert_eq!(ledger.total_structural_energy_delta, 3.0);
+        assert_eq!(ledger.total_external_energy_input, 2.0);
+        assert_eq!(ledger.total_usable_energy_gained, 4.0);
+        assert_eq!(ledger.total_work_expended, 6.0);
+        assert_eq!(ledger.total_heat_dissipated, 10.0);
+        assert_eq!(ledger.total_usable_energy_held, 8.0);
+    }
 
     #[test]
     fn bond_break_releases_only_stored_bond_potential() {
