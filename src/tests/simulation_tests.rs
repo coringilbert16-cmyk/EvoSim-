@@ -433,6 +433,55 @@ mod integration_tests {
         assert_eq!(s.organisms[0].stored_material.physical_count(), 0);
     }
     #[test]
+    fn stored_material_break_does_not_credit_unallocated_energy() {
+        let mut s = Simulation::new(7, 10.0);
+        for cell in &mut s.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        add_test_break_bond(&mut s);
+        s.organisms[0].usable_energy = 100.0;
+        let candidate = crate::decision_runtime::ActionCandidate {
+            action: ActionKind::Break,
+            context_key: Some("stored:0:bond:0".into()),
+        };
+        let mut transformation = Simulation::try_start_transformation(
+            &mut s.organisms[0],
+            &s.environment.catalog,
+            &mut s.next_transformation_id,
+            &candidate,
+        )
+        .expect("stored-material BREAK should start");
+        let before_gained = s.energy_ledger.total_usable_energy_gained;
+        let before_structural = s.energy_ledger.total_structural_energy_delta;
+        let before_work = s.energy_ledger.total_work_expended;
+        let before_heat = s.energy_ledger.total_heat_dissipated;
+        let before_released = s.energy_ledger.total_potential_energy_released;
+
+        assert!(Simulation::prepare_transformation(
+            &mut transformation,
+            &mut s.organisms[0],
+            &mut s.environment,
+            &mut s.energy_ledger,
+            None,
+        ));
+        assert_eq!(s.organisms[0].usable_energy, 100.0);
+        assert_eq!(s.energy_ledger.total_usable_energy_gained, before_gained);
+        assert_eq!(s.energy_ledger.total_structural_energy_delta, before_structural);
+        assert_eq!(s.energy_ledger.total_work_expended, before_work);
+        assert_eq!(s.energy_ledger.total_heat_dissipated, before_heat);
+        assert_eq!(s.energy_ledger.total_potential_energy_released, before_released);
+
+        resolve_transformation(
+            &transformation,
+            &mut s.organisms[0],
+            &mut s.environment,
+            &mut s.energy_ledger,
+        );
+        assert_eq!(s.organisms[0].stored_material.physical_count(), 2);
+        assert_eq!(s.organisms[0].usable_energy, 100.0);
+    }
+
+    #[test]
     fn break_resolution_changes_state_on_expected_tick() {
         let mut s = Simulation::new(7, 10.0);
         for cell in &mut s.environment.field.cells {
