@@ -620,7 +620,6 @@ fn realized_circle_arcs(
     body_index: usize,
     part: &crate::organism_geometry::PlacedForm,
 ) -> Option<Vec<WorldCircleArc>> {
-    use crate::capillary_geometry::{CircularArcBoundary, FluidBoundaryPiece};
     use crate::resources::Form;
     let (sin, cos) = part.rotation_radians.sin_cos();
     let mut arcs = Vec::new();
@@ -693,10 +692,6 @@ fn realized_circle_arcs(
         }
         _ => return Some(Vec::new()),
     }
-    // Keep the import's type checked here: all exact fluid arcs are represented
-    // by the same descriptor that physical geometry and persistence use.
-    let _ = std::mem::size_of::<CircularArcBoundary>();
-    let _ = std::mem::size_of::<FluidBoundaryPiece>();
     Some(arcs)
 }
 
