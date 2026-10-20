@@ -1259,6 +1259,17 @@ pub(crate) fn visible_circular_arc_intervals(
                         &mut critical_points,
                     );
                 }
+                Form::Line { length } => {
+                    if !length.is_finite() || *length <= 0.0 {
+                        return None;
+                    }
+                    let (sin, cos) = part.rotation_radians.sin_cos();
+                    let half = *length * 0.5;
+                    critical_points.extend([
+                        (part.x - half * cos, part.y - half * sin),
+                        (part.x + half * cos, part.y + half * sin),
+                    ]);
+                }
                 Form::Fluid {
                     nominal_area,
                     boundary,
@@ -1786,6 +1797,45 @@ mod point_source_curve_visibility_tests {
             target_intervals.len() >= 2,
             "shadow transition rays must split the visible circular boundary"
         );
+    }
+
+    #[test]
+    fn point_source_circle_shadow_from_finite_line_splits_at_line_endpoints() {
+        let blocker = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Line { length: 1.0 },
+                x: 2.5,
+                y: 0.0,
+                rotation_radians: std::f64::consts::FRAC_PI_2,
+            }],
+            min_x: 2.5,
+            max_x: 2.5,
+            min_y: -0.5,
+            max_y: 0.5,
+        };
+        let target = body(Form::Circle { radius: 1.0 }, 5.0, 0.0);
+        let intervals = visible_circular_arc_intervals((-5.0, 0.0), &[blocker, target])
+            .expect("finite line blockers must partition circular receivers at both endpoints");
+        let visible_target: Vec<_> = intervals
+            .iter()
+            .filter(|interval| interval.body_index == 1)
+            .collect();
+        let visible_sweep: f64 = visible_target
+            .iter()
+            .map(|interval| interval.arc.sweep_radians)
+            .sum();
+        let unoccluded = visible_circular_arc_intervals(
+            (-5.0, 0.0),
+            &[body(Form::Circle { radius: 1.0 }, 5.0, 0.0)],
+        )
+        .expect("isolated circle visibility is supported");
+        let unoccluded_sweep: f64 = unoccluded
+            .iter()
+            .map(|interval| interval.arc.sweep_radians)
+            .sum();
+        assert!(visible_target.len() >= 2, "line endpoint rays must split the arc");
+        assert!(visible_sweep > 0.0 && visible_sweep < unoccluded_sweep);
     }
 
     #[test]
