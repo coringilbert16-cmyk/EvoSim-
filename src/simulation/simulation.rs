@@ -1431,7 +1431,6 @@ mod decomposition_finalization_tests {
                 crate::material_storage::StoredMaterial::Physical(instance) => {
                     (instance.material.total_amount() - amount).abs() < 1e-12
                 }
-                crate::material_storage::StoredMaterial::Logical(_) => false,
             }), "failed BREAK source should be restored with its original amount");
     }
 
