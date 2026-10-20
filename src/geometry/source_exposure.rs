@@ -1351,7 +1351,7 @@ mod point_source_curve_visibility_tests {
 
     #[test]
     fn point_source_circle_visibility_splits_at_circle_circle_intersections() {
-        let blocker = body(Form::Circle { radius: 1.0 }, 4.0, 0.0);
+        let blocker = body(Form::Circle { radius: 0.25 }, 4.1, 0.0);
         let target = body(Form::Circle { radius: 1.0 }, 5.0, 0.0);
         let intervals = visible_circular_arc_intervals((-5.0, 0.0), &[blocker, target])
             .expect("intersecting circular boundaries are classified analytically");
@@ -1364,7 +1364,7 @@ mod point_source_curve_visibility_tests {
             let start = interval.arc.start_point();
             let end = interval.arc.end_point();
             [start, end].iter().any(|point| {
-                ((point.0 - 4.0).powi(2) + point.1.powi(2) - 1.0).abs() < 1e-7
+                ((point.0 - 4.1).powi(2) + point.1.powi(2) - 0.25_f64.powi(2)).abs() < 1e-7
             })
         });
         assert!(
