@@ -479,7 +479,7 @@ pub(crate) fn projected_arc_extent(
     let mut integral = 0.0;
     for pair in cuts.windows(2) {
         let (a, b) = (pair[0], pair[1]);
-        if (a + b) * 0.5 - source_angle .cos() > 0.0 {
+        if (((a + b) * 0.5) - source_angle).cos() > 0.0 {
             // Integral cos(theta - alpha) dtheta = sin(theta - alpha).
             integral += (b - source_angle).sin() - (a - source_angle).sin();
         }
