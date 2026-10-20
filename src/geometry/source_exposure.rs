@@ -831,9 +831,7 @@ pub(crate) fn visible_circular_arc_intervals(
         // safely interpreted as an externally illuminated surface.
         if let Some(body) = bodies.get(target.body_index) {
             if let Some(part) = body.parts.iter().find(|p| p.unit_index == target.unit_index) {
-                if crate::organism_geometry::form_contains_point(
-                    &part.form, part.x, part.y, part.rotation_radians, source.0, source.1,
-                ) {
+                if body.contains_point(source.0, source.1) {
                     continue;
                 }
             }
@@ -957,7 +955,7 @@ pub(crate) fn point_source_projected_arc_extent(
         }
         Some(arc.radius * ((angle.cos() * toward_x + angle.sin() * toward_y) / distance).max(0.0))
     };
-    fn simpson<F: Fn(f64) -> Option<f64>>(f: &F, a: f64, b: f64, fa: f64, fm: f64, fb: f64) -> Option<f64> {
+    fn simpson(a: f64, b: f64, fa: f64, fm: f64, fb: f64) -> Option<f64> {
         let value = (b - a) * (fa + 4.0 * fm + fb) / 6.0;
         value.is_finite().then_some(value)
     }
@@ -969,8 +967,8 @@ pub(crate) fn point_source_projected_arc_extent(
         let right_mid = (mid + b) * 0.5;
         let flm = f(left_mid)?;
         let frm = f(right_mid)?;
-        let left = simpson(f, a, mid, fa, flm, fm)?;
-        let right = simpson(f, mid, b, fm, frm, fb)?;
+        let left = simpson(a, mid, fa, flm, fm)?;
+        let right = simpson(mid, b, fm, frm, fb)?;
         let delta = left + right - whole;
         if depth == 0 || delta.abs() <= 15.0 * tolerance {
             return Some(left + right + delta / 15.0);
@@ -986,7 +984,7 @@ pub(crate) fn point_source_projected_arc_extent(
     let fa = integrand(a)?;
     let fm = integrand(mid)?;
     let fb = integrand(b)?;
-    let whole = simpson(&integrand, a, b, fa, fm, fb)?;
+    let whole = simpson(a, b, fa, fm, fb)?;
     let extent = integrate(&integrand, a, b, fa, fm, fb, whole, 1e-10 * whole.abs().max(1.0), 20)?;
     (extent.is_finite() && extent >= -1e-10).then_some(extent.max(0.0))
 }
