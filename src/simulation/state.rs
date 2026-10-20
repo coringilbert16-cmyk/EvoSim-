@@ -97,8 +97,8 @@ pub(crate) struct ActiveTransformation {
     #[serde(default)]
     pub(crate) pending_experience: Option<crate::memory::PendingTransformationExperience>,
     pub(crate) decision_context_key: Option<String>,
-    /// Deferred COMBINE state. Selection occurs on the first tick, energy
-    /// preparation on the second, and physical mutation on the third.
+    /// Deferred COMBINE state. Selection occurs on the first tick;
+    /// energy preparation and physical mutation commit together on completion.
     #[serde(default)]
     pub(crate) prepared_structure: Option<OrganismStructure>,
     #[serde(default)]
