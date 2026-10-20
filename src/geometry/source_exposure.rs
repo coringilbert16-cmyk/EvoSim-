@@ -1834,7 +1834,10 @@ mod point_source_curve_visibility_tests {
             .iter()
             .map(|interval| interval.arc.sweep_radians)
             .sum();
-        assert!(visible_target.len() >= 2, "line endpoint rays must split the arc");
+        assert!(
+            visible_target.len() >= 2,
+            "line endpoint rays must split the arc"
+        );
         assert!(visible_sweep > 0.0 && visible_sweep < unoccluded_sweep);
     }
 
