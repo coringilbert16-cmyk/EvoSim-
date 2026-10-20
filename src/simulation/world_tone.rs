@@ -1428,25 +1428,14 @@ mod tests {
         let mut ledger = crate::state::EnergyLedger::default();
 
         let result = frame
-            .settle_organism_surface_response(
-                0,
-                0,
-                properties,
-                baselines,
-                organism,
-                &mut ledger,
-            )
+            .settle_organism_surface_response(0, 0, properties, baselines, organism, &mut ledger)
             .expect("valid organism surface response should settle");
 
-        assert!(
-            (result.usable_energy - result.absorbed_energy * efficiency).abs() < 1e-7
-        );
+        assert!((result.usable_energy - result.absorbed_energy * efficiency).abs() < 1e-7);
         assert!(
             (result.heat_dissipated - result.absorbed_energy * (1.0 - efficiency)).abs() < 1e-7
         );
-        assert!(
-            (organism.usable_energy - initial_usable - result.usable_energy).abs() < 1e-7
-        );
+        assert!((organism.usable_energy - initial_usable - result.usable_energy).abs() < 1e-7);
         assert!((ledger.total_external_energy_input - result.absorbed_energy).abs() < 1e-7);
         assert!((ledger.total_usable_energy_gained - result.usable_energy).abs() < 1e-7);
         assert!((ledger.total_heat_dissipated - result.heat_dissipated).abs() < 1e-7);
