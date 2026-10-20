@@ -1368,6 +1368,21 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn world_energy_inventory_reconciles_across_ordinary_ticks() {
+        let mut simulation = Simulation::new(916, 10.0);
+
+        for tick in 1..=5 {
+            simulation.step();
+            let inventory = simulation.energy_inventory_snapshot();
+            assert!(
+                inventory.is_balanced(1e-9),
+                "world energy inventory must reconcile after ordinary tick {tick}: residual={:?}",
+                inventory.residual()
+            );
+        }
+    }
+
+    #[test]
     fn live_stress_break_reconciles_world_energy_inventory() {
         let mut simulation = Simulation::new(915, 10.0);
         let before = simulation.energy_inventory_snapshot();
