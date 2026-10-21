@@ -1567,36 +1567,20 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
-    fn live_stress_break_reconciles_world_energy_inventory() {
+    fn stress_without_retained_resonance_cannot_authorize_a_random_bond_break() {
         let mut simulation = Simulation::new(915, 10.0);
         let before = simulation.energy_inventory_snapshot();
-        assert!(
-            before.is_balanced(1e-9),
-            "initial inventory: {:?}",
-            before.residual()
-        );
+        assert!(before.is_balanced(1e-9), "initial inventory: {:?}", before.residual());
+        let original_bonds = simulation.organisms[0].structure.bonds.clone();
 
-        assert!(crate::transformation::resolve_stress_break(
-            &mut simulation.organisms[0],
-            &simulation.environment,
-            &mut simulation.energy_ledger,
-            &mut simulation.rng,
-        ));
-
-        simulation.energy_ledger.total_usable_energy_held =
-            crate::reproduction::total_usable_energy_held(
-                &simulation.organisms,
-                &simulation.decomposing_bodies,
-            );
-        simulation.energy_ledger.total_structural_energy_held = Simulation::structural_energy_held(
-            &simulation.organisms,
-            &simulation.decomposing_bodies,
-        );
+        simulation.organisms[0].stress = 1.0e9;
+        assert!(!simulation.organisms[0].advance_stress_state());
+        assert_eq!(simulation.organisms[0].structure.bonds, original_bonds);
 
         let after = simulation.energy_inventory_snapshot();
         assert!(
             after.is_balanced(1e-9),
-            "world inventory residual after live stress BREAK: {:?}",
+            "stress bookkeeping must not create or destroy energy: {:?}",
             after.residual()
         );
     }
