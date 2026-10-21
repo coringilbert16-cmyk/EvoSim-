@@ -550,7 +550,7 @@ There are seven base resources. The approved resource-to-position mapping is fix
 
 | Resource | Chemical position |
 |---|---:|
-| Methane | 1.5 |
+| Oxygen | 1.5 |
 | Sulfur | 3.5 |
 | Hydrogen | 5.5 |
 | Water | 7.0 |
@@ -558,7 +558,7 @@ There are seven base resources. The approved resource-to-position mapping is fix
 | Carbon | 10.5 |
 | Phosphorus | 12.5 |
 
-Water is the midpoint at **7**. Methane and Phosphorus intentionally remain inside the 1–14 scale rather than occupying its extreme endpoints. These positions are catalog data, not reactivity magnitudes.
+Water is the midpoint at **7**. Oxygen and Phosphorus intentionally remain inside the 1–14 scale rather than occupying its extreme endpoints. These positions are catalog data, not reactivity magnitudes.
 
 Chemical position is **not a reactivity magnitude**. It describes position on the spectrum. For a local pair:
 
@@ -743,7 +743,7 @@ The chemistry migration is complete at the currently approved architecture bound
 
 | Area | Status | Current boundary |
 |---|---|---|
-| Resource chemical positions | **Complete** | Seven catalog positions are explicit data: Methane 1.5, Sulfur 3.5, Hydrogen 5.5, Water 7.0, Nitrogen 8.5, Carbon 10.5, Phosphorus 12.5. |
+| Resource chemical positions | **Complete** | Seven catalog positions are explicit data: Oxygen 1.5, Sulfur 3.5, Hydrogen 5.5, Water 7.0, Nitrogen 8.5, Carbon 10.5, Phosphorus 12.5. |
 | Core chemistry mathematics | **Complete** | Static chemical-position interaction, distance/contact expression, reaction accumulation, dissipation, and barrier checks exist with invariant tests. |
 | COMBINE energy boundary | **Migrated** | Remaining formation work is derived from the approved attraction force over the actual remaining approach distance; there is no arbitrary mass/cohesion formation multiplier. The formation threshold remains a structural eligibility/investment requirement, while intrinsic bond potential is stored separately and allocated through the energy ledger. |
 | BREAK energy boundary | **Migrated** | Structural BREAK releases the realized bond's stored intrinsic bond potential exactly once. Chemical BREAK uses accumulated reaction energy to pay the realized bond's activation/disruption barrier, with only the surplus becoming usable energy or heat. Constituent material potential is not recreated at bond rupture. |
