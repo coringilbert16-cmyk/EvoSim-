@@ -3369,81 +3369,80 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
                 )
             };
 
-            let (local_edges, closed_surface): (Vec<LocalEdge>, bool) =
-                match &part.form {
-                    Form::Line { length } => {
-                        if !length.is_finite() || *length <= 0.0 {
-                            return None;
-                        }
-                        let half = *length * 0.5;
-                        (vec![((-half, 0.0), (half, 0.0))], false)
+            let (local_edges, closed_surface): (Vec<LocalEdge>, bool) = match &part.form {
+                Form::Line { length } => {
+                    if !length.is_finite() || *length <= 0.0 {
+                        return None;
                     }
-                    Form::Circle { .. } => (Vec::new(), false),
-                    Form::Fluid {
-                        boundary: Some(vertices),
-                        arc_boundary: None,
-                        multi_contact_boundary: None,
-                        ..
-                    } => {
-                        if vertices.len() < 3 {
-                            return None;
-                        }
-                        let edges = (0..vertices.len())
-                            .map(|index| (vertices[index], vertices[(index + 1) % vertices.len()]))
-                            .collect();
-                        (edges, true)
+                    let half = *length * 0.5;
+                    (vec![((-half, 0.0), (half, 0.0))], false)
+                }
+                Form::Circle { .. } => (Vec::new(), false),
+                Form::Fluid {
+                    boundary: Some(vertices),
+                    arc_boundary: None,
+                    multi_contact_boundary: None,
+                    ..
+                } => {
+                    if vertices.len() < 3 {
+                        return None;
                     }
-                    Form::Fluid {
-                        boundary: None,
-                        arc_boundary: Some(arc),
-                        multi_contact_boundary: None,
-                        ..
-                    } => {
-                        if !arc.is_valid() {
-                            return None;
-                        }
-                        (vec![(arc.start_point(), arc.end_point())], false)
+                    let edges = (0..vertices.len())
+                        .map(|index| (vertices[index], vertices[(index + 1) % vertices.len()]))
+                        .collect();
+                    (edges, true)
+                }
+                Form::Fluid {
+                    boundary: None,
+                    arc_boundary: Some(arc),
+                    multi_contact_boundary: None,
+                    ..
+                } => {
+                    if !arc.is_valid() {
+                        return None;
                     }
-                    Form::Fluid {
-                        boundary: None,
-                        arc_boundary: None,
-                        multi_contact_boundary: Some(multi),
-                        ..
-                    } => {
-                        let edges = multi
-                            .pieces
-                            .iter()
-                            .filter_map(|piece| match piece {
-                                FluidBoundaryPiece::SolidContact {
-                                    start_x,
-                                    start_y,
-                                    end_x,
-                                    end_y,
-                                    ..
-                                } => Some(((*start_x, *start_y), (*end_x, *end_y))),
-                                FluidBoundaryPiece::FreeArc(_) => None,
-                            })
-                            .collect();
-                        (edges, false)
+                    (vec![(arc.start_point(), arc.end_point())], false)
+                }
+                Form::Fluid {
+                    boundary: None,
+                    arc_boundary: None,
+                    multi_contact_boundary: Some(multi),
+                    ..
+                } => {
+                    let edges = multi
+                        .pieces
+                        .iter()
+                        .filter_map(|piece| match piece {
+                            FluidBoundaryPiece::SolidContact {
+                                start_x,
+                                start_y,
+                                end_x,
+                                end_y,
+                                ..
+                            } => Some(((*start_x, *start_y), (*end_x, *end_y))),
+                            FluidBoundaryPiece::FreeArc(_) => None,
+                        })
+                        .collect();
+                    (edges, false)
+                }
+                Form::Fluid {
+                    boundary: None,
+                    arc_boundary: None,
+                    multi_contact_boundary: None,
+                    ..
+                } => (Vec::new(), false),
+                Form::Fluid { .. } => return None,
+                _ => {
+                    let vertices = part.form.polygon_vertices()?;
+                    if vertices.len() < 3 {
+                        return None;
                     }
-                    Form::Fluid {
-                        boundary: None,
-                        arc_boundary: None,
-                        multi_contact_boundary: None,
-                        ..
-                    } => (Vec::new(), false),
-                    Form::Fluid { .. } => return None,
-                    _ => {
-                        let vertices = part.form.polygon_vertices()?;
-                        if vertices.len() < 3 {
-                            return None;
-                        }
-                        let edges = (0..vertices.len())
-                            .map(|index| (vertices[index], vertices[(index + 1) % vertices.len()]))
-                            .collect();
-                        (edges, true)
-                    }
-                };
+                    let edges = (0..vertices.len())
+                        .map(|index| (vertices[index], vertices[(index + 1) % vertices.len()]))
+                        .collect();
+                    (edges, true)
+                }
+            };
 
             let vertices_for_winding = if closed_surface {
                 let Some(vertices) = (match &part.form {
