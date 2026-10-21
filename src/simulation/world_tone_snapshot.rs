@@ -116,7 +116,8 @@ impl WorldToneOccluderSnapshot {
         // bound before allocating full realized geometry for off-angle particles.
         for cell in &simulation.environment.field.cells {
             for physical in &cell.physical_materials {
-                let interval = physical_material_parallel_lane_interval(physical, catalog, toward_source)?;
+                let interval =
+                    physical_material_parallel_lane_interval(physical, catalog, toward_source)?;
                 if !receiver_intervals
                     .iter()
                     .any(|receiver| lane_intervals_overlap(interval, *receiver))
@@ -369,16 +370,9 @@ fn parallel_lane_interval_for_bounds(
     max_y: f64,
     toward_source: (f64, f64),
 ) -> Option<(f64, f64)> {
-    if ![
-        min_x,
-        max_x,
-        min_y,
-        max_y,
-        toward_source.0,
-        toward_source.1,
-    ]
-    .iter()
-    .all(|value| value.is_finite())
+    if ![min_x, max_x, min_y, max_y, toward_source.0, toward_source.1]
+        .iter()
+        .all(|value| value.is_finite())
         || min_x > max_x
         || min_y > max_y
         || (toward_source.0.hypot(toward_source.1) - 1.0).abs() > 1e-9
