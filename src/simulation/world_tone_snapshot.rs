@@ -4,6 +4,7 @@
 //! no spatial shape and is not an occluder. The live tick uses the resulting frame
 //! to settle direct sunlight into each living organism's existing energy holder.
 
+use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::material_storage::StoredMaterial;
 use crate::organism_geometry::OrganismBodyGeometry;
 use crate::physical_material::PhysicalMaterial;
@@ -112,7 +113,9 @@ impl WorldToneOccluderSnapshot {
                 };
                 for entry in &construction.committed_material.entries {
                     let StoredMaterial::Physical(physical) = entry;
-                    body_properties.push(physical_material_properties(physical, catalog)?);
+                    body_properties.push(physical_material_properties(
+                        physical, catalog,
+                    )?);
                     bodies.push(body_from_owner_relative_material(
                         physical, anchor, catalog,
                     )?);
@@ -133,7 +136,9 @@ impl WorldToneOccluderSnapshot {
                 {
                     continue;
                 }
-                body_properties.push(physical_material_properties(physical, catalog)?);
+                body_properties.push(physical_material_properties(
+                    physical, catalog,
+                )?);
                 bodies.push(OrganismBodyGeometry::from_physical_material(
                     physical, catalog,
                 )?);
@@ -337,7 +342,8 @@ impl WorldToneOccluderSnapshot {
             {
                 return;
             }
-            let Some(incident_energy) = sample.incident_energy_for_projected_width(path.projected_width)
+            let Some(incident_energy) =
+                sample.incident_energy_for_projected_width(path.projected_width)
             else {
                 return;
             };
