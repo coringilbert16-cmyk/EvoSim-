@@ -1449,8 +1449,14 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
         }
     }
     for first_index in 0..all_arcs.len() {
-        for second_index in (first_index + 1)..all_arcs.len() {
-            let first = all_arcs[first_index];
+        let first = all_arcs[first_index];
+        if !target_body_indices.contains(&first.body_index) {
+            continue;
+        }
+        for second_index in 0..all_arcs.len() {
+            if second_index == first_index {
+                continue;
+            }
             let second = all_arcs[second_index];
             let mut intersections = Vec::with_capacity(2);
             add_circle_circle_intersections(
