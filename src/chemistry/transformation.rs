@@ -57,25 +57,6 @@ pub(crate) fn chemical_break_energy_yield(
 /// the activation threshold. Reaction accumulation is a trigger, not an energy
 /// reservoir: disruption work is paid from the removed bond's stored energy
 /// first, with any shortfall debited from the organism's usable-energy holder.
-pub(crate) fn settle_chemical_break_energy(
-    organism: &mut Organism,
-    bond: crate::structure::Bond,
-    reaction_energy: f64,
-    disruption_cost: f64,
-    processing_efficiency: f64,
-    ledger: &mut EnergyLedger,
-) -> bool {
-    settle_chemical_break_energy_with_resonance(
-        organism,
-        bond,
-        reaction_energy,
-        disruption_cost,
-        0.0,
-        processing_efficiency,
-        ledger,
-    )
-}
-
 /// Settle a chemistry BREAK where compatible retained resonance supplies part
 /// of the disruption work. The reservoir debit is committed by the caller only
 /// after this transaction succeeds; the remaining work is charged to the
