@@ -3723,7 +3723,7 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
         for segment in &segments {
             let lo = segment.lane_start.min(segment.lane_end);
             let hi = segment.lane_start.max(segment.lane_end);
-            if hi - lo <= LANE_STEP {
+            if hi - lo > 1e-9 && hi - lo <= LANE_STEP {
                 coarse_lanes.extend([round_geometry_to_cent(lo)?, round_geometry_to_cent(hi)?]);
             }
         }
