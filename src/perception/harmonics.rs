@@ -1379,13 +1379,8 @@ mod tests {
                 phase_radians: 0.0,
             }],
         };
-        let output = transform_signal_to_energy_budget(
-            properties(1.0, 2.0, 1.0),
-            baselines(),
-            &input,
-            2.5,
-        )
-        .expect("valid residual budget should produce a transformed spectrum");
+        let output = transform_signal_to_energy_budget(properties(1.0, 2.0, 1.0), baselines(), &input, 2.5)
+            .expect("valid residual budget should produce a transformed spectrum");
         let energy: f64 = output
             .components
             .iter()
