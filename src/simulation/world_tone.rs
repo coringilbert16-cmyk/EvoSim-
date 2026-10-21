@@ -1371,8 +1371,7 @@ mod tests {
                 < 1e-9
         );
         assert!(
-            (result.absorbed_energy - result.usable_energy - result.heat_dissipated).abs()
-                < 1e-9
+            (result.absorbed_energy - result.usable_energy - result.heat_dissipated).abs() < 1e-9
         );
         assert!((holder - result.usable_energy).abs() < 1e-9);
         assert!((ledger.total_external_energy_input - result.absorbed_energy).abs() < 1e-9);
