@@ -169,8 +169,7 @@ pub(crate) fn resonant_absorption_fraction(
     if !ratio.is_finite() {
         return 0.0;
     }
-    let response_amplitude =
-        resonance_response(drive_frequency_hz, natural_frequency_hz, damping);
+    let response_amplitude = resonance_response(drive_frequency_hz, natural_frequency_hz, damping);
     let dissipative_amplitude = 2.0 * damping * ratio * response_amplitude;
     let fraction = wave_energy_from_amplitude(dissipative_amplitude);
     if fraction.is_finite() {
@@ -309,9 +308,7 @@ pub(crate) fn world_tone_cavity_contribution(
             properties,
             baselines,
             sample.frequency_hz,
-            wave_amplitude_from_energy(
-                sample.energy_intensity_per_tick_per_width * attenuation,
-            ),
+            wave_amplitude_from_energy(sample.energy_intensity_per_tick_per_width * attenuation),
             0.0,
         );
         received.retain_strongest();
