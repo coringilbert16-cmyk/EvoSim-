@@ -144,6 +144,7 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         occupied_cells: vec![construction.developmental_origin.clone()],
         genome: construction.child_genome.clone(),
         harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+        resonant_energy: crate::harmonics::ResonantEnergyReservoir::default(),
         experience_memory: crate::memory::ExperienceMemory::default(),
         pending_movement_experience: None,
         decision_history: crate::decision::DecisionHistory::default(),
