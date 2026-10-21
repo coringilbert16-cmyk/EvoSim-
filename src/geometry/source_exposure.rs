@@ -2543,7 +2543,7 @@ impl ParallelLanePartition {
         for lane in lanes {
             if unique
                 .last()
-                .is_none_or(|previous| (lane - *previous).abs() > 1e-9)
+                .map_or(true, |previous| (lane - *previous).abs() > 1e-9)
             {
                 unique.push(lane);
             }
