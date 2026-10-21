@@ -2097,3 +2097,15 @@ The latest implementation adds the first explicit geometry-to-ledger solar captu
 - Added tests for unoccluded point-source circle exposure, polygon and circle shadow transitions, circle/straight-boundary intersections, point-source projected extent, and multi-contact fluid arcs with their contact chord included in self-occlusion checks. Geometry-frame tests cover complete and partial shadows between circular receivers.
 - Historical status note from this pass: the point-source curved query initially fed only the exact-circular geometry-frame fallback. The current checkpoint above supersedes that limitation: the frame now calls both straight and curved visibility queries. Live tick settlement, complete world occluder inventory/transforms, approved energy/heat allocation, and whole-world conservation remain outstanding.
 - Exact-head CI is pending; do not treat earlier formatting or Clippy results as verification of this pass.
+
+## PR #202 — parallel-ray model decision supersedes earlier point-source notes — 2026-10-21
+
+**Current approved model:** sunlight is represented by one directional, parallel-ray signal at a time. The older finite point-source visibility model documented in the historical implementation notes is not the target model and must not be treated as complete merely because its curved-boundary calculations are analytic.
+
+- Keep the rotating source's precomputed cycle for direction, tone/frequency, and intensity; visibility for a tick uses one shared ray direction.
+- Shadow classification must use that same direction for every receiver and occluder in the frame. Projected-width calculations alone do not make finite-point-source visibility equivalent to parallel rays.
+- Preserve exact realized geometry and constituent attribution. Straight and curved receivers must agree on the same parallel visibility rule; no curve tessellation is introduced just to make visibility easier.
+- Keep energy settlement and reflection disabled unless their accounting is tied to unique incident energy. Reflection is a reduced-energy change in tone/frequency, not a second geometric ray and not an additional credit of the original incident energy.
+- This note records the approved model and the remaining implementation requirement; it does **not** claim that parallel-ray visibility, reflected-tone propagation, or whole-world conservation is implemented or verified.
+
+Next geometry milestone: replace finite-source angular shadow partitioning with directional parallel-ray interval classification, retaining exact analytic boundary intersections and projected widths for polygonal, circular, and supported fluid boundaries. Then test mixed straight/curved occlusion against one shared direction before relying on it for energy settlement.
