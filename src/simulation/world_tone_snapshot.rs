@@ -299,87 +299,211 @@ impl WorldToneOccluderSnapshot {
             .enumerate()
             .filter_map(|(index, organism)| living_ids.contains(&organism.id).then_some(index))
             .collect();
-        let Some(mut snapshot) =
+        let Some(snapshot) =
             Self::from_simulation_for_organisms(sample, simulation, &receiver_organism_indices)
         else {
             return;
         };
 
-        // The cached direct-exposure widths and ordered lane paths must describe
-        // the same first-hit geometry before any energy is credited. This is a
-        // fail-closed invariant for the upcoming residual-signal propagation.
-        let mut path_direct_widths = std::collections::HashMap::<(usize, usize), f64>::new();
-        for path in snapshot.frame.interaction_paths() {
-            if let Some(&(body_index, unit_index)) = path.hits.first() {
-                let width = path_direct_widths
-                    .entry((body_index, unit_index))
-                    .or_insert(0.0);
-                *width += path.projected_width;
-                if !width.is_finite() {
-                    return;
-                }
-            }
-        }
-        for (organism_index, organism) in simulation.organisms.iter().enumerate() {
-            if !living_ids.contains(&organism.id) {
-                continue;
-            }
-            let Some(body_index) = snapshot.body_index_for_organism(organism_index) else {
-                continue;
-            };
-            for unit_index in 0..organism.structure.units.len() {
-                let Some(expected) = snapshot
-                    .frame
-                    .projected_width_for_unit(body_index, unit_index)
-                else {
-                    continue;
-                };
-                let actual = path_direct_widths
-                    .get(&(body_index, unit_index))
-                    .copied()
-                    .unwrap_or(0.0);
-                if !expected.is_finite()
-                    || !actual.is_finite()
-                    || (expected - actual).abs() > 1e-7 * expected.max(1.0)
-                {
+        let mut body_to_organism = vec![None; snapshot.body_properties.len()];
+        for (organism_index, body_index) in snapshot.organism_body_indices.iter().enumerate() {
+            if let Some(body_index) = body_index {
+                if let Some(slot) = body_to_organism.get_mut(*body_index) {
+                    *slot = Some(organism_index);
+                } else {
                     return;
                 }
             }
         }
 
+        // Work against staged reservoirs. Any invalid geometry, spectrum, or
+        // ledger allocation aborts this entire source frame without partial credit.
+        let mut staged_reservoirs: Vec<_> = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.resonant_energy.clone())
+            .collect();
         let catalog = &simulation.environment.catalog;
         let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
-        let (organisms, ledger) = (&mut simulation.organisms, &mut simulation.energy_ledger);
+        let mut total_incident = 0.0;
+        let mut total_captured = 0.0;
+        let mut total_heat = 0.0;
+        let mut total_escaped = 0.0;
 
-        for (organism_index, organism) in organisms.iter_mut().enumerate() {
-            if !living_ids.contains(&organism.id) {
-                continue;
+        for path in snapshot.frame.interaction_paths() {
+            if !path.projected_width.is_finite()
+                || path.projected_width <= 0.0
+                || path.hits.is_empty()
+            {
+                return;
             }
-            let Some(body_index) = snapshot.body_index_for_organism(organism_index) else {
-                continue;
+            let Some(incident_energy) = sample.incident_energy_for_projected_width(path.projected_width)
+            else {
+                return;
             };
+            let mut signal = crate::harmonics::ToneSpectrum {
+                components: vec![crate::harmonics::ToneComponent {
+                    frequency_hz: sample.frequency_hz,
+                    amplitude: incident_energy.sqrt(),
+                    phase_radians: 0.0,
+                }],
+            };
+            let mut path_captured = 0.0;
+            let mut path_heat = 0.0;
 
-            // Use the unit's aggregate material properties. Mixed-material
-            // units are physical receivers too; selecting only single-part units
-            // silently made them transparent to sunlight energy capture.
-            let unit_properties: Vec<_> = organism
-                .structure
-                .units
+            for &(body_index, unit_index) in &path.hits {
+                let Some(properties) = snapshot.properties_for_body_unit(body_index, unit_index)
+                else {
+                    return;
+                };
+                let incoming_energy = spectrum_energy(&signal);
+                let Some(incoming_energy) = incoming_energy else {
+                    return;
+                };
+                if incoming_energy <= f64::EPSILON {
+                    signal = crate::harmonics::ToneSpectrum::empty();
+                    break;
+                }
+
+                let Some(response_spectrum) = crate::harmonics::material_response_spectrum(
+                    properties,
+                    baselines,
+                    &signal,
+                ) else {
+                    return;
+                };
+                let response_energy = spectrum_energy(&response_spectrum);
+                let Some(response_energy) = response_energy else {
+                    return;
+                };
+                if response_energy > incoming_energy + 1e-9 {
+                    return;
+                }
+                let damping = crate::harmonics::damping_ratio(properties, baselines);
+                if !damping.is_finite() || damping < 0.0 {
+                    return;
+                }
+                let damping_heat = response_energy * damping.clamp(0.0, 1.0);
+                let mut interaction_heat = damping_heat;
+                let mut captured = 0.0;
+
+                let living_organism = body_to_organism
+                    .get(body_index)
+                    .copied()
+                    .flatten()
+                    .filter(|organism_index| {
+                        living_ids.contains(&simulation.organisms[*organism_index].id)
+                    });
+
+                if let Some(organism_index) = living_organism {
+                    let retained_budget = response_energy - damping_heat;
+                    let Some(retained_spectrum) =
+                        crate::harmonics::transform_signal_to_energy_budget(
+                            properties,
+                            baselines,
+                            &signal,
+                            retained_budget,
+                        )
+                    else {
+                        return;
+                    };
+                    let mut candidate = staged_reservoirs[organism_index].clone();
+                    let mut deposit_ok = true;
+                    for component in &retained_spectrum.components {
+                        let energy = component.amplitude * component.amplitude;
+                        if energy > f64::EPSILON
+                            && !candidate.deposit(component.frequency_hz, energy)
+                        {
+                            deposit_ok = false;
+                            break;
+                        }
+                    }
+                    if deposit_ok {
+                        staged_reservoirs[organism_index] = candidate;
+                        captured = retained_budget;
+                    } else {
+                        // A bounded reservoir must not silently discard a
+                        // spectral component; rejected response energy is heat.
+                        interaction_heat = response_energy;
+                    }
+                }
+
+                let outgoing_budget = if living_organism.is_some() {
+                    incoming_energy - response_energy
+                } else {
+                    incoming_energy - interaction_heat
+                };
+                let Some(outgoing) = crate::harmonics::transform_signal_to_energy_budget(
+                    properties,
+                    baselines,
+                    &signal,
+                    outgoing_budget.max(0.0),
+                ) else {
+                    return;
+                };
+                path_captured += captured;
+                path_heat += interaction_heat;
+                if !path_captured.is_finite() || !path_heat.is_finite() {
+                    return;
+                }
+                signal = outgoing;
+            }
+
+            let escaped = spectrum_energy(&signal);
+            let Some(escaped) = escaped else {
+                return;
+            };
+            let allocated = path_captured + path_heat + escaped;
+            if !allocated.is_finite()
+                || (incident_energy - allocated).abs() > 1e-8 * incident_energy.max(1.0)
+            {
+                return;
+            }
+            total_incident += incident_energy;
+            total_captured += path_captured;
+            total_heat += path_heat;
+            total_escaped += escaped;
+            if ![total_incident, total_captured, total_heat, total_escaped]
                 .iter()
-                .enumerate()
-                .filter_map(|(unit_index, unit)| {
-                    unit.properties(catalog)
-                        .map(|properties| (unit_index, properties))
-                })
-                .collect();
-
-            for (unit_index, properties) in unit_properties {
-                let _ = snapshot.frame.settle_organism_surface_response(
-                    body_index, unit_index, properties, baselines, organism, ledger,
-                );
+                .all(|value| value.is_finite())
+            {
+                return;
             }
         }
+
+        let (_, ledger) = (&mut simulation.organisms, &mut simulation.energy_ledger);
+        if !ledger.settle_world_tone_paths(
+            total_incident,
+            total_captured,
+            total_heat,
+            total_escaped,
+        ) {
+            return;
+        }
+        for (organism, reservoir) in simulation.organisms.iter_mut().zip(staged_reservoirs) {
+            organism.resonant_energy = reservoir;
+        }
     }
+}
+}
+
+fn spectrum_energy(spectrum: &crate::harmonics::ToneSpectrum) -> Option<f64> {
+    let mut energy = 0.0;
+    for component in &spectrum.components {
+        if !component.frequency_hz.is_finite()
+            || component.frequency_hz <= 0.0
+            || !component.amplitude.is_finite()
+            || component.amplitude < 0.0
+            || !component.phase_radians.is_finite()
+        {
+            return None;
+        }
+        energy += component.amplitude * component.amplitude;
+        if !energy.is_finite() {
+            return None;
+        }
+    }
+    Some(energy)
 }
 
 fn structure_material_properties(
