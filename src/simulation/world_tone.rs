@@ -1546,8 +1546,7 @@ mod tests {
                 < 1e-7
         );
         assert!(
-            (result.absorbed_energy - result.usable_energy - result.heat_dissipated).abs()
-                < 1e-7
+            (result.absorbed_energy - result.usable_energy - result.heat_dissipated).abs() < 1e-7
         );
         // Captured resonance is transferred out of usable energy and counted once.
         assert!((organism.usable_energy - initial_usable).abs() < 1e-7);
@@ -1562,8 +1561,7 @@ mod tests {
         assert!((ledger.total_usable_energy_gained - result.usable_energy).abs() < 1e-7);
         assert!((ledger.total_heat_dissipated - result.heat_dissipated).abs() < 1e-7);
         assert!(
-            (ledger.total_world_tone_energy_unabsorbed - result.unabsorbed_energy).abs()
-                < 1e-7
+            (ledger.total_world_tone_energy_unabsorbed - result.unabsorbed_energy).abs() < 1e-7
         );
     }
 
