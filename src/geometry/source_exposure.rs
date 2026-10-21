@@ -290,15 +290,20 @@ fn reference_angle_for_bodies(
     let Some(body) = bodies.first() else {
         return Some(0.0);
     };
-    let center = ((body.min_x + body.max_x) * 0.5, (body.min_y + body.max_y) * 0.5);
+    let center = (
+        (body.min_x + body.max_x) * 0.5,
+        (body.min_y + body.max_y) * 0.5,
+    );
     if !center.0.is_finite() || !center.1.is_finite() {
         return None;
     }
-    Some(if (center.0 - source.0).hypot(center.1 - source.1) <= f64::EPSILON {
-        0.0
-    } else {
-        (center.1 - source.1).atan2(center.0 - source.0)
-    })
+    Some(
+        if (center.0 - source.0).hypot(center.1 - source.1) <= f64::EPSILON {
+            0.0
+        } else {
+            (center.1 - source.1).atan2(center.0 - source.0)
+        },
+    )
 }
 
 fn body_angular_intervals(
