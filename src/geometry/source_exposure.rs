@@ -232,6 +232,88 @@ fn polygon_is_convex(vertices: &[(f64, f64)]) -> bool {
 /// before exact realized-geometry occlusion classifies each open interval.
 /// Curved receiver intervals are returned separately by the arc query.
 #[allow(dead_code)]
+fn angle_interval_for_bounds(
+    source: (f64, f64),
+    bounds: (f64, f64, f64, f64),
+    reference_angle: f64,
+) -> Option<(f64, f64)> {
+    if ![
+        source.0,
+        source.1,
+        bounds.0,
+        bounds.1,
+        bounds.2,
+        bounds.3,
+        reference_angle,
+    ]
+    .iter()
+    .all(|value| value.is_finite())
+        || bounds.0 > bounds.1
+        || bounds.2 > bounds.3
+    {
+        return None;
+    }
+    let corners = [
+        (bounds.0, bounds.2),
+        (bounds.0, bounds.3),
+        (bounds.1, bounds.2),
+        (bounds.1, bounds.3),
+    ];
+    let mut minimum = f64::INFINITY;
+    let mut maximum = f64::NEG_INFINITY;
+    for (x, y) in corners {
+        let dx = x - source.0;
+        let dy = y - source.1;
+        if dx.hypot(dy) <= f64::EPSILON {
+            return Some((-std::f64::consts::PI, std::f64::consts::PI));
+        }
+        let angle = dy.atan2(dx);
+        let relative = (angle - reference_angle + std::f64::consts::PI)
+            .rem_euclid(std::f64::consts::TAU)
+            - std::f64::consts::PI;
+        minimum = minimum.min(relative);
+        maximum = maximum.max(relative);
+    }
+    if maximum - minimum > std::f64::consts::PI {
+        Some((-std::f64::consts::PI, std::f64::consts::PI))
+    } else {
+        Some((minimum, maximum))
+    }
+}
+
+fn candidate_body_indices_for_bounds(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_bounds: (f64, f64, f64, f64),
+) -> Option<Vec<usize>> {
+    let center = (
+        (target_bounds.0 + target_bounds.1) * 0.5,
+        (target_bounds.2 + target_bounds.3) * 0.5,
+    );
+    let reference_angle = if (center.0 - source.0).hypot(center.1 - source.1)
+        <= f64::EPSILON
+    {
+        0.0
+    } else {
+        (center.1 - source.1).atan2(center.0 - source.0)
+    };
+    let target_interval = angle_interval_for_bounds(source, target_bounds, reference_angle)?;
+    let mut candidates = Vec::new();
+    for (body_index, body) in bodies.iter().enumerate() {
+        let interval = angle_interval_for_bounds(
+            source,
+            (body.min_x, body.max_x, body.min_y, body.max_y),
+            reference_angle,
+        )?;
+        if interval.0 <= target_interval.1 + 1e-10
+            && target_interval.0 <= interval.1 + 1e-10
+        {
+            candidates.push(body_index);
+        }
+    }
+    Some(candidates)
+}
+
 pub(crate) fn visible_polygonal_intervals(
     source: (f64, f64),
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
@@ -536,6 +618,16 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                 continue;
             }
 
+            let candidate_body_indices = candidate_body_indices_for_bounds(
+                source,
+                bodies,
+                (
+                    a.0.min(b.0),
+                    a.0.max(b.0),
+                    a.1.min(b.1),
+                    a.1.max(b.1),
+                ),
+            )?;
             let mut cuts = vec![0.0_f64, 1.0_f64];
             for &(vx, vy) in &critical_points {
                 let dx = vx - source.0;
@@ -623,8 +715,13 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                 }
                 let t = (t0 + t1) * 0.5;
                 let point = (a.0 + ex * t, a.1 + ey * t);
-                if crate::organism_geometry::source_path_blocked(
-                    source, point, bodies, body_index, unit_index,
+                if crate::organism_geometry::source_path_blocked_for_candidates(
+                    source,
+                    point,
+                    bodies,
+                    body_index,
+                    unit_index,
+                    &candidate_body_indices,
                 ) {
                     continue;
                 }
@@ -1446,6 +1543,9 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
         }
     }
     for target in &all_arcs {
+        if !target_body_mask[target.body_index] {
+            continue;
+        }
         for &(start, end) in &straight_edges {
             add_circle_segment_intersections(
                 target.center,
@@ -1510,6 +1610,16 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
             }
         }
 
+        let candidate_body_indices = candidate_body_indices_for_bounds(
+            source,
+            bodies,
+            (
+                target.center.0 - target.radius,
+                target.center.0 + target.radius,
+                target.center.1 - target.radius,
+                target.center.1 + target.radius,
+            ),
+        )?;
         let mut cuts = vec![target.start, target.start + target.sweep];
         if target.sweep >= std::f64::consts::TAU - 1e-10 {
             cuts.push(target.start + target.sweep * 0.5);
@@ -1596,12 +1706,13 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
             // boundary pieces must be allowed to occlude a concave/compound
             // fluid arc. The target endpoint itself is excluded by the strict
             // before-target intersection checks in the exact geometry queries.
-            if crate::organism_geometry::source_path_blocked(
+            if crate::organism_geometry::source_path_blocked_for_candidates(
                 source,
                 point,
                 bodies,
                 usize::MAX,
                 usize::MAX,
+                &candidate_body_indices,
             ) {
                 continue;
             }
