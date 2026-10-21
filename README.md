@@ -2215,3 +2215,10 @@ The next integration slice now routes the processing-usable portion of captured 
 World inventory now tracks initial/current retained resonance as its own store alongside usable energy and structural bond energy. The inventory residual includes resonant-store changes, and the live sunlight regression now asserts that captured energy persists in the reservoir and that the complete inventory reconciles. The simulation refreshes the resonant inventory total after each tick.
 
 **Still outstanding:** chemistry has not yet withdrawn frequency-compatible reservoir energy, bond overload is not yet resonance-driven, and random stress-break remains active. The current capture-to-reservoir frequency assignment records the incoming source frequency; full material-response spectral partitioning and overload capacity remain later integration work. No exact-head CI or local Rust test run is available from the current GitHub tool connection, so these changes are not yet verified by compilation.
+
+
+## PR #202 — frequency-compatible chemistry integration — 2026-10-21
+
+Chemical BREAK operations now carry a reaction frequency derived from the logarithmic midpoint of the two bonded materials' natural frequencies. Resolution tries a bounded withdrawal from a cloned reservoir using the existing spectral compatibility curve. A stale/failed break does not commit that withdrawal. When compatible resonance is available, it supplies part of the disruption work, reducing the work charged against the bond/usable-energy balance while preserving the full physical work total; the added regression checks that bond energy plus reservoir debit exactly balances usable output, heat, and work.
+
+This is an incremental chemistry connection, not the stress-break replacement. Chemistry still uses its established contact/interface accumulation and activation logic, with resonance reducing the remaining bond-supplied activation/work requirement. The random stress-threshold path remains active until a separately tested overload-driven path can replace it without introducing free energy or losing structural collapse.
