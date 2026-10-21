@@ -312,6 +312,18 @@ fn candidate_body_indices_for_bounds(
     Some(candidates)
 }
 
+fn add_circle_tangent_points_tagged(
+    center: (f64, f64),
+    radius: f64,
+    source: (f64, f64),
+    body_index: usize,
+    critical_points: &mut Vec<(usize, f64, f64)>,
+) {
+    let mut points = Vec::with_capacity(2);
+    add_circle_tangent_points(center, radius, source, &mut points);
+    critical_points.extend(points.into_iter().map(|(x, y)| (body_index, x, y)));
+}
+
 pub(crate) fn visible_polygonal_intervals(
     source: (f64, f64),
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
@@ -341,7 +353,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
 
     let mut straight_targets = Vec::new();
     let mut straight_edges = Vec::new();
-    let mut critical_points = Vec::new();
+    let mut critical_points: Vec<(usize, f64, f64)> = Vec::new();
 
     for (body_index, body) in bodies.iter().enumerate() {
         let mut seen_unit_indices = Vec::with_capacity(body.parts.len());
@@ -445,7 +457,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                 {
                     return None;
                 }
-                critical_points.extend(vertices.iter().copied());
+                critical_points.extend(vertices.iter().copied().map(|(x, y)| (body_index, x, y)));
                 for index in 0..vertices.len() {
                     straight_edges.push((
                         body_index,
@@ -469,14 +481,15 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                     let half = *length * 0.5;
                     let start = (part.x - half * cos, part.y - half * sin);
                     let end = (part.x + half * cos, part.y + half * sin);
-                    critical_points.extend([start, end]);
+                    critical_points.extend([(body_index, start.0, start.1), (body_index, end.0, end.1)]);
                     straight_edges.push((body_index, part.unit_index, start, end));
                 }
                 Form::Circle { radius } => {
-                    add_circle_tangent_points(
+                    add_circle_tangent_points_tagged(
                         (part.x, part.y),
                         *radius,
                         source,
+                        body_index,
                         &mut critical_points,
                     );
                 }
@@ -495,7 +508,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                         if world.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) {
                             return None;
                         }
-                        critical_points.extend(world.iter().copied());
+                        critical_points.extend(world.iter().copied().map(|(x, y)| (body_index, x, y)));
                         for index in 0..world.len() {
                             straight_edges.push((
                                 body_index,
@@ -507,11 +520,12 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                     }
                     if let Some(arc) = arc_boundary {
                         let world = arc.transformed(part.x, part.y, part.rotation_radians)?;
-                        critical_points.extend([world.start_point(), world.end_point()]);
-                        add_circle_tangent_points(
+                        critical_points.extend([world.start_point(), world.end_point()].map(|(x, y)| (body_index, x, y)));
+                        add_circle_tangent_points_tagged(
                             (world.center_x, world.center_y),
                             world.radius,
                             source,
+                            body_index,
                             &mut critical_points,
                         );
                         straight_edges.push((
@@ -543,12 +557,15 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                                 FluidBoundaryPiece::FreeArc(arc) => {
                                     let world =
                                         arc.transformed(part.x, part.y, part.rotation_radians)?;
-                                    critical_points
-                                        .extend([world.start_point(), world.end_point()]);
-                                    add_circle_tangent_points(
+                                    critical_points.extend(
+                                            [world.start_point(), world.end_point()]
+                                                .map(|(x, y)| (body_index, x, y)),
+                                        );
+                                    add_circle_tangent_points_tagged(
                                         (world.center_x, world.center_y),
                                         world.radius,
                                         source,
+                                        body_index,
                                         &mut critical_points,
                                     );
                                 }
@@ -560,10 +577,11 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                         && multi_contact_boundary.is_none()
                     {
                         let radius = (nominal_area / std::f64::consts::PI).sqrt();
-                        add_circle_tangent_points(
+                        add_circle_tangent_points_tagged(
                             (part.x, part.y),
                             radius,
                             source,
+                            body_index,
                             &mut critical_points,
                         );
                     }
@@ -575,7 +593,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
 
     if critical_points
         .iter()
-        .any(|(x, y)| !x.is_finite() || !y.is_finite())
+        .any(|(_, x, y)| !x.is_finite() || !y.is_finite())
         || straight_edges.iter().any(|(_, _, a, b)| {
             !a.0.is_finite() || !a.1.is_finite() || !b.0.is_finite() || !b.1.is_finite()
         })
@@ -621,8 +639,15 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                 bodies,
                 (a.0.min(b.0), a.0.max(b.0), a.1.min(b.1), a.1.max(b.1)),
             )?;
+            let mut candidate_body_mask = vec![false; bodies.len()];
+            for &candidate in &candidate_body_indices {
+                candidate_body_mask[candidate] = true;
+            }
             let mut cuts = vec![0.0_f64, 1.0_f64];
-            for &(vx, vy) in &critical_points {
+            for &(critical_body_index, vx, vy) in &critical_points {
+                if !candidate_body_mask[critical_body_index] {
+                    continue;
+                }
                 let dx = vx - source.0;
                 let dy = vy - source.1;
                 let denominator = ex * dy - ey * dx;
@@ -641,6 +666,9 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
             // Directly split at straight-boundary intersections, including
             // contact chords. Collinear overlaps are split at both endpoints.
             for &(block_body, block_unit, c, d) in &straight_edges {
+                if !candidate_body_mask[block_body] {
+                    continue;
+                }
                 if block_body == body_index && block_unit == unit_index {
                     continue;
                 }
@@ -670,7 +698,8 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
 
             // Curved-boundary intersections with this straight target edge are
             // exact cut points, not a reason to approximate the curve.
-            for (block_body_index, block_body) in bodies.iter().enumerate() {
+            for &block_body_index in &candidate_body_indices {
+                let block_body = bodies.get(block_body_index)?;
                 for blocker in &block_body.parts {
                     if block_body_index == body_index && blocker.unit_index == unit_index {
                         continue;
