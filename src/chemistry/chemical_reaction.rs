@@ -253,6 +253,9 @@ pub(crate) fn resolve(
     if organism.id != operation.organism_id {
         return false;
     }
+    if organism.resonant_energy.total_energy().is_none() {
+        return false;
+    }
     let processing_efficiency = organism.genome.processing_efficiency();
     // Work from a trial reservoir. A failed or stale BREAK must not consume
     // retained resonance; only a successfully settled structural transaction
