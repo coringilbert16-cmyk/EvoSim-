@@ -3319,6 +3319,14 @@ mod parallel_polygonal_visibility_tests {
     }
 
     #[test]
+    fn aligned_disjoint_rectangles_do_not_fail_closed_as_collinear_overlap() {
+        let bodies = [rectangle(0.0, 0.0, 2.0, 2.0), rectangle(5.0, 0.0, 2.0, 2.0)];
+        let visible = visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &bodies, &[0]);
+        assert!(visible.is_some());
+        assert!(visible.unwrap().iter().all(|interval| interval.body_index == 0));
+    }
+
+    #[test]
     fn parallel_classifier_splits_a_partially_shadowed_front_edge() {
         let bodies = [rectangle(4.0, 0.0, 2.0, 2.0), rectangle(8.0, 0.0, 2.0, 1.0)];
         let visible = visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &bodies, &[0]).unwrap();
