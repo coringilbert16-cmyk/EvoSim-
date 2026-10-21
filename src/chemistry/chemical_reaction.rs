@@ -201,38 +201,40 @@ pub(crate) fn accumulate(
             continue;
         };
 
-        // Accumulation remains normalized chemistry state. Only when the
-        // activation threshold is crossed do we convert that state into the
-        // physical energy quantity consumed by the BREAK ledger transaction.
+        let frequency_a = crate::harmonics::natural_frequency_hz(a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_hz(b, baselines);
+        if !frequency_a.is_finite()
+            || frequency_a <= 0.0
+            || !frequency_b.is_finite()
+            || frequency_b <= 0.0
+        {
+            continue;
+        }
+        // The interface reaction couples to the logarithmic midpoint of
+        // its two realized materials' natural frequencies.
+        let reaction_frequency_hz =
+            (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        if !reaction_frequency_hz.is_finite() || reaction_frequency_hz <= 0.0 {
+            continue;
+        }
+
+        // Compatible retained resonance lowers the remaining activation
+        // requirement. It is not copied into the accumulator: resolve() will
+        // withdraw the same energy only if the bond transaction succeeds.
+        let resonance_credit = organism
+            .resonant_energy
+            .compatible_energy(reaction_frequency_hz)
+            .min(barrier);
+        let effective_barrier = (barrier - resonance_credit).max(0.0);
         let Some(reaction_energy) = crate::chemistry::normalized_chemistry_to_energy(next) else {
             continue;
         };
-        if crate::chemistry::activated(reaction_energy, barrier) {
-            // The activation barrier is the physical disruption work for
-            // this realized bond. Reuse that exact quantity; do not calculate
-            // a second constituent-derived BREAK cost.
-            let disruption_cost = barrier;
-            let frequency_a = crate::harmonics::natural_frequency_hz(a, baselines);
-            let frequency_b = crate::harmonics::natural_frequency_hz(b, baselines);
-            if !frequency_a.is_finite()
-                || frequency_a <= 0.0
-                || !frequency_b.is_finite()
-                || frequency_b <= 0.0
-            {
-                continue;
-            }
-            // The interface reaction couples to the logarithmic midpoint of
-            // its two realized materials' natural frequencies.
-            let reaction_frequency_hz =
-                (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
-            if !reaction_frequency_hz.is_finite() || reaction_frequency_hz <= 0.0 {
-                continue;
-            }
+        if crate::chemistry::activated(reaction_energy, effective_barrier) {
             operations.push(ChemicalBreakOperation {
                 organism_id: organism.id.clone(),
                 bond,
                 reaction_energy,
-                disruption_cost,
+                disruption_cost: barrier,
                 reaction_frequency_hz,
             });
             accumulation.remove(&key);
