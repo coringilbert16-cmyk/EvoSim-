@@ -2506,3 +2506,160 @@ mod exact_arc_projection_tests {
         assert_eq!(projected_arc_extent(arc, (0.0, 2.0)), None);
     }
 }
+
+
+/// Coordinate frame for a single shared parallel-ray direction.
+///
+/// `toward_source` points from the scene toward the source. Rays travel in the
+/// opposite direction, but the perpendicular lane coordinate is unchanged by
+/// that sign choice. Construct once per capture frame and reuse for every
+/// receiver and occluder.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ParallelRayFrame {
+    toward_source: (f64, f64),
+    perpendicular: (f64, f64),
+}
+
+impl ParallelRayFrame {
+    /// Normalize a finite nonzero direction. Invalid directions fail closed.
+    #[allow(dead_code)] // Consumed by the parallel visibility partitioner.
+    pub(crate) fn new(toward_source: (f64, f64)) -> Option<Self> {
+        if !toward_source.0.is_finite() || !toward_source.1.is_finite() {
+            return None;
+        }
+        let length = toward_source.0.hypot(toward_source.1);
+        if !length.is_finite() || length <= 1e-12 {
+            return None;
+        }
+        let direction = (toward_source.0 / length, toward_source.1 / length);
+        Some(Self {
+            toward_source: direction,
+            perpendicular: (-direction.1, direction.0),
+        })
+    }
+
+    /// Lane coordinate shared by all points on one parallel ray.
+    #[allow(dead_code)]
+    pub(crate) fn lane(self, point: (f64, f64)) -> Option<f64> {
+        if !point.0.is_finite() || !point.1.is_finite() {
+            return None;
+        }
+        let lane = point.0 * self.perpendicular.0 + point.1 * self.perpendicular.1;
+        lane.is_finite().then_some(lane)
+    }
+
+    /// Signed depth toward the source. Smaller/larger ordering must be
+    /// interpreted consistently by the visibility classifier.
+    #[allow(dead_code)]
+    pub(crate) fn depth(self, point: (f64, f64)) -> Option<f64> {
+        if !point.0.is_finite() || !point.1.is_finite() {
+            return None;
+        }
+        let depth = point.0 * self.toward_source.0 + point.1 * self.toward_source.1;
+        depth.is_finite().then_some(depth)
+    }
+
+    /// Intersect a lane with a straight segment and return the hit depth.
+    ///
+    /// The nested option distinguishes a valid miss (`Some(None)`) from
+    /// invalid or coincident geometry (`None`). A segment lying along the ray
+    /// is ambiguous for nearest-boundary attribution and therefore fails closed.
+    #[allow(dead_code)]
+    pub(crate) fn segment_hit_depth(
+        self,
+        lane: f64,
+        start: (f64, f64),
+        end: (f64, f64),
+    ) -> Option<Option<f64>> {
+        if !lane.is_finite()
+            || !start.0.is_finite()
+            || !start.1.is_finite()
+            || !end.0.is_finite()
+            || !end.1.is_finite()
+        {
+            return None;
+        }
+        let lane_start = self.lane(start)?;
+        let lane_end = self.lane(end)?;
+        let depth_start = self.depth(start)?;
+        let depth_end = self.depth(end)?;
+        let lane_delta = lane_end - lane_start;
+        if !lane_delta.is_finite() {
+            return None;
+        }
+        if lane_delta.abs() <= 1e-12 {
+            // A segment parallel to the ray either misses this lane or overlaps
+            // it for a continuum of depths; the latter cannot be attributed as
+            // one unique hit.
+            return if (lane - lane_start).abs() <= 1e-12 {
+                None
+            } else {
+                Some(None)
+            };
+        }
+        let t = (lane - lane_start) / lane_delta;
+        if !t.is_finite() {
+            return None;
+        }
+        if !(0.0..=1.0).contains(&t) {
+            return Some(None);
+        }
+        let depth = depth_start + (depth_end - depth_start) * t;
+        depth.is_finite().then_some(Some(depth))
+    }
+}
+
+#[cfg(test)]
+mod parallel_ray_frame_tests {
+    use super::ParallelRayFrame;
+
+    #[test]
+    fn lane_is_invariant_under_translation_along_parallel_rays() {
+        let frame = ParallelRayFrame::new((0.0, 4.0)).unwrap();
+        let point = (3.0, 7.0);
+        let translated = (point.0, point.1 + 125.0);
+        assert!((frame.lane(point).unwrap() - frame.lane(translated).unwrap()).abs() < 1e-12);
+    }
+
+    #[test]
+    fn segment_hit_depth_changes_but_lane_does_not_under_ray_translation() {
+        let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
+        let start = (2.0, -1.0);
+        let end = (2.0, 1.0);
+        let lane = frame.lane((0.0, 0.0)).unwrap();
+        let depth = frame.segment_hit_depth(lane, start, end).unwrap().unwrap();
+        let shift = (25.0, 0.0);
+        let shifted_start = (start.0 + shift.0, start.1 + shift.1);
+        let shifted_end = (end.0 + shift.0, end.1 + shift.1);
+        assert_eq!(frame.lane(start), frame.lane(shifted_start));
+        let shifted_depth = frame
+            .segment_hit_depth(lane, shifted_start, shifted_end)
+            .unwrap()
+            .unwrap();
+        assert!((shifted_depth - depth - 25.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn segment_lane_intersection_distinguishes_miss_and_ambiguous_overlap() {
+        let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
+        assert_eq!(
+            frame.segment_hit_depth(5.0, (2.0, 0.0), (3.0, 0.0)),
+            Some(None)
+        );
+        assert_eq!(
+            frame.segment_hit_depth(0.0, (2.0, 0.0), (3.0, 0.0)),
+            None
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_direction_and_non_finite_coordinates() {
+        assert!(ParallelRayFrame::new((0.0, 0.0)).is_none());
+        assert!(ParallelRayFrame::new((f64::NAN, 1.0)).is_none());
+        let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
+        assert!(frame.lane((f64::INFINITY, 0.0)).is_none());
+        assert!(frame
+            .segment_hit_depth(0.0, (0.0, 0.0), (f64::NAN, 1.0))
+            .is_none());
+    }
+}
