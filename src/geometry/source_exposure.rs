@@ -2530,6 +2530,23 @@ pub(crate) struct ParallelLanePartition {
 }
 
 impl ParallelLanePartition {
+    /// Build the shared partition from straight and curved critical events.
+    /// Curved-event lane coordinates are quantized to 0.01 world units as
+    /// approved; straight-edge coordinates retain full precision. All events
+    /// then share one sorted partition, preventing either class from being
+    /// classified against a different lane set.
+    #[allow(dead_code)]
+    pub(crate) fn from_boundary_events(
+        straight_lanes: Vec<f64>,
+        curved_lanes: Vec<f64>,
+    ) -> Option<Self> {
+        let mut lanes = straight_lanes;
+        for lane in curved_lanes {
+            lanes.push(round_geometry_to_cent(lane)?);
+        }
+        Self::new(lanes)
+    }
+
     /// Sort and deduplicate finite lane coordinates. A small epsilon removes
     /// numerical duplicates from the same geometric event without imposing a
     /// coarse grid on straight boundaries.
@@ -2863,5 +2880,35 @@ mod parallel_lane_partition_tests {
         assert!(ParallelLanePartition::new(vec![0.0, f64::NAN]).is_none());
         let partition = ParallelLanePartition::new(vec![0.0, 1e-10, 1.0]).unwrap();
         assert_eq!(partition.intervals(), vec![(0.0, 1.0, 0.5)]);
+    }
+
+    #[test]
+    fn curved_events_round_before_joining_unrounded_straight_events() {
+        let partition = ParallelLanePartition::from_boundary_events(
+            vec![0.1234, 0.2345],
+            vec![0.1236, 0.876],
+        )
+        .unwrap();
+        assert_eq!(partition.lanes(), &[0.12, 0.23, 0.88]);
+    }
+
+    #[test]
+    fn quantized_curved_events_merge_when_they_fall_in_the_same_cent() {
+        let partition = ParallelLanePartition::from_boundary_events(
+            vec![0.0, 1.0],
+            vec![0.401, 0.404, 0.406],
+        )
+        .unwrap();
+        assert_eq!(partition.lanes(), &[0.0, 0.4, 0.41, 1.0]);
+        assert!(partition.intervals().iter().all(|(_, _, midpoint)| midpoint.is_finite()));
+    }
+
+    #[test]
+    fn curved_event_quantization_rejects_non_finite_lanes() {
+        assert!(ParallelLanePartition::from_boundary_events(
+            vec![0.0],
+            vec![f64::INFINITY],
+        )
+        .is_none());
     }
 }
