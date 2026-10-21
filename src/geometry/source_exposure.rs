@@ -3736,6 +3736,73 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
     Some(widths)
 }
 
+
+#[cfg(test)]
+mod parallel_mixed_boundary_visibility_tests {
+    use super::parallel_projected_widths_by_body_for_targets;
+    use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
+    use crate::resources::Form;
+
+    fn circle(x: f64, y: f64, radius: f64) -> OrganismBodyGeometry {
+        OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Circle { radius },
+                x,
+                y,
+                rotation_radians: 0.0,
+            }],
+            min_x: x - radius,
+            max_x: x + radius,
+            min_y: y - radius,
+            max_y: y + radius,
+        }
+    }
+
+    fn rectangle(x: f64, y: f64, width: f64, height: f64) -> OrganismBodyGeometry {
+        OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Rectangle { width, height },
+                x,
+                y,
+                rotation_radians: 0.0,
+            }],
+            min_x: x - width * 0.5,
+            max_x: x + width * 0.5,
+            min_y: y - height * 0.5,
+            max_y: y + height * 0.5,
+        }
+    }
+
+    #[test]
+    fn circular_receiver_is_shadowed_by_a_straight_occluder_in_the_same_parallel_field() {
+        let bodies = [circle(4.0, 0.0, 1.0), rectangle(8.0, 0.0, 2.0, 1.0)];
+        let widths =
+            parallel_projected_widths_by_body_for_targets((1.0, 0.0), &bodies, &[0]).unwrap();
+        assert!((widths[0][0].1 - 1.0).abs() < 0.02);
+        assert_eq!(widths[1][0].1, 0.0);
+    }
+
+    #[test]
+    fn polygonal_receiver_is_shadowed_by_a_circular_occluder_in_the_same_parallel_field() {
+        let bodies = [rectangle(4.0, 0.0, 2.0, 2.0), circle(8.0, 0.0, 0.5)];
+        let widths =
+            parallel_projected_widths_by_body_for_targets((1.0, 0.0), &bodies, &[0]).unwrap();
+        assert!((widths[0][0].1 - 1.0).abs() < 0.02);
+        assert_eq!(widths[1][0].1, 0.0);
+    }
+
+    #[test]
+    fn circular_receiver_is_shadowed_by_a_circular_occluder_in_the_same_parallel_field() {
+        let bodies = [circle(4.0, 0.0, 1.0), circle(8.0, 0.0, 0.5)];
+        let widths =
+            parallel_projected_widths_by_body_for_targets((1.0, 0.0), &bodies, &[0]).unwrap();
+        assert!((widths[0][0].1 - 1.0).abs() < 0.02);
+        assert_eq!(widths[1][0].1, 0.0);
+    }
+}
+
 #[cfg(test)]
 mod parallel_lane_intersection_regression_tests {
     use super::ParallelRayFrame;
