@@ -423,10 +423,10 @@ impl WorldToneCaptureFrame {
         })
     }
     /// Settle one organism constituent using the existing material spectrum.
-    /// Damping is heat; the material's bounded amplitude-squared response is
-    /// retained as frequency-resolved resonance, and only the remaining budget
-    /// continues as signal. No genome-selected efficiency or arbitrary retention
-    /// coefficient is introduced.
+    /// The material response determines the intercepted resonant-energy budget;
+    /// its damping ratio partitions that response into retained resonance and
+    /// heat. Energy outside the response continues as signal. No genome-selected
+    /// efficiency or arbitrary retention coefficient is introduced.
     pub(crate) fn settle_organism_surface_response(
         &mut self,
         receiver_body_index: usize,
@@ -448,40 +448,46 @@ impl WorldToneCaptureFrame {
             self.surface_response_for_unit(receiver_body_index, unit_index, properties, baselines)?;
 
         // The existing material response supplies the spectral composition.
-        // Its amplitudes are scaled to this constituent's incident energy, with
-        // E=A², then bounded by the energy left after damping has become heat.
+        // Scale amplitudes to this constituent's incident budget using E=A².
         let mut spectrum = crate::harmonics::material_response(properties, baselines, 0.0);
         let incident_amplitude = response.incident_energy.sqrt();
         for component in &mut spectrum.components {
             component.amplitude *= incident_amplitude;
         }
-        let mut spectral_energy: f64 = 0.0;
+        let mut response_energy: f64 = 0.0;
         for component in &spectrum.components {
             let energy = component.amplitude * component.amplitude;
             if !energy.is_finite() || energy < 0.0 {
                 return None;
             }
-            spectral_energy += energy;
-            if !spectral_energy.is_finite() {
+            response_energy += energy;
+            if !response_energy.is_finite() {
                 return None;
             }
         }
-        let damping_heat = response.absorbed_by_damping;
-        let retainable_budget = (response.incident_energy - damping_heat).max(0.0);
-        if spectral_energy > retainable_budget && spectral_energy > 0.0 {
-            let scale = (retainable_budget / spectral_energy).sqrt();
+        response_energy = response_energy.min(response.incident_energy);
+
+        // Damping acts on the material's resonant response, not on the entire
+        // incident signal. The response budget not dissipated by damping is
+        // available for persistent frequency-resolved resonance.
+        let damping = crate::harmonics::damping_ratio(properties, baselines);
+        if !damping.is_finite() || damping < 0.0 {
+            return None;
+        }
+        let damping_heat = response_energy * damping.clamp(0.0, 1.0);
+        let retained_budget = response_energy - damping_heat;
+        if response_energy > 0.0 {
+            let scale = (retained_budget / response_energy).sqrt();
             if !scale.is_finite() {
                 return None;
             }
             for component in &mut spectrum.components {
                 component.amplitude *= scale;
             }
-            spectral_energy = retainable_budget;
         }
 
-        // Deposit the whole spectral response atomically. If the bounded
-        // reservoir cannot represent it, dissipate that response as heat rather
-        // than silently losing energy or crediting it twice.
+        // Deposit the whole retained spectrum atomically. If the bounded
+        // reservoir cannot represent it, dissipate the entire response as heat.
         let mut reservoir = organism.resonant_energy.clone();
         let mut deposit_ok = true;
         for component in &spectrum.components {
@@ -491,13 +497,13 @@ impl WorldToneCaptureFrame {
                 break;
             }
         }
-        let retained_energy = if deposit_ok { spectral_energy } else { 0.0 };
+        let retained_energy = if deposit_ok { retained_budget } else { 0.0 };
         let heat_dissipated = if deposit_ok {
             damping_heat
         } else {
-            damping_heat + spectral_energy
+            response_energy
         };
-        let unabsorbed_energy = response.incident_energy - retained_energy - heat_dissipated;
+        let unabsorbed_energy = response.incident_energy - response_energy;
         if !retained_energy.is_finite()
             || !heat_dissipated.is_finite()
             || !unabsorbed_energy.is_finite()
@@ -515,7 +521,7 @@ impl WorldToneCaptureFrame {
         let transaction = ExternalInputTransaction {
             source: ExternalEnergySource::WorldTone,
             source_available: response.incident_energy,
-            external_input: retained_energy + heat_dissipated,
+            external_input: response_energy,
             usable_delta: retained_energy,
             work_expended: 0.0,
             heat_dissipated,
@@ -524,8 +530,8 @@ impl WorldToneCaptureFrame {
         if !ledger.settle_external_input(&mut organism.usable_energy, transaction) {
             return None;
         }
-        // The transaction temporarily credits the existing usable holder; move
-        // that exact retained amount into the reservoir as one internal transfer.
+        // The transaction temporarily credits the usable holder; move that exact
+        // retained amount into the reservoir so inventory categories stay exclusive.
         organism.usable_energy = usable_before;
         if deposit_ok {
             organism.resonant_energy = reservoir;
@@ -538,7 +544,7 @@ impl WorldToneCaptureFrame {
         Some(WorldToneCaptureResult {
             projected_width: response.projected_width,
             incident_energy: response.incident_energy,
-            absorbed_energy: retained_energy + heat_dissipated,
+            absorbed_energy: response_energy,
             unabsorbed_energy,
             usable_energy: retained_energy,
             heat_dissipated,
