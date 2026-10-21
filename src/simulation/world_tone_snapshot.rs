@@ -300,7 +300,9 @@ impl WorldToneOccluderSnapshot {
                 continue;
             };
             for unit_index in 0..organism.structure.units.len() {
-                let Some(expected) = snapshot.frame.projected_width_for_unit(body_index, unit_index)
+                let Some(expected) = snapshot
+                    .frame
+                    .projected_width_for_unit(body_index, unit_index)
                 else {
                     continue;
                 };
