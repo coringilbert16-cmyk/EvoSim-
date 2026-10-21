@@ -76,18 +76,8 @@ impl WorldToneOccluderSnapshot {
             .iter()
             .filter_map(|index| organism_body_indices[*index])
             .collect();
-        if receiver_original_indices.is_empty() {
-            return None;
-        }
         let phase = std::f64::consts::TAU * sample.orbital_phase;
         let toward_source = (phase.sin(), -phase.cos());
-        let receiver_intervals: Vec<_> = receiver_original_indices
-            .iter()
-            .map(|index| {
-                let body = bodies.get(*index)?;
-                parallel_lane_interval(body, toward_source)
-            })
-            .collect::<Option<Vec<_>>>()?;
 
         // A developing offspring is a separate physical structure even
         // before it is admitted to simulation.organisms. Its committed storage
@@ -122,18 +112,14 @@ impl WorldToneOccluderSnapshot {
         }
 
         // Physical field objects retain their world placements. Do not invent
-        // geometry for aggregate logical stock. Test a conservative constituent
-        // bound before allocating full realized geometry for off-angle particles.
+        // geometry for aggregate logical stock. Every realized field object is
+        // also a possible receiver: it must be settled as heat even when no
+        // living organism lies behind it, so receiver-relative angular culling
+        // cannot discard it here.
         for cell in &simulation.environment.field.cells {
             for physical in &cell.physical_materials {
-                let interval =
+                let _interval =
                     physical_material_parallel_lane_interval(physical, catalog, toward_source)?;
-                if !receiver_intervals
-                    .iter()
-                    .any(|receiver| lane_intervals_overlap(interval, *receiver))
-                {
-                    continue;
-                }
                 body_properties.push(physical_material_properties(physical, catalog)?);
                 bodies.push(OrganismBodyGeometry::from_physical_material(
                     physical, catalog,
@@ -217,35 +203,27 @@ impl WorldToneOccluderSnapshot {
             .iter()
             .map(|body| parallel_lane_interval(body, toward_source))
             .collect::<Option<Vec<_>>>()?;
-        let mut receiver_mask = vec![false; bodies.len()];
-        for &index in &receiver_original_indices {
-            *receiver_mask.get_mut(index)? = true;
-        }
-
+        // Every realized body is a receiver as well as a possible occluder.
+        // Keeping the full set is necessary for world energy accounting: a lane
+        // that never reaches a living organism still deposits response energy
+        // as heat in physical material instead of silently omitting that input.
         let mut remapped_indices = vec![None; bodies.len()];
-        let mut relevant_bodies = Vec::new();
-        let mut relevant_properties = Vec::new();
+        let mut relevant_bodies = Vec::with_capacity(bodies.len());
+        let mut relevant_properties = Vec::with_capacity(body_properties.len());
         for (original_index, body) in bodies.into_iter().enumerate() {
-            let is_receiver = receiver_mask[original_index];
-            let interval = angular_intervals[original_index];
-            let relevant = is_receiver
-                || receiver_intervals
-                    .iter()
-                    .any(|receiver| lane_intervals_overlap(interval, *receiver));
-            if relevant {
-                remapped_indices[original_index] = Some(relevant_bodies.len());
-                relevant_bodies.push(body);
-                relevant_properties.push(body_properties[original_index].clone());
-            }
+            let _interval = angular_intervals[original_index];
+            remapped_indices[original_index] = Some(relevant_bodies.len());
+            relevant_bodies.push(body);
+            relevant_properties.push(body_properties[original_index].clone());
         }
         let organism_body_indices: Vec<_> = organism_body_indices
             .into_iter()
             .map(|index| index.and_then(|original| remapped_indices[original]))
             .collect();
-        let receiver_body_indices: Vec<_> = receiver_organism_indices
-            .iter()
-            .filter_map(|index| organism_body_indices[*index])
-            .collect();
+        let receiver_body_indices: Vec<_> = (0..relevant_bodies.len()).collect();
+        if receiver_body_indices.is_empty() {
+            return None;
+        }
         let occluder_count = relevant_bodies.len();
         let frame = WorldToneCaptureFrame::from_geometry_for_receivers(
             sample,
