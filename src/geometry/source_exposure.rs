@@ -3375,6 +3375,20 @@ mod parallel_polygonal_visibility_tests {
     }
 
     #[test]
+    fn parallel_classifier_accepts_explicit_polygonal_fluid_boundaries() {
+        let mut fluid = rectangle(4.0, 0.0, 2.0, 2.0);
+        fluid.parts[0].form = Form::Fluid {
+            nominal_area: 4.0,
+            boundary: Some(vec![(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]),
+            arc_boundary: None,
+            multi_contact_boundary: None,
+        };
+        let visible = visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &[fluid], &[0]);
+        assert!(visible.is_some());
+        assert!(!visible.unwrap().is_empty());
+    }
+
+    #[test]
     fn parallel_classifier_fails_closed_when_curved_geometry_is_present() {
         let mut circle = rectangle(4.0, 0.0, 2.0, 2.0);
         circle.parts[0].form = Form::Circle { radius: 1.0 };
