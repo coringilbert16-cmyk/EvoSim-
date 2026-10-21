@@ -212,8 +212,7 @@ pub(crate) fn accumulate(
         }
         // The interface reaction couples to the logarithmic midpoint of
         // its two realized materials' natural frequencies.
-        let reaction_frequency_hz =
-            (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        let reaction_frequency_hz = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
         if !reaction_frequency_hz.is_finite() || reaction_frequency_hz <= 0.0 {
             continue;
         }
@@ -261,10 +260,8 @@ pub(crate) fn resolve(
     // retained resonance; only a successfully settled structural transaction
     // commits the frequency-compatible withdrawal.
     let mut trial_reservoir = organism.resonant_energy.clone();
-    let resonant_work = trial_reservoir.withdraw_compatible(
-        operation.reaction_frequency_hz,
-        operation.disruption_cost,
-    );
+    let resonant_work = trial_reservoir
+        .withdraw_compatible(operation.reaction_frequency_hz, operation.disruption_cost);
     let success = crate::transformation::settle_chemical_break_energy_with_resonance(
         organism,
         operation.bond,
@@ -377,13 +374,15 @@ mod material_identity_tests {
             &mut simulation.organisms[0],
             &mut simulation.energy_ledger,
         ));
-        assert!((simulation.organisms[0]
-            .resonant_energy
-            .total_energy()
-            .unwrap()
-            - before)
-            .abs()
-            < 1e-12);
+        assert!(
+            (simulation.organisms[0]
+                .resonant_energy
+                .total_energy()
+                .unwrap()
+                - before)
+                .abs()
+                < 1e-12
+        );
     }
 
     #[test]
