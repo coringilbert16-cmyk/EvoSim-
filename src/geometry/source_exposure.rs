@@ -253,6 +253,13 @@ fn angle_interval_for_bounds(
     {
         return None;
     }
+    if source.0 >= bounds.0
+        && source.0 <= bounds.1
+        && source.1 >= bounds.2
+        && source.1 <= bounds.3
+    {
+        return Some((-std::f64::consts::PI, std::f64::consts::PI));
+    }
     let corners = [
         (bounds.0, bounds.2),
         (bounds.0, bounds.3),
