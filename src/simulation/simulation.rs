@@ -118,6 +118,17 @@ impl Simulation {
         let seed_scale_reference =
             crate::juvenile::confirmed_seed_scale_reference(&environment.catalog).ok();
         let organism = Self::create_initial_organism();
+        let world_tone = crate::world_tone::WorldToneRuntimeConfig::default_for_world(
+            environment.width,
+            environment.height,
+        )
+        .expect("default world tone must remain outside the environment bounds");
+        let world_tone_cycle = crate::world_tone::WorldToneCycle::precompute(
+            world_tone,
+            environment.width,
+            environment.height,
+        )
+        .expect("default world tone cycle must be valid");
         let mut energy_ledger = EnergyLedger::default();
         energy_ledger.total_usable_energy_held =
             crate::reproduction::total_usable_energy_held(std::slice::from_ref(&organism), &[]);
@@ -146,8 +157,8 @@ impl Simulation {
             rng,
             decision_parameters: DecisionParameters::default(),
             seed_scale_reference,
-            world_tone: None,
-            world_tone_cycle: None,
+            world_tone: Some(world_tone),
+            world_tone_cycle: Some(world_tone_cycle),
         }
     }
     fn create_environment() -> Environment {
@@ -1460,18 +1471,7 @@ mod decomposition_finalization_tests {
         for cell in &mut simulation.environment.field.cells {
             cell.physical_materials.clear();
         }
-        let config = crate::world_tone::WorldToneRuntimeConfig {
-            parameters: crate::world_tone::WorldToneParameters {
-                minimum_signal_energy_level: 0.0,
-                maximum_signal_energy_level: 8.0,
-                minimum_energy_intensity_per_tick_per_width: 1.0,
-                maximum_energy_intensity_per_tick_per_width: 10.0,
-                orbital_period_ticks: 2_400,
-                envelope_curve: crate::world_tone::EnvelopeCurve::Cosine,
-            },
-            orbit_radius: 1_000.0,
-        };
-        assert!(simulation.configure_world_tone(Some(config)));
+        assert!(simulation.world_tone.is_some());
 
         simulation.step();
 
@@ -1502,6 +1502,7 @@ mod decomposition_finalization_tests {
             orbit_radius: 0.0,
         };
 
+        assert!(simulation.configure_world_tone(None));
         assert!(!simulation.configure_world_tone(Some(config)));
         assert!(simulation.world_tone.is_none());
         assert!(simulation.world_tone_cycle.is_none());
