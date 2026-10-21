@@ -1351,6 +1351,7 @@ impl Simulation {
             initial_structural_energy: self.energy_ledger.initial_structural_energy_held,
             current_structural_energy: self.energy_ledger.total_structural_energy_held,
             external_energy_input: self.energy_ledger.total_external_energy_input,
+            world_tone_energy_escaped: self.energy_ledger.total_world_tone_energy_escaped,
             other_energy_released: self.energy_ledger.total_potential_energy_released,
             work_expended: self.energy_ledger.total_work_expended,
             heat_dissipated: self.energy_ledger.total_heat_dissipated,
