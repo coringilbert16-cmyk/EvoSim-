@@ -3936,6 +3936,55 @@ mod parallel_mixed_boundary_visibility_tests {
     }
 
     #[test]
+    fn dense_world_fallback_keeps_ordered_hits_and_reconciles_first_hit_widths() {
+        let bodies: Vec<_> = (0..=256)
+            .map(|index| {
+                let x = 4.0 + index as f64 * 2.0;
+                OrganismBodyGeometry {
+                    parts: vec![PlacedForm {
+                        unit_index: 0,
+                        form: Form::Rectangle {
+                            width: 1.0,
+                            height: 2.0,
+                        },
+                        x,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    }],
+                    min_x: x - 0.5,
+                    max_x: x + 0.5,
+                    min_y: -1.0,
+                    max_y: 1.0,
+                }
+            })
+            .collect();
+        let targets: Vec<_> = (0..bodies.len()).collect();
+        let (widths, paths) =
+            parallel_exposure_with_paths_for_targets((1.0, 0.0), &bodies, &targets)
+                .expect("dense-world approximation should retain a valid path");
+        assert!(
+            paths.iter().any(|path| path.hits.len() == bodies.len()),
+            "the fallback must preserve downstream hits through the ordered lane"
+        );
+
+        let mut first_hit_widths = vec![0.0_f64; bodies.len()];
+        let mut path_width = 0.0;
+        for path in &paths {
+            let (first_body, _) = *path.hits.first().expect("path has a first hit");
+            first_hit_widths[first_body] += path.projected_width;
+            path_width += path.projected_width;
+        }
+        assert!((path_width - 2.0).abs() < 1e-7);
+        for (body_index, body_widths) in widths.iter().enumerate() {
+            let direct_width: f64 = body_widths.iter().map(|(_, width)| *width).sum();
+            assert!(
+                (first_hit_widths[body_index] - direct_width).abs() < 1e-7,
+                "dense path first-hit width must reconcile for body {body_index}"
+            );
+        }
+    }
+
+    #[test]
     fn circular_receiver_is_shadowed_by_a_straight_occluder_in_the_same_parallel_field() {
         let bodies = [circle(4.0, 0.0, 1.0), rectangle(8.0, 0.0, 2.0, 1.0)];
         let widths =
