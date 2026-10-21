@@ -3664,7 +3664,9 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
     let mut arc_cursor = 0;
     let mut arc_start_order: Vec<usize> = (0..arcs.len()).collect();
     arc_start_order.sort_by(|left, right| {
-        arc_lane_ranges[*left].0.total_cmp(&arc_lane_ranges[*right].0)
+        arc_lane_ranges[*left]
+            .0
+            .total_cmp(&arc_lane_ranges[*right].0)
     });
     let intervals = partition.intervals();
     let mut interaction_paths = Vec::new();
@@ -3677,9 +3679,8 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
             active_segments.push(index);
             segment_cursor += 1;
         }
-        active_segments.retain(|index| {
-            segments[*index].lane_start.max(segments[*index].lane_end) > lane
-        });
+        active_segments
+            .retain(|index| segments[*index].lane_start.max(segments[*index].lane_end) > lane);
         while arc_cursor < arc_start_order.len() {
             let index = arc_start_order[arc_cursor];
             if arc_lane_ranges[index].0 >= lane {
