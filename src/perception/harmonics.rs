@@ -187,6 +187,25 @@ pub(crate) fn wave_amplitude_from_energy(energy: f64) -> f64 {
     energy.sqrt()
 }
 
+/// Return the equivalent amplitude of a multi-frequency spectrum.
+///
+/// Distinct frequency components contribute energy additively, so their
+/// combined magnitude is the square root of summed amplitude-squared energy,
+/// not the arithmetic sum of amplitudes.
+fn spectrum_magnitude(spectrum: &ToneSpectrum) -> f64 {
+    let mut energy = 0.0;
+    for component in &spectrum.components {
+        if !component.amplitude.is_finite() || component.amplitude < 0.0 {
+            return 0.0;
+        }
+        energy += component.amplitude * component.amplitude;
+        if !energy.is_finite() {
+            return 0.0;
+        }
+    }
+    energy.sqrt()
+}
+
 /// Dimensionless fraction of incident wave energy dissipated by damping.
 ///
 /// The oscillator response is an amplitude ratio. Damping couples that
@@ -356,11 +375,7 @@ pub(crate) fn world_tone_cavity_contribution(
             0.0,
         );
         received.retain_strongest();
-        let magnitude = received
-            .components
-            .iter()
-            .map(|component| component.amplitude.max(0.0))
-            .sum::<f64>();
+        let magnitude = spectrum_magnitude(&received);
         if magnitude <= f64::EPSILON {
             continue;
         }
@@ -523,11 +538,7 @@ fn environmental_contribution(
 
     let mut received = ToneSpectrum::empty();
     add_spectrum(&mut received, &emitted, scale);
-    let magnitude = received
-        .components
-        .iter()
-        .map(|component| component.amplitude.max(0.0))
-        .sum::<f64>();
+    let magnitude = spectrum_magnitude(&received);
     if magnitude <= f64::EPSILON {
         return None;
     }
@@ -1028,6 +1039,25 @@ mod tests {
         assert!((environmental_mass_scale(1.0, 1.0) - 0.5).abs() < 1e-12);
         assert!(environmental_mass_scale(10.0, 1.0) > environmental_mass_scale(1.0, 1.0));
         assert!(environmental_mass_scale(0.1, 1.0) < environmental_mass_scale(1.0, 1.0));
+    }
+
+    #[test]
+    fn spectrum_magnitude_is_root_sum_square_of_component_amplitudes() {
+        let spectrum = ToneSpectrum {
+            components: vec![
+                ToneComponent {
+                    frequency_hz: 440.0,
+                    amplitude: 0.6,
+                    phase_radians: 0.0,
+                },
+                ToneComponent {
+                    frequency_hz: 880.0,
+                    amplitude: 0.8,
+                    phase_radians: 0.0,
+                },
+            ],
+        };
+        assert!((spectrum_magnitude(&spectrum) - 1.0).abs() < 1e-12);
     }
 
     #[test]
