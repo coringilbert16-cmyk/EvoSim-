@@ -458,7 +458,7 @@ impl Organism {
     /// Validate stress bookkeeping without granting stress an independent
     /// authority to break physical bonds. Structural damage is resolved only
     /// through the shared resonance/chemistry mechanism.
-    pub(crate) fn advance_stress_state(&self) -> bool {
+    pub(crate) fn validate_stress_state(&self) -> bool {
         !self.stress.is_finite() || !self.stress_threshold.is_finite()
     }
 }
