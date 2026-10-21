@@ -1052,8 +1052,10 @@ mod tests {
         let ledger = &simulation.energy_ledger;
         assert!(retained > 0.0, "the living receiver should retain compatible response energy");
         assert!(ledger.total_external_energy_input > 0.0);
-        assert!(ledger.total_heat_dissipated > 0.0,
-            "damped living response and the nonliving receiver must settle as heat");
+        assert!(
+            ledger.total_heat_dissipated > 0.0,
+            "damped living response and the nonliving receiver must settle as heat"
+        );
         let allocated = retained
             + ledger.total_heat_dissipated
             + ledger.total_world_tone_energy_escaped;
