@@ -102,7 +102,7 @@ mod tests {
         };
         let mut ledger = EnergyLedger::default();
 
-        let _ = crate::simulation::Simulation::apply_survival_damage(
+        let _ = crate::state::Simulation::apply_survival_damage(
             &mut organism,
             &environment,
             &mut ledger,
