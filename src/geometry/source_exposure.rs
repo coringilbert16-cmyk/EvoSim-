@@ -3810,7 +3810,9 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
 
 #[cfg(test)]
 mod parallel_mixed_boundary_visibility_tests {
-    use super::parallel_projected_widths_by_body_for_targets;
+    use super::{
+        parallel_exposure_with_paths_for_targets, parallel_projected_widths_by_body_for_targets,
+    };
     use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
     use crate::resources::Form;
 
@@ -3843,6 +3845,29 @@ mod parallel_mixed_boundary_visibility_tests {
             max_x: x + width * 0.5,
             min_y: y - height * 0.5,
             max_y: y + height * 0.5,
+        }
+    }
+
+    #[test]
+    fn ordered_interaction_paths_reconcile_direct_exposure_and_retain_downstream_hits() {
+        let bodies = [rectangle(4.0, 0.0, 2.0, 2.0), rectangle(8.0, 0.0, 2.0, 2.0)];
+        let (widths, paths) =
+            parallel_exposure_with_paths_for_targets((1.0, 0.0), &bodies, &[0, 1])
+                .expect("valid aligned bodies should produce ordered ray paths");
+        assert!(!paths.is_empty());
+        assert!(paths.iter().any(|path| path.hits.len() >= 2));
+
+        let mut first_hit_widths = vec![0.0_f64; bodies.len()];
+        for path in &paths {
+            let (first_body, _) = *path.hits.first().expect("path has a first hit");
+            first_hit_widths[first_body] += path.projected_width;
+        }
+        for (body_index, body_widths) in widths.iter().enumerate() {
+            let direct_width: f64 = body_widths.iter().map(|(_, width)| *width).sum();
+            assert!(
+                (first_hit_widths[body_index] - direct_width).abs() < 1e-7,
+                "path first-hit width must equal direct exposure for body {body_index}"
+            );
         }
     }
 
