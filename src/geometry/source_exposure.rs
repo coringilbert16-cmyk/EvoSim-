@@ -10,7 +10,6 @@
 /// The normal is the outward unit normal for this interval. Curved boundaries
 /// must be split or integrated by their exact arc representation before using
 /// this straight-interval primitive.
-#[allow(dead_code)] // Geometry measurement is staged before live exposure discovery.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ExposedBoundaryInterval {
     /// Index into the body slice passed to visible_polygonal_intervals.
@@ -231,7 +230,6 @@ fn polygon_is_convex(vertices: &[(f64, f64)]) -> bool {
 /// tangencies, endpoints, and boundary intersections split straight targets
 /// before exact realized-geometry occlusion classifies each open interval.
 /// Curved receiver intervals are returned separately by the arc query.
-#[allow(dead_code)]
 fn angle_interval_for_bounds(
     source: (f64, f64),
     bounds: (f64, f64, f64, f64),
@@ -1729,7 +1727,6 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
 /// Projected extent for a visible circular interval under a finite point source.
 /// The pointwise source direction varies along the arc, so this uses adaptive
 /// Simpson integration rather than substituting a single direction for the arc.
-#[allow(dead_code)]
 pub(crate) fn point_source_projected_arc_extent(
     arc: crate::capillary_geometry::CircularArcBoundary,
     source: (f64, f64),
