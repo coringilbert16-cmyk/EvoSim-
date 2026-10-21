@@ -2697,13 +2697,38 @@ impl ParallelRayFrame {
             return None;
         }
         if denominator.abs() <= 1e-12 {
-            // Parallel segments have no crossing lane. Collinear overlap is
-            // ambiguous for boundary ownership, so reject that geometry.
-            return if numerator_t.abs() <= 1e-12 {
-                None
-            } else {
-                Some(None)
-            };
+            // Parallel non-collinear segments never exchange depth order. For
+            // collinear segments, reject only a positive-length overlap; merely
+            // sharing a line is common for disjoint polygon edges and must not
+            // disable the entire scene.
+            if numerator_t.abs() > 1e-12 {
+                return Some(None);
+            }
+            let length_squared = r.0 * r.0 + r.1 * r.1;
+            if !length_squared.is_finite() || length_squared <= 1e-24 {
+                return None;
+            }
+            let t0 = (offset.0 * r.0 + offset.1 * r.1) / length_squared;
+            let t1 = t0 + (q.0 * r.0 + q.1 * r.1) / length_squared;
+            if !t0.is_finite() || !t1.is_finite() {
+                return None;
+            }
+            let overlap_start = t0.min(t1).max(0.0);
+            let overlap_end = t0.max(t1).min(1.0);
+            if overlap_end - overlap_start > 1e-12 {
+                return None;
+            }
+            if (overlap_end - overlap_start).abs() <= 1e-12
+                && overlap_start >= -1e-12
+                && overlap_start <= 1.0 + 1e-12
+            {
+                let point = (
+                    a.0 + overlap_start.clamp(0.0, 1.0) * r.0,
+                    a.1 + overlap_start.clamp(0.0, 1.0) * r.1,
+                );
+                return self.lane(point).map(Some);
+            }
+            return Some(None);
         }
         let t = numerator_t / denominator;
         let u = numerator_u / denominator;
@@ -3242,6 +3267,34 @@ pub(crate) fn visible_parallel_polygonal_intervals_for_targets(
     Some(visible)
 }
 
+#[cfg(test)]
+mod parallel_lane_intersection_regression_tests {
+    use super::ParallelRayFrame;
+
+    #[test]
+    fn collinear_disjoint_segments_do_not_disable_parallel_partition() {
+        let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
+        assert_eq!(
+            frame.segment_intersection_lane((0.0, 0.0), (1.0, 0.0), (2.0, 0.0), (3.0, 0.0)),
+            Some(None)
+        );
+    }
+
+    #[test]
+    fn collinear_touch_is_a_lane_event_but_positive_overlap_fails_closed() {
+        let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
+        assert_eq!(
+            frame.segment_intersection_lane((0.0, 0.0), (1.0, 0.0), (1.0, 0.0), (2.0, 0.0)),
+            Some(Some(0.0))
+        );
+        assert_eq!(
+            frame.segment_intersection_lane((0.0, 0.0), (2.0, 0.0), (1.0, 0.0), (3.0, 0.0)),
+            None
+        );
+    }
+
+}
+    
 #[cfg(test)]
 mod parallel_polygonal_visibility_tests {
     use super::visible_parallel_polygonal_intervals_for_targets;
