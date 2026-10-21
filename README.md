@@ -1,20 +1,34 @@
 # EvoSim
 
-## PR #202 live sunlight settlement + geometry audit — 2026-10-20
+## PR #202 — current implementation and merge gates — 2026-10-21
 
-**Current code checkpoint:** `3a4cf3e55ef28ec704af26b429cccd04569421e0` on `feature/external-input-ledger`. Formatting passed on the preceding checkpoint; exact-head CI for this checkpoint is queued, so do not treat it as merge-clean yet.
+**Verified source head before this documentation update:** `7274761d5401f08f11fa229dd801e4c066044039` on `feature/external-input-ledger`. The update below reflects source inspection at that head; this documentation commit will require its own exact-head CI result.
 
-- **Live tick wiring:** after transformation resolution and living-organism identification, each tick builds one world-space sunlight snapshot and settles direct absorbed input into each living organism's existing usable-energy holder. Material response uses actual resource properties from the catalog. Captured input is recorded as external energy, split into usable energy and dissipated heat, and is not charged against a depletable sun pool.
-- **Default source:** `Simulation::new` enables the 440 Hz world tone by default. The initial cycle uses signal levels 0–8, intensity 1–10 energy units per tick per projected-width unit, a 2,400-tick cosine cycle, and an orbit radius derived from the larger world dimension so the source remains outside the rectangle. These are initial model defaults based on the existing configuration fixture, not calibrated biological constants.
-- **Geometry blocker — approved model is parallel rays:** the live capture frame still uses the older finite point-source visibility solver. A separate shared parallel-ray classifier exists for straight polygonal boundaries and explicit polygonal-fluid boundaries, but it is not wired into live capture and does not yet classify mixed straight/curved occlusion. Existing finite-source geometry tests do not verify the approved parallel-ray model. This is the main implementation gap before the sunlight path can be considered complete.
-- **Occluder coverage:** the snapshot includes realized organism structures, environmental physical material, decomposing structures, owner-relative stored material, active-transformation material, and developing offspring plus committed physical inventory. Invalid geometry or anchors fail closed. Multi-part structural units are rejected unless each constituent is separately represented; a stale single-resource shape cannot stand in for a composite.
-- **Receiver-to-holder path:** only living organism bodies are exposure receivers; other physical bodies remain eligible occluders. Per-constituent settlement uses catalog properties and the existing ledger. A frame prevents duplicate settlement of the same constituent within a tick.
-- **Performance work:** the snapshot uses conservative angular bounds to omit off-angle field materials before full geometry expansion, retains every body that could shadow a living receiver, and computes exact exposure only for selected receivers. Each target edge now restricts critical points, straight-edge intersections, curved blockers, and exact ray tests to angular candidate bodies. Segment-vs-body checks also use conservative bounds before exact shape tests.
-- **Transaction rollback:** failed prepared COMBINE resolution reverses staged usable-energy and ledger deltas and restores any reserved environmental source. Stress is not rolled back because the prepared stress delta is only applied after a successful physical commit.
-- **Latest completed full-suite checkpoint:** workflow [39522481692](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39522481692) on pre-per-edge-filter checkpoint `99f1da2d2adabf0ce107cdff278c6b0b5b0359ae` reported **502 passed, 28 failed, 1 ignored** (169.10 seconds). A direct comparison against the agreed baseline found the exact same 28 failing test identities. The inventory-reconciliation test still exceeded 60 seconds in that run; the per-edge candidate filtering on the current head specifically addresses that repeated work, but its timing is not yet verified.
-- **Known limitation:** this is direct-source capture, not full light transport. The unabsorbed portion is not credited to an organism, but reflected/secondary propagation is not yet modeled. Clippy remains a separate gate; the latest run before the current cleanup still failed on pre-existing lint issues.
+### Implemented and connected
 
-**Next gates:** complete and integrate one parallel-ray visibility field for straight and curved boundaries; test shadow splits, tangencies, crossings, and duplicate-credit tolerance; then verify full-suite failures against the agreed 28-failure baseline, populated-world tick cost, and world-energy reconciliation. Reflected/secondary propagation remains separate and must not duplicate direct incident energy. Do not spend this workstream trying to erase the agreed 28 baseline failures unless a change introduces a regression.
+- The live simulation tick samples the precomputed world-tone cycle and calls `WorldToneOccluderSnapshot::settle_living_organism_inputs` for living organisms.
+- The snapshot assembles realized world-space occluders from organism structures, environmental physical material, legacy decomposing structures, owner-relative stored physical material, active transformations, and developing offspring/committed material. Ambiguous or invalid geometry fails closed.
+- `WorldToneCaptureFrame` now uses the shared **parallel-ray** visibility path, not the historical finite-point-source solver. The same per-tick direction is used to classify straight and supported curved boundaries. The frame caches exposure and guards against duplicate constituent settlement.
+- Absorbed direct input is settled through the external-input transaction into usable energy and heat. Unabsorbed incident energy is currently recorded as telemetry only; it is not yet propagated as a reflected/secondary tone and is not counted as a second energy credit.
+- Focused regressions cover mixed straight/curved shadows and live tick settlement. The live capture test also checks that the current energy inventory balances after absorbed solar input.
+
+### Latest exact-head CI
+
+Workflow [39630672842](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39630672842) ran on the source head above and completed with failure:
+
+- Formatting, source-size, COMBINE architecture, and focused Bob/fluid/chemical gates passed.
+- Rust suite: **538 passed, 28 failed, 1 ignored** in 165.11 seconds.
+- Clippy failed with 62 production-target errors and 41 test-target errors. Treat this as existing lint debt to triage selectively; do not let broad lint cleanup displace the merge-critical work.
+- The failure count remains at the agreed 28-failure baseline. The last controlled comparison identified the same 28 failing test identities at an earlier checkpoint; identities have not been re-compared against the current head in this run.
+
+### Remaining merge-critical work
+
+1. **Close the energy-accounting gap.** The existing inventory reconciliation covers stored usable energy, stored structural bond energy, external input, other releases, work, and dissipated heat. It does not yet account for unabsorbed world-tone energy as either a bounded propagated signal or an explicit energy output. Passing the direct-capture inventory test is therefore not a proof of complete world-wide conservation.
+2. **Implement reflected/secondary tone without double credit.** Reflection is a lower-energy frequency-composition change, not a literal second ray. Define and test how the energy remaining after the material response is attenuated, passed to downstream material, or exits the modeled world. Do not invent an arbitrary absorption/retention coefficient; reuse existing resonance/damping behavior and the approved dissipation rule where the mechanics support it.
+3. **Add end-to-end propagation/accounting tests.** Cover direct capture, downstream response, single-credit settlement, energy lost to dissipation/escape, and inventory reconciliation across a live tick. Keep unsupported or ambiguous geometry fail-closed.
+4. **Re-run exact-head CI and do narrow Clippy cleanup.** Preserve the known 28-failure baseline; investigate any new identities, and fix straightforward PR-relevant lints without pursuing the repository-wide warning backlog.
+
+PR #202 remains Draft and is **not yet merge-ready**. PR #196 constructor/Bob work remains separate.
 
 ## External-input transaction — 2026-10-19
 
