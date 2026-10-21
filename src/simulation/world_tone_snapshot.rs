@@ -34,6 +34,24 @@ impl WorldToneOccluderSnapshot {
         sample: WorldToneSample,
         simulation: &Simulation,
     ) -> Option<Self> {
+        let receiver_organism_indices: Vec<_> = (0..simulation.organisms.len()).collect();
+        Self::from_simulation_for_organisms(sample, simulation, &receiver_organism_indices)
+    }
+
+    /// Build a shared occluder snapshot but solve exposure only for selected
+    /// organism receivers. Every other physical body remains eligible to cast
+    /// a shadow when its angular bounds overlap a selected receiver.
+    pub(crate) fn from_simulation_for_organisms(
+        sample: WorldToneSample,
+        simulation: &Simulation,
+        receiver_organism_indices: &[usize],
+    ) -> Option<Self> {
+        if receiver_organism_indices
+            .iter()
+            .any(|index| *index >= simulation.organisms.len())
+        {
+            return None;
+        }
         let catalog = &simulation.environment.catalog;
         let mut bodies = Vec::new();
         let mut organism_body_indices = vec![None; simulation.organisms.len()];
@@ -148,8 +166,10 @@ impl WorldToneOccluderSnapshot {
             }
         }
 
-        let receiver_original_indices: Vec<_> =
-            organism_body_indices.iter().flatten().copied().collect();
+        let receiver_original_indices: Vec<_> = receiver_organism_indices
+            .iter()
+            .filter_map(|index| organism_body_indices[*index])
+            .collect();
         if receiver_original_indices.is_empty() {
             return None;
         }
@@ -227,7 +247,19 @@ impl WorldToneOccluderSnapshot {
         sample: WorldToneSample,
         living_ids: &std::collections::HashSet<String>,
     ) {
-        let Some(mut snapshot) = Self::from_simulation(sample, simulation) else {
+        let receiver_organism_indices: Vec<_> = simulation
+            .organisms
+            .iter()
+            .enumerate()
+            .filter_map(|(index, organism)| {
+                living_ids.contains(&organism.id).then_some(index)
+            })
+            .collect();
+        let Some(mut snapshot) = Self::from_simulation_for_organisms(
+            sample,
+            simulation,
+            &receiver_organism_indices,
+        ) else {
             return;
         };
         let catalog = &simulation.environment.catalog;
