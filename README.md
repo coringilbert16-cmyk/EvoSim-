@@ -2163,6 +2163,13 @@ Use a coordinate frame derived once per tick from normalized sunlight direction 
 - The partial-absorption regression passed: the incident budget is divided between absorbed and unabsorbed signal, and absorbed energy is divided between its accounted destinations without crediting the unabsorbed remainder twice.
 - The incompatible-frequency overload regression passed: excess reservoir energy that is incompatible with all candidate bonds does not break a bond or consume that reservoir.
 
+### Latest implementation change — sunlight allocation (2026-10-21)
+
+- Removed genome `processing_efficiency()` from the live sunlight usable-energy/heat split. Material resonance and actual exposed geometry determine the amount absorbed; accepted absorbed energy is routed into the persistent frequency-resolved resonance reservoir, not allocated by a genome-selected percentage. If the bounded reservoir cannot represent a deposit, the amount remains in usable energy rather than being lost or double-counted.
+- Added/renamed the focused regression to assert this behavior.
+- Source commit: `a0cbf80fefb961d7be71dd75ec38e6dc8d4e42d1`.
+- Verification status: the preceding source-head workflow is still in progress; this commit's exact-head workflow has not yet reported a result. Do not treat the change as verified until CI finishes.
+
 ### Current implementation state
 
 - **Direct sunlight is integrated into the live tick.** The precomputed rotating world-tone cycle feeds the shared geometric exposure/occlusion snapshot. Capture uses realized surface exposure and material response, and the processing-usable portion is transferred into the persistent, frequency-resolved organism resonance reservoir. The reservoir is distinct from transient `ToneSpectrum`; frequency-compatible retained energy can contribute to chemical BREAK, and over-capacity resonance can attempt to destabilize a physically realized bond without a hard storage cap.
