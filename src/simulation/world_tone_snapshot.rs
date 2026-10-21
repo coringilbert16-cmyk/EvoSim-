@@ -251,15 +251,11 @@ impl WorldToneOccluderSnapshot {
             .organisms
             .iter()
             .enumerate()
-            .filter_map(|(index, organism)| {
-                living_ids.contains(&organism.id).then_some(index)
-            })
+            .filter_map(|(index, organism)| living_ids.contains(&organism.id).then_some(index))
             .collect();
-        let Some(mut snapshot) = Self::from_simulation_for_organisms(
-            sample,
-            simulation,
-            &receiver_organism_indices,
-        ) else {
+        let Some(mut snapshot) =
+            Self::from_simulation_for_organisms(sample, simulation, &receiver_organism_indices)
+        else {
             return;
         };
         let catalog = &simulation.environment.catalog;
