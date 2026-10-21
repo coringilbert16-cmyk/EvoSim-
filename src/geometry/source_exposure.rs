@@ -723,7 +723,8 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                         if (qx * ey - qy * ex).abs() <= 1e-9 {
                             let length_squared = ex * ex + ey * ey;
                             for point in [c, d] {
-                                let t = ((point.0 - a.0) * ex + (point.1 - a.1) * ey) / length_squared;
+                                let t =
+                                    ((point.0 - a.0) * ex + (point.1 - a.1) * ey) / length_squared;
                                 if t > 1e-10 && t < 1.0 - 1e-10 {
                                     cuts.push(t);
                                 }
