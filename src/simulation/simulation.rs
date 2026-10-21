@@ -710,6 +710,13 @@ impl Simulation {
                     config.sample(self.tick, self.environment.width, self.environment.height)
                 })
             });
+        if let Some(sample) = world_tone_sample {
+            crate::world_tone_snapshot::WorldToneOccluderSnapshot::settle_living_organism_inputs(
+                self,
+                sample,
+                &living_ids,
+            );
+        }
         for organism in &mut self.organisms {
             let is_living = living_ids.contains(&organism.id);
             if is_living {
