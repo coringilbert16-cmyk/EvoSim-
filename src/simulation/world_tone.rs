@@ -442,9 +442,17 @@ impl WorldToneCaptureFrame {
             work_expended: 0.0,
             heat_dissipated,
         };
+        // Validate the diagnostic accumulator before mutating the holder or
+        // ledger, so an overflow cannot leave a partially settled interaction.
+        let next_unabsorbed =
+            ledger.total_world_tone_energy_unabsorbed + response.unabsorbed;
+        if !next_unabsorbed.is_finite() || next_unabsorbed < 0.0 {
+            return None;
+        }
         if !ledger.settle_external_input(holder, transaction) {
             return None;
         }
+        ledger.total_world_tone_energy_unabsorbed = next_unabsorbed;
         self.settled_units
             .get_mut(receiver_body_index)?
             .push(unit_index);
@@ -531,9 +539,16 @@ impl WorldToneCaptureFrame {
             work_expended: 0.0,
             heat_dissipated,
         };
+        // Keep unabsorbed incident energy visible in the ledger's throughput
+        // diagnostics without misclassifying it as stored energy or heat.
+        let next_unabsorbed = ledger.total_world_tone_energy_unabsorbed + unabsorbed_energy;
+        if !next_unabsorbed.is_finite() || next_unabsorbed < 0.0 {
+            return None;
+        }
         if !ledger.settle_external_input(holder, transaction) {
             return None;
         }
+        ledger.total_world_tone_energy_unabsorbed = next_unabsorbed;
         self.settled_receivers[receiver_body_index] = true;
 
         Some(WorldToneCaptureResult {
@@ -1224,6 +1239,7 @@ mod tests {
         assert!((result.heat_dissipated - expected_width).abs() < 1e-7);
         assert!((holder - (1.0 + 4.0 * expected_width)).abs() < 1e-7);
         assert!((ledger.total_external_energy_input - 5.0 * expected_width).abs() < 1e-7);
+        assert!((ledger.total_world_tone_energy_unabsorbed - 5.0 * expected_width).abs() < 1e-7);
         assert!((ledger.total_usable_energy_gained - 4.0 * expected_width).abs() < 1e-7);
         assert!((ledger.total_heat_dissipated - expected_width).abs() < 1e-7);
     }
