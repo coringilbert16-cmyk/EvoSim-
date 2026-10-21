@@ -1043,6 +1043,52 @@ mod tests {
         assert_eq!(snapshot.body_index_for_organism(0), Some(0));
     }
     #[test]
+    fn exposed_environmental_material_settles_heat_without_a_living_receiver() {
+        let mut simulation = Simulation::new(79, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        for organism in &mut simulation.organisms {
+            organism.structure = OrganismStructure::new();
+            organism.stored_material.entries.clear();
+            organism.reproductive_construction = None;
+        }
+        simulation.decomposing_bodies.clear();
+        simulation.active_transformations.clear();
+
+        let catalog = simulation.environment.catalog.clone();
+        let exposed = PhysicalMaterial::realized(
+            Material::free_base("Nitrogen", 1.0),
+            vec![Placement {
+                x: 5.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("environmental receiver should have realized geometry");
+        assert!(simulation.environment.field.deposit_physical(5.0, 0.0, exposed));
+
+        WorldToneOccluderSnapshot::settle_living_organism_inputs(
+            &mut simulation,
+            sample(),
+            &std::collections::HashSet::new(),
+        );
+
+        assert!(
+            simulation.energy_ledger.total_external_energy_input > 0.0,
+            "physical material must receive the source even when no living organism is present"
+        );
+        assert!(
+            simulation.energy_ledger.total_world_tone_energy_heat > 0.0,
+            "nonliving material response must settle as heat"
+        );
+        assert_eq!(
+            simulation.energy_ledger.total_resonant_energy_held,
+            0.0,
+            "a nonliving receiver must not receive biological resonance storage"
+        );
+    }
+
+    #[test]
     fn nonliving_material_response_becomes_heat_instead_of_rejoining_signal() {
         let response_energy = 3.25;
         let damping_heat = 0.75;
