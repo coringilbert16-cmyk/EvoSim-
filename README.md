@@ -1,5 +1,16 @@
 # EvoSim
 
+## PR #202 — continuation audit — 2026-10-21
+
+**Latest code head at this audit:** `7f9de1bbf6ba211c0b7af7ca3820acaf01f60104` on `feature/external-input-ledger`.
+
+- Added a regression requiring resonance overload to preserve both structure and stored energy when the reservoir's frequency is effectively incompatible with all candidate bonds.
+- The last observed Actions run, [39659085722](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39659085722), had passed formatting, source-size/architecture checks, focused Bob/fluid/BREAK checks, and was still running the full Rust test suite on earlier head `2f0b9a6ed83ad9a291cba7a8b2fa98bd79b6f227`. No Actions run had yet appeared for the latest test commit when this note was written; do not treat the latest test or full suite as verified.
+- Direct solar capture and reservoir inventory are covered by a live-tick balance regression. This is not proof of complete world-wide conservation: unabsorbed signal is still telemetry, not propagated energy; secondary tones and energy transfer to nonliving material are not implemented.
+- The new overload mechanism is active as a secondary survival check, but the legacy stress-threshold/random-break path remains authoritative whenever it breaks a bond first. Removing it safely is still a merge-critical task because developing offspring also use the stress path and structural collapse/death behavior must be preserved.
+- PR #202 is not merge-ready until the full exact-head suite is reconciled against the known 28-failure baseline, whole-world signal accounting/propagation is addressed, and the stress-break replacement is audited and tested.
+
+
 ## PR #202 — current implementation and merge gates — 2026-10-21
 
 **Verified source head before this documentation update:** `e70f54f62580c84985a8e8c81c0764e5fc5ffc96` on `feature/external-input-ledger`. The source changes below were inspected at that head; this documentation commit will require its own exact-head CI result.
