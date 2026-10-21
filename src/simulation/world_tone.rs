@@ -933,7 +933,7 @@ mod tests {
             frequency_hz: 440.0,
             signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.0,
+            orbital_phase: 0.75,
         };
         let intervals = crate::source_exposure::visible_circular_arc_intervals(
             (sample.source_x, sample.source_y),
@@ -943,16 +943,16 @@ mod tests {
         let expected: f64 = intervals
             .iter()
             .map(|interval| {
-                crate::source_exposure::point_source_projected_arc_extent(
+                crate::source_exposure::parallel_projected_arc_extent(
                     interval.arc,
-                    (sample.source_x, sample.source_y),
+                    (-1.0, 0.0),
                 )
                 .unwrap()
             })
             .sum();
         let frame = WorldToneCaptureFrame::from_geometry(sample, &[body])
-            .expect("an isolated, externally illuminated circle has point-source exposure");
-        assert!(expected > 0.0 && expected < 2.5);
+            .expect("an isolated, externally illuminated circle has parallel-ray exposure");
+        assert!(expected > 0.0 && expected <= 2.5 + 1e-12);
         assert!((frame.projected_widths[0] - expected).abs() < 1e-12);
         assert!((frame.projected_width_for_unit(0, 7).unwrap() - expected).abs() < 1e-12);
     }
@@ -988,7 +988,7 @@ mod tests {
             frequency_hz: 440.0,
             signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.0,
+            orbital_phase: 0.75,
         };
         let intervals = crate::source_exposure::visible_circular_arc_intervals(
             (sample.source_x, sample.source_y),
@@ -998,16 +998,16 @@ mod tests {
         let expected: f64 = intervals
             .iter()
             .map(|interval| {
-                crate::source_exposure::point_source_projected_arc_extent(
+                crate::source_exposure::parallel_projected_arc_extent(
                     interval.arc,
-                    (sample.source_x, sample.source_y),
+                    (-1.0, 0.0),
                 )
                 .unwrap()
             })
             .sum();
         let frame = WorldToneCaptureFrame::from_geometry(sample, &[body])
-            .expect("legacy circular fluid has a point-source realization");
-        assert!(expected > 0.0 && expected < 2.0 * radius);
+            .expect("legacy circular fluid has a parallel-ray realization");
+        assert!((expected - 2.0 * radius).abs() < 1e-12);
         assert!((frame.projected_width_for_unit(0, 3).unwrap() - expected).abs() < 1e-12);
     }
 
@@ -1049,7 +1049,7 @@ mod tests {
             frequency_hz: 440.0,
             signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.0,
+            orbital_phase: 0.75,
         };
         let frame = WorldToneCaptureFrame::from_geometry(sample, &[body])
             .expect("an isolated exact circular free boundary can be integrated analytically");
@@ -1059,7 +1059,7 @@ mod tests {
             start_angle_radians: arc.start_angle_radians + 0.25,
             ..arc
         };
-        let expected = crate::source_exposure::point_source_projected_arc_extent(
+        let expected = crate::source_exposure::parallel_projected_arc_extent(
             expected_world_arc,
             (sample.source_x, sample.source_y),
         )
@@ -1114,7 +1114,7 @@ mod tests {
             frequency_hz: 440.0,
             signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.0,
+            orbital_phase: 0.75,
         };
         let frame = WorldToneCaptureFrame::from_geometry(sample, &[circle.clone(), blocker])
             .expect("mixed curved receivers and polygonal occluders are supported");
@@ -1135,7 +1135,7 @@ mod tests {
             frequency_hz: 440.0,
             signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.0,
+            orbital_phase: 0.75,
         };
         let blocker = circle_body(0, 0.0, 0.0, 0.5);
         let receiver = OrganismBodyGeometry {
@@ -1170,7 +1170,7 @@ mod tests {
             frequency_hz: 440.0,
             signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.0,
+            orbital_phase: 0.75,
         };
         let blocker = circle_body(0, 0.0, 0.0, 1.0);
         let target = circle_body(0, 5.0, 0.0, 1.0);
@@ -1189,7 +1189,7 @@ mod tests {
             frequency_hz: 440.0,
             signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.0,
+            orbital_phase: 0.75,
         };
         let blocker = circle_body(0, 0.0, 0.7, 0.5);
         let target = circle_body(0, 5.0, 0.0, 1.0);
@@ -1225,7 +1225,7 @@ mod tests {
             frequency_hz: 440.0,
             signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.0,
+            orbital_phase: 0.75,
         };
         let mut frame = WorldToneCaptureFrame::from_geometry(sample, &[receiver])
             .expect("valid polygonal receiver should produce exposure frame");
@@ -1288,7 +1288,7 @@ mod tests {
             frequency_hz: 440.0,
             signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.0,
+            orbital_phase: 0.75,
         };
         let expected_width = expected_front_face_projected_width();
         let frame = WorldToneCaptureFrame::from_geometry(sample, &[body]).unwrap();
@@ -1326,7 +1326,7 @@ mod tests {
             frequency_hz: 440.0,
             signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.0,
+            orbital_phase: 0.75,
         };
         let expected_width = expected_front_face_projected_width();
         let frame = WorldToneCaptureFrame::from_geometry(sample, &[receiver]).unwrap();
@@ -1394,7 +1394,7 @@ mod tests {
             frequency_hz: 440.0,
             signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.0,
+            orbital_phase: 0.75,
         };
         let expected_width = expected_front_face_projected_width();
         let mut frame = WorldToneCaptureFrame::from_geometry(sample, &[body]).unwrap();
@@ -1458,7 +1458,7 @@ mod tests {
             frequency_hz: 440.0,
             signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.0,
+            orbital_phase: 0.75,
         };
         let mut frame = WorldToneCaptureFrame::from_geometry(sample, &[receiver]).unwrap();
         let properties = ResourceProperties {
@@ -1520,7 +1520,7 @@ mod tests {
             frequency_hz: 440.0,
             signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.0,
+            orbital_phase: 0.75,
         };
         let expected_width = expected_front_face_projected_width();
         let mut frame = WorldToneCaptureFrame::from_geometry(sample, &[receiver]).unwrap();
@@ -1563,7 +1563,7 @@ mod tests {
             frequency_hz: 440.0,
             signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.0,
+            orbital_phase: 0.75,
         };
         let mut frame = WorldToneCaptureFrame::from_geometry(sample, &bodies).unwrap();
         let mut holder = 1.0;
@@ -1604,7 +1604,7 @@ mod tests {
             frequency_hz: 440.0,
             signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.0,
+            orbital_phase: 0.75,
         };
         let mut frame = WorldToneCaptureFrame::from_geometry(sample, &[receiver]).unwrap();
         let mut holder = 1.0;
