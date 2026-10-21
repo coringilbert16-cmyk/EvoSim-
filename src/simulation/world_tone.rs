@@ -19,8 +19,6 @@ pub(crate) enum EnvelopeCurve {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct WorldToneParameters {
-    pub(crate) minimum_signal_energy_level: f64,
-    pub(crate) maximum_signal_energy_level: f64,
     pub(crate) minimum_energy_intensity_per_tick_per_width: f64,
     pub(crate) maximum_energy_intensity_per_tick_per_width: f64,
     pub(crate) orbital_period_ticks: u64,
@@ -41,8 +39,6 @@ impl WorldToneRuntimeConfig {
     pub(crate) fn default_for_world(world_width: f64, world_height: f64) -> Option<Self> {
         let config = Self {
             parameters: WorldToneParameters {
-                minimum_signal_energy_level: 0.0,
-                maximum_signal_energy_level: 8.0,
                 minimum_energy_intensity_per_tick_per_width: 1.0,
                 maximum_energy_intensity_per_tick_per_width: 10.0,
                 orbital_period_ticks: 2_400,
@@ -139,9 +135,8 @@ pub(crate) struct WorldToneSample {
     pub(crate) source_x: f64,
     pub(crate) source_y: f64,
     pub(crate) frequency_hz: f64,
-    /// Environmental signal level, not energy already captured by an organism.
-    pub(crate) signal_energy_level: f64,
-    /// Incoming energy intensity per tick per unit of exposed projected width, before absorption.
+    /// Signal strength, expressed as energy per tick per unit of exposed projected width.
+    /// This is the source budget before material interaction, not energy already captured.
     pub(crate) energy_intensity_per_tick_per_width: f64,
     /// Normalized orbital phase: 0 at north, increasing eastward, in [0, 1).
     pub(crate) orbital_phase: f64,
@@ -168,8 +163,6 @@ impl WorldToneSample {
             && self.source_y.is_finite()
             && self.frequency_hz.is_finite()
             && self.frequency_hz > 0.0
-            && self.signal_energy_level.is_finite()
-            && self.signal_energy_level >= 0.0
             && self.energy_intensity_per_tick_per_width.is_finite()
             && (1.0..=10.0).contains(&self.energy_intensity_per_tick_per_width)
             && self.orbital_phase.is_finite()
@@ -216,8 +209,8 @@ impl WorldToneSample {
 }
 
 /// Result of settling one receiver's solar input for one tick.
-/// Unabsorbed incident energy remains outside the receiver ledger; propagation
-/// or reflection must be modeled separately before claiming it as another input.
+/// Unabsorbed incident energy remains in the propagating signal budget and must
+/// not be credited as a new source when it reaches downstream material.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct WorldToneCaptureResult {
     pub(crate) projected_width: f64,
@@ -229,9 +222,8 @@ pub(crate) struct WorldToneCaptureResult {
 }
 
 /// Energy response of one exposed material constituent to the current source sample.
-/// The absorbed term follows the existing damped-resonator model; it is not yet
-/// a usable-energy credit. The unabsorbed term remains available for a future
-/// reflection/propagation path.
+/// Signal strength is the energy budget; material damping partitions it between
+/// absorbed energy and the remaining signal. The remainder is not a second source.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct WorldToneSurfaceResponse {
     pub(crate) projected_width: f64,
@@ -526,11 +518,7 @@ impl WorldToneCaptureFrame {
 
 impl WorldToneParameters {
     pub(crate) fn is_valid(self) -> bool {
-        self.minimum_signal_energy_level.is_finite()
-            && self.minimum_signal_energy_level >= 0.0
-            && self.maximum_signal_energy_level.is_finite()
-            && self.maximum_signal_energy_level > self.minimum_signal_energy_level
-            && self.minimum_energy_intensity_per_tick_per_width.is_finite()
+self.minimum_energy_intensity_per_tick_per_width.is_finite()
             && self.minimum_energy_intensity_per_tick_per_width >= 1.0
             && self.maximum_energy_intensity_per_tick_per_width.is_finite()
             && self.maximum_energy_intensity_per_tick_per_width <= 10.0
@@ -568,8 +556,6 @@ impl WorldToneParameters {
             source_x: center_x + orbit_radius * angle.sin(),
             source_y: center_y - orbit_radius * angle.cos(),
             frequency_hz,
-            signal_energy_level: self.minimum_signal_energy_level
-                + (self.maximum_signal_energy_level - self.minimum_signal_energy_level) * envelope,
             energy_intensity_per_tick_per_width: self.minimum_energy_intensity_per_tick_per_width
                 + (self.maximum_energy_intensity_per_tick_per_width
                     - self.minimum_energy_intensity_per_tick_per_width)
@@ -585,8 +571,6 @@ mod tests {
 
     fn parameters() -> WorldToneParameters {
         WorldToneParameters {
-            minimum_signal_energy_level: 0.0,
-            maximum_signal_energy_level: 8.0,
             minimum_energy_intensity_per_tick_per_width: 1.0,
             maximum_energy_intensity_per_tick_per_width: 10.0,
             orbital_period_ticks: 2_400,
@@ -640,7 +624,7 @@ mod tests {
     }
 
     #[test]
-    fn frequency_stays_440_while_signal_and_energy_levels_cycle() {
+    fn frequency_stays_440_while_signal_strength_tracks_energy_intensity() {
         let params = parameters();
         let north = params.sample(0, 0.0, 0.0, 1.0).unwrap();
         let east = params.sample(600, 0.0, 0.0, 1.0).unwrap();
@@ -648,15 +632,11 @@ mod tests {
         let west = params.sample(1_800, 0.0, 0.0, 1.0).unwrap();
 
         assert_eq!(north.frequency_hz, WORLD_TONE_FREQUENCY_HZ);
-        assert_eq!(north.signal_energy_level, 8.0);
         assert_eq!(north.energy_intensity_per_tick_per_width, 10.0);
         assert_eq!(south.frequency_hz, WORLD_TONE_FREQUENCY_HZ);
-        assert_eq!(south.signal_energy_level, 0.0);
         assert_eq!(south.energy_intensity_per_tick_per_width, 1.0);
         assert_eq!(east.frequency_hz, WORLD_TONE_FREQUENCY_HZ);
         assert_eq!(west.frequency_hz, WORLD_TONE_FREQUENCY_HZ);
-        assert!((east.signal_energy_level - 4.0).abs() < 1e-12);
-        assert!((west.signal_energy_level - 4.0).abs() < 1e-12);
         assert!((east.energy_intensity_per_tick_per_width - 5.5).abs() < 1e-12);
         assert!((west.energy_intensity_per_tick_per_width - 5.5).abs() < 1e-12);
     }
@@ -722,7 +702,6 @@ mod tests {
                 ..valid
             },
             WorldToneSample {
-                signal_energy_level: -1.0,
                 ..valid
             },
             WorldToneSample {
@@ -887,7 +866,6 @@ mod tests {
             source_x: -5.0,
             source_y: 0.0,
             frequency_hz: 440.0,
-            signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -928,7 +906,6 @@ mod tests {
             source_x: -5.0,
             source_y: 0.0,
             frequency_hz: 440.0,
-            signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -974,7 +951,6 @@ mod tests {
             source_x: -5.0,
             source_y: 0.0,
             frequency_hz: 440.0,
-            signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1031,7 +1007,6 @@ mod tests {
             source_x: -5.0,
             source_y: 0.0,
             frequency_hz: 440.0,
-            signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1052,7 +1027,6 @@ mod tests {
             source_x: -5.0,
             source_y: 0.0,
             frequency_hz: 440.0,
-            signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1087,7 +1061,6 @@ mod tests {
             source_x: -5.0,
             source_y: 0.0,
             frequency_hz: 440.0,
-            signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1105,7 +1078,6 @@ mod tests {
             source_x: -5.0,
             source_y: 0.0,
             frequency_hz: 440.0,
-            signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1141,7 +1113,6 @@ mod tests {
             source_x: -5.0,
             source_y: 0.0,
             frequency_hz: 440.0,
-            signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1204,7 +1175,6 @@ mod tests {
             source_x: -5.0,
             source_y: 0.0,
             frequency_hz: 440.0,
-            signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1242,7 +1212,6 @@ mod tests {
             source_x: -5.0,
             source_y: 0.0,
             frequency_hz: 440.0,
-            signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1310,7 +1279,6 @@ mod tests {
             source_x: -5.0,
             source_y: 0.0,
             frequency_hz: 440.0,
-            signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1374,7 +1342,6 @@ mod tests {
             source_x: -5.0,
             source_y: 0.0,
             frequency_hz: 440.0,
-            signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1436,7 +1403,6 @@ mod tests {
             source_x: -5.0,
             source_y: 0.0,
             frequency_hz: 440.0,
-            signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1479,7 +1445,6 @@ mod tests {
             source_x: -5.0,
             source_y: 0.0,
             frequency_hz: 440.0,
-            signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1520,7 +1485,6 @@ mod tests {
             source_x: -5.0,
             source_y: 0.0,
             frequency_hz: 440.0,
-            signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
