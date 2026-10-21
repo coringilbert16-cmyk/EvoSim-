@@ -221,7 +221,11 @@ impl EnergyInventorySnapshot {
         let usable_delta = self.current_usable_energy - self.initial_usable_energy;
         let resonant_delta = self.current_resonant_energy - self.initial_resonant_energy;
         let structural_delta = self.current_structural_energy - self.initial_structural_energy;
-        let residual = usable_delta + resonant_delta + structural_delta + self.work_expended + self.heat_dissipated
+        let residual = usable_delta
+            + resonant_delta
+            + structural_delta
+            + self.work_expended
+            + self.heat_dissipated
             - self.external_energy_input
             - self.other_energy_released;
         residual.is_finite().then_some(residual)
