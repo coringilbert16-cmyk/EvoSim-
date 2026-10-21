@@ -2644,6 +2644,29 @@ impl ParallelRayFrame {
         depth.is_finite().then_some(depth)
     }
 
+    /// Return the two tangent lane coordinates for a circular boundary.
+    ///
+    /// These are the exact extrema of a circle under parallel projection. Only
+    /// the derived lane events are quantized; center and radius remain unchanged.
+    #[allow(dead_code)]
+    pub(crate) fn circle_critical_lanes(
+        self,
+        center: (f64, f64),
+        radius: f64,
+    ) -> Option<(f64, f64)> {
+        if !center.0.is_finite()
+            || !center.1.is_finite()
+            || !radius.is_finite()
+            || radius < 0.0
+        {
+            return None;
+        }
+        let center_lane = self.lane(center)?;
+        let near = round_geometry_to_cent(center_lane - radius)?;
+        let far = round_geometry_to_cent(center_lane + radius)?;
+        Some((near.min(far), near.max(far)))
+    }
+
     /// Find the lane coordinate where two finite straight segments intersect.
     ///
     /// These intersection lanes are critical events: the front-to-back order of
@@ -2797,6 +2820,19 @@ impl ParallelRayFrame {
 #[cfg(test)]
 mod parallel_ray_frame_tests {
     use super::ParallelRayFrame;
+
+    #[test]
+    fn circle_tangent_lanes_are_quantized_without_mutating_geometry() {
+        let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
+        assert_eq!(frame.circle_critical_lanes((4.0, 1.234), 0.456), Some((0.78, 1.69)));
+    }
+
+    #[test]
+    fn circle_tangent_lanes_reject_invalid_geometry() {
+        let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
+        assert_eq!(frame.circle_critical_lanes((0.0, 0.0), -1.0), None);
+        assert_eq!(frame.circle_critical_lanes((f64::NAN, 0.0), 1.0), None);
+    }
 
     #[test]
     fn crossing_segments_produce_the_shared_critical_lane() {
