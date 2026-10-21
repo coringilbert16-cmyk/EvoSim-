@@ -1092,5 +1092,4 @@ mod tests {
             "an impossible heat allocation must fail closed"
         );
     }
-
 }
