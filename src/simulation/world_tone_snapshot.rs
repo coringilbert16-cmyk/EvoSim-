@@ -441,11 +441,13 @@ impl WorldToneOccluderSnapshot {
                 // resonance reservoir. A physical receiver without a living
                 // reservoir instead converts the entire material response to
                 // heat; only the unresponded remainder continues downstream.
-                let mut interaction_heat = heat_for_material_response(
+                let Some(mut interaction_heat) = heat_for_material_response(
                     response_energy,
                     damping_heat,
                     living_organism.is_some(),
-                )?;
+                ) else {
+                    return;
+                };
                 let mut captured = 0.0;
 
                 if let Some(organism_index) = living_organism {
