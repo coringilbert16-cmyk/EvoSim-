@@ -1570,11 +1570,20 @@ mod decomposition_finalization_tests {
     fn stress_without_retained_resonance_cannot_authorize_a_random_bond_break() {
         let mut simulation = Simulation::new(915, 10.0);
         let before = simulation.energy_inventory_snapshot();
-        assert!(before.is_balanced(1e-9), "initial inventory: {:?}", before.residual());
+        assert!(
+            before.is_balanced(1e-9),
+            "initial inventory: {:?}",
+            before.residual()
+        );
         let original_bonds = simulation.organisms[0].structure.bonds.clone();
 
         simulation.organisms[0].stress = 1.0e9;
-        assert!(!simulation.organisms[0].validate_stress_state());
+        let _ = Simulation::apply_survival_damage(
+            &mut simulation.organisms[0],
+            &simulation.environment,
+            &mut simulation.energy_ledger,
+            &mut simulation.rng,
+        );
         assert_eq!(simulation.organisms[0].structure.bonds, original_bonds);
 
         let after = simulation.energy_inventory_snapshot();
