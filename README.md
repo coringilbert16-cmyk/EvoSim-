@@ -2199,3 +2199,10 @@ This remains a signal-strength representation; it does not itself implement the 
 - Nonliving material may resonate and dissipate energy as heat but must not gain biological usable energy.
 - Do not remove the existing stress-break path until its replacement is live, conserved, and covered by regressions.
 - This is a staged plan, not a claim that the reservoir, chemistry coupling, or stress-break replacement is already implemented. PR #202 remains Draft until the sunlight, secondary-tone, energy-inventory, and exact-head CI merge gates are satisfied.
+
+
+## PR #202 — retained-resonance foundation — 2026-10-21
+
+The first implementation slice adds a serialized, organism-local `ResonantEnergyReservoir`, separate from the transient `ToneSpectrum`, and initializes it for newly constructed, reproduced, and developing organisms. It stores frequency-tagged energy (not amplitude), combines deposits at an existing frequency, bounds representation to the current four-component limit, and rejects invalid or unrepresentable deposits without mutating the reservoir. A caller must account rejected input as heat; the reservoir never silently discards it. Compatible withdrawal is bounded by the requested amount and weights access by the existing logarithmic frequency-match rule.
+
+Focused unit tests were added for retained-energy accumulation, bounded component overflow with no energy loss, and frequency-weighted withdrawal. This is only the data-model foundation: the live tick does not yet deposit received energy into the reservoir, chemistry does not yet withdraw from it, overload is not yet coupled to bond instability, and the stress-break path is intentionally unchanged. The reservoir is not yet included in the world inventory. These are explicit next steps, not completed behavior. Exact-head compile/test verification has not been established for this slice.
