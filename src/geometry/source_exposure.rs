@@ -1920,7 +1920,7 @@ pub(crate) fn parallel_projected_arc_extent(
     }
 
     let direction_angle = toward_source.1.atan2(toward_source.0);
-    let start = arc.start_angle_radians;
+    let start = arc.start_angle_radians.rem_euclid(std::f64::consts::TAU);
     let end = start + arc.sweep_radians;
     let first_zero = ((start - direction_angle - std::f64::consts::FRAC_PI_2)
         / std::f64::consts::PI)
@@ -1949,6 +1949,43 @@ pub(crate) fn parallel_projected_arc_extent(
             * ((b - direction_angle).sin() - (a - direction_angle).sin());
     }
     (extent.is_finite() && extent >= -1e-10).then_some(extent.max(0.0))
+}
+
+#[cfg(test)]
+mod parallel_arc_projection_tests {
+    use super::*;
+
+    fn arc(start: f64, sweep: f64) -> crate::capillary_geometry::CircularArcBoundary {
+        crate::capillary_geometry::CircularArcBoundary {
+            center_x: 0.0,
+            center_y: 0.0,
+            radius: 2.0,
+            start_angle_radians: start,
+            sweep_radians: sweep,
+        }
+    }
+
+    #[test]
+    fn parallel_arc_projection_is_exact_for_front_and_back_semicircles() {
+        let front = arc(-std::f64::consts::FRAC_PI_2, std::f64::consts::PI);
+        let back = arc(std::f64::consts::FRAC_PI_2, std::f64::consts::PI);
+        assert!((parallel_projected_arc_extent(front, (1.0, 0.0)).unwrap() - 4.0).abs() < 1e-12);
+        assert!(parallel_projected_arc_extent(back, (1.0, 0.0)).unwrap() < 1e-12);
+    }
+
+    #[test]
+    fn parallel_arc_projection_is_independent_of_center_and_start_angle_wrapping() {
+        let mut wrapped = arc(8.0 * std::f64::consts::TAU + 0.0, std::f64::consts::FRAC_PI_2);
+        wrapped.center_x = 1.0e6;
+        wrapped.center_y = -1.0e6;
+        let expected = 2.0;
+        assert!((parallel_projected_arc_extent(wrapped, (1.0, 0.0)).unwrap() - expected).abs() < 1e-12);
+    }
+
+    #[test]
+    fn parallel_arc_projection_rejects_non_unit_direction() {
+        assert_eq!(parallel_projected_arc_extent(arc(0.0, 1.0), (2.0, 0.0)), None);
+    }
 }
 
 /// Projected extent for a visible circular interval under a finite point source.
