@@ -2559,6 +2559,50 @@ impl ParallelRayFrame {
         depth.is_finite().then_some(depth)
     }
 
+    /// Intersect one parallel lane with a full circle and return its two hit depths.
+    ///
+    /// The nested option distinguishes a valid miss from invalid input. Arc
+    /// receivers can filter these exact hits by their angular interval; no
+    /// curve tessellation is needed. Tangency returns the same depth twice.
+    #[allow(dead_code)] // Consumed by the parallel visibility partitioner.
+    pub(crate) fn circle_hit_depths(
+        self,
+        lane: f64,
+        center: (f64, f64),
+        radius: f64,
+    ) -> Option<Option<(f64, f64)>> {
+        if !lane.is_finite()
+            || !center.0.is_finite()
+            || !center.1.is_finite()
+            || !radius.is_finite()
+            || radius < 0.0
+        {
+            return None;
+        }
+        let center_lane = self.lane(center)?;
+        let center_depth = self.depth(center)?;
+        let lane_offset = lane - center_lane;
+        if !lane_offset.is_finite() {
+            return None;
+        }
+        let radius_squared = radius * radius;
+        let offset_squared = lane_offset * lane_offset;
+        if !radius_squared.is_finite() || !offset_squared.is_finite() {
+            return None;
+        }
+        let discriminant = radius_squared - offset_squared;
+        if discriminant < 0.0 {
+            return Some(None);
+        }
+        let half_chord = discriminant.sqrt();
+        let near = center_depth - half_chord;
+        let far = center_depth + half_chord;
+        if !near.is_finite() || !far.is_finite() {
+            return None;
+        }
+        Some(Some((near, far)))
+    }
+
     /// Intersect a lane with a straight segment and return the hit depth.
     ///
     /// The nested option distinguishes a valid miss (`Some(None)`) from
@@ -2660,6 +2704,46 @@ mod parallel_ray_frame_tests {
         assert!(frame.lane((f64::INFINITY, 0.0)).is_none());
         assert!(frame
             .segment_hit_depth(0.0, (0.0, 0.0), (f64::NAN, 1.0))
+            .is_none());
+    }
+}
+
+#[cfg(test)]
+mod parallel_circle_lane_tests {
+    use super::ParallelRayFrame;
+
+    #[test]
+    fn circle_lane_intersection_handles_two_hits_tangent_and_miss() {
+        let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
+        assert_eq!(
+            frame.circle_hit_depths(0.0, (5.0, 0.0), 2.0),
+            Some(Some((3.0, 7.0)))
+        );
+        assert_eq!(
+            frame.circle_hit_depths(2.0, (5.0, 0.0), 2.0),
+            Some(Some((5.0, 5.0)))
+        );
+        assert_eq!(frame.circle_hit_depths(2.1, (5.0, 0.0), 2.0), Some(None));
+    }
+
+    #[test]
+    fn circle_lane_hits_are_invariant_in_lane_under_parallel_translation() {
+        let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
+        let original = frame.circle_hit_depths(1.0, (5.0, 0.0), 2.0).unwrap().unwrap();
+        let translated = frame
+            .circle_hit_depths(1.0, (105.0, 0.0), 2.0)
+            .unwrap()
+            .unwrap();
+        assert!((translated.0 - original.0 - 100.0).abs() < 1e-12);
+        assert!((translated.1 - original.1 - 100.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn circle_lane_intersection_rejects_invalid_geometry() {
+        let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
+        assert!(frame.circle_hit_depths(0.0, (0.0, 0.0), -1.0).is_none());
+        assert!(frame
+            .circle_hit_depths(f64::NAN, (0.0, 0.0), 1.0)
             .is_none());
     }
 }
