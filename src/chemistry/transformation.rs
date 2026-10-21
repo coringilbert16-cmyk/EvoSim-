@@ -628,17 +628,12 @@ impl Simulation {
 /// prepared state may have lost one optional field.
 fn rollback_prepared_combine(
     usable_energy: &mut f64,
-    stress: &mut f64,
     ledger: &mut EnergyLedger,
     energy_delta: Option<f64>,
-    stress_delta: Option<f64>,
     ledger_delta: Option<&EnergyLedger>,
 ) {
     if let Some(delta) = energy_delta {
         *usable_energy -= delta;
-    }
-    if let Some(delta) = stress_delta {
-        *stress -= delta;
     }
     if let Some(delta) = ledger_delta {
         ledger.total_potential_energy_released -= delta.total_potential_energy_released;
@@ -687,10 +682,8 @@ pub(crate) fn resolve_transformation(
             // and ledger-account it without ever creating the bond.
             rollback_prepared_combine(
                 &mut organism.usable_energy,
-                &mut organism.stress,
                 ledger,
                 transformation.prepared_usable_energy,
-                transformation.prepared_stress,
                 transformation.prepared_ledger.as_ref(),
             );
             if let Some((cell_index, source)) = transformation.combine_environmental_source.as_ref()
@@ -855,7 +848,6 @@ mod tests {
     #[test]
     fn failed_prepared_combine_rolls_back_energy_and_every_ledger_delta() {
         let mut usable_energy = 13.0;
-        let mut stress = 4.0;
         let mut ledger = EnergyLedger {
             total_potential_energy_released: 2.0,
             total_structural_energy_delta: 5.0,
@@ -879,15 +871,12 @@ mod tests {
 
         rollback_prepared_combine(
             &mut usable_energy,
-            &mut stress,
             &mut ledger,
             Some(5.0),
-            Some(1.5),
             Some(&delta),
         );
 
         assert_eq!(usable_energy, 8.0);
-        assert_eq!(stress, 2.5);
         assert_eq!(ledger.total_potential_energy_released, 1.0);
         assert_eq!(ledger.total_structural_energy_delta, 3.0);
         assert_eq!(ledger.total_external_energy_input, 2.0);
