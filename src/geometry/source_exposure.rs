@@ -2519,6 +2519,63 @@ fn round_geometry_to_cent(value: f64) -> Option<f64> {
     rounded.is_finite().then_some(rounded)
 }
 
+/// Sorted shared lane partition for a single parallel-ray frame.
+///
+/// Straight-boundary events retain their calculated coordinates. Callers round
+/// curved-boundary event lanes with `round_geometry_to_cent` before insertion;
+/// the partition itself does not silently change straight geometry.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ParallelLanePartition {
+    lanes: Vec<f64>,
+}
+
+impl ParallelLanePartition {
+    /// Sort and deduplicate finite lane coordinates. A small epsilon removes
+    /// numerical duplicates from the same geometric event without imposing a
+    /// coarse grid on straight boundaries.
+    #[allow(dead_code)]
+    pub(crate) fn new(mut lanes: Vec<f64>) -> Option<Self> {
+        if lanes.iter().any(|lane| !lane.is_finite()) {
+            return None;
+        }
+        lanes.sort_by(f64::total_cmp);
+        let mut unique: Vec<f64> = Vec::with_capacity(lanes.len());
+        for lane in lanes {
+            if unique
+                .last()
+                .is_none_or(|previous| (lane - *previous).abs() > 1e-9)
+            {
+                unique.push(lane);
+            }
+        }
+        Some(Self { lanes: unique })
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn lanes(&self) -> &[f64] {
+        &self.lanes
+    }
+
+    /// Return open lane intervals and one representative midpoint per interval.
+    /// Intervals with zero or non-finite width are excluded.
+    #[allow(dead_code)]
+    pub(crate) fn intervals(&self) -> Vec<(f64, f64, f64)> {
+        self.lanes
+            .windows(2)
+            .filter_map(|pair| {
+                let width = pair[1] - pair[0];
+                let midpoint = pair[0] + width * 0.5;
+                (width.is_finite()
+                    && width > 1e-9
+                    && midpoint.is_finite()
+                    && midpoint > pair[0]
+                    && midpoint < pair[1])
+                    .then_some((pair[0], pair[1], midpoint))
+            })
+            .collect()
+    }
+}
+
 /// Coordinate frame for a single shared parallel-ray direction.
 ///
 /// `toward_source` points from the scene toward the source. Rays travel in the
@@ -2784,5 +2841,27 @@ mod curved_visibility_precision_tests {
     fn curved_visibility_precision_rejects_non_finite_values() {
         assert_eq!(round_geometry_to_cent(f64::INFINITY), None);
         assert_eq!(round_geometry_to_cent(f64::NAN), None);
+    }
+}
+
+#[cfg(test)]
+mod parallel_lane_partition_tests {
+    use super::ParallelLanePartition;
+
+    #[test]
+    fn partition_sorts_and_deduplicates_critical_lanes() {
+        let partition = ParallelLanePartition::new(vec![2.0, 0.0, 1.0, 1.0 + 1e-10]).unwrap();
+        assert_eq!(partition.lanes(), &[0.0, 1.0, 2.0]);
+        assert_eq!(
+            partition.intervals(),
+            vec![(0.0, 1.0, 0.5), (1.0, 2.0, 1.5)]
+        );
+    }
+
+    #[test]
+    fn partition_rejects_non_finite_events_and_skips_degenerate_intervals() {
+        assert!(ParallelLanePartition::new(vec![0.0, f64::NAN]).is_none());
+        let partition = ParallelLanePartition::new(vec![0.0, 1e-10, 1.0]).unwrap();
+        assert_eq!(partition.intervals(), vec![(0.0, 1.0, 0.5)]);
     }
 }
