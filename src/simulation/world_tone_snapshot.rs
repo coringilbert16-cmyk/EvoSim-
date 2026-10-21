@@ -676,10 +676,6 @@ fn parallel_lane_interval_for_bounds(
     Some((minimum, maximum))
 }
 
-fn lane_intervals_overlap(first: (f64, f64), second: (f64, f64)) -> bool {
-    first.0 <= second.1 + 1e-10 && second.0 <= first.1 + 1e-10
-}
-
 fn owner_anchor(organism: &Organism) -> Option<Placement> {
     let position = organism.occupied_cells.first()?;
     if !position.x.is_finite() || !position.y.is_finite() {
