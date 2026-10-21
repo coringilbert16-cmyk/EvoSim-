@@ -1050,15 +1050,17 @@ mod tests {
             .map(|organism| organism.resonant_energy.total_energy().unwrap())
             .sum();
         let ledger = &simulation.energy_ledger;
-        assert!(retained > 0.0, "the living receiver should retain compatible response energy");
+        assert!(
+            retained > 0.0,
+            "the living receiver should retain compatible response energy"
+        );
         assert!(ledger.total_external_energy_input > 0.0);
         assert!(
             ledger.total_heat_dissipated > 0.0,
             "damped living response and the nonliving receiver must settle as heat"
         );
-        let allocated = retained
-            + ledger.total_heat_dissipated
-            + ledger.total_world_tone_energy_escaped;
+        let allocated =
+            retained + ledger.total_heat_dissipated + ledger.total_world_tone_energy_escaped;
         assert!(
             (ledger.total_external_energy_input - allocated).abs()
                 <= 1e-7 * ledger.total_external_energy_input.max(1.0),
