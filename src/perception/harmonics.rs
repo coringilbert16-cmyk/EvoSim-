@@ -123,13 +123,34 @@ pub(crate) fn resonance_response(
     1.0 / denominator.max(f64::EPSILON)
 }
 
-/// Dimensionless fraction of incident oscillator energy absorbed by damping.
+/// Convert wave amplitude to normalized wave energy.
 ///
-/// For a driven damped oscillator, the normalized absorbed-power response is
-/// 4*zeta^2*r^2 / ((1-r^2)^2 + 4*zeta^2*r^2), where r is drive/natural
-/// frequency and zeta is the damping ratio. This is bounded to [0, 1] by the
-/// same denominator that defines the resonance response. It is an absorption
-/// fraction, not a spectral amplitude and not a source-energy allocation.
+/// The harmonic model uses a dimensionless normalization where energy is
+/// proportional to amplitude squared. This is the explicit boundary between
+/// spectral signal values and the energy ledger; callers must not treat raw
+/// amplitudes as energy.
+pub(crate) fn wave_energy_from_amplitude(amplitude: f64) -> f64 {
+    if !amplitude.is_finite() || amplitude <= 0.0 {
+        return 0.0;
+    }
+    amplitude * amplitude
+}
+
+/// Convert normalized wave energy to its corresponding non-negative amplitude.
+pub(crate) fn wave_amplitude_from_energy(energy: f64) -> f64 {
+    if !energy.is_finite() || energy <= 0.0 {
+        return 0.0;
+    }
+    energy.sqrt()
+}
+
+/// Dimensionless fraction of incident wave energy dissipated by damping.
+///
+/// The oscillator response is an amplitude ratio. Damping couples that
+/// response to the dissipative channel with amplitude factor 2*zeta*r, where
+/// r is drive/natural frequency. Squaring the resulting damped amplitude gives
+/// the dissipated-energy fraction. This is derived from the wave-amplitude
+/// model, rather than maintained as a separate energy equation.
 pub(crate) fn resonant_absorption_fraction(
     drive_frequency_hz: f64,
     natural_frequency_hz: f64,
@@ -145,13 +166,17 @@ pub(crate) fn resonant_absorption_fraction(
         return 0.0;
     }
     let ratio = drive_frequency_hz / natural_frequency_hz;
-    let damped_term = 2.0 * damping * ratio;
-    let numerator = damped_term * damped_term;
-    let denominator = (1.0 - ratio * ratio).powi(2) + numerator;
-    if !numerator.is_finite() || !denominator.is_finite() || denominator <= 0.0 {
+    if !ratio.is_finite() {
         return 0.0;
     }
-    (numerator / denominator).clamp(0.0, 1.0)
+    let response_amplitude = resonance_response(drive_frequency_hz, natural_frequency_hz, damping);
+    let dissipative_amplitude = 2.0 * damping * ratio * response_amplitude;
+    let fraction = wave_energy_from_amplitude(dissipative_amplitude);
+    if fraction.is_finite() {
+        fraction.clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
 }
 
 /// Reactivity-driven nonlinear content. Integer multiples are used because
@@ -648,6 +673,30 @@ pub(crate) fn spectral_similarity(a: &ToneSpectrum, b: &ToneSpectrum) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wave_amplitude_energy_conversion_round_trips() {
+        for energy in [0.0, 0.25, 1.0, 5.0, 10.0, 1_000.0] {
+            let amplitude = wave_amplitude_from_energy(energy);
+            assert!((wave_energy_from_amplitude(amplitude) - energy).abs() < 1e-10);
+        }
+        assert_eq!(wave_energy_from_amplitude(f64::NAN), 0.0);
+        assert_eq!(wave_amplitude_from_energy(f64::INFINITY), 0.0);
+    }
+
+    #[test]
+    fn damped_energy_fraction_is_squared_wave_response() {
+        let drive = 660.0;
+        let natural = 440.0;
+        let damping = 0.15;
+        let ratio = drive / natural;
+        let response = resonance_response(drive, natural, damping);
+        let dissipative_amplitude = 2.0 * damping * ratio * response;
+        let expected = wave_energy_from_amplitude(dissipative_amplitude);
+        assert!(
+            (resonant_absorption_fraction(drive, natural, damping) - expected).abs() < 1e-12
+        );
+    }
 
     #[test]
     fn resonant_absorption_fraction_is_bounded_and_peaks_at_resonance() {
