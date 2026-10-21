@@ -3724,18 +3724,12 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
             let lo = segment.lane_start.min(segment.lane_end);
             let hi = segment.lane_start.max(segment.lane_end);
             if hi - lo <= LANE_STEP {
-                coarse_lanes.extend([
-                    round_geometry_to_cent(lo)?,
-                    round_geometry_to_cent(hi)?,
-                ]);
+                coarse_lanes.extend([round_geometry_to_cent(lo)?, round_geometry_to_cent(hi)?]);
             }
         }
         for (lo, hi) in &arc_lane_ranges {
             if hi - lo <= LANE_STEP {
-                coarse_lanes.extend([
-                    round_geometry_to_cent(*lo)?,
-                    round_geometry_to_cent(*hi)?,
-                ]);
+                coarse_lanes.extend([round_geometry_to_cent(*lo)?, round_geometry_to_cent(*hi)?]);
             }
         }
         straight_lanes = coarse_lanes;
