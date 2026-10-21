@@ -192,18 +192,30 @@ pub(crate) fn resolve_resonance_overload_break(
         if barrier <= 1e-9 {
             continue;
         }
-        let Some(unit_a) = organism.structure.unit_index(bond.endpoint_a.constituent_id) else {
+        let Some(unit_a) = organism
+            .structure
+            .unit_index(bond.endpoint_a.constituent_id)
+        else {
             continue;
         };
-        let Some(unit_b) = organism.structure.unit_index(bond.endpoint_b.constituent_id) else {
+        let Some(unit_b) = organism
+            .structure
+            .unit_index(bond.endpoint_b.constituent_id)
+        else {
             continue;
         };
-        let Some(properties_a) = organism.structure.units.get(unit_a)
+        let Some(properties_a) = organism
+            .structure
+            .units
+            .get(unit_a)
             .and_then(|unit| unit.properties(&environment.catalog))
         else {
             continue;
         };
-        let Some(properties_b) = organism.structure.units.get(unit_b)
+        let Some(properties_b) = organism
+            .structure
+            .units
+            .get(unit_b)
             .and_then(|unit| unit.properties(&environment.catalog))
         else {
             continue;
@@ -217,8 +229,7 @@ pub(crate) fn resolve_resonance_overload_break(
         {
             continue;
         }
-        let reaction_frequency_hz =
-            (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        let reaction_frequency_hz = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
         let compatible = organism
             .resonant_energy
             .compatible_energy(reaction_frequency_hz);
@@ -1294,9 +1305,7 @@ mod tests {
             .map(|bond| bond.bond_energy)
             .sum();
         assert!(capacity.is_finite() && capacity > 0.0);
-        assert!(organism
-            .resonant_energy
-            .deposit(440.0, capacity * 0.5));
+        assert!(organism.resonant_energy.deposit(440.0, capacity * 0.5));
         let original_bond_count = organism.structure.bonds.len();
         let mut ledger = crate::state::EnergyLedger::default();
         assert!(!resolve_resonance_overload_break(
@@ -1307,9 +1316,7 @@ mod tests {
         assert_eq!(organism.structure.bonds.len(), original_bond_count);
 
         organism.resonant_energy = crate::harmonics::ResonantEnergyReservoir::default();
-        assert!(organism
-            .resonant_energy
-            .deposit(440.0, capacity + 1.0));
+        assert!(organism.resonant_energy.deposit(440.0, capacity + 1.0));
         let before_resonance = organism.resonant_energy.total_energy().unwrap();
         assert!(resolve_resonance_overload_break(
             &mut organism,
