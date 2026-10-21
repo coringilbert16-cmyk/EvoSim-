@@ -1487,6 +1487,17 @@ mod decomposition_finalization_tests {
             simulation.energy_ledger.total_external_energy_input > 0.0,
             "live world tone should credit absorbed environmental energy"
         );
+        assert!(
+            simulation.energy_ledger.total_resonant_energy_held > 0.0,
+            "captured world-tone energy should persist in the resonant reservoir"
+        );
+        assert!(
+            simulation.organisms[0]
+                .resonant_energy
+                .total_energy()
+                .is_some_and(|energy| energy > 0.0),
+            "organism reservoir should retain source energy across the tick"
+        );
         let inventory = simulation.energy_inventory_snapshot();
         assert!(
             inventory.is_balanced(1e-9),
