@@ -1309,6 +1309,32 @@ mod tests {
     }
 
     #[test]
+    fn resonance_overload_without_frequency_compatible_energy_preserves_structure() {
+        let (mut organism, environment, _) = stress_break_test_organism();
+        let capacity: f64 = organism
+            .structure
+            .bonds
+            .iter()
+            .map(|bond| bond.bond_energy)
+            .sum();
+        assert!(capacity.is_finite() && capacity > 0.0);
+        assert!(organism
+            .resonant_energy
+            .deposit(1.0e300, capacity + 1.0));
+        let original_bonds = organism.structure.bonds.clone();
+        let original_energy = organism.resonant_energy.total_energy().unwrap();
+        let mut ledger = crate::state::EnergyLedger::default();
+
+        assert!(!resolve_resonance_overload_break(
+            &mut organism,
+            &environment,
+            &mut ledger,
+        ));
+        assert_eq!(organism.structure.bonds.len(), original_bonds.len());
+        assert_eq!(organism.resonant_energy.total_energy().unwrap(), original_energy);
+    }
+
+    #[test]
     fn stress_break_candidates_prefer_non_genome_bonds() {
         let (organism, environment, genome_bonds) = stress_break_test_organism();
         let candidates = stress_break_candidate_indices(&organism, &environment);
