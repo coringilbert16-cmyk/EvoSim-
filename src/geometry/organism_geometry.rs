@@ -99,7 +99,7 @@ impl OrganismBodyGeometry {
     /// Unlike `from_structure`, this includes unbonded units as well as bonded
     /// structural components. Sunlight occlusion follows physical presence, not
     /// the organism's current connectivity classification.
-    #[allow(dead_code)] // Consumed by the staged world-tone snapshot.
+    /// Used by live world-tone exposure to include every realized structural unit.
     pub(crate) fn from_all_realized_units(structure: &OrganismStructure) -> Option<Self> {
         if structure.units.is_empty() {
             return None;
@@ -164,7 +164,7 @@ impl OrganismBodyGeometry {
     /// cast shadows. This helper does not apply owner-relative storage transforms:
     /// callers must resolve those transforms before passing stored material here.
     /// The catalog validates and resolves each constituent's realized shape.
-    #[allow(dead_code)] // Consumed by the forthcoming all-world occluder snapshot.
+    /// Used by the world-tone snapshot for environmental and stored physical objects.
     pub(crate) fn from_physical_material(
         physical: &crate::physical_material::PhysicalMaterial,
         catalog: &[BaseResource],
