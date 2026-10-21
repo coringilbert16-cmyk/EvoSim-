@@ -551,7 +551,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                                     };
                                     let start = transform(*start_x, *start_y);
                                     let end = transform(*end_x, *end_y);
-                                    critical_points.extend([start, end]);
+                                    critical_points.extend([(body_index, start.0, start.1), (body_index, end.0, end.1)]);
                                     straight_edges.push((body_index, part.unit_index, start, end));
                                 }
                                 FluidBoundaryPiece::FreeArc(arc) => {
