@@ -176,6 +176,9 @@ pub(crate) fn resolve_resonance_overload_break(
         return false;
     }
 
+    if crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog).is_err() {
+        return false;
+    }
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
     let mut best: Option<(usize, f64, f64)> = None;
     for index in stress_break_candidate_indices(organism, environment) {
@@ -227,6 +230,9 @@ pub(crate) fn resolve_resonance_overload_break(
             continue;
         }
         let score = compatible / barrier;
+        if !score.is_finite() {
+            continue;
+        }
         if best.map_or(true, |(_, _, best_score)| score > best_score) {
             best = Some((index, reaction_frequency_hz, score));
         }
