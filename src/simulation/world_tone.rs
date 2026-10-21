@@ -261,6 +261,17 @@ impl WorldToneCaptureFrame {
         sample: crate::world_tone::WorldToneSample,
         bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     ) -> Option<Self> {
+        let receiver_body_indices: Vec<_> = (0..bodies.len()).collect();
+        Self::from_geometry_for_receivers(sample, bodies, &receiver_body_indices)
+    }
+
+    /// Build one world occlusion frame but solve exact exposure only for the
+    /// selected receiver bodies. All supplied bodies remain potential occluders.
+    pub(crate) fn from_geometry_for_receivers(
+        sample: crate::world_tone::WorldToneSample,
+        bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+        receiver_body_indices: &[usize],
+    ) -> Option<Self> {
         if !sample.is_valid()
             || bodies
                 .iter()
@@ -271,9 +282,17 @@ impl WorldToneCaptureFrame {
 
         let source = (sample.source_x, sample.source_y);
         let straight_intervals =
-            crate::source_exposure::visible_polygonal_intervals(source, bodies)?;
+            crate::source_exposure::visible_polygonal_intervals_for_targets(
+                source,
+                bodies,
+                receiver_body_indices,
+            )?;
         let curved_intervals =
-            crate::source_exposure::visible_circular_arc_intervals(source, bodies)?;
+            crate::source_exposure::visible_circular_arc_intervals_for_targets(
+                source,
+                bodies,
+                receiver_body_indices,
+            )?;
 
         let mut projected_widths = vec![0.0; bodies.len()];
         let mut projected_widths_by_unit: Vec<Vec<(usize, f64)>> = bodies
