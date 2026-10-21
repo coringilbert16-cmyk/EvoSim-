@@ -2342,3 +2342,8 @@ The first all-body receiver build, before the dense-world intersection fallback,
 ### Dense-world lane sampling refinement — 2026-10-21
 
 The intersection-event fallback alone did not yet demonstrate acceptable runtime: the first all-body run took 400.88 seconds overall, with the ordinary-tick inventory test at roughly 313 seconds. The large-world path now also partitions only occupied projected-lane spans on a 0.25-unit grid, while preserving exact bounds for surfaces narrower than the grid step. Energy accounting remains balanced per represented lane; geometric widths and crossing order are approximate at this scale. This stronger approximation is being added specifically to make all-receiver accounting viable with the seeded 5,000-particle cloud. It must pass the dense-scene regression and show a measured runtime reduction before acceptance.
+
+
+### Intersection fallback benchmark — 2026-10-21
+
+The first dense-world intersection fallback (pairwise crossing events skipped, but all exact surface-boundary lanes retained) reduced the full Rust suite from **400.88 seconds to 265.76 seconds**. The ordinary-tick world inventory regression completed in about **184 seconds**, down from roughly 313 seconds. This is a 34% reduction in total suite time but remains slower than the earlier 169-second run that omitted non-receiver physical bodies. The 0.25-unit occupied-lane grid refinement is the next performance step; its exact-head run must determine whether all-body receiver coverage can meet the runtime target.
