@@ -3298,6 +3298,397 @@ pub(crate) fn visible_parallel_polygonal_intervals_for_targets(
     Some(visible)
 }
 
+
+
+/// Compute the exact parallel-projection width credited to each target constituent.
+/// Straight/curved boundaries share one lane partition and one nearest-surface test;
+/// curved event lanes and circle hit depths are quantized to the approved 0.01 grid.
+pub(crate) fn parallel_projected_widths_by_body_for_targets(
+    toward_source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+) -> Option<Vec<Vec<(usize, f64)>>> {
+    use crate::capillary_geometry::FluidBoundaryPiece;
+    use crate::resources::Form;
+
+    let frame = ParallelRayFrame::new(toward_source)?;
+    let mut target_mask = vec![false; bodies.len()];
+    for &index in target_body_indices {
+        *target_mask.get_mut(index)? = true;
+    }
+
+    #[derive(Clone, Copy)]
+    struct Segment {
+        body_index: usize,
+        unit_index: usize,
+        start: (f64, f64),
+        end: (f64, f64),
+        lane_start: f64,
+        lane_end: f64,
+        depth_start: f64,
+        depth_end: f64,
+        normal: Option<(f64, f64)>,
+        creditable: bool,
+    }
+    #[derive(Clone, Copy)]
+    enum Surface {
+        Segment(usize),
+        Arc(usize, f64),
+    }
+
+    let mut segments = Vec::<Segment>::new();
+    let mut arcs = Vec::<WorldCircleArc>::new();
+    let mut straight_lanes = Vec::<f64>::new();
+    let mut curved_lanes = Vec::<f64>::new();
+    let mut widths: Vec<Vec<(usize, f64)>> = bodies
+        .iter()
+        .map(|body| {
+            body.parts
+                .iter()
+                .map(|part| (part.unit_index, 0.0))
+                .collect()
+        })
+        .collect();
+
+    for (body_index, body) in bodies.iter().enumerate() {
+        let mut seen_units = Vec::with_capacity(body.parts.len());
+        for part in &body.parts {
+            if seen_units.contains(&part.unit_index)
+                || !part.x.is_finite()
+                || !part.y.is_finite()
+                || !part.rotation_radians.is_finite()
+                || !part.form.is_valid()
+            {
+                return None;
+            }
+            seen_units.push(part.unit_index);
+            let (sin, cos) = part.rotation_radians.sin_cos();
+            let world = |point: (f64, f64)| {
+                (
+                    part.x + point.0 * cos - point.1 * sin,
+                    part.y + point.0 * sin + point.1 * cos,
+                )
+            };
+
+            let (local_edges, closed_surface): (Vec<((f64, f64), (f64, f64))>, bool) =
+                match &part.form {
+                    Form::Line { length } => {
+                        if !length.is_finite() || *length <= 0.0 {
+                            return None;
+                        }
+                        let half = *length * 0.5;
+                        (vec![((-half, 0.0), (half, 0.0))], false)
+                    }
+                    Form::Circle { .. } => (Vec::new(), false),
+                    Form::Fluid {
+                        boundary: Some(vertices),
+                        arc_boundary: None,
+                        multi_contact_boundary: None,
+                        ..
+                    } => {
+                        if vertices.len() < 3 {
+                            return None;
+                        }
+                        let edges = (0..vertices.len())
+                            .map(|index| (vertices[index], vertices[(index + 1) % vertices.len()]))
+                            .collect();
+                        (edges, true)
+                    }
+                    Form::Fluid {
+                        boundary: None,
+                        arc_boundary: Some(arc),
+                        multi_contact_boundary: None,
+                        ..
+                    } => {
+                        if !arc.is_valid() {
+                            return None;
+                        }
+                        (vec![(arc.start_point(), arc.end_point())], false)
+                    }
+                    Form::Fluid {
+                        boundary: None,
+                        arc_boundary: None,
+                        multi_contact_boundary: Some(multi),
+                        ..
+                    } => {
+                        let edges = multi
+                            .pieces
+                            .iter()
+                            .filter_map(|piece| match piece {
+                                FluidBoundaryPiece::SolidContact {
+                                    start_x,
+                                    start_y,
+                                    end_x,
+                                    end_y,
+                                    ..
+                                } => Some(((*start_x, *start_y), (*end_x, *end_y))),
+                                FluidBoundaryPiece::FreeArc(_) => None,
+                            })
+                            .collect();
+                        (edges, false)
+                    }
+                    Form::Fluid {
+                        boundary: None,
+                        arc_boundary: None,
+                        multi_contact_boundary: None,
+                        ..
+                    } => (Vec::new(), false),
+                    Form::Fluid { .. } => return None,
+                    _ => {
+                        let Some(vertices) = part.form.polygon_vertices() else {
+                            return None;
+                        };
+                        if vertices.len() < 3 {
+                            return None;
+                        }
+                        let edges = (0..vertices.len())
+                            .map(|index| (vertices[index], vertices[(index + 1) % vertices.len()]))
+                            .collect();
+                        (edges, true)
+                    }
+                };
+
+            let vertices_for_winding = if closed_surface {
+                let Some(vertices) = match &part.form {
+                    Form::Fluid { boundary: Some(vertices), .. } => Some(vertices.clone()),
+                    _ => part.form.polygon_vertices(),
+                } else {
+                    return None;
+                };
+                let vertices: Vec<_> = vertices.into_iter().map(world).collect();
+                let area_twice: f64 = vertices
+                    .iter()
+                    .enumerate()
+                    .map(|(index, &(x, y))| {
+                        let (nx, ny) = vertices[(index + 1) % vertices.len()];
+                        x * ny - nx * y
+                    })
+                    .sum();
+                if !area_twice.is_finite() || area_twice.abs() <= 1e-12 {
+                    return None;
+                }
+                Some(area_twice.signum())
+            } else {
+                None
+            };
+
+            for (local_start, local_end) in local_edges {
+                let start = world(local_start);
+                let end = world(local_end);
+                let length = (end.0 - start.0).hypot(end.1 - start.1);
+                if !length.is_finite() || length <= 1e-12 {
+                    return None;
+                }
+                let lane_start = frame.lane(start)?;
+                let lane_end = frame.lane(end)?;
+                let depth_start = frame.depth(start)?;
+                let depth_end = frame.depth(end)?;
+                straight_lanes.extend([lane_start, lane_end]);
+                let normal = vertices_for_winding.map(|winding| {
+                    (
+                        winding * (end.1 - start.1) / length,
+                        -winding * (end.0 - start.0) / length,
+                    )
+                });
+                segments.push(Segment {
+                    body_index,
+                    unit_index: part.unit_index,
+                    start,
+                    end,
+                    lane_start,
+                    lane_end,
+                    depth_start,
+                    depth_end,
+                    normal,
+                    creditable: closed_surface,
+                });
+            }
+
+            arcs.extend(realized_circle_arcs(body_index, part)?);
+        }
+    }
+
+    for arc in &arcs {
+        let (lo, hi) = frame.circle_critical_lanes(arc.center, arc.radius)?;
+        curved_lanes.extend([lo, hi]);
+        for angle in [arc.start, arc.start + arc.sweep] {
+            let point = (
+                arc.center.0 + arc.radius * angle.cos(),
+                arc.center.1 + arc.radius * angle.sin(),
+            );
+            curved_lanes.push(round_geometry_to_cent(frame.lane(point)?)?);
+        }
+    }
+
+    for left in 0..segments.len() {
+        for right in (left + 1)..segments.len() {
+            let a = segments[left];
+            let b = segments[right];
+            match frame.segment_intersection_lane(a.start, a.end, b.start, b.end) {
+                Some(Some(lane)) => straight_lanes.push(lane),
+                Some(None) => {}
+                None => {
+                    // Shared collinear faces are common between touching pieces.
+                    // Their overlapping lanes are resolved as a depth tie below.
+                    let r = (a.end.0 - a.start.0, a.end.1 - a.start.1);
+                    let q = (b.end.0 - b.start.0, b.end.1 - b.start.1);
+                    let offset = (b.start.0 - a.start.0, b.start.1 - a.start.1);
+                    let cross = |x: (f64, f64), y: (f64, f64)| x.0 * y.1 - x.1 * y.0;
+                    let scale = r.0.hypot(r.1) * q.0.hypot(q.1);
+                    if !scale.is_finite()
+                        || cross(r, q).abs() > 1e-10 * scale.max(1.0)
+                        || cross(offset, r).abs() > 1e-10 * r.0.hypot(r.1).max(1.0)
+                    {
+                        return None;
+                    }
+                }
+            }
+        }
+    }
+
+    for arc in &arcs {
+        for segment in &segments {
+            let mut intersections = Vec::new();
+            add_circle_segment_intersections(
+                arc.center,
+                arc.radius,
+                segment.start,
+                segment.end,
+                &mut intersections,
+            )?;
+            for point in intersections {
+                let angle = (point.1 - arc.center.1).atan2(point.0 - arc.center.0);
+                if arc_has_angle(*arc, angle) {
+                    curved_lanes.push(round_geometry_to_cent(frame.lane(point)?)?);
+                }
+            }
+        }
+    }
+
+    for first_index in 0..arcs.len() {
+        for second_index in (first_index + 1)..arcs.len() {
+            let first = arcs[first_index];
+            let second = arcs[second_index];
+            if (first.center.0 - second.center.0).abs() <= 1e-10
+                && (first.center.1 - second.center.1).abs() <= 1e-10
+                && (first.radius - second.radius).abs() <= 1e-10
+            {
+                continue;
+            }
+            let mut intersections = Vec::with_capacity(2);
+            add_circle_circle_intersections(
+                first.center,
+                first.radius,
+                second.center,
+                second.radius,
+                &mut intersections,
+            )?;
+            for point in intersections {
+                let first_angle = (point.1 - first.center.1).atan2(point.0 - first.center.0);
+                let second_angle = (point.1 - second.center.1).atan2(point.0 - second.center.0);
+                if arc_has_angle(first, first_angle) && arc_has_angle(second, second_angle) {
+                    curved_lanes.push(round_geometry_to_cent(frame.lane(point)?)?);
+                }
+            }
+        }
+    }
+
+    let partition = ParallelLanePartition::from_boundary_events(straight_lanes, curved_lanes)?;
+    for (lo, hi, lane) in partition.intervals() {
+        let mut nearest: Option<(f64, Surface)> = None;
+        let mut tied = false;
+        let mut consider = |depth: f64, surface: Surface| -> Option<()> {
+            if !depth.is_finite() {
+                return None;
+            }
+            match nearest {
+                None => {
+                    nearest = Some((depth, surface));
+                    tied = false;
+                }
+                Some((best, _)) if depth > best + 1e-9 => {
+                    nearest = Some((depth, surface));
+                    tied = false;
+                }
+                Some((best, _)) if (depth - best).abs() <= 1e-9 => tied = true,
+                _ => {}
+            }
+            Some(())
+        };
+
+        for (index, segment) in segments.iter().enumerate() {
+            let delta = segment.lane_end - segment.lane_start;
+            if delta.abs() <= 1e-12
+                || lane <= segment.lane_start.min(segment.lane_end)
+                || lane >= segment.lane_start.max(segment.lane_end)
+            {
+                continue;
+            }
+            let t = (lane - segment.lane_start) / delta;
+            let depth = segment.depth_start + (segment.depth_end - segment.depth_start) * t;
+            consider(depth, Surface::Segment(index))?;
+        }
+
+        for (index, arc) in arcs.iter().enumerate() {
+            let Some((near, far)) = frame.circle_hit_depths(lane, arc.center, arc.radius)? else {
+                continue;
+            };
+            for depth in [near, far] {
+                let point = (
+                    frame.toward_source.0 * depth + frame.perpendicular.0 * lane,
+                    frame.toward_source.1 * depth + frame.perpendicular.1 * lane,
+                );
+                let angle = (point.1 - arc.center.1).atan2(point.0 - arc.center.0);
+                if arc_has_angle(*arc, angle) {
+                    consider(depth, Surface::Arc(index, depth))?;
+                }
+            }
+        }
+
+        if tied {
+            continue;
+        }
+        let Some((_, surface)) = nearest else {
+            continue;
+        };
+        let (body_index, unit_index, facing) = match surface {
+            Surface::Segment(index) => {
+                let segment = segments[index];
+                let facing = segment.creditable
+                    && segment.normal.is_some_and(|normal| {
+                        normal.0 * frame.toward_source.0 + normal.1 * frame.toward_source.1 > 1e-10
+                    });
+                (segment.body_index, segment.unit_index, facing)
+            }
+            Surface::Arc(index, depth) => {
+                let arc = arcs[index];
+                let point = (
+                    frame.toward_source.0 * depth + frame.perpendicular.0 * lane,
+                    frame.toward_source.1 * depth + frame.perpendicular.1 * lane,
+                );
+                let facing = ((point.0 - arc.center.0) * frame.toward_source.0
+                    + (point.1 - arc.center.1) * frame.toward_source.1)
+                    / arc.radius
+                    > 1e-10;
+                (arc.body_index, arc.unit_index, facing)
+            }
+        };
+        if !facing || !target_mask[body_index] {
+            continue;
+        }
+        let (_, width) = widths
+            .get_mut(body_index)?
+            .iter_mut()
+            .find(|(candidate, _)| *candidate == unit_index)?;
+        *width += hi - lo;
+    }
+
+    if widths.iter().flatten().any(|(_, width)| !width.is_finite() || *width < 0.0) {
+        return None;
+    }
+    Some(widths)
+}
+
 #[cfg(test)]
 mod parallel_lane_intersection_regression_tests {
     use super::ParallelRayFrame;
