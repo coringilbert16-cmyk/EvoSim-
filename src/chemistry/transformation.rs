@@ -917,6 +917,7 @@ mod tests {
             occupied_cells: Vec::new(),
             genome: crate::genome::initial_genome(),
             harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+            resonant_energy: crate::harmonics::ResonantEnergyReservoir::default(),
             experience_memory: crate::memory::ExperienceMemory::default(),
             pending_movement_experience: None,
             decision_history: crate::decision::DecisionHistory::default(),
