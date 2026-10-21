@@ -276,6 +276,47 @@ impl WorldToneOccluderSnapshot {
         else {
             return;
         };
+
+        // The cached direct-exposure widths and ordered lane paths must describe
+        // the same first-hit geometry before any energy is credited. This is a
+        // fail-closed invariant for the upcoming residual-signal propagation.
+        let mut path_direct_widths = std::collections::HashMap::<(usize, usize), f64>::new();
+        for path in snapshot.frame.interaction_paths() {
+            if let Some(&(body_index, unit_index)) = path.hits.first() {
+                let width = path_direct_widths
+                    .entry((body_index, unit_index))
+                    .or_insert(0.0);
+                *width += path.projected_width;
+                if !width.is_finite() {
+                    return;
+                }
+            }
+        }
+        for (organism_index, organism) in simulation.organisms.iter().enumerate() {
+            if !living_ids.contains(&organism.id) {
+                continue;
+            }
+            let Some(body_index) = snapshot.body_index_for_organism(organism_index) else {
+                continue;
+            };
+            for unit_index in 0..organism.structure.units.len() {
+                let Some(expected) = snapshot.frame.projected_width_for_unit(body_index, unit_index)
+                else {
+                    continue;
+                };
+                let actual = path_direct_widths
+                    .get(&(body_index, unit_index))
+                    .copied()
+                    .unwrap_or(0.0);
+                if !expected.is_finite()
+                    || !actual.is_finite()
+                    || (expected - actual).abs() > 1e-7 * expected.max(1.0)
+                {
+                    return;
+                }
+            }
+        }
+
         let catalog = &simulation.environment.catalog;
         let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
         let (organisms, ledger) = (&mut simulation.organisms, &mut simulation.energy_ledger);
