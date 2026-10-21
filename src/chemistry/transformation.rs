@@ -693,6 +693,8 @@ impl Simulation {
                     - original_ledger.total_external_energy_input,
                 total_world_tone_energy_unabsorbed: trial_ledger.total_world_tone_energy_unabsorbed
                     - original_ledger.total_world_tone_energy_unabsorbed,
+                total_world_tone_energy_escaped: trial_ledger.total_world_tone_energy_escaped
+                    - original_ledger.total_world_tone_energy_escaped,
                 total_usable_energy_gained: trial_ledger.total_usable_energy_gained
                     - original_ledger.total_usable_energy_gained,
                 total_work_expended: trial_ledger.total_work_expended
