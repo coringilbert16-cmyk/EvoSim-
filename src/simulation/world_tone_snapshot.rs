@@ -997,6 +997,74 @@ mod tests {
     }
 
     #[test]
+    fn ordered_living_and_environmental_receivers_conserve_one_travelling_signal() {
+        let mut simulation = Simulation::new(83, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        for organism in &mut simulation.organisms {
+            organism.structure = OrganismStructure::new();
+            organism.stored_material.entries.clear();
+            organism.reproductive_construction = None;
+        }
+        simulation.decomposing_bodies.clear();
+        simulation.active_transformations.clear();
+
+        let catalog = simulation.environment.catalog.clone();
+        replace_with_nitrogen_square(&mut simulation.organisms[0], 5.0, 0.0, &catalog);
+        let living_id = simulation.organisms[0].id.clone();
+
+        let downstream = PhysicalMaterial::realized(
+            Material::free_base("Nitrogen", 1.0),
+            vec![Placement {
+                x: 8.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("downstream environmental receiver should have realized geometry");
+        assert!(simulation
+            .environment
+            .field
+            .deposit_physical(8.0, 0.0, downstream));
+
+        let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
+            .expect("both physical receivers should be represented");
+        assert!(
+            snapshot.frame.interaction_paths().any(|path| {
+                path.hits
+                    .windows(2)
+                    .any(|hits| hits[0] == (0, 0) && hits[1] == (1, 0))
+            }),
+            "at least one source lane must hit the living receiver before the environmental receiver"
+        );
+
+        WorldToneOccluderSnapshot::settle_living_organism_inputs(
+            &mut simulation,
+            sample(),
+            &std::collections::HashSet::from([living_id]),
+        );
+
+        let retained: f64 = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.resonant_energy.total_energy().unwrap())
+            .sum();
+        let ledger = &simulation.energy_ledger;
+        assert!(retained > 0.0, "the living receiver should retain compatible response energy");
+        assert!(ledger.total_external_energy_input > 0.0);
+        assert!(ledger.total_heat_dissipated > 0.0,
+            "damped living response and the nonliving receiver must settle as heat");
+        let allocated = retained
+            + ledger.total_heat_dissipated
+            + ledger.total_world_tone_energy_escaped;
+        assert!(
+            (ledger.total_external_energy_input - allocated).abs()
+                <= 1e-7 * ledger.total_external_energy_input.max(1.0),
+            "the incident source energy must be allocated once across retained resonance, heat, and escape"
+        );
+    }
+
+    #[test]
     fn nonliving_material_response_becomes_heat_instead_of_rejoining_signal() {
         let response_energy = 3.25;
         let damping_heat = 0.75;
