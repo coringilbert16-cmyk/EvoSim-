@@ -198,23 +198,25 @@ impl WorldToneOccluderSnapshot {
                 continue;
             };
 
-            for (unit_index, unit) in organism.structure.units.iter().enumerate() {
-                let Some((resource_name, _)) = unit.material.parts.first() else {
-                    continue;
-                };
-                // The snapshot builder rejects multi-part structural units because
-                // their distinct surfaces are not represented by one cached shape.
-                if unit.material.parts.len() != 1 {
-                    continue;
-                }
-                let Some(properties) = catalog
-                    .iter()
-                    .find(|resource| resource.name == *resource_name)
-                    .map(|resource| resource.properties)
-                else {
-                    continue;
-                };
+            let unit_properties: Vec<_> = organism
+                .structure
+                .units
+                .iter()
+                .enumerate()
+                .filter_map(|(unit_index, unit)| {
+                    if unit.material.parts.len() != 1 {
+                        return None;
+                    }
+                    let (resource_name, _) = unit.material.parts.first()?;
+                    let properties = catalog
+                        .iter()
+                        .find(|resource| resource.name == *resource_name)?
+                        .properties;
+                    Some((unit_index, properties))
+                })
+                .collect();
 
+            for (unit_index, properties) in unit_properties {
                 let _ = snapshot.frame.settle_organism_surface_response(
                     body_index,
                     unit_index,
