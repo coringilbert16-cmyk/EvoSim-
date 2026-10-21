@@ -324,7 +324,8 @@ impl WorldToneCaptureFrame {
         }
 
         for interval in curved_intervals {
-            let extent = crate::source_exposure::parallel_projected_arc_extent(interval.arc, toward_source)?;
+            let extent =
+                crate::source_exposure::parallel_projected_arc_extent(interval.arc, toward_source)?;
             if !extent.is_finite() || extent < 0.0 {
                 return None;
             }
@@ -942,11 +943,8 @@ mod tests {
         let expected: f64 = intervals
             .iter()
             .map(|interval| {
-                crate::source_exposure::parallel_projected_arc_extent(
-                    interval.arc,
-                    (-1.0, 0.0),
-                )
-                .unwrap()
+                crate::source_exposure::parallel_projected_arc_extent(interval.arc, (-1.0, 0.0))
+                    .unwrap()
             })
             .sum();
         let frame = WorldToneCaptureFrame::from_geometry(sample, &[body])
@@ -997,11 +995,8 @@ mod tests {
         let expected: f64 = intervals
             .iter()
             .map(|interval| {
-                crate::source_exposure::parallel_projected_arc_extent(
-                    interval.arc,
-                    (-1.0, 0.0),
-                )
-                .unwrap()
+                crate::source_exposure::parallel_projected_arc_extent(interval.arc, (-1.0, 0.0))
+                    .unwrap()
             })
             .sum();
         let frame = WorldToneCaptureFrame::from_geometry(sample, &[body])
