@@ -2178,3 +2178,24 @@ The resonance-spectrum response now has an explicit incident-energy ceiling:
 Spectrum magnitude now follows the wave-energy convention: independent frequency components contribute amplitude-squared energy, and their combined magnitude is the square root of the summed component energies. Both environmental-material and cavity-wall perception use the same calculation. This avoids inflating resonance strength merely because nonlinear response generated more frequency components. A regression test covers the root-sum-square relationship.
 
 This remains a signal-strength representation; it does not itself implement the still-outstanding geometry-mediated transfer of absorbed energy into chemical work or prove whole-world conservation.
+
+
+## PR #202 — persistent resonance, chemistry, and stress-break unification plan — 2026-10-21
+
+**Approved direction:** make resonance the shared physical mechanism for retained energy, chemical access, dissipation, and bond instability. Replace the separate random stress-break authority only after the resonance-driven path can account for structural changes through the existing energy ledger. Do not change PR #196 constructor/Bob behavior.
+
+### Implementation sequence
+
+1. **Define persistent, frequency-resolved retained resonance.** The current ToneSpectrum is primarily a transient received-signal representation, not stored energy. Add a compact organism-level reservoir that retains energy by frequency across ticks. Keep signal amplitude and physical energy explicitly distinct (energy = amplitude² in the current normalized convention). Bound storage/overload through a derived structural-handling capacity, not an arbitrary hard energy cap. The initial implementation should reuse the existing four-component spectral budget where safe; when a component cannot be represented, its energy must be explicitly transferred to a compatible component or dissipated, never silently discarded or duplicated.
+2. **Enforce one conservation path.** Every reservoir gain, frequency transformation, compatible withdrawal, dissipation, and structural release must be an explicit balanced transaction. The world inventory must count retained resonance exactly once. Do not count the same energy both as usable energy and resonant storage. Reject invalid/non-finite transactions atomically.
+3. **Couple chemistry to compatible resonance.** A reaction may draw only the portion of retained resonance compatible with that reaction's frequency. Material properties, realized geometry, and bond structure determine response and energy handling; organisms do not choose an energy-allocation policy. Reaction work, released bond energy, retained resonance, and heat must reconcile through the shared accounting model.
+4. **Replace stress-break's independent authority.** First connect overload and bond destabilization to retained resonance and the existing bond-energy/ledger settlement. Then replace the random stress-threshold bond selection with resonance-driven instability. Preserve stress as a diagnostic if useful, but it must not independently cause an unaccounted break. Keep structural collapse and death possible; overload must not become immortality or a free-energy source.
+5. **Verify in layers.** Add unit tests for frequency compatibility, retained energy across ticks, overload/bond destabilization, component overflow, invalid-input atomicity, and transaction conservation. Add chemistry and simulation regressions proving stress-break replacement and structural consequences. Run focused tests, formatting, full tests, and exact-head CI; compare failures against the known baseline of 28 failing test identities rather than treating them as new regressions.
+
+### Design constraints and merge gates
+
+- Prefer on-demand frequency compatibility calculations where practical; use a small bounded representation if persistent history or population-scale performance makes on-demand reconstruction impossible. Historical energy must actually be retained, not reconstructed from the current incoming signal.
+- Resonance strength, propagation, retained energy, and dissipation must share one consistent amplitude/energy convention. Heat is dissipated energy, not a separate unexplained loss.
+- Nonliving material may resonate and dissipate energy as heat but must not gain biological usable energy.
+- Do not remove the existing stress-break path until its replacement is live, conserved, and covered by regressions.
+- This is a staged plan, not a claim that the reservoir, chemistry coupling, or stress-break replacement is already implemented. PR #202 remains Draft until the sunlight, secondary-tone, energy-inventory, and exact-head CI merge gates are satisfied.
