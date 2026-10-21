@@ -65,11 +65,44 @@ pub(crate) fn settle_chemical_break_energy(
     processing_efficiency: f64,
     ledger: &mut EnergyLedger,
 ) -> bool {
-    if !crate::chemistry::can_chemical_break(reaction_energy, disruption_cost) {
+    settle_chemical_break_energy_with_resonance(
+        organism,
+        bond,
+        reaction_energy,
+        disruption_cost,
+        0.0,
+        processing_efficiency,
+        ledger,
+    )
+}
+
+/// Settle a chemistry BREAK where compatible retained resonance supplies part
+/// of the disruption work. The reservoir debit is committed by the caller only
+/// after this transaction succeeds; the remaining work is charged to the
+/// removed bond's energy/usable-energy balance.
+pub(crate) fn settle_chemical_break_energy_with_resonance(
+    organism: &mut Organism,
+    bond: crate::structure::Bond,
+    reaction_energy: f64,
+    disruption_cost: f64,
+    resonant_work: f64,
+    processing_efficiency: f64,
+    ledger: &mut EnergyLedger,
+) -> bool {
+    if !resonant_work.is_finite()
+        || resonant_work < 0.0
+        || !disruption_cost.is_finite()
+        || disruption_cost < 0.0
+        || resonant_work > disruption_cost
+    {
+        return false;
+    }
+    let bond_supplied_work = disruption_cost - resonant_work;
+    if !crate::chemistry::can_chemical_break(reaction_energy, bond_supplied_work) {
         return false;
     }
     let Some((gross, usable, heat)) =
-        chemical_break_energy_yield(bond.bond_energy, disruption_cost, processing_efficiency)
+        chemical_break_energy_yield(bond.bond_energy, bond_supplied_work, processing_efficiency)
     else {
         return false;
     };
@@ -78,6 +111,8 @@ pub(crate) fn settle_chemical_break_energy(
         potential_released: 0.0,
         usable_delta: usable,
         structural_delta: -gross,
+        // Total work is unchanged; resonant store loss plus the lower bond-
+        // supplied share balances this full physical disruption cost.
         work_expended: disruption_cost,
         heat_dissipated: heat,
     };
