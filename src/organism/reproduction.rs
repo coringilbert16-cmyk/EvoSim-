@@ -542,6 +542,18 @@ pub(crate) fn total_usable_energy_held(
     organism_energy + decomposition_energy
 }
 
+pub(crate) fn total_resonant_energy_held(organisms: &[Organism]) -> f64 {
+    organisms
+        .iter()
+        .map(|organism| {
+            organism
+                .resonant_energy
+                .total_energy()
+                .unwrap_or(f64::NAN)
+        })
+        .sum()
+}
+
 pub(crate) fn begin_reproduction(
     parent: &mut Organism,
     rng: &mut ChaCha8Rng,
