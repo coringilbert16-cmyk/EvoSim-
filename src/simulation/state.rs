@@ -457,12 +457,10 @@ impl Organism {
             self.stress += deficit + self.maintenance_debt;
         }
     }
-    pub(crate) fn apply_stress_damage(
-        &mut self,
-        environment: &Environment,
-        ledger: &mut EnergyLedger,
-        rng: &mut ChaCha8Rng,
-    ) -> bool {
+    /// Advance the stress bookkeeping without granting stress an independent
+    /// authority to break physical bonds. Structural damage is resolved only
+    /// through the shared resonance/chemistry mechanism.
+    pub(crate) fn advance_stress_state(&mut self) -> bool {
         if !self.stress.is_finite() || !self.stress_threshold.is_finite() {
             return true;
         }
@@ -470,12 +468,6 @@ impl Organism {
             let threshold = self.stress_threshold.max(MIN_STRESS_THRESHOLD);
             self.stress -= threshold;
             self.stress_threshold = (threshold * STRESS_THRESHOLD_DECAY).max(MIN_STRESS_THRESHOLD);
-            if self.structure.bonds.is_empty() {
-                return true;
-            }
-            if !crate::transformation::resolve_stress_break(self, environment, ledger, rng) {
-                break;
-            }
         }
         false
     }
