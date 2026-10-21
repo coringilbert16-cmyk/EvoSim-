@@ -1322,9 +1322,7 @@ mod tests {
             .map(|bond| bond.bond_energy)
             .sum();
         assert!(capacity.is_finite() && capacity > 0.0);
-        assert!(organism
-            .resonant_energy
-            .deposit(1.0e300, capacity + 1.0));
+        assert!(organism.resonant_energy.deposit(1.0e300, capacity + 1.0));
         let original_bonds = organism.structure.bonds.clone();
         let original_energy = organism.resonant_energy.total_energy().unwrap();
         let mut ledger = crate::state::EnergyLedger::default();
