@@ -425,9 +425,7 @@ mod tests {
 
         // Multiple constituents are still composite geometry when they have no
         // internal bonds; a single cached shape cannot represent their surfaces.
-        simulation.organisms[0]
-            .structure
-            .units[0]
+        simulation.organisms[0].structure.units[0]
             .material
             .internal_bonds
             .clear();
