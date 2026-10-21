@@ -533,8 +533,7 @@ impl Simulation {
                     - original_ledger.total_structural_energy_delta,
                 total_external_energy_input: trial_ledger.total_external_energy_input
                     - original_ledger.total_external_energy_input,
-                total_world_tone_energy_unabsorbed: trial_ledger
-                    .total_world_tone_energy_unabsorbed
+                total_world_tone_energy_unabsorbed: trial_ledger.total_world_tone_energy_unabsorbed
                     - original_ledger.total_world_tone_energy_unabsorbed,
                 total_usable_energy_gained: trial_ledger.total_usable_energy_gained
                     - original_ledger.total_usable_energy_gained,
@@ -644,8 +643,7 @@ fn rollback_prepared_combine(
         ledger.total_potential_energy_released -= delta.total_potential_energy_released;
         ledger.total_structural_energy_delta -= delta.total_structural_energy_delta;
         ledger.total_external_energy_input -= delta.total_external_energy_input;
-        ledger.total_world_tone_energy_unabsorbed -=
-            delta.total_world_tone_energy_unabsorbed;
+        ledger.total_world_tone_energy_unabsorbed -= delta.total_world_tone_energy_unabsorbed;
         ledger.total_usable_energy_gained -= delta.total_usable_energy_gained;
         ledger.total_work_expended -= delta.total_work_expended;
         ledger.total_heat_dissipated -= delta.total_heat_dissipated;
