@@ -2347,3 +2347,6 @@ The intersection-event fallback alone did not yet demonstrate acceptable runtime
 ### Intersection fallback benchmark — 2026-10-21
 
 The first dense-world intersection fallback (pairwise crossing events skipped, but all exact surface-boundary lanes retained) reduced the full Rust suite from **400.88 seconds to 265.76 seconds**. The ordinary-tick world inventory regression completed in about **184 seconds**, down from roughly 313 seconds. This is a 34% reduction in total suite time but remains slower than the earlier 169-second run that omitted non-receiver physical bodies. The 0.25-unit occupied-lane grid refinement is the next performance step; its exact-head run must determine whether all-body receiver coverage can meet the runtime target.
+
+
+The dense lane grid's narrow-surface preservation now ignores zero-width segment projections: they carry no projected exposure width and were otherwise reintroducing a per-object lane boundary for every source-parallel edge. Nonzero surface spans at or below the 0.25-unit step remain explicit, so thin but exposed receivers retain lane boundaries without defeating the coarse grid.
