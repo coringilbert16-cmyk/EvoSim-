@@ -2332,3 +2332,8 @@ The exact intersection-event pass is now bounded to snapshots with at most 256 b
 
 
 The dense-world fallback now has a dedicated 257-body regression: it verifies that downstream ordered hits are retained and that first-hit path widths reconcile with the same solver's direct exposure widths. The test and fallback are pending exact-head CI; do not treat them as verified until that run completes.
+
+
+### Dense-world performance measurement — 2026-10-21
+
+The first all-body receiver build, before the dense-world intersection fallback, completed the full Rust suite in **400.88 seconds**; `world_energy_inventory_reconciles_across_ordinary_ticks` took about **313 seconds**. This is a substantial regression versus the earlier receiver-culling run, so the fallback above is required rather than optional. The current exact-head run is testing the fallback and the 257-body ordered-path regression. Do not claim a performance improvement until that run completes and the test duration is compared.
