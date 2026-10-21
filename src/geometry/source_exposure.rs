@@ -889,6 +889,38 @@ mod visibility_tests {
     }
 
     #[test]
+    fn candidate_filter_excludes_angularly_overlapping_bodies_behind_target() {
+        let source = (-10.0, 0.0);
+        let bodies = [
+            rectangle_body(0, 0.0, 0.0, 1.0, 1.0),
+            rectangle_body(1, -3.0, 0.0, 1.0, 1.0),
+            rectangle_body(2, 5.0, 0.0, 1.0, 1.0),
+        ];
+        let reference_angle = reference_angle_for_bodies(source, &bodies).unwrap();
+        let intervals = body_angular_intervals(source, &bodies, reference_angle).unwrap();
+        let minimum_distances = body_minimum_distances(source, &bodies).unwrap();
+
+        let candidates = candidate_body_indices_for_bounds(
+            source,
+            (-0.5, 0.5, -0.5, 0.5),
+            reference_angle,
+            &intervals,
+            &minimum_distances,
+        )
+        .unwrap();
+
+        assert!(candidates.contains(&0), "the target body remains eligible");
+        assert!(
+            candidates.contains(&1),
+            "a body between the source and target remains a possible blocker"
+        );
+        assert!(
+            !candidates.contains(&2),
+            "a farther body cannot block a nearer target, even when angular bounds overlap"
+        );
+    }
+
+    #[test]
     fn polygonal_exposure_rejects_duplicate_constituent_identity() {
         let body = OrganismBodyGeometry {
             parts: vec![
