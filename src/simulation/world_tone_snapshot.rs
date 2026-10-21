@@ -211,7 +211,7 @@ impl WorldToneOccluderSnapshot {
             let relevant = is_receiver
                 || receiver_intervals
                     .iter()
-                    .any(|receiver| angular_intervals_overlap(interval, *receiver));
+                    .any(|receiver| lane_intervals_overlap(interval, *receiver));
             if relevant {
                 remapped_indices[original_index] = Some(relevant_bodies.len());
                 relevant_bodies.push(body);
