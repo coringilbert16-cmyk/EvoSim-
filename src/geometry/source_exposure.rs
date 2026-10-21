@@ -1458,6 +1458,9 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
                 continue;
             }
             let second = all_arcs[second_index];
+            if target_body_indices.contains(&second.body_index) && second_index < first_index {
+                continue;
+            }
             let mut intersections = Vec::with_capacity(2);
             add_circle_circle_intersections(
                 first.center,
