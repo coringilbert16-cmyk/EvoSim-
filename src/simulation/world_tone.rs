@@ -1,7 +1,4 @@
-#![expect(
-    dead_code,
-    reason = "Staged environmental source model awaiting simulation and energy-ledger integration"
-)]
+#![allow(dead_code)] // Lower-level receiver APIs remain useful for focused energy-flow tests.
 //! Parameterized model for EvoSim's single rotating world-tone source.
 //!
 //! This module models source position, frequency, signal level, and the energy
@@ -903,7 +900,7 @@ mod tests {
         };
         let intervals = crate::source_exposure::visible_circular_arc_intervals(
             (sample.source_x, sample.source_y),
-            &[body.clone()],
+            std::slice::from_ref(&body),
         )
         .expect("circle boundary visibility is analytic");
         let expected: f64 = intervals
