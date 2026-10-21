@@ -1455,6 +1455,39 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn live_world_tone_capture_settles_and_reconciles_world_energy() {
+        let mut simulation = Simulation::new(918, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        let config = crate::world_tone::WorldToneRuntimeConfig {
+            parameters: crate::world_tone::WorldToneParameters {
+                minimum_signal_energy_level: 0.0,
+                maximum_signal_energy_level: 8.0,
+                minimum_energy_intensity_per_tick_per_width: 1.0,
+                maximum_energy_intensity_per_tick_per_width: 10.0,
+                orbital_period_ticks: 2_400,
+                envelope_curve: crate::world_tone::EnvelopeCurve::Cosine,
+            },
+            orbit_radius: 1_000.0,
+        };
+        assert!(simulation.configure_world_tone(Some(config)));
+
+        simulation.step();
+
+        assert!(
+            simulation.energy_ledger.total_external_energy_input > 0.0,
+            "live world tone should credit absorbed environmental energy"
+        );
+        let inventory = simulation.energy_inventory_snapshot();
+        assert!(
+            inventory.is_balanced(1e-9),
+            "world inventory after live sunlight capture: {:?}",
+            inventory.residual()
+        );
+    }
+
+    #[test]
     fn world_tone_configuration_rejects_an_orbit_inside_the_world() {
         let mut simulation = Simulation::new(917, 10.0);
         let config = crate::world_tone::WorldToneRuntimeConfig {
