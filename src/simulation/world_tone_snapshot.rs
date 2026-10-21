@@ -297,7 +297,8 @@ impl WorldToneOccluderSnapshot {
                 .iter()
                 .enumerate()
                 .filter_map(|(unit_index, unit)| {
-                    Some((unit_index, unit.properties(catalog)?))
+                    unit.properties(catalog)
+                        .map(|properties| (unit_index, properties))
                 })
                 .collect();
 
