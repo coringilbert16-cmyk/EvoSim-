@@ -1972,16 +1972,24 @@ mod parallel_arc_projection_tests {
 
     #[test]
     fn parallel_arc_projection_is_independent_of_center_and_start_angle_wrapping() {
-        let mut wrapped = arc(8.0 * std::f64::consts::TAU + 0.0, std::f64::consts::FRAC_PI_2);
+        let mut wrapped = arc(
+            8.0 * std::f64::consts::TAU + 0.0,
+            std::f64::consts::FRAC_PI_2,
+        );
         wrapped.center_x = 1.0e6;
         wrapped.center_y = -1.0e6;
         let expected = 2.0;
-        assert!((parallel_projected_arc_extent(wrapped, (1.0, 0.0)).unwrap() - expected).abs() < 1e-12);
+        assert!(
+            (parallel_projected_arc_extent(wrapped, (1.0, 0.0)).unwrap() - expected).abs() < 1e-12
+        );
     }
 
     #[test]
     fn parallel_arc_projection_rejects_non_unit_direction() {
-        assert_eq!(parallel_projected_arc_extent(arc(0.0, 1.0), (2.0, 0.0)), None);
+        assert_eq!(
+            parallel_projected_arc_extent(arc(0.0, 1.0), (2.0, 0.0)),
+            None
+        );
     }
 }
 
@@ -2507,8 +2515,6 @@ mod exact_arc_projection_tests {
     }
 }
 
-
-
 /// Quantize derived visibility coordinates to the approved 0.01 world-unit
 /// grid. Geometry definitions themselves remain full precision.
 fn round_geometry_to_cent(value: f64) -> Option<f64> {
@@ -2654,11 +2660,7 @@ impl ParallelRayFrame {
         center: (f64, f64),
         radius: f64,
     ) -> Option<(f64, f64)> {
-        if !center.0.is_finite()
-            || !center.1.is_finite()
-            || !radius.is_finite()
-            || radius < 0.0
-        {
+        if !center.0.is_finite() || !center.1.is_finite() || !radius.is_finite() || radius < 0.0 {
             return None;
         }
         let center_lane = self.lane(center)?;
@@ -2681,15 +2683,16 @@ impl ParallelRayFrame {
         d: (f64, f64),
     ) -> Option<Option<f64>> {
         let points = [a, b, c, d];
-        if points.iter().any(|point| !point.0.is_finite() || !point.1.is_finite()) {
+        if points
+            .iter()
+            .any(|point| !point.0.is_finite() || !point.1.is_finite())
+        {
             return None;
         }
         let r = (b.0 - a.0, b.1 - a.1);
         let q = (d.0 - c.0, d.1 - c.1);
         let offset = (c.0 - a.0, c.1 - a.1);
-        let cross = |left: (f64, f64), right: (f64, f64)| {
-            left.0 * right.1 - left.1 * right.0
-        };
+        let cross = |left: (f64, f64), right: (f64, f64)| left.0 * right.1 - left.1 * right.0;
         let denominator = cross(r, q);
         let numerator_t = cross(offset, q);
         let numerator_u = cross(offset, r);
@@ -2849,7 +2852,10 @@ mod parallel_ray_frame_tests {
     #[test]
     fn circle_tangent_lanes_are_quantized_without_mutating_geometry() {
         let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
-        assert_eq!(frame.circle_critical_lanes((4.0, 1.234), 0.456), Some((0.78, 1.69)));
+        assert_eq!(
+            frame.circle_critical_lanes((4.0, 1.234), 0.456),
+            Some((0.78, 1.69))
+        );
     }
 
     #[test]
@@ -2929,10 +2935,7 @@ mod parallel_ray_frame_tests {
             frame.segment_hit_depth(5.0, (2.0, 0.0), (3.0, 0.0)),
             Some(None)
         );
-        assert_eq!(
-            frame.segment_hit_depth(0.0, (2.0, 0.0), (3.0, 0.0)),
-            None
-        );
+        assert_eq!(frame.segment_hit_depth(0.0, (2.0, 0.0), (3.0, 0.0)), None);
     }
 
     #[test]
@@ -2968,7 +2971,10 @@ mod parallel_circle_lane_tests {
     #[test]
     fn circle_lane_hits_are_invariant_in_lane_under_parallel_translation() {
         let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
-        let original = frame.circle_hit_depths(1.0, (5.0, 0.0), 2.0).unwrap().unwrap();
+        let original = frame
+            .circle_hit_depths(1.0, (5.0, 0.0), 2.0)
+            .unwrap()
+            .unwrap();
         let translated = frame
             .circle_hit_depths(1.0, (105.0, 0.0), 2.0)
             .unwrap()
@@ -2981,9 +2987,7 @@ mod parallel_circle_lane_tests {
     fn circle_lane_intersection_rejects_invalid_geometry() {
         let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
         assert!(frame.circle_hit_depths(0.0, (0.0, 0.0), -1.0).is_none());
-        assert!(frame
-            .circle_hit_depths(f64::NAN, (0.0, 0.0), 1.0)
-            .is_none());
+        assert!(frame.circle_hit_depths(f64::NAN, (0.0, 0.0), 1.0).is_none());
     }
 }
 
@@ -2998,7 +3002,10 @@ mod curved_visibility_precision_tests {
         assert_eq!(round_geometry_to_cent(-1.235), Some(-1.24));
 
         let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
-        let hits = frame.circle_hit_depths(0.0, (5.123, 0.0), 2.0).unwrap().unwrap();
+        let hits = frame
+            .circle_hit_depths(0.0, (5.123, 0.0), 2.0)
+            .unwrap()
+            .unwrap();
         assert_eq!(hits, (3.12, 7.12));
     }
 
@@ -3032,35 +3039,31 @@ mod parallel_lane_partition_tests {
 
     #[test]
     fn curved_events_round_before_joining_unrounded_straight_events() {
-        let partition = ParallelLanePartition::from_boundary_events(
-            vec![0.2345, 0.3],
-            vec![0.1236, 0.876],
-        )
-        .unwrap();
+        let partition =
+            ParallelLanePartition::from_boundary_events(vec![0.2345, 0.3], vec![0.1236, 0.876])
+                .unwrap();
         assert_eq!(partition.lanes(), &[0.12, 0.2345, 0.3, 0.88]);
     }
 
     #[test]
     fn quantized_curved_events_merge_when_they_fall_in_the_same_cent() {
-        let partition = ParallelLanePartition::from_boundary_events(
-            vec![0.0, 1.0],
-            vec![0.401, 0.404, 0.406],
-        )
-        .unwrap();
+        let partition =
+            ParallelLanePartition::from_boundary_events(vec![0.0, 1.0], vec![0.401, 0.404, 0.406])
+                .unwrap();
         assert_eq!(partition.lanes(), &[0.0, 0.4, 0.41, 1.0]);
-        assert!(partition.intervals().iter().all(|(_, _, midpoint)| midpoint.is_finite()));
+        assert!(partition
+            .intervals()
+            .iter()
+            .all(|(_, _, midpoint)| midpoint.is_finite()));
     }
 
     #[test]
     fn curved_event_quantization_rejects_non_finite_lanes() {
-        assert!(ParallelLanePartition::from_boundary_events(
-            vec![0.0],
-            vec![f64::INFINITY],
-        )
-        .is_none());
+        assert!(
+            ParallelLanePartition::from_boundary_events(vec![0.0], vec![f64::INFINITY],).is_none()
+        );
     }
 }
-
 
 /// Classify straight polygonal boundaries against one shared parallel-ray field.
 ///
@@ -3133,7 +3136,10 @@ pub(crate) fn visible_parallel_polygonal_intervals_for_targets(
                 .into_iter()
                 .map(|(x, y)| (part.x + x * cos - y * sin, part.y + x * sin + y * cos))
                 .collect();
-            if vertices.iter().any(|p| !p.0.is_finite() || !p.1.is_finite()) {
+            if vertices
+                .iter()
+                .any(|p| !p.0.is_finite() || !p.1.is_finite())
+            {
                 return None;
             }
 
@@ -3144,10 +3150,14 @@ pub(crate) fn visible_parallel_polygonal_intervals_for_targets(
                 if vertices.len() < 3 {
                     return None;
                 }
-                let area_twice: f64 = vertices.iter().enumerate().map(|(i, &(x, y))| {
-                    let (nx, ny) = vertices[(i + 1) % vertices.len()];
-                    x * ny - nx * y
-                }).sum();
+                let area_twice: f64 = vertices
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &(x, y))| {
+                        let (nx, ny) = vertices[(i + 1) % vertices.len()];
+                        x * ny - nx * y
+                    })
+                    .sum();
                 if !area_twice.is_finite() || area_twice.abs() <= 1e-12 {
                     return None;
                 }
@@ -3234,9 +3244,13 @@ pub(crate) fn visible_parallel_polygonal_intervals_for_targets(
                 return None;
             }
             match nearest {
-                None => { nearest = Some((edge_index, depth)); tied = false; }
+                None => {
+                    nearest = Some((edge_index, depth));
+                    tied = false;
+                }
                 Some((_, best)) if depth > best + 1e-9 => {
-                    nearest = Some((edge_index, depth)); tied = false;
+                    nearest = Some((edge_index, depth));
+                    tied = false;
                 }
                 Some((_, best)) if (depth - best).abs() <= 1e-9 => tied = true,
                 _ => {}
@@ -3245,24 +3259,34 @@ pub(crate) fn visible_parallel_polygonal_intervals_for_targets(
         if tied {
             continue;
         }
-        let Some((edge_index, _)) = nearest else { continue };
+        let Some((edge_index, _)) = nearest else {
+            continue;
+        };
         let edge = edges[edge_index];
-        if !target_mask[edge.body_index] { continue; }
-        let Some(normal) = edge.outward_normal else { continue };
+        if !target_mask[edge.body_index] {
+            continue;
+        }
+        let Some(normal) = edge.outward_normal else {
+            continue;
+        };
         if normal.0 * frame.toward_source.0 + normal.1 * frame.toward_source.1 <= 1e-10 {
             continue;
         }
         let delta = edge.lane_end - edge.lane_start;
-        if delta.abs() <= 1e-12 { continue; }
+        if delta.abs() <= 1e-12 {
+            continue;
+        }
         let t0 = (lo - edge.lane_start) / delta;
         let t1 = (hi - edge.lane_start) / delta;
         if t0 < -1e-9 || t0 > 1.0 + 1e-9 || t1 < -1e-9 || t1 > 1.0 + 1e-9 {
             return None;
         }
-        let point_at = |t: f64| (
-            edge.start.0 + (edge.end.0 - edge.start.0) * t,
-            edge.start.1 + (edge.end.1 - edge.start.1) * t,
-        );
+        let point_at = |t: f64| {
+            (
+                edge.start.0 + (edge.end.0 - edge.start.0) * t,
+                edge.start.1 + (edge.end.1 - edge.start.1) * t,
+            )
+        };
         visible.push(ExposedBoundaryInterval {
             body_index: edge.body_index,
             unit_index: edge.unit_index,
@@ -3299,9 +3323,8 @@ mod parallel_lane_intersection_regression_tests {
             None
         );
     }
-
 }
-    
+
 #[cfg(test)]
 mod parallel_polygonal_visibility_tests {
     use super::visible_parallel_polygonal_intervals_for_targets;
@@ -3330,20 +3353,35 @@ mod parallel_polygonal_visibility_tests {
         let bodies = [rectangle(0.0, 0.0, 2.0, 2.0), rectangle(5.0, 0.0, 2.0, 2.0)];
         let visible = visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &bodies, &[0]);
         assert!(visible.is_some());
-        assert!(visible.unwrap().iter().all(|interval| interval.body_index == 0));
+        assert!(visible
+            .unwrap()
+            .iter()
+            .all(|interval| interval.body_index == 0));
     }
 
     #[test]
     fn parallel_classifier_splits_a_partially_shadowed_front_edge() {
         let bodies = [rectangle(4.0, 0.0, 2.0, 2.0), rectangle(8.0, 0.0, 2.0, 1.0)];
-        let visible = visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &bodies, &[0]).unwrap();
-        let front: Vec<_> = visible.iter()
-            .filter(|interval| interval.body_index == 0 && (interval.start.0 - 5.0).abs() < 1e-9 && (interval.end.0 - 5.0).abs() < 1e-9)
+        let visible =
+            visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &bodies, &[0]).unwrap();
+        let front: Vec<_> = visible
+            .iter()
+            .filter(|interval| {
+                interval.body_index == 0
+                    && (interval.start.0 - 5.0).abs() < 1e-9
+                    && (interval.end.0 - 5.0).abs() < 1e-9
+            })
             .collect();
         assert_eq!(front.len(), 2);
-        let mut ranges: Vec<_> = front.iter().map(|interval| {
-            (interval.start.1.min(interval.end.1), interval.start.1.max(interval.end.1))
-        }).collect();
+        let mut ranges: Vec<_> = front
+            .iter()
+            .map(|interval| {
+                (
+                    interval.start.1.min(interval.end.1),
+                    interval.start.1.max(interval.end.1),
+                )
+            })
+            .collect();
         ranges.sort_by(|a, b| a.0.total_cmp(&b.0));
         assert!((ranges[0].0 + 1.0).abs() < 1e-9);
         assert!((ranges[0].1 + 0.5).abs() < 1e-9);
@@ -3354,18 +3392,30 @@ mod parallel_polygonal_visibility_tests {
     #[test]
     fn parallel_classifier_does_not_credit_a_shadowing_body() {
         let bodies = [rectangle(4.0, 0.0, 2.0, 2.0), rectangle(8.0, 0.0, 2.0, 1.0)];
-        let visible = visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &bodies, &[0]).unwrap();
+        let visible =
+            visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &bodies, &[0]).unwrap();
         assert!(visible.iter().all(|interval| interval.body_index == 0));
     }
 
     #[test]
     fn parallel_classifier_is_translation_invariant() {
         let original = [rectangle(4.0, 0.0, 2.0, 2.0), rectangle(8.0, 0.0, 2.0, 1.0)];
-        let shifted = [rectangle(104.0, 0.0, 2.0, 2.0), rectangle(108.0, 0.0, 2.0, 1.0)];
-        let a = visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &original, &[0]).unwrap();
-        let b = visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &shifted, &[0]).unwrap();
-        let mut lengths_a: Vec<_> = a.iter().map(|v| (v.end.0-v.start.0).hypot(v.end.1-v.start.1)).collect();
-        let mut lengths_b: Vec<_> = b.iter().map(|v| (v.end.0-v.start.0).hypot(v.end.1-v.start.1)).collect();
+        let shifted = [
+            rectangle(104.0, 0.0, 2.0, 2.0),
+            rectangle(108.0, 0.0, 2.0, 1.0),
+        ];
+        let a =
+            visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &original, &[0]).unwrap();
+        let b =
+            visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &shifted, &[0]).unwrap();
+        let mut lengths_a: Vec<_> = a
+            .iter()
+            .map(|v| (v.end.0 - v.start.0).hypot(v.end.1 - v.start.1))
+            .collect();
+        let mut lengths_b: Vec<_> = b
+            .iter()
+            .map(|v| (v.end.0 - v.start.0).hypot(v.end.1 - v.start.1))
+            .collect();
         lengths_a.sort_by(f64::total_cmp);
         lengths_b.sort_by(f64::total_cmp);
         assert_eq!(lengths_a.len(), lengths_b.len());
@@ -3398,9 +3448,16 @@ mod parallel_polygonal_visibility_tests {
             arc_boundary: None,
             multi_contact_boundary: None,
         };
-        let visible = visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &[receiver, fluid], &[0]).unwrap();
-        let receiver_front: Vec<_> = visible.iter()
-            .filter(|interval| interval.body_index == 0 && (interval.start.0 - 5.0).abs() < 1e-9 && (interval.end.0 - 5.0).abs() < 1e-9)
+        let visible =
+            visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &[receiver, fluid], &[0])
+                .unwrap();
+        let receiver_front: Vec<_> = visible
+            .iter()
+            .filter(|interval| {
+                interval.body_index == 0
+                    && (interval.start.0 - 5.0).abs() < 1e-9
+                    && (interval.end.0 - 5.0).abs() < 1e-9
+            })
             .collect();
         assert_eq!(receiver_front.len(), 2);
     }
@@ -3409,6 +3466,8 @@ mod parallel_polygonal_visibility_tests {
     fn parallel_classifier_fails_closed_when_curved_geometry_is_present() {
         let mut circle = rectangle(4.0, 0.0, 2.0, 2.0);
         circle.parts[0].form = Form::Circle { radius: 1.0 };
-        assert!(visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &[circle], &[0]).is_none());
+        assert!(
+            visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &[circle], &[0]).is_none()
+        );
     }
 }
