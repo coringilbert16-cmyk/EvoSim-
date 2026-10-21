@@ -2337,3 +2337,8 @@ The dense-world fallback now has a dedicated 257-body regression: it verifies th
 ### Dense-world performance measurement — 2026-10-21
 
 The first all-body receiver build, before the dense-world intersection fallback, completed the full Rust suite in **400.88 seconds**; `world_energy_inventory_reconciles_across_ordinary_ticks` took about **313 seconds**. This is a substantial regression versus the earlier receiver-culling run, so the fallback above is required rather than optional. The current exact-head run is testing the fallback and the 257-body ordered-path regression. Do not claim a performance improvement until that run completes and the test duration is compared.
+
+
+### Dense-world lane sampling refinement — 2026-10-21
+
+The intersection-event fallback alone did not yet demonstrate acceptable runtime: the first all-body run took 400.88 seconds overall, with the ordinary-tick inventory test at roughly 313 seconds. The large-world path now also partitions only occupied projected-lane spans on a 0.25-unit grid, while preserving exact bounds for surfaces narrower than the grid step. Energy accounting remains balanced per represented lane; geometric widths and crossing order are approximate at this scale. This stronger approximation is being added specifically to make all-receiver accounting viable with the seeded 5,000-particle cloud. It must pass the dense-scene regression and show a measured runtime reduction before acceptance.
