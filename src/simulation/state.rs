@@ -191,6 +191,9 @@ pub(crate) struct Organism {
     /// Spectrum currently present at the organism's physically realized genome cavity.
     #[serde(default)]
     pub(crate) harmonic_spectrum: crate::harmonics::ToneSpectrum,
+    /// Energy retained across ticks, distinct from the currently received signal.
+    #[serde(default)]
+    pub(crate) resonant_energy: crate::harmonics::ResonantEnergyReservoir,
     /// Associative memory learned from physically received resonance and its consequences.
     #[serde(default)]
     pub(crate) experience_memory: crate::memory::ExperienceMemory,
