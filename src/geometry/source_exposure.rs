@@ -1891,6 +1891,66 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
     Some(output)
 }
 
+/// Exact projected extent of a circular boundary interval under parallel rays.
+///
+/// `toward_source` is the single unit direction shared by every point in the
+/// frame. Integrating the positive outward-normal projection gives the
+/// interval's exposed width without point-source direction variation or
+/// numerical quadrature.
+pub(crate) fn parallel_projected_arc_extent(
+    arc: crate::capillary_geometry::CircularArcBoundary,
+    toward_source: (f64, f64),
+) -> Option<f64> {
+    if !arc.center_x.is_finite()
+        || !arc.center_y.is_finite()
+        || !arc.radius.is_finite()
+        || arc.radius <= 0.0
+        || !arc.start_angle_radians.is_finite()
+        || !arc.sweep_radians.is_finite()
+        || arc.sweep_radians <= 0.0
+        || arc.sweep_radians > std::f64::consts::TAU
+        || !toward_source.0.is_finite()
+        || !toward_source.1.is_finite()
+    {
+        return None;
+    }
+    let direction_length = toward_source.0.hypot(toward_source.1);
+    if (direction_length - 1.0).abs() > 1e-9 {
+        return None;
+    }
+
+    let direction_angle = toward_source.1.atan2(toward_source.0);
+    let start = arc.start_angle_radians;
+    let end = start + arc.sweep_radians;
+    let first_zero = ((start - direction_angle - std::f64::consts::FRAC_PI_2)
+        / std::f64::consts::PI)
+        .floor() as i64;
+    let last_zero = ((end - direction_angle - std::f64::consts::FRAC_PI_2)
+        / std::f64::consts::PI)
+        .ceil() as i64;
+    let mut cuts = vec![start, end];
+    for index in first_zero..=last_zero {
+        let angle = direction_angle
+            + std::f64::consts::FRAC_PI_2
+            + index as f64 * std::f64::consts::PI;
+        if angle > start + 1e-12 && angle < end - 1e-12 {
+            cuts.push(angle);
+        }
+    }
+    cuts.sort_by(f64::total_cmp);
+
+    let mut extent = 0.0;
+    for pair in cuts.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        if ((a + b) * 0.5 - direction_angle).cos() <= 0.0 {
+            continue;
+        }
+        extent += arc.radius
+            * ((b - direction_angle).sin() - (a - direction_angle).sin());
+    }
+    (extent.is_finite() && extent >= -1e-10).then_some(extent.max(0.0))
+}
+
 /// Projected extent for a visible circular interval under a finite point source.
 /// The pointwise source direction varies along the arc, so this uses adaptive
 /// Simpson integration rather than substituting a single direction for the arc.
