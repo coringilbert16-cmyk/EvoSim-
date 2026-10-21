@@ -38,6 +38,24 @@ pub(crate) struct WorldToneRuntimeConfig {
 }
 
 impl WorldToneRuntimeConfig {
+    /// Default 440 Hz environmental source for a world with the supplied bounds.
+    /// Its orbit radius is derived from the world dimensions so the source remains
+    /// outside the full rectangle rather than relying on a fixed scene size.
+    pub(crate) fn default_for_world(world_width: f64, world_height: f64) -> Option<Self> {
+        let config = Self {
+            parameters: WorldToneParameters {
+                minimum_signal_energy_level: 0.0,
+                maximum_signal_energy_level: 8.0,
+                minimum_energy_intensity_per_tick_per_width: 1.0,
+                maximum_energy_intensity_per_tick_per_width: 10.0,
+                orbital_period_ticks: 2_400,
+                envelope_curve: EnvelopeCurve::Cosine,
+            },
+            orbit_radius: world_width.max(world_height),
+        };
+        config.sample(0, world_width, world_height).map(|_| config)
+    }
+
     pub(crate) fn is_valid(self) -> bool {
         self.parameters.is_valid() && self.orbit_radius.is_finite() && self.orbit_radius >= 0.0
     }
