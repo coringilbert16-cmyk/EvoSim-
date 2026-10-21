@@ -2885,11 +2885,11 @@ mod parallel_lane_partition_tests {
     #[test]
     fn curved_events_round_before_joining_unrounded_straight_events() {
         let partition = ParallelLanePartition::from_boundary_events(
-            vec![0.1234, 0.2345],
+            vec![0.2345, 0.3],
             vec![0.1236, 0.876],
         )
         .unwrap();
-        assert_eq!(partition.lanes(), &[0.12, 0.23, 0.88]);
+        assert_eq!(partition.lanes(), &[0.12, 0.2345, 0.3, 0.88]);
     }
 
     #[test]
