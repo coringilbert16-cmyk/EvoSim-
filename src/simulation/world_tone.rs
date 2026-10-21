@@ -444,8 +444,7 @@ impl WorldToneCaptureFrame {
         };
         // Validate the diagnostic accumulator before mutating the holder or
         // ledger, so an overflow cannot leave a partially settled interaction.
-        let next_unabsorbed =
-            ledger.total_world_tone_energy_unabsorbed + response.unabsorbed;
+        let next_unabsorbed = ledger.total_world_tone_energy_unabsorbed + response.unabsorbed;
         if !next_unabsorbed.is_finite() || next_unabsorbed < 0.0 {
             return None;
         }
