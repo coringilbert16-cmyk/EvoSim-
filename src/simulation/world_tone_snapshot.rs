@@ -187,11 +187,15 @@ impl WorldToneOccluderSnapshot {
             .iter()
             .map(|index| angular_intervals.get(*index).copied())
             .collect::<Option<Vec<_>>>()?;
+        let mut receiver_mask = vec![false; bodies.len()];
+        for &index in &receiver_original_indices {
+            *receiver_mask.get_mut(index)? = true;
+        }
 
         let mut remapped_indices = vec![None; bodies.len()];
         let mut relevant_bodies = Vec::new();
         for (original_index, body) in bodies.into_iter().enumerate() {
-            let is_receiver = receiver_original_indices.contains(&original_index);
+            let is_receiver = receiver_mask[original_index];
             let interval = angular_intervals[original_index];
             let relevant = is_receiver
                 || receiver_intervals
