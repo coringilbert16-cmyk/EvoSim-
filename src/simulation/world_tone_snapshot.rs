@@ -151,7 +151,10 @@ impl WorldToneOccluderSnapshot {
             if decomposing.structure.units.is_empty() {
                 continue;
             }
-            body_properties.push(structure_material_properties(&decomposing.structure, catalog)?);
+            body_properties.push(structure_material_properties(
+                &decomposing.structure,
+                catalog,
+            )?);
             bodies.push(OrganismBodyGeometry::from_all_realized_units(
                 &decomposing.structure,
             )?);
