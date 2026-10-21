@@ -422,10 +422,11 @@ impl WorldToneCaptureFrame {
             heat_dissipated,
         })
     }
-    /// Settle one organism constituent using the genome's existing processing
-    /// efficiency for the usable-energy/heat split. Material resonance still
-    /// determines how much incident energy is absorbed; the unabsorbed remainder
-    /// is reserved for later frequency-shifted propagation rather than credited twice.
+    /// Settle one organism constituent's absorbed source energy into the
+    /// frequency-resolved resonance reservoir. Exposed geometry and material
+    /// response determine the amount received; genome processing efficiency does
+    /// not choose an energy allocation. If the bounded spectrum cannot represent
+    /// the deposit, the energy remains in the ordinary usable holder.
     pub(crate) fn settle_organism_surface_response(
         &mut self,
         receiver_body_index: usize,
@@ -435,23 +436,20 @@ impl WorldToneCaptureFrame {
         organism: &mut crate::state::Organism,
         ledger: &mut crate::state::EnergyLedger,
     ) -> Option<WorldToneCaptureResult> {
-        let usable_fraction = organism.genome.processing_efficiency();
         let usable_before = organism.usable_energy;
         let result = self.settle_surface_response(
             receiver_body_index,
             unit_index,
             properties,
             baselines,
-            usable_fraction,
+            1.0,
             &mut organism.usable_energy,
             ledger,
         )?;
 
-        // Source energy is first settled through the existing ledger. Move the
-        // newly credited portion into the organism's retained resonant store;
-        // both stores are counted separately in the world inventory. If the
-        // bounded spectrum cannot represent the deposit, leave it in the
-        // ordinary usable holder rather than losing or duplicating energy.
+        // The ledger first records absorbed energy in the usable holder. Move
+        // that exact delta into resonance only if the reservoir accepts it,
+        // keeping the two inventory categories mutually exclusive.
         let credited = organism.usable_energy - usable_before;
         if credited.is_finite() && credited > f64::EPSILON {
             let mut reservoir = organism.resonant_energy.clone();
@@ -1401,7 +1399,7 @@ mod tests {
     }
 
     #[test]
-    fn organism_surface_settlement_uses_existing_processing_efficiency() {
+    fn organism_surface_settlement_routes_absorbed_energy_to_resonance() {
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
         use crate::resources::{Form, ResourceBaselines, ResourceProperties};
         let receiver = OrganismBodyGeometry {
@@ -1443,7 +1441,6 @@ mod tests {
         };
         let mut simulation = crate::state::Simulation::new(74, 1.0);
         let organism = &mut simulation.organisms[0];
-        let efficiency = organism.genome.processing_efficiency();
         let initial_usable = organism.usable_energy;
         let initial_resonant = organism.resonant_energy.total_energy().unwrap();
         let mut ledger = crate::state::EnergyLedger::default();
@@ -1452,10 +1449,10 @@ mod tests {
             .settle_organism_surface_response(0, 0, properties, baselines, organism, &mut ledger)
             .expect("valid organism surface response should settle");
 
-        assert!((result.usable_energy - result.absorbed_energy * efficiency).abs() < 1e-7);
-        assert!(
-            (result.heat_dissipated - result.absorbed_energy * (1.0 - efficiency)).abs() < 1e-7
-        );
+        // Solar allocation is determined by geometry/material response, not a
+        // genome-selected processing fraction: absorbed energy enters resonance.
+        assert!((result.usable_energy - result.absorbed_energy).abs() < 1e-7);
+        assert!(result.heat_dissipated.abs() < 1e-7);
         // Captured usable energy is transferred to the persistent resonance
         // store, not left duplicated in the organism's usable-energy holder.
         assert!((organism.usable_energy - initial_usable).abs() < 1e-7);
