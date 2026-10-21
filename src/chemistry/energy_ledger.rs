@@ -229,9 +229,9 @@ impl EnergyInventorySnapshot {
             + structural_delta
             + self.work_expended
             + self.heat_dissipated
+            + self.world_tone_energy_escaped
             - self.external_energy_input
-            - self.other_energy_released
-            - self.world_tone_energy_escaped;
+            - self.other_energy_released;
         residual.is_finite().then_some(residual)
     }
 
