@@ -3529,7 +3529,6 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
     });
     for (position, &left_index) in segment_order.iter().enumerate() {
         let a = segments[left_index];
-        let a_min = a.lane_start.min(a.lane_end);
         let a_max = a.lane_start.max(a.lane_end);
         for &right_index in &segment_order[position + 1..] {
             let b = segments[right_index];
@@ -3572,7 +3571,6 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
         });
         for &segment_index in &segment_order[..upper] {
             let segment = segments[segment_index];
-            let segment_min = segment.lane_start.min(segment.lane_end);
             let segment_max = segment.lane_start.max(segment.lane_end);
             if segment_max < arc_min - 1e-9
                 || (!target_mask[arc.body_index] && !target_mask[segment.body_index])
