@@ -3595,7 +3595,7 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
                 }
             }
         }
-    
+
         for (arc_index, arc) in arcs.iter().enumerate() {
             let (arc_min, arc_max) = arc_lane_ranges[arc_index];
             let upper = segment_order.partition_point(|segment_index| {
@@ -3636,7 +3636,7 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
                 }
             }
         }
-    
+
         let mut arc_order: Vec<usize> = (0..arcs.len()).collect();
         arc_order.sort_by(|left, right| {
             arc_lane_ranges[*left]
@@ -3678,7 +3678,7 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
                 }
             }
         }
-    
+
     }
 
     let partition = ParallelLanePartition::from_boundary_events(straight_lanes, curved_lanes)?;
