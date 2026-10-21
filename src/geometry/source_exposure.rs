@@ -1714,8 +1714,7 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
             )?;
         }
     }
-    for first_index in 0..all_arcs.len() {
-        let first = all_arcs[first_index];
+    for (first_index, first) in all_arcs.iter().copied().enumerate() {
         if !target_body_mask[first.body_index] {
             continue;
         }
