@@ -323,16 +323,70 @@ fn body_angular_intervals(
         .collect()
 }
 
+fn body_minimum_distances(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+) -> Option<Vec<f64>> {
+    bodies
+        .iter()
+        .map(|body| {
+            let dx = if source.0 < body.min_x {
+                body.min_x - source.0
+            } else if source.0 > body.max_x {
+                source.0 - body.max_x
+            } else {
+                0.0
+            };
+            let dy = if source.1 < body.min_y {
+                body.min_y - source.1
+            } else if source.1 > body.max_y {
+                source.1 - body.max_y
+            } else {
+                0.0
+            };
+            let distance = dx.hypot(dy);
+            distance.is_finite().then_some(distance)
+        })
+        .collect()
+}
+
 fn candidate_body_indices_for_bounds(
     source: (f64, f64),
     target_bounds: (f64, f64, f64, f64),
     reference_angle: f64,
     body_intervals: &[(f64, f64)],
+    body_min_distances: &[f64],
 ) -> Option<Vec<usize>> {
+    if body_intervals.len() != body_min_distances.len() {
+        return None;
+    }
     let target_interval = angle_interval_for_bounds(source, target_bounds, reference_angle)?;
+    // The farthest corner of the target AABB is an upper bound on every point
+    // along the target edge/arc. A body whose nearest AABB point is farther
+    // from the source cannot block that target, even if their angles overlap.
+    let target_max_distance = [
+        (target_bounds.0, target_bounds.2),
+        (target_bounds.0, target_bounds.3),
+        (target_bounds.1, target_bounds.2),
+        (target_bounds.1, target_bounds.3),
+    ]
+    .into_iter()
+    .map(|(x, y)| (x - source.0).hypot(y - source.1))
+    .fold(0.0_f64, f64::max);
+    if !target_max_distance.is_finite() {
+        return None;
+    }
     let mut candidates = Vec::new();
-    for (body_index, interval) in body_intervals.iter().copied().enumerate() {
-        if interval.0 <= target_interval.1 + 1e-10 && target_interval.0 <= interval.1 + 1e-10 {
+    for (body_index, (interval, minimum_distance)) in body_intervals
+        .iter()
+        .copied()
+        .zip(body_min_distances.iter().copied())
+        .enumerate()
+    {
+        let angular_overlap =
+            interval.0 <= target_interval.1 + 1e-10 && target_interval.0 <= interval.1 + 1e-10;
+        let could_be_in_front = minimum_distance <= target_max_distance + 1e-9;
+        if angular_overlap && could_be_in_front {
             candidates.push(body_index);
         }
     }
@@ -379,6 +433,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
     }
     let reference_angle = reference_angle_for_bodies(source, bodies)?;
     let body_intervals = body_angular_intervals(source, bodies, reference_angle)?;
+    let body_min_distances = body_minimum_distances(source, bodies)?;
 
     let mut straight_targets = Vec::new();
     let mut straight_edges = Vec::new();
@@ -687,6 +742,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                 (a.0.min(b.0), a.0.max(b.0), a.1.min(b.1), a.1.max(b.1)),
                 reference_angle,
                 &body_intervals,
+                &body_min_distances,
             )?;
             let mut cuts = vec![0.0_f64, 1.0_f64];
             for &candidate_body in &candidate_body_indices {
@@ -1428,6 +1484,7 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
     }
     let reference_angle = reference_angle_for_bodies(source, bodies)?;
     let body_intervals = body_angular_intervals(source, bodies, reference_angle)?;
+    let body_min_distances = body_minimum_distances(source, bodies)?;
 
     let mut all_arcs = Vec::new();
     let mut critical_points = Vec::new();
@@ -1688,6 +1745,7 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
             ),
             reference_angle,
             &body_intervals,
+            &body_min_distances,
         )?;
         let mut cuts = vec![target.start, target.start + target.sweep];
         if target.sweep >= std::f64::consts::TAU - 1e-10 {
