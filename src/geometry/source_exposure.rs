@@ -481,7 +481,8 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                     let half = *length * 0.5;
                     let start = (part.x - half * cos, part.y - half * sin);
                     let end = (part.x + half * cos, part.y + half * sin);
-                    critical_points.extend([(body_index, start.0, start.1), (body_index, end.0, end.1)]);
+                    critical_points
+                        .extend([(body_index, start.0, start.1), (body_index, end.0, end.1)]);
                     straight_edges.push((body_index, part.unit_index, start, end));
                 }
                 Form::Circle { radius } => {
@@ -508,7 +509,8 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                         if world.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) {
                             return None;
                         }
-                        critical_points.extend(world.iter().copied().map(|(x, y)| (body_index, x, y)));
+                        critical_points
+                            .extend(world.iter().copied().map(|(x, y)| (body_index, x, y)));
                         for index in 0..world.len() {
                             straight_edges.push((
                                 body_index,
@@ -520,7 +522,10 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                     }
                     if let Some(arc) = arc_boundary {
                         let world = arc.transformed(part.x, part.y, part.rotation_radians)?;
-                        critical_points.extend([world.start_point(), world.end_point()].map(|(x, y)| (body_index, x, y)));
+                        critical_points.extend(
+                            [world.start_point(), world.end_point()]
+                                .map(|(x, y)| (body_index, x, y)),
+                        );
                         add_circle_tangent_points_tagged(
                             (world.center_x, world.center_y),
                             world.radius,
@@ -551,7 +556,10 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                                     };
                                     let start = transform(*start_x, *start_y);
                                     let end = transform(*end_x, *end_y);
-                                    critical_points.extend([(body_index, start.0, start.1), (body_index, end.0, end.1)]);
+                                    critical_points.extend([
+                                        (body_index, start.0, start.1),
+                                        (body_index, end.0, end.1),
+                                    ]);
                                     straight_edges.push((body_index, part.unit_index, start, end));
                                 }
                                 FluidBoundaryPiece::FreeArc(arc) => {
