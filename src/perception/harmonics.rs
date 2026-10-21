@@ -133,7 +133,50 @@ pub(crate) fn wave_energy_from_amplitude(amplitude: f64) -> f64 {
     if !amplitude.is_finite() || amplitude <= 0.0 {
         return 0.0;
     }
-    amplitude * amplitude
+    let energy = amplitude * amplitude;
+    if energy.is_finite() {
+        energy
+    } else {
+        0.0
+    }
+}
+
+/// Bound a response spectrum to its incident energy budget.
+///
+/// Resonance gain is a steady-state displacement ratio, not a license to create
+/// outgoing wave energy. When that gain or nonlinear harmonics exceed the
+/// available budget, scale the whole spectrum uniformly so its summed
+/// amplitude-squared energy does not exceed the incident budget. Invalid or
+/// unrepresentable spectra fail closed.
+fn bound_spectrum_energy(spectrum: &mut ToneSpectrum, energy_budget: f64) {
+    if !energy_budget.is_finite() || energy_budget <= 0.0 {
+        spectrum.components.clear();
+        return;
+    }
+
+    let mut total_energy = 0.0;
+    for component in &spectrum.components {
+        if !component.amplitude.is_finite() || component.amplitude < 0.0 {
+            spectrum.components.clear();
+            return;
+        }
+        total_energy += component.amplitude * component.amplitude;
+        if !total_energy.is_finite() {
+            spectrum.components.clear();
+            return;
+        }
+    }
+
+    if total_energy > energy_budget && total_energy > 0.0 {
+        let scale = (energy_budget / total_energy).sqrt();
+        if !scale.is_finite() {
+            spectrum.components.clear();
+            return;
+        }
+        for component in &mut spectrum.components {
+            component.amplitude *= scale;
+        }
+    }
 }
 
 /// Convert normalized wave energy to its corresponding non-negative amplitude.
@@ -248,6 +291,7 @@ fn material_response_to_drive(
         }
     }
     spectrum.retain_strongest();
+    bound_spectrum_energy(&mut spectrum, wave_energy_from_amplitude(signal_level));
     spectrum
 }
 
@@ -984,6 +1028,41 @@ mod tests {
         assert!((environmental_mass_scale(1.0, 1.0) - 0.5).abs() < 1e-12);
         assert!(environmental_mass_scale(10.0, 1.0) > environmental_mass_scale(1.0, 1.0));
         assert!(environmental_mass_scale(0.1, 1.0) < environmental_mass_scale(1.0, 1.0));
+    }
+
+    #[test]
+    fn resonant_response_and_harmonics_cannot_exceed_incident_energy() {
+        let incident_amplitude = 0.75;
+        let spectrum = material_response_to_drive(
+            properties(1.0, 4.0, 1.0),
+            baselines(),
+            440.0,
+            incident_amplitude,
+            0.0,
+        );
+        let spectral_energy: f64 = spectrum
+            .components
+            .iter()
+            .map(|component| wave_energy_from_amplitude(component.amplitude))
+            .sum();
+        let incident_energy = wave_energy_from_amplitude(incident_amplitude);
+        assert!(spectral_energy <= incident_energy + 1e-12);
+        assert!(spectrum.components.iter().any(|component| {
+            (component.frequency_hz - 2.0 * 440.0).abs() < f64::EPSILON
+        }));
+    }
+
+    #[test]
+    fn unrepresentable_spectral_energy_fails_closed() {
+        let mut spectrum = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_hz: 440.0,
+                amplitude: f64::MAX,
+                phase_radians: 0.0,
+            }],
+        };
+        bound_spectrum_energy(&mut spectrum, 1.0);
+        assert!(spectrum.components.is_empty());
     }
 
     #[test]
