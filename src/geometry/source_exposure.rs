@@ -3569,7 +3569,9 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
     for (arc_index, arc) in arcs.iter().enumerate() {
         let (arc_min, arc_max) = arc_lane_ranges[arc_index];
         let upper = segment_order.partition_point(|segment_index| {
-            segments[*segment_index].lane_start.min(segments[*segment_index].lane_end)
+            segments[*segment_index]
+                .lane_start
+                .min(segments[*segment_index].lane_end)
                 <= arc_max + 1e-9
         });
         for &segment_index in &segment_order[..upper] {
@@ -3599,7 +3601,11 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
     }
 
     let mut arc_order: Vec<usize> = (0..arcs.len()).collect();
-    arc_order.sort_by(|left, right| arc_lane_ranges[*left].0.total_cmp(&arc_lane_ranges[*right].0));
+    arc_order.sort_by(|left, right| {
+        arc_lane_ranges[*left]
+            .0
+            .total_cmp(&arc_lane_ranges[*right].0)
+    });
     for (position, &first_index) in arc_order.iter().enumerate() {
         let first = arcs[first_index];
         let first_range = arc_lane_ranges[first_index];
@@ -3735,7 +3741,6 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
     }
     Some(widths)
 }
-
 
 #[cfg(test)]
 mod parallel_mixed_boundary_visibility_tests {
