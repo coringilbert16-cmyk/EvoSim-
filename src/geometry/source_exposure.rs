@@ -3554,6 +3554,16 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
             if b_min > a_max + 1e-9 {
                 break;
             }
+            // Projected-lane overlap is necessary but not sufficient for an
+            // intersection. Disjoint depth ranges prove these finite segments
+            // cannot cross, avoiding an exact predicate for separated bodies.
+            let a_depth_min = a.depth_start.min(a.depth_end);
+            let a_depth_max = a.depth_start.max(a.depth_end);
+            let b_depth_min = b.depth_start.min(b.depth_end);
+            let b_depth_max = b.depth_start.max(b.depth_end);
+            if a_depth_max < b_depth_min - 1e-9 || b_depth_max < a_depth_min - 1e-9 {
+                continue;
+            }
             if !target_mask[a.body_index] && !target_mask[b.body_index] {
                 continue;
             }
@@ -3592,6 +3602,14 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
             let segment_max = segment.lane_start.max(segment.lane_end);
             if segment_max < arc_min - 1e-9
                 || (!target_mask[arc.body_index] && !target_mask[segment.body_index])
+            {
+                continue;
+            }
+            let segment_depth_min = segment.depth_start.min(segment.depth_end);
+            let segment_depth_max = segment.depth_start.max(segment.depth_end);
+            let arc_depth = frame.depth(arc.center)?;
+            if segment_depth_max < arc_depth - arc.radius - 1e-9
+                || arc_depth + arc.radius < segment_depth_min - 1e-9
             {
                 continue;
             }
