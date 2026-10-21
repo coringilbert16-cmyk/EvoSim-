@@ -3449,10 +3449,10 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
                 };
 
             let vertices_for_winding = if closed_surface {
-                let Some(vertices) = match &part.form {
+                let Some(vertices) = (match &part.form {
                     Form::Fluid { boundary: Some(vertices), .. } => Some(vertices.clone()),
                     _ => part.form.polygon_vertices(),
-                } else {
+                }) else {
                     return None;
                 };
                 let vertices: Vec<_> = vertices.into_iter().map(world).collect();
