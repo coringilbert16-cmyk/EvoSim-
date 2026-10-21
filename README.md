@@ -2324,3 +2324,8 @@ The snapshot no longer culls environmental physical material merely because it f
 ### Depth-range broad-phase refinement — 2026-10-21
 
 To offset the wider all-receiver set without changing geometric authority, the exact visibility solver now rejects segment/segment and segment/arc intersection candidates whose conservative depth intervals are disjoint. Lane overlap and depth overlap are both necessary for a real intersection, so these checks can only remove impossible candidates; exact predicates still decide every remaining intersection. The current exact-head workflow must validate this change and measure whether it helps the expanded world-wide receiver workload.
+
+
+### Dense-world intersection fallback — 2026-10-21
+
+The exact intersection-event pass is now bounded to snapshots with at most 256 bodies. Larger worlds keep all physical receivers and all projected surface/arc boundary events, but use the midpoint of each resulting lane interval to order its interaction path rather than calculating every pairwise crossing. Each represented lane still allocates its incident energy exactly once among resonance retention, heat, and escaped remainder; geometric exposure and downstream ordering become approximate in dense worlds, as permitted for the performance target. Small-scene exact geometry regressions remain on the exact path, and a dense-scene regression plus the full test run must verify path-width and energy-budget invariants before this fallback is accepted.
