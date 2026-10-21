@@ -288,21 +288,16 @@ impl WorldToneOccluderSnapshot {
                 continue;
             };
 
+            // Use the unit's aggregate material properties. Mixed-material
+            // units are physical receivers too; selecting only single-part units
+            // silently made them transparent to sunlight energy capture.
             let unit_properties: Vec<_> = organism
                 .structure
                 .units
                 .iter()
                 .enumerate()
                 .filter_map(|(unit_index, unit)| {
-                    if unit.material.parts.len() != 1 {
-                        return None;
-                    }
-                    let (resource_name, _) = unit.material.parts.first()?;
-                    let properties = catalog
-                        .iter()
-                        .find(|resource| resource.name == *resource_name)?
-                        .properties;
-                    Some((unit_index, properties))
+                    Some((unit_index, unit.properties(catalog)?))
                 })
                 .collect();
 
