@@ -1370,11 +1370,8 @@ impl Simulation {
         }
         // Resonance/chemistry is the only structural damage authority; there
         // is no separate random stress-break path.
-        let _ = crate::transformation::resolve_resonance_overload_break(
-            organism,
-            environment,
-            ledger,
-        );
+        let _ =
+            crate::transformation::resolve_resonance_overload_break(organism, environment, ledger);
         match crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog) {
             Ok(Some(cavity)) => !cavity.qualifies(),
             Ok(None) => true,
