@@ -365,14 +365,7 @@ fn physical_material_source_angular_interval(
         min_y = min_y.min(placement.y - radius);
         max_y = max_y.max(placement.y + radius);
     }
-    source_angular_interval_for_bounds(
-        min_x,
-        max_x,
-        min_y,
-        max_y,
-        sample,
-        reference_angle,
-    )
+    source_angular_interval_for_bounds(min_x, max_x, min_y, max_y, sample, reference_angle)
 }
 
 fn source_angular_interval_for_bounds(
