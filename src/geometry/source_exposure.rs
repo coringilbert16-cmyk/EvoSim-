@@ -283,28 +283,50 @@ fn angle_interval_for_bounds(
     }
 }
 
-fn candidate_body_indices_for_bounds(
+fn reference_angle_for_bodies(
     source: (f64, f64),
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
-    target_bounds: (f64, f64, f64, f64),
-) -> Option<Vec<usize>> {
-    let center = (
-        (target_bounds.0 + target_bounds.1) * 0.5,
-        (target_bounds.2 + target_bounds.3) * 0.5,
-    );
-    let reference_angle = if (center.0 - source.0).hypot(center.1 - source.1) <= f64::EPSILON {
+) -> Option<f64> {
+    let Some(body) = bodies.first() else {
+        return Some(0.0);
+    };
+    let center = ((body.min_x + body.max_x) * 0.5, (body.min_y + body.max_y) * 0.5);
+    if !center.0.is_finite() || !center.1.is_finite() {
+        return None;
+    }
+    Some(if (center.0 - source.0).hypot(center.1 - source.1) <= f64::EPSILON {
         0.0
     } else {
         (center.1 - source.1).atan2(center.0 - source.0)
-    };
+    })
+}
+
+fn body_angular_intervals(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    reference_angle: f64,
+) -> Option<Vec<(f64, f64)>> {
+    bodies
+        .iter()
+        .map(|body| {
+            angle_interval_for_bounds(
+                source,
+                (body.min_x, body.max_x, body.min_y, body.max_y),
+                reference_angle,
+            )
+        })
+        .collect()
+}
+
+fn candidate_body_indices_for_bounds(
+    source: (f64, f64),
+    target_bounds: (f64, f64, f64, f64),
+    reference_angle: f64,
+    body_intervals: &[(f64, f64)],
+) -> Option<Vec<usize>> {
     let target_interval = angle_interval_for_bounds(source, target_bounds, reference_angle)?;
     let mut candidates = Vec::new();
-    for (body_index, body) in bodies.iter().enumerate() {
-        let interval = angle_interval_for_bounds(
-            source,
-            (body.min_x, body.max_x, body.min_y, body.max_y),
-            reference_angle,
-        )?;
+    for (body_index, interval) in body_intervals.iter().copied().enumerate() {
         if interval.0 <= target_interval.1 + 1e-10 && target_interval.0 <= interval.1 + 1e-10 {
             candidates.push(body_index);
         }
@@ -350,6 +372,8 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
     for &index in target_body_indices {
         *target_body_mask.get_mut(index)? = true;
     }
+    let reference_angle = reference_angle_for_bodies(source, bodies)?;
+    let body_intervals = body_angular_intervals(source, bodies, reference_angle)?;
 
     let mut straight_targets = Vec::new();
     let mut straight_edges = Vec::new();
@@ -644,8 +668,9 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
 
             let candidate_body_indices = candidate_body_indices_for_bounds(
                 source,
-                bodies,
                 (a.0.min(b.0), a.0.max(b.0), a.1.min(b.1), a.1.max(b.1)),
+                reference_angle,
+                &body_intervals,
             )?;
             let mut candidate_body_mask = vec![false; bodies.len()];
             for &candidate in &candidate_body_indices {
@@ -1390,6 +1415,8 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
     for &index in target_body_indices {
         *target_body_mask.get_mut(index)? = true;
     }
+    let reference_angle = reference_angle_for_bodies(source, bodies)?;
+    let body_intervals = body_angular_intervals(source, bodies, reference_angle)?;
 
     let mut all_arcs = Vec::new();
     let mut critical_points = Vec::new();
@@ -1642,13 +1669,14 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
 
         let candidate_body_indices = candidate_body_indices_for_bounds(
             source,
-            bodies,
             (
                 target.center.0 - target.radius,
                 target.center.0 + target.radius,
                 target.center.1 - target.radius,
                 target.center.1 + target.radius,
             ),
+            reference_angle,
+            &body_intervals,
         )?;
         let mut cuts = vec![target.start, target.start + target.sweep];
         if target.sweep >= std::f64::consts::TAU - 1e-10 {
