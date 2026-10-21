@@ -2,24 +2,23 @@
 
 ## PR #202 — current implementation and merge gates — 2026-10-21
 
-**Verified source head before this documentation update:** `c0bea08faca8e0dd2abeb03854f6b3674487ca3e` on `feature/external-input-ledger`. The source changes below were inspected at that head; this documentation commit will require its own exact-head CI result.
+**Verified source head before this documentation update:** `e70f54f62580c84985a8e8c81c0764e5fc5ffc96` on `feature/external-input-ledger`. The source changes below were inspected at that head; this documentation commit will require its own exact-head CI result.
 
 ### Implemented and connected
 
 - The live simulation tick samples the precomputed world-tone cycle and calls `WorldToneOccluderSnapshot::settle_living_organism_inputs` for living organisms.
 - The snapshot assembles realized world-space occluders from organism structures, environmental physical material, legacy decomposing structures, owner-relative stored physical material, active transformations, and developing offspring/committed material. Ambiguous or invalid geometry fails closed.
 - `WorldToneCaptureFrame` now uses the shared **parallel-ray** visibility path, not the historical finite-point-source solver. The same per-tick direction is used to classify straight and supported curved boundaries. The frame caches exposure and guards against duplicate constituent settlement.
-- Absorbed direct input is settled through the external-input transaction into usable energy and heat. Mixed-material structural units now use their aggregate material properties in capture instead of being skipped; unabsorbed incident energy is still telemetry only and is not yet propagated as a reflected/secondary tone.
+- Absorbed direct input is settled through the external-input transaction into usable energy and heat. Mixed-material structural units now use aggregate properties instead of being skipped. A focused regression now checks partial absorption, the absorbed-to-usable/heat split, and that unabsorbed signal is not double-credited; it still requires a passing exact-head run. Unabsorbed incident energy remains telemetry only and is not yet propagated as a reflected/secondary tone.
 - Focused regressions cover mixed straight/curved shadows and live tick settlement. The live capture test also checks that the current energy inventory balances after absorbed solar input.
 
 ### Latest exact-head CI
 
-Workflow [39640200103](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39640200103) ran on the source head above and completed with failure:
+Workflow [39641411696](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39641411696) is running on the source head above. The prior run [39641215760](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39641215760) stopped at a formatting check for the new partial-absorption test; that exact rustfmt difference was corrected in `e70f54f62580c84985a8e8c81c0764e5fc5ffc96`. Do not treat the test as verified until the current run completes.
 
-- Formatting and the focused chemical-BREAK gate passed. The two parallel-visibility iterator cleanups and removal of unused lane-bound calculations are included at this head.
-- Rust suite: **538 passed, 28 failed, 1 ignored** in 162.82 seconds.
-- Compared with the earlier baseline workflow [39630672842](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39630672842), the **same 28 test identities fail; there are no new failing identities**.
-- Clippy still fails with 59 production-target errors and 38 test-target errors. The recent geometry cleanup reduced the count, but most remaining failures are longstanding dead-code/lint debt outside the merge-critical path. Fix easy relevant issues only.
+- Last completed full test suite at [39640200103](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39640200103): **538 passed, 28 failed, 1 ignored** in 162.82 seconds.
+- Compared with baseline workflow [39630672842](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39630672842), the **same 28 test identities fail; there are no new failing identities**.
+- Clippy on the last completed source run failed with 59 production-target errors and 38 test-target errors. The geometry cleanup reduced the count, but most remaining failures are longstanding dead-code/lint debt outside the merge-critical path. Fix easy relevant issues only.
 
 ### Remaining merge-critical work
 
