@@ -2171,3 +2171,10 @@ The resonance-spectrum response now has an explicit incident-energy ceiling:
 - If the steady-state oscillator gain and generated harmonics would exceed the incident signal's energy budget, the full spectrum is scaled uniformly to that budget. This preserves relative component strengths while preventing the stateless response calculation from manufacturing extra signal energy.
 - Non-finite/unrepresentable spectral energy fails closed. Regression tests cover the energy ceiling with nonlinear harmonics and an overflow case.
 - This is a passive bound on the current spectral/perception response, not yet a complete physical storage-and-release oscillator or a global energy-conservation proof. It does not settle the outstanding sunlight usable-energy/heat split, secondary propagation, or environmental heat-only receivers.
+
+
+## PR #202 spectrum-strength normalization — 2026-10-21
+
+Spectrum magnitude now follows the wave-energy convention: independent frequency components contribute amplitude-squared energy, and their combined magnitude is the square root of the summed component energies. Both environmental-material and cavity-wall perception use the same calculation. This avoids inflating resonance strength merely because nonlinear response generated more frequency components. A regression test covers the root-sum-square relationship.
+
+This remains a signal-strength representation; it does not itself implement the still-outstanding geometry-mediated transfer of absorbed energy into chemical work or prove whole-world conservation.
