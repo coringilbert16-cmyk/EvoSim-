@@ -244,6 +244,7 @@ pub(crate) struct WorldToneCaptureFrame {
     projected_widths: Vec<f64>,
     /// Exposure attributed to each constituent, preserving material provenance.
     projected_widths_by_unit: Vec<Vec<(usize, f64)>>,
+    interaction_paths: Vec<crate::source_exposure::ParallelRayInteractionPath>,
     settled_receivers: Vec<bool>,
     /// Per-constituent claims are tracked separately from aggregate-body claims.
     settled_units: Vec<Vec<usize>>,
@@ -277,8 +278,8 @@ impl WorldToneCaptureFrame {
 
         let phase = std::f64::consts::TAU * sample.orbital_phase;
         let toward_source = (phase.sin(), -phase.cos());
-        let projected_widths_by_unit =
-            crate::source_exposure::parallel_projected_widths_by_body_for_targets(
+        let (projected_widths_by_unit, interaction_paths) =
+            crate::source_exposure::parallel_exposure_with_paths_for_targets(
                 toward_source,
                 bodies,
                 receiver_body_indices,
@@ -301,9 +302,18 @@ impl WorldToneCaptureFrame {
             sample,
             projected_widths,
             projected_widths_by_unit,
+            interaction_paths,
             settled_receivers: vec![false; bodies.len()],
             settled_units: vec![Vec::new(); bodies.len()],
         })
+    }
+
+    /// Ordered lane hits are retained so residual energy can continue through
+    /// downstream physical material without inventing reflected ray directions.
+    pub(crate) fn interaction_paths(
+        &self,
+    ) -> &[crate::source_exposure::ParallelRayInteractionPath] {
+        &self.interaction_paths
     }
 
     /// Return cached exposure for a constituent. Some(0.0) means no visible
