@@ -253,7 +253,9 @@ pub(crate) fn resolve_resonance_overload_break(
     if !resonant_work.is_finite() || resonant_work <= 1e-9 {
         return false;
     }
-    let reaction_energy = (barrier - resonant_work).max(0.0);
+    // The overload event itself supplies the full activation signal; the
+    // settlement below separately accounts how much work came from resonance.
+    let reaction_energy = barrier;
     let processing_efficiency = organism.genome.processing_efficiency();
     if !settle_chemical_break_energy_with_resonance(
         organism,
