@@ -185,6 +185,8 @@ impl EnergyTransaction {
 pub(crate) struct EnergyInventorySnapshot {
     pub(crate) initial_usable_energy: f64,
     pub(crate) current_usable_energy: f64,
+    pub(crate) initial_resonant_energy: f64,
+    pub(crate) current_resonant_energy: f64,
     pub(crate) initial_structural_energy: f64,
     pub(crate) current_structural_energy: f64,
     pub(crate) external_energy_input: f64,
@@ -196,11 +198,13 @@ pub(crate) struct EnergyInventorySnapshot {
 
 impl EnergyInventorySnapshot {
     /// Signed conservation residual. A value of zero means the change in
-    /// usable and stored energy plus work and heat equals all external sources.
+    /// usable, resonant, and structural energy plus work and heat equals all external sources.
     pub(crate) fn residual(self) -> Option<f64> {
         let values = [
             self.initial_usable_energy,
             self.current_usable_energy,
+            self.initial_resonant_energy,
+            self.current_resonant_energy,
             self.initial_structural_energy,
             self.current_structural_energy,
             self.external_energy_input,
@@ -215,8 +219,9 @@ impl EnergyInventorySnapshot {
             return None;
         }
         let usable_delta = self.current_usable_energy - self.initial_usable_energy;
+        let resonant_delta = self.current_resonant_energy - self.initial_resonant_energy;
         let structural_delta = self.current_structural_energy - self.initial_structural_energy;
-        let residual = usable_delta + structural_delta + self.work_expended + self.heat_dissipated
+        let residual = usable_delta + resonant_delta + structural_delta + self.work_expended + self.heat_dissipated
             - self.external_energy_input
             - self.other_energy_released;
         residual.is_finite().then_some(residual)
@@ -364,10 +369,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn world_inventory_counts_retained_resonance_as_a_distinct_energy_store() {
+        let inventory = EnergyInventorySnapshot {
+            initial_usable_energy: 10.0,
+            current_usable_energy: 10.0,
+            initial_resonant_energy: 0.0,
+            current_resonant_energy: 3.0,
+            initial_structural_energy: 4.0,
+            current_structural_energy: 4.0,
+            external_energy_input: 5.0,
+            other_energy_released: 0.0,
+            work_expended: 1.0,
+            heat_dissipated: 1.0,
+        };
+        assert_eq!(inventory.residual(), Some(0.0));
+        assert!(inventory.is_balanced(1e-12));
+    }
+
+    #[test]
     fn world_inventory_reconciles_external_input_work_and_heat() {
         let inventory = EnergyInventorySnapshot {
             initial_usable_energy: 10.0,
             current_usable_energy: 12.0,
+            initial_resonant_energy: 0.0,
+            current_resonant_energy: 0.0,
             initial_structural_energy: 8.0,
             current_structural_energy: 9.0,
             external_energy_input: 7.0,
@@ -384,6 +409,8 @@ mod tests {
         let inventory = EnergyInventorySnapshot {
             initial_usable_energy: 0.0,
             current_usable_energy: 2.0,
+            initial_resonant_energy: 0.0,
+            current_resonant_energy: 0.0,
             initial_structural_energy: 5.0,
             current_structural_energy: 0.0,
             external_energy_input: 0.0,
@@ -400,6 +427,8 @@ mod tests {
         let mut inventory = EnergyInventorySnapshot {
             initial_usable_energy: 10.0,
             current_usable_energy: 14.0,
+            initial_resonant_energy: 0.0,
+            current_resonant_energy: 0.0,
             initial_structural_energy: 8.0,
             current_structural_energy: 9.0,
             external_energy_input: 7.0,
