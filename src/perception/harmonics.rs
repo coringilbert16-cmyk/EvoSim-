@@ -21,6 +21,121 @@ pub(crate) struct ToneComponent {
     pub(crate) phase_radians: f64,
 }
 
+/// Persistent energy retained by an organism's resonant structure.
+///
+/// This is deliberately separate from ToneSpectrum: that type represents the
+/// signal currently received, while this reservoir represents energy retained
+/// across ticks. Stored values are energy (amplitude squared), not amplitudes.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
+pub(crate) struct ResonantEnergyReservoir {
+    pub(crate) components: Vec<ResonantEnergyComponent>,
+}
+
+/// Energy held at one frequency. Phase is not stored because the reservoir
+/// tracks retained energy, not the instantaneous phase of a travelling signal.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ResonantEnergyComponent {
+    pub(crate) frequency_hz: f64,
+    pub(crate) energy: f64,
+}
+
+impl ResonantEnergyReservoir {
+    /// Add energy at a frequency. Returns false without mutation when input is
+    /// invalid or the bounded spectrum cannot represent another frequency;
+    /// the caller must settle rejected energy as heat rather than discard it.
+    pub(crate) fn deposit(&mut self, frequency_hz: f64, energy: f64) -> bool {
+        if !frequency_hz.is_finite()
+            || frequency_hz <= 0.0
+            || !energy.is_finite()
+            || energy < 0.0
+        {
+            return false;
+        }
+        if energy <= f64::EPSILON {
+            return true;
+        }
+        if let Some(component) = self.components.iter_mut().find(|component| {
+            (component.frequency_hz / frequency_hz).ln().abs() <= 1e-9
+        }) {
+            let Some(next) = component.energy.checked_add(energy) else {
+                return false;
+            };
+            if !next.is_finite() {
+                return false;
+            }
+            component.energy = next;
+            return true;
+        }
+        if self.components.len() >= MAX_SPECTRAL_COMPONENTS {
+            return false;
+        }
+        self.components.push(ResonantEnergyComponent {
+            frequency_hz,
+            energy,
+        });
+        self.components.sort_by(|a, b| {
+            a.frequency_hz
+                .partial_cmp(&b.frequency_hz)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        true
+    }
+
+    pub(crate) fn total_energy(&self) -> Option<f64> {
+        let mut total = 0.0;
+        for component in &self.components {
+            if !component.frequency_hz.is_finite()
+                || component.frequency_hz <= 0.0
+                || !component.energy.is_finite()
+                || component.energy < 0.0
+            {
+                return None;
+            }
+            total += component.energy;
+            if !total.is_finite() {
+                return None;
+            }
+        }
+        Some(total)
+    }
+
+    /// Withdraw up to max_energy, weighted by logarithmic frequency
+    /// compatibility with the reaction. The returned amount is actual energy
+    /// removed from the reservoir. Callers must settle the same amount in the
+    /// reaction transaction; no separate energy is created by matching.
+    pub(crate) fn withdraw_compatible(
+        &mut self,
+        reaction_frequency_hz: f64,
+        max_energy: f64,
+    ) -> f64 {
+        if !reaction_frequency_hz.is_finite()
+            || reaction_frequency_hz <= 0.0
+            || !max_energy.is_finite()
+            || max_energy <= 0.0
+        {
+            return 0.0;
+        }
+        let mut remaining = max_energy;
+        let mut withdrawn = 0.0;
+        for component in &mut self.components {
+            if remaining <= f64::EPSILON {
+                break;
+            }
+            let distance = (component.frequency_hz / reaction_frequency_hz).ln().abs();
+            let compatibility = (-distance / SPECTRAL_MATCH_SIGMA).exp().clamp(0.0, 1.0);
+            let available = component.energy * compatibility;
+            let take = available.min(remaining);
+            if take.is_finite() && take > 0.0 {
+                component.energy -= take;
+                remaining -= take;
+                withdrawn += take;
+            }
+        }
+        self.components.retain(|component| component.energy > f64::EPSILON);
+        withdrawn
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
 pub(crate) struct ToneSpectrum {
     pub(crate) components: Vec<ToneComponent>,
@@ -728,6 +843,36 @@ pub(crate) fn spectral_similarity(a: &ToneSpectrum, b: &ToneSpectrum) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retained_resonance_is_distinct_from_current_signal_and_conserves_energy() {
+        let mut reservoir = ResonantEnergyReservoir::default();
+        assert!(reservoir.deposit(440.0, 3.0));
+        assert!(reservoir.deposit(440.0, 2.0));
+        assert!((reservoir.total_energy().unwrap() - 5.0).abs() < 1e-12);
+        assert_eq!(reservoir.components.len(), 1);
+    }
+
+    #[test]
+    fn retained_resonance_rejects_unrepresentable_frequency_without_losing_energy() {
+        let mut reservoir = ResonantEnergyReservoir::default();
+        for (frequency, energy) in [(110.0, 1.0), (220.0, 2.0), (440.0, 3.0), (880.0, 4.0)] {
+            assert!(reservoir.deposit(frequency, energy));
+        }
+        assert!(!reservoir.deposit(1760.0, 5.0));
+        assert!((reservoir.total_energy().unwrap() - 10.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn retained_resonance_withdrawal_is_frequency_weighted_and_bounded() {
+        let mut reservoir = ResonantEnergyReservoir::default();
+        assert!(reservoir.deposit(440.0, 4.0));
+        assert!(reservoir.deposit(1760.0, 4.0));
+        let withdrawn = reservoir.withdraw_compatible(440.0, 2.0);
+        assert!(withdrawn > 0.0 && withdrawn <= 2.0);
+        assert!((reservoir.total_energy().unwrap() - (8.0 - withdrawn)).abs() < 1e-12);
+        assert_eq!(reservoir.withdraw_compatible(440.0, f64::NAN), 0.0);
+    }
 
     #[test]
     fn wave_amplitude_energy_conversion_round_trips() {
