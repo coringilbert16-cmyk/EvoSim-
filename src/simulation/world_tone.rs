@@ -989,7 +989,7 @@ mod tests {
         };
         let intervals = crate::source_exposure::visible_circular_arc_intervals(
             (sample.source_x, sample.source_y),
-            &[body.clone()],
+            std::slice::from_ref(&body),
         )
         .expect("legacy circular fluid visibility is analytic");
         let expected: f64 = intervals
