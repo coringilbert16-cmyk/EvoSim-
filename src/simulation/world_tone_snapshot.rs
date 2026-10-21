@@ -309,6 +309,48 @@ impl WorldToneOccluderSnapshot {
             return;
         };
 
+        // Every lane's first material hit must reproduce the direct geometric
+        // exposure widths. Abort the frame rather than settle from inconsistent
+        // path and exposure views of the same world.
+        let mut path_direct_widths = std::collections::HashMap::<(usize, usize), f64>::new();
+        for path in snapshot.frame.interaction_paths() {
+            if let Some(&(body_index, unit_index)) = path.hits.first() {
+                let width = path_direct_widths
+                    .entry((body_index, unit_index))
+                    .or_insert(0.0);
+                *width += path.projected_width;
+                if !width.is_finite() {
+                    return;
+                }
+            }
+        }
+        for (organism_index, organism) in simulation.organisms.iter().enumerate() {
+            if !living_ids.contains(&organism.id) {
+                continue;
+            }
+            let Some(body_index) = snapshot.body_index_for_organism(organism_index) else {
+                continue;
+            };
+            for unit_index in 0..organism.structure.units.len() {
+                let Some(expected) = snapshot
+                    .frame
+                    .projected_width_for_unit(body_index, unit_index)
+                else {
+                    continue;
+                };
+                let actual = path_direct_widths
+                    .get(&(body_index, unit_index))
+                    .copied()
+                    .unwrap_or(0.0);
+                if !expected.is_finite()
+                    || !actual.is_finite()
+                    || (expected - actual).abs() > 1e-7 * expected.max(1.0)
+                {
+                    return;
+                }
+            }
+        }
+
         let mut body_to_organism = vec![None; snapshot.body_properties.len()];
         for (organism_index, body_index) in snapshot.organism_body_indices.iter().enumerate() {
             if let Some(body_index) = body_index {
