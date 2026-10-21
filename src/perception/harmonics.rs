@@ -100,6 +100,26 @@ impl ResonantEnergyReservoir {
         Some(total)
     }
 
+    /// Energy accessible to a reaction at the requested frequency, before
+    /// any withdrawal. Invalid reservoir state fails closed.
+    pub(crate) fn compatible_energy(&self, reaction_frequency_hz: f64) -> f64 {
+        if !reaction_frequency_hz.is_finite()
+            || reaction_frequency_hz <= 0.0
+            || self.total_energy().is_none()
+        {
+            return 0.0;
+        }
+        self.components
+            .iter()
+            .map(|component| {
+                let distance = (component.frequency_hz / reaction_frequency_hz).ln().abs();
+                let compatibility = (-distance / SPECTRAL_MATCH_SIGMA).exp().clamp(0.0, 1.0);
+                component.energy * compatibility
+            })
+            .sum::<f64>()
+            .max(0.0)
+    }
+
     /// Withdraw up to max_energy, weighted by logarithmic frequency
     /// compatibility with the reaction. The returned amount is actual energy
     /// removed from the reservoir. Callers must settle the same amount in the
@@ -863,6 +883,17 @@ mod tests {
         }
         assert!(!reservoir.deposit(1760.0, 5.0));
         assert!((reservoir.total_energy().unwrap() - 10.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn compatible_resonance_query_is_frequency_weighted_without_mutation() {
+        let mut reservoir = ResonantEnergyReservoir::default();
+        assert!(reservoir.deposit(440.0, 2.0));
+        assert!(reservoir.deposit(1760.0, 2.0));
+        let original = reservoir.clone();
+        assert!(reservoir.compatible_energy(440.0) > 2.0);
+        assert!(reservoir.compatible_energy(440.0) < 4.0);
+        assert_eq!(reservoir, original);
     }
 
     #[test]
