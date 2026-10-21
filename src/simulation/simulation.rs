@@ -1492,8 +1492,6 @@ mod decomposition_finalization_tests {
         let mut simulation = Simulation::new(917, 10.0);
         let config = crate::world_tone::WorldToneRuntimeConfig {
             parameters: crate::world_tone::WorldToneParameters {
-                minimum_signal_energy_level: 0.0,
-                maximum_signal_energy_level: 8.0,
                 minimum_energy_intensity_per_tick_per_width: 1.0,
                 maximum_energy_intensity_per_tick_per_width: 10.0,
                 orbital_period_ticks: 2_400,
