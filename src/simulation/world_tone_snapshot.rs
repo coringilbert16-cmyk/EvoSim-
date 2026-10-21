@@ -113,9 +113,7 @@ impl WorldToneOccluderSnapshot {
                 };
                 for entry in &construction.committed_material.entries {
                     let StoredMaterial::Physical(physical) = entry;
-                    body_properties.push(physical_material_properties(
-                        physical, catalog,
-                    )?);
+                    body_properties.push(physical_material_properties(physical, catalog)?);
                     bodies.push(body_from_owner_relative_material(
                         physical, anchor, catalog,
                     )?);
@@ -136,9 +134,7 @@ impl WorldToneOccluderSnapshot {
                 {
                     continue;
                 }
-                body_properties.push(physical_material_properties(
-                    physical, catalog,
-                )?);
+                body_properties.push(physical_material_properties(physical, catalog)?);
                 bodies.push(OrganismBodyGeometry::from_physical_material(
                     physical, catalog,
                 )?);
@@ -394,13 +390,14 @@ impl WorldToneOccluderSnapshot {
                 let mut interaction_heat = damping_heat;
                 let mut captured = 0.0;
 
-                let living_organism = body_to_organism
-                    .get(body_index)
-                    .copied()
-                    .flatten()
-                    .filter(|organism_index| {
-                        living_ids.contains(&simulation.organisms[*organism_index].id)
-                    });
+                let living_organism =
+                    body_to_organism
+                        .get(body_index)
+                        .copied()
+                        .flatten()
+                        .filter(|organism_index| {
+                            living_ids.contains(&simulation.organisms[*organism_index].id)
+                        });
 
                 if let Some(organism_index) = living_organism {
                     let retained_budget = response_energy - damping_heat;
