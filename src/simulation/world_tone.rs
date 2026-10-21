@@ -281,18 +281,16 @@ impl WorldToneCaptureFrame {
         }
 
         let source = (sample.source_x, sample.source_y);
-        let straight_intervals =
-            crate::source_exposure::visible_polygonal_intervals_for_targets(
-                source,
-                bodies,
-                receiver_body_indices,
-            )?;
-        let curved_intervals =
-            crate::source_exposure::visible_circular_arc_intervals_for_targets(
-                source,
-                bodies,
-                receiver_body_indices,
-            )?;
+        let straight_intervals = crate::source_exposure::visible_polygonal_intervals_for_targets(
+            source,
+            bodies,
+            receiver_body_indices,
+        )?;
+        let curved_intervals = crate::source_exposure::visible_circular_arc_intervals_for_targets(
+            source,
+            bodies,
+            receiver_body_indices,
+        )?;
 
         let mut projected_widths = vec![0.0; bodies.len()];
         let mut projected_widths_by_unit: Vec<Vec<(usize, f64)>> = bodies
