@@ -698,7 +698,8 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
     for (body_index, x, y) in critical_points {
         critical_points_by_body[body_index].push((x, y));
     }
-    let mut straight_edges_by_body: Vec<Vec<(usize, (f64, f64), (f64, f64))>> =
+    type StraightEdge = (usize, (f64, f64), (f64, f64));
+    let mut straight_edges_by_body: Vec<Vec<StraightEdge>> =
         (0..bodies.len()).map(|_| Vec::new()).collect();
     for (body_index, unit_index, start, end) in straight_edges {
         straight_edges_by_body[body_index].push((unit_index, start, end));
@@ -2722,8 +2723,7 @@ impl ParallelRayFrame {
                 return None;
             }
             if (overlap_end - overlap_start).abs() <= 1e-12
-                && overlap_start >= -1e-12
-                && overlap_start <= 1.0 + 1e-12
+                && (-1e-12..=1.0 + 1e-12).contains(&overlap_start)
             {
                 let point = (
                     a.0 + overlap_start.clamp(0.0, 1.0) * r.0,
