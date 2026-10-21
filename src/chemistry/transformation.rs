@@ -1268,6 +1268,42 @@ mod tests {
     }
 
     #[test]
+    fn resonance_overload_breaks_a_compatible_bond_only_above_structural_capacity() {
+        let (mut organism, environment, _) = stress_break_test_organism();
+        let capacity: f64 = organism
+            .structure
+            .bonds
+            .iter()
+            .map(|bond| bond.bond_energy)
+            .sum();
+        assert!(capacity.is_finite() && capacity > 0.0);
+        assert!(organism
+            .resonant_energy
+            .deposit(440.0, capacity * 0.5));
+        let original_bond_count = organism.structure.bonds.len();
+        let mut ledger = crate::state::EnergyLedger::default();
+        assert!(!resolve_resonance_overload_break(
+            &mut organism,
+            &environment,
+            &mut ledger,
+        ));
+        assert_eq!(organism.structure.bonds.len(), original_bond_count);
+
+        organism.resonant_energy = crate::harmonics::ResonantEnergyReservoir::default();
+        assert!(organism
+            .resonant_energy
+            .deposit(440.0, capacity + 1.0));
+        let before_resonance = organism.resonant_energy.total_energy().unwrap();
+        assert!(resolve_resonance_overload_break(
+            &mut organism,
+            &environment,
+            &mut ledger,
+        ));
+        assert_eq!(organism.structure.bonds.len(), original_bond_count - 1);
+        assert!(organism.resonant_energy.total_energy().unwrap() < before_resonance);
+    }
+
+    #[test]
     fn stress_break_candidates_prefer_non_genome_bonds() {
         let (organism, environment, genome_bonds) = stress_break_test_organism();
         let candidates = stress_break_candidate_indices(&organism, &environment);
