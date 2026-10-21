@@ -1,8 +1,8 @@
 //! One fail-closed world snapshot for directional environmental exposure.
 //!
 //! This assembles only physically realized geometry. Logical material stock has
-//! no spatial shape and is not an occluder. Building this snapshot does not
-//! settle energy or connect sunlight to the live tick.
+//! no spatial shape and is not an occluder. The live tick uses the resulting frame
+//! to settle direct sunlight into each living organism's existing energy holder.
 
 use crate::material_storage::StoredMaterial;
 use crate::organism_geometry::OrganismBodyGeometry;
