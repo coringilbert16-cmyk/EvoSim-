@@ -1331,7 +1331,10 @@ mod tests {
             &mut ledger,
         ));
         assert_eq!(organism.structure.bonds.len(), original_bonds.len());
-        assert_eq!(organism.resonant_energy.total_energy().unwrap(), original_energy);
+        assert_eq!(
+            organism.resonant_energy.total_energy().unwrap(),
+            original_energy
+        );
     }
 
     #[test]
