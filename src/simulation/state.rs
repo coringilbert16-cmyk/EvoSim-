@@ -248,9 +248,7 @@ pub(crate) struct Organism {
 }
 pub(crate) const STRESS_DECAY_PER_TICK: f64 = 0.98;
 pub(crate) const INITIAL_STRESS_THRESHOLD: f64 = 100.0;
-pub(crate) const STRESS_THRESHOLD_DECAY: f64 = 0.90;
 pub(crate) const MAINTENANCE_ENERGY_PER_MASS: f64 = 0.001;
-pub(crate) const MIN_STRESS_THRESHOLD: f64 = 5.0;
 fn default_stress_threshold() -> f64 {
     INITIAL_STRESS_THRESHOLD
 }
@@ -457,19 +455,11 @@ impl Organism {
             self.stress += deficit + self.maintenance_debt;
         }
     }
-    /// Advance the stress bookkeeping without granting stress an independent
+    /// Validate stress bookkeeping without granting stress an independent
     /// authority to break physical bonds. Structural damage is resolved only
     /// through the shared resonance/chemistry mechanism.
-    pub(crate) fn advance_stress_state(&mut self) -> bool {
-        if !self.stress.is_finite() || !self.stress_threshold.is_finite() {
-            return true;
-        }
-        while self.stress >= self.stress_threshold.max(MIN_STRESS_THRESHOLD) {
-            let threshold = self.stress_threshold.max(MIN_STRESS_THRESHOLD);
-            self.stress -= threshold;
-            self.stress_threshold = (threshold * STRESS_THRESHOLD_DECAY).max(MIN_STRESS_THRESHOLD);
-        }
-        false
+    pub(crate) fn advance_stress_state(&self) -> bool {
+        !self.stress.is_finite() || !self.stress_threshold.is_finite()
     }
 }
 #[derive(Serialize, Deserialize, Clone)]
