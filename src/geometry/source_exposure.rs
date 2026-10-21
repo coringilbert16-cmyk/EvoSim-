@@ -254,6 +254,10 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
     if !source.0.is_finite() || !source.1.is_finite() {
         return None;
     }
+    let mut target_body_mask = vec![false; bodies.len()];
+    for &index in target_body_indices {
+        *target_body_mask.get_mut(index)? = true;
+    }
 
     let mut straight_targets = Vec::new();
     let mut straight_edges = Vec::new();
@@ -370,7 +374,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                         vertices[(index + 1) % vertices.len()],
                     ));
                 }
-                if target_body_indices.contains(&body_index) {
+                if target_body_mask[body_index] {
                     straight_targets.push((body_index, part.unit_index, vertices));
                 }
                 continue;
@@ -1255,6 +1259,10 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
     if !source.0.is_finite() || !source.1.is_finite() {
         return None;
     }
+    let mut target_body_mask = vec![false; bodies.len()];
+    for &index in target_body_indices {
+        *target_body_mask.get_mut(index)? = true;
+    }
 
     let mut all_arcs = Vec::new();
     let mut critical_points = Vec::new();
@@ -1450,7 +1458,7 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
     }
     for first_index in 0..all_arcs.len() {
         let first = all_arcs[first_index];
-        if !target_body_indices.contains(&first.body_index) {
+        if !target_body_mask[first.body_index] {
             continue;
         }
         for second_index in 0..all_arcs.len() {
@@ -1458,7 +1466,7 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
                 continue;
             }
             let second = all_arcs[second_index];
-            if target_body_indices.contains(&second.body_index) && second_index < first_index {
+            if target_body_mask[second.body_index] && second_index < first_index {
                 continue;
             }
             let mut intersections = Vec::with_capacity(2);
@@ -1491,7 +1499,7 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
 
     let mut output = Vec::new();
     for target in all_arcs {
-        if !target_body_indices.contains(&target.body_index) {
+        if !target_body_mask[target.body_index] {
             continue;
         }
         // If the source is inside the target material, its boundary cannot be
