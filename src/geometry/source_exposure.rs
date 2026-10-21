@@ -638,6 +638,17 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
         return None;
     }
 
+    let mut critical_points_by_body: Vec<Vec<(f64, f64)>> =
+        (0..bodies.len()).map(|_| Vec::new()).collect();
+    for (body_index, x, y) in critical_points {
+        critical_points_by_body[body_index].push((x, y));
+    }
+    let mut straight_edges_by_body: Vec<Vec<(usize, (f64, f64), (f64, f64))>> =
+        (0..bodies.len()).map(|_| Vec::new()).collect();
+    for (body_index, unit_index, start, end) in straight_edges {
+        straight_edges_by_body[body_index].push((unit_index, start, end));
+    }
+
     let mut result = Vec::new();
     for (body_index, unit_index, vertices) in straight_targets {
         if !polygon_is_convex(&vertices) {
@@ -677,60 +688,54 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                 reference_angle,
                 &body_intervals,
             )?;
-            let mut candidate_body_mask = vec![false; bodies.len()];
-            for &candidate in &candidate_body_indices {
-                candidate_body_mask[candidate] = true;
-            }
             let mut cuts = vec![0.0_f64, 1.0_f64];
-            for &(critical_body_index, vx, vy) in &critical_points {
-                if !candidate_body_mask[critical_body_index] {
-                    continue;
-                }
-                let dx = vx - source.0;
-                let dy = vy - source.1;
-                let denominator = ex * dy - ey * dx;
-                if denominator.abs() <= 1e-12 {
-                    continue;
-                }
-                let ax = a.0 - source.0;
-                let ay = a.1 - source.1;
-                let t = -(ax * dy - ay * dx) / denominator;
-                let u = -(ax * ey - ay * ex) / denominator;
-                if t > 1e-10 && t < 1.0 - 1e-10 && u > 1.0 + 1e-10 {
-                    cuts.push(t);
+            for &candidate_body in &candidate_body_indices {
+                for &(vx, vy) in &critical_points_by_body[candidate_body] {
+                    let dx = vx - source.0;
+                    let dy = vy - source.1;
+                    let denominator = ex * dy - ey * dx;
+                    if denominator.abs() <= 1e-12 {
+                        continue;
+                    }
+                    let ax = a.0 - source.0;
+                    let ay = a.1 - source.1;
+                    let t = -(ax * dy - ay * dx) / denominator;
+                    let u = -(ax * ey - ay * ex) / denominator;
+                    if t > 1e-10 && t < 1.0 - 1e-10 && u > 1.0 + 1e-10 {
+                        cuts.push(t);
+                    }
                 }
             }
 
             // Directly split at straight-boundary intersections, including
             // contact chords. Collinear overlaps are split at both endpoints.
-            for &(block_body, block_unit, c, d) in &straight_edges {
-                if !candidate_body_mask[block_body] {
-                    continue;
-                }
-                if block_body == body_index && block_unit == unit_index {
-                    continue;
-                }
-                let sx = d.0 - c.0;
-                let sy = d.1 - c.1;
-                let qx = c.0 - a.0;
-                let qy = c.1 - a.1;
-                let denominator = ex * sy - ey * sx;
-                if denominator.abs() <= 1e-12 {
-                    if (qx * ey - qy * ex).abs() <= 1e-9 {
-                        let length_squared = ex * ex + ey * ey;
-                        for point in [c, d] {
-                            let t = ((point.0 - a.0) * ex + (point.1 - a.1) * ey) / length_squared;
-                            if t > 1e-10 && t < 1.0 - 1e-10 {
-                                cuts.push(t);
+            for &block_body in &candidate_body_indices {
+                for &(block_unit, c, d) in &straight_edges_by_body[block_body] {
+                    if block_body == body_index && block_unit == unit_index {
+                        continue;
+                    }
+                    let sx = d.0 - c.0;
+                    let sy = d.1 - c.1;
+                    let qx = c.0 - a.0;
+                    let qy = c.1 - a.1;
+                    let denominator = ex * sy - ey * sx;
+                    if denominator.abs() <= 1e-12 {
+                        if (qx * ey - qy * ex).abs() <= 1e-9 {
+                            let length_squared = ex * ex + ey * ey;
+                            for point in [c, d] {
+                                let t = ((point.0 - a.0) * ex + (point.1 - a.1) * ey) / length_squared;
+                                if t > 1e-10 && t < 1.0 - 1e-10 {
+                                    cuts.push(t);
+                                }
                             }
                         }
+                        continue;
                     }
-                    continue;
-                }
-                let t = (qx * sy - qy * sx) / denominator;
-                let u = (qx * ey - qy * ex) / denominator;
-                if t > 1e-10 && t < 1.0 - 1e-10 && (-1e-10..=1.0 + 1e-10).contains(&u) {
-                    cuts.push(t);
+                    let t = (qx * sy - qy * sx) / denominator;
+                    let u = (qx * ey - qy * ex) / denominator;
+                    if t > 1e-10 && t < 1.0 - 1e-10 && (-1e-10..=1.0 + 1e-10).contains(&u) {
+                        cuts.push(t);
+                    }
                 }
             }
 
