@@ -218,7 +218,7 @@ pub(crate) fn resolve_resonance_overload_break(
             continue;
         }
         let score = compatible / barrier;
-        if best.is_none_or(|(_, _, best_score)| score > best_score) {
+        if best.map_or(true, |(_, _, best_score)| score > best_score) {
             best = Some((index, reaction_frequency_hz, score));
         }
     }
@@ -239,13 +239,14 @@ pub(crate) fn resolve_resonance_overload_break(
         return false;
     }
     let reaction_energy = (barrier - resonant_work).max(0.0);
+    let processing_efficiency = organism.genome.processing_efficiency();
     if !settle_chemical_break_energy_with_resonance(
         organism,
         target,
         reaction_energy,
         barrier,
         resonant_work,
-        organism.genome.processing_efficiency(),
+        processing_efficiency,
         ledger,
     ) {
         return false;
