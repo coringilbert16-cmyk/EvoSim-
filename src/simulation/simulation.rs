@@ -83,7 +83,7 @@ impl Simulation {
         not(test),
         expect(
             dead_code,
-            reason = "Runtime configuration remains staged until live world-tone capture is integrated"
+            reason = "Runtime configuration helper is exercised by focused tests; the live tick uses the configured source cycle"
         )
     )]
     pub(crate) fn configure_world_tone(
@@ -1331,7 +1331,7 @@ impl Simulation {
         not(test),
         expect(
             dead_code,
-            reason = "Energy reconciliation snapshot is exercised by tests before live capture is enabled"
+            reason = "Energy inventory snapshot is currently used by reconciliation tests, not production telemetry"
         )
     )]
     pub(crate) fn energy_inventory_snapshot(
