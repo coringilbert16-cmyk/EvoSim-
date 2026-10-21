@@ -3334,6 +3334,7 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
         Arc(usize, f64),
     }
 
+    type LocalEdge = ((f64, f64), (f64, f64));
     let mut segments = Vec::<Segment>::new();
     let mut arcs = Vec::<WorldCircleArc>::new();
     let mut straight_lanes = Vec::<f64>::new();
@@ -3368,7 +3369,7 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
                 )
             };
 
-            let (local_edges, closed_surface): (Vec<((f64, f64), (f64, f64))>, bool) =
+            let (local_edges, closed_surface): (Vec<LocalEdge>, bool) =
                 match &part.form {
                     Form::Line { length } => {
                         if !length.is_finite() || *length <= 0.0 {
@@ -3433,9 +3434,7 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
                     } => (Vec::new(), false),
                     Form::Fluid { .. } => return None,
                     _ => {
-                        let Some(vertices) = part.form.polygon_vertices() else {
-                            return None;
-                        };
+                        let vertices = part.form.polygon_vertices()?;
                         if vertices.len() < 3 {
                             return None;
                         }
