@@ -3317,6 +3317,12 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
     Some(parallel_exposure_with_paths_for_targets(toward_source, bodies, target_body_indices)?.0)
 }
 
+// Dense worlds use boundary-event lane intervals and midpoint depth ordering
+// instead of the quadratic exact intersection-event pass. This preserves one
+// energy-conserving ordered path per represented lane interval while allowing
+// small/local geometry to retain exact crossing splits.
+const EXACT_INTERSECTION_BODY_LIMIT: usize = 256;
+
 pub(crate) fn parallel_exposure_with_paths_for_targets(
     toward_source: (f64, f64),
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
@@ -3545,6 +3551,7 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
         let right = segments[*right].lane_start.min(segments[*right].lane_end);
         left.total_cmp(&right)
     });
+    if bodies.len() <= EXACT_INTERSECTION_BODY_LIMIT {
     for (position, &left_index) in segment_order.iter().enumerate() {
         let a = segments[left_index];
         let a_max = a.lane_start.max(a.lane_end);
@@ -3670,6 +3677,8 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
                 }
             }
         }
+    }
+
     }
 
     let partition = ParallelLanePartition::from_boundary_events(straight_lanes, curved_lanes)?;
