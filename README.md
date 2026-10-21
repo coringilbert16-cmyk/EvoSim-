@@ -2151,16 +2151,37 @@ Use a coordinate frame derived once per tick from normalized sunlight direction 
 **Curved-boundary precision rule:** keep canonical circle/arc definitions at full precision, but quantize derived curved-boundary ray-hit depths and curved-event lane coordinates to the nearest `0.01` world unit before they enter the visibility partition. This is a deliberate visibility approximation, not a change to stored material dimensions, nominal fluid area, resource energy, or the energy ledger. Straight-edge event coordinates remain unquantized apart from near-duplicate event merging (`1e-9`); tests must cover near-tangent circles and closely spaced curved events so the `0.01` grid cannot silently create duplicate exposure or energy credit.
 
 
-## PR #202 exact-head status — 2026-10-21
+## PR #202 exact-head audit — 2026-10-21 (refreshed after workflow 39660330046)
 
-- PR head verified: `e971fd7227a790d19aa95147817d7e7aca047d87`; exact-head workflow [39641847255](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39641847255) completed with failure.
-- Formatting, source-size, COMBINE architecture, focused Bob/fluid checks, and focused chemical BREAK checks passed. The new `world_tone::tests::partial_absorption_accounts_for_remaining_signal_without_double_credit` regression passed on this exact head.
-- Full Rust tests: **539 passed, 28 failed, 1 ignored**. The 28 failed test identities match the recorded baseline; this is not a green suite. Clippy remains failed with **59 production-target and 38 test-target diagnostics**; do not treat broad legacy lint cleanup as the PR's primary task.
-- **Direct sunlight capture is now wired into the live tick.** `Simulation::step` samples the precomputed world-tone cycle and calls `WorldToneOccluderSnapshot::settle_living_organism_inputs` before biological maintenance. The snapshot uses the shared parallel-ray exposure frame and includes physical occluders plus stored/developing material. Response properties come from `StructuralUnit::properties(catalog)`; multi-part structural units remain unsupported and fail closed until their realized geometry represents each constituent.
-- Captured energy is accounted as external input and divided between usable energy and heat using the organism's existing processing efficiency. Unabsorbed energy is tracked only as a diagnostic total; it is **not yet propagated as secondary resonance energy**, so it is not credited again to another receiver. The regression proves the local accounting split but does not prove whole-world conservation.
-- **Additional receiver gap found in the follow-up audit:** the live tick settles only living-organism units. Environmental physical material, dead structures, stored objects, and developing material are included as shadow-casting bodies, but are not yet settled as heat-only sunlight receivers. Their intercepted direct energy therefore has no corresponding heat transaction yet. This must be fixed before claiming unified sunlight/chemistry accounting.
-- **Remaining substantive gap:** define and implement an energy-conserving secondary resonance/aura path using existing material response, with no arbitrary reflection/retention coefficient and no literal reflected-ray tracing. Then reconcile the full world inventory across sunlight, chemistry, structural bond energy, usable holders, work, heat, and any secondary signal output. Keep PR196 separate.
+**Audit basis:** current branch ref `feature/external-input-ledger` at `078c08d96c592a225e217f4dc8a5af94cc2b51e3`; latest completed exact-head Rust workflow [39660330046](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39660330046), completed at 2026-10-21 19:23:14 UTC. This section supersedes earlier PR #202 status snapshots below.
 
+### Verified on the exact source head
+
+- Formatting, source-size, COMBINE architecture, Bob compact-storage/open-reopen/concurrent-initialization, focused Bob fluid transaction/three-piece-cap, fluid coalescence/restoration, and focused chemical BREAK gates passed.
+- The full Rust suite completed: **555 passed, 28 failed, 1 ignored**. The 28 failed test identities match the recorded baseline run [39630672842]; this is not a green full suite, but this run did not add new named failures against that baseline.
+- Clippy failed. Keep cleanup narrow and PR-relevant rather than chasing unrelated legacy lint debt.
+- The partial-absorption regression passed: the incident budget is divided between absorbed and unabsorbed signal, and absorbed energy is divided between its accounted destinations without crediting the unabsorbed remainder twice.
+- The incompatible-frequency overload regression passed: excess reservoir energy that is incompatible with all candidate bonds does not break a bond or consume that reservoir.
+
+### Current implementation state
+
+- **Direct sunlight is integrated into the live tick.** The precomputed rotating world-tone cycle feeds the shared geometric exposure/occlusion snapshot. Capture uses realized surface exposure and material response, and the processing-usable portion is transferred into the persistent, frequency-resolved organism resonance reservoir. The reservoir is distinct from transient `ToneSpectrum`; frequency-compatible retained energy can contribute to chemical BREAK, and over-capacity resonance can attempt to destabilize a physically realized bond without a hard storage cap.
+- **These are integrated slices, not proof of a unified world model.** The live sunlight settlement currently handles living-organism units; environmental physical material, dead structures, stored objects, and developing material can cast shadows but still need heat-only settlement as receivers.
+- Multi-part structural units are not yet represented constituent-by-constituent in the geometry snapshot; they fail closed rather than receiving an invented exposure.
+- Unabsorbed signal remains diagnostic; it is not yet propagated onward as a frequency-shifted secondary resonance/aura signal. This is **propagation with changed frequency composition and reduced energy, not literal reflection or bouncing rays**. The secondary path must conserve its energy budget and must not introduce arbitrary reflection/retention coefficients or duplicate capture.
+- The resonance reservoir, chemical withdrawals, overload, usable-energy holders, bond energy, work and heat are not yet proven by an end-to-end whole-world inventory across every transaction and lifecycle path. In particular, verify that sunlight energy allocation follows the approved physical geometry/material response rather than an organism-selected policy, and reconcile all transfers so the same energy is never counted in both usable energy and retained resonance.
+- The legacy random stress-break authority remains active alongside the new overload path. It still handles stress/starvation damage; the developing-offspring stress path also remains to be migrated. Replace it only after the resonance-driven structural damage path preserves collapse/death behavior and is fully accounted for.
+- Keep constructor/Bob viability work in PR #196, not this PR.
+
+### Remaining merge gates, in order
+
+1. Verify/finish the physical energy allocation and world-inventory reconciliation, including initial holders, COMBINE/BREAK, bond-energy release, work, dissipation, death/decomposition, movement/maintenance and reproduction/development paths.
+2. Settle direct sunlight intercepted by every nonliving/developing physical receiver as heat, without biological usable-energy credit.
+3. Implement energy-conserving onward propagation of frequency-shifted signal using the existing material/resonance response and bounded geometry-aware exposure.
+4. Replace the legacy stress-break path (including developing offspring) through the unified resonance/chemistry mechanism.
+5. Run exact-head CI after the next source change. Formatting and focused gates currently pass, but the full suite and Clippy remain red; preserve the 28-test baseline comparison and do not claim merge readiness.
+
+**Status:** PR #202 remains Draft and not merge-ready. This audit is based on the latest verified source head and workflow above; any README-only commit or subsequent code change requires its own exact-head workflow before claiming current-head verification.
 
 ## PR #202 wave-amplitude energy normalization — 2026-10-21
 
