@@ -172,6 +172,60 @@ impl WorldToneOccluderSnapshot {
         self.frame
             .projected_width_for_unit(self.body_index_for_organism(organism_index)?, unit_index)
     }
+
+    /// Settle one tick of direct environmental input into each living organism's
+    /// existing usable-energy holder. Geometry is sampled once for the whole
+    /// world, while material response uses the actual resource of each unit.
+    /// Invalid world geometry fails closed: no organism receives partial credit
+    /// from an incomplete occluder set.
+    pub(crate) fn settle_living_organism_inputs(
+        simulation: &mut Simulation,
+        sample: WorldToneSample,
+        living_ids: &std::collections::HashSet<String>,
+    ) {
+        let Some(mut snapshot) = Self::from_simulation(sample, simulation) else {
+            return;
+        };
+        let catalog = &simulation.environment.catalog;
+        let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
+        let (organisms, ledger) = (&mut simulation.organisms, &mut simulation.energy_ledger);
+
+        for (organism_index, organism) in organisms.iter_mut().enumerate() {
+            if !living_ids.contains(&organism.id) {
+                continue;
+            }
+            let Some(body_index) = snapshot.body_index_for_organism(organism_index) else {
+                continue;
+            };
+
+            for (unit_index, unit) in organism.structure.units.iter().enumerate() {
+                let Some((resource_name, _)) = unit.material.parts.first() else {
+                    continue;
+                };
+                // The snapshot builder rejects multi-part structural units because
+                // their distinct surfaces are not represented by one cached shape.
+                if unit.material.parts.len() != 1 {
+                    continue;
+                }
+                let Some(properties) = catalog
+                    .iter()
+                    .find(|resource| resource.name == *resource_name)
+                    .map(|resource| resource.properties)
+                else {
+                    continue;
+                };
+
+                let _ = snapshot.frame.settle_organism_surface_response(
+                    body_index,
+                    unit_index,
+                    properties,
+                    baselines,
+                    organism,
+                    ledger,
+                );
+            }
+        }
+    }
 }
 
 fn owner_anchor(organism: &Organism) -> Option<Placement> {
