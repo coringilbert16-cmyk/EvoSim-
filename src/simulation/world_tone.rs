@@ -292,6 +292,13 @@ impl WorldToneCaptureFrame {
             receiver_body_indices,
         )?;
 
+        // Illumination projection uses the single source direction for the
+        // entire tick, not the varying point-source direction at each boundary
+        // point. The visibility partition is adapted separately below; this
+        // keeps energy width exact for parallel rays while preserving the
+        // established fail-closed occlusion classification in this step.
+        let phase = std::f64::consts::TAU * sample.orbital_phase;
+        let toward_source = (phase.sin(), -phase.cos());
         let mut projected_widths = vec![0.0; bodies.len()];
         let mut projected_widths_by_unit: Vec<Vec<(usize, f64)>> = bodies
             .iter()
@@ -304,7 +311,7 @@ impl WorldToneCaptureFrame {
             .collect();
 
         for interval in straight_intervals {
-            let extent = crate::source_exposure::point_source_projected_extent(interval, source)?;
+            let extent = crate::source_exposure::projected_extent(interval, toward_source)?;
             if !extent.is_finite() || extent < 0.0 {
                 return None;
             }
@@ -317,8 +324,7 @@ impl WorldToneCaptureFrame {
         }
 
         for interval in curved_intervals {
-            let extent =
-                crate::source_exposure::point_source_projected_arc_extent(interval.arc, source)?;
+            let extent = crate::source_exposure::parallel_projected_arc_extent(interval.arc, toward_source)?;
             if !extent.is_finite() || extent < 0.0 {
                 return None;
             }
