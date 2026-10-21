@@ -1310,7 +1310,7 @@ mod tests {
 
     #[test]
     fn resonance_break_candidates_prefer_non_genome_bonds() {
-        let (organism, environment, genome_bonds) = stress_break_test_organism();
+        let (organism, environment, genome_bonds) = resonance_break_test_organism();
         let candidates = resonance_break_candidate_indices(&organism, &environment);
         assert!(!candidates.is_empty());
         assert!(candidates.iter().all(|index| !genome_bonds.contains(index)));
@@ -1318,7 +1318,7 @@ mod tests {
 
     #[test]
     fn resonance_break_candidates_fall_back_to_genome_bonds_when_structure_is_exhausted() {
-        let (mut organism, environment, genome_bonds) = stress_break_test_organism();
+        let (mut organism, environment, genome_bonds) = resonance_break_test_organism();
         assert!(!genome_bonds.is_empty());
         let protected_bonds: Vec<_> = genome_bonds
             .iter()
