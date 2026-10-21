@@ -308,7 +308,9 @@ pub(crate) fn world_tone_cavity_contribution(
             properties,
             baselines,
             sample.frequency_hz,
-            sample.energy_intensity_per_tick_per_width * attenuation,
+            wave_amplitude_from_energy(
+                sample.energy_intensity_per_tick_per_width * attenuation,
+            ),
             0.0,
         );
         received.retain_strongest();
