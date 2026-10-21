@@ -1079,6 +1079,24 @@ mod tests {
         assert!((usable - structural_energy + 5.0 + heat).abs() < 1e-12);
     }
 
+    #[test]
+    fn compatible_resonance_reduces_bond_supplied_work_without_energy_creation() {
+        let bond_energy = 4.0;
+        let total_disruption_work = 5.0;
+        let resonant_work = 2.0;
+        let bond_supplied_work = total_disruption_work - resonant_work;
+        let (structural_energy, usable, heat) =
+            chemical_break_energy_yield(bond_energy, bond_supplied_work, 0.5).unwrap();
+
+        assert!((structural_energy - bond_energy).abs() < 1e-12);
+        assert!((usable - 0.5).abs() < 1e-12);
+        assert!((heat - 0.5).abs() < 1e-12);
+        // Bond energy plus the reservoir debit exactly pays usable gain,
+        // dissipated heat, and the full physical disruption work.
+        let residual = -structural_energy - resonant_work + usable + heat + total_disruption_work;
+        assert!(residual.abs() < 1e-12);
+    }
+
     fn stress_break_test_organism() -> (
         crate::state::Organism,
         crate::state::Environment,
