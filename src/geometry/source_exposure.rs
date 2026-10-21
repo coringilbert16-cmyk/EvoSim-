@@ -3298,8 +3298,6 @@ pub(crate) fn visible_parallel_polygonal_intervals_for_targets(
     Some(visible)
 }
 
-
-
 /// Compute the exact parallel-projection width credited to each target constituent.
 /// Straight/curved boundaries share one lane partition and one nearest-surface test;
 /// curved event lanes and circle hit depths are quantized to the approved 0.01 grid.
@@ -3450,7 +3448,10 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
 
             let vertices_for_winding = if closed_surface {
                 let Some(vertices) = (match &part.form {
-                    Form::Fluid { boundary: Some(vertices), .. } => Some(vertices.clone()),
+                    Form::Fluid {
+                        boundary: Some(vertices),
+                        ..
+                    } => Some(vertices.clone()),
                     _ => part.form.polygon_vertices(),
                 }) else {
                     return None;
@@ -3683,7 +3684,11 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
         *width += hi - lo;
     }
 
-    if widths.iter().flatten().any(|(_, width)| !width.is_finite() || *width < 0.0) {
+    if widths
+        .iter()
+        .flatten()
+        .any(|(_, width)| !width.is_finite() || *width < 0.0)
+    {
         return None;
     }
     Some(widths)
