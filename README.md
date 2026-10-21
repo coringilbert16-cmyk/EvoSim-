@@ -2165,10 +2165,10 @@ Use a coordinate frame derived once per tick from normalized sunlight direction 
 
 ### Latest implementation change — sunlight allocation (2026-10-21)
 
-- Corrected organism sunlight settlement so damping-derived energy is heat, not automatically stored energy. The existing material-response spectrum is scaled using the agreed `E = A²` convention and bounded by the energy remaining after damping; represented spectral energy enters the persistent frequency-resolved resonance reservoir. If the bounded reservoir cannot represent the whole deposit, that response energy is dissipated as heat rather than lost, duplicated, or assigned by genome processing efficiency.
+- Corrected organism sunlight settlement so damping-derived energy is heat, not automatically stored energy. The existing material-response spectrum is scaled using the agreed `E = A²` convention; its energy is bounded by the incident budget, and the material damping ratio partitions that response energy between retained resonance and heat. If the bounded reservoir cannot represent the whole deposit, that response energy is dissipated as heat rather than lost, duplicated, or assigned by genome processing efficiency.
 - The interaction now reconciles incident energy into retained resonance, damping/overflow heat, and the remaining signal budget. The remaining amount is still diagnostic only; geometry-aware frequency-shifted onward propagation is not yet implemented.
 - Added/updated the focused regression to assert conservation across retained resonance, heat, and remaining signal.
-- Source/test commits: `8087a91dcb2229379826cfc072751ba653adc3f1`, `b41a562d78a6c167b94472d570f3696d454089b2`, `544ae78a99e1f140487eee837425fab0983de69c`, and `12a75fcfa4d7224d5dc89159392e112fb2ff0ca0` (formatting/compile follow-ups).
+- Source/test commits: `8087a91dcb2229379826cfc072751ba653adc3f1`, `b41a562d78a6c167b94472d570f3696d454089b2`, `544ae78a99e1f140487eee837425fab0983de69c`, `12a75fcfa4d7224d5dc89159392e112fb2ff0ca0`, and `90d54c5b80cd5165e8e7d57000f8925dc22dd179` (formatting, compile, and response-energy partition follow-ups).
 - Verification status: exact-head CI has not yet completed for these changes. Do not treat the implementation as verified until CI finishes.
 
 ### Current implementation state
