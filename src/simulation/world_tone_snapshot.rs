@@ -1030,7 +1030,7 @@ mod tests {
         let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
             .expect("both physical receivers should be represented");
         assert!(
-            snapshot.frame.interaction_paths().any(|path| {
+            snapshot.frame.interaction_paths().iter().any(|path| {
                 path.hits
                     .windows(2)
                     .any(|hits| hits[0] == (0, 0) && hits[1] == (1, 0))
