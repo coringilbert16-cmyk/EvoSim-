@@ -1316,6 +1316,73 @@ mod tests {
         assert!((holder - 7.5 * expected_width).abs() < 1e-7);
     }
     #[test]
+    fn partial_absorption_accounts_for_remaining_signal_without_double_credit() {
+        use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
+        use crate::resources::{Form, ResourceBaselines, ResourceProperties};
+
+        let body = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Rectangle {
+                    width: 2.0,
+                    height: 2.0,
+                },
+                x: 5.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: 4.0,
+            max_x: 6.0,
+            min_y: -1.0,
+            max_y: 1.0,
+        };
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0,
+            source_y: 0.0,
+            frequency_hz: 440.0,
+            energy_intensity_per_tick_per_width: 10.0,
+            orbital_phase: 0.75,
+        };
+        let properties = ResourceProperties {
+            mass: 1.0,
+            potential_energy: 1.0,
+            reactivity: 1.0,
+            chemical_position: Some(7.0),
+            cohesion: 4.0,
+        };
+        let baselines = ResourceBaselines {
+            mass: 1.0,
+            potential_energy: 1.0,
+            reactivity: 1.0,
+            cohesion: 1.0,
+        };
+        let mut frame = WorldToneCaptureFrame::from_geometry(sample, &[body]).unwrap();
+        let mut holder = 0.0;
+        let mut ledger = crate::state::EnergyLedger::default();
+
+        let result = frame
+            .settle_surface_response(0, 0, properties, baselines, 0.75, &mut holder, &mut ledger)
+            .unwrap();
+
+        assert!(result.absorbed_energy > 0.0);
+        assert!(result.unabsorbed_energy > 0.0);
+        assert!(
+            (result.incident_energy - result.absorbed_energy - result.unabsorbed_energy).abs()
+                < 1e-9
+        );
+        assert!(
+            (result.absorbed_energy - result.usable_energy - result.heat_dissipated).abs()
+                < 1e-9
+        );
+        assert!((holder - result.usable_energy).abs() < 1e-9);
+        assert!((ledger.total_external_energy_input - result.absorbed_energy).abs() < 1e-9);
+        assert!((ledger.total_heat_dissipated - result.heat_dissipated).abs() < 1e-9);
+        assert!(
+            (ledger.total_world_tone_energy_unabsorbed - result.unabsorbed_energy).abs() < 1e-9
+        );
+    }
+
+    #[test]
     fn organism_surface_settlement_uses_existing_processing_efficiency() {
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
         use crate::resources::{Form, ResourceBaselines, ResourceProperties};
