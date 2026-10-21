@@ -3,8 +3,6 @@ use crate::decision_runtime::ActionCandidate;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
 use crate::structure::Placement;
-use rand::Rng;
-use rand_chacha::ChaCha8Rng;
 
 /// Release the intrinsic potential stored in an existing physical bond.
 ///
@@ -273,8 +271,8 @@ fn resonance_break_candidate_indices(organism: &Organism, environment: &Environm
             .unwrap_or_default();
 
     // Genome bonds are protected while ordinary structural bonds remain.
-    // Once those ordinary bonds are exhausted, the protected bonds become
-    // stress-break candidates so structural collapse can proceed normally.
+    // Once ordinary bonds are exhausted, compatible resonance may destabilize
+    // a genome-boundary bond through the same chemistry pathway.
     let ordinary_candidates: Vec<usize> = organism
         .structure
         .bonds
@@ -1191,7 +1189,7 @@ mod tests {
         assert!(residual.abs() < 1e-12);
     }
 
-    fn stress_break_test_organism() -> (
+    fn resonance_break_test_organism() -> (
         crate::state::Organism,
         crate::state::Environment,
         Vec<usize>,
