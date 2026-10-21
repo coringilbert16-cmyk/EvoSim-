@@ -253,11 +253,7 @@ fn angle_interval_for_bounds(
     {
         return None;
     }
-    if source.0 >= bounds.0
-        && source.0 <= bounds.1
-        && source.1 >= bounds.2
-        && source.1 <= bounds.3
-    {
+    if source.0 >= bounds.0 && source.0 <= bounds.1 && source.1 >= bounds.2 && source.1 <= bounds.3 {
         return Some((-std::f64::consts::PI, std::f64::consts::PI));
     }
     let corners = [
@@ -297,9 +293,7 @@ fn candidate_body_indices_for_bounds(
         (target_bounds.0 + target_bounds.1) * 0.5,
         (target_bounds.2 + target_bounds.3) * 0.5,
     );
-    let reference_angle = if (center.0 - source.0).hypot(center.1 - source.1)
-        <= f64::EPSILON
-    {
+    let reference_angle = if (center.0 - source.0).hypot(center.1 - source.1) <= f64::EPSILON {
         0.0
     } else {
         (center.1 - source.1).atan2(center.0 - source.0)
@@ -312,9 +306,7 @@ fn candidate_body_indices_for_bounds(
             (body.min_x, body.max_x, body.min_y, body.max_y),
             reference_angle,
         )?;
-        if interval.0 <= target_interval.1 + 1e-10
-            && target_interval.0 <= interval.1 + 1e-10
-        {
+        if interval.0 <= target_interval.1 + 1e-10 && target_interval.0 <= interval.1 + 1e-10 {
             candidates.push(body_index);
         }
     }
@@ -628,12 +620,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
             let candidate_body_indices = candidate_body_indices_for_bounds(
                 source,
                 bodies,
-                (
-                    a.0.min(b.0),
-                    a.0.max(b.0),
-                    a.1.min(b.1),
-                    a.1.max(b.1),
-                ),
+                (a.0.min(b.0), a.0.max(b.0), a.1.min(b.1), a.1.max(b.1)),
             )?;
             let mut cuts = vec![0.0_f64, 1.0_f64];
             for &(vx, vy) in &critical_points {
