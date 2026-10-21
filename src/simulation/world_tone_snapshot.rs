@@ -148,12 +148,50 @@ impl WorldToneOccluderSnapshot {
             }
         }
 
+        let receiver_original_indices: Vec<_> =
+            organism_body_indices.iter().flatten().copied().collect();
+        if receiver_original_indices.is_empty() {
+            return None;
+        }
+
+        // A body can only block a receiver along directions subtended by that
+        // receiver. Keep a conservative angular broad phase so thousands of
+        // unrelated environmental particles do not enter every exact ray test.
+        let reference_angle = (simulation.environment.height * 0.5 - sample.source_y)
+            .atan2(simulation.environment.width * 0.5 - sample.source_x);
+        let angular_intervals = bodies
+            .iter()
+            .map(|body| source_angular_interval(body, sample, reference_angle))
+            .collect::<Option<Vec<_>>>()?;
+        let receiver_intervals: Vec<_> = receiver_original_indices
+            .iter()
+            .map(|index| angular_intervals.get(*index).copied())
+            .collect::<Option<Vec<_>>>()?;
+
+        let mut remapped_indices = vec![None; bodies.len()];
+        let mut relevant_bodies = Vec::new();
+        for (original_index, body) in bodies.into_iter().enumerate() {
+            let is_receiver = receiver_original_indices.contains(&original_index);
+            let interval = angular_intervals[original_index];
+            let relevant = is_receiver
+                || receiver_intervals
+                    .iter()
+                    .any(|receiver| angular_intervals_overlap(interval, *receiver));
+            if relevant {
+                remapped_indices[original_index] = Some(relevant_bodies.len());
+                relevant_bodies.push(body);
+            }
+        }
+        let organism_body_indices: Vec<_> = organism_body_indices
+            .into_iter()
+            .map(|index| index.and_then(|original| remapped_indices[original]))
+            .collect();
         let receiver_body_indices: Vec<_> =
             organism_body_indices.iter().flatten().copied().collect();
-        let occluder_count = bodies.len();
+        let occluder_count = relevant_bodies.len();
         let frame = WorldToneCaptureFrame::from_geometry_for_receivers(
             sample,
-            &bodies,
+            &relevant_bodies,
             &receiver_body_indices,
         )?;
         Some(Self {
@@ -229,6 +267,61 @@ impl WorldToneOccluderSnapshot {
             }
         }
     }
+}
+
+fn source_angular_interval(
+    body: &OrganismBodyGeometry,
+    sample: WorldToneSample,
+    reference_angle: f64,
+) -> Option<(f64, f64)> {
+    if ![
+        body.min_x,
+        body.max_x,
+        body.min_y,
+        body.max_y,
+        sample.source_x,
+        sample.source_y,
+        reference_angle,
+    ]
+    .iter()
+    .all(|value| value.is_finite())
+        || body.min_x > body.max_x
+        || body.min_y > body.max_y
+    {
+        return None;
+    }
+
+    let corners = [
+        (body.min_x, body.min_y),
+        (body.min_x, body.max_y),
+        (body.max_x, body.min_y),
+        (body.max_x, body.max_y),
+    ];
+    let mut minimum = f64::INFINITY;
+    let mut maximum = f64::NEG_INFINITY;
+    for (x, y) in corners {
+        let dx = x - sample.source_x;
+        let dy = y - sample.source_y;
+        if dx.hypot(dy) <= f64::EPSILON {
+            return Some((-std::f64::consts::PI, std::f64::consts::PI));
+        }
+        let angle = dy.atan2(dx);
+        let relative = (angle - reference_angle + std::f64::consts::PI)
+            .rem_euclid(std::f64::consts::TAU)
+            - std::f64::consts::PI;
+        minimum = minimum.min(relative);
+        maximum = maximum.max(relative);
+    }
+
+    if maximum - minimum > std::f64::consts::PI {
+        Some((-std::f64::consts::PI, std::f64::consts::PI))
+    } else {
+        Some((minimum, maximum))
+    }
+}
+
+fn angular_intervals_overlap(first: (f64, f64), second: (f64, f64)) -> bool {
+    first.0 <= second.1 + 1e-10 && second.0 <= first.1 + 1e-10
 }
 
 fn owner_anchor(organism: &Organism) -> Option<Placement> {
