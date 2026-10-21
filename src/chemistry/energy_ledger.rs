@@ -190,6 +190,8 @@ pub(crate) struct EnergyInventorySnapshot {
     pub(crate) initial_structural_energy: f64,
     pub(crate) current_structural_energy: f64,
     pub(crate) external_energy_input: f64,
+    /// Energy carried out of the modeled world by a continuing signal.
+    pub(crate) world_tone_energy_escaped: f64,
     /// Explicit non-structural sources only; never count bond breakdown here.
     pub(crate) other_energy_released: f64,
     pub(crate) work_expended: f64,
@@ -208,6 +210,7 @@ impl EnergyInventorySnapshot {
             self.initial_structural_energy,
             self.current_structural_energy,
             self.external_energy_input,
+            self.world_tone_energy_escaped,
             self.other_energy_released,
             self.work_expended,
             self.heat_dissipated,
@@ -227,7 +230,8 @@ impl EnergyInventorySnapshot {
             + self.work_expended
             + self.heat_dissipated
             - self.external_energy_input
-            - self.other_energy_released;
+            - self.other_energy_released
+            - self.world_tone_energy_escaped;
         residual.is_finite().then_some(residual)
     }
 
@@ -250,6 +254,13 @@ pub(crate) trait EnergyLedgerAuthority {
         &mut self,
         holder: &mut f64,
         transaction: ExternalInputTransaction,
+    ) -> bool;
+    fn settle_world_tone_paths(
+        &mut self,
+        incident_energy: f64,
+        resonant_energy_captured: f64,
+        heat_dissipated: f64,
+        escaped_energy: f64,
     ) -> bool;
     fn settle_external_input_from_budget(
         &mut self,
@@ -313,6 +324,40 @@ impl EnergyLedgerAuthority for EnergyLedger {
         self.total_usable_energy_gained = next_gained;
         self.total_work_expended = next_work;
         self.total_heat_dissipated = next_heat;
+        true
+    }
+
+    fn settle_world_tone_paths(
+        &mut self,
+        incident_energy: f64,
+        resonant_energy_captured: f64,
+        heat_dissipated: f64,
+        escaped_energy: f64,
+    ) -> bool {
+        let values = [
+            incident_energy,
+            resonant_energy_captured,
+            heat_dissipated,
+            escaped_energy,
+        ];
+        if values.iter().any(|value| !value.is_finite() || *value < 0.0) {
+            return false;
+        }
+        let allocated = resonant_energy_captured + heat_dissipated + escaped_energy;
+        if !allocated.is_finite()
+            || (incident_energy - allocated).abs() > EPSILON * incident_energy.max(1.0)
+        {
+            return false;
+        }
+        let next_external = self.total_external_energy_input + incident_energy;
+        let next_heat = self.total_heat_dissipated + heat_dissipated;
+        let next_escaped = self.total_world_tone_energy_escaped + escaped_energy;
+        if !next_external.is_finite() || !next_heat.is_finite() || !next_escaped.is_finite() {
+            return false;
+        }
+        self.total_external_energy_input = next_external;
+        self.total_heat_dissipated = next_heat;
+        self.total_world_tone_energy_escaped = next_escaped;
         true
     }
 
@@ -382,6 +427,7 @@ mod tests {
             initial_structural_energy: 4.0,
             current_structural_energy: 4.0,
             external_energy_input: 5.0,
+            world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
             work_expended: 1.0,
             heat_dissipated: 1.0,
@@ -400,6 +446,7 @@ mod tests {
             initial_structural_energy: 8.0,
             current_structural_energy: 9.0,
             external_energy_input: 7.0,
+            world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
             work_expended: 2.0,
             heat_dissipated: 2.0,
@@ -418,6 +465,7 @@ mod tests {
             initial_structural_energy: 5.0,
             current_structural_energy: 0.0,
             external_energy_input: 0.0,
+            world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
             work_expended: 0.0,
             heat_dissipated: 3.0,
