@@ -408,7 +408,8 @@ impl WorldToneOccluderSnapshot {
                         return;
                     };
                     let mut candidate = staged_reservoirs[organism_index].clone();
-                    let mut deposit_ok = true;
+                    let before_energy = candidate.total_energy();
+                    let mut deposit_ok = before_energy.is_some();
                     for component in &retained_spectrum.components {
                         let energy = component.amplitude * component.amplitude;
                         if energy > f64::EPSILON
@@ -418,7 +419,17 @@ impl WorldToneOccluderSnapshot {
                             break;
                         }
                     }
-                    if deposit_ok {
+                    let stored_delta = candidate
+                        .total_energy()
+                        .zip(before_energy)
+                        .map(|(after, before)| after - before);
+                    if deposit_ok
+                        && stored_delta.is_some_and(|stored| {
+                            stored.is_finite()
+                                && (stored - retained_budget).abs()
+                                    <= 1e-9 * retained_budget.max(1.0)
+                        })
+                    {
                         staged_reservoirs[organism_index] = candidate;
                         captured = retained_budget;
                     } else {
@@ -471,8 +482,7 @@ impl WorldToneOccluderSnapshot {
             }
         }
 
-        let (_, ledger) = (&mut simulation.organisms, &mut simulation.energy_ledger);
-        if !ledger.settle_world_tone_paths(
+        if !simulation.energy_ledger.settle_world_tone_paths(
             total_incident,
             total_captured,
             total_heat,
@@ -484,7 +494,6 @@ impl WorldToneOccluderSnapshot {
             organism.resonant_energy = reservoir;
         }
     }
-}
 }
 
 fn spectrum_energy(spectrum: &crate::harmonics::ToneSpectrum) -> Option<f64> {
