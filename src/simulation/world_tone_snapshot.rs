@@ -371,11 +371,9 @@ impl WorldToneOccluderSnapshot {
                     break;
                 }
 
-                let Some(response_spectrum) = crate::harmonics::material_response_spectrum(
-                    properties,
-                    baselines,
-                    &signal,
-                ) else {
+                let Some(response_spectrum) =
+                    crate::harmonics::material_response_spectrum(properties, baselines, &signal)
+                else {
                     return;
                 };
                 let response_energy = spectrum_energy(&response_spectrum);
@@ -393,13 +391,14 @@ impl WorldToneOccluderSnapshot {
                 let mut interaction_heat = damping_heat;
                 let mut captured = 0.0;
 
-                let living_organism = body_to_organism
-                    .get(body_index)
-                    .copied()
-                    .flatten()
-                    .filter(|organism_index| {
-                        living_ids.contains(&simulation.organisms[*organism_index].id)
-                    });
+                let living_organism =
+                    body_to_organism
+                        .get(body_index)
+                        .copied()
+                        .flatten()
+                        .filter(|organism_index| {
+                            living_ids.contains(&simulation.organisms[*organism_index].id)
+                        });
 
                 if let Some(organism_index) = living_organism {
                     let retained_budget = response_energy - damping_heat;
