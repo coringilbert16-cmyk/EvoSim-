@@ -3678,7 +3678,6 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
                 }
             }
         }
-
     }
 
     let partition = ParallelLanePartition::from_boundary_events(straight_lanes, curved_lanes)?;
