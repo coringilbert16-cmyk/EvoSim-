@@ -2149,3 +2149,15 @@ Use a coordinate frame derived once per tick from normalized sunlight direction 
 - Captured energy is accounted as external input and divided between usable energy and heat using the organism's existing processing efficiency. Unabsorbed energy is tracked only as a diagnostic total; it is **not yet propagated as secondary resonance energy**, so it is not credited again to another receiver. The regression proves the local accounting split but does not prove whole-world conservation.
 - **Additional receiver gap found in the follow-up audit:** the live tick settles only living-organism units. Environmental physical material, dead structures, stored objects, and developing material are included as shadow-casting bodies, but are not yet settled as heat-only sunlight receivers. Their intercepted direct energy therefore has no corresponding heat transaction yet. This must be fixed before claiming unified sunlight/chemistry accounting.
 - **Remaining substantive gap:** define and implement an energy-conserving secondary resonance/aura path using existing material response, with no arbitrary reflection/retention coefficient and no literal reflected-ray tracing. Then reconcile the full world inventory across sunlight, chemistry, structural bond energy, usable holders, work, heat, and any secondary signal output. Keep PR196 separate.
+
+
+## PR #202 wave-amplitude energy normalization — 2026-10-21
+
+The first implementation slice adopts the wave-amplitude interpretation for resonance energy:
+
+- Normalized wave energy is represented as amplitude squared; converting incident energy into a signal amplitude uses the square root.
+- The damped oscillator's dissipated-energy fraction is now expressed through its amplitude response and the squared dissipative amplitude, rather than a separately written numerator/denominator energy equation.
+- Focused tests cover energy/amplitude round-tripping and the squared damped-response relationship.
+- The world-tone cavity signal path now converts its per-tick incident energy intensity to amplitude before applying the material response.
+
+**This is a normalization step, not a completed unified energy model.** The steady-state oscillator response can exceed the incident amplitude, so its response amplitude must not be treated as an outgoing energy-bearing wave without accounting for where the additional response energy came from or explicitly bounding it. Nonlinear harmonic generation and strongest-component truncation also need an energy-preserving rule. The live sunlight path still uses genome processing efficiency to split the damped amount into usable energy and heat; that is not yet consistent with the agreed rule that damping produces heat and physical structure determines energy transfer. The new code has passed formatting and architecture checks on the latest workflow; full Rust tests and Clippy are still running at the time of this note. Do not claim whole-world conservation or merge readiness from this slice.
