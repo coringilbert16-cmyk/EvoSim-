@@ -133,6 +133,9 @@ impl Simulation {
         energy_ledger.total_usable_energy_held =
             crate::reproduction::total_usable_energy_held(std::slice::from_ref(&organism), &[]);
         energy_ledger.initial_usable_energy_held = energy_ledger.total_usable_energy_held;
+        energy_ledger.total_resonant_energy_held =
+            crate::reproduction::total_resonant_energy_held(std::slice::from_ref(&organism));
+        energy_ledger.initial_resonant_energy_held = energy_ledger.total_resonant_energy_held;
         energy_ledger.total_structural_energy_held = organism
             .structure
             .bonds
@@ -1299,6 +1302,8 @@ impl Simulation {
             &self.organisms,
             &self.decomposing_bodies,
         );
+        self.energy_ledger.total_resonant_energy_held =
+            crate::reproduction::total_resonant_energy_held(&self.organisms);
         self.energy_ledger.total_structural_energy_held =
             Self::structural_energy_held(&self.organisms, &self.decomposing_bodies);
     }
@@ -1341,6 +1346,8 @@ impl Simulation {
         crate::energy_ledger::EnergyInventorySnapshot {
             initial_usable_energy: self.energy_ledger.initial_usable_energy_held,
             current_usable_energy: self.energy_ledger.total_usable_energy_held,
+            initial_resonant_energy: self.energy_ledger.initial_resonant_energy_held,
+            current_resonant_energy: self.energy_ledger.total_resonant_energy_held,
             initial_structural_energy: self.energy_ledger.initial_structural_energy_held,
             current_structural_energy: self.energy_ledger.total_structural_energy_held,
             external_energy_input: self.energy_ledger.total_external_energy_input,
