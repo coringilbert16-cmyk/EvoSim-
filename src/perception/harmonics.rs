@@ -238,7 +238,7 @@ pub(crate) fn world_tone_cavity_contribution(
     sample: crate::world_tone::WorldToneSample,
 ) -> (ToneSpectrum, Vec<ResonancePerception>) {
     let segments = cavity.boundary_segments();
-    if segments.is_empty() || sample.signal_energy_level <= f64::EPSILON {
+    if segments.is_empty() || sample.energy_intensity_per_tick_per_width <= f64::EPSILON {
         return (ToneSpectrum::empty(), Vec::new());
     }
     let center = cavity_center(cavity);
@@ -283,7 +283,7 @@ pub(crate) fn world_tone_cavity_contribution(
             properties,
             baselines,
             sample.frequency_hz,
-            sample.signal_energy_level * attenuation,
+            sample.energy_intensity_per_tick_per_width * attenuation,
             0.0,
         );
         received.retain_strongest();
@@ -777,7 +777,6 @@ mod tests {
             source_x: 500.0,
             source_y: 0.0,
             frequency_hz: 440.0,
-            signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.0,
         };
@@ -799,14 +798,13 @@ mod tests {
             source_x: 500.0,
             source_y: 1000.0,
             frequency_hz: 110.0,
-            signal_energy_level: 0.0,
             energy_intensity_per_tick_per_width: 1.0,
             orbital_phase: 0.5,
         };
         let (south_spectrum, south_perceptions) =
             world_tone_cavity_contribution(&catalog, &structure, &cavity, south);
-        assert!(south_spectrum.components.is_empty());
-        assert!(south_perceptions.is_empty());
+        assert!(!south_spectrum.components.is_empty());
+        assert!(!south_perceptions.is_empty());
     }
 
     #[test]
