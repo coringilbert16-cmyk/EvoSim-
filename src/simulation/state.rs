@@ -153,6 +153,11 @@ pub(crate) struct EnergyLedger {
     /// Energy received from explicit external sources, distinct from bond release.
     #[serde(default)]
     pub(crate) total_external_energy_input: f64,
+    /// Cumulative world-tone energy that was incident on exposed material but
+    /// not absorbed. This is throughput telemetry, not stored energy or an
+    /// inventory term; the remainder still needs explicit propagation/escape handling.
+    #[serde(default)]
+    pub(crate) total_world_tone_energy_unabsorbed: f64,
     pub(crate) total_usable_energy_gained: f64,
     #[serde(default)]
     pub(crate) total_work_expended: f64,
