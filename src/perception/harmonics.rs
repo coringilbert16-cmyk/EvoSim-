@@ -169,7 +169,8 @@ pub(crate) fn resonant_absorption_fraction(
     if !ratio.is_finite() {
         return 0.0;
     }
-    let response_amplitude = resonance_response(drive_frequency_hz, natural_frequency_hz, damping);
+    let response_amplitude =
+        resonance_response(drive_frequency_hz, natural_frequency_hz, damping);
     let dissipative_amplitude = 2.0 * damping * ratio * response_amplitude;
     let fraction = wave_energy_from_amplitude(dissipative_amplitude);
     if fraction.is_finite() {
