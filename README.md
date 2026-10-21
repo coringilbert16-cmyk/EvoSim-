@@ -2286,3 +2286,17 @@ The legacy stress-threshold/random-break path is **not yet removed**. For this t
 ## PR #202 — activation-barrier coupling refinement — 2026-10-21
 
 The chemistry coupling now uses the same non-mutating frequency-compatibility calculation during reaction accumulation. Compatible retained resonance lowers the remaining activation barrier; the actual reservoir debit is still deferred until resolution and committed only if the bond transaction succeeds. If earlier same-tick events consume the available resonance or invalidate the bond, resolution fails without consuming the reservoir. The overload path uses the same transaction settlement and work accounting, while its overload condition remains the aggregate retained-energy total exceeding the realized bond-energy capacity.
+
+
+## PR #202 — ordered downstream world-tone propagation implementation checkpoint — 2026-10-21
+
+This checkpoint supersedes the earlier statement that onward propagation is only diagnostic, but it is **not** a claim that the implementation has passed exact-head CI.
+
+- The shared parallel-ray geometry frame now preserves the ordered material hits for each projected-width lane, not just the nearest visible surface. The first-hit width derived from these paths is checked against the existing direct-exposure result before settlement; ambiguous or unsupported paths fail closed.
+- Each hit resolves its actual resource properties and applies the existing material/harmonic response to the incoming spectrum. The response changes frequency composition; outgoing amplitude is then normalized to the energy budget still available. This is continuing signal propagation through downstream material, **not literal reflection or a new source**.
+- Each lane stages its resonance deposits and reconciles incident energy into retained resonance, damping heat, and the signal that exits the modeled world. The escaped remainder is now tracked separately and included as an output term in the world-inventory residual. Failed/invalid allocations do not commit staged reservoir changes.
+- A geometry regression checks that ordered paths retain downstream hits and that the path first-hit widths reconcile with direct exposure. A ledger regression checks that capture, heat, and escape sum to the incident source exactly once.
+
+**Verification status at this checkpoint:** the exact-head workflow for commit `133233b68986d116b9356433faa2969943600132` is queued/in progress; formatting, Rust tests, Clippy, and the focused geometry/energy tests are not yet confirmed green. Earlier workflows failed on missing trait import, missing ledger initializer fields, and formatting; those issues were corrected in later commits, but the newer head must be verified independently.
+
+**Still open after this slice:** whole-world energy reconciliation across every lifecycle and transaction path; settlement for all nonliving/dead/stored/developing receivers (they currently can occlude, but the live path is centered on living organism bodies); replacement of the legacy random stress-break path and migration of developing offspring; exact-head CI and baseline failure identity comparison. PR #202 remains Draft and not merge-ready.
