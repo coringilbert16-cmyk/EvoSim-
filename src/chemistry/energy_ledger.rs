@@ -200,7 +200,8 @@ pub(crate) struct EnergyInventorySnapshot {
 
 impl EnergyInventorySnapshot {
     /// Signed conservation residual. A value of zero means the change in
-    /// usable, resonant, and structural energy plus work and heat equals all external sources.
+    /// usable, resonant, and structural energy plus work, heat, and escaped tone
+    /// equals all external sources.
     pub(crate) fn residual(self) -> Option<f64> {
         let values = [
             self.initial_usable_energy,
@@ -511,6 +512,7 @@ mod tests {
             initial_structural_energy: 8.0,
             current_structural_energy: 9.0,
             external_energy_input: 7.0,
+            world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
             work_expended: 2.0,
             heat_dissipated: 2.0,
