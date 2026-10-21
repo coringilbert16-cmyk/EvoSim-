@@ -3299,6 +3299,8 @@ pub(crate) fn visible_parallel_polygonal_intervals_for_targets(
 /// Compute the exact parallel-projection width credited to each target constituent.
 /// Straight/curved boundaries share one lane partition and one nearest-surface test;
 /// curved event lanes and circle hit depths are quantized to the approved 0.01 grid.
+type ParallelExposureWidths = Vec<Vec<(usize, f64)>>;
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ParallelRayInteractionPath {
     /// Width of this lane interval; energy is intensity multiplied by this width.
@@ -3311,7 +3313,7 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
     toward_source: (f64, f64),
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     target_body_indices: &[usize],
-) -> Option<Vec<Vec<(usize, f64)>>> {
+) -> Option<ParallelExposureWidths> {
     Some(parallel_exposure_with_paths_for_targets(toward_source, bodies, target_body_indices)?.0)
 }
 
@@ -3319,7 +3321,7 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
     toward_source: (f64, f64),
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     target_body_indices: &[usize],
-) -> Option<(Vec<Vec<(usize, f64)>>, Vec<ParallelRayInteractionPath>)> {
+) -> Option<(ParallelExposureWidths, Vec<ParallelRayInteractionPath>)> {
     use crate::capillary_geometry::FluidBoundaryPiece;
     use crate::resources::Form;
 
