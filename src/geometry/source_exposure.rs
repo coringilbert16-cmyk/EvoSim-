@@ -3507,9 +3507,11 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
         }
     }
 
+    let mut arc_lane_ranges = Vec::with_capacity(arcs.len());
     for arc in &arcs {
-        let (lo, hi) = frame.circle_critical_lanes(arc.center, arc.radius)?;
-        curved_lanes.extend([lo, hi]);
+        let range = frame.circle_critical_lanes(arc.center, arc.radius)?;
+        arc_lane_ranges.push(range);
+        curved_lanes.extend([range.0, range.1]);
         for angle in [arc.start, arc.start + arc.sweep] {
             let point = (
                 arc.center.0 + arc.radius * angle.cos(),
@@ -3519,10 +3521,29 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
         }
     }
 
-    for left in 0..segments.len() {
-        for right in (left + 1)..segments.len() {
-            let a = segments[left];
-            let b = segments[right];
+    // Sweep by lane extent instead of comparing every pair of boundaries.
+    // Only intersections involving a receiver boundary can change whether that
+    // receiver is exposed; blocker/blocker crossings cannot reveal a hidden
+    // receiver without a receiver/blocker crossing of their own.
+    let mut segment_order: Vec<usize> = (0..segments.len()).collect();
+    segment_order.sort_by(|left, right| {
+        let left = segments[*left].lane_start.min(segments[*left].lane_end);
+        let right = segments[*right].lane_start.min(segments[*right].lane_end);
+        left.total_cmp(&right)
+    });
+    for (position, &left_index) in segment_order.iter().enumerate() {
+        let a = segments[left_index];
+        let a_min = a.lane_start.min(a.lane_end);
+        let a_max = a.lane_start.max(a.lane_end);
+        for &right_index in &segment_order[position + 1..] {
+            let b = segments[right_index];
+            let b_min = b.lane_start.min(b.lane_end);
+            if b_min > a_max + 1e-9 {
+                break;
+            }
+            if !target_mask[a.body_index] && !target_mask[b.body_index] {
+                continue;
+            }
             match frame.segment_intersection_lane(a.start, a.end, b.start, b.end) {
                 Some(Some(lane)) => straight_lanes.push(lane),
                 Some(None) => {}
@@ -3545,8 +3566,21 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
         }
     }
 
-    for arc in &arcs {
-        for segment in &segments {
+    for (arc_index, arc) in arcs.iter().enumerate() {
+        let (arc_min, arc_max) = arc_lane_ranges[arc_index];
+        let upper = segment_order.partition_point(|segment_index| {
+            segments[*segment_index].lane_start.min(segments[*segment_index].lane_end)
+                <= arc_max + 1e-9
+        });
+        for &segment_index in &segment_order[..upper] {
+            let segment = segments[segment_index];
+            let segment_min = segment.lane_start.min(segment.lane_end);
+            let segment_max = segment.lane_start.max(segment.lane_end);
+            if segment_max < arc_min - 1e-9
+                || (!target_mask[arc.body_index] && !target_mask[segment.body_index])
+            {
+                continue;
+            }
             let mut intersections = Vec::new();
             add_circle_segment_intersections(
                 arc.center,
@@ -3564,10 +3598,20 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
         }
     }
 
-    for first_index in 0..arcs.len() {
-        for second_index in (first_index + 1)..arcs.len() {
-            let first = arcs[first_index];
+    let mut arc_order: Vec<usize> = (0..arcs.len()).collect();
+    arc_order.sort_by(|left, right| arc_lane_ranges[*left].0.total_cmp(&arc_lane_ranges[*right].0));
+    for (position, &first_index) in arc_order.iter().enumerate() {
+        let first = arcs[first_index];
+        let first_range = arc_lane_ranges[first_index];
+        for &second_index in &arc_order[position + 1..] {
+            let second_range = arc_lane_ranges[second_index];
+            if second_range.0 > first_range.1 + 1e-9 {
+                break;
+            }
             let second = arcs[second_index];
+            if !target_mask[first.body_index] && !target_mask[second.body_index] {
+                continue;
+            }
             if (first.center.0 - second.center.0).abs() <= 1e-10
                 && (first.center.1 - second.center.1).abs() <= 1e-10
                 && (first.radius - second.radius).abs() <= 1e-10
