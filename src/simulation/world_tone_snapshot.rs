@@ -1081,7 +1081,7 @@ mod tests {
             "physical material must receive the source even when no living organism is present"
         );
         assert!(
-            simulation.energy_ledger.total_world_tone_energy_heat > 0.0,
+            simulation.energy_ledger.total_heat_dissipated > 0.0,
             "nonliving material response must settle as heat"
         );
         assert_eq!(
