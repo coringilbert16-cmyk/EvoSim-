@@ -28,7 +28,7 @@ mod structure_authority;
 #[path = "simulation/world_tone.rs"]
 mod world_tone;
 #[path = "simulation/world_tone_snapshot.rs"]
-#[allow(dead_code)] // Snapshot is staged before live-tick energy settlement.
+#[allow(dead_code)] // Live settlement uses this snapshot; audit helpers remain test-only.
 mod world_tone_snapshot;
 
 // Active physical geometry authority stack.
@@ -65,7 +65,7 @@ mod physical_geometry;
 #[path = "geometry/rigid_boundary.rs"]
 mod rigid_boundary;
 #[path = "geometry/source_exposure.rs"]
-#[allow(dead_code)] // Projected-extent primitive is staged before exact exposure discovery.
+#[allow(dead_code)] // Live sunlight uses analytic exposure; remaining helpers are test-only.
 mod source_exposure;
 #[path = "geometry/surface_geometry.rs"]
 mod surface_geometry;
