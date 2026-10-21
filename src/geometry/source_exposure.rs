@@ -3552,133 +3552,133 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
         left.total_cmp(&right)
     });
     if bodies.len() <= EXACT_INTERSECTION_BODY_LIMIT {
-    for (position, &left_index) in segment_order.iter().enumerate() {
-        let a = segments[left_index];
-        let a_max = a.lane_start.max(a.lane_end);
-        for &right_index in &segment_order[position + 1..] {
-            let b = segments[right_index];
-            let b_min = b.lane_start.min(b.lane_end);
-            if b_min > a_max + 1e-9 {
-                break;
-            }
-            // Projected-lane overlap is necessary but not sufficient for an
-            // intersection. Disjoint depth ranges prove these finite segments
-            // cannot cross, avoiding an exact predicate for separated bodies.
-            let a_depth_min = a.depth_start.min(a.depth_end);
-            let a_depth_max = a.depth_start.max(a.depth_end);
-            let b_depth_min = b.depth_start.min(b.depth_end);
-            let b_depth_max = b.depth_start.max(b.depth_end);
-            if a_depth_max < b_depth_min - 1e-9 || b_depth_max < a_depth_min - 1e-9 {
-                continue;
-            }
-            if !target_mask[a.body_index] && !target_mask[b.body_index] {
-                continue;
-            }
-            match frame.segment_intersection_lane(a.start, a.end, b.start, b.end) {
-                Some(Some(lane)) => straight_lanes.push(lane),
-                Some(None) => {}
-                None => {
-                    // Shared collinear faces are common between touching pieces.
-                    // Their overlapping lanes are resolved as a depth tie below.
-                    let r = (a.end.0 - a.start.0, a.end.1 - a.start.1);
-                    let q = (b.end.0 - b.start.0, b.end.1 - b.start.1);
-                    let offset = (b.start.0 - a.start.0, b.start.1 - a.start.1);
-                    let cross = |x: (f64, f64), y: (f64, f64)| x.0 * y.1 - x.1 * y.0;
-                    let scale = r.0.hypot(r.1) * q.0.hypot(q.1);
-                    if !scale.is_finite()
-                        || cross(r, q).abs() > 1e-10 * scale.max(1.0)
-                        || cross(offset, r).abs() > 1e-10 * r.0.hypot(r.1).max(1.0)
-                    {
-                        return None;
+        for (position, &left_index) in segment_order.iter().enumerate() {
+            let a = segments[left_index];
+            let a_max = a.lane_start.max(a.lane_end);
+            for &right_index in &segment_order[position + 1..] {
+                let b = segments[right_index];
+                let b_min = b.lane_start.min(b.lane_end);
+                if b_min > a_max + 1e-9 {
+                    break;
+                }
+                // Projected-lane overlap is necessary but not sufficient for an
+                // intersection. Disjoint depth ranges prove these finite segments
+                // cannot cross, avoiding an exact predicate for separated bodies.
+                let a_depth_min = a.depth_start.min(a.depth_end);
+                let a_depth_max = a.depth_start.max(a.depth_end);
+                let b_depth_min = b.depth_start.min(b.depth_end);
+                let b_depth_max = b.depth_start.max(b.depth_end);
+                if a_depth_max < b_depth_min - 1e-9 || b_depth_max < a_depth_min - 1e-9 {
+                    continue;
+                }
+                if !target_mask[a.body_index] && !target_mask[b.body_index] {
+                    continue;
+                }
+                match frame.segment_intersection_lane(a.start, a.end, b.start, b.end) {
+                    Some(Some(lane)) => straight_lanes.push(lane),
+                    Some(None) => {}
+                    None => {
+                        // Shared collinear faces are common between touching pieces.
+                        // Their overlapping lanes are resolved as a depth tie below.
+                        let r = (a.end.0 - a.start.0, a.end.1 - a.start.1);
+                        let q = (b.end.0 - b.start.0, b.end.1 - b.start.1);
+                        let offset = (b.start.0 - a.start.0, b.start.1 - a.start.1);
+                        let cross = |x: (f64, f64), y: (f64, f64)| x.0 * y.1 - x.1 * y.0;
+                        let scale = r.0.hypot(r.1) * q.0.hypot(q.1);
+                        if !scale.is_finite()
+                            || cross(r, q).abs() > 1e-10 * scale.max(1.0)
+                            || cross(offset, r).abs() > 1e-10 * r.0.hypot(r.1).max(1.0)
+                        {
+                            return None;
+                        }
                     }
                 }
             }
         }
-    }
-
-    for (arc_index, arc) in arcs.iter().enumerate() {
-        let (arc_min, arc_max) = arc_lane_ranges[arc_index];
-        let upper = segment_order.partition_point(|segment_index| {
-            segments[*segment_index]
-                .lane_start
-                .min(segments[*segment_index].lane_end)
-                <= arc_max + 1e-9
+    
+        for (arc_index, arc) in arcs.iter().enumerate() {
+            let (arc_min, arc_max) = arc_lane_ranges[arc_index];
+            let upper = segment_order.partition_point(|segment_index| {
+                segments[*segment_index]
+                    .lane_start
+                    .min(segments[*segment_index].lane_end)
+                    <= arc_max + 1e-9
+            });
+            for &segment_index in &segment_order[..upper] {
+                let segment = segments[segment_index];
+                let segment_max = segment.lane_start.max(segment.lane_end);
+                if segment_max < arc_min - 1e-9
+                    || (!target_mask[arc.body_index] && !target_mask[segment.body_index])
+                {
+                    continue;
+                }
+                let segment_depth_min = segment.depth_start.min(segment.depth_end);
+                let segment_depth_max = segment.depth_start.max(segment.depth_end);
+                let arc_depth = frame.depth(arc.center)?;
+                if segment_depth_max < arc_depth - arc.radius - 1e-9
+                    || arc_depth + arc.radius < segment_depth_min - 1e-9
+                {
+                    continue;
+                }
+                let mut intersections = Vec::new();
+                add_circle_segment_intersections(
+                    arc.center,
+                    arc.radius,
+                    segment.start,
+                    segment.end,
+                    &mut intersections,
+                )?;
+                for point in intersections {
+                    let angle = (point.1 - arc.center.1).atan2(point.0 - arc.center.0);
+                    if arc_has_angle(*arc, angle) {
+                        curved_lanes.push(round_geometry_to_cent(frame.lane(point)?)?);
+                    }
+                }
+            }
+        }
+    
+        let mut arc_order: Vec<usize> = (0..arcs.len()).collect();
+        arc_order.sort_by(|left, right| {
+            arc_lane_ranges[*left]
+                .0
+                .total_cmp(&arc_lane_ranges[*right].0)
         });
-        for &segment_index in &segment_order[..upper] {
-            let segment = segments[segment_index];
-            let segment_max = segment.lane_start.max(segment.lane_end);
-            if segment_max < arc_min - 1e-9
-                || (!target_mask[arc.body_index] && !target_mask[segment.body_index])
-            {
-                continue;
-            }
-            let segment_depth_min = segment.depth_start.min(segment.depth_end);
-            let segment_depth_max = segment.depth_start.max(segment.depth_end);
-            let arc_depth = frame.depth(arc.center)?;
-            if segment_depth_max < arc_depth - arc.radius - 1e-9
-                || arc_depth + arc.radius < segment_depth_min - 1e-9
-            {
-                continue;
-            }
-            let mut intersections = Vec::new();
-            add_circle_segment_intersections(
-                arc.center,
-                arc.radius,
-                segment.start,
-                segment.end,
-                &mut intersections,
-            )?;
-            for point in intersections {
-                let angle = (point.1 - arc.center.1).atan2(point.0 - arc.center.0);
-                if arc_has_angle(*arc, angle) {
-                    curved_lanes.push(round_geometry_to_cent(frame.lane(point)?)?);
+        for (position, &first_index) in arc_order.iter().enumerate() {
+            let first = arcs[first_index];
+            let first_range = arc_lane_ranges[first_index];
+            for &second_index in &arc_order[position + 1..] {
+                let second_range = arc_lane_ranges[second_index];
+                if second_range.0 > first_range.1 + 1e-9 {
+                    break;
+                }
+                let second = arcs[second_index];
+                if !target_mask[first.body_index] && !target_mask[second.body_index] {
+                    continue;
+                }
+                if (first.center.0 - second.center.0).abs() <= 1e-10
+                    && (first.center.1 - second.center.1).abs() <= 1e-10
+                    && (first.radius - second.radius).abs() <= 1e-10
+                {
+                    continue;
+                }
+                let mut intersections = Vec::with_capacity(2);
+                add_circle_circle_intersections(
+                    first.center,
+                    first.radius,
+                    second.center,
+                    second.radius,
+                    &mut intersections,
+                )?;
+                for point in intersections {
+                    let first_angle = (point.1 - first.center.1).atan2(point.0 - first.center.0);
+                    let second_angle = (point.1 - second.center.1).atan2(point.0 - second.center.0);
+                    if arc_has_angle(first, first_angle) && arc_has_angle(second, second_angle) {
+                        curved_lanes.push(round_geometry_to_cent(frame.lane(point)?)?);
+                    }
                 }
             }
         }
-    }
-
-    let mut arc_order: Vec<usize> = (0..arcs.len()).collect();
-    arc_order.sort_by(|left, right| {
-        arc_lane_ranges[*left]
-            .0
-            .total_cmp(&arc_lane_ranges[*right].0)
-    });
-    for (position, &first_index) in arc_order.iter().enumerate() {
-        let first = arcs[first_index];
-        let first_range = arc_lane_ranges[first_index];
-        for &second_index in &arc_order[position + 1..] {
-            let second_range = arc_lane_ranges[second_index];
-            if second_range.0 > first_range.1 + 1e-9 {
-                break;
-            }
-            let second = arcs[second_index];
-            if !target_mask[first.body_index] && !target_mask[second.body_index] {
-                continue;
-            }
-            if (first.center.0 - second.center.0).abs() <= 1e-10
-                && (first.center.1 - second.center.1).abs() <= 1e-10
-                && (first.radius - second.radius).abs() <= 1e-10
-            {
-                continue;
-            }
-            let mut intersections = Vec::with_capacity(2);
-            add_circle_circle_intersections(
-                first.center,
-                first.radius,
-                second.center,
-                second.radius,
-                &mut intersections,
-            )?;
-            for point in intersections {
-                let first_angle = (point.1 - first.center.1).atan2(point.0 - first.center.0);
-                let second_angle = (point.1 - second.center.1).atan2(point.0 - second.center.0);
-                if arc_has_angle(first, first_angle) && arc_has_angle(second, second_angle) {
-                    curved_lanes.push(round_geometry_to_cent(frame.lane(point)?)?);
-                }
-            }
-        }
-    }
-
+    
     }
 
     let partition = ParallelLanePartition::from_boundary_events(straight_lanes, curved_lanes)?;
