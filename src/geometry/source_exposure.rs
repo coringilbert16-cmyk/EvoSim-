@@ -3678,6 +3678,68 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
                 }
             }
         }
+    } else {
+        // Dense worlds use coarse lane intervals over occupied projected spans.
+        // Preserve the exact bounds of sub-step surfaces so thin receivers are
+        // not silently omitted, while avoiding thousands of redundant lane
+        // partitions from every large body's vertices.
+        const LANE_STEP: f64 = 0.25;
+        let mut ranges: Vec<_> = segments
+            .iter()
+            .map(|segment| {
+                (
+                    segment.lane_start.min(segment.lane_end),
+                    segment.lane_start.max(segment.lane_end),
+                )
+            })
+            .chain(arc_lane_ranges.iter().copied())
+            .collect();
+        ranges.sort_by(|left, right| left.0.total_cmp(&right.0));
+
+        let mut occupied_ranges: Vec<(f64, f64)> = Vec::new();
+        for (lo, hi) in ranges {
+            if let Some(last) = occupied_ranges.last_mut() {
+                if lo <= last.1 + 1e-9 {
+                    last.1 = last.1.max(hi);
+                    continue;
+                }
+            }
+            occupied_ranges.push((lo, hi));
+        }
+
+        let mut coarse_lanes = Vec::new();
+        for (lo, hi) in occupied_ranges {
+            coarse_lanes.push(round_geometry_to_cent(lo)?);
+            let mut lane = lo + LANE_STEP;
+            while lane < hi - 1e-9 {
+                coarse_lanes.push(round_geometry_to_cent(lane)?);
+                lane += LANE_STEP;
+            }
+            coarse_lanes.push(round_geometry_to_cent(hi)?);
+        }
+        // Preserve narrow projected surfaces even when their full extent falls
+        // between regular grid samples. The approximation may blur larger
+        // crossings, but does not intentionally discard thin material bounds.
+        for segment in &segments {
+            let lo = segment.lane_start.min(segment.lane_end);
+            let hi = segment.lane_start.max(segment.lane_end);
+            if hi - lo <= LANE_STEP {
+                coarse_lanes.extend([
+                    round_geometry_to_cent(lo)?,
+                    round_geometry_to_cent(hi)?,
+                ]);
+            }
+        }
+        for (lo, hi) in &arc_lane_ranges {
+            if hi - lo <= LANE_STEP {
+                coarse_lanes.extend([
+                    round_geometry_to_cent(*lo)?,
+                    round_geometry_to_cent(*hi)?,
+                ]);
+            }
+        }
+        straight_lanes = coarse_lanes;
+        curved_lanes.clear();
     }
 
     let partition = ParallelLanePartition::from_boundary_events(straight_lanes, curved_lanes)?;
