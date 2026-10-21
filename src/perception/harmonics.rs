@@ -130,13 +130,6 @@ pub(crate) fn resonance_response(
 /// frequency and zeta is the damping ratio. This is bounded to [0, 1] by the
 /// same denominator that defines the resonance response. It is an absorption
 /// fraction, not a spectral amplitude and not a source-energy allocation.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "Capture-response primitive is staged until live world-tone settlement is implemented"
-    )
-)]
 pub(crate) fn resonant_absorption_fraction(
     drive_frequency_hz: f64,
     natural_frequency_hz: f64,
