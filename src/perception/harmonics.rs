@@ -693,9 +693,7 @@ mod tests {
         let response = resonance_response(drive, natural, damping);
         let dissipative_amplitude = 2.0 * damping * ratio * response;
         let expected = wave_energy_from_amplitude(dissipative_amplitude);
-        assert!(
-            (resonant_absorption_fraction(drive, natural, damping) - expected).abs() < 1e-12
-        );
+        assert!((resonant_absorption_fraction(drive, natural, damping) - expected).abs() < 1e-12);
     }
 
     #[test]
