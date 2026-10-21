@@ -650,7 +650,14 @@ pub(crate) fn advance_construction(
 
     let mut child = developing_organism(construction);
     child.apply_maintenance(&environment.catalog, ledger);
-    let dead = child.apply_stress_damage(environment, ledger, rng);
+    let dead = child.advance_stress_state();
+    if !dead {
+        let _ = crate::transformation::resolve_resonance_overload_break(
+            &mut child,
+            environment,
+            ledger,
+        );
+    }
     construction.developing_energy = child.usable_energy;
     construction.developing_stress = child.stress;
     construction.developing_maintenance_debt = child.maintenance_debt;
