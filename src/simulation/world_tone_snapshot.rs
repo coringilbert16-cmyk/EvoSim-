@@ -41,9 +41,10 @@ impl WorldToneOccluderSnapshot {
         Self::from_simulation_for_organisms(sample, simulation, &receiver_organism_indices)
     }
 
-    /// Build a shared occluder snapshot but solve exposure only for selected
-    /// organism receivers. Every other physical body remains eligible to cast
-    /// a shadow when its angular bounds overlap a selected receiver.
+    /// Validate a selected biological receiver subset while building the
+    /// world-wide physical exposure frame. All realized bodies are receivers
+    /// for energy accounting, regardless of whether a living organism lies
+    /// behind them; the selected indices are retained for caller validation.
     pub(crate) fn from_simulation_for_organisms(
         sample: WorldToneSample,
         simulation: &Simulation,
@@ -72,10 +73,6 @@ impl WorldToneOccluderSnapshot {
             bodies.push(body);
         }
 
-        let receiver_original_indices: Vec<_> = receiver_organism_indices
-            .iter()
-            .filter_map(|index| organism_body_indices[*index])
-            .collect();
         let phase = std::f64::consts::TAU * sample.orbital_phase;
         let toward_source = (phase.sin(), -phase.cos());
 
@@ -818,7 +815,7 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_culls_bodies_outside_all_receiver_angular_spans() {
+    fn snapshot_keeps_bodies_outside_living_receiver_spans_for_world_accounting() {
         let mut simulation = Simulation::new(76, 1.0);
         clear_environment_physical_material(&mut simulation);
         let catalog = simulation.environment.catalog.clone();
@@ -850,7 +847,7 @@ mod tests {
         let filtered_width = filtered
             .projected_width_for_organism_unit(0, 0)
             .expect("receiver mapping should survive broad-phase filtering");
-        assert_eq!(filtered.occluder_count, 1);
+        assert_eq!(filtered.occluder_count, 2);
         assert!((filtered_width - initial_width).abs() < 1e-10);
     }
 
