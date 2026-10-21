@@ -134,7 +134,6 @@ impl WorldToneOccluderSnapshot {
                     continue;
                 }
                 body_properties.push(physical_material_properties(physical, catalog)?);
-                body_properties.push(physical_material_properties(physical, catalog)?);
                 bodies.push(OrganismBodyGeometry::from_physical_material(
                     physical, catalog,
                 )?);
@@ -200,6 +199,7 @@ impl WorldToneOccluderSnapshot {
             }
             if let Some((cell_index, physical)) = &transformation.combine_environmental_source {
                 let _ = simulation.environment.field.cells.get(*cell_index)?;
+                body_properties.push(physical_material_properties(physical, catalog)?);
                 bodies.push(OrganismBodyGeometry::from_physical_material(
                     physical, catalog,
                 )?);
