@@ -98,7 +98,10 @@ pub(crate) fn settle_chemical_break_energy_with_resonance(
         return false;
     }
     let bond_supplied_work = disruption_cost - resonant_work;
-    if !crate::chemistry::can_chemical_break(reaction_energy, bond_supplied_work) {
+    let next_total_work = ledger.total_work_expended + disruption_cost;
+    if !next_total_work.is_finite()
+        || !crate::chemistry::can_chemical_break(reaction_energy, bond_supplied_work)
+    {
         return false;
     }
     let Some((gross, usable, heat)) =
@@ -111,12 +114,18 @@ pub(crate) fn settle_chemical_break_energy_with_resonance(
         potential_released: 0.0,
         usable_delta: usable,
         structural_delta: -gross,
-        // Total work is unchanged; resonant store loss plus the lower bond-
-        // supplied share balances this full physical disruption cost.
-        work_expended: disruption_cost,
+        // This balanced subtransaction charges the bond-supplied share. The
+        // resonant share is added to the same cumulative work total below.
+        work_expended: bond_supplied_work,
         heat_dissipated: heat,
     };
-    settle_break_transaction(organism, bond, tx, ledger)
+    if !settle_break_transaction(organism, bond, tx, ledger) {
+        return false;
+    }
+    // Prevalidated above so this final ledger update cannot overflow after the
+    // structure has changed. The reservoir debit is committed by the caller.
+    ledger.total_work_expended = next_total_work;
+    true
 }
 
 /// Shared commit path for every BREAK of a realized structural bond. The
