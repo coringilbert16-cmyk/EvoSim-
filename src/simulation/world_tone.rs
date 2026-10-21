@@ -1485,7 +1485,7 @@ mod tests {
     }
 
     #[test]
-    fn organism_surface_settlement_routes_absorbed_energy_to_resonance() {
+    fn organism_surface_settlement_conserves_resonance_heat_and_remaining_signal() {
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
         use crate::resources::{Form, ResourceBaselines, ResourceProperties};
         let receiver = OrganismBodyGeometry {
@@ -1535,12 +1535,23 @@ mod tests {
             .settle_organism_surface_response(0, 0, properties, baselines, organism, &mut ledger)
             .expect("valid organism surface response should settle");
 
-        // Solar allocation is determined by geometry/material response, not a
-        // genome-selected processing fraction: absorbed energy enters resonance.
-        assert!((result.usable_energy - result.absorbed_energy).abs() < 1e-7);
-        assert!(result.heat_dissipated.abs() < 1e-7);
-        // Captured usable energy is transferred to the persistent resonance
-        // store, not left duplicated in the organism's usable-energy holder.
+        // Damping is heat; the material response is retained as resonance,
+        // and only the remaining incident budget stays in the continuing signal.
+        assert!(result.usable_energy > 0.0);
+        assert!(result.heat_dissipated > 0.0);
+        assert!(
+            (result.incident_energy
+                - result.usable_energy
+                - result.heat_dissipated
+                - result.unabsorbed_energy)
+                .abs()
+                < 1e-7
+        );
+        assert!(
+            (result.absorbed_energy - result.usable_energy - result.heat_dissipated).abs()
+                < 1e-7
+        );
+        // Captured resonance is transferred out of usable energy and counted once.
         assert!((organism.usable_energy - initial_usable).abs() < 1e-7);
         assert!(
             (organism.resonant_energy.total_energy().unwrap()
@@ -1552,6 +1563,10 @@ mod tests {
         assert!((ledger.total_external_energy_input - result.absorbed_energy).abs() < 1e-7);
         assert!((ledger.total_usable_energy_gained - result.usable_energy).abs() < 1e-7);
         assert!((ledger.total_heat_dissipated - result.heat_dissipated).abs() < 1e-7);
+        assert!(
+            (ledger.total_world_tone_energy_unabsorbed - result.unabsorbed_energy).abs()
+                < 1e-7
+        );
     }
 
     #[test]
