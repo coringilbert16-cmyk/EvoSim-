@@ -3299,11 +3299,27 @@ pub(crate) fn visible_parallel_polygonal_intervals_for_targets(
 /// Compute the exact parallel-projection width credited to each target constituent.
 /// Straight/curved boundaries share one lane partition and one nearest-surface test;
 /// curved event lanes and circle hit depths are quantized to the approved 0.01 grid.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ParallelRayInteractionPath {
+    /// Width of this lane interval; energy is intensity multiplied by this width.
+    pub(crate) projected_width: f64,
+    /// Material constituents encountered in source-to-downstream order.
+    pub(crate) hits: Vec<(usize, usize)>,
+}
+
 pub(crate) fn parallel_projected_widths_by_body_for_targets(
     toward_source: (f64, f64),
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     target_body_indices: &[usize],
 ) -> Option<Vec<Vec<(usize, f64)>>> {
+    Some(parallel_exposure_with_paths_for_targets(toward_source, bodies, target_body_indices)?.0)
+}
+
+pub(crate) fn parallel_exposure_with_paths_for_targets(
+    toward_source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+) -> Option<(Vec<Vec<(usize, f64)>>, Vec<ParallelRayInteractionPath>)> {
     use crate::capillary_geometry::FluidBoundaryPiece;
     use crate::resources::Form;
 
@@ -3637,13 +3653,16 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
     }
 
     let partition = ParallelLanePartition::from_boundary_events(straight_lanes, curved_lanes)?;
+    let mut interaction_paths = Vec::new();
     for (lo, hi, lane) in partition.intervals() {
         let mut nearest: Option<(f64, Surface)> = None;
+        let mut lane_hits = Vec::new();
         let mut tied = false;
         let mut consider = |depth: f64, surface: Surface| -> Option<()> {
             if !depth.is_finite() {
                 return None;
             }
+            lane_hits.push((depth, surface));
             match nearest {
                 None => {
                     nearest = Some((depth, surface));
@@ -3694,6 +3713,59 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
         let Some((_, surface)) = nearest else {
             continue;
         };
+
+        // Preserve the full ordered interaction path for this lane. Each
+        // constituent is visited once, at its first source-facing boundary.
+        lane_hits.sort_by(|left, right| right.0.total_cmp(&left.0));
+        let mut path_hits = Vec::new();
+        for (_, candidate) in &lane_hits {
+            let (candidate_body, candidate_unit, candidate_facing) = match *candidate {
+                Surface::Segment(index) => {
+                    let segment = segments[index];
+                    let facing = segment.creditable
+                        && segment.normal.is_some_and(|normal| {
+                            normal.0 * frame.toward_source.0
+                                + normal.1 * frame.toward_source.1
+                                > 1e-10
+                        });
+                    (segment.body_index, segment.unit_index, facing)
+                }
+                Surface::Arc(index, depth) => {
+                    let arc = arcs[index];
+                    let point = (
+                        frame.toward_source.0 * depth + frame.perpendicular.0 * lane,
+                        frame.toward_source.1 * depth + frame.perpendicular.1 * lane,
+                    );
+                    let facing = ((point.0 - arc.center.0) * frame.toward_source.0
+                        + (point.1 - arc.center.1) * frame.toward_source.1)
+                        / arc.radius
+                        > 1e-10;
+                    (arc.body_index, arc.unit_index, facing)
+                }
+            };
+            if candidate_facing
+                && !path_hits
+                    .iter()
+                    .any(|&(body, unit)| body == candidate_body && unit == candidate_unit)
+            {
+                path_hits.push((candidate_body, candidate_unit));
+            }
+        }
+        let nearest_identity = match surface {
+            Surface::Segment(index) => (segments[index].body_index, segments[index].unit_index),
+            Surface::Arc(index, _) => (arcs[index].body_index, arcs[index].unit_index),
+        };
+        // Unsupported or ambiguous front surfaces stop this lane rather than
+        // allowing energy to jump through geometry the material model cannot settle.
+        if path_hits.first().copied() == Some(nearest_identity)
+            && path_hits.iter().any(|(body, _)| target_mask[*body])
+        {
+            interaction_paths.push(ParallelRayInteractionPath {
+                projected_width: hi - lo,
+                hits: path_hits,
+            });
+        }
+
         let (body_index, unit_index, facing) = match surface {
             Surface::Segment(index) => {
                 let segment = segments[index];
@@ -3733,7 +3805,7 @@ pub(crate) fn parallel_projected_widths_by_body_for_targets(
     {
         return None;
     }
-    Some(widths)
+    Some((widths, interaction_paths))
 }
 
 #[cfg(test)]
