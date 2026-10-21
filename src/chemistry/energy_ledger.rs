@@ -341,7 +341,10 @@ impl EnergyLedgerAuthority for EnergyLedger {
             heat_dissipated,
             escaped_energy,
         ];
-        if values.iter().any(|value| !value.is_finite() || *value < 0.0) {
+        if values
+            .iter()
+            .any(|value| !value.is_finite() || *value < 0.0)
+        {
             return false;
         }
         let allocated = resonant_energy_captured + heat_dissipated + escaped_energy;
