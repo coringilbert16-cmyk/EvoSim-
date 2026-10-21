@@ -3655,8 +3655,41 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
     }
 
     let partition = ParallelLanePartition::from_boundary_events(straight_lanes, curved_lanes)?;
+    // The lane partition is sorted. Sweep surface extents alongside it so each
+    // lane tests only boundaries whose projected ranges can actually intersect
+    // that lane, rather than rescanning every segment and arc for every interval.
+    let mut active_segments = Vec::new();
+    let mut segment_cursor = 0;
+    let mut active_arcs = Vec::new();
+    let mut arc_cursor = 0;
+    let mut arc_start_order: Vec<usize> = (0..arcs.len()).collect();
+    arc_start_order.sort_by(|left, right| {
+        arc_lane_ranges[*left].0.total_cmp(&arc_lane_ranges[*right].0)
+    });
+    let intervals = partition.intervals();
     let mut interaction_paths = Vec::new();
-    for (lo, hi, lane) in partition.intervals() {
+    for (lo, hi, lane) in intervals {
+        while segment_cursor < segment_order.len() {
+            let index = segment_order[segment_cursor];
+            if segments[index].lane_start.min(segments[index].lane_end) >= lane {
+                break;
+            }
+            active_segments.push(index);
+            segment_cursor += 1;
+        }
+        active_segments.retain(|index| {
+            segments[*index].lane_start.max(segments[*index].lane_end) > lane
+        });
+        while arc_cursor < arc_start_order.len() {
+            let index = arc_start_order[arc_cursor];
+            if arc_lane_ranges[index].0 >= lane {
+                break;
+            }
+            active_arcs.push(index);
+            arc_cursor += 1;
+        }
+        active_arcs.retain(|index| arc_lane_ranges[*index].1 > lane);
+
         let mut nearest: Option<(f64, Surface)> = None;
         let mut lane_hits = Vec::new();
         let mut tied = false;
@@ -3680,7 +3713,8 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
             Some(())
         };
 
-        for (index, segment) in segments.iter().enumerate() {
+        for &index in &active_segments {
+            let segment = segments[index];
             let delta = segment.lane_end - segment.lane_start;
             if delta.abs() <= 1e-12
                 || lane <= segment.lane_start.min(segment.lane_end)
@@ -3693,7 +3727,8 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
             consider(depth, Surface::Segment(index))?;
         }
 
-        for (index, arc) in arcs.iter().enumerate() {
+        for &index in &active_arcs {
+            let arc = arcs[index];
             let Some((near, far)) = frame.circle_hit_depths(lane, arc.center, arc.radius)? else {
                 continue;
             };
@@ -3703,7 +3738,7 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
                     frame.toward_source.1 * depth + frame.perpendicular.1 * lane,
                 );
                 let angle = (point.1 - arc.center.1).atan2(point.0 - arc.center.0);
-                if arc_has_angle(*arc, angle) {
+                if arc_has_angle(arc, angle) {
                     consider(depth, Surface::Arc(index, depth))?;
                 }
             }
