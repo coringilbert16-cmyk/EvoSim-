@@ -74,13 +74,13 @@ impl WorldToneOccluderSnapshot {
         if receiver_original_indices.is_empty() {
             return None;
         }
-        let reference_angle = (simulation.environment.height * 0.5 - sample.source_y)
-            .atan2(simulation.environment.width * 0.5 - sample.source_x);
+        let phase = std::f64::consts::TAU * sample.orbital_phase;
+        let toward_source = (phase.sin(), -phase.cos());
         let receiver_intervals: Vec<_> = receiver_original_indices
             .iter()
             .map(|index| {
                 let body = bodies.get(*index)?;
-                source_angular_interval(body, sample, reference_angle)
+                parallel_lane_interval(body, toward_source)
             })
             .collect::<Option<Vec<_>>>()?;
 
@@ -116,15 +116,10 @@ impl WorldToneOccluderSnapshot {
         // bound before allocating full realized geometry for off-angle particles.
         for cell in &simulation.environment.field.cells {
             for physical in &cell.physical_materials {
-                let interval = physical_material_source_angular_interval(
-                    physical,
-                    catalog,
-                    sample,
-                    reference_angle,
-                )?;
+                let interval = physical_material_parallel_lane_interval(physical, catalog, toward_source)?;
                 if !receiver_intervals
                     .iter()
-                    .any(|receiver| angular_intervals_overlap(interval, *receiver))
+                    .any(|receiver| lane_intervals_overlap(interval, *receiver))
                 {
                     continue;
                 }
@@ -201,7 +196,7 @@ impl WorldToneOccluderSnapshot {
         // do not enter every exact ray test.
         let angular_intervals = bodies
             .iter()
-            .map(|body| source_angular_interval(body, sample, reference_angle))
+            .map(|body| parallel_lane_interval(body, toward_source))
             .collect::<Option<Vec<_>>>()?;
         let mut receiver_mask = vec![false; bodies.len()];
         for &index in &receiver_original_indices {
@@ -319,26 +314,23 @@ impl WorldToneOccluderSnapshot {
     }
 }
 
-fn source_angular_interval(
+fn parallel_lane_interval(
     body: &OrganismBodyGeometry,
-    sample: WorldToneSample,
-    reference_angle: f64,
+    toward_source: (f64, f64),
 ) -> Option<(f64, f64)> {
-    source_angular_interval_for_bounds(
+    parallel_lane_interval_for_bounds(
         body.min_x,
         body.max_x,
         body.min_y,
         body.max_y,
-        sample,
-        reference_angle,
+        toward_source,
     )
 }
 
-fn physical_material_source_angular_interval(
+fn physical_material_parallel_lane_interval(
     physical: &PhysicalMaterial,
     catalog: &[BaseResource],
-    sample: WorldToneSample,
-    reference_angle: f64,
+    toward_source: (f64, f64),
 ) -> Option<(f64, f64)> {
     let placements = physical.placements.as_ref()?;
     if placements.is_empty() || placements.len() != physical.material.parts.len() {
@@ -367,34 +359,33 @@ fn physical_material_source_angular_interval(
         min_y = min_y.min(placement.y - radius);
         max_y = max_y.max(placement.y + radius);
     }
-    source_angular_interval_for_bounds(min_x, max_x, min_y, max_y, sample, reference_angle)
+    parallel_lane_interval_for_bounds(min_x, max_x, min_y, max_y, toward_source)
 }
 
-fn source_angular_interval_for_bounds(
+fn parallel_lane_interval_for_bounds(
     min_x: f64,
     max_x: f64,
     min_y: f64,
     max_y: f64,
-    sample: WorldToneSample,
-    reference_angle: f64,
+    toward_source: (f64, f64),
 ) -> Option<(f64, f64)> {
     if ![
         min_x,
         max_x,
         min_y,
         max_y,
-        sample.source_x,
-        sample.source_y,
-        reference_angle,
+        toward_source.0,
+        toward_source.1,
     ]
     .iter()
     .all(|value| value.is_finite())
         || min_x > max_x
         || min_y > max_y
+        || (toward_source.0.hypot(toward_source.1) - 1.0).abs() > 1e-9
     {
         return None;
     }
-
+    let perpendicular = (-toward_source.1, toward_source.0);
     let corners = [
         (min_x, min_y),
         (min_x, max_y),
@@ -404,27 +395,17 @@ fn source_angular_interval_for_bounds(
     let mut minimum = f64::INFINITY;
     let mut maximum = f64::NEG_INFINITY;
     for (x, y) in corners {
-        let dx = x - sample.source_x;
-        let dy = y - sample.source_y;
-        if dx.hypot(dy) <= f64::EPSILON {
-            return Some((-std::f64::consts::PI, std::f64::consts::PI));
+        let lane = x * perpendicular.0 + y * perpendicular.1;
+        if !lane.is_finite() {
+            return None;
         }
-        let angle = dy.atan2(dx);
-        let relative = (angle - reference_angle + std::f64::consts::PI)
-            .rem_euclid(std::f64::consts::TAU)
-            - std::f64::consts::PI;
-        minimum = minimum.min(relative);
-        maximum = maximum.max(relative);
+        minimum = minimum.min(lane);
+        maximum = maximum.max(lane);
     }
-
-    if maximum - minimum > std::f64::consts::PI {
-        Some((-std::f64::consts::PI, std::f64::consts::PI))
-    } else {
-        Some((minimum, maximum))
-    }
+    Some((minimum, maximum))
 }
 
-fn angular_intervals_overlap(first: (f64, f64), second: (f64, f64)) -> bool {
+fn lane_intervals_overlap(first: (f64, f64), second: (f64, f64)) -> bool {
     first.0 <= second.1 + 1e-10 && second.0 <= first.1 + 1e-10
 }
 
