@@ -141,6 +141,119 @@ fn settle_break_transaction(
     true
 }
 
+/// Destabilize a structural bond when the organism's retained resonance
+/// exceeds the energy held by its complete bond network. The total bond energy
+/// is a geometry-dependent handling capacity, not a hard reservoir cap: excess
+/// energy remains stored until compatible resonance can do physical work.
+pub(crate) fn resolve_resonance_overload_break(
+    organism: &mut Organism,
+    environment: &Environment,
+    ledger: &mut EnergyLedger,
+) -> bool {
+    let Some(retained_energy) = organism.resonant_energy.total_energy() else {
+        return false;
+    };
+    let mut capacity = 0.0;
+    for bond in &organism.structure.bonds {
+        if !bond.bond_energy.is_finite() || bond.bond_energy < 0.0 {
+            return false;
+        }
+        capacity += bond.bond_energy;
+        if !capacity.is_finite() {
+            return false;
+        }
+    }
+    if retained_energy <= capacity + 1e-9 {
+        return false;
+    }
+
+    let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
+    let mut best: Option<(usize, f64, f64)> = None;
+    for index in stress_break_candidate_indices(organism, environment) {
+        let Some(bond) = organism.structure.bonds.get(index).copied() else {
+            continue;
+        };
+        let Some(barrier) = crate::chemistry::activation_barrier_from_bond_strength(bond.strength)
+        else {
+            continue;
+        };
+        if barrier <= 1e-9 {
+            continue;
+        }
+        let Some(unit_a) = organism.structure.unit_index(bond.endpoint_a.constituent_id) else {
+            continue;
+        };
+        let Some(unit_b) = organism.structure.unit_index(bond.endpoint_b.constituent_id) else {
+            continue;
+        };
+        let Some(properties_a) = organism.structure.units.get(unit_a)
+            .and_then(|unit| unit.properties(&environment.catalog))
+        else {
+            continue;
+        };
+        let Some(properties_b) = organism.structure.units.get(unit_b)
+            .and_then(|unit| unit.properties(&environment.catalog))
+        else {
+            continue;
+        };
+        let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
+        if !frequency_a.is_finite()
+            || frequency_a <= 0.0
+            || !frequency_b.is_finite()
+            || frequency_b <= 0.0
+        {
+            continue;
+        }
+        let reaction_frequency_hz =
+            (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        let compatible = organism
+            .resonant_energy
+            .compatible_energy(reaction_frequency_hz);
+        if !reaction_frequency_hz.is_finite()
+            || reaction_frequency_hz <= 0.0
+            || !compatible.is_finite()
+            || compatible <= 1e-9
+        {
+            continue;
+        }
+        let score = compatible / barrier;
+        if best.is_none_or(|(_, _, best_score)| score > best_score) {
+            best = Some((index, reaction_frequency_hz, score));
+        }
+    }
+
+    let Some((target_index, reaction_frequency_hz, _)) = best else {
+        return false;
+    };
+    let Some(target) = organism.structure.bonds.get(target_index).copied() else {
+        return false;
+    };
+    let Some(barrier) = crate::chemistry::activation_barrier_from_bond_strength(target.strength)
+    else {
+        return false;
+    };
+    let mut trial_reservoir = organism.resonant_energy.clone();
+    let resonant_work = trial_reservoir.withdraw_compatible(reaction_frequency_hz, barrier);
+    if !resonant_work.is_finite() || resonant_work <= 1e-9 {
+        return false;
+    }
+    let reaction_energy = (barrier - resonant_work).max(0.0);
+    if !settle_chemical_break_energy_with_resonance(
+        organism,
+        target,
+        reaction_energy,
+        barrier,
+        resonant_work,
+        organism.genome.processing_efficiency(),
+        ledger,
+    ) {
+        return false;
+    }
+    organism.resonant_energy = trial_reservoir;
+    true
+}
+
 fn stress_break_candidate_indices(organism: &Organism, environment: &Environment) -> Vec<usize> {
     let genome_bonds =
         crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
