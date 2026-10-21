@@ -7,7 +7,7 @@
 use crate::material_storage::StoredMaterial;
 use crate::organism_geometry::OrganismBodyGeometry;
 use crate::physical_material::PhysicalMaterial;
-use crate::resources::BaseResource;
+use crate::resources::{BaseResource, ResourceProperties};
 use crate::state::{Organism, Simulation};
 use crate::structure::Placement;
 use crate::world_tone::{WorldToneCaptureFrame, WorldToneSample};
@@ -17,6 +17,8 @@ pub(crate) struct WorldToneOccluderSnapshot {
     /// Frame-wide exposure cache; organism indices below map into this frame.
     pub(crate) frame: WorldToneCaptureFrame,
     pub(crate) organism_body_indices: Vec<Option<usize>>,
+    /// Material properties keyed by the constituent indices used by geometry.
+    pub(crate) body_properties: Vec<Vec<(usize, ResourceProperties)>>,
     /// Number of bodies retained by the conservative receiver-angle broad phase.
     /// Bodies outside every receiver's angular span cannot cast a direct-source shadow.
     pub(crate) occluder_count: usize,
@@ -54,6 +56,7 @@ impl WorldToneOccluderSnapshot {
         }
         let catalog = &simulation.environment.catalog;
         let mut bodies = Vec::new();
+        let mut body_properties = Vec::new();
         let mut organism_body_indices = vec![None; simulation.organisms.len()];
 
         // Every organism remains a physical occluder regardless of whether its
@@ -64,6 +67,7 @@ impl WorldToneOccluderSnapshot {
             }
             let body = OrganismBodyGeometry::from_all_realized_units(&organism.structure)?;
             organism_body_indices[organism_index] = Some(bodies.len());
+            body_properties.push(structure_material_properties(&organism.structure, catalog)?);
             bodies.push(body);
         }
 
@@ -92,6 +96,10 @@ impl WorldToneOccluderSnapshot {
                 continue;
             };
             if !construction.developing_structure.units.is_empty() {
+                body_properties.push(structure_material_properties(
+                    &construction.developing_structure,
+                    catalog,
+                )?);
                 bodies.push(OrganismBodyGeometry::from_all_realized_units(
                     &construction.developing_structure,
                 )?);
@@ -104,6 +112,7 @@ impl WorldToneOccluderSnapshot {
                 };
                 for entry in &construction.committed_material.entries {
                     let StoredMaterial::Physical(physical) = entry;
+                    body_properties.push(physical_material_properties(physical, catalog)?);
                     bodies.push(body_from_owner_relative_material(
                         physical, anchor, catalog,
                     )?);
@@ -124,6 +133,8 @@ impl WorldToneOccluderSnapshot {
                 {
                     continue;
                 }
+                body_properties.push(physical_material_properties(physical, catalog)?);
+                body_properties.push(physical_material_properties(physical, catalog)?);
                 bodies.push(OrganismBodyGeometry::from_physical_material(
                     physical, catalog,
                 )?);
@@ -136,6 +147,7 @@ impl WorldToneOccluderSnapshot {
             if decomposing.structure.units.is_empty() {
                 continue;
             }
+            body_properties.push(structure_material_properties(&decomposing.structure, catalog)?);
             bodies.push(OrganismBodyGeometry::from_all_realized_units(
                 &decomposing.structure,
             )?);
@@ -149,6 +161,7 @@ impl WorldToneOccluderSnapshot {
             let anchor = owner_anchor(organism)?;
             for entry in &organism.stored_material.entries {
                 let StoredMaterial::Physical(physical) = entry;
+                body_properties.push(physical_material_properties(physical, catalog)?);
                 bodies.push(body_from_owner_relative_material(
                     physical, anchor, catalog,
                 )?);
@@ -178,6 +191,7 @@ impl WorldToneOccluderSnapshot {
                 return None;
             }
             if let Some(physical) = &transformation.stored_material {
+                body_properties.push(physical_material_properties(physical, catalog)?);
                 bodies.push(body_from_owner_relative_material(
                     physical,
                     owner_anchor(owner)?,
@@ -206,6 +220,7 @@ impl WorldToneOccluderSnapshot {
 
         let mut remapped_indices = vec![None; bodies.len()];
         let mut relevant_bodies = Vec::new();
+        let mut relevant_properties = Vec::new();
         for (original_index, body) in bodies.into_iter().enumerate() {
             let is_receiver = receiver_mask[original_index];
             let interval = angular_intervals[original_index];
@@ -216,6 +231,7 @@ impl WorldToneOccluderSnapshot {
             if relevant {
                 remapped_indices[original_index] = Some(relevant_bodies.len());
                 relevant_bodies.push(body);
+                relevant_properties.push(body_properties[original_index].clone());
             }
         }
         let organism_body_indices: Vec<_> = organism_body_indices
@@ -235,8 +251,20 @@ impl WorldToneOccluderSnapshot {
         Some(Self {
             frame,
             organism_body_indices,
+            body_properties: relevant_properties,
             occluder_count,
         })
+    }
+
+    pub(crate) fn properties_for_body_unit(
+        &self,
+        body_index: usize,
+        unit_index: usize,
+    ) -> Option<ResourceProperties> {
+        self.body_properties
+            .get(body_index)?
+            .iter()
+            .find_map(|(candidate, properties)| (*candidate == unit_index).then_some(*properties))
     }
 
     pub(crate) fn body_index_for_organism(&self, organism_index: usize) -> Option<usize> {
@@ -352,6 +380,34 @@ impl WorldToneOccluderSnapshot {
             }
         }
     }
+}
+
+fn structure_material_properties(
+    structure: &crate::structure::OrganismStructure,
+    catalog: &[BaseResource],
+) -> Option<Vec<(usize, ResourceProperties)>> {
+    structure
+        .units
+        .iter()
+        .enumerate()
+        .map(|(unit_index, unit)| Some((unit_index, unit.properties(catalog)?)))
+        .collect()
+}
+
+fn physical_material_properties(
+    physical: &PhysicalMaterial,
+    catalog: &[BaseResource],
+) -> Option<Vec<(usize, ResourceProperties)>> {
+    physical
+        .material
+        .parts
+        .iter()
+        .enumerate()
+        .map(|(unit_index, (name, _))| {
+            let resource = catalog.iter().find(|resource| resource.name == *name)?;
+            Some((unit_index, resource.properties))
+        })
+        .collect()
 }
 
 fn parallel_lane_interval(
