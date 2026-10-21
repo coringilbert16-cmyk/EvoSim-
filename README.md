@@ -1,47 +1,27 @@
 # EvoSim
 
-## PR #202 — continuation audit — 2026-10-21
+## PR #202 — authoritative implementation status — 2026-10-21
 
-- Added `transform_signal_to_energy_budget` in `src/perception/harmonics.rs`. It reuses the existing material resonance/nonlinear harmonic response to change the spectrum, then scales amplitude-squared energy to the caller-supplied remaining budget. It rejects budgets above incoming signal energy and tests both harmonic transformation and exact residual-energy preservation.
-- **Boundary:** this is the reusable spectral/energy primitive, not yet live downstream propagation. The live world-tone tick still does not carry this transformed residual through ordered geometry hits, and whole-world conservation must not be claimed complete until that path and nonliving heat settlement are connected and tested.
+This section is the current status summary. Older PR #202 checkpoints below are historical notes and may describe earlier states; where they conflict with this section, this section is authoritative.
 
-**Latest code head at this audit:** `7f9de1bbf6ba211c0b7af7ca3820acaf01f60104` on `feature/external-input-ledger`.
+**Source checkpoint audited:** `5c982b35229a987816977255378325f70f8ab547` on `feature/external-input-ledger`. Exact-head Actions run [39691642301](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39691642301) has passed formatting, source-size/architecture checks, and focused Bob/fluid/chemical-BREAK checks. The full Rust test suite is still running; do not mark this checkpoint verified until its result is available. The newly added ordered living-to-environmental receiver conservation regression is included in that run.
 
-- Added a regression requiring resonance overload to preserve both structure and stored energy when the reservoir's frequency is effectively incompatible with all candidate bonds.
-- The last observed Actions run, [39659085722](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39659085722), had passed formatting, source-size/architecture checks, focused Bob/fluid/BREAK checks, and was still running the full Rust test suite on earlier head `2f0b9a6ed83ad9a291cba7a8b2fa98bd79b6f227`. No Actions run had yet appeared for the latest test commit when this note was written; do not treat the latest test or full suite as verified.
-- Direct solar capture and reservoir inventory are covered by a live-tick balance regression. This is not proof of complete world-wide conservation: unabsorbed signal is still telemetry, not propagated energy; secondary tones and energy transfer to nonliving material are not implemented.
-- The new overload mechanism is active as a secondary survival check, but the legacy stress-threshold/random-break path remains authoritative whenever it breaks a bond first. Removing it safely is still a merge-critical task because developing offspring also use the stress path and structural collapse/death behavior must be preserved.
-- PR #202 is not merge-ready until the full exact-head suite is reconciled against the known 28-failure baseline, whole-world signal accounting/propagation is addressed, and the stress-break replacement is audited and tested.
+### Implemented in the audited source
 
+- **Live ordered propagation:** the precomputed world-tone sample is passed into `WorldToneOccluderSnapshot::settle_living_organism_inputs`. A lane walks ordered material hits, applies each material's existing spectral response, and sends only the unresponded remainder onward. Frequency composition changes as the signal propagates; this is not literal ray reflection or a new energy source.
+- **Single-credit energy allocation:** living receivers may retain the non-damped response in their staged resonant reservoir. A receiver without a living reservoir converts its material response to heat. Failed reservoir deposits also settle as heat. The signal that exits the modeled path is recorded as escaped energy. Each path checks incident energy against retained resonance, heat, and escape before the frame is committed.
+- **Inventory and chemistry links:** retained resonance is included in the world inventory; frequency-compatible resonance can contribute to chemical disruption work and the overload-driven structural-damage path. The legacy random stress-break authority has been removed from the production survival/developing-offspring path; stress is not an independent bond-break authority.
+- **World physical coverage:** the snapshot includes realized organism structures, field physical material, stored physical material, developing offspring, decomposing carriers, and physical sources in active transformations. Unsupported composite multi-part structural units still fail closed because their constituent geometry is not represented.
 
-## PR #202 — current implementation and merge gates — 2026-10-21
+### Remaining merge gates
 
-**Verified source head before this documentation update:** `e70f54f62580c84985a8e8c81c0764e5fc5ffc96` on `feature/external-input-ledger`. The source changes below were inspected at that head; this documentation commit will require its own exact-head CI result.
+1. **Verify the current regression and exact-head suite.** Preserve the known baseline of 28 failing test identities; distinguish those from any new failures. A passing format check is not a substitute for the Rust test result.
+2. **Measure population-scale performance.** The prior all-receiver dense-world implementation took 400.88 seconds for the suite; the intersection fallback reduced it to 265.76 seconds, and the occupied-lane refinement previously reduced it to 235.41 seconds. The current source includes additional world-wide receiver coverage and a dense-world lane approximation; report a fresh runtime from the current run rather than assuming the earlier speedup still holds. The ordinary-tick inventory test remains a major cost.
+3. **Resolve composite geometry.** Either represent every constituent of supported composite units in ordered exposure and accounting, or prove they cannot occur in normal operation and keep the fail-closed boundary explicit.
+4. **Complete whole-world reconciliation across lifecycle/transaction paths.** The per-path incident/captured/heat/escape equation is implemented, but it is not by itself proof that every energy store, chemistry transaction, death transition, and lifecycle change reconciles in the global inventory.
+5. **Update this checkpoint after CI.** Record the exact tested head, test counts/runtime, whether the 28 baseline identities are unchanged, and relevant Clippy findings.
 
-### Implemented and connected
-
-- The live simulation tick samples the precomputed world-tone cycle and calls `WorldToneOccluderSnapshot::settle_living_organism_inputs` for living organisms.
-- The snapshot assembles realized world-space occluders from organism structures, environmental physical material, legacy decomposing structures, owner-relative stored physical material, active transformations, and developing offspring/committed material. Ambiguous or invalid geometry fails closed.
-- `WorldToneCaptureFrame` now uses the shared **parallel-ray** visibility path, not the historical finite-point-source solver. The same per-tick direction is used to classify straight and supported curved boundaries. The frame caches exposure and guards against duplicate constituent settlement.
-- Absorbed direct input is settled through the external-input transaction into usable energy and heat. Capture now obtains response properties through `StructuralUnit::properties(catalog)`, preserving its weighted-property calculation for supported units. This does **not** enable composite structural units: the geometry snapshot intentionally fails closed when one unit contains multiple material parts because its realized shape cannot represent all constituents. A focused regression now checks partial absorption, the absorbed-to-usable/heat split, and that unabsorbed signal is not double-credited; it still requires a passing exact-head run. Unabsorbed incident energy remains telemetry only and is not yet propagated as a reflected/secondary tone.
-- Focused regressions cover mixed straight/curved shadows and live tick settlement. The live capture test also checks that the current energy inventory balances after absorbed solar input.
-
-### Latest exact-head CI
-
-Workflow [39641411696](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39641411696) is running on the source head above. The prior run [39641215760](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39641215760) stopped at a formatting check for the new partial-absorption test; that exact rustfmt difference was corrected in `e70f54f62580c84985a8e8c81c0764e5fc5ffc96`. Do not treat the test as verified until the current run completes.
-
-- Last completed full test suite at [39640200103](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39640200103): **538 passed, 28 failed, 1 ignored** in 162.82 seconds.
-- Compared with baseline workflow [39630672842](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39630672842), the **same 28 test identities fail; there are no new failing identities**.
-- Clippy on the last completed source run failed with 59 production-target errors and 38 test-target errors. The geometry cleanup reduced the count, but most remaining failures are longstanding dead-code/lint debt outside the merge-critical path. Fix easy relevant issues only.
-
-### Remaining merge-critical work
-
-1. **Close the energy-accounting gap.** The existing inventory reconciliation covers stored usable energy, stored structural bond energy, external input, other releases, work, and dissipated heat. It does not yet account for unabsorbed world-tone energy as either a bounded propagated signal or an explicit energy output. Passing the direct-capture inventory test is therefore not a proof of complete world-wide conservation.
-2. **Implement reflected/secondary tone without double credit.** Reflection is a lower-energy frequency-composition change, not a literal second ray. Define and test how the energy remaining after the material response is attenuated, passed to downstream material, or exits the modeled world. Do not invent an arbitrary absorption/retention coefficient; reuse existing resonance/damping behavior and the approved dissipation rule where the mechanics support it.
-3. **Add end-to-end propagation/accounting tests.** Cover direct capture, downstream response, single-credit settlement, energy lost to dissipation/escape, and inventory reconciliation across a live tick. Keep unsupported or ambiguous geometry fail-closed.
-4. **Re-run exact-head CI and do narrow Clippy cleanup.** Preserve the known 28-failure baseline; investigate any new identities, and fix straightforward PR-relevant lints without pursuing the repository-wide warning backlog.
-
-PR #202 remains Draft and is **not yet merge-ready**. PR #196 constructor/Bob work remains separate.
+PR #202 remains Draft and is not merge-ready until these gates are satisfied. PR #196 constructor/Bob work remains separate and untouched.
 
 ## External-input transaction — 2026-10-19
 
