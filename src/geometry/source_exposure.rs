@@ -3035,3 +3035,343 @@ mod parallel_lane_partition_tests {
         .is_none());
     }
 }
+
+
+/// Classify straight polygonal boundaries against one shared parallel-ray field.
+///
+/// Every polygon vertex and every finite segment crossing contributes a lane
+/// event. Between consecutive events, boundary order cannot change, so the
+/// midpoint ray identifies the unique nearest physical boundary for that lane
+/// interval. Only winning, source-facing intervals belonging to requested
+/// receiver bodies are returned. Curved forms deliberately fail closed here;
+/// they must be added to this same partition/classification path, not handled
+/// by a second independently credited exposure calculation.
+pub(crate) fn visible_parallel_polygonal_intervals_for_targets(
+    toward_source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+) -> Option<Vec<ExposedBoundaryInterval>> {
+    use crate::resources::Form;
+
+    let frame = ParallelRayFrame::new(toward_source)?;
+    let mut target_mask = vec![false; bodies.len()];
+    for &index in target_body_indices {
+        *target_mask.get_mut(index)? = true;
+    }
+
+    #[derive(Clone, Copy)]
+    struct Edge {
+        body_index: usize,
+        unit_index: usize,
+        start: (f64, f64),
+        end: (f64, f64),
+        lane_start: f64,
+        lane_end: f64,
+        depth_start: f64,
+        depth_end: f64,
+        outward_normal: Option<(f64, f64)>,
+    }
+
+    let mut edges = Vec::<Edge>::new();
+    let mut lanes = Vec::<f64>::new();
+    for (body_index, body) in bodies.iter().enumerate() {
+        let mut seen_units = Vec::with_capacity(body.parts.len());
+        for part in &body.parts {
+            if seen_units.contains(&part.unit_index)
+                || !part.x.is_finite()
+                || !part.y.is_finite()
+                || !part.rotation_radians.is_finite()
+                || !part.form.is_valid()
+            {
+                return None;
+            }
+            seen_units.push(part.unit_index);
+            let (sin, cos) = part.rotation_radians.sin_cos();
+            let local_vertices = match &part.form {
+                Form::Line { length } => {
+                    let half = *length * 0.5;
+                    vec![(-half, 0.0), (half, 0.0)]
+                }
+                _ => part.form.polygon_vertices()?,
+            };
+            if local_vertices.len() < 2 {
+                return None;
+            }
+            let vertices: Vec<_> = local_vertices
+                .into_iter()
+                .map(|(x, y)| (part.x + x * cos - y * sin, part.y + x * sin + y * cos))
+                .collect();
+            if vertices.iter().any(|p| !p.0.is_finite() || !p.1.is_finite()) {
+                return None;
+            }
+
+            let is_line = matches!(part.form, Form::Line { .. });
+            let winding = if is_line {
+                0.0
+            } else {
+                if vertices.len() < 3 {
+                    return None;
+                }
+                let area_twice: f64 = vertices.iter().enumerate().map(|(i, &(x, y))| {
+                    let (nx, ny) = vertices[(i + 1) % vertices.len()];
+                    x * ny - nx * y
+                }).sum();
+                if !area_twice.is_finite() || area_twice.abs() <= 1e-12 {
+                    return None;
+                }
+                area_twice.signum()
+            };
+            let edge_count = if is_line { 1 } else { vertices.len() };
+            for edge_index in 0..edge_count {
+                let start = vertices[edge_index];
+                let end = vertices[(edge_index + 1) % vertices.len()];
+                let length = (end.0 - start.0).hypot(end.1 - start.1);
+                if !length.is_finite() || length <= 1e-12 {
+                    return None;
+                }
+                let lane_start = frame.lane(start)?;
+                let lane_end = frame.lane(end)?;
+                let depth_start = frame.depth(start)?;
+                let depth_end = frame.depth(end)?;
+                lanes.extend([lane_start, lane_end]);
+                let outward_normal = if is_line {
+                    None
+                } else {
+                    Some((
+                        winding * (end.1 - start.1) / length,
+                        -winding * (end.0 - start.0) / length,
+                    ))
+                };
+                edges.push(Edge {
+                    body_index,
+                    unit_index: part.unit_index,
+                    start,
+                    end,
+                    lane_start,
+                    lane_end,
+                    depth_start,
+                    depth_end,
+                    outward_normal,
+                });
+            }
+        }
+    }
+
+    // Crossings are the only places where two straight boundaries can exchange
+    // front-to-back order. Collinear overlaps are ambiguous and fail closed.
+    for left in 0..edges.len() {
+        for right in (left + 1)..edges.len() {
+            let event = frame.segment_intersection_lane(
+                edges[left].start,
+                edges[left].end,
+                edges[right].start,
+                edges[right].end,
+            )?;
+            if let Some(lane) = event {
+                lanes.push(lane);
+            }
+        }
+    }
+
+    let partition = ParallelLanePartition::new(lanes)?;
+    let mut visible = Vec::new();
+    for (_, _, lane) in partition.intervals() {
+        let mut nearest: Option<(usize, f64)> = None;
+        let mut tied = false;
+        for (edge_index, edge) in edges.iter().enumerate() {
+            let lane_delta = edge.lane_end - edge.lane_start;
+            // A boundary parallel to the rays has zero projected width. It
+            // remains a measure-zero event, not a finite interval to credit.
+            if lane_delta.abs() <= 1e-12 {
+                continue;
+            }
+            let low = edge.lane_start.min(edge.lane_end);
+            let high = edge.lane_start.max(edge.lane_end);
+            if lane <= low || lane >= high {
+                continue;
+            }
+            let t = (lane - edge.lane_start) / lane_delta;
+            let depth = edge.depth_start + (edge.depth_end - edge.depth_start) * t;
+            if !depth.is_finite() {
+                return None;
+            }
+            match nearest {
+                None => {
+                    nearest = Some((edge_index, depth));
+                    tied = false;
+                }
+                Some((_, best_depth)) if depth > best_depth + 1e-9 => {
+                    nearest = Some((edge_index, depth));
+                    tied = false;
+                }
+                Some((_, best_depth)) if (depth - best_depth).abs() <= 1e-9 => {
+                    tied = true;
+                }
+                _ => {}
+            }
+        }
+
+        // Coincident material boundaries have no unique owner. Omitting this
+        // measure interval is safer than granting the same incident energy twice.
+        if tied {
+            continue;
+        }
+        let Some((edge_index, _)) = nearest else {
+            continue;
+        };
+        let edge = edges[edge_index];
+        if !target_mask[edge.body_index] {
+            continue;
+        }
+        let Some(normal) = edge.outward_normal else {
+            continue;
+        };
+        if normal.0 * frame.toward_source.0 + normal.1 * frame.toward_source.1 <= 1e-10 {
+            continue;
+        }
+
+        let lane_delta = edge.lane_end - edge.lane_start;
+        let lane_lo = partition.lanes().iter().copied()
+            .find(|candidate| (*candidate - lane).abs() <= 1e-12)
+            .unwrap_or(lane);
+        let _ = lane_lo; // The partition interval endpoints are used below.
+    }
+
+    // Emit intervals by walking the shared lane partition again. The winning
+    // edge is constant within each open interval by construction.
+    for pair in partition.lanes().windows(2) {
+        let lo = pair[0];
+        let hi = pair[1];
+        if hi - lo <= 1e-9 {
+            continue;
+        }
+        let lane = lo + (hi - lo) * 0.5;
+        let mut nearest: Option<(usize, f64)> = None;
+        let mut tied = false;
+        for (edge_index, edge) in edges.iter().enumerate() {
+            let lane_delta = edge.lane_end - edge.lane_start;
+            if lane_delta.abs() <= 1e-12 {
+                continue;
+            }
+            if lane <= edge.lane_start.min(edge.lane_end)
+                || lane >= edge.lane_start.max(edge.lane_end)
+            {
+                continue;
+            }
+            let t = (lane - edge.lane_start) / lane_delta;
+            let depth = edge.depth_start + (edge.depth_end - edge.depth_start) * t;
+            if !depth.is_finite() {
+                return None;
+            }
+            match nearest {
+                None => { nearest = Some((edge_index, depth)); tied = false; }
+                Some((_, best)) if depth > best + 1e-9 => {
+                    nearest = Some((edge_index, depth)); tied = false;
+                }
+                Some((_, best)) if (depth - best).abs() <= 1e-9 => tied = true,
+                _ => {}
+            }
+        }
+        if tied {
+            continue;
+        }
+        let Some((edge_index, _)) = nearest else { continue };
+        let edge = edges[edge_index];
+        if !target_mask[edge.body_index] { continue; }
+        let Some(normal) = edge.outward_normal else { continue };
+        if normal.0 * frame.toward_source.0 + normal.1 * frame.toward_source.1 <= 1e-10 {
+            continue;
+        }
+        let delta = edge.lane_end - edge.lane_start;
+        if delta.abs() <= 1e-12 { continue; }
+        let t0 = (lo - edge.lane_start) / delta;
+        let t1 = (hi - edge.lane_start) / delta;
+        if t0 < -1e-9 || t0 > 1.0 + 1e-9 || t1 < -1e-9 || t1 > 1.0 + 1e-9 {
+            return None;
+        }
+        let point_at = |t: f64| (
+            edge.start.0 + (edge.end.0 - edge.start.0) * t,
+            edge.start.1 + (edge.end.1 - edge.start.1) * t,
+        );
+        visible.push(ExposedBoundaryInterval {
+            body_index: edge.body_index,
+            unit_index: edge.unit_index,
+            start: point_at(t0.clamp(0.0, 1.0)),
+            end: point_at(t1.clamp(0.0, 1.0)),
+            outward_normal: normal,
+        });
+    }
+    Some(visible)
+}
+
+#[cfg(test)]
+mod parallel_polygonal_visibility_tests {
+    use super::visible_parallel_polygonal_intervals_for_targets;
+    use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
+    use crate::resources::Form;
+
+    fn rectangle(x: f64, y: f64, width: f64, height: f64) -> OrganismBodyGeometry {
+        let radius = (width * width + height * height).sqrt() * 0.5;
+        OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Rectangle { width, height },
+                x,
+                y,
+                rotation_radians: 0.0,
+            }],
+            min_x: x - radius,
+            max_x: x + radius,
+            min_y: y - radius,
+            max_y: y + radius,
+        }
+    }
+
+    #[test]
+    fn parallel_classifier_splits_a_partially_shadowed_front_edge() {
+        let bodies = [rectangle(4.0, 0.0, 2.0, 2.0), rectangle(8.0, 0.0, 2.0, 1.0)];
+        let visible = visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &bodies, &[0]).unwrap();
+        let front: Vec<_> = visible.iter()
+            .filter(|interval| interval.body_index == 0 && (interval.start.0 - 5.0).abs() < 1e-9 && (interval.end.0 - 5.0).abs() < 1e-9)
+            .collect();
+        assert_eq!(front.len(), 2);
+        let mut ranges: Vec<_> = front.iter().map(|interval| {
+            (interval.start.1.min(interval.end.1), interval.start.1.max(interval.end.1))
+        }).collect();
+        ranges.sort_by(|a, b| a.0.total_cmp(&b.0));
+        assert!((ranges[0].0 + 1.0).abs() < 1e-9);
+        assert!((ranges[0].1 + 0.5).abs() < 1e-9);
+        assert!((ranges[1].0 - 0.5).abs() < 1e-9);
+        assert!((ranges[1].1 - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn parallel_classifier_does_not_credit_a_shadowing_body() {
+        let bodies = [rectangle(4.0, 0.0, 2.0, 2.0), rectangle(8.0, 0.0, 2.0, 1.0)];
+        let visible = visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &bodies, &[0]).unwrap();
+        assert!(visible.iter().all(|interval| interval.body_index == 0));
+    }
+
+    #[test]
+    fn parallel_classifier_is_translation_invariant() {
+        let original = [rectangle(4.0, 0.0, 2.0, 2.0), rectangle(8.0, 0.0, 2.0, 1.0)];
+        let shifted = [rectangle(104.0, 0.0, 2.0, 2.0), rectangle(108.0, 0.0, 2.0, 1.0)];
+        let a = visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &original, &[0]).unwrap();
+        let b = visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &shifted, &[0]).unwrap();
+        let mut lengths_a: Vec<_> = a.iter().map(|v| (v.end.0-v.start.0).hypot(v.end.1-v.start.1)).collect();
+        let mut lengths_b: Vec<_> = b.iter().map(|v| (v.end.0-v.start.0).hypot(v.end.1-v.start.1)).collect();
+        lengths_a.sort_by(f64::total_cmp);
+        lengths_b.sort_by(f64::total_cmp);
+        assert_eq!(lengths_a.len(), lengths_b.len());
+        for (left, right) in lengths_a.iter().zip(lengths_b.iter()) {
+            assert!((left - right).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn parallel_classifier_fails_closed_when_curved_geometry_is_present() {
+        let mut circle = rectangle(4.0, 0.0, 2.0, 2.0);
+        circle.parts[0].form = Form::Circle { radius: 1.0 };
+        assert!(visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &[circle], &[0]).is_none());
+    }
+}
