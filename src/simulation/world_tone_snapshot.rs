@@ -218,12 +218,7 @@ impl WorldToneOccluderSnapshot {
 
             for (unit_index, properties) in unit_properties {
                 let _ = snapshot.frame.settle_organism_surface_response(
-                    body_index,
-                    unit_index,
-                    properties,
-                    baselines,
-                    organism,
-                    ledger,
+                    body_index, unit_index, properties, baselines, organism, ledger,
                 );
             }
         }
@@ -430,7 +425,12 @@ mod tests {
 
         // Multiple constituents are still composite geometry when they have no
         // internal bonds; a single cached shape cannot represent their surfaces.
-        simulation.organisms[0].structure.units[0].material.internal_bonds.clear();
+        simulation.organisms[0]
+            .structure
+            .units[0]
+            .material
+            .internal_bonds
+            .clear();
         simulation.organisms[0].mark_structure_changed();
         assert!(
             WorldToneOccluderSnapshot::from_simulation(sample(), &simulation).is_none(),
