@@ -533,6 +533,9 @@ impl Simulation {
                     - original_ledger.total_structural_energy_delta,
                 total_external_energy_input: trial_ledger.total_external_energy_input
                     - original_ledger.total_external_energy_input,
+                total_world_tone_energy_unabsorbed: trial_ledger
+                    .total_world_tone_energy_unabsorbed
+                    - original_ledger.total_world_tone_energy_unabsorbed,
                 total_usable_energy_gained: trial_ledger.total_usable_energy_gained
                     - original_ledger.total_usable_energy_gained,
                 total_work_expended: trial_ledger.total_work_expended
@@ -576,6 +579,8 @@ impl Simulation {
             ledger.total_potential_energy_released += ledger_delta.total_potential_energy_released;
             ledger.total_structural_energy_delta += ledger_delta.total_structural_energy_delta;
             ledger.total_external_energy_input += ledger_delta.total_external_energy_input;
+            ledger.total_world_tone_energy_unabsorbed +=
+                ledger_delta.total_world_tone_energy_unabsorbed;
             ledger.total_usable_energy_gained += ledger_delta.total_usable_energy_gained;
             ledger.total_work_expended += ledger_delta.total_work_expended;
             ledger.total_heat_dissipated += ledger_delta.total_heat_dissipated;
@@ -639,6 +644,8 @@ fn rollback_prepared_combine(
         ledger.total_potential_energy_released -= delta.total_potential_energy_released;
         ledger.total_structural_energy_delta -= delta.total_structural_energy_delta;
         ledger.total_external_energy_input -= delta.total_external_energy_input;
+        ledger.total_world_tone_energy_unabsorbed -=
+            delta.total_world_tone_energy_unabsorbed;
         ledger.total_usable_energy_gained -= delta.total_usable_energy_gained;
         ledger.total_work_expended -= delta.total_work_expended;
         ledger.total_heat_dissipated -= delta.total_heat_dissipated;
@@ -852,6 +859,7 @@ mod tests {
             total_potential_energy_released: 2.0,
             total_structural_energy_delta: 5.0,
             total_external_energy_input: 3.0,
+            total_world_tone_energy_unabsorbed: 9.0,
             total_usable_energy_gained: 7.0,
             total_work_expended: 11.0,
             total_heat_dissipated: 17.0,
@@ -862,6 +870,7 @@ mod tests {
             total_potential_energy_released: 1.0,
             total_structural_energy_delta: 2.0,
             total_external_energy_input: 1.0,
+            total_world_tone_energy_unabsorbed: 2.0,
             total_usable_energy_gained: 3.0,
             total_work_expended: 5.0,
             total_heat_dissipated: 7.0,
@@ -875,6 +884,7 @@ mod tests {
         assert_eq!(ledger.total_potential_energy_released, 1.0);
         assert_eq!(ledger.total_structural_energy_delta, 3.0);
         assert_eq!(ledger.total_external_energy_input, 2.0);
+        assert_eq!(ledger.total_world_tone_energy_unabsorbed, 7.0);
         assert_eq!(ledger.total_usable_energy_gained, 4.0);
         assert_eq!(ledger.total_work_expended, 6.0);
         assert_eq!(ledger.total_heat_dissipated, 10.0);
