@@ -2,6 +2,9 @@
 
 ## PR #202 — continuation audit — 2026-10-21
 
+- Added `transform_signal_to_energy_budget` in `src/perception/harmonics.rs`. It reuses the existing material resonance/nonlinear harmonic response to change the spectrum, then scales amplitude-squared energy to the caller-supplied remaining budget. It rejects budgets above incoming signal energy and tests both harmonic transformation and exact residual-energy preservation.
+- **Boundary:** this is the reusable spectral/energy primitive, not yet live downstream propagation. The live world-tone tick still does not carry this transformed residual through ordered geometry hits, and whole-world conservation must not be claimed complete until that path and nonliving heat settlement are connected and tested.
+
 **Latest code head at this audit:** `7f9de1bbf6ba211c0b7af7ca3820acaf01f60104` on `feature/external-input-ledger`.
 
 - Added a regression requiring resonance overload to preserve both structure and stored energy when the reservoir's frequency is effectively incompatible with all candidate bonds.
