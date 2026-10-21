@@ -433,7 +433,8 @@ impl WorldToneCaptureFrame {
         ledger: &mut crate::state::EnergyLedger,
     ) -> Option<WorldToneCaptureResult> {
         let usable_fraction = organism.genome.processing_efficiency();
-        self.settle_surface_response(
+        let usable_before = organism.usable_energy;
+        let result = self.settle_surface_response(
             receiver_body_index,
             unit_index,
             properties,
@@ -441,7 +442,22 @@ impl WorldToneCaptureFrame {
             usable_fraction,
             &mut organism.usable_energy,
             ledger,
-        )
+        )?;
+
+        // Source energy is first settled through the existing ledger. Move the
+        // newly credited portion into the organism's retained resonant store;
+        // both stores are counted separately in the world inventory. If the
+        // bounded spectrum cannot represent the deposit, leave it in the
+        // ordinary usable holder rather than losing or duplicating energy.
+        let credited = organism.usable_energy - usable_before;
+        if credited.is_finite() && credited > f64::EPSILON {
+            let mut reservoir = organism.resonant_energy.clone();
+            if reservoir.deposit(self.sample.frequency_hz, credited) {
+                organism.usable_energy = usable_before;
+                organism.resonant_energy = reservoir;
+            }
+        }
+        Some(result)
     }
 
     /// Settle one receiver's absorbed input atomically. Fractions remain explicit
