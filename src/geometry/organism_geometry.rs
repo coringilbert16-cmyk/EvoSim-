@@ -431,6 +431,44 @@ pub(crate) fn source_path_blocked(
     target_body_index: usize,
     target_unit_index: usize,
 ) -> bool {
+    source_path_blocked_inner(
+        source,
+        target,
+        bodies,
+        target_body_index,
+        target_unit_index,
+        None,
+    )
+}
+
+/// Exact blocker test restricted to bodies whose conservative angular bounds
+/// overlap the target boundary interval. Candidate indices refer to `bodies`.
+pub(crate) fn source_path_blocked_for_candidates(
+    source: (f64, f64),
+    target: (f64, f64),
+    bodies: &[OrganismBodyGeometry],
+    target_body_index: usize,
+    target_unit_index: usize,
+    candidate_body_indices: &[usize],
+) -> bool {
+    source_path_blocked_inner(
+        source,
+        target,
+        bodies,
+        target_body_index,
+        target_unit_index,
+        Some(candidate_body_indices),
+    )
+}
+
+fn source_path_blocked_inner(
+    source: (f64, f64),
+    target: (f64, f64),
+    bodies: &[OrganismBodyGeometry],
+    target_body_index: usize,
+    target_unit_index: usize,
+    candidate_body_indices: Option<&[usize]>,
+) -> bool {
     if !source.0.is_finite()
         || !source.1.is_finite()
         || !target.0.is_finite()
@@ -440,38 +478,84 @@ pub(crate) fn source_path_blocked(
         return true;
     }
 
-    let segment_min_x = source.0.min(target.0);
-    let segment_max_x = source.0.max(target.0);
-    let segment_min_y = source.1.min(target.1);
-    let segment_max_y = source.1.max(target.1);
-    for (body_index, body) in bodies.iter().enumerate() {
-        if ![body.min_x, body.max_x, body.min_y, body.max_y]
-            .iter()
-            .all(|value| value.is_finite())
-            || body.min_x > body.max_x
-            || body.min_y > body.max_y
-        {
-            return true;
-        }
-        // Body bounds are conservative around every realized constituent, so
-        // a segment outside this box cannot cross any exact constituent shape.
-        if body.max_x < segment_min_x
-            || body.min_x > segment_max_x
-            || body.max_y < segment_min_y
-            || body.min_y > segment_max_y
-        {
-            continue;
-        }
-        for part in &body.parts {
-            if body_index == target_body_index && part.unit_index == target_unit_index {
-                continue;
+    let segment_bounds = (
+        source.0.min(target.0),
+        source.0.max(target.0),
+        source.1.min(target.1),
+        source.1.max(target.1),
+    );
+    if let Some(candidates) = candidate_body_indices {
+        for &body_index in candidates {
+            let Some(body) = bodies.get(body_index) else {
+                return true;
+            };
+            if body_blocks_segment(
+                body_index,
+                body,
+                source,
+                target,
+                target_body_index,
+                target_unit_index,
+                segment_bounds,
+            ) != Some(false)
+            {
+                return true;
             }
-            if segment_crosses_part(source, target, part) {
+        }
+    } else {
+        for (body_index, body) in bodies.iter().enumerate() {
+            if body_blocks_segment(
+                body_index,
+                body,
+                source,
+                target,
+                target_body_index,
+                target_unit_index,
+                segment_bounds,
+            ) != Some(false)
+            {
                 return true;
             }
         }
     }
     false
+}
+
+fn body_blocks_segment(
+    body_index: usize,
+    body: &OrganismBodyGeometry,
+    source: (f64, f64),
+    target: (f64, f64),
+    target_body_index: usize,
+    target_unit_index: usize,
+    segment_bounds: (f64, f64, f64, f64),
+) -> Option<bool> {
+    if ![body.min_x, body.max_x, body.min_y, body.max_y]
+        .iter()
+        .all(|value| value.is_finite())
+        || body.min_x > body.max_x
+        || body.min_y > body.max_y
+    {
+        return None;
+    }
+    // Body bounds are conservative around every realized constituent, so a
+    // segment outside this box cannot cross any exact constituent shape.
+    if body.max_x < segment_bounds.0
+        || body.min_x > segment_bounds.1
+        || body.max_y < segment_bounds.2
+        || body.min_y > segment_bounds.3
+    {
+        return Some(false);
+    }
+    for part in &body.parts {
+        if body_index == target_body_index && part.unit_index == target_unit_index {
+            continue;
+        }
+        if segment_crosses_part(source, target, part) {
+            return Some(true);
+        }
+    }
+    Some(false)
 }
 
 fn segment_crosses_part(source: (f64, f64), target: (f64, f64), part: &PlacedForm) -> bool {
