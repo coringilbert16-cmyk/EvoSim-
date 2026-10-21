@@ -2329,3 +2329,6 @@ To offset the wider all-receiver set without changing geometric authority, the e
 ### Dense-world intersection fallback — 2026-10-21
 
 The exact intersection-event pass is now bounded to snapshots with at most 256 bodies. Larger worlds keep all physical receivers and all projected surface/arc boundary events, but use the midpoint of each resulting lane interval to order its interaction path rather than calculating every pairwise crossing. Each represented lane still allocates its incident energy exactly once among resonance retention, heat, and escaped remainder; geometric exposure and downstream ordering become approximate in dense worlds, as permitted for the performance target. Small-scene exact geometry regressions remain on the exact path, and a dense-scene regression plus the full test run must verify path-width and energy-budget invariants before this fallback is accepted.
+
+
+The dense-world fallback now has a dedicated 257-body regression: it verifies that downstream ordered hits are retained and that first-hit path widths reconcile with the same solver's direct exposure widths. The test and fallback are pending exact-head CI; do not treat them as verified until that run completes.
