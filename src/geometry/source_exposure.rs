@@ -3724,8 +3724,7 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
                     let segment = segments[index];
                     let facing = segment.creditable
                         && segment.normal.is_some_and(|normal| {
-                            normal.0 * frame.toward_source.0
-                                + normal.1 * frame.toward_source.1
+                            normal.0 * frame.toward_source.0 + normal.1 * frame.toward_source.1
                                 > 1e-10
                         });
                     (segment.body_index, segment.unit_index, facing)
