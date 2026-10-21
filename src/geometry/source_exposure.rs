@@ -2644,6 +2644,56 @@ impl ParallelRayFrame {
         depth.is_finite().then_some(depth)
     }
 
+    /// Find the lane coordinate where two finite straight segments intersect.
+    ///
+    /// These intersection lanes are critical events: the front-to-back order of
+    /// two boundaries can change only where their segments cross. A proper miss
+    /// returns Some(None); invalid coordinates and collinear overlap fail closed.
+    #[allow(dead_code)]
+    pub(crate) fn segment_intersection_lane(
+        self,
+        a: (f64, f64),
+        b: (f64, f64),
+        c: (f64, f64),
+        d: (f64, f64),
+    ) -> Option<Option<f64>> {
+        let points = [a, b, c, d];
+        if points.iter().any(|point| !point.0.is_finite() || !point.1.is_finite()) {
+            return None;
+        }
+        let r = (b.0 - a.0, b.1 - a.1);
+        let q = (d.0 - c.0, d.1 - c.1);
+        let offset = (c.0 - a.0, c.1 - a.1);
+        let cross = |left: (f64, f64), right: (f64, f64)| {
+            left.0 * right.1 - left.1 * right.0
+        };
+        let denominator = cross(r, q);
+        let numerator_t = cross(offset, q);
+        let numerator_u = cross(offset, r);
+        if !denominator.is_finite() || !numerator_t.is_finite() || !numerator_u.is_finite() {
+            return None;
+        }
+        if denominator.abs() <= 1e-12 {
+            // Parallel segments have no crossing lane. Collinear overlap is
+            // ambiguous for boundary ownership, so reject that geometry.
+            return if numerator_t.abs() <= 1e-12 {
+                None
+            } else {
+                Some(None)
+            };
+        }
+        let t = numerator_t / denominator;
+        let u = numerator_u / denominator;
+        if !t.is_finite() || !u.is_finite() {
+            return None;
+        }
+        if !(0.0..=1.0).contains(&t) || !(0.0..=1.0).contains(&u) {
+            return Some(None);
+        }
+        let point = (a.0 + t * r.0, a.1 + t * r.1);
+        self.lane(point).map(Some)
+    }
+
     /// Intersect one parallel lane with a full circle and return its two hit depths.
     ///
     /// The nested option distinguishes a valid miss from invalid input. Arc
@@ -2747,6 +2797,43 @@ impl ParallelRayFrame {
 #[cfg(test)]
 mod parallel_ray_frame_tests {
     use super::ParallelRayFrame;
+
+    #[test]
+    fn crossing_segments_produce_the_shared_critical_lane() {
+        let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
+        let lane = frame
+            .segment_intersection_lane((0.0, 0.0), (2.0, 2.0), (0.0, 2.0), (2.0, 0.0))
+            .unwrap()
+            .unwrap();
+        assert!((lane - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn disjoint_parallel_segments_have_no_intersection_event() {
+        let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
+        assert_eq!(
+            frame.segment_intersection_lane((0.0, 0.0), (1.0, 0.0), (0.0, 2.0), (1.0, 2.0)),
+            Some(None)
+        );
+    }
+
+    #[test]
+    fn collinear_overlap_fails_closed() {
+        let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
+        assert_eq!(
+            frame.segment_intersection_lane((0.0, 0.0), (2.0, 0.0), (1.0, 0.0), (3.0, 0.0)),
+            None
+        );
+    }
+
+    #[test]
+    fn intersection_outside_finite_segments_is_not_a_critical_event() {
+        let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
+        assert_eq!(
+            frame.segment_intersection_lane((0.0, 0.0), (1.0, 1.0), (2.0, 0.0), (3.0, 1.0)),
+            Some(None)
+        );
+    }
 
     #[test]
     fn lane_is_invariant_under_translation_along_parallel_rays() {
