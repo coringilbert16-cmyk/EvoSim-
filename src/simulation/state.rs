@@ -158,6 +158,9 @@ pub(crate) struct EnergyLedger {
     /// inventory term; the remainder still needs explicit propagation/escape handling.
     #[serde(default)]
     pub(crate) total_world_tone_energy_unabsorbed: f64,
+    /// Residual world-tone energy that leaves the modeled world after propagation.
+    #[serde(default)]
+    pub(crate) total_world_tone_energy_escaped: f64,
     pub(crate) total_usable_energy_gained: f64,
     #[serde(default)]
     pub(crate) total_work_expended: f64,
