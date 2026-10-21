@@ -457,18 +457,9 @@ fn material_response_to_drive(
 /// amplitudes are normalized so the outgoing spectrum carries exactly that
 /// budget under E = A². This is onward transmission, not a new emitted source
 /// and not a literal reflected ray.
-pub(crate) fn transform_signal_to_energy_budget(
-    properties: ResourceProperties,
-    baselines: ResourceBaselines,
-    incoming: &ToneSpectrum,
-    outgoing_energy_budget: f64,
-) -> Option<ToneSpectrum> {
-    if !outgoing_energy_budget.is_finite() || outgoing_energy_budget < 0.0 {
-        return None;
-    }
-
-    let mut incoming_energy = 0.0;
-    for component in &incoming.components {
+fn spectrum_energy(spectrum: &ToneSpectrum) -> Option<f64> {
+    let mut energy = 0.0;
+    for component in &spectrum.components {
         if !component.frequency_hz.is_finite()
             || component.frequency_hz <= 0.0
             || !component.amplitude.is_finite()
@@ -477,18 +468,23 @@ pub(crate) fn transform_signal_to_energy_budget(
         {
             return None;
         }
-        incoming_energy += component.amplitude * component.amplitude;
-        if !incoming_energy.is_finite() {
+        energy += component.amplitude * component.amplitude;
+        if !energy.is_finite() {
             return None;
         }
     }
-    if outgoing_energy_budget > incoming_energy + 1e-9 {
-        return None;
-    }
-    if outgoing_energy_budget <= f64::EPSILON {
-        return Some(ToneSpectrum::empty());
-    }
+    Some(energy)
+}
 
+/// Apply the existing material resonance and nonlinear response to every
+/// component of an incoming spectrum. The returned response keeps its natural
+/// response amplitude, but total energy cannot exceed the incoming spectrum.
+pub(crate) fn material_response_spectrum(
+    properties: ResourceProperties,
+    baselines: ResourceBaselines,
+    incoming: &ToneSpectrum,
+) -> Option<ToneSpectrum> {
+    let incoming_energy = spectrum_energy(incoming)?;
     let mut transformed = ToneSpectrum::empty();
     for component in &incoming.components {
         if component.amplitude <= f64::EPSILON {
@@ -503,6 +499,35 @@ pub(crate) fn transform_signal_to_energy_budget(
         );
         transformed.merge_from(&response, 1.0);
     }
+    bound_spectrum_energy(&mut transformed, incoming_energy);
+    Some(transformed)
+}
+
+/// Transform a continuing environmental signal through one material response.
+///
+/// The harmonic model determines relative frequency composition. The caller
+/// supplies the remaining physical energy budget after capture and dissipation;
+/// amplitudes are normalized so the outgoing spectrum carries exactly that
+/// budget under E = A². This is onward transmission, not a new emitted source
+/// and not a literal reflected ray.
+pub(crate) fn transform_signal_to_energy_budget(
+    properties: ResourceProperties,
+    baselines: ResourceBaselines,
+    incoming: &ToneSpectrum,
+    outgoing_energy_budget: f64,
+) -> Option<ToneSpectrum> {
+    let incoming_energy = spectrum_energy(incoming)?;
+    if !outgoing_energy_budget.is_finite()
+        || outgoing_energy_budget < 0.0
+        || outgoing_energy_budget > incoming_energy + 1e-9
+    {
+        return None;
+    }
+    if outgoing_energy_budget <= f64::EPSILON {
+        return Some(ToneSpectrum::empty());
+    }
+
+    let mut transformed = material_response_spectrum(properties, baselines, incoming)?;
     let transformed_energy = spectrum_magnitude(&transformed).powi(2);
     if !transformed_energy.is_finite() || transformed_energy <= f64::EPSILON {
         return None;
