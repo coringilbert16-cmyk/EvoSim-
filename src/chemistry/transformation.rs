@@ -1092,6 +1092,7 @@ mod tests {
             occupied_cells: vec![crate::state::Position { x: 0.0, y: 0.0 }],
             genome,
             harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+            resonant_energy: crate::harmonics::ResonantEnergyReservoir::default(),
             experience_memory: crate::memory::ExperienceMemory::default(),
             pending_movement_experience: None,
             decision_history: crate::decision::DecisionHistory::default(),
