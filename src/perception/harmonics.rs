@@ -1047,9 +1047,10 @@ mod tests {
             .sum();
         let incident_energy = wave_energy_from_amplitude(incident_amplitude);
         assert!(spectral_energy <= incident_energy + 1e-12);
-        assert!(spectrum.components.iter().any(|component| {
-            (component.frequency_hz - 2.0 * 440.0).abs() < f64::EPSILON
-        }));
+        assert!(spectrum
+            .components
+            .iter()
+            .any(|component| (component.frequency_hz - 2.0 * 440.0).abs() < f64::EPSILON));
     }
 
     #[test]
