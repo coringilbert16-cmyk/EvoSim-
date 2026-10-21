@@ -3117,6 +3117,13 @@ pub(crate) fn visible_parallel_polygonal_intervals_for_targets(
                     let half = *length * 0.5;
                     vec![(-half, 0.0), (half, 0.0)]
                 }
+                Form::Fluid {
+                    boundary: Some(vertices),
+                    arc_boundary: None,
+                    multi_contact_boundary: None,
+                    ..
+                } => vertices.clone(),
+                Form::Fluid { .. } => return None,
                 _ => part.form.polygon_vertices()?,
             };
             if local_vertices.len() < 2 {
