@@ -236,6 +236,18 @@ pub(crate) fn visible_polygonal_intervals(
     source: (f64, f64),
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
 ) -> Option<Vec<ExposedBoundaryInterval>> {
+    let targets: Vec<_> = (0..bodies.len()).collect();
+    visible_polygonal_intervals_for_targets(source, bodies, &targets)
+}
+
+/// Compute visible intervals only for selected receiver bodies while retaining
+/// every body as a potential occluder. This avoids solving exposure for thousands
+/// of environmental particles when only organism energy holders receive input.
+pub(crate) fn visible_polygonal_intervals_for_targets(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+) -> Option<Vec<ExposedBoundaryInterval>> {
     use crate::capillary_geometry::FluidBoundaryPiece;
     use crate::resources::Form;
 
@@ -358,7 +370,9 @@ pub(crate) fn visible_polygonal_intervals(
                         vertices[(index + 1) % vertices.len()],
                     ));
                 }
-                straight_targets.push((body_index, part.unit_index, vertices));
+                if target_body_indices.contains(&body_index) {
+                    straight_targets.push((body_index, part.unit_index, vertices));
+                }
                 continue;
             }
 
@@ -1225,6 +1239,17 @@ pub(crate) fn visible_circular_arc_intervals(
     source: (f64, f64),
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
 ) -> Option<Vec<ExposedCircularArcInterval>> {
+    let targets: Vec<_> = (0..bodies.len()).collect();
+    visible_circular_arc_intervals_for_targets(source, bodies, &targets)
+}
+
+/// Compute visible arc intervals only for selected receiver bodies; all arcs
+/// still participate in blocker intersections and occlusion classification.
+pub(crate) fn visible_circular_arc_intervals_for_targets(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+) -> Option<Vec<ExposedCircularArcInterval>> {
     use crate::capillary_geometry::FluidBoundaryPiece;
     use crate::resources::Form;
     if !source.0.is_finite() || !source.1.is_finite() {
@@ -1457,6 +1482,9 @@ pub(crate) fn visible_circular_arc_intervals(
 
     let mut output = Vec::new();
     for target in all_arcs {
+        if !target_body_indices.contains(&target.body_index) {
+            continue;
+        }
         // If the source is inside the target material, its boundary cannot be
         // safely interpreted as an externally illuminated surface.
         if let Some(body) = bodies.get(target.body_index) {
