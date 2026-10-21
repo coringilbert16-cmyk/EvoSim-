@@ -2508,6 +2508,17 @@ mod exact_arc_projection_tests {
 }
 
 
+
+/// Quantize derived visibility coordinates to the approved 0.01 world-unit
+/// grid. Geometry definitions themselves remain full precision.
+fn round_geometry_to_cent(value: f64) -> Option<f64> {
+    if !value.is_finite() {
+        return None;
+    }
+    let rounded = (value * 100.0).round() / 100.0;
+    rounded.is_finite().then_some(rounded)
+}
+
 /// Coordinate frame for a single shared parallel-ray direction.
 ///
 /// `toward_source` points from the scene toward the source. Rays travel in the
@@ -2600,7 +2611,13 @@ impl ParallelRayFrame {
         if !near.is_finite() || !far.is_finite() {
             return None;
         }
-        Some(Some((near, far)))
+        // Curved-boundary visibility intentionally uses a 0.01 world-unit
+        // depth grid. Quantize only the derived hit depths, not the stored
+        // circle geometry, so material dimensions and energy properties remain
+        // untouched while the lane partition stays simple and deterministic.
+        let near = round_geometry_to_cent(near)?;
+        let far = round_geometry_to_cent(far)?;
+        Some(Some((near.min(far), near.max(far))))
     }
 
     /// Intersect a lane with a straight segment and return the hit depth.
@@ -2745,5 +2762,27 @@ mod parallel_circle_lane_tests {
         assert!(frame
             .circle_hit_depths(f64::NAN, (0.0, 0.0), 1.0)
             .is_none());
+    }
+}
+
+#[cfg(test)]
+mod curved_visibility_precision_tests {
+    use super::{round_geometry_to_cent, ParallelRayFrame};
+
+    #[test]
+    fn curved_boundary_hit_depths_round_to_nearest_hundredth() {
+        assert_eq!(round_geometry_to_cent(1.234), Some(1.23));
+        assert_eq!(round_geometry_to_cent(1.235), Some(1.24));
+        assert_eq!(round_geometry_to_cent(-1.235), Some(-1.24));
+
+        let frame = ParallelRayFrame::new((1.0, 0.0)).unwrap();
+        let hits = frame.circle_hit_depths(0.0, (5.123, 0.0), 2.0).unwrap().unwrap();
+        assert_eq!(hits, (3.12, 7.12));
+    }
+
+    #[test]
+    fn curved_visibility_precision_rejects_non_finite_values() {
+        assert_eq!(round_geometry_to_cent(f64::INFINITY), None);
+        assert_eq!(round_geometry_to_cent(f64::NAN), None);
     }
 }
