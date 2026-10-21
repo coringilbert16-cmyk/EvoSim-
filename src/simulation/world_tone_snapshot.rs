@@ -1065,7 +1065,10 @@ mod tests {
             &catalog,
         )
         .expect("environmental receiver should have realized geometry");
-        assert!(simulation.environment.field.deposit_physical(5.0, 0.0, exposed));
+        assert!(simulation
+            .environment
+            .field
+            .deposit_physical(5.0, 0.0, exposed));
 
         WorldToneOccluderSnapshot::settle_living_organism_inputs(
             &mut simulation,
@@ -1082,8 +1085,7 @@ mod tests {
             "nonliving material response must settle as heat"
         );
         assert_eq!(
-            simulation.energy_ledger.total_resonant_energy_held,
-            0.0,
+            simulation.energy_ledger.total_resonant_energy_held, 0.0,
             "a nonliving receiver must not receive biological resonance storage"
         );
     }
