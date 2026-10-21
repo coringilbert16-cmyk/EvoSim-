@@ -3105,7 +3105,7 @@ pub(crate) fn visible_parallel_polygonal_intervals_for_targets(
                 return None;
             }
 
-            let is_line = matches!(part.form, Form::Line { .. });
+            let is_line = matches!(&part.form, Form::Line { .. });
             let winding = if is_line {
                 0.0
             } else {
@@ -3175,68 +3175,6 @@ pub(crate) fn visible_parallel_polygonal_intervals_for_targets(
 
     let partition = ParallelLanePartition::new(lanes)?;
     let mut visible = Vec::new();
-    for (_, _, lane) in partition.intervals() {
-        let mut nearest: Option<(usize, f64)> = None;
-        let mut tied = false;
-        for (edge_index, edge) in edges.iter().enumerate() {
-            let lane_delta = edge.lane_end - edge.lane_start;
-            // A boundary parallel to the rays has zero projected width. It
-            // remains a measure-zero event, not a finite interval to credit.
-            if lane_delta.abs() <= 1e-12 {
-                continue;
-            }
-            let low = edge.lane_start.min(edge.lane_end);
-            let high = edge.lane_start.max(edge.lane_end);
-            if lane <= low || lane >= high {
-                continue;
-            }
-            let t = (lane - edge.lane_start) / lane_delta;
-            let depth = edge.depth_start + (edge.depth_end - edge.depth_start) * t;
-            if !depth.is_finite() {
-                return None;
-            }
-            match nearest {
-                None => {
-                    nearest = Some((edge_index, depth));
-                    tied = false;
-                }
-                Some((_, best_depth)) if depth > best_depth + 1e-9 => {
-                    nearest = Some((edge_index, depth));
-                    tied = false;
-                }
-                Some((_, best_depth)) if (depth - best_depth).abs() <= 1e-9 => {
-                    tied = true;
-                }
-                _ => {}
-            }
-        }
-
-        // Coincident material boundaries have no unique owner. Omitting this
-        // measure interval is safer than granting the same incident energy twice.
-        if tied {
-            continue;
-        }
-        let Some((edge_index, _)) = nearest else {
-            continue;
-        };
-        let edge = edges[edge_index];
-        if !target_mask[edge.body_index] {
-            continue;
-        }
-        let Some(normal) = edge.outward_normal else {
-            continue;
-        };
-        if normal.0 * frame.toward_source.0 + normal.1 * frame.toward_source.1 <= 1e-10 {
-            continue;
-        }
-
-        let lane_delta = edge.lane_end - edge.lane_start;
-        let lane_lo = partition.lanes().iter().copied()
-            .find(|candidate| (*candidate - lane).abs() <= 1e-12)
-            .unwrap_or(lane);
-        let _ = lane_lo; // The partition interval endpoints are used below.
-    }
-
     // Emit intervals by walking the shared lane partition again. The winning
     // edge is constant within each open interval by construction.
     for pair in partition.lanes().windows(2) {
