@@ -1364,7 +1364,17 @@ impl Simulation {
         rng: &mut ChaCha8Rng,
     ) -> bool {
         organism.stress *= crate::state::STRESS_DECAY_PER_TICK;
+        let revision_before_stress = organism.structure_revision;
         let _ = organism.apply_stress_damage(environment, ledger, rng);
+        // Until the stress path is fully retired, avoid allowing it and the new
+        // overload mechanism to break two bonds in the same survival pass.
+        if organism.structure_revision == revision_before_stress {
+            let _ = crate::transformation::resolve_resonance_overload_break(
+                organism,
+                environment,
+                ledger,
+            );
+        }
         match crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog) {
             Ok(Some(cavity)) => !cavity.qualifies(),
             Ok(None) => true,
