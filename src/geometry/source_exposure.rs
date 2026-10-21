@@ -1925,14 +1925,12 @@ pub(crate) fn parallel_projected_arc_extent(
     let first_zero = ((start - direction_angle - std::f64::consts::FRAC_PI_2)
         / std::f64::consts::PI)
         .floor() as i64;
-    let last_zero = ((end - direction_angle - std::f64::consts::FRAC_PI_2)
-        / std::f64::consts::PI)
+    let last_zero = ((end - direction_angle - std::f64::consts::FRAC_PI_2) / std::f64::consts::PI)
         .ceil() as i64;
     let mut cuts = vec![start, end];
     for index in first_zero..=last_zero {
-        let angle = direction_angle
-            + std::f64::consts::FRAC_PI_2
-            + index as f64 * std::f64::consts::PI;
+        let angle =
+            direction_angle + std::f64::consts::FRAC_PI_2 + index as f64 * std::f64::consts::PI;
         if angle > start + 1e-12 && angle < end - 1e-12 {
             cuts.push(angle);
         }
@@ -1945,8 +1943,7 @@ pub(crate) fn parallel_projected_arc_extent(
         if ((a + b) * 0.5 - direction_angle).cos() <= 0.0 {
             continue;
         }
-        extent += arc.radius
-            * ((b - direction_angle).sin() - (a - direction_angle).sin());
+        extent += arc.radius * ((b - direction_angle).sin() - (a - direction_angle).sin());
     }
     (extent.is_finite() && extent >= -1e-10).then_some(extent.max(0.0))
 }
