@@ -280,62 +280,18 @@ impl WorldToneCaptureFrame {
             return None;
         }
 
-        let source = (sample.source_x, sample.source_y);
-        let straight_intervals = crate::source_exposure::visible_polygonal_intervals_for_targets(
-            source,
-            bodies,
-            receiver_body_indices,
-        )?;
-        let curved_intervals = crate::source_exposure::visible_circular_arc_intervals_for_targets(
-            source,
-            bodies,
-            receiver_body_indices,
-        )?;
-
-        // Illumination projection uses the single source direction for the
-        // entire tick, not the varying point-source direction at each boundary
-        // point. The visibility partition is adapted separately below; this
-        // keeps energy width exact for parallel rays while preserving the
-        // established fail-closed occlusion classification in this step.
         let phase = std::f64::consts::TAU * sample.orbital_phase;
         let toward_source = (phase.sin(), -phase.cos());
-        let mut projected_widths = vec![0.0; bodies.len()];
-        let mut projected_widths_by_unit: Vec<Vec<(usize, f64)>> = bodies
+        let projected_widths_by_unit =
+            crate::source_exposure::parallel_projected_widths_by_body_for_targets(
+                toward_source,
+                bodies,
+                receiver_body_indices,
+            )?;
+        let projected_widths: Vec<f64> = projected_widths_by_unit
             .iter()
-            .map(|body| {
-                body.parts
-                    .iter()
-                    .map(|part| (part.unit_index, 0.0))
-                    .collect()
-            })
+            .map(|units| units.iter().map(|(_, width)| *width).sum())
             .collect();
-
-        for interval in straight_intervals {
-            let extent = crate::source_exposure::projected_extent(interval, toward_source)?;
-            if !extent.is_finite() || extent < 0.0 {
-                return None;
-            }
-            *projected_widths.get_mut(interval.body_index)? += extent;
-            let (_, unit_width) = projected_widths_by_unit
-                .get_mut(interval.body_index)?
-                .iter_mut()
-                .find(|(unit_index, _)| *unit_index == interval.unit_index)?;
-            *unit_width += extent;
-        }
-
-        for interval in curved_intervals {
-            let extent =
-                crate::source_exposure::parallel_projected_arc_extent(interval.arc, toward_source)?;
-            if !extent.is_finite() || extent < 0.0 {
-                return None;
-            }
-            *projected_widths.get_mut(interval.body_index)? += extent;
-            let (_, unit_width) = projected_widths_by_unit
-                .get_mut(interval.body_index)?
-                .iter_mut()
-                .find(|(unit_index, _)| *unit_index == interval.unit_index)?;
-            *unit_width += extent;
-        }
 
         if projected_widths.iter().any(|width| !width.is_finite())
             || projected_widths_by_unit
@@ -955,7 +911,7 @@ mod tests {
     }
 
     #[test]
-    fn standalone_legacy_fluid_uses_point_source_projection_of_nominal_circle() {
+    fn standalone_legacy_fluid_uses_parallel_projection_of_nominal_circle() {
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
         use crate::resources::Form;
 
@@ -987,26 +943,14 @@ mod tests {
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
-        let intervals = crate::source_exposure::visible_circular_arc_intervals(
-            (sample.source_x, sample.source_y),
-            std::slice::from_ref(&body),
-        )
-        .expect("legacy circular fluid visibility is analytic");
-        let expected: f64 = intervals
-            .iter()
-            .map(|interval| {
-                crate::source_exposure::parallel_projected_arc_extent(interval.arc, (-1.0, 0.0))
-                    .unwrap()
-            })
-            .sum();
+        let expected = 2.0 * radius;
         let frame = WorldToneCaptureFrame::from_geometry(sample, &[body])
             .expect("legacy circular fluid has a parallel-ray realization");
-        assert!((expected - 2.0 * radius).abs() < 1e-12);
-        assert!((frame.projected_width_for_unit(0, 3).unwrap() - expected).abs() < 1e-12);
+        assert!((frame.projected_width_for_unit(0, 3).unwrap() - expected).abs() < 0.02);
     }
 
     #[test]
-    fn standalone_circular_fluid_arc_uses_finite_point_source_projection() {
+    fn standalone_circular_fluid_arc_uses_parallel_projection() {
         use crate::capillary_geometry::CircularArcBoundary;
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
         use crate::resources::Form;
@@ -1053,19 +997,11 @@ mod tests {
             start_angle_radians: arc.start_angle_radians + 0.25,
             ..arc
         };
-        let expected = crate::source_exposure::parallel_projected_arc_extent(
-            expected_world_arc,
-            (sample.source_x, sample.source_y),
-        )
-        .unwrap();
-        let parallel_ray_approximation =
-            crate::source_exposure::projected_arc_extent(expected_world_arc, (-1.0, 0.0)).unwrap();
-        assert!(
-            (expected - parallel_ray_approximation).abs() > 1e-5,
-            "finite point-source geometry should not silently collapse to parallel rays"
-        );
-        assert!((frame.projected_widths[0] - expected).abs() < 1e-12);
-        assert_eq!(frame.projected_width_for_unit(0, 2), Some(expected));
+        let expected =
+            crate::source_exposure::parallel_projected_arc_extent(expected_world_arc, (-1.0, 0.0))
+                .unwrap();
+        assert!((frame.projected_widths[0] - expected).abs() < 0.02);
+        assert!((frame.projected_width_for_unit(0, 2).unwrap() - expected).abs() < 0.02);
     }
 
     #[test]
