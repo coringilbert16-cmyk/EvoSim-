@@ -2,24 +2,24 @@
 
 ## PR #202 — current implementation and merge gates — 2026-10-21
 
-**Verified source head before this documentation update:** `7274761d5401f08f11fa229dd801e4c066044039` on `feature/external-input-ledger`. The update below reflects source inspection at that head; this documentation commit will require its own exact-head CI result.
+**Verified source head before this documentation update:** `c0bea08faca8e0dd2abeb03854f6b3674487ca3e` on `feature/external-input-ledger`. The source changes below were inspected at that head; this documentation commit will require its own exact-head CI result.
 
 ### Implemented and connected
 
 - The live simulation tick samples the precomputed world-tone cycle and calls `WorldToneOccluderSnapshot::settle_living_organism_inputs` for living organisms.
 - The snapshot assembles realized world-space occluders from organism structures, environmental physical material, legacy decomposing structures, owner-relative stored physical material, active transformations, and developing offspring/committed material. Ambiguous or invalid geometry fails closed.
 - `WorldToneCaptureFrame` now uses the shared **parallel-ray** visibility path, not the historical finite-point-source solver. The same per-tick direction is used to classify straight and supported curved boundaries. The frame caches exposure and guards against duplicate constituent settlement.
-- Absorbed direct input is settled through the external-input transaction into usable energy and heat. Unabsorbed incident energy is currently recorded as telemetry only; it is not yet propagated as a reflected/secondary tone and is not counted as a second energy credit.
+- Absorbed direct input is settled through the external-input transaction into usable energy and heat. Mixed-material structural units now use their aggregate material properties in capture instead of being skipped; unabsorbed incident energy is still telemetry only and is not yet propagated as a reflected/secondary tone.
 - Focused regressions cover mixed straight/curved shadows and live tick settlement. The live capture test also checks that the current energy inventory balances after absorbed solar input.
 
 ### Latest exact-head CI
 
-Workflow [39630672842](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39630672842) ran on the source head above and completed with failure:
+Workflow [39640200103](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39640200103) ran on the source head above and completed with failure:
 
-- Formatting, source-size, COMBINE architecture, and focused Bob/fluid/chemical gates passed.
-- Rust suite: **538 passed, 28 failed, 1 ignored** in 165.11 seconds.
-- Clippy failed with 62 production-target errors and 41 test-target errors. Treat this as existing lint debt to triage selectively; do not let broad lint cleanup displace the merge-critical work.
-- The failure count remains at the agreed 28-failure baseline. The last controlled comparison identified the same 28 failing test identities at an earlier checkpoint; identities have not been re-compared against the current head in this run.
+- Formatting and the focused chemical-BREAK gate passed. The two parallel-visibility iterator cleanups and removal of unused lane-bound calculations are included at this head.
+- Rust suite: **538 passed, 28 failed, 1 ignored** in 162.82 seconds.
+- Compared with the earlier baseline workflow [39630672842](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39630672842), the **same 28 test identities fail; there are no new failing identities**.
+- Clippy still fails with 59 production-target errors and 38 test-target errors. The recent geometry cleanup reduced the count, but most remaining failures are longstanding dead-code/lint debt outside the merge-critical path. Fix easy relevant issues only.
 
 ### Remaining merge-critical work
 
