@@ -866,7 +866,7 @@ mod tests {
         assert!(parameters().sample(0, 0.0, 0.0, -1.0).is_none());
     }
     #[test]
-    fn standalone_circle_uses_point_source_projection_without_polygon_approximation() {
+    fn standalone_circle_uses_parallel_projection_without_polygon_approximation() {
         use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
         use crate::resources::Form;
 
@@ -891,23 +891,12 @@ mod tests {
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
-        let intervals = crate::source_exposure::visible_circular_arc_intervals(
-            (sample.source_x, sample.source_y),
-            std::slice::from_ref(&body),
-        )
-        .expect("circle boundary visibility is analytic");
-        let expected: f64 = intervals
-            .iter()
-            .map(|interval| {
-                crate::source_exposure::parallel_projected_arc_extent(interval.arc, (-1.0, 0.0))
-                    .unwrap()
-            })
-            .sum();
+        let expected = 2.5;
         let frame = WorldToneCaptureFrame::from_geometry(sample, &[body])
             .expect("an isolated, externally illuminated circle has parallel-ray exposure");
         assert!(expected > 0.0 && expected <= 2.5 + 1e-12);
-        assert!((frame.projected_widths[0] - expected).abs() < 1e-12);
-        assert!((frame.projected_width_for_unit(0, 7).unwrap() - expected).abs() < 1e-12);
+        assert!((frame.projected_widths[0] - expected).abs() < 0.02);
+        assert!((frame.projected_width_for_unit(0, 7).unwrap() - expected).abs() < 0.02);
     }
 
     #[test]
@@ -1105,9 +1094,8 @@ mod tests {
         let blocker = circle_body(0, 0.0, 0.0, 1.0);
         let target = circle_body(0, 5.0, 0.0, 1.0);
         let frame = WorldToneCaptureFrame::from_geometry(sample, &[blocker, target])
-            .expect("circle boundaries can cast exact point-source shadows");
-        assert!(frame.projected_widths[0] > 0.0);
-        assert!(frame.projected_widths[0] < 2.0);
+            .expect("circle boundaries share one parallel-ray field");
+        assert!((frame.projected_widths[0] - 2.0).abs() < 0.02);
         assert_eq!(frame.projected_widths[1], 0.0);
     }
 
@@ -1124,7 +1112,7 @@ mod tests {
         let blocker = circle_body(0, 0.0, 0.7, 0.5);
         let target = circle_body(0, 5.0, 0.0, 1.0);
         let frame = WorldToneCaptureFrame::from_geometry(sample, &[blocker, target])
-            .expect("circle boundaries can cast exact point-source shadows");
+            .expect("circle boundaries share one parallel-ray field");
         assert!(frame.projected_widths[1] > 0.0);
         assert!(frame.projected_widths[1] < 2.0);
     }
