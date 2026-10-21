@@ -67,6 +67,23 @@ impl WorldToneOccluderSnapshot {
             bodies.push(body);
         }
 
+        let receiver_original_indices: Vec<_> = receiver_organism_indices
+            .iter()
+            .filter_map(|index| organism_body_indices[*index])
+            .collect();
+        if receiver_original_indices.is_empty() {
+            return None;
+        }
+        let reference_angle = (simulation.environment.height * 0.5 - sample.source_y)
+            .atan2(simulation.environment.width * 0.5 - sample.source_x);
+        let receiver_intervals: Vec<_> = receiver_original_indices
+            .iter()
+            .map(|index| {
+                let body = bodies.get(*index)?;
+                source_angular_interval(body, sample, reference_angle)
+            })
+            .collect::<Option<Vec<_>>>()?;
+
         // A developing offspring is a separate physical structure even
         // before it is admitted to simulation.organisms. Its committed storage
         // remains physical too and is anchored to the offspring's own origin.
@@ -95,9 +112,22 @@ impl WorldToneOccluderSnapshot {
         }
 
         // Physical field objects retain their world placements. Do not invent
-        // geometry for aggregate logical stock.
+        // geometry for aggregate logical stock. Test a conservative constituent
+        // bound before allocating full realized geometry for off-angle particles.
         for cell in &simulation.environment.field.cells {
             for physical in &cell.physical_materials {
+                let interval = physical_material_source_angular_interval(
+                    physical,
+                    catalog,
+                    sample,
+                    reference_angle,
+                )?;
+                if !receiver_intervals
+                    .iter()
+                    .any(|receiver| angular_intervals_overlap(interval, *receiver))
+                {
+                    continue;
+                }
                 bodies.push(OrganismBodyGeometry::from_physical_material(
                     physical, catalog,
                 )?);
@@ -166,26 +196,12 @@ impl WorldToneOccluderSnapshot {
             }
         }
 
-        let receiver_original_indices: Vec<_> = receiver_organism_indices
-            .iter()
-            .filter_map(|index| organism_body_indices[*index])
-            .collect();
-        if receiver_original_indices.is_empty() {
-            return None;
-        }
-
         // A body can only block a receiver along directions subtended by that
-        // receiver. Keep a conservative angular broad phase so thousands of
-        // unrelated environmental particles do not enter every exact ray test.
-        let reference_angle = (simulation.environment.height * 0.5 - sample.source_y)
-            .atan2(simulation.environment.width * 0.5 - sample.source_x);
+        // receiver. Keep a conservative angular broad phase so unrelated bodies
+        // do not enter every exact ray test.
         let angular_intervals = bodies
             .iter()
             .map(|body| source_angular_interval(body, sample, reference_angle))
-            .collect::<Option<Vec<_>>>()?;
-        let receiver_intervals: Vec<_> = receiver_original_indices
-            .iter()
-            .map(|index| angular_intervals.get(*index).copied())
             .collect::<Option<Vec<_>>>()?;
         let mut receiver_mask = vec![false; bodies.len()];
         for &index in &receiver_original_indices {
@@ -306,28 +322,89 @@ fn source_angular_interval(
     sample: WorldToneSample,
     reference_angle: f64,
 ) -> Option<(f64, f64)> {
-    if ![
+    source_angular_interval_for_bounds(
         body.min_x,
         body.max_x,
         body.min_y,
         body.max_y,
+        sample,
+        reference_angle,
+    )
+}
+
+fn physical_material_source_angular_interval(
+    physical: &PhysicalMaterial,
+    catalog: &[BaseResource],
+    sample: WorldToneSample,
+    reference_angle: f64,
+) -> Option<(f64, f64)> {
+    let placements = physical.placements.as_ref()?;
+    if placements.is_empty() || placements.len() != physical.material.parts.len() {
+        return None;
+    }
+    let (mut min_x, mut max_x, mut min_y, mut max_y) = (
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+    );
+    for (index, placement) in placements.iter().enumerate() {
+        if !placement.x.is_finite()
+            || !placement.y.is_finite()
+            || !placement.rotation_radians.is_finite()
+        {
+            return None;
+        }
+        let shape = physical.realized_shape_for_part(index, catalog)?;
+        let radius = shape.form.bounding_radius();
+        if !radius.is_finite() || radius < 0.0 {
+            return None;
+        }
+        min_x = min_x.min(placement.x - radius);
+        max_x = max_x.max(placement.x + radius);
+        min_y = min_y.min(placement.y - radius);
+        max_y = max_y.max(placement.y + radius);
+    }
+    source_angular_interval_for_bounds(
+        min_x,
+        max_x,
+        min_y,
+        max_y,
+        sample,
+        reference_angle,
+    )
+}
+
+fn source_angular_interval_for_bounds(
+    min_x: f64,
+    max_x: f64,
+    min_y: f64,
+    max_y: f64,
+    sample: WorldToneSample,
+    reference_angle: f64,
+) -> Option<(f64, f64)> {
+    if ![
+        min_x,
+        max_x,
+        min_y,
+        max_y,
         sample.source_x,
         sample.source_y,
         reference_angle,
     ]
     .iter()
     .all(|value| value.is_finite())
-        || body.min_x > body.max_x
-        || body.min_y > body.max_y
+        || min_x > max_x
+        || min_y > max_y
     {
         return None;
     }
 
     let corners = [
-        (body.min_x, body.min_y),
-        (body.min_x, body.max_y),
-        (body.max_x, body.min_y),
-        (body.max_x, body.max_y),
+        (min_x, min_y),
+        (min_x, max_y),
+        (max_x, min_y),
+        (max_x, max_y),
     ];
     let mut minimum = f64::INFINITY;
     let mut maximum = f64::NEG_INFINITY;
