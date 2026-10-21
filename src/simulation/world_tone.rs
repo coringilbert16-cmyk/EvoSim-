@@ -422,11 +422,11 @@ impl WorldToneCaptureFrame {
             heat_dissipated,
         })
     }
-    /// Settle one organism constituent's absorbed source energy into the
-    /// frequency-resolved resonance reservoir. Exposed geometry and material
-    /// response determine the amount received; genome processing efficiency does
-    /// not choose an energy allocation. If the bounded spectrum cannot represent
-    /// the deposit, the energy remains in the ordinary usable holder.
+    /// Settle one organism constituent using the existing material spectrum.
+    /// Damping is heat; the material's bounded amplitude-squared response is
+    /// retained as frequency-resolved resonance, and only the remaining budget
+    /// continues as signal. No genome-selected efficiency or arbitrary retention
+    /// coefficient is introduced.
     pub(crate) fn settle_organism_surface_response(
         &mut self,
         receiver_body_index: usize,
@@ -436,29 +436,115 @@ impl WorldToneCaptureFrame {
         organism: &mut crate::state::Organism,
         ledger: &mut crate::state::EnergyLedger,
     ) -> Option<WorldToneCaptureResult> {
-        let usable_before = organism.usable_energy;
-        let result = self.settle_surface_response(
-            receiver_body_index,
-            unit_index,
+        if *self.settled_receivers.get(receiver_body_index)?
+            || self.settled_units.get(receiver_body_index)?.contains(&unit_index)
+        {
+            return None;
+        }
+        let response =
+            self.surface_response_for_unit(receiver_body_index, unit_index, properties, baselines)?;
+
+        // The existing material response supplies the spectral composition.
+        // Its amplitudes are scaled to this constituent's incident energy, with
+        // E=A², then bounded by the energy left after damping has become heat.
+        let mut spectrum = crate::perception::harmonics::material_response(
             properties,
             baselines,
-            1.0,
-            &mut organism.usable_energy,
-            ledger,
-        )?;
-
-        // The ledger first records absorbed energy in the usable holder. Move
-        // that exact delta into resonance only if the reservoir accepts it,
-        // keeping the two inventory categories mutually exclusive.
-        let credited = organism.usable_energy - usable_before;
-        if credited.is_finite() && credited > f64::EPSILON {
-            let mut reservoir = organism.resonant_energy.clone();
-            if reservoir.deposit(self.sample.frequency_hz, credited) {
-                organism.usable_energy = usable_before;
-                organism.resonant_energy = reservoir;
+            0.0,
+        );
+        let incident_amplitude = response.incident_energy.sqrt();
+        for component in &mut spectrum.components {
+            component.amplitude *= incident_amplitude;
+        }
+        let mut spectral_energy = 0.0;
+        for component in &spectrum.components {
+            let energy = component.amplitude * component.amplitude;
+            if !energy.is_finite() || energy < 0.0 {
+                return None;
+            }
+            spectral_energy += energy;
+            if !spectral_energy.is_finite() {
+                return None;
             }
         }
-        Some(result)
+        let damping_heat = response.absorbed_by_damping;
+        let retainable_budget = (response.incident_energy - damping_heat).max(0.0);
+        if spectral_energy > retainable_budget && spectral_energy > 0.0 {
+            let scale = (retainable_budget / spectral_energy).sqrt();
+            if !scale.is_finite() {
+                return None;
+            }
+            for component in &mut spectrum.components {
+                component.amplitude *= scale;
+            }
+            spectral_energy = retainable_budget;
+        }
+
+        // Deposit the whole spectral response atomically. If the bounded
+        // reservoir cannot represent it, dissipate that response as heat rather
+        // than silently losing energy or crediting it twice.
+        let mut reservoir = organism.resonant_energy.clone();
+        let mut deposit_ok = true;
+        for component in &spectrum.components {
+            let energy = component.amplitude * component.amplitude;
+            if energy > f64::EPSILON && !reservoir.deposit(component.frequency_hz, energy) {
+                deposit_ok = false;
+                break;
+            }
+        }
+        let retained_energy = if deposit_ok { spectral_energy } else { 0.0 };
+        let heat_dissipated = if deposit_ok {
+            damping_heat
+        } else {
+            damping_heat + spectral_energy
+        };
+        let unabsorbed_energy =
+            response.incident_energy - retained_energy - heat_dissipated;
+        if !retained_energy.is_finite()
+            || !heat_dissipated.is_finite()
+            || !unabsorbed_energy.is_finite()
+            || retained_energy < 0.0
+            || heat_dissipated < 0.0
+            || unabsorbed_energy < -1e-9
+        {
+            return None;
+        }
+        let unabsorbed_energy = unabsorbed_energy.max(0.0);
+        let next_unabsorbed = ledger.total_world_tone_energy_unabsorbed + unabsorbed_energy;
+        if !next_unabsorbed.is_finite() || next_unabsorbed < 0.0 {
+            return None;
+        }
+        let transaction = ExternalInputTransaction {
+            source: ExternalEnergySource::WorldTone,
+            source_available: response.incident_energy,
+            external_input: retained_energy + heat_dissipated,
+            usable_delta: retained_energy,
+            work_expended: 0.0,
+            heat_dissipated,
+        };
+        let usable_before = organism.usable_energy;
+        if !ledger.settle_external_input(&mut organism.usable_energy, transaction) {
+            return None;
+        }
+        // The transaction temporarily credits the existing usable holder; move
+        // that exact retained amount into the reservoir as one internal transfer.
+        organism.usable_energy = usable_before;
+        if deposit_ok {
+            organism.resonant_energy = reservoir;
+        }
+        ledger.total_world_tone_energy_unabsorbed = next_unabsorbed;
+        self.settled_units
+            .get_mut(receiver_body_index)?
+            .push(unit_index);
+
+        Some(WorldToneCaptureResult {
+            projected_width: response.projected_width,
+            incident_energy: response.incident_energy,
+            absorbed_energy: retained_energy + heat_dissipated,
+            unabsorbed_energy,
+            usable_energy: retained_energy,
+            heat_dissipated,
+        })
     }
 
     /// Settle one receiver's absorbed input atomically. Fractions remain explicit
