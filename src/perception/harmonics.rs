@@ -520,8 +520,7 @@ pub(crate) fn transform_signal_to_energy_budget(
     transformed.retain_strongest();
     let final_energy = spectrum_magnitude(&transformed).powi(2);
     if !final_energy.is_finite()
-        || (final_energy - outgoing_energy_budget).abs()
-            > 1e-9 * outgoing_energy_budget.max(1.0)
+        || (final_energy - outgoing_energy_budget).abs() > 1e-9 * outgoing_energy_budget.max(1.0)
     {
         return None;
     }
