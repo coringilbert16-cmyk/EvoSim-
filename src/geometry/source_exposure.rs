@@ -1719,11 +1719,10 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
         if !target_body_mask[first.body_index] {
             continue;
         }
-        for second_index in 0..all_arcs.len() {
+        for (second_index, second) in all_arcs.iter().copied().enumerate() {
             if second_index == first_index {
                 continue;
             }
-            let second = all_arcs[second_index];
             if target_body_mask[second.body_index] && second_index < first_index {
                 continue;
             }
