@@ -566,9 +566,9 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                                     let world =
                                         arc.transformed(part.x, part.y, part.rotation_radians)?;
                                     critical_points.extend(
-                                            [world.start_point(), world.end_point()]
-                                                .map(|(x, y)| (body_index, x, y)),
-                                        );
+                                        [world.start_point(), world.end_point()]
+                                            .map(|(x, y)| (body_index, x, y)),
+                                    );
                                     add_circle_tangent_points_tagged(
                                         (world.center_x, world.center_y),
                                         world.radius,
