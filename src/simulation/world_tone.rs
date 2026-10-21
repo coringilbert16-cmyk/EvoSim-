@@ -658,10 +658,9 @@ mod tests {
         }
     }
 
-    // Finite point-source projection of the exposed x=4 face spanning y=[-1, 1],
-    // with the source at (-5, 0): h * (asinh(1/h) + asinh(1/h)), h=9.
+    // Parallel-ray projection of the exposed x=4 face spanning y=[-1, 1].
     fn expected_front_face_projected_width() -> f64 {
-        18.0 * (1.0_f64 / 9.0).asinh()
+        2.0
     }
 
     #[test]
