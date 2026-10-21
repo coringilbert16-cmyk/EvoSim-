@@ -635,7 +635,7 @@ pub(crate) fn advance_construction(
     environment: &Environment,
     ledger: &mut EnergyLedger,
     parent_energy: &mut f64,
-    rng: &mut ChaCha8Rng,
+    _rng: &mut ChaCha8Rng,
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
     seed_reference: Option<(f64, f64)>,
 ) -> (ConstructionStatus, Option<f64>) {
