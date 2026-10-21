@@ -440,7 +440,28 @@ pub(crate) fn source_path_blocked(
         return true;
     }
 
+    let segment_min_x = source.0.min(target.0);
+    let segment_max_x = source.0.max(target.0);
+    let segment_min_y = source.1.min(target.1);
+    let segment_max_y = source.1.max(target.1);
     for (body_index, body) in bodies.iter().enumerate() {
+        if ![body.min_x, body.max_x, body.min_y, body.max_y]
+            .iter()
+            .all(|value| value.is_finite())
+            || body.min_x > body.max_x
+            || body.min_y > body.max_y
+        {
+            return true;
+        }
+        // Body bounds are conservative around every realized constituent, so
+        // a segment outside this box cannot cross any exact constituent shape.
+        if body.max_x < segment_min_x
+            || body.min_x > segment_max_x
+            || body.max_y < segment_min_y
+            || body.min_y > segment_max_y
+        {
+            continue;
+        }
         for part in &body.parts {
             if body_index == target_body_index && part.unit_index == target_unit_index {
                 continue;
