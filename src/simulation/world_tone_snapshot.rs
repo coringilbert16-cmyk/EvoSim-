@@ -17,8 +17,8 @@ pub(crate) struct WorldToneOccluderSnapshot {
     /// Frame-wide exposure cache; organism indices below map into this frame.
     pub(crate) frame: WorldToneCaptureFrame,
     pub(crate) organism_body_indices: Vec<Option<usize>>,
-    /// Number of physical bodies represented in the frame, useful for auditing
-    /// coverage without exposing the internal body array.
+    /// Number of bodies retained by the conservative receiver-angle broad phase.
+    /// Bodies outside every receiver's angular span cannot cast a direct-source shadow.
     pub(crate) occluder_count: usize,
 }
 
@@ -457,6 +457,43 @@ mod tests {
             .expect("organism unit mapping should remain stable");
         assert!(blocked_width > 0.0 && blocked_width < initial_width);
         assert_eq!(obstructed.occluder_count, 2);
+    }
+
+    #[test]
+    fn snapshot_culls_bodies_outside_all_receiver_angular_spans() {
+        let mut simulation = Simulation::new(76, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        replace_with_nitrogen_square(&mut simulation.organisms[0], 5.0, 0.0, &catalog);
+
+        let unobstructed = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
+            .expect("one valid receiver should produce a snapshot");
+        let initial_width = unobstructed
+            .projected_width_for_organism_unit(0, 0)
+            .expect("receiver unit should have cached exposure");
+
+        let unrelated = PhysicalMaterial::realized(
+            Material::free_base("Hydrogen", 1.0),
+            vec![Placement {
+                x: 5.0,
+                y: 100.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("unrelated physical material should be realized");
+        assert!(simulation
+            .environment
+            .field
+            .deposit_physical(5.0, 100.0, unrelated));
+
+        let filtered = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
+            .expect("irrelevant but valid bodies must not invalidate the frame");
+        let filtered_width = filtered
+            .projected_width_for_organism_unit(0, 0)
+            .expect("receiver mapping should survive broad-phase filtering");
+        assert_eq!(filtered.occluder_count, 1);
+        assert!((filtered_width - initial_width).abs() < 1e-10);
     }
 
     #[test]
