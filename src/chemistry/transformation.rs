@@ -1278,7 +1278,9 @@ mod tests {
 
     #[test]
     fn resonance_overload_breaks_a_compatible_bond_only_above_structural_capacity() {
-        let (mut organism, environment, _) = stress_break_test_organism();
+        let mut simulation = crate::state::Simulation::new(918, 10.0);
+        let mut organism = simulation.organisms.remove(0);
+        let environment = simulation.environment.clone();
         let capacity: f64 = organism
             .structure
             .bonds
@@ -1310,7 +1312,9 @@ mod tests {
 
     #[test]
     fn resonance_overload_without_frequency_compatible_energy_preserves_structure() {
-        let (mut organism, environment, _) = stress_break_test_organism();
+        let mut simulation = crate::state::Simulation::new(918, 10.0);
+        let mut organism = simulation.organisms.remove(0);
+        let environment = simulation.environment.clone();
         let capacity: f64 = organism
             .structure
             .bonds
