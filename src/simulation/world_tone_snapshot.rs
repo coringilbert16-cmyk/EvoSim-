@@ -369,7 +369,16 @@ mod tests {
 
         assert!(
             WorldToneOccluderSnapshot::from_simulation(sample(), &simulation).is_none(),
-            "a cached single-resource shape must not stand in for a composite material"
+            "a cached single-resource shape must not stand in for a bonded composite material"
+        );
+
+        // Multiple constituents are still composite geometry when they have no
+        // internal bonds; a single cached shape cannot represent their surfaces.
+        simulation.organisms[0].structure.units[0].material.internal_bonds.clear();
+        simulation.organisms[0].mark_structure_changed();
+        assert!(
+            WorldToneOccluderSnapshot::from_simulation(sample(), &simulation).is_none(),
+            "an unbonded multi-constituent material must also fail closed"
         );
     }
 
