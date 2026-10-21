@@ -44,6 +44,9 @@ impl ResonantEnergyReservoir {
     /// invalid or the bounded spectrum cannot represent another frequency;
     /// the caller must settle rejected energy as heat rather than discard it.
     pub(crate) fn deposit(&mut self, frequency_hz: f64, energy: f64) -> bool {
+        if self.total_energy().is_none() {
+            return false;
+        }
         if !frequency_hz.is_finite()
             || frequency_hz <= 0.0
             || !energy.is_finite()
@@ -110,6 +113,7 @@ impl ResonantEnergyReservoir {
             || reaction_frequency_hz <= 0.0
             || !max_energy.is_finite()
             || max_energy <= 0.0
+            || self.total_energy().is_none()
         {
             return 0.0;
         }
@@ -859,6 +863,20 @@ mod tests {
         }
         assert!(!reservoir.deposit(1760.0, 5.0));
         assert!((reservoir.total_energy().unwrap() - 10.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn invalid_retained_resonance_state_fails_closed_without_mutation() {
+        let mut reservoir = ResonantEnergyReservoir {
+            components: vec![ResonantEnergyComponent {
+                frequency_hz: 440.0,
+                energy: f64::NAN,
+            }],
+        };
+        let original = reservoir.clone();
+        assert!(!reservoir.deposit(440.0, 1.0));
+        assert_eq!(reservoir.withdraw_compatible(440.0, 1.0), 0.0);
+        assert_eq!(reservoir, original);
     }
 
     #[test]
