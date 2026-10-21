@@ -907,7 +907,12 @@ mod tests {
         let original = reservoir.clone();
         assert!(!reservoir.deposit(440.0, 1.0));
         assert_eq!(reservoir.withdraw_compatible(440.0, 1.0), 0.0);
-        assert_eq!(reservoir, original);
+        assert_eq!(reservoir.components.len(), original.components.len());
+        assert_eq!(
+            reservoir.components[0].frequency_hz,
+            original.components[0].frequency_hz
+        );
+        assert!(reservoir.components[0].energy.is_nan());
     }
 
     #[test]
