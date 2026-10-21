@@ -86,59 +86,33 @@ mod tests {
     }
 
     #[test]
-    fn stress_break_reconciles_usable_and_structural_energy() {
-        use rand::SeedableRng;
-        use rand_chacha::ChaCha8Rng;
-
+    fn stress_without_resonance_cannot_break_a_bond_or_spend_energy() {
         let catalog = default_catalog();
         let mut simulation = crate::state::Simulation::new(903, 10.0);
         let mut organism = simulation.organisms.remove(0);
         organism.usable_energy = 1000.0;
-        assert!(!organism.structure.bonds.is_empty());
-        let initial_usable_energy = organism.usable_energy;
-        let initial_structural_energy: f64 = organism
-            .structure
-            .bonds
-            .iter()
-            .map(|bond| bond.bond_energy)
-            .sum();
+        organism.stress = 1.0e9;
+        let original_bonds = organism.structure.bonds.clone();
+        let original_usable_energy = organism.usable_energy;
         let environment = Environment {
             width: 1000.0,
             height: 1000.0,
-            catalog: catalog.clone(),
+            catalog,
             field: ActiveMaterialField::new(1000.0, 1000.0, 10.0),
         };
         let mut ledger = EnergyLedger::default();
-        let mut rng = ChaCha8Rng::seed_from_u64(19);
 
-        assert!(crate::transformation::resolve_stress_break(
+        let _ = crate::simulation::Simulation::apply_survival_damage(
             &mut organism,
             &environment,
             &mut ledger,
-            &mut rng,
-        ));
-
-        let remaining_structural_energy: f64 = organism
-            .structure
-            .bonds
-            .iter()
-            .map(|bond| bond.bond_energy)
-            .sum();
-        let residual = (organism.usable_energy - initial_usable_energy)
-            + (remaining_structural_energy - initial_structural_energy)
-            + ledger.total_work_expended
-            + ledger.total_heat_dissipated;
-
-        assert!(
-            residual.abs() <= 1e-9,
-            "stress-break energy residual: {residual}"
+            &mut simulation.rng,
         );
+
+        assert_eq!(organism.structure.bonds, original_bonds);
+        assert_eq!(organism.usable_energy, original_usable_energy);
+        assert_eq!(ledger.total_structural_energy_delta, 0.0);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
         assert_eq!(ledger.total_potential_energy_released, 0.0);
-        assert!(
-            (ledger.total_structural_energy_delta
-                - (remaining_structural_energy - initial_structural_energy))
-                .abs()
-                <= 1e-9
-        );
     }
 }
