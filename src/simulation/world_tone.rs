@@ -1442,6 +1442,7 @@ mod tests {
         let organism = &mut simulation.organisms[0];
         let efficiency = organism.genome.processing_efficiency();
         let initial_usable = organism.usable_energy;
+        let initial_resonant = organism.resonant_energy.total_energy().unwrap();
         let mut ledger = crate::state::EnergyLedger::default();
 
         let result = frame
@@ -1452,7 +1453,16 @@ mod tests {
         assert!(
             (result.heat_dissipated - result.absorbed_energy * (1.0 - efficiency)).abs() < 1e-7
         );
-        assert!((organism.usable_energy - initial_usable - result.usable_energy).abs() < 1e-7);
+        // Captured usable energy is transferred to the persistent resonance
+        // store, not left duplicated in the organism's usable-energy holder.
+        assert!((organism.usable_energy - initial_usable).abs() < 1e-7);
+        assert!(
+            (organism.resonant_energy.total_energy().unwrap()
+                - initial_resonant
+                - result.usable_energy)
+                .abs()
+                < 1e-7
+        );
         assert!((ledger.total_external_energy_input - result.absorbed_energy).abs() < 1e-7);
         assert!((ledger.total_usable_energy_gained - result.usable_energy).abs() < 1e-7);
         assert!((ledger.total_heat_dissipated - result.heat_dissipated).abs() < 1e-7);
