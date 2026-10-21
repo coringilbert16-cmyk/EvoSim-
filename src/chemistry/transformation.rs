@@ -869,12 +869,7 @@ mod tests {
             ..EnergyLedger::default()
         };
 
-        rollback_prepared_combine(
-            &mut usable_energy,
-            &mut ledger,
-            Some(5.0),
-            Some(&delta),
-        );
+        rollback_prepared_combine(&mut usable_energy, &mut ledger, Some(5.0), Some(&delta));
 
         assert_eq!(usable_energy, 8.0);
         assert_eq!(ledger.total_potential_energy_released, 1.0);
