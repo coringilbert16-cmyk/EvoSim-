@@ -73,9 +73,6 @@ impl WorldToneOccluderSnapshot {
             bodies.push(body);
         }
 
-        let phase = std::f64::consts::TAU * sample.orbital_phase;
-        let toward_source = (phase.sin(), -phase.cos());
-
         // A developing offspring is a separate physical structure even
         // before it is admitted to simulation.organisms. Its committed storage
         // remains physical too and is anchored to the offspring's own origin.
@@ -115,8 +112,6 @@ impl WorldToneOccluderSnapshot {
         // cannot discard it here.
         for cell in &simulation.environment.field.cells {
             for physical in &cell.physical_materials {
-                let _interval =
-                    physical_material_parallel_lane_interval(physical, catalog, toward_source)?;
                 body_properties.push(physical_material_properties(physical, catalog)?);
                 bodies.push(OrganismBodyGeometry::from_physical_material(
                     physical, catalog,
@@ -196,10 +191,6 @@ impl WorldToneOccluderSnapshot {
         // A body can only block a receiver along directions subtended by that
         // receiver. Keep a conservative angular broad phase so unrelated bodies
         // do not enter every exact ray test.
-        let angular_intervals = bodies
-            .iter()
-            .map(|body| parallel_lane_interval(body, toward_source))
-            .collect::<Option<Vec<_>>>()?;
         // Every realized body is a receiver as well as a possible occluder.
         // Keeping the full set is necessary for world energy accounting: a lane
         // that never reaches a living organism still deposits response energy
@@ -208,7 +199,6 @@ impl WorldToneOccluderSnapshot {
         let mut relevant_bodies = Vec::with_capacity(bodies.len());
         let mut relevant_properties = Vec::with_capacity(body_properties.len());
         for (original_index, body) in bodies.into_iter().enumerate() {
-            let _interval = angular_intervals[original_index];
             remapped_indices[original_index] = Some(relevant_bodies.len());
             relevant_bodies.push(body);
             relevant_properties.push(body_properties[original_index].clone());
@@ -590,90 +580,6 @@ fn physical_material_properties(
             Some((unit_index, resource.properties))
         })
         .collect()
-}
-
-fn parallel_lane_interval(
-    body: &OrganismBodyGeometry,
-    toward_source: (f64, f64),
-) -> Option<(f64, f64)> {
-    parallel_lane_interval_for_bounds(
-        body.min_x,
-        body.max_x,
-        body.min_y,
-        body.max_y,
-        toward_source,
-    )
-}
-
-fn physical_material_parallel_lane_interval(
-    physical: &PhysicalMaterial,
-    catalog: &[BaseResource],
-    toward_source: (f64, f64),
-) -> Option<(f64, f64)> {
-    let placements = physical.placements.as_ref()?;
-    if placements.is_empty() || placements.len() != physical.material.parts.len() {
-        return None;
-    }
-    let (mut min_x, mut max_x, mut min_y, mut max_y) = (
-        f64::INFINITY,
-        f64::NEG_INFINITY,
-        f64::INFINITY,
-        f64::NEG_INFINITY,
-    );
-    for (index, placement) in placements.iter().enumerate() {
-        if !placement.x.is_finite()
-            || !placement.y.is_finite()
-            || !placement.rotation_radians.is_finite()
-        {
-            return None;
-        }
-        let shape = physical.realized_shape_for_part(index, catalog)?;
-        let radius = shape.form.bounding_radius();
-        if !radius.is_finite() || radius < 0.0 {
-            return None;
-        }
-        min_x = min_x.min(placement.x - radius);
-        max_x = max_x.max(placement.x + radius);
-        min_y = min_y.min(placement.y - radius);
-        max_y = max_y.max(placement.y + radius);
-    }
-    parallel_lane_interval_for_bounds(min_x, max_x, min_y, max_y, toward_source)
-}
-
-fn parallel_lane_interval_for_bounds(
-    min_x: f64,
-    max_x: f64,
-    min_y: f64,
-    max_y: f64,
-    toward_source: (f64, f64),
-) -> Option<(f64, f64)> {
-    if ![min_x, max_x, min_y, max_y, toward_source.0, toward_source.1]
-        .iter()
-        .all(|value| value.is_finite())
-        || min_x > max_x
-        || min_y > max_y
-        || (toward_source.0.hypot(toward_source.1) - 1.0).abs() > 1e-9
-    {
-        return None;
-    }
-    let perpendicular = (-toward_source.1, toward_source.0);
-    let corners = [
-        (min_x, min_y),
-        (min_x, max_y),
-        (max_x, min_y),
-        (max_x, max_y),
-    ];
-    let mut minimum = f64::INFINITY;
-    let mut maximum = f64::NEG_INFINITY;
-    for (x, y) in corners {
-        let lane = x * perpendicular.0 + y * perpendicular.1;
-        if !lane.is_finite() {
-            return None;
-        }
-        minimum = minimum.min(lane);
-        maximum = maximum.max(lane);
-    }
-    Some((minimum, maximum))
 }
 
 fn owner_anchor(organism: &Organism) -> Option<Placement> {
