@@ -143,8 +143,10 @@ pub(crate) struct WorldToneSample {
 }
 /// Energy split for one material interaction with the incoming world tone.
 ///
-/// The unabsorbed amount is not automatically reflected or lost: downstream
-/// propagation, reflection, and attenuation must explicitly account for it.
+/// The unabsorbed amount remains in the continuing signal budget; it is neither
+/// lost nor credited again. Any onward propagation must explicitly account for
+/// attenuation and frequency-composition changes. This model does not use literal
+/// reflection or bouncing rays.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct WorldToneInteraction {
     pub(crate) incident_energy: f64,
@@ -209,8 +211,9 @@ impl WorldToneSample {
 }
 
 /// Result of settling one receiver's solar input for one tick.
-/// Unabsorbed incident energy remains in the propagating signal budget and must
-/// not be credited as a new source when it reaches downstream material.
+/// Unabsorbed incident energy remains in the continuing signal budget and must
+/// not be credited as a new source when it reaches downstream material. The
+/// intended onward interaction may shift frequency; it is not literal reflection.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct WorldToneCaptureResult {
     pub(crate) projected_width: f64,
@@ -422,7 +425,7 @@ impl WorldToneCaptureFrame {
     /// Settle one organism constituent using the genome's existing processing
     /// efficiency for the usable-energy/heat split. Material resonance still
     /// determines how much incident energy is absorbed; the unabsorbed remainder
-    /// is returned for later reflection/propagation rather than credited twice.
+    /// is reserved for later frequency-shifted propagation rather than credited twice.
     pub(crate) fn settle_organism_surface_response(
         &mut self,
         receiver_body_index: usize,
