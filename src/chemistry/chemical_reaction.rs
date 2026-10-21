@@ -307,6 +307,81 @@ mod material_identity_tests {
         );
     }
     #[test]
+    fn successful_chemical_break_consumes_only_compatible_retained_resonance() {
+        let mut simulation = crate::state::Simulation::new(920, 10.0);
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        let operation = ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            reaction_energy: 1_000.0,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+        };
+        let before = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .unwrap();
+        assert!(resolve(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.energy_ledger,
+        ));
+        let after = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .unwrap();
+        assert!((before - after - 0.5).abs() < 1e-9);
+        assert!(!simulation.organisms[0]
+            .structure
+            .bonds
+            .iter()
+            .any(|candidate| candidate.has_same_identity(&bond)));
+    }
+
+    #[test]
+    fn failed_stale_chemical_break_does_not_consume_retained_resonance() {
+        let mut simulation = crate::state::Simulation::new(921, 10.0);
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        let operation = ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            reaction_energy: 1_000.0,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+        };
+        assert!(simulation.organisms[0]
+            .structure
+            .break_matching_bond(bond)
+            .is_some());
+        let before = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .unwrap();
+        assert!(!resolve(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.energy_ledger,
+        ));
+        assert!((simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .unwrap()
+            - before)
+            .abs()
+            < 1e-12);
+    }
+
+    #[test]
     fn base_contact_key_matches_checked_in_cache_identity() {
         let carbon = Material::free_base("Carbon", 1.0);
         let hydrogen = Material::free_base("Hydrogen", 1.0);
