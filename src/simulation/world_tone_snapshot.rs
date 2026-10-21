@@ -462,7 +462,6 @@ mod tests {
             source_x: -5.0,
             source_y: 0.0,
             frequency_hz: 440.0,
-            signal_energy_level: 8.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         }
