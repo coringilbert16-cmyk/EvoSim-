@@ -3389,6 +3389,23 @@ mod parallel_polygonal_visibility_tests {
     }
 
     #[test]
+    fn polygonal_fluid_boundary_occludes_a_receiver_in_the_shared_ray_field() {
+        let receiver = rectangle(4.0, 0.0, 2.0, 2.0);
+        let mut fluid = rectangle(8.0, 0.0, 2.0, 1.0);
+        fluid.parts[0].form = Form::Fluid {
+            nominal_area: 2.0,
+            boundary: Some(vec![(-1.0, -0.5), (1.0, -0.5), (1.0, 0.5), (-1.0, 0.5)]),
+            arc_boundary: None,
+            multi_contact_boundary: None,
+        };
+        let visible = visible_parallel_polygonal_intervals_for_targets((1.0, 0.0), &[receiver, fluid], &[0]).unwrap();
+        let receiver_front: Vec<_> = visible.iter()
+            .filter(|interval| interval.body_index == 0 && (interval.start.0 - 5.0).abs() < 1e-9 && (interval.end.0 - 5.0).abs() < 1e-9)
+            .collect();
+        assert_eq!(receiver_front.len(), 2);
+    }
+
+    #[test]
     fn parallel_classifier_fails_closed_when_curved_geometry_is_present() {
         let mut circle = rectangle(4.0, 0.0, 2.0, 2.0);
         circle.parts[0].form = Form::Circle { radius: 1.0 };
