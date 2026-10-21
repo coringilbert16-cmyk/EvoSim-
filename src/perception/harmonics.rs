@@ -450,6 +450,84 @@ fn material_response_to_drive(
     spectrum
 }
 
+/// Transform a continuing environmental signal through one material response.
+///
+/// The harmonic model determines relative frequency composition. The caller
+/// supplies the remaining physical energy budget after capture and dissipation;
+/// amplitudes are normalized so the outgoing spectrum carries exactly that
+/// budget under E = A². This is onward transmission, not a new emitted source
+/// and not a literal reflected ray.
+pub(crate) fn transform_signal_to_energy_budget(
+    properties: ResourceProperties,
+    baselines: ResourceBaselines,
+    incoming: &ToneSpectrum,
+    outgoing_energy_budget: f64,
+) -> Option<ToneSpectrum> {
+    if !outgoing_energy_budget.is_finite() || outgoing_energy_budget < 0.0 {
+        return None;
+    }
+
+    let mut incoming_energy = 0.0;
+    for component in &incoming.components {
+        if !component.frequency_hz.is_finite()
+            || component.frequency_hz <= 0.0
+            || !component.amplitude.is_finite()
+            || component.amplitude < 0.0
+            || !component.phase_radians.is_finite()
+        {
+            return None;
+        }
+        incoming_energy += component.amplitude * component.amplitude;
+        if !incoming_energy.is_finite() {
+            return None;
+        }
+    }
+    if outgoing_energy_budget > incoming_energy + 1e-9 {
+        return None;
+    }
+    if outgoing_energy_budget <= f64::EPSILON {
+        return Some(ToneSpectrum::empty());
+    }
+
+    let mut transformed = ToneSpectrum::empty();
+    for component in &incoming.components {
+        if component.amplitude <= f64::EPSILON {
+            continue;
+        }
+        let response = material_response_to_drive(
+            properties,
+            baselines,
+            component.frequency_hz,
+            component.amplitude,
+            component.phase_radians,
+        );
+        transformed.merge_from(&response, 1.0);
+    }
+    let transformed_energy = spectrum_magnitude(&transformed).powi(2);
+    if !transformed_energy.is_finite() || transformed_energy <= f64::EPSILON {
+        return None;
+    }
+
+    // Keep the harmonic model's frequency weights, but let only the conserved
+    // remainder determine the outgoing signal's amplitude.
+    let scale = (outgoing_energy_budget / transformed_energy).sqrt();
+    if !scale.is_finite() {
+        return None;
+    }
+    for component in &mut transformed.components {
+        component.amplitude *= scale;
+    }
+    transformed.retain_strongest();
+    let final_energy = spectrum_magnitude(&transformed).powi(2);
+    if !final_energy.is_finite()
+        || (final_energy - outgoing_energy_budget).abs()
+            > 1e-9 * outgoing_energy_budget.max(1.0)
+    {
+        return None;
+    }
+    Some(transformed)
+}
+
 /// Receive the rotating world tone through the organism's actual cavity-wall
 /// segments. This is signal perception only: it neither mutates organism energy
 /// nor records energy capture. Each wall segment uses its realized material
@@ -1290,6 +1368,41 @@ mod tests {
         };
         bound_spectrum_energy(&mut spectrum, 1.0);
         assert!(spectrum.components.is_empty());
+    }
+
+    #[test]
+    fn transformed_secondary_signal_preserves_budget_and_material_harmonics() {
+        let input = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_hz: 440.0,
+                amplitude: 2.0,
+                phase_radians: 0.0,
+            }],
+        };
+        let output = transform_signal_to_energy_budget(
+            properties(1.0, 2.0, 1.0),
+            baselines(),
+            &input,
+            2.5,
+        )
+        .expect("valid residual budget should produce a transformed spectrum");
+        let energy: f64 = output
+            .components
+            .iter()
+            .map(|component| component.amplitude * component.amplitude)
+            .sum();
+        assert!((energy - 2.5).abs() < 1e-9);
+        assert!(output
+            .components
+            .iter()
+            .any(|component| (component.frequency_hz - 880.0).abs() < 1e-9));
+        assert!(transform_signal_to_energy_budget(
+            properties(1.0, 2.0, 1.0),
+            baselines(),
+            &input,
+            4.1,
+        )
+        .is_none());
     }
 
     #[test]
