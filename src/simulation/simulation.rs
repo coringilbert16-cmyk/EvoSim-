@@ -1365,7 +1365,7 @@ impl Simulation {
         _rng: &mut ChaCha8Rng,
     ) -> bool {
         organism.stress *= crate::state::STRESS_DECAY_PER_TICK;
-        if organism.advance_stress_state() {
+        if organism.validate_stress_state() {
             return true;
         }
         // Resonance/chemistry is the only structural damage authority; there
@@ -1574,7 +1574,7 @@ mod decomposition_finalization_tests {
         let original_bonds = simulation.organisms[0].structure.bonds.clone();
 
         simulation.organisms[0].stress = 1.0e9;
-        assert!(!simulation.organisms[0].advance_stress_state());
+        assert!(!simulation.organisms[0].validate_stress_state());
         assert_eq!(simulation.organisms[0].structure.bonds, original_bonds);
 
         let after = simulation.energy_inventory_snapshot();
