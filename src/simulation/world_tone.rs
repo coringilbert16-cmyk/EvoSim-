@@ -437,7 +437,10 @@ impl WorldToneCaptureFrame {
         ledger: &mut crate::state::EnergyLedger,
     ) -> Option<WorldToneCaptureResult> {
         if *self.settled_receivers.get(receiver_body_index)?
-            || self.settled_units.get(receiver_body_index)?.contains(&unit_index)
+            || self
+                .settled_units
+                .get(receiver_body_index)?
+                .contains(&unit_index)
         {
             return None;
         }
@@ -447,16 +450,12 @@ impl WorldToneCaptureFrame {
         // The existing material response supplies the spectral composition.
         // Its amplitudes are scaled to this constituent's incident energy, with
         // E=A², then bounded by the energy left after damping has become heat.
-        let mut spectrum = crate::perception::harmonics::material_response(
-            properties,
-            baselines,
-            0.0,
-        );
+        let mut spectrum = crate::harmonics::material_response(properties, baselines, 0.0);
         let incident_amplitude = response.incident_energy.sqrt();
         for component in &mut spectrum.components {
             component.amplitude *= incident_amplitude;
         }
-        let mut spectral_energy = 0.0;
+        let mut spectral_energy: f64 = 0.0;
         for component in &spectrum.components {
             let energy = component.amplitude * component.amplitude;
             if !energy.is_finite() || energy < 0.0 {
@@ -498,8 +497,7 @@ impl WorldToneCaptureFrame {
         } else {
             damping_heat + spectral_energy
         };
-        let unabsorbed_energy =
-            response.incident_energy - retained_energy - heat_dissipated;
+        let unabsorbed_energy = response.incident_energy - retained_energy - heat_dissipated;
         if !retained_energy.is_finite()
             || !heat_dissipated.is_finite()
             || !unabsorbed_energy.is_finite()
