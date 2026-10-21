@@ -162,7 +162,7 @@ pub(crate) fn resolve_resonance_overload_break(
     }
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
     let mut best: Option<(usize, f64, f64)> = None;
-    for index in stress_break_candidate_indices(organism, environment) {
+    for index in resonance_break_candidate_indices(organism, environment) {
         let Some(bond) = organism.structure.bonds.get(index).copied() else {
             continue;
         };
@@ -264,7 +264,7 @@ pub(crate) fn resolve_resonance_overload_break(
     true
 }
 
-fn stress_break_candidate_indices(organism: &Organism, environment: &Environment) -> Vec<usize> {
+fn resonance_break_candidate_indices(organism: &Organism, environment: &Environment) -> Vec<usize> {
     let genome_bonds =
         crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
             .ok()
@@ -287,37 +287,6 @@ fn stress_break_candidate_indices(organism: &Organism, environment: &Environment
     }
 
     genome_bonds
-}
-
-pub(crate) fn resolve_stress_break(
-    organism: &mut Organism,
-    environment: &Environment,
-    ledger: &mut EnergyLedger,
-    rng: &mut ChaCha8Rng,
-) -> bool {
-    let candidate_indices = stress_break_candidate_indices(organism, environment);
-    if candidate_indices.is_empty() {
-        return false;
-    }
-    let target_index = candidate_indices[rng.gen_range(0..candidate_indices.len())];
-    let target = organism.structure.bonds[target_index];
-    // A physical bond stores its own intrinsic potential. Do not recreate
-    // constituent potential energy here: those material potentials were not
-    // consumed when the bond was formed.
-    let Some((gross, usable, heat)) =
-        bond_break_energy_yield(target.bond_energy, organism.genome.processing_efficiency())
-    else {
-        return false;
-    };
-    let transaction = EnergyTransaction {
-        reason: EnergyReason::Break,
-        potential_released: 0.0,
-        usable_delta: usable,
-        structural_delta: -gross,
-        work_expended: 0.0,
-        heat_dissipated: heat,
-    };
-    settle_break_transaction(organism, target, transaction, ledger)
 }
 
 impl Simulation {
@@ -1342,15 +1311,15 @@ mod tests {
     }
 
     #[test]
-    fn stress_break_candidates_prefer_non_genome_bonds() {
+    fn resonance_break_candidates_prefer_non_genome_bonds() {
         let (organism, environment, genome_bonds) = stress_break_test_organism();
-        let candidates = stress_break_candidate_indices(&organism, &environment);
+        let candidates = resonance_break_candidate_indices(&organism, &environment);
         assert!(!candidates.is_empty());
         assert!(candidates.iter().all(|index| !genome_bonds.contains(index)));
     }
 
     #[test]
-    fn stress_break_candidates_fall_back_to_genome_bonds_when_structure_is_exhausted() {
+    fn resonance_break_candidates_fall_back_to_genome_bonds_when_structure_is_exhausted() {
         let (mut organism, environment, genome_bonds) = stress_break_test_organism();
         assert!(!genome_bonds.is_empty());
         let protected_bonds: Vec<_> = genome_bonds
@@ -1362,7 +1331,7 @@ mod tests {
                 .iter()
                 .any(|candidate| candidate.has_same_identity(bond))
         });
-        let candidates = stress_break_candidate_indices(&organism, &environment);
+        let candidates = resonance_break_candidate_indices(&organism, &environment);
         assert_eq!(candidates.len(), organism.structure.bonds.len());
         assert!(!candidates.is_empty());
     }
