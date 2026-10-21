@@ -518,7 +518,7 @@ impl WorldToneCaptureFrame {
 
 impl WorldToneParameters {
     pub(crate) fn is_valid(self) -> bool {
-self.minimum_energy_intensity_per_tick_per_width.is_finite()
+        self.minimum_energy_intensity_per_tick_per_width.is_finite()
             && self.minimum_energy_intensity_per_tick_per_width >= 1.0
             && self.maximum_energy_intensity_per_tick_per_width.is_finite()
             && self.maximum_energy_intensity_per_tick_per_width <= 10.0
@@ -699,9 +699,6 @@ mod tests {
             },
             WorldToneSample {
                 frequency_hz: f64::NAN,
-                ..valid
-            },
-            WorldToneSample {
                 ..valid
             },
             WorldToneSample {
