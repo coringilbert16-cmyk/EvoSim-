@@ -447,16 +447,14 @@ impl WorldToneCaptureFrame {
         let response =
             self.surface_response_for_unit(receiver_body_index, unit_index, properties, baselines)?;
 
-        // The existing material response supplies the spectral composition.
-        // Scale amplitudes to this constituent's incident budget using E=A².
-        let mut spectrum = crate::harmonics::material_response(properties, baselines, 0.0);
+        // Determine how much incident energy the existing material response
+        // represents before damping partitions it into storage and heat.
         let incident_amplitude = response.incident_energy.sqrt();
-        for component in &mut spectrum.components {
-            component.amplitude *= incident_amplitude;
-        }
+        let response_spectrum = crate::harmonics::material_response(properties, baselines, 0.0);
         let mut response_energy: f64 = 0.0;
-        for component in &spectrum.components {
-            let energy = component.amplitude * component.amplitude;
+        for component in &response_spectrum.components {
+            let amplitude = component.amplitude * incident_amplitude;
+            let energy = amplitude * amplitude;
             if !energy.is_finite() || energy < 0.0 {
                 return None;
             }
@@ -476,15 +474,19 @@ impl WorldToneCaptureFrame {
         }
         let damping_heat = response_energy * damping.clamp(0.0, 1.0);
         let retained_budget = response_energy - damping_heat;
-        if response_energy > 0.0 {
-            let scale = (retained_budget / response_energy).sqrt();
-            if !scale.is_finite() {
-                return None;
-            }
-            for component in &mut spectrum.components {
-                component.amplitude *= scale;
-            }
-        }
+        let incoming_signal = crate::harmonics::ToneSpectrum {
+            components: vec![crate::harmonics::ToneComponent {
+                frequency_hz: self.sample.frequency_hz,
+                amplitude: incident_amplitude,
+                phase_radians: 0.0,
+            }],
+        };
+        let spectrum = crate::harmonics::transform_signal_to_energy_budget(
+            properties,
+            baselines,
+            &incoming_signal,
+            retained_budget,
+        )?;
 
         // Deposit the whole retained spectrum atomically. If the bounded
         // reservoir cannot represent it, dissipate the entire response as heat.
