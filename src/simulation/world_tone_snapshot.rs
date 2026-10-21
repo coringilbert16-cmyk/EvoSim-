@@ -148,8 +148,14 @@ impl WorldToneOccluderSnapshot {
             }
         }
 
+        let receiver_body_indices: Vec<_> =
+            organism_body_indices.iter().flatten().copied().collect();
         let occluder_count = bodies.len();
-        let frame = WorldToneCaptureFrame::from_geometry(sample, &bodies)?;
+        let frame = WorldToneCaptureFrame::from_geometry_for_receivers(
+            sample,
+            &bodies,
+            &receiver_body_indices,
+        )?;
         Some(Self {
             frame,
             organism_body_indices,
