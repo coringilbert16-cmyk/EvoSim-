@@ -429,9 +429,6 @@ impl WorldToneOccluderSnapshot {
                     return;
                 }
                 let damping_heat = response_energy * damping.clamp(0.0, 1.0);
-                let mut interaction_heat = damping_heat;
-                let mut captured = 0.0;
-
                 let living_organism =
                     body_to_organism
                         .get(body_index)
@@ -440,6 +437,16 @@ impl WorldToneOccluderSnapshot {
                         .filter(|organism_index| {
                             living_ids.contains(&simulation.organisms[*organism_index].id)
                         });
+                // A living receiver may retain the non-damped response in its
+                // resonance reservoir. A physical receiver without a living
+                // reservoir instead converts the entire material response to
+                // heat; only the unresponded remainder continues downstream.
+                let mut interaction_heat = heat_for_material_response(
+                    response_energy,
+                    damping_heat,
+                    living_organism.is_some(),
+                )?;
+                let mut captured = 0.0;
 
                 if let Some(organism_index) = living_organism {
                     let retained_budget = response_energy - damping_heat;
@@ -485,11 +492,10 @@ impl WorldToneOccluderSnapshot {
                     }
                 }
 
-                let outgoing_budget = if living_organism.is_some() {
-                    incoming_energy - response_energy
-                } else {
-                    incoming_energy - interaction_heat
-                };
+                // Response energy is removed from the travelling signal
+                // exactly once, whether it is retained biologically or becomes
+                // heat at a nonliving/dead physical receiver.
+                let outgoing_budget = incoming_energy - response_energy;
                 let Some(outgoing) = crate::harmonics::transform_signal_to_energy_budget(
                     properties,
                     baselines,
@@ -540,6 +546,26 @@ impl WorldToneOccluderSnapshot {
             organism.resonant_energy = reservoir;
         }
     }
+}
+
+fn heat_for_material_response(
+    response_energy: f64,
+    damping_heat: f64,
+    can_retain_resonance: bool,
+) -> Option<f64> {
+    if !response_energy.is_finite()
+        || response_energy < 0.0
+        || !damping_heat.is_finite()
+        || damping_heat < 0.0
+        || damping_heat > response_energy + 1e-9 * response_energy.max(1.0)
+    {
+        return None;
+    }
+    Some(if can_retain_resonance {
+        damping_heat.min(response_energy)
+    } else {
+        response_energy
+    })
 }
 
 fn spectrum_energy(spectrum: &crate::harmonics::ToneSpectrum) -> Option<f64> {
@@ -1043,4 +1069,26 @@ mod tests {
         assert_eq!(snapshot.occluder_count, 2);
         assert_eq!(snapshot.body_index_for_organism(0), Some(0));
     }
+    #[test]
+    fn nonliving_material_response_becomes_heat_instead_of_rejoining_signal() {
+        let response_energy = 3.25;
+        let damping_heat = 0.75;
+
+        assert_eq!(
+            heat_for_material_response(response_energy, damping_heat, false),
+            Some(response_energy),
+            "nonliving physical material has no resonant store, so all absorbed response is heat"
+        );
+        assert_eq!(
+            heat_for_material_response(response_energy, damping_heat, true),
+            Some(damping_heat),
+            "living receivers retain the non-damped response when reservoir settlement succeeds"
+        );
+        assert_eq!(
+            heat_for_material_response(response_energy, response_energy + 1.0, false),
+            None,
+            "an impossible heat allocation must fail closed"
+        );
+    }
+
 }
