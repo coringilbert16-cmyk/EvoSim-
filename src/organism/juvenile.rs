@@ -19,7 +19,7 @@ pub(crate) fn confirmed_seed_baseline(
     use crate::resources::Material;
     use crate::structural_blueprint::{BlueprintConnection, BlueprintElement, BlueprintPlacement};
 
-    for material in ["Carbon", "Sulfur", "Methane"] {
+    for material in ["Carbon", "Sulfur", "Oxygen"] {
         if !catalog.iter().any(|resource| resource.name == material) {
             return Err(format!("catalog is missing seed {material}"));
         }
@@ -33,7 +33,7 @@ pub(crate) fn confirmed_seed_baseline(
     //
     // The six-carbon inner loop supplies a physically compatible enclosed region. From one
     // point on that loop, twenty additional carbon elements extend along a
-    // physically spaced outward chain. Sulfur and methane provide heterogeneous
+    // physically spaced outward chain. Sulfur and oxygen provide heterogeneous
     // peripheral material without defining an organism role or topology.
     let ring_sides = 6usize;
     let chain_steps = 20usize;
@@ -98,7 +98,7 @@ pub(crate) fn confirmed_seed_baseline(
         let angle = std::f64::consts::TAU * i as f64 / ring_sides as f64;
         let radius = ring_radius + 3.0;
         elements.push(BlueprintElement {
-            material: Material::free_base("Methane", 1.0),
+            material: Material::free_base("Oxygen", 1.0),
             placement: BlueprintPlacement {
                 x: radius * angle.cos(),
                 y: radius * angle.sin(),
@@ -129,11 +129,11 @@ pub(crate) fn confirmed_seed_baseline(
             element_b: sulfur_start + offset,
         });
     }
-    let methane_start = sulfur_start + 4;
+    let oxygen_start = sulfur_start + 4;
     for (offset, &i) in [2usize, 5].iter().enumerate() {
         connections.push(BlueprintConnection {
             element_a: i,
-            element_b: methane_start + offset,
+            element_b: oxygen_start + offset,
         });
     }
 
@@ -318,31 +318,31 @@ mod seed_geometry_tests {
     }
 
     #[test]
-    fn methane_attachments_follow_the_six_piece_ring_angles() {
+    fn oxygen_attachments_follow_the_six_piece_ring_angles() {
         let catalog = crate::resources::default_catalog();
         let blueprint = confirmed_seed_baseline(&catalog).expect("seed baseline should be valid");
         let ring_sides = 6usize;
-        let methane_start = ring_sides + 20 + 4;
+        let oxygen_start = ring_sides + 20 + 4;
 
         for (offset, ring_index) in [2usize, 5].into_iter().enumerate() {
-            let methane = blueprint.elements[methane_start + offset].placement;
-            let actual_angle = methane.y.atan2(methane.x);
+            let oxygen = blueprint.elements[oxygen_start + offset].placement;
+            let actual_angle = oxygen.y.atan2(oxygen.x);
             let expected_angle = std::f64::consts::TAU * ring_index as f64 / ring_sides as f64;
             let angular_error = (actual_angle - expected_angle)
                 .rem_euclid(std::f64::consts::TAU)
                 .min((expected_angle - actual_angle).rem_euclid(std::f64::consts::TAU));
             assert!(
                 angular_error < 1e-9,
-                "methane attachment at ring index {ring_index} has angle {actual_angle}, expected {expected_angle}"
+                "oxygen attachment at ring index {ring_index} has angle {actual_angle}, expected {expected_angle}"
             );
             assert!(
                 blueprint.connections.iter().any(|connection| {
                     (connection.element_a == ring_index
-                        && connection.element_b == methane_start + offset)
+                        && connection.element_b == oxygen_start + offset)
                         || (connection.element_b == ring_index
-                            && connection.element_a == methane_start + offset)
+                            && connection.element_a == oxygen_start + offset)
                 }),
-                "methane attachment must connect to ring element {ring_index}"
+                "oxygen attachment must connect to ring element {ring_index}"
             );
         }
     }
