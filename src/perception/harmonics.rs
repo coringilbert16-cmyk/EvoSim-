@@ -57,9 +57,7 @@ impl ResonantEnergyReservoir {
         if let Some(component) = self.components.iter_mut().find(|component| {
             (component.frequency_hz / frequency_hz).ln().abs() <= 1e-9
         }) {
-            let Some(next) = component.energy.checked_add(energy) else {
-                return false;
-            };
+            let next = component.energy + energy;
             if !next.is_finite() {
                 return false;
             }
