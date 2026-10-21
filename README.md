@@ -1,27 +1,40 @@
 # EvoSim
 
-## PR #202 — authoritative implementation status — 2026-10-21
+## PR #202 — merge-safety checkpoint — 2026-10-21
 
-This section is the current status summary. Older PR #202 checkpoints below are historical notes and may describe earlier states; where they conflict with this section, this section is authoritative.
+**Exact tested head:** `cc356b945c57779eae58ebb05b38f3631371dc1b` on `feature/external-input-ledger`. GitHub Actions run [#39695004714](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39695004714) completed on this exact head.
 
-**Source checkpoint audited:** `5c982b35229a987816977255378325f70f8ab547` on `feature/external-input-ledger`. Exact-head Actions run [39691642301](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39691642301) has passed formatting, source-size/architecture checks, and focused Bob/fluid/chemical-BREAK checks. The full Rust test suite is still running; do not mark this checkpoint verified until its result is available. The newly added ordered living-to-environmental receiver conservation regression is included in that run.
+### Verification result
 
-### Implemented in the audited source
+- **Formatting:** passed.
+- **Architecture guard:** COMBINE architecture checks passed.
+- **Focused regression checks:** Bob storage/reopen, fluid multi-contact transaction, and related focused checks passed.
+- **Full Rust suite:** 562 passed, 28 failed, 1 ignored; runtime 278.02 seconds.
+- **Known-baseline comparison:** compared against exact-head run [#39691642301](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39691642301) at `5c982b35229a987816977255378325f70f8ab547`. All 28 failing test identities are identical; there are **zero new failing test identities**. The suite counts and runtime are effectively unchanged.
+- **Clippy:** still fails under `-D warnings` (59 application-target and 38 test-target lint errors). The previous checkpoint reports the same error counts; this is existing project lint debt, not a newly introduced failure from the final rename commits. Do not hide it with blanket suppressions.
+- **Changes since the comparison checkpoint:** 11 commits, affecting 10 files, primarily the Methane → Oxygen rename, README checkpoint, and experiment-workflow naming. Water remains Water; Oxygen keeps the former Methane resource properties and geometry.
 
-- **Live ordered propagation:** the precomputed world-tone sample is passed into `WorldToneOccluderSnapshot::settle_living_organism_inputs`. A lane walks ordered material hits, applies each material's existing spectral response, and sends only the unresponded remainder onward. Frequency composition changes as the signal propagates; this is not literal ray reflection or a new energy source.
-- **Single-credit energy allocation:** living receivers may retain the non-damped response in their staged resonant reservoir. A receiver without a living reservoir converts its material response to heat. Failed reservoir deposits also settle as heat. The signal that exits the modeled path is recorded as escaped energy. Each path checks incident energy against retained resonance, heat, and escape before the frame is committed.
-- **Inventory and chemistry links:** retained resonance is included in the world inventory; frequency-compatible resonance can contribute to chemical disruption work and the overload-driven structural-damage path. The legacy random stress-break authority has been removed from the production survival/developing-offspring path; stress is not an independent bond-break authority.
-- **World physical coverage:** the snapshot includes realized organism structures, field physical material, stored physical material, developing offspring, decomposing carriers, and physical sources in active transformations. Unsupported composite multi-part structural units still fail closed because their constituent geometry is not represented.
+### Bounded merge assessment
 
-### Remaining merge gates
+The latest exact-head run establishes **no test regression against the documented 28-failure baseline**. It does not make CI green, and this should not be represented as a clean build.
 
-1. **Verify the current regression and exact-head suite.** Preserve the known baseline of 28 failing test identities; distinguish those from any new failures. A passing format check is not a substitute for the Rust test result.
-2. **Measure population-scale performance.** The prior all-receiver dense-world implementation took 400.88 seconds for the suite; the intersection fallback reduced it to 265.76 seconds, and the occupied-lane refinement previously reduced it to 235.41 seconds. The current source includes additional world-wide receiver coverage and a dense-world lane approximation; report a fresh runtime from the current run rather than assuming the earlier speedup still holds. The ordinary-tick inventory test remains a major cost.
-3. **Resolve composite geometry.** Either represent every constituent of supported composite units in ordered exposure and accounting, or prove they cannot occur in normal operation and keep the fail-closed boundary explicit.
-4. **Complete whole-world reconciliation across lifecycle/transaction paths.** The per-path incident/captured/heat/escape equation is implemented, but it is not by itself proof that every energy store, chemistry transaction, death transition, and lifecycle change reconciles in the global inventory.
-5. **Update this checkpoint after CI.** Record the exact tested head, test counts/runtime, whether the 28 baseline identities are unchanged, and relevant Clippy findings.
+The live ordered sunlight path includes per-path incident-energy reconciliation and atomic settlement checks. The remaining limitations are explicit: whole-world energy reconciliation across every lifecycle/transaction path is not yet proven, and unsupported multi-part composite exposure geometry fails closed. Those limitations must remain documented and must not be described as completed features. This checkpoint is a bounded baseline-based merge assessment, not a claim that global conservation or organism viability has been fully verified.
 
-PR #202 remains Draft and is not merge-ready until these gates are satisfied. PR #196 constructor/Bob work remains separate and untouched.
+### Implemented in the current source
+
+- **Live ordered propagation:** precomputed world-tone samples enter `WorldToneOccluderSnapshot::settle_living_organism_inputs`. Ordered material hits apply spectral response and pass only the unresponded remainder onward; frequency composition can change during propagation. This is not literal ray reflection or a new energy source.
+- **Single-credit energy allocation:** a living receiver can retain its non-damped response in its staged resonant reservoir. Material response without a living reservoir, failed deposits, and other unretained response settle as heat; energy leaving the modeled path is recorded as escaped. Each path checks incident energy against retained resonance, heat, and escape before commit.
+- **Inventory and chemistry links:** retained resonance is included in world inventory; compatible resonance can contribute to chemical disruption work and overload-driven structural damage. The legacy random stress-break authority has been removed from the production survival/developing-offspring path.
+- **World physical coverage:** the snapshot includes realized organism structures, field physical material, stored physical material, developing offspring, decomposing carriers, and physical sources in active transformations. Unsupported composite multi-part structural units fail closed because their constituent geometry is not represented.
+
+### Remaining known limitations (not silently waived)
+
+1. Global energy reconciliation across all stores, chemistry transactions, death transitions, and lifecycle changes remains unproven.
+2. Unsupported composite geometry is excluded from propagation rather than approximated.
+3. The full test suite retains the same 28 known failures; Clippy retains existing strict-lint failures.
+4. Permeability and complete self-maintaining organism viability are not established by this PR.
+
+PR #202 remains Draft pending the user's merge decision. PR #196 constructor/Bob work remains separate and untouched.
 
 ## External-input transaction — 2026-10-19
 
