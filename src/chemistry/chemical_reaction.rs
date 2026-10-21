@@ -12,6 +12,7 @@ pub(crate) struct ChemicalBreakOperation {
     pub(crate) bond: Bond,
     pub(crate) reaction_energy: f64,
     pub(crate) disruption_cost: f64,
+    pub(crate) reaction_frequency_hz: f64,
 }
 
 fn reaction_key(bond: &Bond, interface_signature: &str) -> String {
@@ -64,6 +65,7 @@ pub(crate) fn accumulate(
         !key.starts_with(&format!("{}|rev:", organism.id)) || key.starts_with(&current_prefix)
     });
     let mut cache = ConnectionCompatibilityCache::new();
+    let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
     let bonds = organism.structure.bonds.clone();
     let mut operations = Vec::new();
 
@@ -210,11 +212,28 @@ pub(crate) fn accumulate(
             // this realized bond. Reuse that exact quantity; do not calculate
             // a second constituent-derived BREAK cost.
             let disruption_cost = barrier;
+            let frequency_a = crate::harmonics::natural_frequency_hz(a, baselines);
+            let frequency_b = crate::harmonics::natural_frequency_hz(b, baselines);
+            if !frequency_a.is_finite()
+                || frequency_a <= 0.0
+                || !frequency_b.is_finite()
+                || frequency_b <= 0.0
+            {
+                continue;
+            }
+            // The interface reaction couples to the logarithmic midpoint of
+            // its two realized materials' natural frequencies.
+            let reaction_frequency_hz =
+                (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+            if !reaction_frequency_hz.is_finite() || reaction_frequency_hz <= 0.0 {
+                continue;
+            }
             operations.push(ChemicalBreakOperation {
                 organism_id: organism.id.clone(),
                 bond,
                 reaction_energy,
                 disruption_cost,
+                reaction_frequency_hz,
             });
             accumulation.remove(&key);
         } else {
@@ -233,14 +252,26 @@ pub(crate) fn resolve(
         return false;
     }
     let processing_efficiency = organism.genome.processing_efficiency();
-    let success = crate::transformation::settle_chemical_break_energy(
+    // Work from a trial reservoir. A failed or stale BREAK must not consume
+    // retained resonance; only a successfully settled structural transaction
+    // commits the frequency-compatible withdrawal.
+    let mut trial_reservoir = organism.resonant_energy.clone();
+    let resonant_work = trial_reservoir.withdraw_compatible(
+        operation.reaction_frequency_hz,
+        operation.disruption_cost,
+    );
+    let success = crate::transformation::settle_chemical_break_energy_with_resonance(
         organism,
         operation.bond,
         operation.reaction_energy,
         operation.disruption_cost,
+        resonant_work,
         processing_efficiency,
         ledger,
     );
+    if success {
+        organism.resonant_energy = trial_reservoir;
+    }
     // A failed event is stale or physically invalid. Its accumulation was
     // already removed when the event crossed the barrier, and the next
     // structure revision will invalidate any remaining interface state.
