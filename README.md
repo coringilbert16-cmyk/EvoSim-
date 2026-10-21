@@ -2161,3 +2161,13 @@ The first implementation slice adopts the wave-amplitude interpretation for reso
 - The world-tone cavity signal path now converts its per-tick incident energy intensity to amplitude before applying the material response.
 
 **This is a normalization step, not a completed unified energy model.** The steady-state oscillator response can exceed the incident amplitude, so its response amplitude must not be treated as an outgoing energy-bearing wave without accounting for where the additional response energy came from or explicitly bounding it. Nonlinear harmonic generation and strongest-component truncation also need an energy-preserving rule. The live sunlight path still uses genome processing efficiency to split the damped amount into usable energy and heat; that is not yet consistent with the agreed rule that damping produces heat and physical structure determines energy transfer. The new code has passed formatting and architecture checks on the latest workflow; full Rust tests and Clippy are still running at the time of this note. Do not claim whole-world conservation or merge readiness from this slice.
+
+
+## PR #202 passive spectral response bound — 2026-10-21
+
+The resonance-spectrum response now has an explicit incident-energy ceiling:
+
+- A spectrum's normalized energy is the sum of each component's amplitude squared.
+- If the steady-state oscillator gain and generated harmonics would exceed the incident signal's energy budget, the full spectrum is scaled uniformly to that budget. This preserves relative component strengths while preventing the stateless response calculation from manufacturing extra signal energy.
+- Non-finite/unrepresentable spectral energy fails closed. Regression tests cover the energy ceiling with nonlinear harmonics and an overflow case.
+- This is a passive bound on the current spectral/perception response, not yet a complete physical storage-and-release oscillator or a global energy-conservation proof. It does not settle the outstanding sunlight usable-energy/heat split, secondary propagation, or environmental heat-only receivers.
