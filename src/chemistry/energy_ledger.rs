@@ -437,6 +437,33 @@ mod tests {
     }
 
     #[test]
+    fn world_tone_path_settlement_accounts_for_capture_heat_and_escape_once() {
+        let mut ledger = EnergyLedger::default();
+        assert!(ledger.settle_world_tone_paths(10.0, 4.0, 2.0, 4.0));
+        assert_eq!(ledger.total_external_energy_input, 10.0);
+        assert_eq!(ledger.total_heat_dissipated, 2.0);
+        assert_eq!(ledger.total_world_tone_energy_escaped, 4.0);
+        assert!(!ledger.settle_world_tone_paths(10.0, 4.0, 2.0, 3.0));
+        assert_eq!(ledger.total_external_energy_input, 10.0);
+        assert_eq!(ledger.total_world_tone_energy_escaped, 4.0);
+
+        let inventory = EnergyInventorySnapshot {
+            initial_usable_energy: 0.0,
+            current_usable_energy: 0.0,
+            initial_resonant_energy: 0.0,
+            current_resonant_energy: 4.0,
+            initial_structural_energy: 0.0,
+            current_structural_energy: 0.0,
+            external_energy_input: ledger.total_external_energy_input,
+            world_tone_energy_escaped: ledger.total_world_tone_energy_escaped,
+            other_energy_released: 0.0,
+            work_expended: 0.0,
+            heat_dissipated: ledger.total_heat_dissipated,
+        };
+        assert!(inventory.is_balanced(1e-12));
+    }
+
+    #[test]
     fn world_inventory_reconciles_external_input_work_and_heat() {
         let inventory = EnergyInventorySnapshot {
             initial_usable_energy: 10.0,
