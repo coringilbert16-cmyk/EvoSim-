@@ -47,19 +47,17 @@ impl ResonantEnergyReservoir {
         if self.total_energy().is_none() {
             return false;
         }
-        if !frequency_hz.is_finite()
-            || frequency_hz <= 0.0
-            || !energy.is_finite()
-            || energy < 0.0
-        {
+        if !frequency_hz.is_finite() || frequency_hz <= 0.0 || !energy.is_finite() || energy < 0.0 {
             return false;
         }
         if energy <= f64::EPSILON {
             return true;
         }
-        if let Some(component) = self.components.iter_mut().find(|component| {
-            (component.frequency_hz / frequency_hz).ln().abs() <= 1e-9
-        }) {
+        if let Some(component) = self
+            .components
+            .iter_mut()
+            .find(|component| (component.frequency_hz / frequency_hz).ln().abs() <= 1e-9)
+        {
             let next = component.energy + energy;
             if !next.is_finite() {
                 return false;
@@ -153,7 +151,8 @@ impl ResonantEnergyReservoir {
                 withdrawn += take;
             }
         }
-        self.components.retain(|component| component.energy > f64::EPSILON);
+        self.components
+            .retain(|component| component.energy > f64::EPSILON);
         withdrawn
     }
 }
