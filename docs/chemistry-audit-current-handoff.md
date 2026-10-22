@@ -580,5 +580,5 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 
 - Exact tested head `aa7750d35124a9d03952d70bd74cac99db13826c`: 589 passed, 27 failed, 1 ignored. The new core-identity initializer compiles; baseline failure pattern remains. This predates anchor-placement and cavity-ranking edits.
 - Strict Clippy remains red with 34 app-target and 15 test-target diagnostics.
-- Head `7631b67b178d26a559e6a54c1531391d6ab30962` passed formatting and was in full tests; new core-identity regression test was added afterward at `c8ce07e0322b1fd880dbdc6261cfd1bc52d372c4`. Validate the newer head before treating any of those edits as confirmed.
+- Head `7631b67b178d26a559e6a54c1531391d6ab30962` passed formatting and entered full tests; the primary-core-loss regression followed at `c8ce07e0322b1fd880dbdc6261cfd1bc52d372c4`. Formatting was corrected in `135bc4349263a80b5d3a67c8e2e40a3eeeea753f`; its exact-head workflow passed formatting and was in full tests at handoff update time.
 
