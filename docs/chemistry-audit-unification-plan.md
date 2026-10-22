@@ -2479,3 +2479,18 @@ No source or test files were changed in this checkpoint. PR #204 remains documen
 5. Movement translates attached units once and leaves stored material at owner-relative positions; snapshot geometry, collision checks, and receiver mapping agree on the same physical aggregate.
 
 No implementation is authorized by this audit. The serialized model, cache invalidation, and core-identity semantics must be designed together before the first structure-representation change.
+
+
+### 17.75 Multi-core cavity identity is a prerequisite to one-graph budding — 2026-10-22
+
+**Status: Additional structural dependency confirmed.** Read-only inspection of `src/geometry/cavity.rs`, `src/organism/viability.rs`, and harmonic/cavity call paths at PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862`.
+
+- `analyze_genome_cavity` scans connected components and selects the qualifying cavity with the greatest area. It does not accept a core identity or an anchor index as a selection criterion. Harmonic perception and viability call this analyzer on `organism.structure`.
+- Today, the developing graph is analyzed separately, so the child's second core can be found without competing with the parent's core. If both structures are merged into one aggregate graph, a simple concatenation may cause the largest-cavity rule to select the wrong core or switch which genome cavity drives the organism's harmonic spectrum, viability, and cached cavity state.
+- The owner’s “one physical structure” rule does not mean the simulation can conflate two genome identities. The aggregate may contain the parent core and an internal developing second core, while the parent remains the sole organism/physical owner until division.
+- A core-specific cavity query or explicit internal core identity is therefore a design dependency. It must identify the parent’s operative core for current organism perception/behavior and the second core for construction readiness, without hard-coding a material recipe or predefining cavity geometry. Physical cavity geometry remains authoritative; identity only chooses which realized cavity belongs to which genome.
+- If the project chooses not to introduce core identity, the alternative is to preserve a separate *analysis view* of the attached core while still keeping one physical structure/owner. Such a view must reference shared unit IDs and geometry rather than duplicate physical units, bonds, energy, or receiver bodies. Treat this as a fallback architecture, not permission to keep a second physical authority.
+
+**Required acceptance tests:** two qualifying cavities in one aggregate remain independently discoverable; parent active cavity/perception does not switch merely because the second core grows; the second core’s construction readiness is checked against its own cavity; structural mutation invalidates both core-specific results; world-tone receiver mapping still maps every attached surface to the parent reservoir; division assigns each core and its units to exactly one child.
+
+**Audit implication:** the single-structure design needs an explicit physical-owner model plus a multi-core identity/query contract before implementation. Do not merge `developing_structure` into `organism.structure` as a blind vector append. No source/test changes.
