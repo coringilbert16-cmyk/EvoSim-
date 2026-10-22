@@ -90,7 +90,7 @@ impl StructuralUnit {
             return true;
         }
         if let [(name, amount)] = self.material.parts.as_slice() {
-            if *amount > 1.0 && (amount - amount.round()).abs() <= 1e-9 {
+            if *amount > 1.0 && (*amount - amount.round()).abs() <= 1e-9 {
                 let Some(resource) = catalog.iter().find(|resource| resource.name == *name) else {
                     return false;
                 };
