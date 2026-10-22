@@ -1,6 +1,6 @@
 # Chemistry Unification — Current Handoff
 
-**Plan (latest recorded plan commit):** `e34e52be71ee856f3b2d8be86973d6076aac4c28`  
+**Plan (latest recorded plan commit):** `af5cb77dab1842e10c699980edbd715af3b4bbda`  
 **PR #205 last audited head (historical; refresh before implementation):** `12d8079230458da68a8dc3755a1d6a9b41347862`  
 **CI:** [39833438679](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39833438679).
 
