@@ -328,6 +328,7 @@ impl ChemistryLibrary {
         self.insert_with_persistence(record, append_record_and_sync, persist_manifest_atomically)
     }
 
+    #[cfg(test)]
     fn insert_with_manifest_persistence<F>(
         &mut self,
         record: ChemistryRecord,
