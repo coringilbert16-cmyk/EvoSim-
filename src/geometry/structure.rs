@@ -3,7 +3,7 @@ use crate::connection_geometry::WorldConnectionPoint;
 use crate::physical_geometry::PhysicalGeometry;
 use crate::resources::{BaseResource, Material};
 use serde::{Deserialize, Deserializer, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct Placement {
     pub x: f64,
@@ -529,6 +529,85 @@ impl PhysicalConstituentGraph {
         self.units.push(u);
         index
     }
+
+    /// Append another physical graph without aliasing its graph-local IDs.
+    ///
+    /// The source graph is validated and the complete result is staged on a
+    /// clone before this graph is changed. Geometry/contact eligibility is the
+    /// caller's responsibility; this operation only preserves physical
+    /// constituents, bond endpoints/energy, and genome-core identity metadata.
+    /// The destination's primary core stays primary; the source's primary core
+    /// becomes an additional core in the combined aggregate.
+    pub(crate) fn append_graph_remapping_ids(
+        &mut self,
+        source: &Self,
+    ) -> Option<HashMap<PhysicalConstituentId, PhysicalConstituentId>> {
+        let source_ids: HashSet<_> = source.units.iter().map(|unit| unit.physical_id).collect();
+        if source_ids.len() != source.units.len()
+            || source_ids.contains(&PhysicalConstituentId(0))
+            || source.next_constituent_id == 0
+            || self.next_constituent_id == 0
+            || self.next_constituent_id.checked_add(source.units.len() as u64).is_none()
+        {
+            return None;
+        }
+        if source.bonds.iter().any(|bond| {
+            bond.endpoint_a.constituent_id == bond.endpoint_b.constituent_id
+                || !source_ids.contains(&bond.endpoint_a.constituent_id)
+                || !source_ids.contains(&bond.endpoint_b.constituent_id)
+                || !bond.bond_energy.is_finite()
+                || bond.bond_energy < 0.0
+        }) {
+            return None;
+        }
+        let source_core_ids: HashSet<_> = source
+            .genome_constituent_ids
+            .iter()
+            .chain(source.additional_genome_constituent_groups.iter().flatten())
+            .copied()
+            .collect();
+        if source_core_ids.iter().any(|id| !source_ids.contains(id)) {
+            return None;
+        }
+
+        let mut staged = self.clone();
+        let mut remap = HashMap::with_capacity(source.units.len());
+        for unit in &source.units {
+            let old_id = unit.physical_id;
+            let new_index = staged.add_unit(unit.clone());
+            let new_id = staged.physical_id(new_index)?;
+            if remap.insert(old_id, new_id).is_some() {
+                return None;
+            }
+        }
+        for bond in &source.bonds {
+            let mut remapped = *bond;
+            remapped.endpoint_a.constituent_id = *remap.get(&bond.endpoint_a.constituent_id)?;
+            remapped.endpoint_b.constituent_id = *remap.get(&bond.endpoint_b.constituent_id)?;
+            staged.bonds.push(remapped);
+        }
+
+        let remap_group = |ids: &[PhysicalConstituentId]| -> Option<Vec<PhysicalConstituentId>> {
+            ids.iter().map(|id| remap.get(id).copied()).collect()
+        };
+        let source_primary = remap_group(&source.genome_constituent_ids)?;
+        let source_additional = source
+            .additional_genome_constituent_groups
+            .iter()
+            .map(|group| remap_group(group))
+            .collect::<Option<Vec<_>>>()?;
+        if staged.genome_constituent_ids.is_empty() && !source_primary.is_empty() {
+            staged.set_genome_constituent_ids(source_primary);
+        } else if !source_primary.is_empty() {
+            staged.add_genome_constituent_group(source_primary);
+        }
+        for group in source_additional {
+            staged.add_genome_constituent_group(group);
+        }
+
+        *self = staged;
+        Some(remap)
+    }
     /// Remove temporary physical constituents and every bond touching them.
     /// Bonds identify constituents by stable physical ID, so remaining units do
     /// not need index remapping.
@@ -964,6 +1043,96 @@ mod tests {
         );
         assert!(carbon.realize_default_geometry(&catalog));
         assert!(!carbon.realize_fluid_geometry(fitted, &catalog));
+    }
+
+    #[test]
+    fn append_graph_remaps_local_ids_bonds_energy_and_core_groups_atomically() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut parent = OrganismStructure::new();
+        let parent_unit = parent.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = parent.physical_id(parent_unit).unwrap();
+        parent.set_genome_constituent_ids([parent_id]);
+
+        let mut developing = OrganismStructure::new();
+        let first = developing.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let second = developing.add_unit(StructuralUnit::new("Carbon", placement));
+        let first_id = developing.physical_id(first).unwrap();
+        let second_id = developing.physical_id(second).unwrap();
+        developing.set_genome_constituent_ids([first_id]);
+        developing.add_genome_constituent_group([second_id]);
+        developing.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(
+                first_id,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                second_id,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::PI,
+                },
+            ),
+            strength: 0.75,
+            bond_energy: 2.5,
+        });
+
+        let remap = parent.append_graph_remapping_ids(&developing).unwrap();
+        let mapped_first = remap[&first_id];
+        let mapped_second = remap[&second_id];
+        assert_ne!(mapped_first, first_id);
+        assert_ne!(mapped_second, second_id);
+        assert_eq!(parent.units.len(), 3);
+        assert_eq!(parent.bonds.len(), 1);
+        assert_eq!(parent.bonds[0].endpoint_a.constituent_id, mapped_first);
+        assert_eq!(parent.bonds[0].endpoint_b.constituent_id, mapped_second);
+        assert_eq!(parent.bonds[0].bond_energy, 2.5);
+        assert_eq!(parent.genome_constituent_ids(), &[parent_id]);
+        assert!(parent
+            .additional_genome_constituent_groups()
+            .contains(&vec![mapped_first]));
+        assert!(parent
+            .additional_genome_constituent_groups()
+            .contains(&vec![mapped_second]));
+        assert_eq!(
+            parent.physical_constituent_ids().into_iter().collect::<HashSet<_>>().len(),
+            3
+        );
+    }
+
+    #[test]
+    fn append_graph_rejects_dangling_bond_without_mutating_destination() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut destination = OrganismStructure::new();
+        destination.add_unit(StructuralUnit::new("Carbon", placement));
+        let original_units = destination.units.clone();
+        let original_bonds = destination.bonds.clone();
+
+        let mut invalid_source = OrganismStructure::new();
+        let source_unit = invalid_source.add_unit(StructuralUnit::new("Carbon", placement));
+        let source_id = invalid_source.physical_id(source_unit).unwrap();
+        invalid_source.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(
+                source_id,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                PhysicalConstituentId(999),
+                ConnectionEndpoint::Boundary { angle_radians: 1.0 },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+
+        assert!(destination.append_graph_remapping_ids(&invalid_source).is_none());
+        assert_eq!(destination.units, original_units);
+        assert_eq!(destination.bonds, original_bonds);
     }
 
     #[test]
