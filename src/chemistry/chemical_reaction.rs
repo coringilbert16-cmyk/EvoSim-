@@ -400,7 +400,10 @@ mod material_identity_tests {
             material_identity(&hydrogen),
             &interface,
         );
-        assert_eq!(key.schema_version, 3);
+        assert_eq!(
+            key.schema_version,
+            crate::chemistry_library::CHEMISTRY_LIBRARY_SCHEMA_VERSION
+        );
         assert_eq!(key.material_a, "Carbon");
         assert_eq!(key.material_b, "Hydrogen");
         assert_eq!(key.interface_class, "rigid_point");
