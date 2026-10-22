@@ -47,15 +47,18 @@ The latest focused audit is recorded in Section 17.26; the Clippy comparison is 
 
 - `Simulation::step` recomputes `living_ids` from core qualification. Breached organisms remain physical entries in `self.organisms`; structural-bond chemistry continues, but biological work is skipped.
 - `ActiveMaterialField::deposit_physical` / `deposit_physical_at_index` transfer an already-realized physical object and report failure. `MaterialStorage::drain_entries` removes ownership, so callers must retain/restore entries if a deposit fails.
-- Existing `recycle_dead_organism` is **not** a valid integration path. It uses the forbidden `DecomposingBody` carrier, ignores deposit failures after draining storage, and removes reproductive construction without preserving its developing structure as a physical holder.
+- Existing `recycle_dead_organism` is **not** a valid integration path. It uses the forbidden `DecomposingBody` carrier, ignores deposit failures after draining storage, and removes reproductive construction without preserving its developing structure as a physical holder. Existing `expel_physical_material` is geometry-aware for a single stored item, but depends on movement memory or a nonzero owner-relative offset and does not restore storage if the final environmental insertion fails; it is not a general death-release transaction.
 - Current inventory tracks usable/developing energy, resonant energy, parent/developing structural bond energy, and active transformations. Active transformations intentionally settle after core breach. No approved death-transfer policy for resonant energy or intact developing-structure bonds is established yet.
 - Do not activate the legacy one-bond decomposition law or claim that a material/energy release policy is settled.
 
 **Next steps:**
-1. Continue the focused design audit for a no-loss, atomic ownership transition: stored physical material, committed material, developing structure/bond energy, usable/developing/resonant energy, and in-flight transformations. Specify how developing-structure bonds remain represented and chemically addressable without losing their current endpoints/energy, plus rollback or retained ownership for failed deposits.
+1. Continue the focused design audit for a no-loss, atomic ownership transition: stored physical material, committed material, developing structure/bond energy, usable/developing/resonant energy, and in-flight transformations. Specify deterministic world placement independent of behavioral memory, rollback/retained ownership for failed deposits, and how developing-structure bonds remain represented and chemically addressable without losing their current endpoints/energy.
 2. Once that design audit is complete, implement and test the smallest scoped Phase 8 change on PR #205. Add independent material and energy inventory coverage across a breach and bounded live ticks.
 3. Keep all phase gates open until exact-head evidence is verified. Update this handoff whenever head, evidence, or phase status changes.
 
 ## Separate reproduction requirement (not implemented here)
 
 Internal/adjacent budding: at 100% of original organism size, begin building a second genome core immediately next to the first; continue outward growth to 160% total size; split into two roughly equal 80%-size children. Current reproduction code does not yet satisfy this lifecycle. This remains a separate future requirement, not part of this chemistry change; PR #196 remains out of scope.
+
+
+Latest Phase 8 design-audit addendum: Section 17.28 documents why `expel_physical_material` is not safe to loop on core breach. PR #205 comment [6348852052](https://github.com/coringilbert16-cmyk/EvoSim-/pull/205#issuecomment-6348852052) records the source finding. No code/test change has been made; next is still the design audit, not implementation.
