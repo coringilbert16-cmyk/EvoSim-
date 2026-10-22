@@ -2111,3 +2111,15 @@ The schema-4 chemistry manifest uses a fixed equation fingerprint with a catalog
 - No other production `ledger.transfer` call sites were found by the current source search beyond construction reserve transfer and the legacy recycler. The ledger unit test confirms successful transfers preserve the sum of the two holders.
 
 **Next audit:** inspect initialization and end-of-tick cached-holder refresh alongside prepared transformation deltas; ensure every cached/diagnostic field has one update policy and no cached value enters the independent inventory equation. No implementation until audit templates are complete.
+
+
+### 17.54 Initialization and held-counter refresh audit — baseline/source split is internally consistent for current holders — 2026-10-22
+
+**Status: Holder initialization and cache refresh mapped; world-scale historical proof remains partial.** Exact-head review of Simulation::new, Simulation::step end-of-tick refresh, structural_energy_held, and energy_inventory_snapshot. No source/test changes.
+
+- Initial usable reserve is first removed from the seed organism and reintroduced through one balanced InitialCondition ExternalInputTransaction. The tick-zero usable baseline is deliberately zero, so the same initial reserve is not simultaneously treated as baseline energy and a new source. The one-time source guard prevents duplicate initial grants.
+- Initial resonant and structural baselines are captured from the seed organism's current reservoir and realized graph bonds. At the end of each live tick, cached held totals are refreshed from current organism/developing holders and any legacy decomposition carriers. Structural totals include both primary and developing graph bonds; stored PhysicalMaterial connections contribute no structural-energy value because they carry no allocated bond energy.
+- The test-only EnergyInventorySnapshot independently recomputes current usable, resonant, and structural stores from holders instead of reading the cached held totals. Its cumulative inputs/sinks and initial baselines still come from ledger history, so it can expose current-holder mismatches but cannot independently prove historical source provenance by itself.
+- This confirms the current baseline/cache split for the represented holders. It does not close conservation across all event paths: movement's post-geometry ledger rejection, source/destination fallback failures, the COMBINE delta-field omission, world-tone receiver eligibility, and incomplete exact-geometry evidence remain open.
+
+**Next audit:** reconcile all transaction and holder-transition findings into one source-to-sink dependency matrix with a concrete regression oracle per row. Do not start implementation until the matrix and all required audit templates are complete.
