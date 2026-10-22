@@ -3136,6 +3136,17 @@ Consequences:
 - This audit strengthens the ordering: finish stable core identity and core-specific cavity/viability semantics before migrating the live construction graph. Movement remains deferred until that migration begins, at which point translation/collision/revision updates must be coordinated.
 - **Next:** design and test core-anchored cavity lookup with two qualifying cavities in one graph, proving the primary result and additional-core result remain stable under unit insertion/removal and serialization. Then proceed to atomic parent-funded growth. No movement code changed in this audit.
 
+
+
+## Core-specific cavity lookup implementation slice (Section 17.118, 2026-10-22)
+
+- **Current PR #205 head:** `a5b95ca21acce5ced5b4ccae47d523fc8f357472`. Added `analyze_genome_cavity_for_core`, which re-derives cavity geometry but requires the resulting cavity boundary to intersect the supplied stable physical core IDs. Added a two-cavity regression fixture with distinct physical IDs and a test that asks for the second core specifically.
+- Reproduction readiness now asks for the cavity associated with the anchor's physical ID rather than finding the largest cavity first and rejecting it afterward. This is consistent with the existing birth rule that the qualifying cavity must include the anchor.
+- The organism cavity cache now uses its last-known primary core IDs for subsequent analyses and preserves those IDs when the cavity is temporarily absent, rather than silently selecting a different qualifying cavity in the same aggregate. This is groundwork for multiple cores in one graph; the stable identity lifecycle when every old core constituent is physically removed remains a separate edge case to audit before aggregate migration.
+- **Validation status:** CI run `39862195685` for exact head `a5b95ca21acce5ced5b4ccae47d523fc8f357472` passed formatting, repository architecture checks, and focused chemistry/Bob tests; the full Rust test step is still running at note time. Do not claim the new two-cavity test passed until the run finishes. Strict Clippy is still pending for this head.
+- **Still not implemented:** the reproductive graph is still separately stored. This slice does not make reproduction a canonical parent-owned aggregate or make production costs atomic. Movement is unchanged.
+- **Next:** finish exact-head CI, then audit stable core identity if all old boundary constituents disappear. Continue toward the first atomic parent-funded growth transaction only after core identity and anchor placement are reliable. Movement starts later, when the live construction graph actually moves into the parent-owned aggregate; notify the user before that coordinated refactor.
+
 ## 18. Research references and annotated application to EvoSim — 2026-10-22
 
 **Purpose.** These references are an external research crosswalk for the plan, not a new physics specification and not evidence that any feature is already implemented. Use them to sharpen audits, design tests, and identify efficient abstractions. The owner-approved decisions in Sections 14 and 17 remain authoritative. In particular, do not import assumptions from models that do not conserve material, use different energy semantics, or omit EvoSim's physical geometry.
