@@ -177,3 +177,12 @@ The owner explicitly approved the parent-aggregate ownership model: the parent r
 - Maintenance settlement is better ordered: energy/stress update follows successful ledger settlement, with unpaid demand becoming debt. Resonance-overload BREAK stages reservoir withdrawal and candidate structure, settles first, and only commits the reservoir/graph on success. These paths still need independent inventory tests.
 - Movement currently records its full energy cost as heat and zero explicit work. D7 requires this to be reconciled with the physical meaning of work versus dissipative locomotion cost before changing equations.
 - **Next audit:** inspect remaining physical mutations and energy consumers for geometry-before-ledger or source-before-destination ordering; update the impact matrix and failure coverage. Do not implement before the audit templates are complete.
+
+
+## Latest handoff checkpoint — 2026-10-22, Sections 17.45–17.47
+
+- Plan commit: `4592980f87b40457335b8ab2a227db1322a66f9d`. PR #204 remains documentation-only. PR #205 source head inspected: `12d8079230458da68a8dc3755a1d6a9b41347862`. No implementation source/tests changed.
+- Section 17.45 found that contained acquisition removes field sources before storage and ignores a failed fallback deposit; expulsion removes parent storage and does not restore the original source if the final environment deposit rejects. COMBINE bond formation and one-unit instantiation are useful trial-state patterns.
+- Section 17.46 ranks the confirmed risks: stored BREAK partial split/return; contained acquisition and expulsion fallback; movement geometry committed before ledger settlement; then cross-domain failure injection and inventory reconciliation.
+- Section 17.47 confirms structural BREAK uses a negative structural-store delta rather than a second potential-release credit; COMBINE uses a positive structural delta; world tone and initial energy use separate input paths. Inspected live chemistry callers set the generic potential-release field to zero; any future nonzero use needs a real source authority, not just a counter.
+- Remaining audit areas: chemistry-library/reaction-cache invalidation and remaining energy-changing paths. Keep activation accumulation distinct from physical energy. No code/test changes until all audit templates are complete.
