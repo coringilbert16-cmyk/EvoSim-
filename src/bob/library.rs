@@ -3418,8 +3418,7 @@ impl GeometryLibrary {
         formation: GeometryFormation,
         catalog: &[BaseResource],
     ) -> std::io::Result<bool> {
-        let mut candidates = Vec::new();
-        candidates.push(formation);
+        let candidates = vec![formation];
         Ok(self.insert_many(candidates, catalog)? > 0)
     }
 
