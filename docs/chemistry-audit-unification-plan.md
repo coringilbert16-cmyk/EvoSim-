@@ -2164,3 +2164,15 @@ This summary consolidates Sections 17.32–17.54. Local ordering being sound doe
 - This map does not make the uncalled legacy APIs safe to activate. A future caller must either join the approved live transaction model or remain clearly quarantined with tests that do not imply production integration.
 
 **Next audit:** reconcile the final call-site map with the dependency/phase tracker and decide whether the remaining unfilled templates are source inspection, focused-test design, or owner decision. No implementation until audit completion.
+
+
+### 17.57 Resource identity and README truth audit — active catalog uses Oxygen; README misstates live capture status — 2026-10-22
+
+**Status: Current catalog identity confirmed; documentation mismatch confirmed.** Exact-head review of src/materials/resources.rs and README.md at PR #205 head 12d8079230458da68a8dc3755a1d6a9b41347862, plus default-branch search results. No source/test/README change.
+
+- The active catalog defines Oxygen for resource ID 6; the catalog regression asserts Oxygen and current property data. Material validation checks catalog membership and whole finite constituent amounts. Unknown-resource mass/potential/weighted-property queries fail with NaN rather than inventing zero-valued properties. The current README and active catalog do not use Methane as a live resource identity; remaining search hits are historical audit/archive documents, which should remain historical rather than be blindly rewritten.
+- README.md says “Live capture stays disabled until the allocation and conservation path is complete and verified.” The live tick in Simulation::step calls the world-tone snapshot/settlement path, and Section 17.39 confirms it stages reservoir commits and settles frame energy. Therefore the README's disabled-capture claim is factually stale. The accurate status is: capture code is live, but whole-world allocation/conservation, receiver eligibility, exact-small-world approximation accuracy, and performance remain unverified.
+- README also carries the older PR #203 verification checkpoint (563/28/1 and workflow 39705150387). Current exact-head evidence for PR #205 is workflow 39833438679 and its 585/27/1 result with baseline-identity comparison. Documentation should not replace the older checkpoint without preserving it as historical context.
+- **Scope decision for this plan:** record the README mismatch now, but do not edit README in this audit-plan commit. Correct the current-status sentence and verification links only after the audit register is closed and the owner approves the docs change. This keeps PR #204's present plan/handoff focus intact and avoids suggesting that “live” means “validated.”
+
+**Next audit:** check the remaining A1 material/property fallbacks and verify whether each zero/default result is an intentional domain default or a fail-closed path. Then update the audit summary with only active-code findings, retaining historical references as historical.
