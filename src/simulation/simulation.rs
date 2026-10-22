@@ -2,8 +2,9 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 
-#[cfg(test)]
-use crate::energy_ledger::EnergyLedgerAuthority;
+use crate::energy_ledger::{
+    EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction,
+};
 
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
 use crate::decision_runtime::{
@@ -129,10 +130,26 @@ impl Simulation {
             environment.height,
         )
         .expect("default world tone cycle must be valid");
+        // Treat the starting usable reserve as an explicit, one-time external
+        // source transaction instead of silently declaring it as the baseline.
+        let initial_usable_energy = organism.usable_energy;
+        organism.usable_energy = 0.0;
         let mut energy_ledger = EnergyLedger::default();
+        let initial_input = ExternalInputTransaction {
+            source: ExternalEnergySource::InitialCondition,
+            source_available: initial_usable_energy,
+            external_input: initial_usable_energy,
+            usable_delta: initial_usable_energy,
+            work_expended: 0.0,
+            heat_dissipated: 0.0,
+        };
+        assert!(
+            energy_ledger.settle_external_input(&mut organism.usable_energy, initial_input),
+            "initial usable energy must enter through a balanced source transaction"
+        );
         energy_ledger.total_usable_energy_held =
             crate::reproduction::total_usable_energy_held(std::slice::from_ref(&organism), &[]);
-        energy_ledger.initial_usable_energy_held = energy_ledger.total_usable_energy_held;
+        energy_ledger.initial_usable_energy_held = 0.0;
         energy_ledger.total_resonant_energy_held =
             crate::reproduction::total_resonant_energy_held(std::slice::from_ref(&organism));
         energy_ledger.initial_resonant_energy_held = energy_ledger.total_resonant_energy_held;
@@ -1535,6 +1552,24 @@ mod decomposition_finalization_tests {
                     }
                 }),
             "failed BREAK source should be restored with its original amount"
+        );
+    }
+
+    #[test]
+    fn initial_usable_energy_enters_through_an_explicit_source_transaction() {
+        let simulation = Simulation::new(916, 10.0);
+        let initial_usable_energy = simulation.organisms[0].usable_energy;
+
+        assert!(initial_usable_energy.is_finite() && initial_usable_energy > 0.0);
+        assert_eq!(simulation.energy_ledger.initial_usable_energy_held, 0.0);
+        assert_eq!(
+            simulation.energy_ledger.total_external_energy_input,
+            initial_usable_energy
+        );
+        assert!(
+            simulation.energy_inventory_snapshot().is_balanced(1e-9),
+            "initial energy source should reconcile: {:?}",
+            simulation.energy_inventory_snapshot().residual()
         );
     }
 
