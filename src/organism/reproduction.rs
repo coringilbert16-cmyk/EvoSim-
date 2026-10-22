@@ -19,7 +19,6 @@ pub(crate) enum ConstructionStatus {
     Ready,
     Detached,
     Dead,
-    DeadEnd,
 }
 
 pub(crate) fn parent_body_geometry(
