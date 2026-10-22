@@ -10,6 +10,12 @@ use crate::structure::{Bond, BondEndpoint, OrganismStructure, Placement, Structu
 
 const EPSILON: f64 = 1e-9;
 
+fn is_finite_placement(placement: Placement) -> bool {
+    placement.x.is_finite()
+        && placement.y.is_finite()
+        && placement.rotation_radians.is_finite()
+}
+
 fn transform_relative(origin: Placement, relative: Placement) -> Placement {
     let (sin, cos) = origin.rotation_radians.sin_cos();
     Placement {
@@ -33,7 +39,9 @@ pub(crate) fn restore_material(
     let relative = instance.placements.as_ref()?;
     let connections = instance.internal_connections.as_ref()?;
     let material = &instance.material;
-    if !material.is_valid_for_catalog(catalog)
+    if !is_finite_placement(origin)
+        || relative.iter().any(|placement| !is_finite_placement(*placement))
+        || !material.is_valid_for_catalog(catalog)
         || material.parts.is_empty()
         || relative.len() != material.parts.len()
     {
@@ -69,9 +77,13 @@ pub(crate) fn restore_material(
         {
             return None;
         }
+        let transformed = transform_relative(origin, *placement);
+        if !is_finite_placement(transformed) {
+            return None;
+        }
         let mut unit = StructuralUnit::from_material(
             crate::resources::Material::free_base(name.clone(), *amount),
-            transform_relative(origin, *placement),
+            transformed,
         )?;
         if !unit.realize_default_geometry(catalog) {
             return None;
