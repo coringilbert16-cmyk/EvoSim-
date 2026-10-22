@@ -652,7 +652,7 @@ This is a dependency order, not permission to begin all changes immediately.
 5. **Unify resonance/reaction coupling (A7) and stress/death/post-death behavior (A10–A11).**
 6. **Audit every existing energy consumer and transfer (A9, A12), then event ordering (A15).**
 7. **Repair/verify persistence and cache semantics (A13–A14).**
-8. **Resolve the existing world-tone capture path (A8) against the energy inventory (A6).** The audited source appears to perform live capture despite the README claim that it is disabled; establish the exact runtime gate and source budget, then include any containment or behavior change in the owner-approved implementation plan. Do not change capture behavior in this documentation-only PR.
+8. **Validate the existing world-tone capture path (A8) against the energy inventory (A6).** The audited source contains a live capture/settlement path. Verify source budget, duplicate claims, occlusion, and performance against D5's fast first-hit/single-sweep direction and an exact small-world reference. Do not describe capture as disabled or change runtime behavior in this documentation-only PR.
 9. **Complete diagnostics and scaling benchmarks (A17, A19).**
 10. **Run cross-domain invariants and documentation alignment (A20–A21).**
 11. Only then implement the smallest coherent production changes in focused steps, with one audit before each change and exact-head CI comparison after each.
@@ -693,11 +693,11 @@ Do not claim chemistry unification complete until all applicable gates have evid
 | A9 Work, heat, dissipation | Gap found | Movement/maintenance are heat-accounted; move precedes debit; stress and heat semantics need definition | Canonical sink/work semantics and failure-injection tests after audits |
 | A10 Stress/death/core breach | Gap found | Death is observational; breached bodies persist and chemistry continues; same-tick gate boundary remains | Tick-order and pending-transaction tests after audits |
 | A11 Post-death chemistry/material fate | Gap found | Live path is ordinary chemistry; legacy decomposition is test-only; recycling helper has no production caller found | Keep one live pathway; test/harden or quarantine legacy helper after audits |
-| A12 Energy consumers/transfers | Gap found | Initial energy is an implicit baseline; ignored transfer result and trial-energy allowances need explicit accounting; reproduction anchor transfer is staged separately | Define initial-energy boundary; surface transfer failures; prove deterministic trial/actual construction equivalence |
+| A12 Energy consumers/transfers | Gap found; initial-source decision settled by D2 | Initial energy is currently an implicit baseline; ignored transfer results and trial-energy allowances need explicit accounting; reproduction anchor transfer is staged separately | Implement one-time source transaction; surface transfer failures; prove deterministic trial/actual construction equivalence |
 | A13 Persistence/schema/recovery | Gap found | Serde defaults/aliases and skipped derived caches identified; authoritative save/load chain and atomic recovery not proven | Locate actual snapshot boundary; version/migrate ledger baselines; validate pending-operation cross-field invariants and malformed energy |
 | A14 Chemistry cache semantics | Gap found | Miss fallback exists; equation/parameter fingerprint not evidenced, so stale cache hits may alter reaction thresholds | Version cache semantics; prove hit/miss equivalence and invalid/corrupt-cache fallback; benchmark cold/hot lookups |
 | A15 Tick ordering/determinism | Gap found | Pending transformations retain staged state and have restoration paths, but the full tick phase order and all stale/cancelled-operation rollback paths are not proven | Document authoritative phase order; test duration boundaries, save/load around commit, stale operations, and failure injection |
-| A16 Material conservation | Gap found | Multiple physical holders and transfer paths identified; no independent production whole-world material inventory evidenced; fractional logical amounts lack a conversion contract | Define holder ownership/counting; decide fractional-to-physical policy; build independent test-only constituent inventory oracle |
+| A16 Material conservation | Gap found; indivisibility rule settled by D8 | Multiple physical holders and transfer paths identified; no independent whole-world integer constituent inventory evidenced; `f64` material amounts do not enforce the rule | Trace holder ownership/counting and enforce indivisible base-resource counts; build independent test-only constituent inventory oracle |
 | A17 Diagnostics/observability | Gap found | Recorder is staged/opt-in; inventory snapshot is test-oriented; diagnostic header hard-codes seed 42 and current-vs-cumulative values need clear labels | Report actual run configuration; isolate I/O failures; document units and inventory residual semantics; bound output volume |
 | A18 Numerical stability | Gap found | Reaction accumulation can overflow from extreme prior state; reservoir epsilon pruning and cumulative counter overflow lack a defined long-run fate/tolerance budget | Add adversarial overflow and drift tests; define numerical truncation and counter-overflow policy before shared math changes |
 | A19 Scalability/profiling | Gap found | World-tone geometry/exposure is a likely hotspot; no representative runtime/memory envelope or cache-growth measurements were found | Benchmark sparse/dense worlds and cache cold/hot paths; compare first-hit approximation to a trusted oracle with explicit error bounds |
@@ -953,7 +953,7 @@ Record decisions here with date, rationale, affected audits, and any superseded 
 
 ## 13. Proposed dependency-ordered implementation plan
 
-**This is a proposal, not authorization to modify production code.** No production change begins until the owner explicitly approves this sequence and the open decisions below. Apply one focused pre-change audit before each implementation change; keep each command/test bounded to five minutes and compare failures against the exact `main` baseline recorded in A0.
+**This is a proposal, not authorization to modify production code.** The owner has already selected D1–D15 in Section 14; do not treat those decisions as open. No production change begins until the owner explicitly approves the implementation sequence. Apply one focused pre-change audit before each implementation change; keep each command/test bounded to five minutes and compare failures against the exact `main` baseline recorded in A0.
 
 | Phase | Work and dependencies | Exit gate before advancing |
 |---|---|---|
@@ -968,7 +968,7 @@ Record decisions here with date, rationale, affected audits, and any superseded 
 | 8. World-tone capture and efficient exposure | Audit the live existing call path against D5: reconcile incident source energy, width allocation, duplicate claims, occlusion, damping and onward frequency-shifted propagation. Compare the proposed fast first-hit/single-sweep approximation with a slow exact small-world reference; quantify error and profile representative thousands-object workloads. | Evidence establishes whether the selected approximation meets an explicitly documented error/performance budget and whether source allocation is conservative and deterministic. Do not reopen whether capture is present; do not change runtime behavior in this PR. |
 | 9. Integrated verification and status | Run bounded focused tests, the whole suite, strict Clippy tracking, persistence tests and target-scale profiles. Compare named failures to the A0 baseline. Update root README only after the current implementation state is supported by evidence. | No new unexplained baseline failures; all new invariants pass; documentation accurately reflects live source and unresolved gates. |
 
-### Owner decisions required before implementation
+### Implementation evidence and approval gates
 
 **This list is superseded by Section 14 (D1–D15). Do not reopen these choices as unanswered questions.** The owner has selected Oxygen as the canonical identity, an explicit one-time initial-energy source transaction, explicit bond-owned energy with exactly-once settlement, a distinction between numerical tolerance and physical dissipation, a conditional fast first-hit/single-sweep sunlight approximation validated against an exact small-world reference, and rejection of all pre-unification saves/caches. The remaining work is to trace implementation coverage, identify stale references, define acceptance tests/thresholds where the owner has delegated them to evidence, and document the gaps.
 
@@ -1105,13 +1105,13 @@ The project owner selected the following directions for the chemistry unificatio
 
 **Scope:** Read-only review of `README.md` and the chemistry/energy/material/world-tone/tick implementation on exact `main` SHA `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5`. This supplements A0–A21 by separating (a) decisions or mechanisms already present, (b) partial answers needing a contract or independent proof, and (c) unresolved gaps. It does not change runtime code or tests.
 
-### 13.1 Important README/source mismatch
+### 15.1 Important README/source mismatch
 
 - The README says PR #203 is still a draft and cites PR #202's merged SHA `8c84978cd003738d94a74eef9114b711689c3804` as the integration baseline. The reviewed `main` SHA is instead `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5`, and A0 records PR #203 as merged at that main head. README's current-state block is stale relative to the reviewed source.
 - The README says live world-tone capture stays disabled pending verification. The reviewed source constructs a default world-tone cycle in `Simulation::new`, has a live settlement path in `WorldToneSnapshot::settle_living_organism_inputs`, and includes an integration test `live_world_tone_capture_settles_and_reconciles_world_energy`. Thus the source path is active in the reviewed tree; what remains unproven is complete correctness/scale, not whether a capture path exists. Do not change the runtime gate as part of this documentation audit.
 - The README correctly warns that whole-world energy conservation across every storage, reaction, and lifecycle path, and complete self-maintaining organism viability, are not proven.
 
-### 13.2 Questions with existing answers or strong partial answers
+### 15.2 Questions with existing answers or strong partial answers
 
 | Design question | What README/source already establishes | Status / remaining gap |
 |---|---|---|
@@ -1129,19 +1129,19 @@ The project owner selected the following directions for the chemistry unificatio
 | Is there a numerical tolerance? | Source uses explicit tolerances in several local checks (for example (10^{-9}), (10^{-12})); physical reaction-accumulator dissipation is separately defined as 10% per tick. | **Partially answered.** There are local numeric tolerances and a physical dissipation constant, but no single documented tolerance policy or measured global residual budget. Local epsilon checks must not silently erase stored physical energy. |
 | Is there an energy inventory test? | `EnergyInventorySnapshot` and tests check tick-zero and ordinary-tick energy balance, and a live world-tone capture integration test checks a balanced snapshot. | **Partially answered.** This is useful evidence, not the independent oracle required by this plan: snapshot terms draw from ledger totals and held-energy totals, so a shared omission in accounting may evade detection. No equivalent independent integer constituent inventory was identified. |
 
-### 13.3 Questions the reviewed source does not yet answer
+### 15.3 Questions the reviewed source does not yet answer
 
-1. **Explicit tick-zero source transaction:** `Simulation::new` initializes initial usable/resonant/structural inventory baselines from the constructed organism. The reviewed initialization does not record the initial world energy as a one-time external-source transaction. The owner's D2 decision remains a design direction not yet implemented.
-2. **Indivisible base resources:** `Material` stores `(resource_name, f64 amount)`; `Material::is_valid` requires finite positive amounts but does not require integer base-resource counts. The owner’s no-fractional-atoms decision is not yet enforced. Establish how numerical intermediates and fluid volume obey that invariant.
+1. **Explicit tick-zero source transaction:** `Simulation::new` initializes initial usable/resonant/structural inventory baselines from the constructed organism. The reviewed initialization does not record initial world energy as a one-time external-source transaction. D2 settles the required design; implementation and exactly-once verification remain open.
+2. **Indivisible base resources:** `Material` stores `(resource_name, f64 amount)`; `Material::is_valid` requires finite positive amounts but does not require integer base-resource counts. D8 settles that base atoms cannot be fractional or split; implementation must establish how numerical intermediates and fluid volume obey that invariant.
 3. **Catalog fail-closed behavior:** `fresh_energy` returns zero for an unknown resource name, and material validity alone does not establish that every name belongs to the canonical catalog. A malformed or stale identity can therefore appear as zero energy rather than a clear catalog error. Define and test validation at load/restore/transaction boundaries.
-4. **Canonical Oxygen identity across persisted data:** the default catalog contains Oxygen; the follow-up owner decision now selects Oxygen, so the old mismatch is resolved as a decision. Source/fixtures/docs and saved/cache keys still need a full trace to identify stale Methane assumptions and define the explicit post-unification version rejection.
+4. **Canonical Oxygen identity across persisted data:** the default catalog contains Oxygen and D1 confirms it as canonical. Source/fixtures/docs and saved/cache keys still need a full trace to identify stale Methane assumptions and implement the explicit post-unification version rejection.
 5. **Independent matter conservation:** no independent whole-world inventory of integer base constituents was identified in the reviewed paths. The existing energy snapshot does not solve this.
 6. **Global atomicity and failure injection:** local staged transactions and rollback-oriented tests exist, but the review did not establish that every COMBINE/BREAK, external-source claim, transfer, persistence operation, and multi-tick cancellation is atomic across geometry, energy, resonance, and material ownership.
-7. **Persistence boundary:** serde defaults exist on some evolving fields, but this review did not find proof of a single mandatory unification version that rejects all pre-unification saves/caches with actionable errors. The owner's D6 policy remains to be specified and implemented.
+7. **Persistence boundary:** serde defaults exist on some evolving fields, but this review did not find proof of a single mandatory unification version that rejects all pre-unification saves/caches with actionable errors. D6 settles rejection rather than migration; the mandatory version boundary and actionable errors remain to be implemented.
 8. **Benchmark/error acceptance criteria:** source sample precomputation is bounded, but no measured representative-world runtime/memory/cache-growth results or accepted geometric/energy error bounds were established by this source review.
 9. **Baseline identity list:** README's older PR #202 run records a stable set of 28 failures, while the reviewed main SHA is later. Extract named failing tests from the exact reviewed-head run before claiming identity-level equivalence at that SHA.
 
-### 13.4 Evidence reviewed
+### 15.4 Evidence reviewed
 
 - [README.md at reviewed main SHA](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/README.md)
 - [Primitive chemistry equations](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/src/chemistry/chemistry.rs)
@@ -1155,6 +1155,6 @@ The project owner selected the following directions for the chemistry unificatio
 - [Simulation state and pending transformations](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/src/simulation/state.rs)
 - [Simulation initialization, tick processing, and energy snapshot](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/src/simulation/simulation.rs)
 
-### 13.5 Updated resume point
+### 15.5 Updated resume point
 
 **Current task remains documentation-only.** The owner decisions D1–D15 stand. The next useful read-only audit is to trace the exact runtime call paths for (a) death/decomposing-body handling, (b) every cache key and persistence entry point, and (c) every physical material creation/transfer/split path. Add source/function/test references and mark each finding verified or still unknown. Do not create tests or modify production code in PR #204. Once those paths are mapped, revise the design questions so only genuinely unresolved decisions remain; do not repeat questions the code already answers.
