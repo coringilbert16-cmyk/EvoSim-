@@ -102,3 +102,14 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - **No implementation yet.** The owner decision on non-primary receiver eligibility remains open, and the final audit-template sign-off has not been declared complete. No source/test changes.
 - PR #205 exact head reviewed in this audit series: `12d8079230458da68a8dc3755a1d6a9b41347862`. Latest recorded CI is still workflow 39833438679 and is not fresh.
 - **Next:** obtain owner direction on whether parent-owned stored/committed/developing surfaces can retain resonance energy, then finalize the audit-template sign-off. Do not change receiver mapping or begin code before that decision.
+
+
+## Latest owner-decision checkpoint — 2026-10-22, Section 17.70
+
+- **Plan commit:** `f19d7c9a93e98cb92982b5571710ea4e4872a22b`. PR #204 remains documentation-only.
+- **Owner decision:** physical structure and “committed reproductive structure” are one category; a separate “developing structure” identity is not desired as a physical model. Any structurally attached units count for the living owner’s resonance; stored material does not. This resolves the former owner-decision blocker but is not implementation proof.
+- **Source impact at PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862`:** `world_tone_snapshot.rs` represents primary structure, developing structure, committed material, stored material, and active-transformation escrow as separate physical bodies. Only primary `organism.structure` body is mapped to an organism resonance reservoir. The developing structure therefore cannot credit the parent’s reservoir and is treated as a nonliving receiver (response becomes heat). Stored material is also a physical receiver/occluder and must remain excluded from parent resonance under the owner rule.
+- `reproduction.rs` adapts developing construction into a temporary `Organism` value, copying structure, committed storage, energy, stress, debt, and origin. Trace all construction/growth/wait/finish/detach/death/division paths before removing or changing this state; do not create duplicate physical authority or energy.
+- Existing snapshot test `developing_offspring_and_its_stored_material_remain_world_occluders` currently encodes the old separate-body geometry. Revise its intended expectations as part of the audited design; do not preserve the old representation as a constraint.
+- **Next:** complete the source-impact matrix for construction holders/transfers and attached-structure resonance; revise deterministic sunlight and inventory acceptance cases; then reconcile audit sign-off. No source/test changes until all audit templates close. Before implementation, re-fetch PR #205 head and workflow state.
+- No source or test files changed. Latest recorded CI remains historical workflow `39833438679`; do not call it fresh verification.
