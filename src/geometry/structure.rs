@@ -1220,6 +1220,34 @@ mod tests {
     }
 
     #[test]
+    fn each_aggregate_genome_core_is_independently_recognized() {
+        let mut structure = OrganismStructure::new();
+        let primary = structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let additional = structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 3.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let primary_id = structure.physical_id(primary).unwrap();
+        let additional_id = structure.physical_id(additional).unwrap();
+        structure.set_genome_constituent_ids([primary_id]);
+        structure.add_genome_constituent_group([additional_id]);
+
+        assert!(structure.genome_connected(primary));
+        assert!(structure.genome_connected(additional));
+    }
+
+    #[test]
     fn bond_identity_uses_physical_ids() {
         let a = PhysicalConstituentId(11);
         let b = PhysicalConstituentId(22);
