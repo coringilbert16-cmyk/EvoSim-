@@ -72,18 +72,14 @@ pub(crate) fn restore_material(
     // geometrically self-consistent when restored. Bonded contact is allowed;
     // physical penetration is not.
     for left in 0..indices.len() {
-        let Some(left_shape) = trial.units[indices[left]].shape(catalog) else {
-            return None;
-        };
+        let left_shape = trial.units[indices[left]].shape(catalog)?;
         let left_part = crate::material_geometry::PlacedMaterialPart {
             part_index: left,
             form: left_shape.form.clone(),
             placement: trial.units[indices[left]].placement,
         };
         for right in (left + 1)..indices.len() {
-            let Some(right_shape) = trial.units[indices[right]].shape(catalog) else {
-                return None;
-            };
+            let right_shape = trial.units[indices[right]].shape(catalog)?;
             let right_part = crate::material_geometry::PlacedMaterialPart {
                 part_index: right,
                 form: right_shape.form.clone(),
