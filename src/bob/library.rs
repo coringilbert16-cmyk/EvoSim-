@@ -1022,10 +1022,8 @@ fn multi_contact_boundary_matches_constraints(
             let center_parameter = (start_parameter + end_parameter) * 0.5;
             if start_distance <= TOLERANCE
                 && end_distance <= TOLERANCE
-                && start_parameter >= -TOLERANCE
-                && start_parameter <= 1.0 + TOLERANCE
-                && end_parameter >= -TOLERANCE
-                && end_parameter <= 1.0 + TOLERANCE
+                && (-TOLERANCE..=1.0 + TOLERANCE).contains(&start_parameter)
+                && (-TOLERANCE..=1.0 + TOLERANCE).contains(&end_parameter)
                 && (segment_length - constraint.contact_length).abs() <= TOLERANCE
                 && center_parameter >= constraint.edge_parameter_start - TOLERANCE
                 && center_parameter <= constraint.edge_parameter_end + TOLERANCE
