@@ -1448,3 +1448,22 @@ This entry supersedes Section 17.16's queued-workflow status. The exact-head wor
 - **Phase 3:** the topology-rejection and non-finite-placement rejection tests are now evidenced as passing. Keep the phase open for remaining failed-transformation rollback, storage/restore edge cases, and decomposition/post-death ownership.
 - **Phase 4:** schema/fingerprint, missing-manifest, manifest rollback/reopen, partial-append rollback/reopen, and concurrency tests remain present; the required next gate is failure injection through the actual `ChemistryLibrary::insert` append path, not only a rollback helper.
 - **Next action:** continue with a focused read-only audit of the real cache insert/append transaction and identify a minimal failure-injection seam/test. Do not edit implementation until that audit identifies the exact invariant and smallest change. Keep every command/test under five minutes, preserve PR #204 as documentation-only, and keep PR #196 out of scope.
+
+
+### 17.18 Phase 4 focused audit — real cache insert/append failure path — 2026-10-22
+
+**Audit status: Gap found; smallest test seam identified.** Read-only inspection of `src/chemistry/chemistry_library.rs` at PR #205 head `be1e9c2aae56c9f94ab0d899f358929bbb754915` found the following production transaction:
+
+1. `ChemistryLibrary::insert` delegates to `insert_with_manifest_persistence` with the real atomic manifest persister.
+2. Under the store lock, the method reloads persisted state, refreshes in-memory entries/manifest, and rejects duplicate keys.
+3. It opens `chemistry.jsonl` in append mode, captures the original byte length, serializes one row, then calls `write_all` and `sync_data`.
+4. If write or sync fails, it calls `rollback_appended_record` to truncate to the captured length and sync the truncation. If manifest persistence fails after append, it uses the same rollback path.
+5. In-memory `entries` and `manifest` are published only after append/sync and manifest persistence both succeed.
+
+**Coverage gap:** `partial_append_failure_rolls_back_original_cache_bytes_and_reopens_cleanly` currently writes a partial row directly to a file and calls `rollback_appended_record` itself. It proves the helper truncates bytes and that reopen succeeds, but it does **not** drive a write failure through `ChemistryLibrary::insert`; therefore it does not prove that the production append error branch invokes rollback and leaves in-memory/manifest state unchanged.
+
+**Smallest recommended implementation/test change (PR #205 only):** factor the append-and-sync operation behind a private injectable callback used by the same insertion transaction. Production `insert` supplies the existing `write_all + sync_data` behavior; the regression test supplies a callback that writes a short prefix and then returns an injected `WriteZero`/I/O error. Exercise the actual insert transaction and assert: the original JSONL bytes are restored; manifest bytes/count are unchanged; in-memory entry count and manifest count are unchanged; the failed key is absent; and reopening the store returns exactly the original record set. Keep the current helper-level test if it still provides distinct value, or replace it only if the new end-to-end test subsumes it.
+
+**Boundaries / follow-up:** do not change cache schema, equations, or runtime chemistry policy. A rollback-truncation failure is a distinct failure mode and may leave the store requiring operator recovery; do not claim that case solved by the injected append-failure test. Keep Phase 4 open until actual insert-path failure injection passes and broader manifest/restart failure handling is reviewed. This was one focused read-only audit; no implementation code changed during it.
+
+**Next action:** implement the minimal private append callback and end-to-end rollback regression on PR #205, run the targeted test and formatting under the five-minute limit, then verify exact-head CI and update this handoff.
