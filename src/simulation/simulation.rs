@@ -1486,9 +1486,47 @@ mod decomposition_finalization_tests {
     use super::*;
     use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
+    fn rollback_material_inventory(simulation: &Simulation) -> std::collections::BTreeMap<String, u64> {
+        fn add(
+            totals: &mut std::collections::BTreeMap<String, u64>,
+            material: &crate::resources::Material,
+        ) {
+            for (name, amount) in &material.parts {
+                assert!(
+                    amount.is_finite() && *amount >= 0.0 && amount.fract().abs() <= 1e-9,
+                    "rollback fixture must contain whole finite constituents"
+                );
+                *totals.entry(name.clone()).or_default() += amount.round() as u64;
+            }
+        }
+
+        let mut totals = std::collections::BTreeMap::new();
+        for organism in &simulation.organisms {
+            for unit in &organism.structure.units {
+                add(&mut totals, &unit.material);
+            }
+            for material in organism.stored_material.iter_materials() {
+                add(&mut totals, material);
+            }
+        }
+        for cell in &simulation.environment.field.cells {
+            for material in &cell.materials {
+                add(&mut totals, material);
+            }
+            for physical in &cell.physical_materials {
+                add(&mut totals, &physical.material);
+            }
+        }
+        totals
+    }
+
     #[test]
     fn failed_stored_break_restores_material_to_organism_storage() {
         let mut simulation = Simulation::new(917, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
         let placement = Placement {
             x: 20.0,
             y: 20.0,
@@ -1505,6 +1543,7 @@ mod decomposition_finalization_tests {
         assert!(simulation.organisms[0]
             .stored_material
             .store_physical_instance(source.clone()));
+        let inventory_before = rollback_material_inventory(&simulation);
         let removed = simulation.organisms[0]
             .stored_material
             .take_physical_at(original_count)
@@ -1555,6 +1594,11 @@ mod decomposition_finalization_tests {
                     }
                 }),
             "failed BREAK source should be restored with its original amount"
+        );
+        assert_eq!(
+            rollback_material_inventory(&simulation),
+            inventory_before,
+            "failed stored BREAK rollback must preserve total constituent ownership"
         );
     }
 
