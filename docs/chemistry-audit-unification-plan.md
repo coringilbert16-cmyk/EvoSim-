@@ -676,7 +676,7 @@ Do not claim chemistry unification complete until all applicable gates have evid
 
 | Audit | Status | Evidence / output | Open blockers |
 |---|---|---|---|
-| A0 Baseline and inventory | Gap found; CI identity comparison blocked | main cbe3c5d; README stale re PR #203 and exact-head evidence | Fix baseline evidence / revisit after CI retrieval |
+| A0 Baseline and inventory | Gap found; exact-head counts verified, named failures only commit-attested | main cbe3c5d; run 39705628427: 563 passed, 28 failed, 1 ignored; commit states all 28 match accepted baseline | Independently extract named failures if available; keep the attestation limitation explicit |
 | A1 Resource vocabulary/properties | Gap found | default_catalog contains Oxygen, not approved Methane; unknown-name zero fallbacks; composites have no chemical_position | Canonical resource identity and migration policy after all audits |
 | A2 Core chemistry math/units | Gap found | formulas located; implicit units, accumulator overflow, activation/settlement alignment remain to prove | Unit contract and adversarial tests after all audits |
 | A3 COMBINE and bond storage | Gap found | Trial structure + balanced ledger transaction; structure clone per attempt; fluid transient special case | Caller matrix, fluid topology and clone-cost tests after audits |
