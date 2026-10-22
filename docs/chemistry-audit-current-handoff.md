@@ -128,3 +128,13 @@ The owner explicitly approved the parent-aggregate ownership model: the parent r
 - Missing tests remain for partial multi-piece stored-BREAK commit, rejected storage plus rejected field deposit, failed containment-transfer fallback, malformed stored-BREAK completion restoration, stale construction source index, and every environmental COMBINE source-cell rollback variant.
 - Do not add a test seam yet. After all audit templates are complete, a narrow test-only destination-rejection seam may be needed to deterministically test partial piece rejection and fallback failure. Any regression must compare the full independent material oracle, holder/geometry snapshots, and energy/resonance ledger.
 - No source/test changes. PR #205 head remains the audited 12d8079230458da68a8dc3755a1d6a9b41347862; re-fetch before implementation.
+
+
+### Three-audit checkpoint — Sections 17.35–17.37
+
+- Latest plan commit: f1c439534d62980ce253473f0e51caba4a5a5f1d.
+- Failure-injection audit: normal-path tests exist, but partial multi-piece stored BREAK, storage-plus-deposit rejection, failed containment fallback, malformed completion restoration, stale construction source, and all COMBINE rollback variants are not yet covered. No test seam or source change has been added.
+- Energy-holder transition matrix: COMBINE and construction mostly stage candidate state before source debit; environment/storage and stored-BREAK fallbacks remain failure-atomicity risks. Reproduction finish is a distinct ownership boundary and stays out of chemistry implementation scope.
+- **New world-tone finding:** current PR #205 head has live sunlight capture enabled. Shared occlusion geometry includes stored/committed/developing material and active transformations, but only primary structures of living organisms map to resonance reservoirs. Every other physical receiver converts its material response to heat, including parent-relative non-primary holdings that the approved aggregate model says remain parent-owned until division.
+- This exposes a contract question: should a living aggregate harvest compatible resonance from its owned non-primary surfaces, or is resonance eligibility intentionally limited to the primary graph? Do not change the mapping until the existing approved sunlight decisions are checked for an explicit answer.
+- Next: reconcile Sections 17.31 and the earlier approved world-tone rules against receiver eligibility, and determine whether owner clarification is needed. No source/test changes.
