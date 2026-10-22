@@ -220,6 +220,28 @@ Do not mark an audit Verified solely because code compiles or a helper has unit 
 **Deliverable**
 - COMBINE transaction state diagram; exact source of formation work and structural energy; caller inventory; atomicity tests for rigid, composite, and supported fluid cases.
 
+**Audit record — 2026-10-22**
+
+**Status: Gap found (main COMBINE path located; full caller and edge-case matrix remains for integration audits).**
+
+**Observed production path**
+- Candidate eligibility is based on live physical contact candidates. The runtime rejects endpoint distance greater than 0.1, unavailable endpoints, invalid indices, missing physical IDs/properties, and failed formation criteria. When both constituents have chemical positions, a positive chemical attraction is required at the candidate interface. Geometry/contact authority remains separate from chemistry eligibility.
+- Formation threshold/investment, work, bond strength, and stored intrinsic bond energy are separate values. Formation work is calculated by integrating the documented force/contact curve over the remaining approach distance; it is not simply the static potential copied into a wallet. Intrinsic bond potential is based on chemical-position interaction when both positions exist, with a cohesion-derived fallback for materials without positions.
+- Bond creation is staged on a cloned OrganismStructure. The new Bond stores strength and bond_energy. A balanced EnergyTransaction is settled before the trial structure is committed, so the physical commit after successful settlement is an assignment rather than another fallible geometry operation. Failed candidate insertion or failed settlement returns without committing the trial graph.
+- Ordinary persistent bonds allocate usable-energy expenditure into stored structural energy, formation work, and dissipated investment. A fluid-fluid pair is special: current coalescence supports a narrow same-resource/single-part topology; its transient bond energy and investment are allocated as heat because that bond does not survive the merge. Unsupported coalescence topology rejects the trial.
+
+**Findings / risk ranking**
+1. **P1 — caller coverage still needs proof:** the runtime has multiple entry points (ordinary stored-unit COMBINE, selected-candidate/developmental construction, environmental sources, and prepared multi-tick transformations). Confirm all of them reach the same transaction and that no alternate path writes bonds or energy directly; A12/A20 will cross-check callers.
+2. **P1 — trial-structure clone cost:** bond formation clones the whole organism structure per attempted bond. This is transactionally clear but can scale with structure size and candidate count; measure before replacing it, and preserve atomicity. No full-world clone was observed in this bond helper, but the structure clone is still a per-attempt cost.
+3. **P2 — fluid transient accounting depends on exact topology:** the current special case relies on whether both first constituent resource entries are fluids, while coalescence itself later enforces same-resource/single-part constraints. Cross-test every unsupported/malformed fluid case so no transient bond is treated as persistent structural energy.
+4. **P2 — contact scales are distinct:** live COMBINE tolerance is 0.1, chemical interaction radius is 1.0, and Bob/library tolerances have different semantics. Keep them separate in any unified model.
+
+**Evidence inspected:** src/chemistry/combine.rs (chemical interaction, formation work, intrinsic bond potential); src/chemistry/combine_runtime.rs (candidate validation, trial bond insertion, energy transaction, fluid coalescence); src/chemistry/energy_ledger.rs (expenditure balance); src/geometry/contact.rs and src/geometry/structure_authority.rs discovered as the physical authority paths.
+
+- **Dependencies / downstream audits affected:** A1–A2, A5–A6, A9, A12–A16, A19–A20. The resource identity mismatch from A1 blocks safe catalog-key changes but not this path audit.
+- **Decision required from project owner, if any:** none before the remaining audits.
+- **Recommended smallest next change (if authorized):** after all audits, add explicit property/unit and transaction-invariant tests for each COMBINE entry point and unsupported fluid topology; profile structure cloning before optimizing. No production code change authorized now.
+
 ### A4 — BREAK paths and structural-energy release
 
 **Questions**
@@ -236,6 +258,32 @@ Do not mark an audit Verified solely because code compiles or a helper has unit 
 **Deliverable**
 - Complete BREAK call graph and path-equivalence table; identify the one authoritative commit/settlement primitive and necessary lifecycle-specific orchestration.
 
+**Audit record — 2026-10-22**
+
+**Status: Gap found (shared realized-bond path exists; lifecycle and rollback guarantees need cross-domain proof).**
+
+| BREAK pathway | Current behavior observed | Energy/material interpretation | Remaining audit need |
+|---|---|---|---|
+| Chemical reaction BREAK | Accumulation crosses an activation threshold; resolve withdraws compatible resonance on a trial reservoir and calls settle_chemical_break_energy_with_resonance. | Reaction accumulation is a trigger, not a separate energy store. Bond structural energy pays disruption first; resonance supplies compatible work; usable energy pays any remaining deficit; efficiency partitions recoverable surplus vs heat. | Prove the threshold/withdrawal/work relationship for all values and stale operations (A2/A5/A7/A20). |
+| Resonance-overload BREAK | resolve_resonance_overload_break detects retained resonance above total bond-energy handling capacity, chooses an eligible non-genome bond where possible, then calls the same chemistry/resonance settlement path. | Uses retained resonance as the energy/work source; genome-boundary bonds are protected while ordinary bonds remain. | Validate no negative/duplicate reservoir debit and no unintended core breach/death (A7/A10). |
+| Voluntary BREAK of stored physical material | try_start_transformation removes the exact stored physical instance and records its internal bond. Preparation validates the bond and settles a zero-energy transaction. Completion splits the compound and returns pieces to storage or environment. | Existing stored-material bonds have no prior allocated structural-energy store; this path intentionally releases no energy/heat rather than minting energy from constituent potential. | Verify rollback/restoration if a staged operation is invalidated, and preserve material amount/placement (A13/A15/A16). |
+| BREAK of environmental stored material | Same prepared stored-material route, with pieces deposited back into the environment after completion. | Connectivity changes; no energy credit because the environmental bond had no recorded stored-energy allocation. | Verify field mutation/recovery and failed deposit behavior. |
+| Post-death decomposition | DecomposingBody bond release calls bond_break_energy_yield and settles negative structural_delta plus usable credit/heat through the same ledger interface; constituent material is released after its final bond is gone. | Existing bond potential is removed from structural inventory once; it is not relabeled as a new external/non-structural source. | Compare with recycling and the live simulation tick; ensure all final physical materials remain accounted for (A11/A16). |
+
+**Shared realized-bond commit contract:** settle_break_transaction clones the structure, validates/removes the matching bond on the trial graph, settles the ledger transaction, then commits the graph and applies heat as stress. The resonance reservoir is also trial-cloned and only committed after successful settlement. This is a good local atomicity pattern.
+
+**Findings / risk ranking**
+1. **P1 — staged multi-tick state:** voluntary stored-material BREAK removes a physical instance from storage at start and resolves it later. The source-restoration helper covers failed preparation, but the full cancellation/stale-event path and energy/material rollback must be tested against persistence and tick ordering.
+2. **P1 — post-death path ownership must stay singular:** src/chemistry/decomposition.rs is called by simulation code for decomposing bodies; do not treat the helper as test-only based solely on old archive notes. src/chemistry/recycling.rs separately transfers usable/developing energy and physical storage to the dead body's lifecycle. A11 must establish whether every dead physical constituent and energy holder is transferred exactly once.
+3. **P2 — near-zero tolerances:** bond-break math and ledger settlement use tolerances; test exact equality, zero-energy bonds, near-zero usable holders, and repeated release so epsilon handling cannot accumulate meaningful energy.
+4. **P2 — one semantic distinction matters:** a stored compound whose bond never had allocated structural energy is not equivalent to a realized structural bond with bond_energy. Preserve that distinction while sharing validation/transaction infrastructure; do not force a fake energy release onto stored materials.
+
+**Evidence inspected:** src/chemistry/transformation.rs (chemical BREAK, overload BREAK, shared settle_break_transaction, stored-material transformation prepare/resolve); src/chemistry/decomposition.rs; src/chemistry/recycling.rs; src/simulation/simulation.rs; src/chemistry/energy_ledger.rs.
+
+- **Dependencies / downstream audits affected:** A2, A5–A7, A9–A11, A13, A15–A16, A20. Death and recycling cannot be closed by this audit alone.
+- **Decision required from project owner, if any:** none before the remaining audits.
+- **Recommended smallest next change (if authorized):** after all audits, create a pathway matrix test that forces each BREAK type through success, stale/invalid input, and settlement rejection while checking energy, structure, reservoir, and material state. No production code change authorized now.
+
 ### A5 — Energy ledger transaction algebra and API guarantees
 
 **Questions**
@@ -251,6 +299,38 @@ Do not mark an audit Verified solely because code compiles or a helper has unit 
 
 **Deliverable**
 - Formal transaction equations, sign table, valid/invalid transaction matrix, and a list of calls that bypass or under-specify settlement.
+
+**Audit record — 2026-10-22**
+
+**Status: Gap found (local transaction algebra is coherent; world-wide use and prepared-delta symmetry are not yet proven).**
+
+**Canonical local equation**
+
+Every EnergyAllocation currently checks the signed identity:
+
+source_energy = usable_delta + structural_delta + work_expended + heat_dissipated
+
+Equivalently, the residual source minus all destinations must be zero within EPSILON = 1e-9. The structural delta is signed: positive when a persistent bond store is created, negative when stored bond energy is released. EnergyTransaction::expenditure constructs a debit whose negative usable_delta exactly funds positive structural storage, work, and heat. ExternalInputTransaction keeps source availability/input separate from bond potential and requires nonnegative usable credit; the input is allocated into usable energy, work, and heat.
+
+**Observed API guarantees**
+- settle_transaction validates holder finiteness/non-negativity, transaction balance, and all resulting ledger totals before mutating holder or ledger. It records non-structural source release, structural delta, usable gains, work, and heat.
+- settle_external_input validates its transaction and resulting counters before mutating; settle_external_input_from_budget checks source identity and available allowance before settling, then decrements the non-Copy/non-Clone budget only after success.
+- transfer checks finite/nonnegative amount, source balance, and recipient overflow before updating both holders. It deliberately does not add world energy: an internal transfer cancels at world scale.
+- settle_world_tone_paths verifies incident energy equals captured resonant energy plus heat plus escaped energy within a scale-relative tolerance, then records incident external input, heat, and escaped energy. The physical allocation and reservoir mutation remain the caller's responsibility and must be reconciled in A8/A6.
+- EnergyInventorySnapshot::residual independently expresses world balance across usable, resonant, and structural energy plus work, heat, escaped tone, external input, and explicit other sources. Its presence is not proof the live simulation constructs and validates it each tick.
+
+**Findings / risk ranking**
+1. **P1 — prepared-ledger rollback is manually maintained:** prepare_transformation computes per-field ledger deltas and applies them individually; rollback_prepared_combine subtracts a manually enumerated subset. The delta structure includes total_world_tone_energy_escaped and total_resonant_energy_held, while the rollback helper does not reverse those fields. Current COMBINE is not expected to alter those counters, so this is a symmetry/maintenance risk rather than proof of a present COMBINE energy loss; the invariant should be encoded rather than assumed.
+2. **P1 — inventory helper versus live authority:** EnergyInventorySnapshot is defined beside the ledger, but A6 must prove which production code populates it, at what cadence, and whether missing/duplicate holders or dead/developing stores are omitted.
+3. **P2 — tolerance budget:** EPSILON is applied per transaction and external source checks also use a scale-relative tolerance. Many transactions can accumulate small accepted residuals; long-run error bounds need measured tests, not only single-transaction assertions.
+4. **P2 — accounting and physical commit are split by callers:** the ledger validates arithmetic, but cannot itself know whether the caller later commits a bond, reservoir, body, or material mutation. Each caller must preserve trial/settle/commit ordering and rollback on every failure path.
+5. **P2 — source scope is caller-defined:** EnergySourceBudget prevents accidental cloning of a shared allowance, but comments explicitly leave its physical scope to callers. A8 must verify the sun's total incident energy is uniquely allocated, not merely that each local transaction balances.
+
+**Evidence inspected:** src/chemistry/energy_ledger.rs (EnergyAllocation, EnergyTransaction, ExternalInputTransaction, EnergySourceBudget, EnergyInventorySnapshot, EnergyLedgerAuthority implementation); src/simulation/state.rs (serialized cumulative ledger fields); src/chemistry/transformation.rs (prepared ledger delta and rollback); src/chemistry/combine_runtime.rs (COMBINE transaction caller).
+
+- **Dependencies / downstream audits affected:** A3–A4, A6–A9, A12–A16, A18–A20. The local algebra is reusable, but no claim of whole-world conservation is authorized yet.
+- **Decision required from project owner, if any:** none before remaining audits.
+- **Recommended smallest next change (if authorized):** after the complete audit, replace hand-maintained ledger delta/rollback lists with one tested delta application/reversal abstraction, and make the live world-inventory assertion explicit. No production code change authorized now.
 
 ### A6 — Whole-world energy inventory and conservation proof
 
