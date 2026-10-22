@@ -4,7 +4,10 @@
 **Baseline branch:** `main`  
 **Baseline commit:** `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5`  
 **Plan opened:** 2026-10-22  
-**Scope:** Read-only audits complete for the planned register; production changes remain unauthorized until the owner reviews the findings and approves the implementation sequence. A0 now has exact-head main workflow evidence for the reported baseline counts; individual failing-test identities are attested by the main commit message but were not independently extracted from the workflow logs in this pass.
+**Scope:** Read-only audits A0–A21 are recorded; this does not mean the chemistry system is unified or conservation is proven. PR #204 is a durable planning/handoff artifact only: no production code or tests may change here. The current canonical owner decisions are in Section 12 and supersede earlier unresolved-question lists and provisional recommendations. A0 records exact-head counts, but the individual failing-test identities were not independently extracted from workflow logs in this pass.
+
+> **Handoff consistency rule (2026-10-22):** Section 12 is the canonical owner-decision log; Section 13 is the latest reconciliation of those decisions against the audited source. Earlier audit records preserve what was observed at the time, but any provisional recommendation or unresolved-question list that conflicts with Sections 12–13 is superseded. A decision being settled does **not** mean it is implemented or verified. Current unresolved work is evidence gathering and implementation coverage, not re-selection of the owner's decisions.
+
 
 ## 1. Purpose and acceptance target
 
@@ -32,13 +35,13 @@ A successful audit is not a claim that the system is already unified. Mark each 
 - **No silent baseline rewriting.** Exact-head `main` workflow/commit evidence records 563 passed, 28 failed, and 1 ignored at `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5`; the commit message reports that all 28 full-suite failures match the accepted baseline. The workflow check itself concluded failure because the suite has known failures. The detailed failing-test identity list was not independently extracted from the run logs in this pass, so retain that evidence limitation rather than overstating direct verification. Do not weaken physical invariants to make CI green.
 - **README is the current project guide.** Dated handoff archives are historical evidence and may contain superseded or contradictory snapshots. Confirm every finding against current `main`.
 
-## 3. Baseline and known unresolved claims to verify
+## 3. Baseline and claims requiring verification
 
-These are audit leads, not automatically accepted implementation facts.
+This section describes evidence gaps, not open owner decisions. Where earlier audit records conflict with Section 12 or the later source reconciliation in Section 13, the later explicit decision/reconciliation controls; earlier entries remain historical audit evidence and must not be treated as current instructions.
 
-- Current README says whole-world energy conservation across every storage, reaction, and lifecycle path is **not yet proven**.
-- Current README says live sunlight/world-tone energy capture is **not yet proven** and remains disabled until allocation/conservation is complete.
-- Current README says complete self-maintaining organism viability is **not yet proven**.
+- Whole-world energy conservation across every storage, reaction, and lifecycle path is **not yet proven**.
+- A live world-tone capture/settlement path exists in the audited source. Its complete conservation correctness, occlusion/error behavior, and performance are **not yet proven**; do not describe the path as disabled or toggle it in this documentation-only PR.
+- Complete self-maintaining organism viability is **not yet proven**.
 - `EnergyLedger` provides staged transaction/accounting primitives, but its existence does not prove a complete live world inventory.
 - `EnergySourceBudget` intentionally is not `Copy` or `Clone`; that prevents one class of duplicate budget but does not itself guarantee callers share one correctly scoped allowance or prevent duplicate exposure claims.
 - Reaction accumulation is a driving quantity, not by itself a named source debit.
@@ -116,6 +119,8 @@ Do not mark an audit Verified solely because code compiles or a helper has unit 
 - **Recommended smallest next change (if authorized):** after all audits, update the README's status block from verified merge and exact-head evidence; no change authorized now.
 
 ### A1 — Resource vocabulary, properties, and units
+
+**Historical note:** the initial audit below correctly records that the then-approved vocabulary said Methane, but that owner decision was explicitly superseded by D1 in Section 12. Oxygen is now canonical. Treat A1's “critical catalog/spec mismatch” language as historical; the remaining audit task is to trace stale Methane references and persistence/cache compatibility, not to re-decide the resource name.
 
 **Questions**
 - Is there exactly one canonical resource catalog and one authority for immutable properties?
@@ -705,7 +710,7 @@ Do not claim chemistry unification complete until all applicable gates have evid
 - Reproduction redesign or movement redesign.
 - Unrelated lint cleanup, repo-wide reorganization, broad formatting churn, or speculative API redesign.
 - Changing resource shapes or geometry tolerances merely to satisfy chemistry tests.
-- Enabling live world-tone capture before the source-backed conservation gate passes.
+- Changing the live world-tone capture path as part of this documentation-only PR; its correctness remains an audit/verification gap, not an unresolved request to enable or disable it.
 - Claiming full organism viability from cavity qualification or a bounded constructor search result.
 
 ## 12. Decision log
@@ -715,7 +720,7 @@ Record decisions here with date, rationale, affected audits, and any superseded 
 | Date | Decision | Rationale / affected audits |
 |---|---|---|
 | 2026-10-22 | Chemistry unification proceeds on `main`; PR #196 stays open and draft-only. | Avoid stabilizing constructor behavior against unsettled chemistry; A0/A3/A6/A12 boundary. |
-| 2026-10-22 | Live world-tone capture is present in the audited tick path but is not yet conservation-validated; runtime enablement/containment policy needs explicit owner approval. | Prevent unbacked energy creation and duplicate source claims; A6/A8. |
+| 2026-10-22 | The audited source contains a live world-tone capture/settlement path; complete conservation and approximation accuracy remain unverified. Do not describe it as disabled or change its runtime behavior in this PR. | A6/A8 and Section 13 source reconciliation. |
 
 
 ### A12 — All energy consumers, transfers, initialization, and construction
@@ -959,16 +964,11 @@ Record decisions here with date, rationale, affected audits, and any superseded 
 | 8. World-tone capture and efficient exposure | Against the live existing call path, reconcile incident source energy, width allocation, duplicate claims, occlusion, damping and onward frequency-shifted propagation. Compare optimized sweep/first-hit approach with a slow small-world oracle; quantify error and profile representative thousands-object workloads. | Energy allocation is conservative and deterministic; occlusion behavior and approximation bounds are documented; performance budget passes. Only then decide whether existing capture is safe to retain, contain, or alter. |
 | 9. Integrated verification and status | Run bounded focused tests, the whole suite, strict Clippy tracking, persistence tests and target-scale profiles. Compare named failures to the A0 baseline. Update root README only after the current implementation state is supported by evidence. | No new unexplained baseline failures; all new invariants pass; documentation accurately reflects live source and unresolved gates. |
 
-### Owner decisions required before Phase 2/implementation
+### Owner decisions required before implementation
 
-1. **Canonical resource identity:** should resource ID 6 be restored to Methane as specified, with a compatibility migration from Oxygen, or is the approved vocabulary/spec to be deliberately revised?
-2. **Initial energy:** should initial energy be a documented tick-zero condition or an explicit boundary-source transaction in the world ledger?
-3. **Composite bond energy:** how should a composite material's internal bonds store and release energy, and how is each bond identified to prevent double release?
-4. **Numerical tolerance:** which tiny-energy truncations are physical dissipation versus representation-only tolerance, and what residual/error budget is acceptable?
-5. **World-tone policy:** approve a measured geometric/energy error budget for the efficient sweep/first-hit exposure model; confirm that live capture is considered unvalidated until source allocation and world inventory gates pass.
-6. **Legacy persistence/cache policy:** migrate supported older data with versioned conversion, or reject unsupported versions with an actionable error? Do not infer a migration from a missing field.
+**This list is superseded by Section 12 (D1–D15). Do not reopen these choices as unanswered questions.** The owner has selected Oxygen as the canonical identity, an explicit one-time initial-energy source transaction, explicit bond-owned energy with exactly-once settlement, a distinction between numerical tolerance and physical dissipation, a conditional fast first-hit/single-sweep sunlight approximation validated against an exact small-world reference, and rejection of all pre-unification saves/caches. The remaining work is to trace implementation coverage, identify stale references, define acceptance tests/thresholds where the owner has delegated them to evidence, and document the gaps.
 
-**Recommended first production slice after approval:** the smallest test-only independent energy/material inventory oracle plus a tick-zero baseline test. It establishes the measurement standard before changing reaction or source behavior. This is a recommendation only; no code change is authorized by this plan.
+The suggested first implementation slice in older planning text is not authorization to change code in PR #204. This PR remains documentation-only; no production or test changes are authorized here.
 
 ## Audit completion and implementation gate
 
