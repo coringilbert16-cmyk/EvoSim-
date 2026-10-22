@@ -324,6 +324,14 @@ impl InternalBond {
 /// be preserved; aggregation is an ecological-storage concern, not a change
 /// to the physical identity of the material.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+const MATERIAL_COUNT_EPSILON: f64 = 1e-9;
+
+fn is_whole_count(amount: f64) -> bool {
+    amount.is_finite()
+        && amount >= 0.0
+        && (amount - amount.round()).abs() <= MATERIAL_COUNT_EPSILON
+}
+
 pub struct Material {
     pub parts: Vec<(String, f64)>,
     pub internal_bonds: Vec<InternalBond>,
@@ -341,11 +349,9 @@ impl Material {
         if self.parts.is_empty() {
             return self.internal_bonds.is_empty();
         }
-        if !self
-            .parts
-            .iter()
-            .all(|(name, amount)| !name.is_empty() && amount.is_finite() && *amount > 0.0)
-        {
+        if !self.parts.iter().all(|(name, amount)| {
+            !name.is_empty() && *amount > 0.0 && is_whole_count(*amount)
+        }) {
             return false;
         }
         for (i, bond) in self.internal_bonds.iter().enumerate() {
@@ -362,11 +368,22 @@ impl Material {
         true
     }
 
+    /// Validate constituent counts and membership in the authoritative catalog.
+    pub fn is_valid_for_catalog(&self, catalog: &[BaseResource]) -> bool {
+        self.is_valid()
+            && self.parts.iter().all(|(name, _)| {
+                catalog.iter().any(|resource| resource.name == *name)
+            })
+    }
+
     pub fn has_internal_structure(&self) -> bool {
         !self.internal_bonds.is_empty()
     }
 
     pub fn potential_energy(&self, catalog: &[BaseResource]) -> f64 {
+        if !self.is_valid_for_catalog(catalog) {
+            return f64::NAN;
+        }
         self.parts
             .iter()
             .map(|(name, amount)| fresh_energy(catalog, name, *amount))
@@ -386,19 +403,31 @@ impl Material {
     }
 
     pub fn mass(&self, catalog: &[BaseResource]) -> f64 {
+        if !self.is_valid_for_catalog(catalog) {
+            return f64::NAN;
+        }
         self.parts
             .iter()
             .map(|(name, amount)| {
                 catalog
                     .iter()
-                    .find(|b| &b.name == name)
-                    .map(|b| b.properties.mass * amount)
-                    .unwrap_or(0.0)
+                    .find(|resource| &resource.name == name)
+                    .map(|resource| resource.properties.mass * amount)
+                    .unwrap_or(f64::NAN)
             })
             .sum()
     }
 
     pub fn weighted_properties(&self, catalog: &[BaseResource]) -> ResourceProperties {
+        if !self.is_valid_for_catalog(catalog) {
+            return ResourceProperties {
+                mass: f64::NAN,
+                potential_energy: f64::NAN,
+                reactivity: f64::NAN,
+                chemical_position: None,
+                cohesion: f64::NAN,
+            };
+        }
         let mut mass = 0.0;
         let mut pe = 0.0;
         let mut reac = 0.0;
@@ -437,26 +466,71 @@ impl Material {
     }
 
     pub fn take(&mut self, amount: f64) -> Option<Material> {
-        if self.has_internal_structure() {
+        if self.has_internal_structure()
+            || !self.is_valid()
+            || !is_whole_count(amount)
+            || amount <= 0.0
+        {
             return None;
         }
         let total = self.total_amount();
-        if amount <= 0.0 || total <= 0.0 {
+        if !is_whole_count(total) || total <= 0.0 {
             return None;
         }
         let taken = amount.min(total);
-        let frac = taken / total;
-        let mut parts = Vec::new();
-        for (name, qty) in &mut self.parts {
-            let piece = *qty * frac;
-            *qty -= piece;
-            parts.push((name.clone(), piece));
+        let fraction = taken / total;
+        let allocations: Vec<f64> = self.parts.iter()
+            .map(|(_, quantity)| *quantity * fraction).collect();
+        if allocations.iter().any(|piece| !is_whole_count(*piece)) {
+            return None;
         }
-        self.parts.retain(|(_, q)| *q > 1e-12);
-        Some(Material {
-            parts,
+        let mut parts = Vec::new();
+        for ((name, quantity), piece) in self.parts.iter_mut().zip(allocations) {
+            if piece > MATERIAL_COUNT_EPSILON {
+                parts.push((name.clone(), piece));
+            }
+            *quantity -= piece;
+            if quantity.abs() <= MATERIAL_COUNT_EPSILON {
+                *quantity = 0.0;
+            }
+        }
+        self.parts.retain(|(_, quantity)| *quantity > MATERIAL_COUNT_EPSILON);
+        Some(Material { parts, internal_bonds: Vec::new() })
+    }
+}
+
+#[cfg(test)]
+mod material_contract_tests {
+    use super::*;
+
+    #[test]
+    fn material_counts_are_whole_and_catalog_bound() {
+        let catalog = default_catalog();
+        assert!(Material::free_base("Carbon", 2.0).is_valid());
+        assert!(!Material::free_base("Carbon", 1.5).is_valid());
+        let unknown = Material::free_base("UnknownResource", 1.0);
+        assert!(!unknown.is_valid_for_catalog(&catalog));
+        assert!(unknown.mass(&catalog).is_nan());
+        assert!(unknown.potential_energy(&catalog).is_nan());
+        assert!(unknown.weighted_properties(&catalog).mass.is_nan());
+        assert!(fresh_energy(&catalog, "UnknownResource", 1.0).is_nan());
+    }
+
+    #[test]
+    fn material_take_never_splits_atoms_or_mutates_on_unrepresentable_mix() {
+        let mut mixture = Material {
+            parts: vec![("Carbon".into(), 1.0), ("Oxygen".into(), 1.0)],
             internal_bonds: Vec::new(),
-        })
+        };
+        let original = mixture.clone();
+        assert!(mixture.take(1.0).is_none());
+        assert_eq!(mixture, original);
+
+        let mut carbon = Material::free_base("Carbon", 3.0);
+        let taken = carbon.take(1.0).expect("one whole carbon should be extractable");
+        assert_eq!(taken.parts, vec![("Carbon".into(), 1.0)]);
+        assert_eq!(carbon.parts, vec![("Carbon".into(), 2.0)]);
+        assert!(carbon.take(0.5).is_none());
     }
 }
 
@@ -703,11 +777,13 @@ pub fn default_catalog() -> Vec<BaseResource> {
 }
 
 pub fn fresh_energy(catalog: &[BaseResource], name: &str, amount: f64) -> f64 {
-    catalog
-        .iter()
-        .find(|b| b.name == name)
-        .map(|b| b.properties.potential_energy * amount)
-        .unwrap_or(0.0)
+    if !is_whole_count(amount) {
+        return f64::NAN;
+    }
+    catalog.iter()
+        .find(|resource| resource.name == name)
+        .map(|resource| resource.properties.potential_energy * amount)
+        .unwrap_or(f64::NAN)
 }
 
 #[cfg(test)]

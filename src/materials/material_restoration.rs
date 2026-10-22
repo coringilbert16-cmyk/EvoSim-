@@ -33,7 +33,10 @@ pub(crate) fn restore_material(
     let relative = instance.placements.as_ref()?;
     let connections = instance.internal_connections.as_ref()?;
     let material = &instance.material;
-    if !material.is_valid() || material.parts.is_empty() || relative.len() != material.parts.len() {
+    if !material.is_valid_for_catalog(catalog)
+        || material.parts.is_empty()
+        || relative.len() != material.parts.len()
+    {
         return None;
     }
     if connections.len() != material.internal_bonds.len()
@@ -49,10 +52,16 @@ pub(crate) fn restore_material(
     for (part_index, ((name, amount), placement)) in
         material.parts.iter().zip(relative.iter()).enumerate()
     {
-        if amount.fract().abs() > EPSILON || (*amount - 1.0).abs() > EPSILON {
+        let resource = catalog.iter().find(|resource| resource.name == *name)?;
+        if amount.fract().abs() > EPSILON
+            || *amount < 1.0
+            || ((*amount - 1.0).abs() > EPSILON
+                && (material.parts.len() != 1
+                    || material.has_internal_structure()
+                    || resource.physical_state != crate::resources::PhysicalState::Fluid))
+        {
             return None;
         }
-        let resource = catalog.iter().find(|resource| resource.name == *name)?;
         let mut unit = StructuralUnit::from_material(
             crate::resources::Material::free_base(name.clone(), *amount),
             transform_relative(origin, *placement),

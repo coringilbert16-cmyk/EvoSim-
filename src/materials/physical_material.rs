@@ -36,7 +36,7 @@ impl PhysicalMaterial {
         placements: Vec<Placement>,
         catalog: &[BaseResource],
     ) -> Option<Self> {
-        if !material.is_valid()
+        if !material.is_valid_for_catalog(catalog)
             || material.parts.is_empty()
             || placements.len() != material.parts.len()
         {
@@ -53,7 +53,15 @@ impl PhysicalMaterial {
         let mut structure = OrganismStructure::new();
         for ((name, amount), placement) in material.parts.iter().zip(placements.iter()) {
             if (*amount - 1.0).abs() > 1e-9 {
-                return None;
+                let resource = catalog.iter().find(|resource| resource.name == *name)?;
+                if material.parts.len() != 1
+                    || material.has_internal_structure()
+                    || resource.physical_state != crate::resources::PhysicalState::Fluid
+                    || *amount < 1.0
+                    || (amount - amount.round()).abs() > 1e-9
+                {
+                    return None;
+                }
             }
             let mut unit =
                 StructuralUnit::from_material(Material::free_base(name.clone(), 1.0), *placement)?;
@@ -110,7 +118,7 @@ impl PhysicalMaterial {
             return None;
         }
         let (name, amount) = self.material.parts.first()?;
-        if (*amount - 1.0).abs() > 1e-9 {
+        if !amount.is_finite() || *amount < 1.0 || (amount - amount.round()).abs() > 1e-9 {
             return None;
         }
         let resource = catalog.iter().find(|resource| resource.name == *name)?;
@@ -136,7 +144,10 @@ impl PhysicalMaterial {
             } => *nominal_area,
             _ => return None,
         };
-        if (shape_area - default_area).abs() > 1e-9 * default_area.max(1.0) {
+        let expected_area = default_area * *amount;
+        if !expected_area.is_finite()
+            || (shape_area - expected_area).abs() > 1e-9 * expected_area.max(1.0)
+        {
             return None;
         }
         self.realized_shapes = Some(vec![shape]);
@@ -150,10 +161,10 @@ impl PhysicalMaterial {
         part_index: usize,
         catalog: &[BaseResource],
     ) -> Option<crate::resources::Shape> {
-        let (name, amount) = self.material.parts.get(part_index)?;
-        if !amount.is_finite() || *amount <= 0.0 {
+        if !self.material.is_valid_for_catalog(catalog) {
             return None;
         }
+        let (name, amount) = self.material.parts.get(part_index)?;
         let resource = catalog.iter().find(|resource| resource.name == *name)?;
         let shape = match self.realized_shapes.as_ref() {
             Some(shapes) if shapes.len() == self.material.parts.len() => shapes.get(part_index)?,
@@ -163,37 +174,20 @@ impl PhysicalMaterial {
         if !shape.is_valid() {
             return None;
         }
-        if shape != &resource.shape {
-            if resource.physical_state != crate::resources::PhysicalState::Fluid {
-                return None;
-            }
+        if shape != &resource.shape && resource.physical_state != crate::resources::PhysicalState::Fluid {
+            return None;
+        }
+        if resource.physical_state == crate::resources::PhysicalState::Fluid {
             let default_area = match &resource.shape.form {
                 crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
                 crate::resources::Form::Fluid { nominal_area, .. } => *nominal_area,
                 _ => return None,
             };
             let shape_area = match &shape.form {
-                crate::resources::Form::Fluid {
-                    nominal_area,
-                    boundary: Some(_),
-                    ..
-                }
-                | crate::resources::Form::Fluid {
-                    nominal_area,
-                    arc_boundary: Some(_),
-                    ..
-                }
-                | crate::resources::Form::Fluid {
-                    nominal_area,
-                    multi_contact_boundary: Some(_),
-                    ..
-                } => *nominal_area,
+                crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+                crate::resources::Form::Fluid { nominal_area, .. } => *nominal_area,
                 _ => return None,
             };
-            // A realized fluid boundary represents the full material amount,
-            // not just one catalog unit. Keep this invariant aligned with
-            // StructuralUnit::realize_fluid_geometry so merged fluid bodies can
-            // be validated without silently shrinking their conserved area.
             let expected_area = default_area * *amount;
             if !expected_area.is_finite()
                 || (shape_area - expected_area).abs() > 1e-9 * expected_area.max(1.0)

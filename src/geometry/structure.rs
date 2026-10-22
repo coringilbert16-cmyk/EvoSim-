@@ -48,13 +48,7 @@ impl StructuralUnit {
         &self,
         catalog: &[BaseResource],
     ) -> Option<crate::resources::ResourceProperties> {
-        if !self.material.is_valid()
-            || !self
-                .material
-                .parts
-                .iter()
-                .all(|(name, _)| catalog.iter().any(|base| base.name == *name))
-        {
+        if !self.material.is_valid_for_catalog(catalog) {
             return None;
         }
         Some(self.material.weighted_properties(catalog))
@@ -94,6 +88,20 @@ impl StructuralUnit {
     pub fn realize_default_geometry(&mut self, catalog: &[BaseResource]) -> bool {
         if self.geometry.is_some() {
             return true;
+        }
+        if let [(name, amount)] = self.material.parts.as_slice() {
+            if *amount > 1.0 && (amount - amount.round()).abs() <= 1e-9 {
+                let Some(resource) = catalog.iter().find(|resource| resource.name == *name) else {
+                    return false;
+                };
+                if resource.physical_state != crate::resources::PhysicalState::Fluid
+                    || !self.material.is_valid_for_catalog(catalog)
+                {
+                    return false;
+                }
+                self.geometry = Some(PhysicalGeometry::from_default(&resource.shape));
+                return true;
+            }
         }
         let Some(shape) = self.shape(catalog).cloned() else {
             return false;
