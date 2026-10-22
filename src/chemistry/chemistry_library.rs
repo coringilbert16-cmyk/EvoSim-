@@ -679,7 +679,9 @@ mod tests {
         let reopened = ChemistryLibrary::open(&root).unwrap();
         assert_eq!(reopened.len(), 1);
         assert_eq!(
-            reopened.get(&original.key).map(|record| record.static_potential),
+            reopened
+                .get(&original.key)
+                .map(|record| record.static_potential),
             Some(0.45)
         );
         drop(reopened);
