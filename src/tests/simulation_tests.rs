@@ -168,6 +168,38 @@ mod integration_tests {
     }
 
     #[test]
+    fn integer_material_inventory_rejects_unknown_resource_identity() {
+        let mut simulation = Simulation::new(7104, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.environment.field.cells[0]
+            .materials
+            .push(Material::free_base("UnknownResource", 1.0));
+
+        let error = integer_material_inventory(&simulation)
+            .expect_err("the independent oracle must reject unknown resource names");
+        assert!(error.contains("unknown resource identity"));
+    }
+
+    #[test]
+    fn integer_material_inventory_rejects_fractional_constituent_counts() {
+        let mut simulation = Simulation::new(7105, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.environment.field.cells[0]
+            .materials
+            .push(Material::free_base("Carbon", 1.5));
+
+        let error = integer_material_inventory(&simulation)
+            .expect_err("the independent oracle must reject fractional base constituents");
+        assert!(error.contains("non-integer or invalid amount for Carbon"));
+    }
+
+    #[test]
     fn fresh_organism_is_a_physically_realized_organism() {
         let o = Simulation::create_initial_organism();
         assert!(!o.structure.units.is_empty());
