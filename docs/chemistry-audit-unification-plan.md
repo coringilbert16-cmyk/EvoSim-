@@ -917,6 +917,8 @@ Record decisions here with date, rationale, affected audits, and any superseded 
 
 ### A21 — Documentation/spec alignment and implementation sequencing
 
+**Historical status note:** this audit record predates the explicit owner decisions in Section 14. Its claims that resource identity, initial-energy treatment, internal-bond energy, and world-tone policy still require owner selection are superseded. The remaining tasks are implementation tracing, stale-reference cleanup, and evidence/threshold work; do not reopen D1–D15.
+
 **Audit record — 2026-10-22**
 
 **Status: Gap found (audit plan complete; authoritative project status and several design choices require reconciliation).**
@@ -933,17 +935,19 @@ Record decisions here with date, rationale, affected audits, and any superseded 
 - **Focused tests to add or run:** (1) independently extract the exact-head failure list if workflow logs/annotations are accessible; (2) verify resource IDs/names across catalog, serialization fixtures, chemistry library and Bob library; (3) world-tone live-call-path and source-budget integration test; (4) full energy/material inventory matrix from A20; (5) equation-version cache invalidation; (6) persistence/migration tests for any resource or ledger schema change; (7) measured target-population benchmark and approximation error report.
 - **Findings ranked by severity:** **P0/P1** — root README has material status contradictions about PR #203 merge state and live world-tone capture; correct the status only after source-backed reconciliation. **P1** — resource identity differs from the approved resource vocabulary and affects persistence/cache compatibility. **P1** — individual baseline failure identities were not independently extracted, although exact-head counts and the commit's baseline-match statement are available. **P1** — world energy/material conservation and live source allocation remain unproven. **P2** — implementation sequence needs to enforce dependency order and keep PR #196 separate.
 - **Dependencies / downstream audits affected:** all A0–A20. This is the sequencing gate; it consolidates but does not resolve their findings.
-- **Decision required from project owner, if any:** before production changes, approve the canonical resource identity/migration, the initial energy/source accounting contract, internal composite-bond energy policy, and the acceptable error/performance budget for world-tone exposure. No decision is required to continue the read-only audit itself.
+- **Decision required from project owner, if any (historical wording):** this record predates Section 14. D1–D15 now settle the listed design choices; remaining approval is for the implementation sequence, while acceptance thresholds must be grounded in measurement.
 - **Recommended smallest next change (if authorized):** the audit template is populated through A21 and exact-head baseline evidence is recorded. Next, present the dependency-ordered implementation plan for owner approval. Do not begin production code until approval. No production code change authorized now.
 
 ## 12. Consistency pass — 2026-10-22
+
+**Historical snapshot note:** this consistency pass was written before the owner recorded D1–D15 in Section 14. Its statements that resource identity, initial energy, internal-bond energy, numerical pruning, and world-tone approximation are still undecided are superseded by that later decision log. The technical implementation and verification gaps remain open.
 
 **Result: structural consistency pass completed; substantive gaps remain open.**
 
 - Cross-checked the 22 audit headings (A0–A21) against the 22 audit-register rows. Each planned domain has a corresponding audit record and a summary row; all are correctly represented as **Gap found** or **Blocked**, not as resolved or verified.
 - Reconciled the world-tone status language: source inspection indicates a live capture-settlement path despite the README's disabled-capture claim. The plan now treats capture as present but not yet conservation-validated and explicitly prohibits toggling runtime behavior in this documentation-only PR.
 - Updated the baseline conclusion from exact-head GitHub Actions evidence: `main` at `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5` recorded 563 passed, 28 failed, and 1 ignored; its commit message reports the 28 failures match the accepted baseline. Individual failing-test identities were not independently enumerated from the logs in this pass.
-- Confirmed that resource identity/migration, initial-energy treatment, internal composite-bond energy, numerical truncation, and world-tone approximation bounds remain decisions/gates—not decisions silently made by the audit.
+- At the time this snapshot was written, resource identity/migration, initial-energy treatment, internal composite-bond energy, numerical truncation, and world-tone approximation bounds were still open. Section 14 subsequently records the owner's decisions; implementation and evidence gates remain.
 - Confirmed the dependency order keeps independent inventory oracles and transaction/failure-injection coverage ahead of behavior changes, and keeps PR #196 constructor/Bob work separate.
 - Scope remains documentation-only: no production code, tests, README, resource catalog, or persistent library data was changed. The plan is populated, but chemistry unification and whole-world conservation are not proven.
 
