@@ -1093,6 +1093,20 @@ The project owner selected the following directions for the chemistry unificatio
 
 **Implementation implications:** Keep the recorded main SHA and 563 passed / 28 failed / 1 ignored result as historical baseline evidence; do not call it green. Extract named failures and compare future runs by identity, not only aggregate count. Do not pull all known baseline failures into this chemistry change unless a failure blocks a required invariant or the owner separately authorizes it.
 
+### D16 — Physical attachment, committed structure, and resonance eligibility
+
+**Decision (owner-confirmed 2026-10-22):** Reproductive status is not a special physical-material designator. Physical structure and committed reproductive structure are the same physical structure. Do not maintain a separate authoritative `developing_structure` graph. Any unit structurally attached to the organism is part of its aggregate physical structure and counts as a receiver for that organism's resonance. Only material still held in storage is excluded from the owner's resonance capture.
+
+**Implementation implications:**
+- Classify by actual physical state/attachment, not by a reproductive-material label. A unit attached to the organism is ordinary structure even if it was introduced during reproduction; it appears once in geometry, chemistry, structural-energy inventory, and resonance receiver mapping.
+- Remove the second physical-graph authority represented by `ReproductiveConstruction.developing_structure`. Keep only necessary nonphysical construction/core/progress metadata and explicitly justified accounting sub-holders; do not preserve a duplicate physical structure under a new name.
+- Stored, unattached material remains a separate holder and does not credit the owner's resonance reservoir, although it may remain a physical occluder/receiver for onward signal propagation.
+- Map all attached surfaces to the owner's one resonance reservoir, subject to the same living/biological eligibility and energy-settlement rules as other attached structure. Do not double-count attached units or structural energy.
+- Update aggregate graph movement, collision/occlusion, chemistry reachability, cavity/core identity, caches, material/energy inventory oracles, and diagnostic JSON together. Preserve distinct genome-core identities as references over the shared physical graph; core identity is metadata, not a material tag.
+- A distinct reserve-energy sub-holder may remain only if its accounting purpose and transfers are explicit; it must not imply a second physical graph or second organism before division.
+
+This decision supersedes any earlier open question about whether attached reproductive structure participates in owner resonance and upgrades the one-graph direction in Sections 17.70 and 17.77 from recommendation to approved design direction. It does not close the remaining transaction-failure, multi-core cavity, diagnostic-contract, or conservation gates.
+
 ### Updated dependency order
 
 1. Freeze the exact-head baseline and extract named failures where possible.
@@ -1343,8 +1357,8 @@ This is the current phase view; detailed dated evidence remains below in Section
 | Phase | Status | Current evidence / remaining gate |
 |---|---|---|
 | **0 — Freeze baseline and scope** | **Recorded** | Frozen main SHA cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5; workflow 39705628427: 563 passed, 28 failed, 1 ignored. Named baseline failures are available. |
-| **1 — Contract and dependency map** | **Core chemistry map recorded; aggregate-reproduction impact audit active** | Sections 17.70–17.75 resolve receiver eligibility and trace attached reproductive structure across world-tone, construction, movement, geometry, energy/material inventory, persistence, and core identity. Canonical single-structure representation and multi-core cavity contract still need design closure. |
-| **2 — Independent inventory oracles** | **Implemented; coverage incomplete** | Integer material oracle walks field, organism structure/storage, committed/developing construction, active transformation escrow, and legacy carriers. Energy snapshot recomputes usable, resonance, and graph-bond stores independently of cached held totals. Cross-domain failure/transition cases remain open. |
+| **1 — Contract and dependency map** | **Core chemistry map recorded; aggregate-representation audit active** | D16 and Sections 17.70–17.83 approve one authoritative physical graph for all attached units, with no reproductive-material tag and no separate developing physical graph. Remaining design work is the minimum construction metadata, core-specific cavity identity, and the transition/failure matrix. |
+| **2 — Independent inventory oracles** | **Implemented; coverage incomplete** | Integer material oracle and energy snapshot exist, but their separate developing-graph categories must be reconciled to one aggregate graph plus stored material and explicit nonphysical accounting holders. Cross-domain failure/transition cases remain open. |
 | **3 — Resource identity and indivisible material ownership** | **Partial; atomicity gate open** | Whole-count/unknown-resource validation, physical restoration checks, and selected transfer tests exist. Confirmed best-effort return gaps remain in stored BREAK, contained acquisition, and expulsion. |
 | **4 — Chemistry cache version boundary** | **Schema/fingerprint and rollback tests present; phase gate open** | Schema 4, equation fingerprint, strict manifest/record validation, duplicate-key rejection, and append/manifest rollback/reopen tests are present. Cached static potential depends on catalog chemical positions, which are not in ChemistryKey; the catalog marker is manually versioned. Add a test proving catalog-property change requires a fingerprint bump and rejects the old store. |
 | **5 — Authoritative energy ledger and initial source** | **Started; global proof open** | One-time InitialCondition input and world-tone frame settlement paths exist. Current graph BREAK uses negative structural delta; COMBINE uses positive structural delta. Independent whole-world source provenance and cross-domain conservation are not proven. |
@@ -2600,3 +2614,26 @@ This refines, rather than reverses, Section 17.77: one physical graph remains th
 5. If a separate reserve sub-holder remains, transfers are atomic and total parent-owned energy is conserved through waiting, growth, death, and division.
 
 **Open owner-facing semantic point:** confirm whether the parent’s existing maintenance/stress model should apply to the entire aggregate during internal budding, with no independent developing-core maintenance/death state. The current owner rules strongly suggest this, but the detailed energy/stress allocation should be explicit before code changes.
+
+### 17.83 Owner-confirmed physical-state classification — no reproductive material tag or separate developing graph — 2026-10-22
+
+**Status: Owner decision recorded; design direction approved, implementation and verification still open.** This section records the owner's explicit clarification after Sections 17.77–17.82.
+
+**Canonical classification**
+- **Attached physical structure:** the one authoritative physical graph owned by the organism. This includes units introduced/committed during reproductive construction once they are structurally attached. They are not a separate “reproductive material” category and are not excluded from resonance because of their origin.
+- **Stored material:** unattached physical units in the organism's storage holder. These do not contribute to the owner's resonance capture. They remain physically present for material accounting and may still occlude/receive onward signal according to world-tone propagation rules.
+- **Construction state:** nonphysical metadata needed to track the second genome/core, progress, and any explicitly justified energy-accounting sub-holder. A separate physical `developing_structure` graph should not exist as an authoritative holder.
+
+**Consequences for implementation**
+1. Change physical-state representation so attachment, not reproductive designation, determines whether a unit belongs to the organism's structure and resonance receiver set.
+2. A successful construction step must atomically remove its exact source from storage/environment and attach it to the aggregate graph, including bonds and structural energy once. Waiting/rejection leaves the pre-state unchanged.
+3. World-tone geometry must enumerate the aggregate structure once and map every attached surface to the organism's single resonance reservoir. Stored material is excluded from owner capture; it must not be counted again as attached structure.
+4. Chemistry and ordinary post-death chemistry must operate on the physical aggregate using shared reaction rules. Stored-holder reaction reachability remains a separate open gap; do not solve it by pretending stored material is attached.
+5. Preserve two genome/core identities without two physical graphs. Use stable physical IDs/core references and core-specific cavity selection; never mark units by reproductive role to make cavity or resonance decisions.
+6. Revise movement, collision/occlusion, structural-energy snapshots, integer material inventory, structure/cache invalidation, and diagnostic JSON together. Diagnostic construction output should carry only nonphysical progress/core metadata and justified sub-ledgers, not a second physical graph.
+7. Keep any developing-energy/reserve, stress, maintenance-debt, or progress field only if its accounting/lifecycle purpose is explicitly established. This decision rejects a second physical structure, but does not by itself settle every sub-ledger equation or the exact maintenance/stress policy.
+8. The approved division operation must still partition physical units, bonds, stored material, energy holders, and core identity exactly once; cross-partition bonds require explicit settlement.
+
+**Audit correction:** Sections 17.70–17.81 contain historical audit findings and recommendations; read them through this owner-confirmed classification. Section 17.82's separate-graph and separate-temporary-organism findings remain valid observations of current source. Its open question about exact parent maintenance/stress allocation is not resolved by this decision and must be audited without restoring a second physical graph.
+
+**Next:** update the handoff and PR #204 description to point to this decision, then finish the source/holder and transaction-failure matrices. No source/test files have changed; implementation remains gated on audit-template closure.
