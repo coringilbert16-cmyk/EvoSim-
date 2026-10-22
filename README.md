@@ -1,45 +1,34 @@
 # EvoSim
 
-## PR #202 — merge-safety checkpoint — 2026-10-21
+## PR #202 — merge-safety checkpoint — 2026-10-22
 
-**Last pre-fix tested source head:** `cc356b945c57779eae58ebb05b38f3631371dc1b`, run [#39695004714](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39695004714). The current branch contains a follow-up geometry-invariant clarification and composite-geometry regression test; their exact-head CI result is pending.
+**Verified source head:** `6a4fc68e72d9aa682b6a8fe5af48ac41de61f75b`. Exact-head GitHub Actions run [#39697289682](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39697289682) completed.
 
-### Verification baseline
+### Verification result
 
-- **Formatting:** passed on the pre-fix head.
-- **Architecture guard:** COMBINE architecture checks passed on the pre-fix head.
-- **Focused regression checks:** Bob storage/reopen, fluid multi-contact transaction, and related focused checks passed on the pre-fix head.
-- **Full Rust suite:** 562 passed, 28 failed, 1 ignored; runtime 278.02 seconds on the pre-fix head.
-- **Known-baseline comparison:** run [#39691642301](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39691642301), commit `5c982b35229a987816977255378325f70f8ab547`, has the same 28 failing test identities. There were zero new failing test identities in the pre-fix comparison.
-- **Clippy:** fails under `-D warnings` with the same existing counts as the comparison run: 59 application-target and 38 test-target lint errors. Do not hide this debt with blanket suppressions.
-- **Resource rename:** Methane → Oxygen; Water remains Water. Oxygen keeps the former Methane properties and geometry.
+- **Formatting:** passed.
+- **Source-size guard:** passed.
+- **COMBINE architecture guard:** passed.
+- **Focused regression checks:** Bob compact storage/reopen, concurrent library initialization, fluid transaction/cap, fluid coalescence/restoration, and chemical BREAK checks all passed.
+- **Composite geometry regression:** `world_tone_snapshot::tests::snapshot_represents_each_constituent_of_composite_physical_material` passed. The malformed-state guard test `snapshot_fails_closed_on_invalid_composite_structural_unit_state` also passed.
+- **Full Rust suite:** 563 passed, 28 failed, 1 ignored; runtime 233.30 seconds.
+- **Known-baseline comparison:** previous run [#39695004714](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39695004714) had 562 passed, 28 failed, 1 ignored. Exact failing-test identity comparison shows **all 28 baseline failures are unchanged; zero new failures and zero resolved baseline failures**.
+- **Clippy:** fails under `-D warnings` with the existing 59 application-target and 38 test-target lint errors. This matches the previous run's counts; no blanket suppressions were added.
+- **Resource rename:** Methane → Oxygen; Water remains Water. Oxygen retains the former Methane properties and geometry.
 
 ### Composite geometry: model boundary and resolution
 
 A `StructuralUnit` represents exactly one physical constituent. `StructuralUnit::from_material` rejects multi-part materials, and its deserializer rejects composite material with an explicit instruction to restore constituent placements and bonds through the organism graph. The geometry cache stores only one realized shape and one placement per structural unit; it has no valid per-constituent transforms for a composite. Guessing transforms or reusing the cached shape would corrupt shadows and energy allocation.
 
-Composite materials are represented by `PhysicalMaterial`, which carries one placement per constituent and preserves optional internal-bond identity. The world-tone snapshot already expands that representation into one placed shape and one material-response entry per constituent. The follow-up change clarifies this invariant and adds a regression test proving that a valid two-constituent physical material is accepted by the snapshot and retains both constituent material responses. An artificially mutated in-memory `StructuralUnit` with a composite material still fails closed by design; it is malformed state, not a supported organism representation.
+Composite materials are represented by `PhysicalMaterial`, which carries one placement per constituent and preserves optional internal-bond identity. The world-tone snapshot expands that representation into one placed shape and one material-response entry per constituent. The follow-up clarifies this invariant and adds regression coverage proving a valid two-constituent physical material is accepted by the snapshot and retains both constituent responses. An artificially mutated in-memory `StructuralUnit` with composite material still fails closed by design; it is malformed state, not a supported organism representation. **The identified composite-geometry gap is closed at the valid model boundary; no synthetic constituent poses are invented.**
 
-### Bounded merge assessment
+### Merge assessment
 
-The pre-fix exact-head run establishes **no test regression against the documented 28-failure baseline**, but does not make CI green. The follow-up must pass formatting, the new composite-physical-material regression, and the exact-head test run without adding failing test identities before this checkpoint is considered complete.
+PR #202 has passed formatting, architecture guards, focused transaction tests, and the new composite-geometry regression. The full suite retains exactly the same 28 known failing test identities as the documented baseline. Clippy retains its existing strict-lint debt. This is a baseline-based result, not a clean-CI claim.
 
-The live ordered sunlight path includes per-path incident-energy reconciliation and atomic settlement checks. Whole-world energy reconciliation across every lifecycle/transaction path remains unproven. Permeability and complete self-maintaining organism viability are not established by this PR. These are explicit scope limitations, not completed features.
+Whole-world energy reconciliation across every store, chemistry transaction, death transition, and lifecycle path remains unproven. Permeability and complete self-maintaining organism viability are not established by this PR. These remain explicit scope limitations rather than completed features.
 
-### Implemented in the current source
-
-- **Live ordered propagation:** precomputed world-tone samples enter `WorldToneOccluderSnapshot::settle_living_organism_inputs`. Ordered material hits apply spectral response and pass only the unresponded remainder onward; frequency composition can change during propagation. This is not literal ray reflection or a new energy source.
-- **Single-credit energy allocation:** a living receiver can retain its non-damped response in its staged resonant reservoir. Material response without a living reservoir, failed deposits, and other unretained response settle as heat; energy leaving the modeled path is recorded as escaped. Each path checks incident energy against retained resonance, heat, and escape before commit.
-- **Inventory and chemistry links:** retained resonance is included in world inventory; compatible resonance can contribute to chemical disruption work and overload-driven structural damage. The legacy random stress-break authority has been removed from the production survival/developing-offspring path.
-- **World physical coverage:** the snapshot includes realized organism structures, field physical material, stored physical material, developing offspring, decomposing carriers, and physical sources in active transformations. Valid composite physical materials are expanded by their constituent placements; malformed composite `StructuralUnit` state fails closed.
-
-### Remaining known limitations
-
-1. Global energy reconciliation across all stores, chemistry transactions, death transitions, and lifecycle changes remains unproven.
-2. The full test suite retains the same 28 known failures; Clippy retains existing strict-lint failures.
-3. Permeability and complete self-maintaining organism viability are not established by this PR.
-
-PR #202 remains Draft pending exact-head verification and the user's merge decision. PR #196 constructor/Bob work remains separate and untouched. Historical notes below are dated handoff records; where they conflict with this checkpoint, this checkpoint is authoritative.
+PR #196 constructor/Bob work remains separate and untouched. Historical notes below are dated handoff records; where they conflict with this checkpoint, this checkpoint is authoritative.
 
 ## External-input transaction — 2026-10-19
 
