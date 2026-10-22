@@ -17,23 +17,6 @@ mod tests {
     }
 
     #[test]
-    fn ancestral_seed_realizes_a_physically_valid_developmental_structure() {
-        let catalog = default_catalog();
-        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
-        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog)
-            .expect("confirmed seed must have a physical realization");
-
-        assert!(!structure.units.is_empty());
-        assert!(!structure.bonds.is_empty());
-
-        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
-            .expect("cavity analysis must succeed")
-            .expect("developmental realization must contain a qualifying physical cavity");
-        assert!(cavity.qualifies());
-        assert!(structure.units.iter().all(|unit| unit.geometry.is_some()));
-    }
-
-    #[test]
     fn physically_valid_divergence_is_allowed_when_anchor_is_impossible() {
         let blueprint = StructuralBlueprint::new(
             vec![nitrogen_wall(0.0, 0.0, 0.0), nitrogen_wall(0.0, 0.0, 0.0)],

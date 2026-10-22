@@ -42,7 +42,7 @@ impl MaterialGeometry {
             let resource = catalog
                 .iter()
                 .find(|resource| resource.name == *resource_name)?;
-            if !resource.shape.is_valid()
+            if !resource.shape.is_valid_physical_shape()
                 || !placement.x.is_finite()
                 || !placement.y.is_finite()
                 || !placement.rotation_radians.is_finite()

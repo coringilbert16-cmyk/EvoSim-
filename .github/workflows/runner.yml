@@ -21,6 +21,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Parse PowerShell runner
+        timeout-minutes: 5
         shell: pwsh
         run: |
           $tokens = $null
@@ -36,6 +37,7 @@ jobs:
           }
 
       - name: Validate launcher wiring
+        timeout-minutes: 5
         shell: pwsh
         run: |
           $cmd = Get-Content -Raw "run_evosim.cmd"

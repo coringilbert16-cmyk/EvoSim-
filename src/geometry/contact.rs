@@ -1,7 +1,5 @@
 //! Physical contact and structural connection candidates.
-use crate::connection_geometry::{
-    facing_compatibility, point_distance, rigid_endpoint_world_point,
-};
+use crate::connection_geometry::{facing_compatibility, point_distance};
 use crate::resources::Form;
 use crate::structure::{Bond, ConnectionEndpoint, OrganismStructure, StructuralUnit};
 use crate::surface_geometry::boundary_point_toward;
@@ -456,14 +454,24 @@ pub(crate) fn endpoint_world_point(
 ) -> Option<crate::connection_geometry::WorldConnectionPoint> {
     let shape = unit.shape(catalog)?;
     match endpoint {
-        ConnectionEndpoint::Corner { point_index }
-        | ConnectionEndpoint::LineEndpoint { point_index } => rigid_endpoint_world_point(
-            shape,
-            point_index,
-            unit.placement.x,
-            unit.placement.y,
-            unit.placement.rotation_radians,
-        ),
+        ConnectionEndpoint::Corner { point_index } => {
+            crate::connection_geometry::transform_polygon_vertex(
+                shape,
+                point_index,
+                unit.placement.x,
+                unit.placement.y,
+                unit.placement.rotation_radians,
+            )
+        }
+        ConnectionEndpoint::LineEndpoint { point_index } => {
+            crate::connection_geometry::transform_line_endpoint(
+                shape,
+                point_index,
+                unit.placement.x,
+                unit.placement.y,
+                unit.placement.rotation_radians,
+            )
+        }
         ConnectionEndpoint::Boundary { angle_radians } => {
             let (s, c) = angle_radians.sin_cos();
             let point = boundary_point_toward(shape, c, s)?;
@@ -683,8 +691,10 @@ mod tests {
         );
         let endpoint = ConnectionEndpoint::Boundary { angle_radians: 0.1 };
         let point = endpoint_world_point(endpoint, &unit, &catalog).unwrap();
-        assert!(point.normal_x > 0.99);
-        assert!(point.normal_y.abs() < 1e-12);
+        // The ray intersects the actual slanted hexagon edge. Its outward
+        // normal is the edge normal, not the ray's radial direction.
+        assert!((point.normal_x - 3.0_f64.sqrt() / 2.0).abs() < 1e-12);
+        assert!((point.normal_y - 0.5).abs() < 1e-12);
     }
 
     #[test]

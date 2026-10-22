@@ -57,9 +57,9 @@ pub fn transform_polygon_vertex(
 
 /// Derive and transform a primary end point of a line-like rigid shape.
 ///
-/// Generic zero-thickness lines use their two geometric endpoints. Hydrogen is
-/// intentionally different: it has finite 0.1 thickness, but retains two
-/// line-like primary connection points at the centers of its two end faces.
+/// Zero-thickness lines are geometry primitives only. Hydrogen is a finite-area
+/// rectangle that retains two line-like primary connection points at the centers
+/// of its end faces.
 pub fn transform_line_endpoint(
     shape: &Shape,
     endpoint: usize,
@@ -67,8 +67,12 @@ pub fn transform_line_endpoint(
     origin_y: f64,
     rotation_radians: f64,
 ) -> Option<WorldConnectionPoint> {
-    let crate::resources::Form::Line { length } = shape.form else {
-        return None;
+    let length = match &shape.form {
+        crate::resources::Form::Line { length } => *length,
+        crate::resources::Form::Rectangle { width, height } if *height <= *width * 0.1 + 1e-12 => {
+            *width
+        }
+        _ => return None,
     };
     let x = if endpoint == 0 {
         -length / 2.0
@@ -104,24 +108,8 @@ pub fn rigid_endpoint_world_point(
         crate::resources::Form::Line { .. } => {
             transform_line_endpoint(shape, vertex, origin_x, origin_y, rotation_radians)
         }
-        crate::resources::Form::Rectangle { width, height }
-            if vertex < 2 && *height <= *width * 0.1 + 1e-12 =>
-        {
-            let x = if vertex == 0 {
-                -*width / 2.0
-            } else {
-                *width / 2.0
-            };
-            let normal_x = if vertex == 0 { -1.0 } else { 1.0 };
-            Some(transform_derived_point(
-                x,
-                0.0,
-                normal_x,
-                0.0,
-                origin_x,
-                origin_y,
-                rotation_radians,
-            ))
+        crate::resources::Form::Rectangle { width, height } if *height <= *width * 0.1 + 1e-12 => {
+            transform_line_endpoint(shape, vertex, origin_x, origin_y, rotation_radians)
         }
         _ => transform_polygon_vertex(shape, vertex, origin_x, origin_y, rotation_radians),
     }

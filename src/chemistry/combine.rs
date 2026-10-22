@@ -511,8 +511,12 @@ mod tests {
             },
         ));
         let mut cache = ConnectionCompatibilityCache::new();
-        assert!(eligible_candidates(&s, 0, 1, &catalog, &mut cache)
+        let candidates = eligible_candidates(&s, 0, 1, &catalog, &mut cache);
+        assert!(candidates
             .iter()
-            .all(|c| matches!(c.endpoint_a, ConnectionEndpoint::LineEndpoint { .. })))
+            .any(|c| matches!(c.endpoint_a, ConnectionEndpoint::LineEndpoint { .. })));
+        assert!(candidates
+            .iter()
+            .any(|c| matches!(c.endpoint_a, ConnectionEndpoint::Boundary { .. })));
     }
 }

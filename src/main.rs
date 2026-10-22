@@ -54,8 +54,8 @@ mod geometry_server;
 mod initial_organism_constructor;
 #[path = "geometry/interior_geometry.rs"]
 mod interior_geometry;
-#[path = "organism/juvenile.rs"]
-mod juvenile;
+#[path = "bob/known_qualifying_cavities.rs"]
+mod known_qualifying_cavities;
 #[path = "geometry/organism_geometry.rs"]
 mod organism_geometry;
 #[path = "organism/viability.rs"]
@@ -171,6 +171,36 @@ async fn main() {
             .and_then(|value| value.parse::<u16>().ok())
             .expect("--simulation-child requires a TCP port");
         sim_process::run_child(port).await;
+        return;
+    }
+
+    if command.as_deref() == Some("--bob-cavity-seed-nitrogen-ring") {
+        let catalog = resources::default_catalog();
+        let path = known_qualifying_cavities::default_store_path();
+        let outcome = known_qualifying_cavities::seed_nitrogen_ring(&path, &catalog)
+            .expect("nitrogen-ring cavity seed failed authoritative validation or persistence");
+        println!("Known qualifying cavity store: {}", path.display());
+        println!("{outcome:?}");
+        return;
+    }
+
+    if command.as_deref() == Some("--bob-cavity-mutate-once") {
+        let catalog = resources::default_catalog();
+        let path = known_qualifying_cavities::default_store_path();
+        let stats = known_qualifying_cavities::mutate_once(&path, &catalog)
+            .expect("bounded cavity mutation batch failed");
+        println!("Known qualifying cavity store: {}", path.display());
+        println!("{stats:?}");
+        return;
+    }
+
+    if command.as_deref() == Some("--bob-cavity-mutate-until-full") {
+        let catalog = resources::default_catalog();
+        let path = known_qualifying_cavities::default_store_path();
+        println!("Known qualifying cavity store: {}", path.display());
+        let stats = known_qualifying_cavities::mutate_until_full(&path, &catalog)
+            .expect("cavity mutation search failed");
+        println!("Bob cavity search stopped: {stats:?}");
         return;
     }
 

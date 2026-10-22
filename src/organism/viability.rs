@@ -58,33 +58,61 @@ pub fn validate_realized_organism(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::juvenile::confirmed_seed_baseline;
     use crate::resources::default_catalog;
 
     #[test]
-    fn viability_does_not_depend_on_a_predefined_piece_count_or_core() {
+    fn cavity_contract_does_not_depend_on_a_predefined_piece_count_or_core() {
         let catalog = default_catalog();
-        let blueprint = confirmed_seed_baseline(&catalog).unwrap();
-        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
+        let structure = crate::initial_organism_constructor::sealed_nitrogen_ring_fixture(&catalog)
+            .expect("test ring should be physically realized and bonded");
         validate_realized_organism(
             &structure,
             &catalog,
-            OrganismViabilityRequirements::default(),
+            OrganismViabilityRequirements {
+                require_sealed_genome_cavity: true,
+                // This test isolates the cavity contract. Extra processing
+                // structure is a separate viability requirement.
+                require_extra_structure: false,
+            },
         )
-        .unwrap();
+        .expect("any realized topology meeting the cavity contract should qualify");
     }
 
     #[test]
     fn unsealed_genome_fails_viability() {
         let catalog = default_catalog();
-        let blueprint = confirmed_seed_baseline(&catalog).unwrap();
-        let mut structure = blueprint.realize(&catalog).unwrap();
-        structure.bonds.clear();
-        assert!(validate_realized_organism(
+        let mut structure =
+            crate::initial_organism_constructor::sealed_nitrogen_ring_fixture(&catalog)
+                .expect("test ring should be physically realized and bonded");
+        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .expect("fixture starts with a qualifying cavity");
+        let bond_index = cavity
+            .boundary_bond_indices(&structure, &catalog)
+            .first()
+            .copied()
+            .expect("cavity wall must have bonded neighboring units");
+        let bond = structure.bonds[bond_index].clone();
+        let a = bond.endpoint_a.constituent_id;
+        let b = bond.endpoint_b.constituent_id;
+        // A physical join has multiple endpoint records. Remove every record
+        // for this constituent pair so the wall join is genuinely unbonded.
+        structure.bonds.retain(|candidate| {
+            !((candidate.endpoint_a.constituent_id == a
+                && candidate.endpoint_b.constituent_id == b)
+                || (candidate.endpoint_a.constituent_id == b
+                    && candidate.endpoint_b.constituent_id == a))
+        });
+        let result = validate_realized_organism(
             &structure,
             &catalog,
             OrganismViabilityRequirements::default(),
-        )
-        .is_err());
+        );
+        assert!(
+            result
+                .as_ref()
+                .is_err_and(|error| error.contains("genome cavity is not sealed")),
+            "a single missing perimeter bond must invalidate the genome cavity; result={result:?}"
+        );
     }
 }

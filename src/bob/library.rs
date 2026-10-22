@@ -1807,6 +1807,7 @@ pub struct GeometryLibrary {
     root: PathBuf,
     entries: BTreeMap<String, GeometryFormation>,
     equivalence_index: BTreeMap<String, Vec<String>>,
+    bonded_pair_formation_index: BTreeMap<(String, String), Vec<String>>,
     manifest: GeometryLibraryManifest,
     frontier: GeometryFrontier,
     contact_families: BTreeMap<String, GeometryContactFamily>,
@@ -1820,6 +1821,24 @@ pub struct GeometryLibrary {
     rigid_vertex_contact_index: HashMap<u64, Vec<String>>,
     formation_ids: BTreeMap<String, String>,
     formation_storage_version: u32,
+}
+
+fn bonded_pair_formation_key(formation: &GeometryFormation) -> Option<(String, String)> {
+    if formation.constituents.len() != 2
+        || !formation.bonds.iter().any(|bond| {
+            (bond.constituent_a == 0 && bond.constituent_b == 1)
+                || (bond.constituent_a == 1 && bond.constituent_b == 0)
+        })
+    {
+        return None;
+    }
+    let first = formation.constituents[0].resource.clone();
+    let second = formation.constituents[1].resource.clone();
+    Some(if first <= second {
+        (first, second)
+    } else {
+        (second, first)
+    })
 }
 
 fn compact_formation_value(
@@ -2520,10 +2539,21 @@ impl GeometryLibrary {
                 .push(signature.clone());
         }
 
+        let mut bonded_pair_formation_index = BTreeMap::<(String, String), Vec<String>>::new();
+        for (signature, formation) in &entries {
+            if let Some(key) = bonded_pair_formation_key(formation) {
+                bonded_pair_formation_index
+                    .entry(key)
+                    .or_default()
+                    .push(signature.clone());
+            }
+        }
+
         let mut library = Self {
             root,
             entries,
             equivalence_index,
+            bonded_pair_formation_index,
             manifest,
             frontier,
             contact_families,
@@ -2601,6 +2631,25 @@ impl GeometryLibrary {
         self.entries.values()
     }
 
+    /// Query only bonded two-piece formations for a material pair. Results
+    /// retain the same canonical-signature order as `formations()`.
+    pub fn bonded_pair_formations(
+        &self,
+        first_resource: &str,
+        second_resource: &str,
+    ) -> impl Iterator<Item = &GeometryFormation> {
+        let key = if first_resource <= second_resource {
+            (first_resource.to_owned(), second_resource.to_owned())
+        } else {
+            (second_resource.to_owned(), first_resource.to_owned())
+        };
+        self.bonded_pair_formation_index
+            .get(&key)
+            .into_iter()
+            .flatten()
+            .filter_map(|signature| self.entries.get(signature))
+    }
+
     pub fn frontier(&self) -> &GeometryFrontier {
         &self.frontier
     }
@@ -2673,6 +2722,42 @@ impl GeometryLibrary {
         candidate_resource: &BaseResource,
         catalog: &[BaseResource],
     ) -> Vec<RigidEdgePlacementSuggestion> {
+        self.suggest_rigid_edge_placements_with_policy(
+            anchor_material,
+            anchor_placement,
+            candidate_resource,
+            catalog,
+            true,
+        )
+    }
+
+    /// Strict construction query: only use contact families already persisted
+    /// in Bob. A coverage miss returns no candidates instead of generating
+    /// ephemeral geometry that cannot be traced to a stored record.
+    pub fn suggest_persisted_rigid_edge_placements(
+        &self,
+        anchor_material: &str,
+        anchor_placement: Placement,
+        candidate_resource: &BaseResource,
+        catalog: &[BaseResource],
+    ) -> Vec<RigidEdgePlacementSuggestion> {
+        self.suggest_rigid_edge_placements_with_policy(
+            anchor_material,
+            anchor_placement,
+            candidate_resource,
+            catalog,
+            false,
+        )
+    }
+
+    fn suggest_rigid_edge_placements_with_policy(
+        &self,
+        anchor_material: &str,
+        anchor_placement: Placement,
+        candidate_resource: &BaseResource,
+        catalog: &[BaseResource],
+        allow_generated_fallback: bool,
+    ) -> Vec<RigidEdgePlacementSuggestion> {
         if candidate_resource.physical_state == crate::resources::PhysicalState::Fluid {
             return Vec::new();
         }
@@ -2708,10 +2793,9 @@ impl GeometryLibrary {
                 families.push((family.clone(), stored_anchor.placement.rotation_radians));
             }
         }
-        // An intentionally empty catalogue is a supported bootstrap state.
-        // Derive local single-anchor families on demand without persisting
-        // unverified records or starting a bulk geometry worker.
-        if families.is_empty() {
+        // Exploratory queries may derive ephemeral families for diagnostics.
+        // Strict live construction must use persisted, traceable records only.
+        if families.is_empty() && allow_generated_fallback {
             let seed = GeometryFormation::single(anchor_material);
             families.extend(
                 generate_rigid_contact_families(&seed, candidate_resource, catalog)
@@ -3496,6 +3580,11 @@ impl GeometryLibrary {
                 .entry(formation_equivalence_key(formation))
                 .or_default()
                 .push(signature.clone());
+            if let Some(key) = bonded_pair_formation_key(formation) {
+                let signatures = self.bonded_pair_formation_index.entry(key).or_default();
+                let position = signatures.binary_search(signature).unwrap_or_else(|i| i);
+                signatures.insert(position, signature.clone());
+            }
         }
         self.entries.extend(unique);
         self.manifest.entries = self.entries.len() as u64;
@@ -3722,7 +3811,7 @@ pub fn validate_formation(formation: &GeometryFormation, catalog: &[BaseResource
         let Some(resource) = catalog.iter().find(|r| r.name == constituent.resource) else {
             return false;
         };
-        if !resource.shape.is_valid() {
+        if !resource.shape.is_valid_physical_shape() {
             return false;
         }
     }
@@ -5798,9 +5887,23 @@ mod bob_lookup_contract_tests {
             y: -4.0,
             rotation_radians: 0.37,
         };
+        let strict_suggestions = library.suggest_persisted_rigid_edge_placements(
+            "Carbon",
+            live_anchor,
+            &carbon,
+            &catalog,
+        );
+        assert!(
+            strict_suggestions.is_empty(),
+            "strict construction lookup must report a coverage miss for an empty library"
+        );
+
         let suggestions =
             library.suggest_rigid_edge_placements("Carbon", live_anchor, &carbon, &catalog);
-        assert!(!suggestions.is_empty());
+        assert!(
+            !suggestions.is_empty(),
+            "exploratory lookup may still derive ephemeral suggestions"
+        );
         let water = catalog
             .iter()
             .find(|resource| resource.name == "Water")
@@ -7033,8 +7136,9 @@ mod fluid_contact_constraint_schema_tests {
         for name in ["TestWallA", "TestWallB"] {
             let mut wall = carbon.clone();
             wall.name = name.to_string();
-            wall.shape.form = Form::Line {
-                length: wall_length,
+            wall.shape.form = Form::Rectangle {
+                width: wall_length,
+                height: 0.1,
             };
             catalog.push(wall);
         }
@@ -7046,7 +7150,7 @@ mod fluid_contact_constraint_schema_tests {
                     resource: "TestWallA".to_string(),
                     placement: Placement {
                         x: -wall_length * 0.5,
-                        y: 0.0,
+                        y: -0.05,
                         rotation_radians: 0.0,
                     },
                 },
@@ -7054,7 +7158,7 @@ mod fluid_contact_constraint_schema_tests {
                     resource: "TestWallB".to_string(),
                     placement: Placement {
                         x: wall_length * 0.5,
-                        y: 0.0,
+                        y: -0.05,
                         rotation_radians: 0.0,
                     },
                 },
@@ -7159,8 +7263,9 @@ mod fluid_contact_constraint_schema_tests {
         for name in ["TestWallA", "TestWallB", "TestWallC"] {
             let mut wall = carbon.clone();
             wall.name = name.to_string();
-            wall.shape.form = Form::Line {
-                length: wall_length,
+            wall.shape.form = Form::Rectangle {
+                width: wall_length,
+                height: 0.1,
             };
             catalog.push(wall);
         }
@@ -7172,7 +7277,7 @@ mod fluid_contact_constraint_schema_tests {
                     resource: "TestWallA".to_string(),
                     placement: Placement {
                         x: -wall_length,
-                        y: 0.0,
+                        y: -0.05,
                         rotation_radians: 0.0,
                     },
                 },
@@ -7180,7 +7285,7 @@ mod fluid_contact_constraint_schema_tests {
                     resource: "TestWallB".to_string(),
                     placement: Placement {
                         x: 0.0,
-                        y: 0.0,
+                        y: -0.05,
                         rotation_radians: 0.0,
                     },
                 },
@@ -7188,7 +7293,7 @@ mod fluid_contact_constraint_schema_tests {
                     resource: "TestWallC".to_string(),
                     placement: Placement {
                         x: wall_length,
-                        y: 0.0,
+                        y: -0.05,
                         rotation_radians: 0.0,
                     },
                 },

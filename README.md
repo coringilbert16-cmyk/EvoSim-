@@ -61,3 +61,10 @@ The full test suite is currently **not green**. A maintenance change is acceptab
 ## Specification authority
 
 The project's design authority is **Master Technical Specification v2.4** (`EVOSIM-MASTER-2.4`, recall phrase “Master Spec 2.4”). This README is the repository's current implementation map and status record; it must reflect the specification and explicit later decisions, while dated handoffs remain historical evidence. If an implementation checkpoint and a design decision conflict, resolve the conflict explicitly rather than silently treating old notes as current.
+
+## Constructor milestone policy — 2026-10-22
+
+- Cavity qualification is milestone 1, not full organism viability. The constructor may report that milestone independently; overall viability requires every explicitly defined required milestone to pass. Define the milestone set before claiming viability; do not invent a milestone count as a substitute for requirements.
+- Bob's current state/beam limits are intentionally throttled low. Search is incomplete under this budget; exhaustion does not prove that no useful Bob suggestion or valid construction exists. Keep the five-minute hard deadline and all live overlap, contact, bond/COMBINE, and energy checks.
+- The runtime Water-placement fallback is a temporary bandaid. Bob's persisted suggestions are intended to include Water. Remove the fallback only after persisted coverage and focused tests establish the required cases.
+
