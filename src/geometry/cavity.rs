@@ -1,8 +1,8 @@
 //! Physical genome-cavity qualification from realized rigid geometry.
 
 use crate::resources::{BaseResource, Form};
-use crate::structure::{OrganismStructure, Placement};
-use std::collections::HashSet;
+use crate::structure::{OrganismStructure, PhysicalConstituentId, Placement};
+use std::collections::{HashMap, HashSet};
 use std::f64::consts::TAU;
 
 const EPS: f64 = 1e-8;
@@ -124,7 +124,41 @@ pub fn analyze_genome_cavity(
     // the cavity boundary against later structural evolution.
     let mut best = None;
     for component in structure.connected_components() {
-        let candidate = analyze_genome_cavity_in_indices(structure, catalog, &component)?;
+        let candidate = analyze_genome_cavity_in_indices(structure, catalog, &component, None)?;
+        if candidate.as_ref().is_some_and(|candidate| {
+            best.as_ref()
+                .is_none_or(|current: &GenomeCavity| candidate.area > current.area)
+        }) {
+            best = candidate;
+        }
+    }
+    Ok(best)
+}
+
+
+/// Analyze a qualifying cavity associated with a previously identified physical
+/// genome core. The core IDs identify the cavity being tracked; the actual
+/// boundary and topology are still re-derived from the current geometry.
+pub fn analyze_genome_cavity_for_core(
+    structure: &OrganismStructure,
+    catalog: &[BaseResource],
+    core_ids: &[PhysicalConstituentId],
+) -> Result<Option<GenomeCavity>, String> {
+    let core_indices: HashSet<usize> = core_ids
+        .iter()
+        .filter_map(|id| structure.unit_index(*id))
+        .collect();
+    if core_indices.is_empty() {
+        return Ok(None);
+    }
+
+    let mut best = None;
+    for component in structure.connected_components() {
+        if !component.iter().any(|index| core_indices.contains(index)) {
+            continue;
+        }
+        let candidate =
+            analyze_genome_cavity_in_indices(structure, catalog, &component, Some(&core_indices))?;
         if candidate.as_ref().is_some_and(|candidate| {
             best.as_ref()
                 .is_none_or(|current: &GenomeCavity| candidate.area > current.area)
@@ -139,6 +173,7 @@ fn analyze_genome_cavity_in_indices(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
     candidate_indices: &[usize],
+    required_core_indices: Option<&HashSet<usize>>,
 ) -> Result<Option<GenomeCavity>, String> {
     let minimum_area = minimum_genome_cavity_area(catalog)?;
     let component_set: HashSet<usize> = candidate_indices.iter().copied().collect();
@@ -153,6 +188,12 @@ fn analyze_genome_cavity_in_indices(
                 .boundary_units
                 .iter()
                 .all(|index| component_set.contains(index))
+            || required_core_indices.is_some_and(|core_indices| {
+                !region
+                    .boundary_units
+                    .iter()
+                    .any(|index| core_indices.contains(index))
+            })
         {
             continue;
         }
@@ -327,6 +368,72 @@ mod tests {
             .expect("realized structure must contain a sealed qualifying cavity");
         assert!(cavity.qualifies(), "cavity={cavity:?}");
         assert!(!cavity.boundary_units.is_empty());
+    }
+
+    fn append_structure_with_offset(
+        target: &mut OrganismStructure,
+        source: &OrganismStructure,
+        offset_x: f64,
+    ) -> HashMap<PhysicalConstituentId, PhysicalConstituentId> {
+        let mut remap = HashMap::new();
+        for (index, unit) in source.units.iter().enumerate() {
+            let old_id = source.physical_id(index).unwrap();
+            let mut copy = unit.clone();
+            copy.placement.x += offset_x;
+            let new_index = target.add_unit(copy);
+            remap.insert(old_id, target.physical_id(new_index).unwrap());
+        }
+        for bond in &source.bonds {
+            let mut copy = bond.clone();
+            copy.endpoint_a.constituent_id = remap[&bond.endpoint_a.constituent_id];
+            copy.endpoint_b.constituent_id = remap[&bond.endpoint_b.constituent_id];
+            target.push_bond_unchecked(copy);
+        }
+        remap
+    }
+
+    #[test]
+    fn core_specific_cavity_lookup_selects_the_requested_core() {
+        let catalog = default_catalog();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
+        let (seed, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
+        let seed_cavity = analyze_genome_cavity(&seed, &catalog)
+            .unwrap()
+            .expect("seed cavity");
+        let seed_core_ids: Vec<_> = seed_cavity
+            .boundary_units
+            .iter()
+            .filter_map(|&index| seed.physical_id(index))
+            .collect();
+
+        let mut combined = OrganismStructure::new();
+        let first_remap = append_structure_with_offset(&mut combined, &seed, 0.0);
+        let second_remap = append_structure_with_offset(&mut combined, &seed, 100.0);
+        let first_core_ids: Vec<_> = seed_core_ids.iter().map(|id| first_remap[id]).collect();
+        let second_core_ids: Vec<_> = seed_core_ids.iter().map(|id| second_remap[id]).collect();
+        combined.set_genome_constituent_ids(first_core_ids.clone());
+        combined.add_genome_constituent_group(second_core_ids.clone());
+
+        let generic = analyze_genome_cavity(&combined, &catalog)
+            .unwrap()
+            .expect("some qualifying cavity");
+        let generic_ids: Vec<_> = generic
+            .boundary_units
+            .iter()
+            .filter_map(|&index| combined.physical_id(index))
+            .collect();
+        assert!(generic_ids.iter().any(|id| first_core_ids.contains(id)));
+
+        let second = analyze_genome_cavity_for_core(&combined, &catalog, &second_core_ids)
+            .unwrap()
+            .expect("second core cavity");
+        let second_ids: Vec<_> = second
+            .boundary_units
+            .iter()
+            .filter_map(|&index| combined.physical_id(index))
+            .collect();
+        assert!(second_ids.iter().any(|id| second_core_ids.contains(id)));
+        assert!(!second_ids.iter().any(|id| first_core_ids.contains(id)));
     }
 
     #[test]
