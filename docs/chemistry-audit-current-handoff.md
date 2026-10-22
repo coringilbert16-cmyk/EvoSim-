@@ -396,3 +396,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Stored BREAK normal-path and one restore-helper test exist, but malformed resolver state and partial multi-piece destination failure remain uncovered. Environmental COMBINE has helper/live-candidate rollback tests, but no end-to-end exact-cell source-restoration test for malformed prepared state.
 - Required assertions: exact material/source ownership, no partial ledger/energy/stress mutation, no duplicate restore, and unchanged field revision/index state on rejection. No source/test changes.
 - Next: reconcile Sections 17.86–17.99 into the authoritative failure matrix and release checklist before any implementation.
+
+
+## Resume checkpoint — authoritative failure matrix (Section 17.100)
+
+- Plan commit: `dcd483fe83150324adb627d33f4c15164d945cd4`; PR #204 remains documentation-only.
+- Sections 17.86–17.99 are consolidated into a current matrix distinguishing inspected source paths, existing normal/helper test evidence, test-required gaps, design/implementation gates, and release gates.
+- Attached-structure resonance eligibility is settled by Section 17.96. Remaining design gap is the minimal reserve/debt/maintenance contract consistent with one aggregate and one biological lifecycle.
+- No source/test changes and no fresh CI run. PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862` remains the last inspected head; refresh before any implementation.
+- Next: finish reserve/debt/maintenance accounting design, perform a final production mutation/energy call-site sweep, reconcile inventory coverage, then refresh CI before coding. Do not claim global source audit or chemistry unification complete.
