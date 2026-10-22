@@ -2224,3 +2224,13 @@ A1 active identity and unknown-name behavior are substantially closed for inspec
 - Test coverage should exercise the helper directly and at least one live world-tone and one chemical-reaction call site with malformed catalog properties. Verify invalid material does not become a baseline-frequency resonator and does not change reservoir, ledger, or activation state.
 
 This confirms an adversarial invalid-state gap across several callers; it is not evidence of a default-catalog failure or of energy exceeding the incident budget. No implementation change.
+
+
+### 17.62 Accumulation helper range/overflow audit — finite inputs can still produce a nonfinite result — 2026-10-22
+
+**Status: Defensive math-contract gap confirmed.** Exact-head review of accumulate_reaction and its live chemical-reaction caller. No source/test changes.
+
+- `accumulate_reaction` validates that each input is finite and nonnegative, but it does not validate the output after evaluating `previous + interaction * contact * engagement - dissipation * previous`. It then returns `Some(next.max(0.0))`; finite but out-of-domain values can overflow an intermediate and return `Some(infinity)` rather than fail closed.
+- The live caller's static potential, contact, engagement, and dissipation are bounded by the current equations/constants, and it rejects nonfinite `next` at the subsequent normalized-chemistry-to-energy conversion before storing a new accumulation. Therefore this is primarily a helper contract and adversarial-state gap, not evidence that ordinary valid input creates infinite accumulated energy. A stale prior value can remain if conversion rejects it.
+- Add an output finiteness check before returning, and define accepted ranges for normalized potential and dissipation (dissipation is a fraction, so it should not silently accept arbitrary finite values above its intended domain). Prefer a stable expression only if it preserves the approved equation. Tests should cover maximum finite inputs, oversized interaction/dissipation, and the actual live constants.
+- Keep reaction accumulation categorized as activation state, not a physical energy holder. Its overflow behavior must be deterministic and bounded, but it does not itself enter the world energy conservation equation.
