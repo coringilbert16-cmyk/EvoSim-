@@ -452,3 +452,10 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Child currently receives `construction.developing_energy`; no separate holder is allowed. Production costs debit parent usable energy; remaining energy at division must partition exactly once, but no authoritative numeric split rule was found in the inspected README. Do not invent a 50/50 rule.
 - Division tests still needed: exact-once units/bonds/storage/energy, collision-safe IDs, cross-partition bond settlement, rollback on either-child validation failure, and no child from non-Ready states.
 - No source/test changes or fresh CI run. Next: check repository history for an established child-energy allocation rule; if absent, ask the owner one narrow question before implementing division.
+
+
+## Resume checkpoint — proportional division energy (Section 17.107, 2026-10-22)
+
+- **Owner choice B recorded:** at successful division, proportionally split the parent's remaining ordinary `usable_energy` between the two resulting organisms. All production costs remain debited directly from parent `usable_energy`; no separate developing-energy holder.
+- The proportional denominator remains open. Repository documentation supports the physical 160%-aggregate → two ~80%-organism goal but does not define an energy ratio. Candidate for owner confirmation: allocate energy by each validated child's post-split structural mass. Do not assume this candidate is approved or implement arbitrary 50/50.
+- Division stays atomic and exact-once; dead/non-Ready construction cannot create offspring. No source/test changes. Implementation gate: settle the proportional basis, then refresh exact PR #205 head and CI before first source change.
