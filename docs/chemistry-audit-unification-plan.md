@@ -2323,3 +2323,16 @@ This confirms an adversarial invalid-state gap across several callers; it is not
 **Reconciliation result:** the recorded audit has no remaining ambiguity about the major known local mutation orderings, but it is **not ready to authorize implementation**. The next work is evidence design/closure for the test-required rows and the single owner-blocked receiver-eligibility rule; then perform one final source search for any production material/energy mutation path missing from this table. Do not mark any row closed merely because a helper or isolated unit test exists.
 
 **Implementation entry condition:** every test-required row has a deterministic failure test and independent inventory assertion; the receiver rule is decided; the final mutation-path search is reconciled; the plan/handoff/PR description are synchronized; and PR #205 exact head plus CI are re-fetched before the first code change.
+
+
+### 17.68 Final production mutation-path search — no new source/sink category, existing gaps remain — 2026-10-22
+
+**Status: Broad exact-head mutation-pattern scan reconciled; no new source/sink category found.** Read-only scan of the 19 PR #205 changed paths plus movement, reproduction, world-tone, harmonic, and expulsion modules at exact head `12d8079230458da68a8dc3755a1d6a9b41347862`. No source/test changes.
+
+- The scan re-found the already-mapped live categories: initialization source setup; COMBINE material/bond commit; chemical/resonance BREAK and retained-resonance withdrawal; staged world-tone frame settlement; storage/field acquisition and expulsion; movement; construction transfer/growth; cache persistence; independent material/energy inventory.
+- Direct graph mutation methods in `src/geometry/structure.rs` include low-level insertion/removal, but production energy authority remains in higher-level COMBINE/BREAK paths. Their staged/dead-code annotation and tests do not make them a live energy source.
+- `src/chemistry/decomposition.rs` remains a legacy, non-live path. Its local transaction tests do not establish that the production tick invokes it, and it must not be enabled as a parallel death-release mechanism.
+- No additional distinct physical source/sink category was discovered by this pass. This does **not** close the identified rows: broad text-pattern search is not a substitute for adversarial failure injection or the independent world-level conservation oracle.
+- The production mutation map is now sufficiently reconciled to stop expanding the inventory of ordinary paths. The remaining work is proof/contract closure, not another broad search: test-required rows from Section 17.67, the owner-blocked receiver rule, and final audit-template sign-off remain open.
+
+**Next:** finish audit-template sign-off by attaching the exact source/test reference and a deterministic proof requirement to every remaining row. If any row lacks a testable acceptance condition, keep it open. Only after that may the smallest implementation unit be selected.
