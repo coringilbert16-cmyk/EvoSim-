@@ -1079,6 +1079,15 @@ mod tests {
             "at least one source lane must hit the living receiver before the environmental receiver"
         );
 
+        let before_retained: f64 = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.resonant_energy.total_energy().unwrap())
+            .sum();
+        let before_external = simulation.energy_ledger.total_external_energy_input;
+        let before_heat = simulation.energy_ledger.total_heat_dissipated;
+        let before_escaped = simulation.energy_ledger.total_world_tone_energy_escaped;
+
         WorldToneOccluderSnapshot::settle_living_organism_inputs(
             &mut simulation,
             sample(),
@@ -1095,17 +1104,20 @@ mod tests {
             retained > 0.0,
             "the living receiver should retain compatible response energy"
         );
-        assert!(ledger.total_external_energy_input > 0.0);
+        let incident_input = ledger.total_external_energy_input - before_external;
+        let heat_dissipated = ledger.total_heat_dissipated - before_heat;
+        let escaped = ledger.total_world_tone_energy_escaped - before_escaped;
+        let retained_delta = retained - before_retained;
+        assert!(incident_input > 0.0);
         assert!(
-            ledger.total_heat_dissipated > 0.0,
+            heat_dissipated > 0.0,
             "damped living response and the nonliving receiver must settle as heat"
         );
-        let allocated =
-            retained + ledger.total_heat_dissipated + ledger.total_world_tone_energy_escaped;
+        let allocated = retained_delta + heat_dissipated + escaped;
         assert!(
-            (ledger.total_external_energy_input - allocated).abs()
-                <= 1e-7 * ledger.total_external_energy_input.max(1.0),
-            "the incident source energy must be allocated once across retained resonance, heat, and escape"
+            (incident_input - allocated).abs()
+                <= 1e-7 * incident_input.max(1.0),
+            "the newly incident source energy must be allocated once across retained resonance, heat, and escape"
         );
     }
 
