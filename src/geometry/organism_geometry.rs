@@ -114,10 +114,11 @@ impl OrganismBodyGeometry {
         );
 
         for (unit_index, unit) in structure.units.iter().enumerate() {
-            // A single StructuralUnit cannot faithfully expose multiple
-            // material constituents, whether or not they are internally bonded.
-            // Reject even stale cached geometry rather than treating one shape as
-            // an authoritative representation of a multi-constituent material.
+            // StructuralUnit is intentionally one physical constituent. Its
+            // constructor and deserializer enforce that invariant; composite
+            // materials belong in the physical-material representation, which
+            // carries one placement and realized shape per constituent. Reject
+            // malformed in-memory state rather than inventing constituent poses.
             if unit.material.parts.len() != 1 {
                 return None;
             }
