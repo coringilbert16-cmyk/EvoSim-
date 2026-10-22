@@ -4,9 +4,9 @@
 **Baseline branch:** `main`  
 **Baseline commit:** `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5`  
 **Plan opened:** 2026-10-22  
-**Scope:** Read-only audits A0–A21 are recorded; this does not mean the chemistry system is unified or conservation is proven. PR #204 is a durable planning/handoff artifact only: no production code or tests may change here. The current canonical owner decisions are in Section 12 and supersede earlier unresolved-question lists and provisional recommendations. A0 records exact-head counts, but the individual failing-test identities were not independently extracted from workflow logs in this pass.
+**Scope:** Read-only audits A0–A21 are recorded; this does not mean the chemistry system is unified or conservation is proven. PR #204 is a durable planning/handoff artifact only: no production code or tests may change here. The current canonical owner decisions are in Section 14 and supersede earlier unresolved-question lists and provisional recommendations. A0 records exact-head counts, but the individual failing-test identities were not independently extracted from workflow logs in this pass.
 
-> **Handoff consistency rule (2026-10-22):** Section 12 is the canonical owner-decision log; Section 13 is the latest reconciliation of those decisions against the audited source. Earlier audit records preserve what was observed at the time, but any provisional recommendation or unresolved-question list that conflicts with Sections 12–13 is superseded. A decision being settled does **not** mean it is implemented or verified. Current unresolved work is evidence gathering and implementation coverage, not re-selection of the owner's decisions.
+> **Handoff consistency rule (2026-10-22):** Section 14 is the canonical owner-decision log; Section 15 is the latest reconciliation of those decisions against the audited source. Earlier audit records preserve what was observed at the time, but any provisional recommendation or unresolved-question list that conflicts with Sections 14–15 is superseded. A decision being settled does **not** mean it is implemented or verified. Current unresolved work is evidence gathering and implementation coverage, not re-selection of the owner's decisions.
 
 
 ## 1. Purpose and acceptance target
@@ -37,7 +37,7 @@ A successful audit is not a claim that the system is already unified. Mark each 
 
 ## 3. Baseline and claims requiring verification
 
-This section describes evidence gaps, not open owner decisions. Where earlier audit records conflict with Section 12 or the later source reconciliation in Section 13, the later explicit decision/reconciliation controls; earlier entries remain historical audit evidence and must not be treated as current instructions.
+This section describes evidence gaps, not open owner decisions. Where earlier audit records conflict with Section 14 or the later source reconciliation in Section 15, the later explicit decision/reconciliation controls; earlier entries remain historical audit evidence and must not be treated as current instructions.
 
 - Whole-world energy conservation across every storage, reaction, and lifecycle path is **not yet proven**.
 - A live world-tone capture/settlement path exists in the audited source. Its complete conservation correctness, occlusion/error behavior, and performance are **not yet proven**; do not describe the path as disabled or toggle it in this documentation-only PR.
@@ -120,7 +120,7 @@ Do not mark an audit Verified solely because code compiles or a helper has unit 
 
 ### A1 — Resource vocabulary, properties, and units
 
-**Historical note:** the initial audit below correctly records that the then-approved vocabulary said Methane, but that owner decision was explicitly superseded by D1 in Section 12. Oxygen is now canonical. Treat A1's “critical catalog/spec mismatch” language as historical; the remaining audit task is to trace stale Methane references and persistence/cache compatibility, not to re-decide the resource name.
+**Historical note:** the initial audit below correctly records that the then-approved vocabulary said Methane, but that owner decision was explicitly superseded by D1 in Section 14. Oxygen is now canonical. Treat A1's “critical catalog/spec mismatch” language as historical; the remaining audit task is to trace stale Methane references and persistence/cache compatibility, not to re-decide the resource name.
 
 **Questions**
 - Is there exactly one canonical resource catalog and one authority for immutable properties?
@@ -702,7 +702,7 @@ Do not claim chemistry unification complete until all applicable gates have evid
 | A18 Numerical stability | Gap found | Reaction accumulation can overflow from extreme prior state; reservoir epsilon pruning and cumulative counter overflow lack a defined long-run fate/tolerance budget | Add adversarial overflow and drift tests; define numerical truncation and counter-overflow policy before shared math changes |
 | A19 Scalability/profiling | Gap found | World-tone geometry/exposure is a likely hotspot; no representative runtime/memory envelope or cache-growth measurements were found | Benchmark sparse/dense worlds and cache cold/hot paths; compare first-hit approximation to a trusted oracle with explicit error bounds |
 | A20 Cross-domain integration | Gap found | Local unit tests exist, but end-to-end energy/material reconciliation and cross-domain failure-injection coverage are unproven; exact-head main reports 563 passed/28 failed/1 ignored, while detailed failure identities are only commit-attested | Build independent inventory oracles and integration matrix covering full ticks, lifecycle, persistence, stale events, and failed commits |
-| A21 Documentation/sequence | Gap found | README is stale about PR #203 and world-tone capture; older audit text still contains pre-D1 Methane language; named baseline failure identities were not independently extracted in this pass | Reconcile current README and historical audit wording with Section 12; preserve the exact-head evidence limitation |
+| A21 Documentation/sequence | Gap found | README is stale about PR #203 and world-tone capture; older audit text still contains pre-D1 Methane language; named baseline failure identities were not independently extracted in this pass | Reconcile current README and historical audit wording with Section 14; preserve the exact-head evidence limitation |
 
 ## 11. Out of scope unless a direct dependency is proven
 
@@ -713,14 +713,14 @@ Do not claim chemistry unification complete until all applicable gates have evid
 - Changing the live world-tone capture path as part of this documentation-only PR; its correctness remains an audit/verification gap, not an unresolved request to enable or disable it.
 - Claiming full organism viability from cavity qualification or a bounded constructor search result.
 
-## 12. Decision log
+## Historical decision log — provisional entries superseded by D1–D15
 
 Record decisions here with date, rationale, affected audits, and any superseded rule. If a design choice needs the project owner's decision, leave it open instead of inventing a constant or silently choosing behavior.
 
 | Date | Decision | Rationale / affected audits |
 |---|---|---|
 | 2026-10-22 | Chemistry unification proceeds on `main`; PR #196 stays open and draft-only. | Avoid stabilizing constructor behavior against unsettled chemistry; A0/A3/A6/A12 boundary. |
-| 2026-10-22 | The audited source contains a live world-tone capture/settlement path; complete conservation and approximation accuracy remain unverified. Do not describe it as disabled or change its runtime behavior in this PR. | A6/A8 and Section 13 source reconciliation. |
+| 2026-10-22 | The audited source contains a live world-tone capture/settlement path; complete conservation and approximation accuracy remain unverified. Do not describe it as disabled or change its runtime behavior in this PR. | A6/A8 and Section 15 source reconciliation. |
 
 
 ### A12 — All energy consumers, transfers, initialization, and construction
@@ -936,7 +936,7 @@ Record decisions here with date, rationale, affected audits, and any superseded 
 - **Decision required from project owner, if any:** before production changes, approve the canonical resource identity/migration, the initial energy/source accounting contract, internal composite-bond energy policy, and the acceptable error/performance budget for world-tone exposure. No decision is required to continue the read-only audit itself.
 - **Recommended smallest next change (if authorized):** the audit template is populated through A21 and exact-head baseline evidence is recorded. Next, present the dependency-ordered implementation plan for owner approval. Do not begin production code until approval. No production code change authorized now.
 
-## 11. Consistency pass — 2026-10-22
+## 12. Consistency pass — 2026-10-22
 
 **Result: structural consistency pass completed; substantive gaps remain open.**
 
@@ -947,14 +947,14 @@ Record decisions here with date, rationale, affected audits, and any superseded 
 - Confirmed the dependency order keeps independent inventory oracles and transaction/failure-injection coverage ahead of behavior changes, and keeps PR #196 constructor/Bob work separate.
 - Scope remains documentation-only: no production code, tests, README, resource catalog, or persistent library data was changed. The plan is populated, but chemistry unification and whole-world conservation are not proven.
 
-## 13. Proposed dependency-ordered implementation plan — for owner approval
+## 13. Proposed dependency-ordered implementation plan
 
 **This is a proposal, not authorization to modify production code.** No production change begins until the owner explicitly approves this sequence and the open decisions below. Apply one focused pre-change audit before each implementation change; keep each command/test bounded to five minutes and compare failures against the exact `main` baseline recorded in A0.
 
 | Phase | Work and dependencies | Exit gate before advancing |
 |---|---|---|
 | 0. Baseline freeze | Use `main` SHA `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5` as the audited baseline. Record Rust workflow run `39705628427`, result 563 passed / 28 failed / 1 ignored, and the commit's statement that the 28 failures match the accepted baseline. If available, independently extract the named failures; otherwise preserve that limitation explicitly. | Baseline SHA/run/counts recorded; no claim that the suite is green. |
-| 1. Contract implementation and vocabulary consistency | Apply D1–D4 and D7–D8 from Section 12: Oxygen is canonical; initial energy is a one-time external-source transaction; stored bond energy has explicit ownership and exactly-once settlement; numerical tolerance is distinct from physical dissipation; base resources are indivisible. Document the units contract and trace stale identity references. | Source/docs agree with settled decisions; unknown identities and fractional base-resource counts have defined fail-closed behavior. Decisions are not reopened here. |
+| 1. Contract implementation and vocabulary consistency | Apply D1–D4 and D7–D8 from Section 14: Oxygen is canonical; initial energy is a one-time external-source transaction; stored bond energy has explicit ownership and exactly-once settlement; numerical tolerance is distinct from physical dissipation; base resources are indivisible. Document the units contract and trace stale identity references. | Source/docs agree with settled decisions; unknown identities and fractional base-resource counts have defined fail-closed behavior. Decisions are not reopened here. |
 | 2. Independent inventory oracles | Add test-only whole-world energy and material inventory oracles spanning world field, organism structure/storage, resonance, active/staged operations, developing offspring, and persistent/recovery state. Define the source/sink equation and residual tolerance. | Tests prove internal transfers cancel and each holder/source/sink is counted once; include deliberately broken/duplicate-claim cases. |
 | 3. Transaction and bond accounting | Reconcile COMBINE/BREAK and related bond transitions around one validate → stage → settle → commit boundary. Ensure stored bond energy is created/released once; failures/stale events leave geometry, material, energy and resonance unchanged. | Focused transaction tests plus inventory-oracle checks pass for successful and rejected reactions. |
 | 4. Resource/catalog/cache compatibility | Implement the approved resource identity migration only after phase 1; validate all material names against the catalog; version chemistry equations/parameters in cache identity and prove cache-hit results match authoritative recomputation. Cover persisted chemistry/Bob keys where affected. | Migration/round-trip tests pass; unknown identities fail explicitly; cache failures cannot change physical validity. |
@@ -966,7 +966,7 @@ Record decisions here with date, rationale, affected audits, and any superseded 
 
 ### Owner decisions required before implementation
 
-**This list is superseded by Section 12 (D1–D15). Do not reopen these choices as unanswered questions.** The owner has selected Oxygen as the canonical identity, an explicit one-time initial-energy source transaction, explicit bond-owned energy with exactly-once settlement, a distinction between numerical tolerance and physical dissipation, a conditional fast first-hit/single-sweep sunlight approximation validated against an exact small-world reference, and rejection of all pre-unification saves/caches. The remaining work is to trace implementation coverage, identify stale references, define acceptance tests/thresholds where the owner has delegated them to evidence, and document the gaps.
+**This list is superseded by Section 14 (D1–D15). Do not reopen these choices as unanswered questions.** The owner has selected Oxygen as the canonical identity, an explicit one-time initial-energy source transaction, explicit bond-owned energy with exactly-once settlement, a distinction between numerical tolerance and physical dissipation, a conditional fast first-hit/single-sweep sunlight approximation validated against an exact small-world reference, and rejection of all pre-unification saves/caches. The remaining work is to trace implementation coverage, identify stale references, define acceptance tests/thresholds where the owner has delegated them to evidence, and document the gaps.
 
 The suggested first implementation slice in older planning text is not authorization to change code in PR #204. This PR remains documentation-only; no production or test changes are authorized here.
 
@@ -980,12 +980,12 @@ Before the first production change, require:
 3. Independent energy/material inventory oracles and failure-injection tests planned before changing production accounting paths.
 4. One focused pre-change audit before each implementation change, bounded verification, and exact-head comparison against the accepted failure baseline.
 
-The owner decisions in Section 12 are already recorded. The implementation gate is evidence and sequencing, not another decision round.
+The owner decisions in Section 14 are already recorded. The implementation gate is evidence and sequencing, not another decision round.
 
 
 ---
 
-## 12. Owner decisions recorded — 2026-10-22
+## 14. Owner decisions recorded — 2026-10-22
 
 The project owner selected the following directions for the chemistry unification work. These decisions resolve the corresponding design questions in this plan. They do not mean the behavior has been implemented or verified. Production code changes remain gated on the dependency-ordered implementation plan and the project's change-approval workflow.
 
@@ -1097,7 +1097,7 @@ The project owner selected the following directions for the chemistry unificatio
 
 ---
 
-## 13. Follow-up audit — existing answers in README and main source (2026-10-22)
+## 15. Follow-up audit — existing answers in README and main source (2026-10-22)
 
 **Scope:** Read-only review of `README.md` and the chemistry/energy/material/world-tone/tick implementation on exact `main` SHA `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5`. This supplements A0–A21 by separating (a) decisions or mechanisms already present, (b) partial answers needing a contract or independent proof, and (c) unresolved gaps. It does not change runtime code or tests.
 
