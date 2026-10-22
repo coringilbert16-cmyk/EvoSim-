@@ -1,6 +1,6 @@
 # Chemistry Unification — Current Handoff
 
-**Plan (latest recorded plan commit):** `452c26286afe96256adcc8e1ca3b195451e14fa2`  
+**Plan (latest recorded plan commit):** `e6889035c149e089c1d4fc289f88992edc832f87`  
 **PR #205 last audited head (historical; refresh before implementation):** `12d8079230458da68a8dc3755a1d6a9b41347862`  
 **CI:** [39833438679](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39833438679).
 
@@ -252,4 +252,13 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Plan commit: `452c26286afe96256adcc8e1ca3b195451e14fa2`.
 - Section 17.6 now explicitly tracks D1–D16. D16 is settled and documented, but one aggregate graph, attached-unit resonance mapping, storage exclusion, core-specific cavity identity, inventory consistency, and failure atomicity remain implementation/verification obligations.
 - No source/test changes or fresh CI run. Latest recorded PR #205 head remains historical `12d8079230458da68a8dc3755a1d6a9b41347862`; workflow 39833438679 remains the latest recorded verification.
-- Next: finish auditing remaining physical-material mutation paths and close audit templates row by row. Re-fetch PR #205 head and CI before any code change.
+- Next: reconcile Sections 17.84–17.85 with the phase tracker and release checklist, then close each test-required audit template explicitly. Re-fetch PR #205 head and CI before any code change.
+
+## Targeted physical-material mutation audit — Section 17.85
+
+- **Plan commit:** `e6889035c149e089c1d4fc289f88992edc832f87`.
+- Targeted source inspection covered material storage/transfer, field containment and deposits, restoration, COMBINE/BREAK, expulsion, movement, construction/reproduction, and legacy recycling at PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862`.
+- No new production internal-energy-transfer caller surfaced beyond construction reserve and the quarantined recycler already in Section 17.56. This is a bounded call-site audit, not passing test evidence.
+- Confirmed physical-material failure gaps: contained acquisition can lose a returned instance if storage and fallback deposit both reject; stored BREAK commits split pieces incrementally; expulsion can lose the removed source if destination/restoration rejects; environmental COMBINE exact-cell restoration and prepared-ledger rollback need malformed-state injection; the legacy recycler drains before deposits/transfers and stays quarantined.
+- Movement failure rollback includes the mover, pushed organisms, pushed field objects, indexes, anchors, and progress.
+- **Next:** reconcile Sections 17.84–17.85 with the phase tracker and release checklist, then close each test-required audit template explicitly. No source/test changes; implementation remains gated.
