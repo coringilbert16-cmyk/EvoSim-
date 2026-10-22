@@ -1736,3 +1736,29 @@ The test oracle has the necessary holder coverage, but existing regressions do n
 **Audit boundary:** this matrix is source analysis, not a claim that every scenario is reproduced by a test. Before selecting the fix, complete a targeted failure-injection matrix for (1) storage rejection, (2) field-deposit rejection, (3) later split-piece rejection after an earlier piece was accepted, (4) missing/corrupt prepared transformation state, and (5) stale parent storage index. Each case must compare the independent material oracle, geometry/topology, owner-relative placement, and energy ledger before/after.
 
 **Next audit:** inspect the exact failure-injection hooks and current regression coverage for stored BREAK, contained-material transfer, and construction transfer. Identify which matrix cases can be tested without production changes and which require a narrow test seam after all audit templates are complete.
+
+
+### 17.36 Failure-injection coverage audit — existing tests versus transition matrix — 2026-10-22, PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862`
+
+**Existing coverage verified**
+- `integer_material_inventory_conserves_constituents_across_field_to_storage_transfer` checks successful environmental containment transfer, and `integer_material_inventory_conserves_constituents_across_storage_restore` checks successful storage restoration.
+- Invalid restoration connection topology and non-finite placement tests assert that rejection preserves the source structure/storage and the independent inventory.
+- `break_action_starts_a_transformation_before_resolution` proves that stored material moved from parent storage into active transformation escrow is counted exactly once.
+- `stored_material_break_does_not_credit_unallocated_bond_energy` tests the preparation/energy contract: the source bond has no allocated energy and no usable-energy, structural-energy, work, heat, or source credit is created.
+- A simulation-level failed-stored-BREAK test invokes the preparation-failure restoration helper and compares a narrow inventory before/after. Its local oracle intentionally counts only the main graph, parent storage, and field; the full independent oracle in `src/tests/simulation_tests.rs` is the appropriate oracle for cases with construction or active escrow.
+- Reproductive tests cover waiting and later resumption when material becomes available, and the independent oracle checks the anchor transfer into developing construction. They do not inject stale source indices or a post-transfer failure.
+
+**Coverage gaps — no evidence yet for these matrix rows**
+1. Storage rejects a split piece after another piece has already been accepted: no atomic multi-piece rollback regression found.
+2. Parent storage rejects a piece and field deposit also rejects: no regression verifies the source is retained rather than lost.
+3. Containment transfer drains a field source, then both storage and fallback deposit reject: no failure-injection regression found.
+4. A stored BREAK reaches resolution with missing/corrupt `prepared_energy` or an unexpected `break_internal_bond` failure: no regression verifies the original escrow is restored.
+5. Construction selects a parent storage entry that becomes stale/rejected between trial and commit: no regression verifies parent storage, construction, energy, and ledger all remain unchanged.
+6. Destination rejection after a COMBINE source has been reserved: rollback tests exist for incomplete prepared COMBINE state, but this audit did not establish coverage for every exact source-cell/destination failure variant.
+
+**Test-seam assessment**
+- Cases 4 and stale-source cases can be tested by constructing malformed/stale state through existing internal test access; a new production seam is not automatically necessary.
+- Cases 1–3 need deterministic rejection at the storage/deposit boundary. Existing APIs reject invalid physical material or out-of-world coordinates, but they do not expose a safe deterministic way to force a later piece failure while earlier pieces are accepted. A narrow test-only injected destination callback/policy may be warranted **after all audit templates are complete**. Do not add that seam yet.
+- Every failure regression should compare the full independent integer material oracle plus exact holder/geometry snapshots and the relevant energy/resonance ledger. A test that checks only total amount or a local inventory is insufficient.
+
+**Conclusion:** Normal-path and selected rollback tests exist, but the highest-risk failure atomicity cases in Section 17.35 remain untested. The next step is not a code change: complete the remaining transition and energy-holder audits, then choose the smallest test seam and production fix together. No source or test files changed.
