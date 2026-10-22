@@ -2526,3 +2526,16 @@ Section 17.7's current tracker rows for Phases 1, 8, and 9 have been updated to 
 **Why this is the smallest coherent model:** it aligns geometry, resonance, movement, chemistry, material ownership, and death with one physical authority; keeps reproduction-specific state limited to the information needed to track a second genome and growth process; and prevents a sunlight-only patch from masking a broader double-graph inconsistency.
 
 **Risks that still need testable contracts:** stable physical-unit/bond IDs and bond-endpoint remapping during merge; parent/second-core cavity identity under mutations; maintenance and resonance-overload behavior while the aggregate contains two cores; save migration idempotence; construction reserve-holder semantics; and atomic division/cross-bond settlement. This recommendation does not authorize code changes until the remaining audit templates and release gates are closed. If the owner prefers a different single-authority design, revise this recommendation before implementation.
+
+
+### 17.78 Persistence claim correction — construction serialization is diagnostic output, not demonstrated world save/load — 2026-10-22
+
+**Status: Earlier migration language narrowed after call-site verification.** Exact PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862`.
+
+- `ReproductiveConstruction` and `Organism` derive Serde traits, but the current `Simulation` itself does not derive `Serialize` or `Deserialize`. No live world save/load path for restoring a whole `Simulation` was found in the reviewed runtime/process/server call sites.
+- The confirmed production use of `reproductive_construction` serialization is diagnostic/observation output in `src/infrastructure/diagnostics.rs` (`serde_json::to_value`) and related observation projections. This is outward-facing JSON representation, not evidence of a simulation persistence/reload contract.
+- Therefore, Sections 17.72, 17.74, and 17.77 should not present migration of persisted worlds as an existing mandatory runtime requirement. The current mandatory compatibility task is to update diagnostic/observation JSON contracts and tests so they describe the unified structure accurately and do not expose a misleading separate physical graph.
+- If a world-save/load facility is introduced later, versioned migration or fail-closed handling for legacy construction graphs will be required before that feature can restore old state. That is a future compatibility constraint, not a verified current production path.
+- The core representation, cavity identity, movement, cache invalidation, independent inventories, resonance mapping, and atomic division concerns remain unchanged.
+
+**Corrected next task:** finish the canonical one-graph/core-identity contract and diagnostic/observation JSON impact matrix; do not spend effort on a nonexistent world-load migration path. No source/test changes.
