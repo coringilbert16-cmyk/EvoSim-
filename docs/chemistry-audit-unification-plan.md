@@ -1787,3 +1787,32 @@ Do not automatically map every occluder to the parent reservoir: a source can be
 4. Keep source/path geometry shared and bounded; do not introduce per-organism ray tracing.
 
 **Next audit:** inspect the approved sunlight/world-tone decisions in the plan and compare them to this receiver-eligibility behavior. Determine whether existing owner approval settles this question or whether a concise decision is required before the live capture map changes. No code/tests until the audit templates are complete.
+
+
+### 17.38 World-tone contract reconciliation — prior approvals do not settle receiver ownership — 2026-10-22
+
+**Status: Gap found; one narrow owner clarification is required before changing receiver mapping.** This section reconciles the approved D5 sunlight computation rule, D7 quantity semantics, D9 ownership/transaction rules, D12 post-death chemistry, and the owner-approved aggregate model in Section 17.31 against the live receiver mapping audited in Section 17.37. It is still documentation-only; no source or test files changed.
+
+**What the existing decisions settle**
+- D5 settles the computation strategy conditionally: preserve one source budget, occlusion/shadow behavior, frequency-shifted onward propagation (not mirror reflection), and adopt the fast first-hit/single-sweep approximation only after comparison against an exact small-world reference. D5 does **not** specify which physical holders are eligible to deposit energy into an organism's resonance reservoir.
+- D7 says signal/resonance quantities must remain distinct from usable energy, stored bond energy, work, and heat. A body's material response is not itself proof that an organism can retain it.
+- D9 and D12 establish that a pending physical holder remains accounted for across operations and that death changes biological eligibility, not physical existence. They do not state that all parent-owned surfaces share the same biological energy receiver.
+- Section 17.31 explicitly assigns the parent aggregate ownership of its primary structure, stored physical material, committed reproductive material, developing structure/bonds, and associated energy until division. It explicitly warns that ownership does not automatically make every holder chemically available. It does not explicitly decide sunlight/resonance eligibility for a disconnected stored object or a developing structure.
+
+**Current behavior from Section 17.37**
+- The occlusion/exposure frame contains those non-primary holders as physical bodies. However, only a living organism's primary structure maps to its single retained resonance reservoir. All other bodies consume their material response as heat; dead primary structures also have no living receiver.
+- Thus the implementation has a distinction between physical occlusion and biological capture. It may be intentional for disconnected objects, but the current decisions do not explicitly approve that distinction for parent-owned, parent-relative holders.
+
+**Why the decision matters**
+- Mapping every parent-owned body to the parent's reservoir would allow any exposed stored/developing surface to harvest compatible response. That could be scientifically appropriate for an aggregate, but it must not create duplicate receiver claims when bodies overlap, when a constituent is in active-transformation escrow, or when one physical holder is represented in more than one snapshot structure.
+- Keeping capture limited to the primary graph avoids that new mapping but means a living aggregate may absorb sunlight as heat on its own stored/developing surfaces without retaining any compatible resonance. That is not prohibited by D5 or Section 17.31, but neither is it explicitly approved.
+- This choice does not authorize adding a resonance reservoir to every holder. The existing approved architecture has one parent-owned aggregate and a parent resonance reservoir; any mapping must preserve one physical response debit, at most one reservoir credit, first-hit occlusion, and world-scale energy conservation.
+
+**Narrow clarification needed**
+Before modifying receiver mapping, ask the owner to choose one rule:
+1. **Aggregate capture:** any physically realized surface whose unique authoritative owner is a living organism may deposit compatible response into that parent's single resonance reservoir, including stored, committed, and developing holders. Environmental material, dead aggregates, and ambiguous/duplicate ownership never capture into a living reservoir.
+2. **Primary-structure capture:** only the parent's primary structural graph may deposit into the resonance reservoir; other physical holders still occlude and respond, but their material response is heat, even if parent-owned.
+
+Do not silently infer either rule from D5's approximation decision or Section 17.31's ownership decision. Keep the current live path intact pending clarification; no runtime toggle or code change in PR #204.
+
+**Next audit while awaiting clarification:** complete the source-to-sink energy accounting matrix independently of this eligibility choice: incident source allocation, material response, damping, reservoir credit, downstream propagation, escape, heat, and ledger settlement. Separately inspect active-transformation snapshot de-duplication and owner resolution so the later chosen rule can map each physical body to no more than one owner. No code/tests until the audit templates are complete.
