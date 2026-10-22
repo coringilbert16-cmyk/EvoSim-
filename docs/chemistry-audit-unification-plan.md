@@ -697,7 +697,7 @@ Do not claim chemistry unification complete until all applicable gates have evid
 | A18 Numerical stability | Gap found | Reaction accumulation can overflow from extreme prior state; reservoir epsilon pruning and cumulative counter overflow lack a defined long-run fate/tolerance budget | Add adversarial overflow and drift tests; define numerical truncation and counter-overflow policy before shared math changes |
 | A19 Scalability/profiling | Gap found | World-tone geometry/exposure is a likely hotspot; no representative runtime/memory envelope or cache-growth measurements were found | Benchmark sparse/dense worlds and cache cold/hot paths; compare first-hit approximation to a trusted oracle with explicit error bounds |
 | A20 Cross-domain integration | Gap found | Local unit tests exist, but end-to-end energy/material reconciliation and cross-domain failure-injection coverage are unproven; exact-head CI identity remains blocked | Build independent inventory oracles and integration matrix covering full ticks, lifecycle, persistence, stale events, and failed commits |
-| A21 Documentation/sequence | Not started | — | — |
+| A21 Documentation/sequence | Gap found | README contradicts current main on PR #203 status and live world-tone capture; approved resource vocabulary differs from catalog; baseline CI/test identity remains unverified | Reconcile documentation only after exact-head evidence; resolve resource migration, source accounting, internal-bond policy, and world-tone error budget before implementation |
 
 ## 11. Out of scope unless a direct dependency is proven
 
