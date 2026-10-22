@@ -57,3 +57,11 @@ Workflow 39833438679 on PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862`:
 ## Separate future reproduction requirement
 
 Internal/adjacent budding begins a second genome core at 100% of original size, grows to 160% total, then splits into two roughly 80%-size children. Current reproduction code does not yet satisfy this. It remains separate from chemistry PR #205 unless the owner explicitly changes scope.
+
+
+## Latest cache dependency audit — 2026-10-22
+
+- Plan commit: `11a7c12d5cacc6f27c78a9fed640fe2a5a0695dc`.
+- Cached static potential depends on resource chemical_position values and CHEMICAL_K / CHEMICAL_D_MAX. ChemistryKey contains resource names and interface identity but not the numeric positions, so the manifest fingerprint is the invalidation boundary for catalog chemistry changes. Current fingerprint includes a catalog-version marker maintained manually; tests must prove a chemical-position change requires a version/fingerprint bump and rejects the old cache.
+- Contact distance, contact radius, facing/engagement, and physical endpoints are evaluated live; the cache supplies only static potential and cannot authorize a bond. The fingerprint currently includes some live-only parameters too, causing conservative extra invalidation rather than incorrect hits.
+- Next: update the handoff and PR description with the latest plan commit, then finish the remaining call-site/impact matrix before any implementation.
