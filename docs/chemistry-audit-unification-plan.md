@@ -1618,3 +1618,23 @@ The parent organism remains physically present and continues ordinary chemistry 
 **Why this is preferred:** it preserves the existing physical graph and its bond energy rather than reconstructing them from composition, makes death a clear ownership boundary, and allows one general chemistry engine to handle living and nonliving physical structures. Main design cost/risk is extending spatial queries, collision/contact, chemical reaction enumeration, persistence/serialization, and independent inventory to the detached-structure collection; audit those call sites before coding.
 
 **Open decisions before implementation:** choose the minimal home for the detached-structure collection (environment/world state), define its stable ID and anchor transform, define whether resonant energy persists indefinitely or dissipates under an already approved energy law, and prove all transfer paths can fail without partial loss. This recommendation is a proposed design, not approval to start coding; complete the call-site/API audit first.
+
+
+### 17.30 Refined ownership model — parent remains the aggregate owner until division
+
+**Recommended refinement prompted by design discussion; supersedes death-time detachment as the preferred first option, pending call-site audit.**
+
+Prefer one authoritative parent aggregate to own all material and energy involved in its current life and unfinished reproduction until a successful division transaction. The aggregate includes the parent's realized body structure, stored physical materials, committed reproductive material, developing structure and its bonds, and associated energy reservoirs. The adjacent second genome core is part of the parent's internal construction until the split; it is not a separate organism or an external bud.
+
+Death before division does **not** transfer ownership or convert the holdings into a special decomposition object. It stops biological processing, while the dead parent continues to own its physical holdings. Ordinary chemistry may continue to act on its body and, where physically accessible and covered by the same chemistry rules, its stored/developing physical material. This avoids a death-only migration of all holdings and avoids introducing a detached structure solely because death occurred.
+
+**Important limitation:** aggregate ownership alone does not make every owned holder chemically available. The Phase 8 audit must still determine how ordinary reactions discover and interact with stored physical material and the developing structure after biological work stops. Extend the existing chemistry path over those physical holders as appropriate; do not invent a separate decomposition law, and do not flatten a developing graph in a way that loses geometry, bond endpoints, or bond energy. Keep the parent as owner while those holdings remain within the aggregate.
+
+At division (the reproduction requirement is 100% original size → construct adjacent second genome core → grow to 160% total → split into two approximately 80%-size children), perform a single atomic partition:
+1. Assign each constituent unit and each independently owned physical material to exactly one child.
+2. Partition stored/committed holdings under an explicit deterministic rule; do not duplicate inventories.
+3. Assign bonds whose endpoints both belong to one child to that child. Explicitly handle any bond crossing the partition boundary through a defined chemistry/energy settlement rule; never silently clone or discard bond energy.
+4. Partition usable, developing, resonant, and structural energy by their actual ownership semantics, not an arbitrary 50/50 copy.
+5. Validate both resulting children and all destinations before committing; on failure, preserve the intact parent aggregate and retry safely.
+
+This reduces lifecycle complexity by making death a biological-state change rather than a mass-transfer event. The hard remaining work is correct chemistry enumeration/accessibility for all owned physical holders and a lossless, atomic division partition. Keep the implementation gate closed until those call sites and invariants are audited. No code/test changes were made.
