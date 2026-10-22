@@ -200,6 +200,38 @@ mod integration_tests {
     }
 
     #[test]
+    fn integer_material_inventory_rejects_unknown_constituents_in_authoritative_holders() {
+        let mut simulation = Simulation::new(7104, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.environment.field.cells[0]
+            .materials
+            .push(Material::free_base("Unobtainium", 1.0));
+
+        let error = integer_material_inventory(&simulation)
+            .expect_err("unknown material identity must fail the independent inventory");
+        assert!(error.contains("unknown resource identity: Unobtainium"));
+    }
+
+    #[test]
+    fn integer_material_inventory_rejects_fractional_constituents_in_authoritative_holders() {
+        let mut simulation = Simulation::new(7105, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.environment.field.cells[0]
+            .materials
+            .push(Material::free_base("Carbon", 1.5));
+
+        let error = integer_material_inventory(&simulation)
+            .expect_err("fractional base constituents must fail the independent inventory");
+        assert!(error.contains("non-integer or invalid amount for Carbon: 1.5"));
+    }
+
+    #[test]
     fn fresh_organism_is_a_physically_realized_organism() {
         let o = Simulation::create_initial_organism();
         assert!(!o.structure.units.is_empty());
