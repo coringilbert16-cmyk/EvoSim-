@@ -165,8 +165,7 @@ mod integration_tests {
         assert!(simulation.organisms[0]
             .stored_material
             .store_physical_instance(physical));
-        let before =
-            integer_material_inventory(&simulation).expect("stored inventory is integral");
+        let before = integer_material_inventory(&simulation).expect("stored inventory is integral");
 
         let stored = simulation.organisms[0]
             .stored_material
