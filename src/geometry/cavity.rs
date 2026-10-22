@@ -158,10 +158,9 @@ pub fn analyze_genome_cavity_for_core(
         }
         let candidate =
             analyze_genome_cavity_in_indices(structure, catalog, &component, Some(&core_indices))?;
-        if candidate
-            .as_ref()
-            .is_some_and(|candidate| cavity_is_better(candidate, best.as_ref(), Some(&core_indices)))
-        {
+        if candidate.as_ref().is_some_and(|candidate| {
+            cavity_is_better(candidate, best.as_ref(), Some(&core_indices))
+        }) {
             best = candidate;
         }
     }
