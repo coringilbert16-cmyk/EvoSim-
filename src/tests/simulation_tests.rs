@@ -342,7 +342,7 @@ mod integration_tests {
             .expect("initial organism should have an accessible interior region");
         // The topological sample point only proves that the point is inside;
         // it is not guaranteed to contain an entire rigid resource. Find a
-        // placement where the actual Carbon geometry fits, then exercise the
+        // placement where the actual Hydrogen geometry fits, then exercise the
         // production containment path. This keeps the test independent of
         // arbitrary chamber coordinates while still requiring real geometry.
         let (min_x, max_x, min_y, max_y) = region.boundary.iter().fold(
@@ -367,7 +367,7 @@ mod integration_tests {
                     rotation_radians: 0.0,
                 };
                 let physical = PhysicalMaterial::realized(
-                    Material::free_base("Carbon", 1.0),
+                    Material::free_base("Hydrogen", 1.0),
                     vec![candidate],
                     &s.environment.catalog,
                 )
@@ -382,9 +382,9 @@ mod integration_tests {
                 }
             }
         }
-        let anchor = anchor.expect("seed chamber must contain a full Carbon constituent");
+        let anchor = anchor.expect("seed chamber must contain a full Hydrogen constituent");
         let physical = PhysicalMaterial::realized(
-            Material::free_base("Carbon", 1.0),
+            Material::free_base("Hydrogen", 1.0),
             vec![anchor],
             &s.environment.catalog,
         )
