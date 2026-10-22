@@ -1926,3 +1926,27 @@ The material oracle and world-tone snapshot both explicitly account for active-o
 6. Compare parent+construction inventory before finish, during the same step after finish returns, and after child append. The production path should be atomic at externally observable tick boundaries; test-only intermediate probes may verify staging without changing live semantics.
 
 **Decision:** These are implementation defects/coverage gaps, but do not patch them until the full audit register is complete. The eventual smallest fix should replace best-effort partial deposits with an all-or-nothing holder transfer that preserves exact ownership and coordinates, and provide deterministic failure injection only where existing interfaces cannot exercise rejection. Keep reproductive division itself out of this chemistry fix.
+
+
+### 17.43 Transformation terminal-state matrix — terminal ownership is not total on malformed/rejected BREAK paths — 2026-10-22, PR #205 head 12d8079230458da68a8dc3755a1d6a9b41347862
+
+**Status: Gap found.** This matrix consolidates the exact-head source paths; it is not a runtime test result. No source/test changes.
+
+| Operation state / terminal route | Source/material disposition observed | Energy/ledger disposition | Audit status |
+|---|---|---|---|
+| COMBINE completes with prepared structure/storage/stress | Prepared graph and storage commit; environmental source is consumed into the prepared result; active marker cleared | Preparation's staged usable/ledger changes remain committed | Normal path staged; needs inventory integration test |
+| COMBINE missing prepared physical state at resolution | If an environmental source exists, source is restored to exact cell when that cell still exists; active marker cleared | rollback_prepared_combine reverses prepared usable/ledger deltas that are still represented | Guarded, but invalid/missing source cell recovery is not proven |
+| COMBINE preparation rejects or owner is absent | Restoration helper returns environmental source to exact source cell if present | Preparation failures occur before prepared ledger changes are committed; exact-head tests should assert this | Normal rejection path exists; failure injection incomplete |
+| Stored BREAK preparation rejects | Exact source is put back in parent storage if possible; otherwise helper attempts field deposit using first stored placement and ignores result | No structural energy is created; stored connection has no allocated bond energy | Best-effort recovery; owner-relative fallback not proven |
+| Stored BREAK succeeds and all output pieces store | All disconnected pieces return to parent storage | Zero-energy transaction; topology changes without fabricated energy | Normal path covered, but no full failure matrix |
+| Stored BREAK has one or more output-piece store rejections | Each piece is handled sequentially; a failed store attempts field deposit and ignores its result. Earlier pieces may already be committed | No stored bond energy released | **Non-atomic; potential material loss/partial transfer** |
+| Stored BREAK completion lacks source, target, prepared marker, or valid split | Resolver clears active marker and returns; no explicit restoration of the source is visible | No additional energy settlement at that point | **Escrow can become unowned when completed transformation is dropped** |
+| Transformation owner is absent at prepare/completion boundary | Scheduler attempts the generic source-restoration helper; no owner storage is available | COMBINE source may return to exact environment cell; stored BREAK relies on best-effort placement | **Stored-source terminal ownership not guaranteed** |
+| Reproduction construction waits / candidate rejected | Candidate child/ledger state is not committed; parent-held source remains authoritative | Candidate ledger is discarded | Mostly staged; stale-index failure needs explicit test |
+| Reproduction construction successfully finishes | Parent construction is taken and its developing graph, committed storage, usable energy and genome become a child appended later in same step | Internal energy/material transfer; no external input intended | Whole-step inventory test required |
+
+**Matrix conclusion:** the most severe immediately actionable gap is not a missing equation but a missing all-or-nothing terminal ownership rule for stored BREAK. The operation must not clear its only active-operation marker until it has either committed all resulting pieces to a valid destination or restored the original source. Environment fallback must use a valid world-space transform and must return a checked result; a failed destination must retain or restore the source. Similarly, a failed COMBINE source return must remain represented for recovery rather than silently disappearing. This is a focused candidate for implementation after the audit register closes, not authorization to code now.
+
+**Required closure evidence:** for every row, a test must compare the independent constituent inventory, exact holder ownership, physical geometry/placements, usable/resonant/structural energy, cumulative ledger deltas, and active-operation markers before and after both success and injected failure. The current normal-path and selected rollback tests do not satisfy this matrix.
+
+**Next audit:** enumerate construction transfer candidate failures and movement/maintenance/resonance energy paths in the same source→validation→commit→rollback schema. No implementation until all audit templates are complete.
