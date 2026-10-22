@@ -41,11 +41,11 @@ Audited the current `main` commit `8c84978cd003738d94a74eef9114b711689c3804` (po
 
 **Action:** Use the separate [large-module boundary audit](architecture/large-module-boundaries.md) for the three modules it covers. Add a similar dependency/caller audit for `src/construction/runtime.rs` before considering any extraction. Preserve module visibility and colocated tests; don't combine refactoring with behavior changes or Clippy suppression.
 
-### P2 — Clarify the experimental workflow's lifecycle
+### P2 — Preserve the experiment workflow until its branch lifecycle is resolved
 
-**Finding:** `.github/workflows/sulfur-parallelogram-experiment.yml` is an 11 KB, one-PR comparison workflow that targets the dedicated fix branch and also checks the experiment head name. It appears intentionally scoped, not a general CI gate.
+**Finding:** `.github/workflows/sulfur-parallelogram-experiment.yml` is a 252-line, one-PR comparison workflow. It pins the pre-experiment baseline, runs the baseline twice and variant once, checks named test-failure deltas, and compares Bob catalogue output. It is explicitly gated to `experiment/sulfur-parallelogram-2026-10-13`. That branch still exists at `6762652857c36d7b31c192445cc1b1f5a441966a` (last commit dated 2026-10-13). The historical PR audit says the sulfur experiment was merged into #194, but that alone does not prove the dedicated branch or comparison evidence is no longer useful.
 
-**Action:** Preserve it while the experiment branch or its evidence may still be needed. Once branch and artifact/history requirements are checked, either archive the workflow's rationale in `docs/` and remove an obsolete workflow, or rename/comment it so its experiment-only status is obvious. Do not silently delete it as routine cleanup.
+**Action:** Keep the workflow for now; it is narrow and documents a useful reproducible comparison. Before deleting it, reconcile the experiment branch with the merged lineage and confirm that its test/generation evidence is preserved elsewhere. This is a lifecycle decision, not routine cleanup.
 
 ### P3 — Keep runtime launch code cohesive
 
