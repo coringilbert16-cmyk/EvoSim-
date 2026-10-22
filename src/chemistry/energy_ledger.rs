@@ -17,6 +17,8 @@ pub(crate) enum EnergyReason {
 /// separate from bond-energy release: world tone is not chemical potential.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ExternalEnergySource {
+    /// The explicit one-time energy grant that initializes the simulation's first organism.
+    InitialCondition,
     WorldTone,
 }
 
