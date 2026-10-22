@@ -186,3 +186,12 @@ The owner explicitly approved the parent-aggregate ownership model: the parent r
 - Section 17.46 ranks the confirmed risks: stored BREAK partial split/return; contained acquisition and expulsion fallback; movement geometry committed before ledger settlement; then cross-domain failure injection and inventory reconciliation.
 - Section 17.47 confirms structural BREAK uses a negative structural-store delta rather than a second potential-release credit; COMBINE uses a positive structural delta; world tone and initial energy use separate input paths. Inspected live chemistry callers set the generic potential-release field to zero; any future nonzero use needs a real source authority, not just a counter.
 - Remaining audit areas: chemistry-library/reaction-cache invalidation and remaining energy-changing paths. Keep activation accumulation distinct from physical energy. No code/test changes until all audit templates are complete.
+
+
+## Latest handoff checkpoint — 2026-10-22, Section 17.48
+
+- Plan commit: `a58924a2c8d1491cc8fafff01159e9268b4a42d9`. PR #204 remains documentation-only. PR #205 exact head inspected remains `12d8079230458da68a8dc3755a1d6a9b41347862`; no source/test changes.
+- Chemistry-library schema 4/fingerprint and strict rejection of legacy/malformed stores are present; insert rollback/reopen tests passed on the recorded exact-head workflow. Keep the fingerprint marker synchronized with future resource/catalog chemistry changes.
+- New runtime cleanup finding: `chemical_reaction::accumulate` returns early for bondless structures before pruning stale per-organism accumulation keys. If a final bond disappears while old revision keys remain, those keys can persist indefinitely for dead/bondless organisms. This is activation state, not energy. Candidate fix: clear that organism's keys before the early return; test that another organism's entries remain.
+- Confirmed source/destination atomicity and movement settlement risks remain in Sections 17.43–17.46. No implementation until audit templates are complete.
+- Next audit: finish remaining energy/material mutation and cache/catalog invalidation call sites; then close the dependency/failure matrix and rank the smallest implementation units.
