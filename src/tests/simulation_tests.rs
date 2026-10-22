@@ -623,9 +623,17 @@ mod integration_tests {
         let mut s = Simulation::new(7, 10.0);
         add_test_break_bond(&mut s);
         s.organisms[0].usable_energy = 100.0;
+        let inventory_before =
+            integer_material_inventory(&s).expect("pre-transformation inventory is integral");
         start_test_break_transformation(&mut s);
         assert!(s.organisms[0].active_transformation_id.is_some());
         assert_eq!(s.organisms[0].stored_material.physical_count(), 0);
+        let inventory_after =
+            integer_material_inventory(&s).expect("active transformation inventory is integral");
+        assert_eq!(
+            inventory_after, inventory_before,
+            "moving stored physical material into an active BREAK transformation must preserve constituents"
+        );
     }
     #[test]
     fn energy_inventory_snapshot_recomputes_current_holders_independently_of_ledger_totals() {
