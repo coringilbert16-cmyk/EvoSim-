@@ -2067,3 +2067,14 @@ The schema-4 chemistry manifest uses a fixed equation fingerprint with a catalog
 - Geometry/interface identity is separately represented in the key, and live geometry remains authoritative before a cache lookup. A cache hit supplies only the static potential; it does not authorize a bond or replace live contact, endpoint, or energy validation.
 
 **Closure gate:** add or document a deterministic test that changing a chemistry-position catalog value requires a changed cache fingerprint and rejection of the old store. Phase 4 remains open until the chosen manual/derived fingerprint policy is enforced. No source/test change.
+
+
+### 17.51 Prepared COMBINE ledger-delta field audit — staged fields are broader than the commit list — 2026-10-22
+
+**Status: Defensive consistency gap identified; currently omitted counters appear unaffected by the COMBINE candidate itself.** Exact-head review of prepare_transformation, rollback_prepared_combine, and try_combine. No source/test changes.
+
+- COMBINE preparation computes a per-field EnergyLedger delta from the trial ledger, including `total_world_tone_energy_escaped` and `total_resonant_energy_held`. The commit path applies usable/structural/external/unabsorbed/gained/work/heat/usable-held deltas but does not apply the escaped-tone or resonant-held deltas. The rollback helper likewise omits those fields.
+- The inspected COMBINE candidate currently has no world-tone or resonance-receiver operation, so those omitted deltas should remain zero on the current path. This is not evidence of a present energy leak, but it makes the staging contract fragile: a future candidate-side ledger effect could be silently dropped while the delta structure appears to preserve it.
+- Closure options: narrow the delta struct to only fields COMBINE is allowed to mutate and assert all other deltas are zero, or commit/rollback every permitted field from one centralized delta application helper. Add a test that compares every EnergyLedger field before/after successful and rejected prepared COMBINE. Do not broaden the transaction's authority implicitly.
+
+**Next audit:** compare all fields in the energy-ledger schema against initialization, end-of-tick refresh, prepared transformation commit/rollback, and inventory snapshot equations; record intentional diagnostics versus authoritative stores. No implementation until the audit templates are complete.
