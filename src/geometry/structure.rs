@@ -547,7 +547,10 @@ impl PhysicalConstituentGraph {
             || source_ids.contains(&PhysicalConstituentId(0))
             || source.next_constituent_id == 0
             || self.next_constituent_id == 0
-            || self.next_constituent_id.checked_add(source.units.len() as u64).is_none()
+            || self
+                .next_constituent_id
+                .checked_add(source.units.len() as u64)
+                .is_none()
         {
             return None;
         }
@@ -1097,7 +1100,11 @@ mod tests {
             .additional_genome_constituent_groups()
             .contains(&vec![mapped_second]));
         assert_eq!(
-            parent.physical_constituent_ids().into_iter().collect::<HashSet<_>>().len(),
+            parent
+                .physical_constituent_ids()
+                .into_iter()
+                .collect::<HashSet<_>>()
+                .len(),
             3
         );
     }
@@ -1130,7 +1137,9 @@ mod tests {
             bond_energy: 1.0,
         });
 
-        assert!(destination.append_graph_remapping_ids(&invalid_source).is_none());
+        assert!(destination
+            .append_graph_remapping_ids(&invalid_source)
+            .is_none());
         assert_eq!(destination.units, original_units);
         assert_eq!(destination.bonds, original_bonds);
     }
