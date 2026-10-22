@@ -3125,6 +3125,17 @@ Consequences:
 - **Validation status at note time:** latest PR #205 head is `2f8ae39a9b065121a174c07e60a876ac7dae59e5`; CI run `39861074268` has passed formatting and structural checks, while test stages remain in progress. Do not claim test success until the run finishes. Strict Clippy remains a known baseline failure unless the exact-head run proves otherwise.
 - **Next step:** focused audit of anchor placement/contact semantics and the smallest safe path to promote the anchor into the canonical graph, then implement the first live atomic growth transaction. Keep PR #196 out of scope and keep individual commands/tests within the five-minute cap.
 
+
+
+## Core-specific cavity/cache ownership audit (Section 17.117, 2026-10-22)
+
+- **Focused source audit:** `Organism::genome_cavity_cached_ref` currently analyzes the entire `organism.structure` and writes the selected cavity's boundary IDs back through `set_genome_constituent_ids`. This is correct for the present one-genome-per-graph model, but unsafe once a second genome core lives in the same parent-owned aggregate.
+- With multiple cores in one graph, a whole-graph cavity scan could select the developing core instead of the parent's own genome. Updating the primary ID group from that result can also strip those IDs from the additional group. A metadata-only multi-core API does not prevent this ownership/cache error.
+- Before canonical aggregation, introduce core-specific cavity analysis and cache ownership: the parent genome's cavity must remain anchored to its own stable core identity; the developing genome's cavity/viability must be analyzed against its own physical component or a view restricted by its core identity. Do not infer organism identity from whichever cavity a whole-graph analyzer returns first.
+- Cache invalidation must follow physical graph revision, but each core's cached result must retain its own core identity and genome/blueprint association. A graph revision shared by both cores is not permission to share or overwrite their biological state.
+- This audit strengthens the ordering: finish stable core identity and core-specific cavity/viability semantics before migrating the live construction graph. Movement remains deferred until that migration begins, at which point translation/collision/revision updates must be coordinated.
+- **Next:** design and test core-anchored cavity lookup with two qualifying cavities in one graph, proving the primary result and additional-core result remain stable under unit insertion/removal and serialization. Then proceed to atomic parent-funded growth. No movement code changed in this audit.
+
 ## 18. Research references and annotated application to EvoSim — 2026-10-22
 
 **Purpose.** These references are an external research crosswalk for the plan, not a new physics specification and not evidence that any feature is already implemented. Use them to sharpen audits, design tests, and identify efficient abstractions. The owner-approved decisions in Sections 14 and 17 remain authoritative. In particular, do not import assumptions from models that do not conserve material, use different energy semantics, or omit EvoSim's physical geometry.
