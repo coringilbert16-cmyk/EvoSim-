@@ -138,3 +138,13 @@ The owner explicitly approved the parent-aggregate ownership model: the parent r
 - **New world-tone finding:** current PR #205 head has live sunlight capture enabled. Shared occlusion geometry includes stored/committed/developing material and active transformations, but only primary structures of living organisms map to resonance reservoirs. Every other physical receiver converts its material response to heat, including parent-relative non-primary holdings that the approved aggregate model says remain parent-owned until division.
 - This exposes a contract question: should a living aggregate harvest compatible resonance from its owned non-primary surfaces, or is resonance eligibility intentionally limited to the primary graph? Do not change the mapping until the existing approved sunlight decisions are checked for an explicit answer.
 - Next: reconcile Sections 17.31 and the earlier approved world-tone rules against receiver eligibility, and determine whether owner clarification is needed. No source/test changes.
+
+
+## Latest handoff checkpoint — 2026-10-22, Section 17.38
+
+- Plan update commit: `522872e8883df91f94ff777bc861a2f0c10cc06f`. PR #204 remains documentation-only.
+- Audited PR #205 implementation head remains `12d8079230458da68a8dc3755a1d6a9b41347862`; this pass changed no implementation source or tests.
+- Section 17.38 reconciles the existing approvals: D5 settles the sunlight computation approximation and source/occlusion/propagation constraints, but does not specify which physical holders can credit the organism's resonance reservoir. Section 17.31 settles parent aggregate ownership until division, but explicitly does not make every owned holder chemically available. Therefore prior decisions do not unambiguously settle whether parent-owned stored/committed/developing surfaces can harvest compatible resonance.
+- The two plausible rules are recorded in Section 17.38: (1) aggregate capture by any uniquely owned physical surface of a living aggregate into the parent's one reservoir; or (2) primary-structure-only capture, with all other surfaces responding as heat. Do not infer or implement one without owner clarification. Keep the live path unchanged meanwhile.
+- Work can continue without blocking on that choice: next audit is the complete source-to-sink world-tone energy matrix (incident budget → response → damping → reservoir credit → onward propagation → escape/heat → ledger), plus proof that active-transformation bodies are not double-counted and each body resolves to at most one owner.
+- Existing failure-path risks remain open as recorded in Sections 17.34–17.36. No code/test change or test seam is authorized until all audit templates are complete.
