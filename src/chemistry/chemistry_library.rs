@@ -325,7 +325,11 @@ impl ChemistryLibrary {
     }
 
     pub fn insert(&mut self, record: ChemistryRecord) -> std::io::Result<bool> {
-        self.insert_with_manifest_persistence(record, persist_manifest_atomically)
+        self.insert_with_persistence(
+            record,
+            append_record_and_sync,
+            persist_manifest_atomically,
+        )
     }
 
     fn insert_with_manifest_persistence<F>(
@@ -334,6 +338,19 @@ impl ChemistryLibrary {
         persist_manifest: F,
     ) -> std::io::Result<bool>
     where
+        F: FnOnce(&Path, &ChemistryLibraryManifest) -> std::io::Result<()>,
+    {
+        self.insert_with_persistence(record, append_record_and_sync, persist_manifest)
+    }
+
+    fn insert_with_persistence<A, F>(
+        &mut self,
+        record: ChemistryRecord,
+        append_record: A,
+        persist_manifest: F,
+    ) -> std::io::Result<bool>
+    where
+        A: FnOnce(&mut File, &[u8]) -> std::io::Result<()>,
         F: FnOnce(&Path, &ChemistryLibraryManifest) -> std::io::Result<()>,
     {
         if !record.is_valid() {
@@ -361,7 +378,7 @@ impl ChemistryLibrary {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         row.push(b'\n');
 
-        if let Err(write_error) = file.write_all(&row).and_then(|()| file.sync_data()) {
+        if let Err(write_error) = append_record(&mut file, &row) {
             return Err(rollback_appended_record(
                 &mut file,
                 original_len,
@@ -384,6 +401,11 @@ impl ChemistryLibrary {
         self.manifest = next_manifest;
         Ok(true)
     }
+}
+
+fn append_record_and_sync(file: &mut File, row: &[u8]) -> std::io::Result<()> {
+    file.write_all(row)?;
+    file.sync_data()
 }
 
 fn rollback_appended_record(
@@ -640,7 +662,7 @@ mod tests {
     }
 
     #[test]
-    fn partial_append_failure_rolls_back_original_cache_bytes_and_reopens_cleanly() {
+    fn insert_partial_append_failure_rolls_back_original_cache_bytes_and_reopens_cleanly() {
         let root = test_root("append-failure");
         let _ = fs::remove_dir_all(&root);
         let mut library = ChemistryLibrary::open(&root).unwrap();
@@ -654,30 +676,39 @@ mod tests {
         let manifest_path = root.join("manifest.json");
         let original_data = fs::read(&data_path).unwrap();
         let original_manifest = fs::read(&manifest_path).unwrap();
-        let original_len = original_data.len() as u64;
-        let mut file = OpenOptions::new()
-            .read(true)
-            .append(true)
-            .open(&data_path)
-            .unwrap();
-        file.write_all(br#"{"key":"#).unwrap();
-        file.sync_data().unwrap();
+        let failed_record = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "injected-append-failure"),
+            static_potential: 0.75,
+        };
+        let failed_key = failed_record.key.clone();
 
-        let error = rollback_appended_record(
-            &mut file,
-            original_len,
-            std::io::Error::new(
-                std::io::ErrorKind::WriteZero,
-                "injected partial chemistry record append failure",
-            ),
-        );
+        let error = library
+            .insert_with_persistence(
+                failed_record,
+                |file, row| {
+                    let prefix_len = row.len().min(5);
+                    file.write_all(&row[..prefix_len])?;
+                    file.sync_data()?;
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::WriteZero,
+                        "injected partial chemistry record append failure",
+                    ))
+                },
+                persist_manifest_atomically,
+            )
+            .unwrap_err();
+
         assert_eq!(error.kind(), std::io::ErrorKind::WriteZero);
-        drop(file);
-
         assert_eq!(fs::read(&data_path).unwrap(), original_data);
         assert_eq!(fs::read(&manifest_path).unwrap(), original_manifest);
+        assert_eq!(library.len(), 1);
+        assert_eq!(library.manifest.entries, 1);
+        assert!(library.get(&failed_key).is_none());
+
         let reopened = ChemistryLibrary::open(&root).unwrap();
         assert_eq!(reopened.len(), 1);
+        assert_eq!(reopened.manifest.entries, 1);
+        assert!(reopened.get(&failed_key).is_none());
         assert_eq!(
             reopened
                 .get(&original.key)
