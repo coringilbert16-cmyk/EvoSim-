@@ -507,3 +507,10 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - GitHub Actions has not yet returned a workflow run for this commit in the available check; verification remains pending. No full suite was run manually.
 - Latest plan commit before this checkpoint: `634f17d5fb96ddf55f3b342d7ff83bcd14a87e98`; handoff before this checkpoint: `a9c2fbcae2d9fd64145b6dba407b46b03e5d0f0d`.
 - Next: verify the focused regression and formatting on exact head. Then continue one focused audit of candidate geometry/parent-energy/source-removal mutation ordering for a real aggregate attachment transaction; do not patch the old developing-energy flow in isolation.
+
+## Construction attachment transaction audit — 2026-10-22, Section 17.114
+
+- Audited the live construction path after the fail-closed guard. `try_child_construction` asks the attachment solver to charge `child.usable_energy` even for parent-storage candidates; the caller removes the parent-held source afterward, then commits candidate ledger and developing graph separately. Parent ordinary `usable_energy` is not the production-cost source for that attachment.
+- A scalar-only switch to parent energy is unsafe: source removal and aggregate structure mutation are separate commits, and the candidate graph remains separate from the parent. It would violate both atomicity and the approved aggregate/resonance/lifecycle model.
+- Next code slice must provide a live parent-owned aggregate transaction: validate candidate placement and graph/core-ID remapping, stage parent energy and ledger, stage source removal, then commit structure/storage/energy/ledger/revision together or leave all unchanged. Remove the separate developing-energy transfer and temporary-organism lifecycle within that coherent change.
+- No source/test change from this audit; no additional owner decision required. Workflow `39856976428` for head `c57926fdf551472cfa274ca1f3550d1a93b29295` remained in progress at last check.
