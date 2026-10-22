@@ -26,16 +26,16 @@ This README is the current repository guide and implementation-status summary. O
 ## Repository map
 
 - `src/chemistry/` — chemical reactions, transactions, resource accounting, and energy ledger.
-- `src/geometry/` and `src/material_geometry/` — realized geometry, contact, cavities, and material-shape reasoning.
+- `src/geometry/` — realized geometry, contact, cavities, material-shape reasoning, and structure authority. `material_geometry.rs` lives here; there is no separate `src/material_geometry/` directory.
 - `src/bob/` — geometry-library generation, persistence, lookup, and viewer-facing support.
 - `src/construction/` and `src/organism/` — construction, organism state, decisions, and reproduction.
 - `src/perception/` — harmonic response, movement, and related perception logic.
-- `src/materials/` — physical-material handling and restoration.
+- `src/materials/` — resource definitions, physical-material handling, storage, transfer, and restoration.
 - `docs/` — focused architecture, implementation, and audit documents.
 - `scripts/`, `.github/workflows/` — repository checks and automation.
 - `ui/` — user-interface assets.
 
-For current feature-level details, use the focused documents under `docs/` and the most recent dated checkpoint above. The handoff archive retains earlier decisions and evidence for traceability.
+`src/main.rs` is also the crate-level module registry: explicit `#[path]` declarations preserve existing module names while implementation files are grouped by responsibility. The `src/tests/` directory contains crate-internal contract and simulation tests; the top-level `ui/` contains browser assets, while `src/ui/` contains Rust-side visualization support. For current feature-level details, use the focused documents under `docs/` and the most recent dated checkpoint above. The handoff archive retains earlier decisions and evidence for traceability.
 
 ## Build and verification
 
