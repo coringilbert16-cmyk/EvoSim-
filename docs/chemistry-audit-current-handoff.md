@@ -379,3 +379,11 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - The COMBINE rollback helper omits world-tone escaped and resonant-held fields, but the current `settle_transaction` API does not mutate those fields; the gap is missing explicit zero-delta/preservation assertions, not yet a proven live accounting defect.
 - Existing test `failed_prepared_combine_rolls_back_energy_and_every_ledger_delta` does not assert all ledger fields. A future focused test should initialize nonzero sentinel values and prove unmodified fields survive prepare/rollback, while proving every generated delta belongs to the transaction's mutation set.
 - No source/test changes. Continue failure-row coverage and audit closure; do not code until templates close. Refresh PR #205 head and CI immediately before the first implementation change.
+
+
+## Resume checkpoint — movement/acquisition/expulsion coverage (Section 17.98)
+
+- Plan commit: `50744dc7e8e4fc04faed0cdfa95e855e4a376319`; PR #204 remains documentation-only.
+- Exact PR #205 head reviewed: `12d8079230458da68a8dc3755a1d6a9b41347862`.
+- Movement already has geometric push-chain atomicity tests, but not energy-ledger rejection after geometry succeeds. Containment has a successful transfer regression, but not combined storage/fallback rejection. Expulsion has no local tests and does not restore storage after final deposit rejection.
+- These are test-required gates after source inspection; no source/test changes made. Continue with stored BREAK/environmental COMBINE failure coverage and reconcile the full matrix before implementation. Refresh exact head/CI before code changes.
