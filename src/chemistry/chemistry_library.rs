@@ -640,6 +640,53 @@ mod tests {
     }
 
     #[test]
+    fn partial_append_failure_rolls_back_original_cache_bytes_and_reopens_cleanly() {
+        let root = test_root("append-failure");
+        let _ = fs::remove_dir_all(&root);
+        let mut library = ChemistryLibrary::open(&root).unwrap();
+        let original = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "append-rollback"),
+            static_potential: 0.45,
+        };
+        assert!(library.insert(original.clone()).unwrap());
+
+        let data_path = root.join("chemistry.jsonl");
+        let manifest_path = root.join("manifest.json");
+        let original_data = fs::read(&data_path).unwrap();
+        let original_manifest = fs::read(&manifest_path).unwrap();
+        let original_len = original_data.len() as u64;
+        let mut file = OpenOptions::new()
+            .read(true)
+            .append(true)
+            .open(&data_path)
+            .unwrap();
+        file.write_all(b"{\\"key\\":").unwrap();
+        file.sync_data().unwrap();
+
+        let error = rollback_appended_record(
+            &mut file,
+            original_len,
+            std::io::Error::new(
+                std::io::ErrorKind::WriteZero,
+                "injected partial chemistry record append failure",
+            ),
+        );
+        assert_eq!(error.kind(), std::io::ErrorKind::WriteZero);
+        drop(file);
+
+        assert_eq!(fs::read(&data_path).unwrap(), original_data);
+        assert_eq!(fs::read(&manifest_path).unwrap(), original_manifest);
+        let reopened = ChemistryLibrary::open(&root).unwrap();
+        assert_eq!(reopened.len(), 1);
+        assert_eq!(
+            reopened.get(&original.key).map(|record| record.static_potential),
+            Some(0.45)
+        );
+        drop(reopened);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn independent_instances_serialize_writes_and_refresh_stale_state() {
         let root = test_root("concurrent-writers");
         let _ = fs::remove_dir_all(&root);
