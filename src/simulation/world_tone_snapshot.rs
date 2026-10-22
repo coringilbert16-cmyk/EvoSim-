@@ -862,7 +862,10 @@ mod tests {
         let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
             .expect("valid composite physical material should not invalidate the world snapshot");
         assert!(
-            snapshot.body_properties.iter().any(|properties| properties.len() == 2),
+            snapshot
+                .body_properties
+                .iter()
+                .any(|properties| properties.len() == 2),
             "both constituent material responses must be present for composite geometry"
         );
     }
