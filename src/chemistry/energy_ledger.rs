@@ -306,7 +306,12 @@ impl EnergyLedgerAuthority for EnergyLedger {
         holder: &mut f64,
         transaction: ExternalInputTransaction,
     ) -> bool {
-        if !holder.is_finite() || *holder < -EPSILON || !transaction.balanced() {
+        if (transaction.source == ExternalEnergySource::InitialCondition
+            && (self.initial_condition_energy_settled || transaction.external_input <= 0.0))
+            || !holder.is_finite()
+            || *holder < -EPSILON
+            || !transaction.balanced()
+        {
             return false;
         }
         let next_holder = *holder + transaction.usable_delta;
@@ -327,6 +332,9 @@ impl EnergyLedgerAuthority for EnergyLedger {
         self.total_usable_energy_gained = next_gained;
         self.total_work_expended = next_work;
         self.total_heat_dissipated = next_heat;
+        if transaction.source == ExternalEnergySource::InitialCondition {
+            self.initial_condition_energy_settled = true;
+        }
         true
     }
 
@@ -625,6 +633,33 @@ mod tests {
         assert_eq!(energy, 14.0);
         assert_eq!(ledger.total_potential_energy_released, 12.0);
         assert_eq!(ledger.total_work_expended, 2.0);
+    }
+
+    #[test]
+    fn initial_condition_energy_source_can_only_be_settled_once() {
+        let mut ledger = EnergyLedger::default();
+        let mut holder = 0.0;
+        let initial = ExternalInputTransaction {
+            source: ExternalEnergySource::InitialCondition,
+            source_available: 12.5,
+            external_input: 12.5,
+            usable_delta: 12.5,
+            work_expended: 0.0,
+            heat_dissipated: 0.0,
+        };
+
+        assert!(ledger.settle_external_input(&mut holder, initial));
+        assert_eq!(holder, 12.5);
+        assert_eq!(ledger.total_external_energy_input, 12.5);
+        assert!(ledger.initial_condition_energy_settled);
+
+        assert!(!ledger.settle_external_input(&mut holder, initial));
+        assert_eq!(holder, 12.5, "duplicate initial source must not credit holder");
+        assert_eq!(
+            ledger.total_external_energy_input,
+            12.5,
+            "duplicate initial source must not increase source accounting"
+        );
     }
 
     #[test]
