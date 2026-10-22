@@ -98,6 +98,9 @@ impl StructuralUnit {
         let Some(shape) = self.shape(catalog).cloned() else {
             return false;
         };
+        if !shape.is_valid_physical_shape() {
+            return false;
+        }
         self.geometry = Some(PhysicalGeometry::from_default(&shape));
         true
     }
@@ -367,7 +370,7 @@ impl Bond {
             && connection_is_valid(self.endpoint_b)
     }
 }
-fn units_strictly_overlap(
+pub(crate) fn units_strictly_overlap(
     a: &StructuralUnit,
     b: &StructuralUnit,
     catalog: &[BaseResource],
@@ -531,6 +534,15 @@ impl PhysicalConstituentGraph {
         let Some(d) = self.endpoint_index(b.endpoint_b) else {
             return false;
         };
+        if !self.units[a]
+            .shape(c)
+            .is_some_and(|shape| shape.is_valid_physical_shape())
+            || !self.units[d]
+                .shape(c)
+                .is_some_and(|shape| shape.is_valid_physical_shape())
+        {
+            return false;
+        }
         if !b.is_valid(|e| {
             self.endpoint_index(e)
                 .and_then(|i| e.location.world_point(self.units.get(i)?, c))

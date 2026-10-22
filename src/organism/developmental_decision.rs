@@ -24,11 +24,9 @@ pub(crate) struct DevelopmentalContext {
 pub(crate) fn context(
     organism: &mut Organism,
     environment: &Environment,
-    seed_reference: (f64, f64),
 ) -> Option<DevelopmentalContext> {
-    let (seed_mass, seed_length) = seed_reference;
     let current_realization = organism
-        .developmental_realization_cached_for_reference(&environment.catalog, seed_reference)
+        .developmental_realization_cached(&environment.catalog)
         .unwrap_or(crate::developmental_blueprint::DevelopmentalRealization {
             material: None,
             density: None,
@@ -41,11 +39,8 @@ pub(crate) fn context(
         organism.developmental_origin.y,
     );
     let orientation = organism.developmental_orientation_radians;
-    let preferred_length = blueprint.preferred_developmental_length(
-        organism.genome.preferred_mass(),
-        seed_mass,
-        seed_length,
-    );
+    let preferred_length =
+        blueprint.preferred_developmental_length(organism.genome.preferred_mass());
     Some(DevelopmentalContext {
         blueprint,
         origin,
@@ -60,17 +55,9 @@ pub(crate) fn context(
 /// Compute the observed growth fraction without mutating the organism's cache.
 /// Observation must be a read-only projection of simulation state.
 pub(crate) fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
-    let Ok((seed_mass, seed_length)) =
-        crate::juvenile::confirmed_seed_scale_reference(&environment.catalog)
-    else {
-        return 0.0;
-    };
     let blueprint = &organism.genome.developmental_blueprint;
-    let preferred_length = blueprint.preferred_developmental_length(
-        organism.genome.preferred_mass(),
-        seed_mass,
-        seed_length,
-    );
+    let preferred_length =
+        blueprint.preferred_developmental_length(organism.genome.preferred_mass());
     growth_fraction_for_structure(
         &organism.structure,
         environment,
@@ -89,7 +76,8 @@ pub(crate) fn growth_fraction_for_reference(
     environment: &Environment,
     seed_reference: (f64, f64),
 ) -> f64 {
-    context(organism, environment, seed_reference)
+    let _ = seed_reference;
+    context(organism, environment)
         .map(|developmental| developmental.current_growth_fraction)
         .unwrap_or(0.0)
 }

@@ -353,26 +353,17 @@ impl DevelopmentalFieldBlueprint {
         }
     }
 
-    pub fn preferred_developmental_length(
-        &self,
-        preferred_mass: f64,
-        seed_mass: f64,
-        seed_length: f64,
-    ) -> f64 {
-        if !preferred_mass.is_finite()
-            || preferred_mass <= 0.0
-            || !seed_mass.is_finite()
-            || seed_mass <= 0.0
-            || !seed_length.is_finite()
-            || seed_length <= 0.0
-        {
+    /// Convert preferred structural mass into a characteristic length in the
+    /// simulation's two-dimensional space.
+    ///
+    /// The field's length scale follows the 2-D mass/area relationship:
+    /// L ∝ sqrt(M). No fixed seed topology or seed-specific dimensions enter
+    /// this inherited preference. The physical graph remains authoritative.
+    pub fn preferred_developmental_length(&self, preferred_mass: f64) -> f64 {
+        if !preferred_mass.is_finite() || preferred_mass <= 0.0 {
             return 0.0;
         }
-        // Approved calibration relationship:
-        // L_preferred = L_seed * sqrt(M_preferred / M_seed).
-        // Seed values are physical calibration references, never inherited
-        // structural or topological authority.
-        seed_length * (preferred_mass / seed_mass).sqrt()
+        preferred_mass.sqrt()
     }
 }
 
@@ -423,6 +414,15 @@ mod tests {
         assert!(blueprint.validate().is_ok());
         assert!((blueprint.density_preference(0.0, 0.0) - 1.0).abs() < f64::EPSILON);
         assert!(blueprint.density_preference(2.0, 0.0) < 0.5);
+    }
+
+    #[test]
+    fn preferred_length_uses_two_dimensional_mass_scaling_without_seed_calibration() {
+        let blueprint = default_developmental_blueprint();
+        assert!((blueprint.preferred_developmental_length(4.0) - 2.0).abs() < 1e-12);
+        assert!((blueprint.preferred_developmental_length(16.0) - 4.0).abs() < 1e-12);
+        assert_eq!(blueprint.preferred_developmental_length(0.0), 0.0);
+        assert_eq!(blueprint.preferred_developmental_length(f64::NAN), 0.0);
     }
 
     #[test]

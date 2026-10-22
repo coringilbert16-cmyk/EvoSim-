@@ -115,8 +115,6 @@ impl Simulation {
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
         let rng = ChaCha8Rng::seed_from_u64(seed);
         let environment = Self::create_environment();
-        let seed_scale_reference =
-            crate::juvenile::confirmed_seed_scale_reference(&environment.catalog).ok();
         let organism = Self::create_initial_organism();
         let world_tone = crate::world_tone::WorldToneRuntimeConfig::default_for_world(
             environment.width,
@@ -159,7 +157,6 @@ impl Simulation {
             next_transformation_id: 1,
             rng,
             decision_parameters: DecisionParameters::default(),
-            seed_scale_reference,
             world_tone: Some(world_tone),
             world_tone_cycle: Some(world_tone_cycle),
         }
@@ -181,8 +178,11 @@ impl Simulation {
     pub(crate) fn create_initial_organism() -> Organism {
         let genome = initial_genome();
         let catalog = crate::resources::default_catalog();
-        let construction = crate::initial_organism_constructor::construct_valid(&catalog)
-            .expect("initial organism constructor must find a valid organism");
+        let construction = crate::initial_organism_constructor::construct_valid_with_energy(
+            &catalog,
+            genome.reproductive_energy_allocation,
+        )
+        .expect("initial organism constructor must find a valid organism");
         let mut structure = construction.structure;
         let acquired_resource_shapes = construction.acquired_resource_shapes;
         let fluid_geometry_status = construction.fluid_geometry_status;
@@ -228,8 +228,9 @@ impl Simulation {
             ));
         }
 
-        let construction_cost = (1.0e12 - construction.energy).max(0.0);
-        let initial_energy = construction_cost + genome.reproductive_energy_allocation;
+        // Construction starts with the genome's supplied allocation. Do not
+        // refund construction costs or synthesize energy to compensate for geometry.
+        let initial_energy = construction.energy;
 
         Organism {
             id: "1".into(),
@@ -659,7 +660,6 @@ impl Simulation {
                         organism,
                         &mut self.environment,
                         &mut self.energy_ledger,
-                        self.seed_scale_reference,
                     ) {
                         restore_failed_transformation_material(
                             &transformation,
@@ -712,10 +712,6 @@ impl Simulation {
             .collect();
 
         let decision_parameters = self.decision_parameters;
-        // The confirmed seed scale is deterministic for the catalog. Compute it
-        // once per simulation tick instead of rebuilding the calibration
-        // structure for every organism.
-        let seed_reference = self.seed_scale_reference;
         let world_tone_sample = self
             .world_tone_cycle
             .as_ref()
@@ -743,13 +739,8 @@ impl Simulation {
                     self.tick,
                 );
                 crate::memory::update_experience_memory(organism, &self.environment);
-                let budding_available = seed_reference
-                    .and_then(|reference| {
-                        organism.developmental_realization_cached_for_reference(
-                            &self.environment.catalog,
-                            reference,
-                        )
-                    })
+                let budding_available = organism
+                    .developmental_realization_cached(&self.environment.catalog)
                     .is_some_and(|realization| realization.overall > BUDDING_AVAILABILITY_FRACTION);
                 if budding_available && organism.reproductive_construction.is_none() {
                     let _ = crate::reproduction::begin_reproduction(
@@ -809,13 +800,8 @@ impl Simulation {
                 {
                     continue;
                 }
-                let developmental = seed_reference.and_then(|reference| {
-                    crate::developmental_decision::context(
-                        &mut organisms[index],
-                        environment,
-                        reference,
-                    )
-                });
+                let developmental =
+                    crate::developmental_decision::context(&mut organisms[index], environment);
                 let needs = Self::current_needs(
                     &mut organisms[index],
                     environment,
@@ -1247,7 +1233,6 @@ impl Simulation {
                         &mut organism.usable_energy,
                         &mut self.rng,
                         &parent_body,
-                        self.seed_scale_reference,
                     )
                 };
                 if let Some(stress) = stress {
@@ -1265,7 +1250,6 @@ impl Simulation {
                         child_id,
                         &self.environment.catalog,
                         &mut self.energy_ledger,
-                        self.seed_scale_reference,
                     ) {
                         next_organism_id += 1;
                         offspring.push(child);

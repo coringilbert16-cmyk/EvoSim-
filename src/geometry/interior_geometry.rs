@@ -124,10 +124,13 @@ pub fn find_enclosed_regions(
         let Some(resource) = catalog.iter().find(|resource| resource.name == *name) else {
             continue;
         };
-        let Some(geometry) = unit.geometry.as_ref() else {
+        // A missing cached geometry is expected after a resource mutation.
+        // Resolve the current material's catalog shape in that case; silently
+        // skipping the unit would measure a stale/incomplete cavity boundary.
+        let Some(shape) = unit.shape(catalog) else {
             continue;
         };
-        if let Some(polygon) = transformed_polygon(&geometry.shape().form, unit.placement) {
+        if let Some(polygon) = transformed_polygon(&shape.form, unit.placement) {
             if polygon.len() < 3 {
                 continue;
             }
@@ -143,7 +146,7 @@ pub fn find_enclosed_regions(
         // real boundaries when their endpoints stitch two area boundaries.
         // Keep them in the planar graph without allowing a free-standing line
         // to create containment by itself.
-        let Form::Line { length } = geometry.shape().form else {
+        let Form::Line { length } = shape.form else {
             continue;
         };
         if !length.is_finite() || length <= 0.0 {
@@ -484,6 +487,91 @@ mod tests {
             &catalog,
             std::slice::from_ref(&region),
         ));
+    }
+
+    #[test]
+    fn cavity_analysis_uses_catalog_shape_when_mutated_unit_geometry_is_missing() {
+        use crate::structure::{
+            Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit,
+        };
+
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let placements = [
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 1.0,
+                y: 1.0,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 0.0,
+                y: 1.0,
+                rotation_radians: 0.0,
+            },
+        ];
+        let mut indices = Vec::new();
+        for (index, placement) in placements.into_iter().enumerate() {
+            let resource = if index == 0 { "Carbon" } else { "Nitrogen" };
+            indices.push(structure.add_unit(StructuralUnit::new(resource, placement)));
+        }
+
+        let genome_id = structure.physical_id(indices[0]).unwrap();
+        structure.set_genome_constituent_ids([genome_id]);
+        for index in 0..indices.len() {
+            let next = (index + 1) % indices.len();
+            let a = structure.physical_id(indices[index]).unwrap();
+            let b = structure.physical_id(indices[next]).unwrap();
+            structure.push_bond_unchecked(Bond {
+                endpoint_a: BondEndpoint::new(
+                    a,
+                    ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+                ),
+                endpoint_b: BondEndpoint::new(
+                    b,
+                    ConnectionEndpoint::Boundary {
+                        angle_radians: std::f64::consts::PI,
+                    },
+                ),
+                strength: 0.5,
+                bond_energy: 1.0,
+            });
+        }
+
+        // The Carbon unit represents a just-mutated piece: its cached geometry
+        // is absent, so cavity analysis must use Carbon's current catalog shape.
+        assert!(structure.units[indices[0]].geometry.is_none());
+        assert!(structure.units[indices[0]].shape(&catalog).is_some());
+        let regions = find_enclosed_regions(&structure, &catalog);
+        assert!(
+            regions
+                .iter()
+                .any(|region| region.boundary_units.contains(&indices[0])),
+            "the mutated Carbon must participate in the analyzed boundary"
+        );
+
+        // Compare against the same formation with the original Nitrogen
+        // restored. The changed catalog shape must affect measured topology,
+        // not merely the material label attached to a stale cavity.
+        let mut nitrogen_baseline = structure.clone();
+        nitrogen_baseline.units[indices[0]].material =
+            crate::resources::Material::free_base("Nitrogen", 1.0);
+        let baseline_regions = find_enclosed_regions(&nitrogen_baseline, &catalog);
+        let measured_area: f64 = regions.iter().map(|region| region.area).sum();
+        let baseline_area: f64 = baseline_regions.iter().map(|region| region.area).sum();
+        assert!(
+            (measured_area - baseline_area).abs() > EPS,
+            "replacing a cavity piece with Carbon must recalculate the measured area"
+        );
     }
 
     fn region_count(polygons: Vec<Vec<Point>>) -> usize {

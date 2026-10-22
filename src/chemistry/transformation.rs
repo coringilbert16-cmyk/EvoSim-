@@ -577,7 +577,6 @@ impl Simulation {
         organism: &mut Organism,
         environment: &mut Environment,
         ledger: &mut EnergyLedger,
-        seed_scale_reference: Option<(f64, f64)>,
     ) -> bool {
         if matches!(
             transformation.kind,
@@ -619,13 +618,8 @@ impl Simulation {
             let original_ledger = *ledger;
             let mut trial_ledger = original_ledger;
             let mut cache = crate::contact::ConnectionCompatibilityCache;
-            let developmental_context = seed_scale_reference.and_then(|reference| {
-                crate::developmental_decision::context(
-                    &mut trial_organism,
-                    &trial_environment,
-                    reference,
-                )
-            });
+            let developmental_context =
+                crate::developmental_decision::context(&mut trial_organism, &trial_environment);
             let developmental = developmental_context.as_ref().map(|context| {
                 (
                     &context.blueprint,
@@ -1196,8 +1190,11 @@ mod tests {
     ) {
         let genome = crate::genome::initial_genome();
         let catalog = crate::resources::default_catalog();
-        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
-        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
+        let structure =
+            crate::initial_organism_constructor::sealed_nitrogen_ring_with_external_unit_fixture(
+                &catalog,
+            )
+            .expect("test ring and external bond should be physically realized");
         let organism = crate::state::Organism {
             id: "test".into(),
             developmental_origin: crate::state::Position { x: 0.0, y: 0.0 },

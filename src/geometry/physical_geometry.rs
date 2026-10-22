@@ -37,7 +37,7 @@ impl PhysicalGeometry {
     /// The caller is responsible for establishing that this constituent is a
     /// fluid resource. The method itself only accepts a valid replacement.
     pub fn replace_fluid_realization(&mut self, shape: Shape) -> bool {
-        if !shape.is_valid() {
+        if !shape.is_valid_physical_shape() {
             return false;
         }
         self.shape = shape;

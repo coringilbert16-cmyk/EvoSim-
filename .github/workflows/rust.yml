@@ -1,13 +1,16 @@
 name: Rust
 
-# CI trigger: validate main pushes and every pull request targeting main.
+# CI trigger: validate main, the active constructor branch, and PRs targeting integration.
+# The explicit constructor-branch push trigger makes focused replay regressions runnable
+# even when PR workflow dispatch does not produce a new run for a connector-created commit.
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'refactor/constructor-strip-2026-10-12']
   pull_request:
-    # Also validate stacked fix branches against their parent fix branch.
+    # Validate the integration target and stacked fix branches.
     branches: [main, integration/unified-source-and-catalogue, 'fix/**']
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -21,22 +24,36 @@ jobs:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - name: Check formatting
+        timeout-minutes: 5
         run: cargo fmt --all -- --check
+      - name: Check compilation
+        timeout-minutes: 5
+        run: cargo check --locked --all-targets
       - name: Check source file sizes
+        timeout-minutes: 5
         run: bash scripts/check_large_files.sh
       - name: Check COMBINE architecture
+        timeout-minutes: 5
         run: bash scripts/check_combine_architecture.sh
       # Run the persistence-specific tests independently so their result is visible
       # even while the repository's known unrelated baseline tests are failing.
       - name: Run Bob compact-storage tests
+        timeout-minutes: 5
+        if: always()
         run: cargo test --locked compact_family_storage_tests
       - name: Verify empty Bob library open and reopen without generation
+        timeout-minutes: 5
+        if: always()
         run: cargo test --locked fresh_empty_library_opens_and_reopens_without_seeding_geometry
       - name: Verify concurrent Bob library initialization
+        timeout-minutes: 5
+        if: always()
         run: cargo test --locked concurrent_default_store_initialization_does_not_race_on_temp_files
       # Keep the fluid transaction and three-piece generation gate visible apart
       # from the known constructor-dependent full-suite backlog.
       - name: Run focused Bob fluid transaction and three-piece cap tests
+        timeout-minutes: 5
+        if: always()
         run: |
           cargo test --locked multi_contact_fluid_forms_multiple_bonds_to_one_rigid_edge
           cargo test --locked multi_contact_fluid_commits_all_three_rigid_bonds_together
@@ -47,6 +64,8 @@ jobs:
       # Exercise the fluid coalescence lifecycle independently of the broad
       # constructor/lifecycle failures in the full repository suite.
       - name: Run focused fluid coalescence and restoration tests
+        timeout-minutes: 5
+        if: always()
         run: |
           cargo test --locked live_combine_coalesces_fluid_pair_atomically
           cargo test --locked coalesced_fluid_boundary_survives_physical_material_roundtrip_and_restore
@@ -61,11 +80,157 @@ jobs:
       # Keep the chemistry BREAK energy gate visible independently of the
       # repository's known unrelated baseline failures.
       - name: Run focused chemical BREAK tests
+        timeout-minutes: 5
+        if: always()
         run: cargo test --locked chemical_break_
-      # Expensive headless multigeneration validation is paused while the seed
-      # topology is being finalized. Keep the normal Rust/Clippy gates active.
-      - name: Run Rust tests
-        run: cargo test --locked --all-targets
+      # Generate Bob knowledge in an isolated temporary store. Never seed the
+      # repository's default geometry_library/data directory from CI.
+      - name: Seed Bob and generate geometry frontiers in an isolated store
+        timeout-minutes: 5
+        if: always()
+        run: |
+          export EVOSIM_GEOMETRY_LIBRARY_DIR="$RUNNER_TEMP/evosim-bob-constructor-replay"
+          mkdir -p "$EVOSIM_GEOMETRY_LIBRARY_DIR"
+          cargo run --locked -- --geometry-worker-passes 7
+      # Measure real qualifying-cavity library growth, not ordinary geometry formations.
+      # Use a disposable isolated store; never touch the developer/default library.
+      - name: Measure Bob qualifying-cavity library growth
+        timeout-minutes: 5
+        if: always()
+        run: |
+          export EVOSIM_KNOWN_CAVITIES_DIR="$RUNNER_TEMP/evosim-known-cavities-growth"
+          rm -rf "$EVOSIM_KNOWN_CAVITIES_DIR"
+          mkdir -p "$EVOSIM_KNOWN_CAVITIES_DIR"
+          store="$EVOSIM_KNOWN_CAVITIES_DIR/candidates.jsonl"
+          echo "Initial qualifying-candidate count: $(test -f "$store" && wc -l < "$store" || echo 0)"
+          echo "=== Bounded diversity search (internal deadline: 240 seconds) ==="
+          cargo run --locked -- --bob-cavity-mutate-until-full
+          echo "Final qualifying-candidate count: $(wc -l < "$store")"
+          echo "Existing records are revalidated at search start; new records are validated before persistence."
+          python3 - <<'PY'
+          import collections, json, pathlib
+          import os
+          store = pathlib.Path(os.environ["RUNNER_TEMP"]) / "evosim-known-cavities-growth" / "candidates.jsonl"
+          records = [json.loads(line) for line in store.read_text().splitlines() if line.strip()]
+          ids = [record["id"] for record in records]
+          by_id = {record["id"]: record for record in records}
+          assert len(records) == len(ids), "duplicate candidate IDs"
+          assert len(records) <= 5000, f"hard candidate cap exceeded: {len(records)}"
+          assert records and records[0]["id"] == "nitrogen-ring-seed-v1", "nitrogen-ring seed is not first"
+          assert records[0]["constituent_count"] == 12, "seed is not the expected 12-piece corner-free ring"
+          assert all(record["constituent_count"] == len(record["structure"]["units"]) for record in records), "constituent metadata mismatch"
+          assert all(record["constituent_count"] <= 12 for record in records), "candidate grew beyond the 12-piece seed"
+          for index, record in enumerate(records):
+              parent_id = record.get("parent_id")
+              if parent_id:
+                  assert parent_id in by_id, f"missing parent {parent_id} for {record['id']}"
+                  assert record["constituent_count"] <= by_id[parent_id]["constituent_count"], f"constituent count increased: {record['id']}"
+                  assert ids.index(parent_id) < index, f"parent must precede child: {record['id']}"
+          counts = collections.Counter(record["constituent_count"] for record in records)
+          operations = collections.Counter()
+          for record in records:
+              change = record.get("change", "")
+              operation = next((prefix for prefix in ("initial validated", "remove constituent", "translate constituent", "move ", "rotate ", "replace constituent", "remove bond") if change.startswith(prefix)), "other")
+              operations[operation] += 1
+          areas = [record["cavity_area"] for record in records]
+          minima = [record["minimum_cavity_area"] for record in records]
+          bond_counts = [len(record["structure"].get("bonds", [])) for record in records]
+          unique_areas = sorted({round(value, 4) for value in areas})
+          fractional_areas = sorted({round(value, 4) for value in areas if round(value, 4) != round(round(value, 4))})
+          composition_signatures = set()
+          aspect_buckets = set()
+          lineage_depths = {}
+          for record in records:
+              parent_id = record.get("parent_id")
+              lineage_depths[record["id"]] = lineage_depths[parent_id] + 1 if parent_id else 0
+              composition = collections.Counter(
+                  unit["material"]["parts"][0][0]
+                  for unit in record["structure"]["units"]
+                  if unit.get("material", {}).get("parts")
+              )
+              composition_signatures.add(tuple(sorted(composition.items())))
+              xs = [unit["placement"]["x"] for unit in record["structure"]["units"]]
+              ys = [unit["placement"]["y"] for unit in record["structure"]["units"]]
+              width = max(xs) - min(xs)
+              height = max(ys) - min(ys)
+              aspect = max(width, height) / max(min(width, height), 1e-9)
+              aspect_buckets.add(round(aspect / 0.25))
+          print("=== Cavity candidate quality report ===")
+          print(f"records={len(records)} unique_ids={len(set(ids))} seed_constituents={records[0]['constituent_count']}")
+          print(f"constituent_count_distribution={dict(sorted(counts.items()))}")
+          print(f"mutation_operation_distribution={dict(sorted(operations.items()))}")
+          print(f"cavity_area_range={min(areas):.6g}..{max(areas):.6g}; unique_rounded_areas={len(unique_areas)}")
+          print(f"cavity_areas={unique_areas}")
+          print(f"fractional_area_count={sum(abs(value - round(value)) > 1e-6 for value in areas)}; unique_fractional_areas={fractional_areas}")
+          print(f"unique_resource_compositions={len(composition_signatures)}; unique_aspect_buckets={len(aspect_buckets)}")
+          print(f"lineage_depth_distribution={dict(sorted(collections.Counter(lineage_depths.values()).items()))}")
+          print(f"minimum_required_area_range={min(minima):.6g}..{max(minima):.6g}")
+          print(f"bond_count_range={min(bond_counts)}..{max(bond_counts)}; unique_bond_counts={len(set(bond_counts))}")
+          print("=== Accepted lineage changes ===")
+          for record in records[1:]:
+              if record.get("parent_id"):
+                  print(f"parent={record['parent_id']} id={record['id']} change={record.get('change', '')!r} area={record['cavity_area']:.9g} minimum={record['minimum_cavity_area']:.9g} constituents={record['constituent_count']}")
+          # Trace accepted substitutions against their exact parent so we can see
+          # whether cavity-facing pieces ever change and what geometry is persisted.
+          replacements = [record for record in records if record.get("change", "").startswith("replace constituent")]
+          replacement_locations = collections.Counter()
+          print("=== Accepted resource substitutions ===")
+          for record in replacements:
+              parent = by_id.get(record.get("parent_id"))
+              if parent is None:
+                  continue
+              try:
+                  index = int(record["change"].split("index ", 1)[1].split()[0])
+                  old_unit = parent["structure"]["units"][index]
+                  new_unit = record["structure"]["units"][index]
+                  old_name = old_unit["material"]["parts"][0][0]
+                  new_name = new_unit["material"]["parts"][0][0]
+                  pose = old_unit["placement"]
+                  location = (round(pose["x"], 4), round(pose["y"], 4))
+                  replacement_locations[(location, old_name, new_name, round(record["cavity_area"], 4))] += 1
+                  print(f"id={record['id']} parent={parent['id']} index={index} pose={location} material={old_name}->{new_name} area={record['cavity_area']:.6g}")
+              except (IndexError, KeyError, TypeError, ValueError) as error:
+                  print(f"Could not decode replacement {record.get('id')}: {error}")
+          print(f"replacement_count={len(replacements)} distinct_replacement_location/material/area={len(replacement_locations)}")
+          contact_guided = sum("then align edge" in record.get("change", "") for record in records)
+          print(f"accepted_contact_guided_replacements={contact_guided}")
+          assert len(fractional_areas) >= 5, f"fractional cavity diversity regressed: {len(fractional_areas)} unique fractional areas"
+          assert len(unique_areas) >= 10, f"cavity-area diversity regressed: {len(unique_areas)} unique areas"
+          assert len(composition_signatures) >= 10, f"resource-composition diversity regressed: {len(composition_signatures)}"
+          assert contact_guided > 0, "no contact-guided replacement produced a qualifying cavity"
+          print("PASS: seed identity/size, unique IDs, metadata, lineage, non-increasing constituent counts, storage cap, fractional areas, and diverse cavity families")
+          PY
+      # Keep the persisted-pair transform/contact/collision replay independently visible.
+      - name: Run persisted-pair replay regression
+        timeout-minutes: 5
+        if: always()
+        run: cargo test --locked persisted_pair_replay_preserves_relative_pose_at_a_rotated_live_anchor -- --nocapture
+      # Calibrate the genome-cavity contract independently while the production
+      # constructor tests are on hold. These focused geometry/viability checks are
+      # deliberately kept runnable during that pause.
+      - name: Run focused genome-cavity contract tests
+        timeout-minutes: 5
+        if: always()
+        run: |
+          cargo test --locked cavity_analysis_uses_catalog_shape_when_mutated_unit_geometry_is_missing -- --nocapture
+          cargo test --locked cavity::tests::
+          cargo test --locked viability::tests::
+          cargo test --locked corner_free_nitrogen_ring_qualifies_as_genome_cavity
+          cargo test --locked known_qualifying_cavities::tests::
+          cargo test --locked known_qualifying_cavities::cavity_mutation::lineage_tests::
+      # The constructor is the purpose of this branch, so verify the complete
+      # repository behavior rather than hiding constructor-dependent failures.
+      # The five-minute timeout is a hard acceptance boundary.
+      - name: Run full Rust suite against constructor branch
+        timeout-minutes: 5
+        if: always()
+        run: |
+          # Reuse the isolated Bob library seeded above. Each Actions step has
+          # its own shell, so the earlier export does not carry into this step.
+          # Never use or seed the developer/default geometry_library/data store.
+          export EVOSIM_GEOMETRY_LIBRARY_DIR="$RUNNER_TEMP/evosim-bob-constructor-replay"
+          cargo test --locked
       - name: Run Clippy
+        timeout-minutes: 5
         if: always()
         run: cargo clippy --locked --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of

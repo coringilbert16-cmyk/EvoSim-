@@ -26,21 +26,20 @@ mod integration_tests {
         )
         .unwrap()
         .is_some());
-        assert!(!o.structure.units.is_empty());
-        assert!(!o.stored_material.is_empty());
         let stored = o.stored_material.materials_snapshot();
-        assert_eq!(stored.len(), 4);
-        assert!(stored
-            .iter()
-            .any(|material| { material.parts.iter().any(|(name, _)| name == "Water") }));
+        let catalog = crate::resources::default_catalog();
+        for material in &stored {
+            assert!(!material.parts.is_empty());
+            assert!(material.parts.iter().all(|(name, amount)| {
+                catalog.iter().any(|resource| resource.name == *name)
+                    && amount.is_finite()
+                    && *amount > 0.0
+            }));
+        }
         assert_eq!(
-            stored
-                .iter()
-                .filter(|material| { material.parts.iter().all(|(name, _)| name != "Water") })
-                .count(),
-            3
+            o.usable_energy, o.genome.reproductive_energy_allocation,
+            "free-form construction must preserve the supplied energy allocation"
         );
-        assert!(o.usable_energy >= o.genome.reproductive_energy_allocation);
         assert!(o.decision_history.entries.is_empty());
     }
 
@@ -106,15 +105,14 @@ mod integration_tests {
     }
     #[test]
     fn accessible_interior_starts_without_synthetic_water() {
-        let s = Simulation::new(22, 10.0);
-        let catalog = s.environment.catalog.clone();
-        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog)
-            .expect("confirmed seed baseline should be valid");
-        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog)
-            .expect("initial realization should produce the seed boundary");
+        // Exercise the production constructor rather than the retired fixed-seed
+        // blueprint. The interior must be accessible in the realized startup organism.
+        let organism = Simulation::create_initial_organism();
+        let structure = &organism.structure;
+        let catalog = crate::resources::default_catalog();
         let regions =
-            crate::interior_geometry::find_accessible_interior_regions(&structure, &catalog)
-                .expect("initial seed should expose accessible topology");
+            crate::interior_geometry::find_accessible_interior_regions(structure, &catalog)
+                .expect("initial organism should expose accessible topology");
         assert!(!regions.is_empty());
         // Boundary Water is ordinary realized structure; no Water is synthesized
         // into the accessible interior.

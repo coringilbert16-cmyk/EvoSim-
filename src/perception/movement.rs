@@ -1235,6 +1235,18 @@ mod tests {
                 ..Default::default()
             },
         );
+        // Make every legal distance known so this test isolates dominance
+        // ranking instead of the separate curiosity-driven exploration path.
+        for (distance, energy_delta) in [(2.0, -0.02), (4.0, -0.04)] {
+            organism.decision_history.record(
+                crate::decision::ActionKind::Move,
+                Some(movement_context_key(distance)),
+                crate::decision::ActionConsequence {
+                    energy_delta,
+                    ..Default::default()
+                },
+            );
+        }
         let mut rng = ChaCha8Rng::seed_from_u64(1);
         assert_eq!(
             select_movement_distance(

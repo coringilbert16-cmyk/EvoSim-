@@ -600,7 +600,7 @@ Memory capacity and persistence are both consequences of the **realized qualifyi
 
 The number of simultaneously retained memory points is derived from the cavity's realized **2D interior area**. Capacity has diminishing returns rather than scaling one-for-one with area.
 
-The minimum qualifying cavity is strictly greater than the established three-Carbon reference area. A qualifying cavity provides at least one memory slot.
+The minimum qualifying cavity area is greater than or equal to the area of exactly three Carbon constituents. Equality qualifies; any smaller cavity fails. This is a hard minimum, not a suggestion or reference threshold. A qualifying cavity provides at least one memory slot.
 
 The current implementation uses a square-root relationship:
 
@@ -624,7 +624,7 @@ Thus larger cavities improve persistence while producing progressively smaller a
 
 Memories may exist only while the organism has a qualifying realized genome cavity:
 
-> enclosed 2D cavity area > three-Carbon reference area
+> enclosed 2D cavity area ≥ area of exactly three Carbon constituents
 
 If the realized organism loses that qualifying cavity, its retained memories are cleared. This is a consequence of losing the physical substrate that provides memory capacity and persistence; it is not a separate death or viability authority.
 
