@@ -216,3 +216,13 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Any future graph merge must stage an injective old→new ID mapping, rewrite both endpoints of every incoming bond, remap second-core anchor/boundary references, validate the candidate, and commit atomically. Existing graph API has no complete atomic merge helper.
 - Required tests: colliding ID ranges remap correctly, bond endpoints remain valid, malformed endpoints reject without mutation, parent core IDs stay stable, second-core references remap once, and pure merge preserves structural-energy inventory.
 - No source/test changes; this is a candidate future implementation unit only after audit sign-off.
+
+
+## Construction lifecycle gap — Section 17.82
+
+- **Plan commit:** `af5cb77dab1842e10c699980edbd715af3b4bbda`.
+- `advance_construction` creates a temporary Organism, applies its own maintenance, stress/death validation, and resonance-overload BREAK, then copies energy/stress/debt/structure back to construction. This is a separate biological lifecycle for an unfinished core before division.
+- Simulation handles `ConstructionStatus::Dead` in the same finish branch as Ready/Detached. `finish_reproduction` can still return an offspring when the structure is nonempty even if readiness is false. “Dead” therefore does not reliably abandon construction; needs deterministic test/semantics.
+- Recommended implication: before division, maintenance/stress/death eligibility belongs to the parent aggregate; construction is an internal process, not a second living organism. Parent death stops growth while attached units/material remain physical and ordinary chemistry continues. Do not delete reserve/stress/debt fields until separating accounting sub-holders from duplicate child-organism state.
+- Required tests cover no separate pre-split maintenance/death/overload, dead-parent no-growth/finish, no offspring after dead construction without explicit recovery, parent aggregate maintenance once, and conserved parent-owned reserve across waiting/growth/death/division.
+- **Open semantic confirmation:** should parent maintenance/stress apply to the entire aggregate during internal budding, with no independent developing-core maintenance/death state? Existing owner rules strongly imply yes, but exact energy/stress allocation needs explicit confirmation before code changes.
