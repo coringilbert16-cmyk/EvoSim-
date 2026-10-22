@@ -51,15 +51,20 @@ fn realize_released_unit(
     catalog: &[crate::resources::BaseResource],
 ) -> Option<PhysicalMaterial> {
     if unit.material.parts.len() == 1 {
-        let (name, _) = unit.material.parts.first()?;
+        let (name, amount) = unit.material.parts.first()?;
         let resource = catalog.iter().find(|resource| resource.name == *name)?;
         if resource.physical_state == crate::resources::PhysicalState::Fluid {
-            return PhysicalMaterial::realized_with_single_fluid_shape(
-                unit.material.clone(),
-                unit.placement,
-                unit.shape(catalog)?.clone(),
-                catalog,
-            );
+            let shape = unit.shape(catalog)?.clone();
+            if *amount > 1.0
+                || matches!(shape.form, crate::resources::Form::Fluid { .. })
+            {
+                return PhysicalMaterial::realized_with_single_fluid_shape(
+                    unit.material.clone(),
+                    unit.placement,
+                    shape,
+                    catalog,
+                );
+            }
         }
     }
     PhysicalMaterial::realized(unit.material.clone(), vec![unit.placement], catalog)
