@@ -62,3 +62,13 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Section 17.64 material-loss/movement failure rows remain open. Exact-small-world sunlight proof and post-death non-primary-holder reachability remain open; receiver eligibility is still owner-decision-blocked.
 - Recorded workflow 39833438679 is still the latest evidence and remains baseline-red (585 passed, 27 failed, 1 ignored; baseline identities only). It is not fresh CI.
 - **Next:** consolidate remaining rows into one exit checklist and identify any uninspected production mutation paths. No implementation until all audit templates are complete.
+
+
+## Latest touched-file cross-check — 2026-10-22, Section 17.66
+
+- **Plan commit:** `3695aa8c228877b963b5c8ebf4c9c654e02fe021`. PR #204 remains documentation-only.
+- PR #205 exact source head audited: `12d8079230458da68a8dc3755a1d6a9b41347862`; no source/test/document changes.
+- `docs/CHEMISTRY_UNIFICATION_CONTRACT.md` labels its dependency table as the frozen-main baseline, so old schema-3 and aggregate-transfer entries are historical, not current implementation claims. Its plan-authority link is pinned to an older plan commit and should be refreshed after audit closure.
+- README's “live capture stays disabled” sentence is stale: capture/settlement is live but unvalidated. Update only after audit closure and owner approval.
+- CI steps use five-minute timeouts. The staged graph API in `src/geometry/structure.rs` is not evidence of live energy-settlement reachability; trace production callers.
+- **Next:** produce a row-by-row exit checklist for Section 17.55, classify each transition as locally verified, test-required, or owner-decision-blocked, and reconcile with A0–A21 and Section 17.7. No implementation until every audit template is complete.
