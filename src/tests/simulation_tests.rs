@@ -260,6 +260,81 @@ mod integration_tests {
     }
 
     #[test]
+    fn restoration_rejects_connections_that_change_stored_bond_topology_atomically() {
+        let mut simulation = Simulation::new(7108, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.organisms[0].stored_material.entries.clear();
+
+        let catalog = simulation.environment.catalog.clone();
+        let material = Material {
+            parts: vec![
+                ("Carbon".to_string(), 1.0),
+                ("Hydrogen".to_string(), 1.0),
+                ("Sulfur".to_string(), 1.0),
+            ],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
+        let physical = PhysicalMaterial::realized(
+            material.clone(),
+            vec![
+                Placement { x: 20.0, y: 20.0, rotation_radians: 0.0 },
+                Placement { x: 20.838, y: 20.0, rotation_radians: 0.0 },
+                Placement { x: 50.0, y: 50.0, rotation_radians: 0.0 },
+            ],
+            &catalog,
+        )
+        .expect("three-part material with one valid internal bond should be realizable");
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(physical));
+
+        let inventory_before =
+            integer_material_inventory(&simulation).expect("pre-restore inventory is integral");
+        let structure_before = serde_json::to_value(&simulation.organisms[0].structure)
+            .expect("structure snapshot should serialize");
+        let storage_before = simulation.organisms[0].stored_material.clone();
+        let mut malformed = simulation.organisms[0]
+            .stored_material
+            .peek_matching_physical(&material)
+            .expect("stored compound should be available for validation");
+        let connection = malformed
+            .internal_connections
+            .as_mut()
+            .and_then(|connections| connections.first_mut())
+            .expect("realized compound should preserve its bond endpoints");
+        // Keep the connection indices valid but redirect the stored bond from
+        // constituents 0-1 to 1-2. Restoration must not trust this altered topology.
+        connection.part_a = 1;
+        connection.part_b = 2;
+
+        assert!(crate::material_restoration::restore_material(
+            &mut simulation.organisms[0].structure,
+            &malformed,
+            Placement { x: 100.0, y: 100.0, rotation_radians: 0.0 },
+            &catalog,
+        )
+        .is_none());
+
+        assert_eq!(
+            serde_json::to_value(&simulation.organisms[0].structure)
+                .expect("post-rejection structure should serialize"),
+            structure_before
+        );
+        assert_eq!(simulation.organisms[0].stored_material, storage_before);
+        assert_eq!(
+            integer_material_inventory(&simulation).expect("post-rejection inventory is integral"),
+            inventory_before,
+            "rejected topology alteration must not mutate material ownership"
+        );
+    }
+
+    #[test]
     fn integer_material_inventory_conserves_constituents_when_anchor_moves_to_offspring() {
         let mut simulation = Simulation::new(23, 20.0);
         assert!(simulation.organisms[0].store_material(Material::free_base("Carbon", 1.0)));
