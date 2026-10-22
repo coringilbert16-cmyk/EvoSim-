@@ -29,6 +29,11 @@ jobs:
       - name: Check COMBINE architecture
         timeout-minutes: 5
         run: bash scripts/check_combine_architecture.sh
+      # Keep physical-graph ID remapping and rollback visible apart from the
+      # known slow full-suite gate.
+      - name: Run focused physical graph merge tests
+        timeout-minutes: 5
+        run: cargo test --locked append_graph_
       # Run the persistence-specific tests independently so their result is visible
       # even while the repository's known unrelated baseline tests are failing.
       - name: Run Bob compact-storage tests
