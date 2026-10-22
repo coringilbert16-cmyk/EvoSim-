@@ -34,14 +34,14 @@ impl DecomposingBody {
     pub(crate) fn release_finished_material(
         &mut self,
         catalog: &[crate::resources::BaseResource],
-    ) -> Vec<PhysicalMaterial> {
+    ) -> Option<Vec<PhysicalMaterial>> {
         if !self.is_finished() {
-            return Vec::new();
+            return Some(Vec::new());
         }
         self.structure
             .units
             .iter()
-            .filter_map(|unit| realize_released_unit(unit, catalog))
+            .map(|unit| realize_released_unit(unit, catalog))
             .collect()
     }
 }
@@ -92,8 +92,8 @@ pub(crate) fn resolve_one_bond_with_ledger(
             trial_structure
                 .units
                 .iter()
-                .filter_map(|unit| realize_released_unit(unit, &environment.catalog))
-                .collect(),
+                .map(|unit| realize_released_unit(unit, &environment.catalog))
+                .collect::<Option<Vec<_>>>()?,
         )
     } else {
         None
@@ -214,7 +214,9 @@ mod tests {
         structure.add_unit(water_unit);
         let mut body = DecomposingBody::new(structure, 0.0, Position { x: 0.0, y: 0.0 }).unwrap();
 
-        let released = body.release_finished_material(&catalog);
+        let released = body
+            .release_finished_material(&catalog)
+            .expect("all finished material should retain a valid physical realization");
         assert_eq!(released.len(), 1);
         assert_eq!(
             released[0].realized_shape_for_part(0, &catalog),
@@ -227,5 +229,29 @@ mod tests {
         let structure = minimal_realized_structure();
         let body = DecomposingBody::new(structure, 0.0, Position { x: 0.0, y: 0.0 }).unwrap();
         assert!(body.is_finished());
+    }
+
+    #[test]
+    fn finished_release_rejects_aggregate_fluid_without_exact_geometry() {
+        let catalog = default_catalog();
+        let mut water = StructuralUnit::from_material(
+            crate::resources::Material::free_base("Water", 2.0),
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        )
+        .unwrap();
+        assert!(water.realize_default_geometry(&catalog));
+        let mut structure = OrganismStructure::new();
+        structure.add_unit(water);
+        let mut body =
+            DecomposingBody::new(structure, 0.0, Position { x: 0.0, y: 0.0 }).unwrap();
+
+        assert!(
+            body.release_finished_material(&catalog).is_none(),
+            "invalid aggregate fluid must not be silently dropped during release"
+        );
     }
 }
