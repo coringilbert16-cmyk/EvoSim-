@@ -2365,3 +2365,33 @@ This confirms an adversarial invalid-state gap across several callers; it is not
 **Acceptance rule:** each failure test must use a deterministic rejection seam or malformed state that reaches the actual live transaction boundary; assert both the relevant object state and independent inventory before/after. A helper-only test does not prove production reachability. Do not weaken a test by asserting only a ledger counter, stored count, or aggregate failure total.
 
 **Audit gate:** the test-design matrix is now explicit. Still open before implementation: owner decision on non-primary receiver eligibility; exact source references and injection strategy for each test in the implementation branch; and a final owner-facing confirmation that all audit templates are complete. No production source/test changes are authorized by this documentation update.
+
+
+### 17.70 Owner decision — resonance follows attached physical structure; stored material excluded — 2026-10-22
+
+**Status: Owner decision resolved; source-impact audit required before implementation.** The owner clarified the previously blocked non-primary receiver rule:
+
+- “Physical structure” and what earlier notes called “committed reproductive structure” are the same physical category. Do not give attached reproductive structure a special physical-material designation merely because it is associated with reproduction.
+- The separate “developing structure” category is not accepted as a desired physical model. Audit whether it can be represented as ordinary organism-owned physical structure throughout growth, with construction state tracking only the process/state that is genuinely necessary. Do not delete the field or merge state blindly before tracing construction, transfer, geometry, and division.
+- Any physical structure structurally attached to an organism is eligible to contribute its material response to that owning organism’s resonance reservoir, while that organism is biologically eligible to receive resonance.
+- Stored physical material is excluded from the owner’s resonance capture. It remains physical geometry and may occlude/receive signal as a nonliving physical receiver, but its response must not be credited to the owner’s resonance reservoir merely because the owner stores it.
+- The same physical object must not be counted twice: attached units belong to the owner’s physical structure and resonance accounting; stored units remain stored objects. A construction-progress label alone must not create a second physical copy or energy holder.
+- Death still ends biological processing without removing physical existence. Dead attached structure remains a physical receiver/occluder and cannot credit a dead organism’s resonance reservoir; ordinary chemistry remains responsible for later physical changes.
+
+**Exact-head source impact observed at PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862`:**
+
+- `src/simulation/world_tone_snapshot.rs` builds the parent organism body from `organism.structure`, then separately adds `reproductive_construction.developing_structure` as another physical body and adds `committed_material` as separate physical bodies.
+- The same snapshot also includes `organism.stored_material` and active-transformation escrow as physical occluders/receivers. The receiver-to-organism map only maps the primary `organism.structure` body to an organism. Consequently, the separate developing structure cannot retain resonance for its parent today; its response is treated as a nonliving physical receiver and becomes heat.
+- `settle_living_organism_inputs` validates direct projected widths only for primary organism structure units, and commits staged resonance reservoirs to organisms after ledger settlement.
+- `src/organism/reproduction.rs` has a `developing_organism` adapter that copies `developing_structure`, `committed_material`, developing energy/stress, and origin into a temporary `Organism`-shaped value. Construction/growth/finish logic therefore needs tracing before deciding whether the field can be removed or should be retained only as a transient construction workspace and never as a second physical authority.
+- Existing snapshot test `developing_offspring_and_its_stored_material_remain_world_occluders` asserts current separate-body geometry behavior; its intended assertions must be revised to the owner’s unified-structure rule rather than preserved as an outdated design constraint.
+
+**Required follow-up before implementation:**
+
+1. Trace every read/write/transfer of `reproductive_construction.developing_structure`, `committed_material`, and associated energy/stress/debt through construction reserve, growth, waiting, ready/finish, detachment, death, and division.
+2. Establish the canonical representation: attached physical units must be represented once in the owning organism structure (or prove why an interim workspace is needed without treating it as a second physical authority). Stored material remains separate and excluded from owner resonance.
+3. Update the sunlight oracle and acceptance matrix so attached structure can capture into the living owner’s reservoir, stored material cannot, dead attached structure cannot capture biologically, and first-hit geometry/energy allocation remains conserved.
+4. Update material/energy inventory rules and transition-failure cases to detect double counting during attach/finish/transfer and ensure the owner remains authoritative until the approved atomic division boundary.
+5. Only after this source-impact audit, adjust the test design and mark the receiver-decision blocker closed. This decision resolves the policy question but does not establish implementation or conservation correctness.
+
+No source or test files were changed in this checkpoint. PR #204 remains documentation-only; implementation stays in PR #205.
