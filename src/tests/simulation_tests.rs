@@ -283,9 +283,21 @@ mod integration_tests {
         let physical = PhysicalMaterial::realized(
             material.clone(),
             vec![
-                Placement { x: 20.0, y: 20.0, rotation_radians: 0.0 },
-                Placement { x: 20.838, y: 20.0, rotation_radians: 0.0 },
-                Placement { x: 50.0, y: 50.0, rotation_radians: 0.0 },
+                Placement {
+                    x: 20.0,
+                    y: 20.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 20.838,
+                    y: 20.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 50.0,
+                    y: 50.0,
+                    rotation_radians: 0.0,
+                },
             ],
             &catalog,
         )
@@ -316,7 +328,11 @@ mod integration_tests {
         assert!(crate::material_restoration::restore_material(
             &mut simulation.organisms[0].structure,
             &malformed,
-            Placement { x: 100.0, y: 100.0, rotation_radians: 0.0 },
+            Placement {
+                x: 100.0,
+                y: 100.0,
+                rotation_radians: 0.0,
+            },
             &catalog,
         )
         .is_none());
