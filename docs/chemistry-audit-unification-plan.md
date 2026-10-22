@@ -2055,3 +2055,15 @@ The material oracle and world-tone snapshot both explicitly account for active-o
 The schema-4 chemistry manifest uses a fixed equation fingerprint with a catalog-version marker. ChemistryKey contains material names and interface identity, not the actual catalog property values; cached static potential depends on chemical position. Current tests prove mismatched fingerprints are rejected, but do not prove a catalog property change automatically changes the fingerprint. Phase 4 must document and test the version-bump contract, or derive a deterministic fingerprint from chemistry-relevant catalog fields. No source/test change.
 
 **Next audit:** enumerate the exact inputs to interaction_potential and ChemistryKey so cache invalidation covers every value affecting the cached result.
+
+
+### 17.50 Cache input dependency map — exact cached equation inputs confirmed — 2026-10-22
+
+**Status: Dependency map complete; versioning remains manual.** Exact-head review of interaction_potential, contact_factor, ChemistryKey, and the live accumulator.
+
+- The persisted `static_potential` is calculated only from `position_a`, `position_b`, `CHEMICAL_K`, and `CHEMICAL_D_MAX` through interaction_potential. `position_a` and `position_b` are resource `chemical_position` values. The live contact factor is computed separately from current candidate distance and `CHEMICAL_CONTACT_RADIUS`; engagement uses current candidate facing. These live values are not stored as the static potential.
+- ChemistryKey is symmetric in the two material identities and contains schema version, material names, interface class, and interface signature. It does not include the numeric chemical positions. The manifest fingerprint is therefore the version boundary for changes to chemical positions or the static-potential equation. Keep that marker synchronized, or derive it from canonical relevant fields as recorded in Section 17.49.
+- The current fingerprint also includes contact radius, max force/energy scale, and reaction dissipation. Some of these affect later live computations rather than the cached static-potential value. This is conservative invalidation (extra cache rebuilds), not a correctness defect.
+- Geometry/interface identity is separately represented in the key, and live geometry remains authoritative before a cache lookup. A cache hit supplies only the static potential; it does not authorize a bond or replace live contact, endpoint, or energy validation.
+
+**Closure gate:** add or document a deterministic test that changing a chemistry-position catalog value requires a changed cache fingerprint and rejection of the old store. Phase 4 remains open until the chosen manual/derived fingerprint policy is enforced. No source/test change.
