@@ -50,3 +50,15 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Still open: COMBINE prepared-ledger invariant, stale reaction keys, cache catalog fingerprint/restart, maintenance debt/rejection, construction growth/finish stale-source rollback, world-tone exact-small-world oracle, and post-death holder reachability. Parent-owned non-primary sunlight receiver eligibility remains owner-decision-blocked under Section 17.38.
 - Latest recorded CI is still workflow 39833438679 (failure; 585 passed, 27 failed, 1 ignored; failure identities match frozen baseline, normalized Clippy identities match baseline). Historical evidence only, not fresh verification.
 - **Next:** reconcile remaining rows against Section 17.7 and the Section 17.6 release gates; classify each as source-inspection-complete, test-required, or owner-decision-blocked. No implementation until every audit template is complete.
+
+
+## Latest local-contract audit checkpoint — 2026-10-22, Section 17.65
+
+- **Plan commit:** `1ba675a9c735557b927fd7f5a4e13ea210e2beec`. PR #204 remains documentation-only.
+- PR #205 source head reviewed: `12d8079230458da68a8dc3755a1d6a9b41347862`; no source/test changes.
+- Three remaining local-contract gaps were reconfirmed: bondless reaction accumulation returns before stale-key cleanup; prepared COMBINE calculates escaped-tone/resonant-held deltas but omits them from commit/rollback (current candidate should leave both zero); cache tests reject a changed fingerprint string but do not bind catalog chemical-position changes to fingerprint invalidation.
+- The energy transfer primitive itself stages and validates both holder values before assignment; the construction caller's ignored boolean remains the problem.
+- Required next evidence: stale-key cleanup regression; explicit zero-field COMBINE invariant or symmetric field-wise commit/rollback test; catalog chemistry fingerprint invalidation test; reserve-transfer rejection policy test.
+- Section 17.64 material-loss/movement failure rows remain open. Exact-small-world sunlight proof and post-death non-primary-holder reachability remain open; receiver eligibility is still owner-decision-blocked.
+- Recorded workflow 39833438679 is still the latest evidence and remains baseline-red (585 passed, 27 failed, 1 ignored; baseline identities only). It is not fresh CI.
+- **Next:** consolidate remaining rows into one exit checklist and identify any uninspected production mutation paths. No implementation until all audit templates are complete.
