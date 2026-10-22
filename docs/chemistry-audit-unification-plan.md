@@ -3168,6 +3168,15 @@ Consequences:
 - Anchor placement was also changed to require intended boundary contact and no strict penetration against any parent constituent; the existing reproduction-anchor test now asserts both. The first CI run after these edits failed formatting on the added assertions; formatting has since been corrected. Fresh exact-head CI is required.
 - **Next:** verify exact-head formatting, focused tests, full suite, and Clippy; then move to the first atomic anchor-promotion transaction only after the current baseline test failures are distinguished from regressions.
 
+
+
+## Latest full-suite checkpoint (Section 17.121, 2026-10-22)
+
+- Exact tested source head `aa7750d35124a9d03952d70bd74cac99db13826c`, workflow run `39863749605`: **589 passed, 27 failed, 1 ignored**. The new core-identity initializer compiled; the known baseline failure pattern remains at 27. The anchor-geometry change and cavity-overlap ranking were added after this tested head, so these results do not validate those changes.
+- Strict Clippy still fails with the repository's existing 34 application-target and 15 test-target diagnostics.
+- Newer head `7631b67b178d26a559e6a54c1531391d6ab30962` passed formatting and is in the full Rust test stage at note time; it includes core-overlap ranking and anchor-placement assertions. A further core-identity regression test was then added at `c8ce07e0322b1fd880dbdc6261cfd1bc52d372c4`, so final validation must be against that newer head or later.
+- Do not treat CI on an earlier commit as validation of later changes.
+
 ## 18. Research references and annotated application to EvoSim — 2026-10-22
 
 **Purpose.** These references are an external research crosswalk for the plan, not a new physics specification and not evidence that any feature is already implemented. Use them to sharpen audits, design tests, and identify efficient abstractions. The owner-approved decisions in Sections 14 and 17 remain authoritative. In particular, do not import assumptions from models that do not conserve material, use different energy semantics, or omit EvoSim's physical geometry.
