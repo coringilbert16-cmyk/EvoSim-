@@ -1575,3 +1575,17 @@ This entry supersedes Section 17.16's queued-workflow status. The exact-head wor
 - Clippy remains failing because of baseline lint debt. No lint fix is warranted by this comparison; do not make lint-only changes.
 - This closes the Clippy comparison gate for head `12d8079`. Resume Phase 8 design audit from Section 17.26. Before a code change, specify how the unfinished developing structure remains a physical, chemically addressable holder with its existing bond energy and endpoints preserved, how resonant energy is owned after breach, and how failed environmental deposits roll back or retain ownership.
 - PR #205 comment [6348800724](https://github.com/coringilbert16-cmyk/EvoSim-/pull/205#issuecomment-6348800724) records the comparison. No source/test change occurred.
+
+
+### 17.28 Phase 8 addendum — existing expulsion helper is not a general death-release transaction
+
+Read-only follow-up inspection of `src/chemistry/expulsion.rs` on PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862` found `expel_physical_material`, a geometry-aware voluntary path for one stored physical object.
+
+- It correctly accounts for the owner's anchor and the stored object's owner-relative placement when computing a world destination, unlike simply depositing storage-local placements at the owner's first cell.
+- It is not a guaranteed death-release mechanism: without a movement direction from experience memory, it needs a nonzero `owner_relative_origin` offset. If neither exists, it returns false and leaves the item stored.
+- After removing the item from storage and calculating a destination, it returns the result of `deposit_physical_at_index` directly. If that final insertion unexpectedly fails, it does not restore the removed item. A death transition cannot rely on it without strengthening its rollback guarantee.
+- It only handles stored `PhysicalMaterial`; it does not preserve/release the developing structure as an intact graph with its existing bond energies, and it does not define ownership of developing or resonant energy.
+
+**Design consequence:** do not loop `expel_physical_material` on core breach. The Phase 8 design must use deterministic placement independent of behavioral memory, retain ownership or roll back every failed insertion, and provide an intact, chemically addressable physical holder for developing structure/bond energy. The parent body's usable/resonant energy and in-flight transformation reservations must remain accounted exactly once. No code/test changes were made.
+
+PR #205 comment [6348852052](https://github.com/coringilbert16-cmyk/EvoSim-/pull/205#issuecomment-6348852052) records this addendum.
