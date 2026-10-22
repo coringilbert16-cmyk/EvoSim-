@@ -533,10 +533,10 @@ mod tests {
     }
 
     #[test]
-    fn sulfur_shape_replacement_preserves_existing_chemistry_cache_output() {
-        // The cache is keyed by material pair and interface class/signature,
-        // not by serialized outline. A geometry-only sulfur change must not
-        // silently change this already-established chemistry result.
+    fn pre_unification_sulfur_interaction_cache_record_is_not_reused() {
+        // D6 rejects pre-unification chemistry caches without migration. The
+        // repository cache was reset to the current schema; the old cached
+        // interaction must not be treated as authoritative under schema four.
         let library = ChemistryLibrary::open("chemistry_library/data").unwrap();
         let key = ChemistryKey::new(
             "Hydrogen",
@@ -544,10 +544,10 @@ mod tests {
             "rigid_point",
             "live-v1|Hydrogen:line:0|Sulfur:corner:0",
         );
-        let record = library
-            .get(&key)
-            .expect("the existing Hydrogen–Sulfur corner interaction remains reusable");
-        assert!((record.static_potential - 0.09678938442541647).abs() < 1e-12);
+        assert!(
+            library.get(&key).is_none(),
+            "pre-unification Hydrogen–Sulfur cache output must not be reused"
+        );
     }
 
     #[test]
