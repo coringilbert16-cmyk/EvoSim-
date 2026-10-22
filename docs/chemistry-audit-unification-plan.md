@@ -1335,7 +1335,7 @@ This decision supersedes any earlier open question about whether attached reprod
 
 ### 17.6 Release gate — no phase may be called “unified” without evidence
 
-- [ ] D1–D15 map to code/tests/docs; no settled decision remains an owner question.
+- [ ] D1–D16 map to code/tests/docs; no settled decision remains an owner question. D16 is documented and owner-approved, but its one-graph representation and resonance receiver mapping are not yet implemented or verified.
 - [ ] Independent energy and integer constituent oracles do not reuse production counters as their source of truth.
 - [ ] Initialization is an explicit one-time source transaction without duplicate baseline/source counting.
 - [ ] Every energy-bearing bond settles exactly once; COMBINE/BREAK/overload rollback is atomic.
@@ -1348,7 +1348,7 @@ This decision supersedes any earlier open question about whether attached reprod
 - [ ] Exact-head baseline comparison, bounded CI, failure-injection coverage, and representative performance evidence are recorded.
 - [ ] README and implementation docs describe only verified behavior.
 
-**Formal plan status:** owner approval received for the scientific invariants, 12-phase order, and verification/completion gate. This document remains an information-only plan and audit register; implementation and tests are tracked in the separate [PR #205](https://github.com/coringilbert16-cmyk/EvoSim-/pull/205). The implementation base is `main` at `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5`; the recorded baseline is 563 passed, 28 failed, 1 ignored. Head `4f4b2af` reported 581 passed, 28 failed, 1 ignored with the exact 28 baseline failures. Head `25f1df5` fixed the cache-test fixture syntax and formatting; workflow `39818514455` reported 580 passed, 28 failed, 1 ignored in 236.55 seconds. Latest head `0148437` was verified by workflow `39818747953`: 580 passed, 28 failed, 1 ignored in 237.90 seconds; all 28 failure identities matched baseline, the oracle and cache append rollback tests passed, and normalized Clippy messages matched baseline. Whole-world conservation remains unproven.
+**Formal plan status:** owner approval received for the scientific invariants, 12-phase order, verification/completion gate, and D16 physical-attachment/resonance classification. D16 remains an implementation and verification obligation, not a claim of completed behavior. This document remains an information-only plan and audit register; implementation and tests are tracked in the separate [PR #205](https://github.com/coringilbert16-cmyk/EvoSim-/pull/205). The implementation base is `main` at `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5`; the recorded baseline is 563 passed, 28 failed, 1 ignored. Head `4f4b2af` reported 581 passed, 28 failed, 1 ignored with the exact 28 baseline failures. Head `25f1df5` fixed the cache-test fixture syntax and formatting; workflow `39818514455` reported 580 passed, 28 failed, 1 ignored in 236.55 seconds. Latest head `0148437` was verified by workflow `39818747953`: 580 passed, 28 failed, 1 ignored in 237.90 seconds; all 28 failure identities matched baseline, the oracle and cache append rollback tests passed, and normalized Clippy messages matched baseline. Whole-world conservation remains unproven.
 
 ### 17.7 Implementation progress tracker (reconciled 2026-10-22)
 
