@@ -1486,7 +1486,9 @@ mod decomposition_finalization_tests {
     use super::*;
     use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
-    fn rollback_material_inventory(simulation: &Simulation) -> std::collections::BTreeMap<String, u64> {
+    fn rollback_material_inventory(
+        simulation: &Simulation,
+    ) -> std::collections::BTreeMap<String, u64> {
         fn add(
             totals: &mut std::collections::BTreeMap<String, u64>,
             material: &crate::resources::Material,
