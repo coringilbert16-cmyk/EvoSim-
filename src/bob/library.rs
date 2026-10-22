@@ -4874,15 +4874,13 @@ pub fn generate_rigid_vertex_contact_families(
                 nx * placement.rotation_radians.sin() + ny * placement.rotation_radians.cos(),
             );
             let outward_angle = world_n.1.atan2(world_n.0);
-            for candidate_vertex in 0..candidate_vertices.len() {
+            for (candidate_vertex, &(vertex_x, vertex_y)) in candidate_vertices.iter().enumerate() {
                 // A convex polygon remains outside the anchor while its selected
                 // vertex is on the supporting line whenever the polygon interior
                 // direction lies in the inward half-plane. The boundary of that
                 // admissible set is therefore a +/- pi/2 interval around the
                 // outward normal, adjusted by the local vertex radial direction.
-                let vertex_angle = candidate_vertices[candidate_vertex]
-                    .1
-                    .atan2(candidate_vertices[candidate_vertex].0);
+                let vertex_angle = vertex_y.atan2(vertex_x);
                 let center = outward_angle - vertex_angle;
                 let start = center - std::f64::consts::FRAC_PI_2;
                 let end = center + std::f64::consts::FRAC_PI_2;
@@ -5002,7 +5000,7 @@ pub fn generate_two_constituent_candidates(
 
     if let (Some(tv), Some(cv)) = (&target_vertices, &candidate_vertices) {
         for ti in 0..tv.len() {
-            for ci in 0..cv.len() {
+            for (ci, &candidate_vertex) in cv.iter().enumerate() {
                 for rotation in crate::rigid_boundary::corner_alignment_rotations(
                     &candidate_resource.shape,
                     ci,
@@ -5016,7 +5014,7 @@ pub fn generate_two_constituent_candidates(
                         target_placement,
                     )
                     .unwrap();
-                    let (cx, cy) = rotated_point(cv[ci], rotation);
+                    let (cx, cy) = rotated_point(candidate_vertex, rotation);
                     push_candidate(
                         &mut out,
                         target,
@@ -5069,15 +5067,15 @@ pub fn generate_two_constituent_candidates(
         let half = *length / 2.0;
         let endpoints = [(-half, 0.0), (half, 0.0)];
         if let Some(tv) = target_vertices {
-            for ti in 0..tv.len() {
-                for endpoint in 0..2 {
+            for (ti, &target_vertex) in tv.iter().enumerate() {
+                for (endpoint, &endpoint_position) in endpoints.iter().enumerate() {
                     for rotation in crate::rigid_boundary::line_endpoint_alignment_rotations(
                         endpoint,
                         0,
                         target_placement.rotation_radians,
                     ) {
-                        let (tx, ty) = world_point(tv[ti], target_placement);
-                        let (cx, cy) = rotated_point(endpoints[endpoint], rotation);
+                        let (tx, ty) = world_point(target_vertex, target_placement);
+                        let (cx, cy) = rotated_point(endpoint_position, rotation);
                         push_candidate(
                             &mut out,
                             target,
