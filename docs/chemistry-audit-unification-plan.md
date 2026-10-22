@@ -2566,3 +2566,16 @@ Section 17.7's current tracker rows for Phases 1, 8, and 9 have been updated to 
 - Required tests: preserve parent boundary IDs while adding child anchor; independently select parent and second-core cavities in one connected aggregate; ensure growth/chemistry changes don't silently switch core identity; reject dangling core references atomically; division transfers the correct core identity to each child exactly once.
 
 This refines, rather than reverses, Section 17.77: one physical graph remains the recommendation; core identity is metadata over that graph, not a separate physical owner. No source/test changes.
+
+
+### 17.81 Graph-unification mechanics — stable-ID remapping is mandatory — 2026-10-22
+
+**Status: Graph primitive audit complete for the relevant merge concern.** Exact PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862`, `src/geometry/structure.rs`.
+
+- `PhysicalConstituentGraph::new` starts `next_constituent_id` at 1, and `add_unit` assigns IDs from that graph-local counter. A separate parent graph and construction graph can therefore both contain IDs such as 1, 2, etc.; concatenating their `units`/ `bonds` vectors would create identity collisions.
+- Bonds address endpoints by `PhysicalConstituentId`, not just vector indices. Any graph merge must stage an injective old→new ID mapping for every incoming construction unit, then rewrite both endpoints of every incoming bond before validation/commit. Parent genome boundary IDs and the second-core anchor/boundary references must use the same mapping.
+- Existing `add_unit` assigns a fresh ID, but the reviewed graph API does not expose a complete atomic graph-merge operation that remaps all incoming bonds and core references together. A reusable merge helper should stage the complete candidate graph, validate all endpoints and physical bonds, then return the candidate for a higher-level transaction; it must not mutate the live graph partially.
+- Removing units also removes bonds that touch those physical IDs and prunes the graph's single `genome_constituent_ids` list. With two cores, the future core-reference collection must prune/reject dangling references transactionally rather than silently changing which cavity a genome represents.
+- Required tests: colliding source/destination ID ranges merge without endpoint aliasing; every incoming bond retains the same physical endpoints after remap; malformed/missing endpoints reject with no live mutation; parent core IDs remain unchanged; second-core references remap exactly; independent structural-energy inventory is identical before/after a pure graph merge.
+
+**Audit implication:** one authoritative graph is feasible in principle but requires a tested ID-remapping transaction, not vector concatenation. This helper is a candidate future implementation unit only after all audit templates are signed off. No source/test changes.
