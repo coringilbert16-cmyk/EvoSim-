@@ -2431,3 +2431,30 @@ No source or test files were changed in this checkpoint. PR #204 remains documen
 **Audit conclusion:** the second graph is embedded in serialization, movement, geometry, construction, energy snapshots, death/tick behavior, and test fixtures. A safe implementation should first settle the canonical state/ownership representation and migration/compatibility behavior, then update the sunlight receiver mapping and independent oracles together. Do not patch only `world_tone_snapshot.rs`; that would leave conflicting physical representations and accounting.
 
 **Next:** inspect saved-state construction and all tests that depend on boundary/detachment/anchor/cavity semantics; map each behavior to the single-structure model and specify regression tests. Other chemistry transaction audits remain open, so no implementation authorization yet.
+
+
+### 17.73 Reproduction-test contract reconciliation — replace separate-child assumptions with aggregate ownership — 2026-10-22
+
+**Status: Existing test contracts reviewed against the owner-approved physical model; tests remain unchanged pending audit closure.** Exact PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862`; source/test files unchanged.
+
+| Existing test/contract | Current assertion | Required interpretation under owner decision |
+|---|---|---|
+| `anchor_starts_a_separate_physical_child_graph` | Asserts parent structure remains byte-for-byte unchanged after reproduction starts and offspring anchor lives only in `developing_structure`. | Replace with an aggregate-ownership assertion: anchor is removed from storage and appears exactly once in the parent’s one authoritative physical structure; second genome/progress metadata remains internal, not a separate physical organism/graph owner. |
+| `developing_offspring_receives_persistent_energy_from_parent` | Energy moves to `construction.developing_energy` and parent usable energy decreases. | Preserve explicit energy conservation but redefine holder ownership. A distinct developmental energy sub-holder may remain if it is a nonphysical sub-ledger owned by the parent aggregate and is transferred/partitioned atomically; do not create a second organism’s independent reservoir before division. Test world inventory across every tick. |
+| `crossing_parent_boundary_does_not_detach_while_contact_remains`, `fully_outside_parent_boundary_is_detached`, `loss_of_parent_contact_is_detachment` | Treat the developing graph as a separate child that can leave the parent boundary or lose contact. | Re-evaluate whether these tests encode an obsolete external-bud model. Under internal/adjacent aggregate budding, physical units remain parent-owned until the approved division boundary. If detachment remains a valid failure state, define a physical bond/partition event and exact owner settlement; mere graph-to-graph contact is not an ownership rule. |
+| `construction_waits_when_all_physical_inventory_is_exhausted`, `waiting_construction_resumes_from_same_graph_when_material_arrives` | Preserve a separate construction graph across waiting and later growth. | Preserve deterministic waiting/resume and exact-once material use, but assert the single authoritative aggregate graph is unchanged on waiting and extended only once when material arrives. Stored material remains stored until an atomic attachment transaction commits. |
+| `developmental_scale_requires_eighty_percent_linear_target` | Scale is measured from `developing_structure` relative to a preferred target. | Preserve the approved total aggregate size/split criterion using the internal second-core region or construction progress metadata, not a separate physical graph identity. Confirm exact thresholds against the owner-approved reproduction requirement; do not let this chemistry audit silently change them. |
+| Snapshot test `developing_offspring_and_its_stored_material_remain_world_occluders` | Builds separate geometry for developing graph and stored material. | Attached units should come from the parent’s one structure and map to the parent’s resonance reservoir; stored material remains a separate receiver/occluder and is not eligible for owner resonance. Assert first-hit allocation and global energy accounting. |
+
+**Additional invariants to test once implementation is authorized:**
+
+1. Begin construction: storage debit and attached-unit insertion are atomic; the selected anchor exists exactly once in the aggregate and contributes structural energy once.
+2. Growth succeeds: candidate material leaves exactly one source holder and enters the aggregate once; failed/stale candidate leaves graph, storage, energy, and ledger unchanged.
+3. Growth waits: no structure/material/energy duplication; later material arrival resumes from identical pre-wait state.
+4. Movement: aggregate units translate once, collide/occlude as one organism, and update spatial indices/caches consistently.
+5. Resonance: attached units may credit the living parent reservoir; stored material never credits it; dead attached units remain physical receivers but do not credit biological resonance.
+6. Death: parent biological processing stops, but all attached/stored material and energy remain physically owned/accounted and ordinary chemistry can continue.
+7. Division: one atomic partition moves each unit, bond, stored item, energy holder, and core identity exactly once to the two resulting organisms at the already-approved division threshold. Cross-partition bonds must settle explicitly.
+8. Save/load: a persisted aggregate cannot resurrect a legacy second graph, drop attached units, or count a unit twice. Define whether legacy serialized construction records need migration or fail-closed handling before changing the serialized model.
+
+**Audit implication:** do not preserve test names/expectations merely to minimize diff. The tests are evidence of current architecture, not higher authority than the owner-approved model. First specify the unified structure and save/load transition; then revise tests and implementation together. Chemistry audit remains open; no implementation authorized yet.
