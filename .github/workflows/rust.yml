@@ -34,6 +34,9 @@ jobs:
       - name: Run focused physical graph merge tests
         timeout-minutes: 5
         run: cargo test --locked append_graph_
+      - name: Run focused core-specific viability test
+        timeout-minutes: 5
+        run: cargo test --locked core_specific_viability_
       # Run the persistence-specific tests independently so their result is visible
       # even while the repository's known unrelated baseline tests are failing.
       - name: Run Bob compact-storage tests
