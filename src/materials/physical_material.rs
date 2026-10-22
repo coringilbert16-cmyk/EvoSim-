@@ -454,7 +454,8 @@ mod tests {
             std::f64::consts::FRAC_PI_2,
         )
         .unwrap();
-        let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
+        let arc =
+            crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
         let shape = crate::resources::Shape {
             form: crate::resources::Form::Fluid {
                 nominal_area: merged_area,
@@ -464,7 +465,11 @@ mod tests {
             },
         };
         let material = Material::free_base("Water", 2.0);
-        let placement = Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 };
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
 
         assert!(
             PhysicalMaterial::realized(material.clone(), vec![placement], &catalog).is_none(),
