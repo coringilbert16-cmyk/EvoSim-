@@ -46,6 +46,7 @@ Still in migration:
 - chemistry_library/ now contains tracked schema-3 cache records and a manifest; the persistence code exists, but runtime hit/miss coverage and the long-term write/refresh authority still need verification.
 - Bob's large library.rs still needs an internal split into lookup/query/index/resolution/persistence/validation responsibilities.
 - [x] Added `docs/README.md` as an index-first taxonomy for the existing document set; file moves remain deferred until incoming links are audited.
+- [x] Audited responsibility groups in `source_exposure.rs`, `capillary_geometry.rs`, and Bob's `library.rs`; documented candidate splits without changing runtime code.
 - Remaining documentation can be migrated under architecture, mechanics, libraries, decisions, and audits incrementally after link audits.
 
 Authority boundaries:
