@@ -235,19 +235,6 @@ pub enum LiveFamilyResolution {
     Unique,
 }
 
-/// Classifies whether a live interface identity is sufficient by itself to
-/// select one persisted Bob family. Most live contacts are not: a family also
-/// carries continuous edge/rotation information that endpoint topology alone
-/// cannot recover.
-pub fn classify_live_family_resolution(interface: &LiveGeometryInterface) -> LiveFamilyResolution {
-    match interface.interface_class {
-        "rigid_edge" | "rigid_point" | "rigid_vertex" | "fluid_boundary" | "rigid_surface" => {
-            LiveFamilyResolution::Unresolved
-        }
-        _ => LiveFamilyResolution::Unresolved,
-    }
-}
-
 /// Resolve a runtime contact using the geometry that was actually realized.
 ///
 /// Unlike the topology-only resolver above, this includes the local contact
