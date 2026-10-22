@@ -21,22 +21,29 @@ jobs:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - name: Check formatting
+        timeout-minutes: 5
         run: cargo fmt --all -- --check
       - name: Check source file sizes
+        timeout-minutes: 5
         run: bash scripts/check_large_files.sh
       - name: Check COMBINE architecture
+        timeout-minutes: 5
         run: bash scripts/check_combine_architecture.sh
       # Run the persistence-specific tests independently so their result is visible
       # even while the repository's known unrelated baseline tests are failing.
       - name: Run Bob compact-storage tests
+        timeout-minutes: 5
         run: cargo test --locked compact_family_storage_tests
       - name: Verify empty Bob library open and reopen without generation
+        timeout-minutes: 5
         run: cargo test --locked fresh_empty_library_opens_and_reopens_without_seeding_geometry
       - name: Verify concurrent Bob library initialization
+        timeout-minutes: 5
         run: cargo test --locked concurrent_default_store_initialization_does_not_race_on_temp_files
       # Keep the fluid transaction and three-piece generation gate visible apart
       # from the known constructor-dependent full-suite backlog.
       - name: Run focused Bob fluid transaction and three-piece cap tests
+        timeout-minutes: 5
         run: |
           cargo test --locked multi_contact_fluid_forms_multiple_bonds_to_one_rigid_edge
           cargo test --locked multi_contact_fluid_commits_all_three_rigid_bonds_together
@@ -47,6 +54,7 @@ jobs:
       # Exercise the fluid coalescence lifecycle independently of the broad
       # constructor/lifecycle failures in the full repository suite.
       - name: Run focused fluid coalescence and restoration tests
+        timeout-minutes: 5
         run: |
           cargo test --locked live_combine_coalesces_fluid_pair_atomically
           cargo test --locked coalesced_fluid_boundary_survives_physical_material_roundtrip_and_restore
@@ -61,11 +69,14 @@ jobs:
       # Keep the chemistry BREAK energy gate visible independently of the
       # repository's known unrelated baseline failures.
       - name: Run focused chemical BREAK tests
+        timeout-minutes: 5
         run: cargo test --locked chemical_break_
       # Expensive headless multigeneration validation is paused while the seed
       # topology is being finalized. Keep the normal Rust/Clippy gates active.
       - name: Run Rust tests
+        timeout-minutes: 5
         run: cargo test --locked --all-targets
       - name: Run Clippy
+        timeout-minutes: 5
         if: always()
         run: cargo clippy --locked --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
