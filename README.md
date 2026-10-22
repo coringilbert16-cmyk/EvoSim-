@@ -9,7 +9,7 @@ This README is the current repository guide and implementation-status summary. O
 - **Integration baseline:** PR [#202](https://github.com/coringilbert16-cmyk/EvoSim-/pull/202) is merged to `main` at `8c84978cd003738d94a74eef9114b711689c3804`.
 - **Maintenance work:** [PR #203](https://github.com/coringilbert16-cmyk/EvoSim-/pull/203) is a draft based on that baseline. It contains narrowly scoped lint cleanup and documentation organization. It is not merged.
 - **Known test baseline:** 563 passed, 28 failed, 1 ignored on the exact tested PR #202 source head. Comparison with the prior run found the same 28 failing test identities, with no new or resolved baseline failures. See [run #39697289682](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39697289682).
-- **Strict Clippy:** `cargo clippy --locked --all-targets -- -D warnings` fails on existing lint debt. The initial audit counted 59 application-target and 38 test-target diagnostics. PR #203 is addressing simple, behavior-preserving lints first; no blanket lint suppression is intended.
+- **Strict Clippy:** `cargo clippy --locked --all-targets -- -D warnings` still fails on existing lint debt. At PR #203 head `1414744`, the completed run reports 44 application-target and 23 test-target errors, down from the baseline's 59 and 38. Remaining diagnostics include dead code whose architectural role needs review, plus type-complexity and other targeted lints. No blanket lint suppression is intended.
 - **Not yet proven:** whole-world energy conservation across every storage, reaction, and lifecycle path; live sunlight/world-tone energy capture; and complete self-maintaining organism viability. Do not infer these from passing focused tests.
 - **Separate work:** PR [#196](https://github.com/coringilbert16-cmyk/EvoSim-/pull/196) remains out of scope for PR #203. Do not import its constructor/Bob changes as part of maintenance cleanup.
 
@@ -51,9 +51,9 @@ The full test suite is currently **not green**. A maintenance change is acceptab
 
 ## Active maintenance checklist
 
-- [ ] Complete exact-head CI review for PR #203.
-- [ ] Continue small, audited Clippy fixes; investigate dead-code warnings before deleting or suppressing anything.
-- [ ] Reconcile test failures by identity, not count alone.
+- [x] Review exact-head CI at `1414744`: formatting, source-size and COMBINE architecture checks pass; focused Bob/fluid/chemical tests pass; full suite remains at the same 28 baseline failures (563 passed, 1 ignored).
+- [ ] Continue small, audited Clippy fixes; investigate dead-code warnings before deleting or suppressing anything. Strict Clippy currently reports 44 application-target and 23 test-target errors.
+- [x] Reconcile full-suite test failures by identity against the known baseline; no new or resolved failing identities.
 - [ ] Improve repository documentation and source ownership without discarding historical evidence.
 - [ ] Keep PR #196 separate until the stabilized baseline is understood and its exact-head behavior is independently reviewed.
 
