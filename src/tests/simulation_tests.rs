@@ -647,6 +647,10 @@ mod integration_tests {
         // This test sets a controlled holder balance after construction.
         s.energy_ledger.initial_usable_energy_held = 100.0;
         s.energy_ledger.total_usable_energy_held = 100.0;
+        // This fixture replaces the constructed organism's initial condition;
+        // reset its source counter so the synthetic 100-unit baseline is not
+        // also charged for the constructor's discarded initial reserve.
+        s.energy_ledger.total_external_energy_input = 0.0;
         let candidate = crate::decision_runtime::ActionCandidate {
             action: ActionKind::Break,
             context_key: Some("stored:0:bond:0".into()),
