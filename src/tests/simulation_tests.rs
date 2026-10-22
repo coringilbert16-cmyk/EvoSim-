@@ -143,6 +143,31 @@ mod integration_tests {
     }
 
     #[test]
+    fn integer_material_inventory_conserves_constituents_when_anchor_moves_to_offspring() {
+        let mut simulation = Simulation::new(23, 20.0);
+        assert!(simulation.organisms[0].store_material(Material::free_base("Carbon", 1.0)));
+        let catalog = simulation.environment.catalog.clone();
+        let before =
+            integer_material_inventory(&simulation).expect("initial inventory is integral");
+        let mut ledger = crate::state::EnergyLedger::default();
+
+        let (parent, rng) = (&mut simulation.organisms[0], &mut simulation.rng);
+        assert!(crate::reproduction::begin_reproduction(
+            parent,
+            rng,
+            &catalog,
+            &mut ledger,
+        ));
+
+        let after =
+            integer_material_inventory(&simulation).expect("post-transfer inventory is integral");
+        assert_eq!(
+            after, before,
+            "moving the physical anchor into developing offspring must preserve every constituent"
+        );
+    }
+
+    #[test]
     fn fresh_organism_is_a_physically_realized_organism() {
         let o = Simulation::create_initial_organism();
         assert!(!o.structure.units.is_empty());
