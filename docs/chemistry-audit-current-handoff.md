@@ -110,3 +110,12 @@ The owner explicitly approved the parent-aggregate ownership model: the parent r
 - Confirmed transition risk: environment-to-storage and stored-BREAK fallback paths ignore failed physical deposits. Stored-BREAK fallback may use intrinsic-frame placement as world coordinates. These are potential silent material-loss / placement risks under rejection, not proof of common-path failure.
 - Next: build the source-removal → trial → energy settlement → destination commit → rollback matrix for every transition, especially all early returns after source removal in stored BREAK and reproductive construction. No code or test changes until the audit templates are complete.
 - Exact PR #205 head for this source review: `12d8079230458da68a8dc3755a1d6a9b41347862`; re-fetch before future implementation.
+
+
+### Holder transition matrix checkpoint — Section 17.35
+
+- Latest plan commit: 17c0c4f5477c63b8a1280e339e206d71a4588875.
+- The source-removal/commit matrix is now explicit. Immediate COMBINE and parent-storage-to-construction use trial copies before source debit; active BREAK escrow is counted once by the independent material oracle.
+- Highest-priority failure candidate remains physical material removed from a source holder followed by a destination deposit that can fail but whose result is ignored. Stored BREAK also commits pieces one at a time, so a later piece rejection can leave a partial split; its fallback placement is not proven world-relative.
+- The currently implemented construction finish boundary may emit a child on Ready, Detached, or Dead; this is existing reproduction lifecycle behavior and does not implement the owner-approved 100%→160% total growth / two ~80% children design. Do not redesign reproduction inside PR #205.
+- Next audit: inspect failure-injection hooks and tests for stored BREAK, contained-material transfer, and construction transfer; separate already-testable matrix cases from cases needing a future narrow test seam. No source/test changes.
