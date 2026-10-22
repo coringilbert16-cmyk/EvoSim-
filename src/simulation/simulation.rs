@@ -2,9 +2,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 
-use crate::energy_ledger::{
-    EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction,
-};
+use crate::energy_ledger::{EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction};
 
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
 use crate::decision_runtime::{
