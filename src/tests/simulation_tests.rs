@@ -225,7 +225,8 @@ mod integration_tests {
 
         let inventory_before =
             integer_material_inventory(&simulation).expect("pre-restore inventory is integral");
-        let structure_before = simulation.organisms[0].structure.clone();
+        let structure_before = serde_json::to_value(&simulation.organisms[0].structure)
+            .expect("structure snapshot should serialize");
         let storage_before = simulation.organisms[0].stored_material.clone();
         let mut malformed = simulation.organisms[0]
             .stored_material
@@ -245,7 +246,11 @@ mod integration_tests {
         )
         .is_none());
 
-        assert_eq!(simulation.organisms[0].structure, structure_before);
+        assert_eq!(
+            serde_json::to_value(&simulation.organisms[0].structure)
+                .expect("post-rejection structure should serialize"),
+            structure_before
+        );
         assert_eq!(simulation.organisms[0].stored_material, storage_before);
         assert_eq!(
             integer_material_inventory(&simulation).expect("post-rejection inventory is integral"),
