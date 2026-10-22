@@ -1,5 +1,104 @@
 # EvoSim
 
+## PR #202 — merge-safety checkpoint — 2026-10-22
+
+**Verified source head:** `6a4fc68e72d9aa682b6a8fe5af48ac41de61f75b`. Exact-head GitHub Actions run [#39697289682](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39697289682) completed.
+
+### Verification result
+
+- **Formatting:** passed.
+- **Source-size guard:** passed.
+- **COMBINE architecture guard:** passed.
+- **Focused regression checks:** Bob compact storage/reopen, concurrent library initialization, fluid transaction/cap, fluid coalescence/restoration, and chemical BREAK checks all passed.
+- **Composite geometry regression:** `world_tone_snapshot::tests::snapshot_represents_each_constituent_of_composite_physical_material` passed. The malformed-state guard test `snapshot_fails_closed_on_invalid_composite_structural_unit_state` also passed.
+- **Full Rust suite:** 563 passed, 28 failed, 1 ignored; runtime 233.30 seconds.
+- **Known-baseline comparison:** previous run [#39695004714](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39695004714) had 562 passed, 28 failed, 1 ignored. Exact failing-test identity comparison shows **all 28 baseline failures are unchanged; zero new failures and zero resolved baseline failures**.
+- **Clippy:** fails under `-D warnings` with the existing 59 application-target and 38 test-target lint errors. This matches the previous run's counts; no blanket suppressions were added.
+- **Resource rename:** Methane → Oxygen; Water remains Water. Oxygen retains the former Methane properties and geometry.
+
+### Composite geometry: model boundary and resolution
+
+A `StructuralUnit` represents exactly one physical constituent. `StructuralUnit::from_material` rejects multi-part materials, and its deserializer rejects composite material with an explicit instruction to restore constituent placements and bonds through the organism graph. The geometry cache stores only one realized shape and one placement per structural unit; it has no valid per-constituent transforms for a composite. Guessing transforms or reusing the cached shape would corrupt shadows and energy allocation.
+
+Composite materials are represented by `PhysicalMaterial`, which carries one placement per constituent and preserves optional internal-bond identity. The world-tone snapshot expands that representation into one placed shape and one material-response entry per constituent. The follow-up clarifies this invariant and adds regression coverage proving a valid two-constituent physical material is accepted by the snapshot and retains both constituent responses. An artificially mutated in-memory `StructuralUnit` with composite material still fails closed by design; it is malformed state, not a supported organism representation. **The identified composite-geometry gap is closed at the valid model boundary; no synthetic constituent poses are invented.**
+
+### Merge assessment
+
+PR #202 has passed formatting, architecture guards, focused transaction tests, and the new composite-geometry regression. The full suite retains exactly the same 28 known failing test identities as the documented baseline. Clippy retains its existing strict-lint debt. This is a baseline-based result, not a clean-CI claim.
+
+Whole-world energy reconciliation across every store, chemistry transaction, death transition, and lifecycle path remains unproven. Permeability and complete self-maintaining organism viability are not established by this PR. These remain explicit scope limitations rather than completed features.
+
+PR #196 constructor/Bob work remains separate and untouched. Historical notes below are dated handoff records; where they conflict with this checkpoint, this checkpoint is authoritative.
+
+## External-input transaction — 2026-10-19
+
+First implementation slice on the dedicated `feature/external-input-ledger` branch, based on verified integration head `9b34e911c6eb98ff400ecf58dae09884d55f2ceb`.
+
+- Added a distinct `ExternalInputTransaction` and `settle_external_input` path. External input is never recorded as released bond potential.
+- The transaction carries its source, local source availability, captured input, usable-energy gain, work, and heat. It is accepted only when all values are finite/nonnegative, captured input does not exceed the supplied availability, and the energy split balances.
+- Settlement updates the holder and all affected ledger counters atomically; rejected input leaves both unchanged. The new cumulative external-input counter defaults to zero when deserializing older ledgers.
+- Added focused ledger tests for successful accounting, source-availability rejection, and atomic rejection of an unbalanced input.
+- **Not implemented in this slice:** harmonic-response-to-capture calculation, per-tick capture scheduling, live world-tone energy capture, global inventory/conservation, and capture-efficiency inheritance. The caller must supply a valid local source budget and enforce the once-per-organism-per-tick rule; the ledger cannot infer those from a spectrum.
+- Exact-head CI exposed three existing world-tone compile errors: `WorldToneSample` was compared/debug-formatted in tests and passed through the harmonic path without implementing `PartialEq`, `Debug`, or `Copy`. Added those value-type derives so the existing source model and call path compile; this does not change source behavior. Formatting-only corrections were also applied to the ledger expression and source-tone integration. Exact-head verification is still required. Do not treat this ledger primitive alone as proof of whole-world conservation or functional solar capture.
+
+
+## Energy-path audit — 2026-10-20
+
+- The shared `EnergySourceBudget` is intentionally not `Copy` or `Clone`, preventing accidental duplication of a shared remaining allowance. This is an API guard, not a live source scheduler: callers still have to create one correctly scoped budget and pass that same mutable budget to every receiver.
+- Source audit confirms COMBINE/construction bond formation, movement expenditure, maintenance, realized-bond chemical BREAK, and stress BREAK use ledger transactions. Chemical and stress BREAK share a graph-validation/settlement/commit path. Reproductive usable-energy transfers conserve energy between holders. The staged legacy decomposition helper also uses the ledger but remains test-only and is not invoked by the production tick.
+- The live tick still has no world-tone capture call and no source-budget scheduling across receivers. Directional exposure geometry is staged separately and does not credit energy. Keep capture disabled until the complete live energy inventory reconciles under exact-head tests.
+- Verification limitation: GitHub reports no Actions run/status for the current PR head, and local test execution could not clone the repository because this environment could not resolve `github.com`. The source-budget change is source-audited but not compiled or tested here; do not infer a passing exact-head gate.
+
+## Deterministic world-tone cycle cache — 2026-10-19
+
+- The source sample is deterministic for a fixed world size and runtime configuration. `WorldToneCycle` precomputes one sample per tick for cycles up to 65,536 ticks and uses modulo lookup during the simulation tick.
+- The cache stores only source outputs (position, frequency, signal level, energy intensity per tick per unit of exposed projected width, and phase). It does not allocate incident energy to organisms, cache live reflections, or replace energy-ledger accounting.
+- The cache is rebuilt when world-tone configuration is applied. Cycles longer than the explicit 65,536-sample memory bound fall back to the existing direct sampler; they remain valid rather than being rejected.
+- Regression tests compare every cached sample against direct sampling for the full 2,400-tick cycle and verify cycle wrap. A separate test checks that oversized cycles fall back safely.
+- **Performance expectation:** this removes repeated trigonometric source sampling from the configured tick path, but it is not yet benchmarked and should not be presented as a major speedup. The source was already sampled only once per tick, not once per organism. Resonance evaluation and live reflection propagation are separate, likely more significant future costs.
+
+**Future library direction (design recommendation, not implementation):** keep Bob focused on geometry. If profiling later justifies reusable harmonic responses, introduce a separate response cache/library keyed by all inputs that affect a deterministic material response (material properties, incoming frequency/composition, and relevant response parameters). Do not store position-dependent energy outcomes or live reflection paths there, and do not duplicate response records in Bob. Keep actual received/captured/reflected/dissipated energy in the live, source-backed accounting path.
+
+## Live world energy inventory — 2026-10-20
+
+- `EnergyLedger` now retains tick-zero baselines for usable energy and stored bond energy, alongside current world totals.
+- Simulation initialization captures the initial usable-energy and structural-energy baseline. End-of-tick accounting refreshes current usable energy and sums realized graph-bond energy across the currently inventoried holders. A `DecomposingBody` remains a legacy carrier type, not a distinct chemical process.
+- `Simulation::energy_inventory_snapshot()` exposes those current values with cumulative external input, explicitly non-structural energy release, work, and heat to the shared conservation check.
+- Added a simulation test that checks the tick-zero inventory starts balanced, in addition to the three ledger-level reconciliation tests.
+- **Important boundary:** the model currently stores bond energy only on realized graph bonds. Internal connections inside `PhysicalMaterial` have no independent energy value, so they are not separately counted as stored bond energy. That representation must be resolved before claiming the inventory covers every possible stored-material state.
+- **Resolved resource-property distinction (2026-10-20):** `ResourceProperties::potential_energy` is immutable per-type maximum potential, not an amount of energy currently held by every instance. It must not be summed into the world inventory merely because a material exists; doing so would duplicate a type-level ceiling as stored energy. COMBINE/decomposition comments correctly state that constituent potential is not consumed on bond formation. The live inventory's current structural store is realized `bond_energy`; physical-material internal bonds currently derive release potential on break rather than retaining a stored numeric energy. Keep this as a representation boundary: if material bonds become explicit energy stores later, define their allocation/formation and inventory them exactly once before using them as a source.
+- **Resolved stored-material BREAK accounting audit (2026-10-20):** live COMBINE debits usable energy and allocates recorded energy to realized rigid bonds or dissipates the transient fluid-bond allocation as heat. `PhysicalMaterialBond` retains endpoints but no `bond_energy`, and no energy is allocated when those pre-existing internal bonds enter storage. Stored-material BREAK therefore validates and splits the physical composite while settling a zero-energy transaction; it does not derive or credit bond potential from constituent properties. The regression `stored_material_break_does_not_credit_unallocated_bond_energy` passes. Only realized graph bonds with recorded `bond_energy` release energy on BREAK. This closes the identified free-energy path, but does not by itself prove whole-world conservation.
+- **Death/decomposition architecture correction (2026-10-20):** the simulation tick must not call `process_decomposing_bodies` as a special chemistry pathway. A breached organism remains as a physical structure and continues through `chemical_reaction::accumulate`/`resolve`, the same reaction pass used by living organisms. “Decomposition” describes the chemistry observed after death; it does not define a separate bond-breaking law. The legacy `DecomposingBody` path is retained only as staged code pending a shared BREAK settlement audit, and the tick-level regression that incorrectly asserted it should advance independently has been removed.
+- **Verification status superseded by the current audit at the top of this README:** exact-head Rust tests have now run, including the stored-material BREAK regression. Whole-world conservation across all chemical transitions remains unverified, and live sunlight capture remains disabled.
+
+## World energy inventory reconciliation primitive — 2026-10-20
+
+- Added `EnergyInventorySnapshot` in `src/chemistry/energy_ledger.rs`. It expresses the world-scale invariant: change in usable energy + change in stored structural/bond energy + work + heat = external input + explicitly non-structural released energy.
+- Added focused unit tests for a balanced external-input case, a bond-breakdown case where stored bond energy decreases exactly once, and unbalanced/non-finite snapshots.
+- Internal transfers are intentionally absent from this world-level equation because they cancel between holders. Bond breakdown belongs in the structural-energy decrease, not in `other_energy_released`.
+- **Scope limit:** this is a tested-by-design reconciliation primitive, not yet a live whole-world inventory. The simulation does not yet independently compute tick-zero/current structural bond-energy totals and pass them through this snapshot. Tests were added but have not been run; no successful exact-head CI result is available yet. Do not treat this commit as proof of runtime conservation or functional sunlight capture.
+
+## Unified resonance and reflected-tone energy — 2026-10-19
+
+**Decision confirmed by the user:** an interaction may change the frequency composition of the reflected tone. Reflection is not energy-costly tone emission; it is the onward propagation of the energy left from an incoming tone. The reflected tone must be less energetic than its source interaction after capture and losses.
+
+- Reuse the existing harmonic/resonance response rules for incoming tones and reflected tones. Do not create a solar-only reflection system or a second aura propagation mechanism.
+- Material resonance and nonlinear response may reweight frequencies and produce harmonic components in the reflected spectrum. The reflected spectrum may therefore differ from the incoming spectrum.
+- Keep the spectrum as a signal representation and track its physical energy budget separately. Spectral amplitude or `ResonancePerception.magnitude` is not, by itself, captured energy.
+- For each interaction, enforce: incoming energy received = usable energy captured + energy reflected onward + energy lost. Any frequency transformation must remain bounded by the energy available for reflection; it cannot create energy.
+- A downstream organism can harvest only reflected energy that actually reaches it. Directional propagation, attenuation, and obstruction must apply consistently to direct and reflected tones.
+- The existing `material_response_to_drive` and `nonlinear_harmonic_amplitude` functions provide a starting point for spectral transformation, but the current world-tone path only computes perception. It does not create an energy-bearing reflected signal or perform capture.
+- The existing external-input ledger validates one transaction against a caller-supplied availability value. It does not yet allocate a shared per-tick source budget across receivers or prevent repeated claims against the same budget.
+- **Capture-model progress — 2026-10-19:** `src/perception/harmonics.rs` now defines a bounded, dimensionless damped-oscillator absorption fraction, `4ζ²r² / ((1−r²)² + 4ζ²r²)`, with `r = drive_frequency / natural_frequency`. It uses the existing damping/frequency model, is constrained to [0, 1], and is covered by unit tests for resonance, off-resonance response, and invalid inputs. This is a physical absorption-response candidate, not spectral amplitude, source energy, or an implemented capture path. It is not yet wired into live energy capture; spatial receiver weighting, shared source-budget allocation, reflection, and end-to-end conservation remain open implementation gates. Tests have been added but not run.
+
+**Directional interception model — clarified 2026-10-19:** the world tone emits energy and signal directionally from its current rotating source position, analogous to light. Use simplified direct-path visibility rather than detailed photon/ray simulation: a clear path exposes a surface; an occluded path puts it in shadow. Only source-facing, unoccluded surfaces intercept incoming energy/signal. That surface's realized material and geometry determine inward propagation toward the genome cavity, where resonance/damping can determine absorbed energy. Do not give the entire organism an independent copy of source output, and do not equate perceived harmonic amplitude with energy. The energy ledger must credit absorbed energy once; energy not intercepted/absorbed remains uncaptured or follows an explicitly modeled reflection/loss path. Shadowing and surface exposure define the spatial capture pool, replacing the prior unresolved abstract receiver-pool framing. Exact discretization of visibility/occlusion and accounting for intercepted-but-not-absorbed energy still need implementation and tests.
+
+**Implementation gate — updated 2026-10-19:** the bounded resonance-to-absorption response exists, but its focused tests have not been run. A geometry-level `source_path_blocked` primitive in `src/geometry/organism_geometry.rs` checks direct segments against realized constituent geometry (including circles, polygon edges, lines, and explicit fluid boundaries) without raster sampling. It handles collinear boundary overlap and excludes contact only at the destination endpoint. The `visible_source_facing_points` query reuses `surface_geometry::boundary_point_toward` to derive a world-space boundary point and outward normal for each constituent, rejects back-facing candidates, and filters points shadowed by other realized material. Those probes are useful for diagnostics but are not a surface-area or energy-interception calculation, and they are not called by simulation.
+
+**Polygonal exposure discovery — 2026-10-19:** `visible_polygonal_intervals` now derives straight exposed intervals for polygonal constituents by splitting target edges at source rays through blocker vertices and classifying each interval against realized-geometry occlusion. Unsupported curved, line-only, or implicit boundaries fail closed instead of being approximated. The helper is geometry-only; it does not yet calculate curved-boundary exposure or credit energy. A sign correction to the analytic ray/edge parameter was applied during review. Focused regression tests now cover an unobstructed target edge, a partially shadowed target edge, a fully occluded target edge, and fail-closed handling of non-finite realized geometry. The helper rejects non-finite part transforms and transformed vertices before intersection math. Exact-head Rust verification is still required before relying on this path. **CI evidence audit — 2026-10-19:** the latest discoverable Rust workflow run is [#39300799075](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39300799075), checked out commit `3369b71dfaf9972fb626edb74d5e04bf68402127`, not the current PR head `f518f2daf399082bfa83efeac9d8ce8b2f0d15da`. That older run reports 412 passed, 30 failed, 1 ignored in the full test suite; Clippy also failed with 62 lint errors. The failing tests span existing constructor, geometry, cavity, harmonics, movement, reproduction, and simulation behavior, so they cannot be attributed to the new exposure tests from that run. This run predates the latest exposure-test commits and does not verify them. No successful exact-head result is available.
+
+Energy must enter the ledger exactly once through the external-input transaction. Intercepted, absorbed, reflected, and otherwise uncaptured energy must remain distinct; raw spectral amplitude is not energy, and no arbitrary reflection/loss constants should be introduced. The new primitive and tests have not been compiled or run. Live capture, complete exposed-surface integration, whole-world conservation, and end-to-end verification remain unverified. Keep this work in PR #202; leave constructor/Bob PR #196 untouched.
+
 ## Single working authority and directory boundaries
 
 This root `README.md` is the **only authoritative working README** for EvoSim. Subsystem READMEs are being retired; durable decisions, current status, test gates, and operational instructions belong here. Dated audit documents under `docs/` may hold detailed evidence, but they are supporting records—not competing authorities. When a detail conflicts, this README's latest explicit decision/status wins, and stale history must be labelled historical.
@@ -458,7 +557,7 @@ There are seven base resources. The approved resource-to-position mapping is fix
 
 | Resource | Chemical position |
 |---|---:|
-| Methane | 1.5 |
+| Oxygen | 1.5 |
 | Sulfur | 3.5 |
 | Hydrogen | 5.5 |
 | Water | 7.0 |
@@ -466,7 +565,7 @@ There are seven base resources. The approved resource-to-position mapping is fix
 | Carbon | 10.5 |
 | Phosphorus | 12.5 |
 
-Water is the midpoint at **7**. Methane and Phosphorus intentionally remain inside the 1–14 scale rather than occupying its extreme endpoints. These positions are catalog data, not reactivity magnitudes.
+Water is the midpoint at **7**. Oxygen and Phosphorus intentionally remain inside the 1–14 scale rather than occupying its extreme endpoints. These positions are catalog data, not reactivity magnitudes.
 
 Chemical position is **not a reactivity magnitude**. It describes position on the spectrum. For a local pair:
 
@@ -651,7 +750,7 @@ The chemistry migration is complete at the currently approved architecture bound
 
 | Area | Status | Current boundary |
 |---|---|---|
-| Resource chemical positions | **Complete** | Seven catalog positions are explicit data: Methane 1.5, Sulfur 3.5, Hydrogen 5.5, Water 7.0, Nitrogen 8.5, Carbon 10.5, Phosphorus 12.5. |
+| Resource chemical positions | **Complete** | Seven catalog positions are explicit data: Oxygen 1.5, Sulfur 3.5, Hydrogen 5.5, Water 7.0, Nitrogen 8.5, Carbon 10.5, Phosphorus 12.5. |
 | Core chemistry mathematics | **Complete** | Static chemical-position interaction, distance/contact expression, reaction accumulation, dissipation, and barrier checks exist with invariant tests. |
 | COMBINE energy boundary | **Migrated** | Remaining formation work is derived from the approved attraction force over the actual remaining approach distance; there is no arbitrary mass/cohesion formation multiplier. The formation threshold remains a structural eligibility/investment requirement, while intrinsic bond potential is stored separately and allocated through the energy ledger. |
 | BREAK energy boundary | **Migrated** | Structural BREAK releases the realized bond's stored intrinsic bond potential exactly once. Chemical BREAK uses accumulated reaction energy to pay the realized bond's activation/disruption barrier, with only the surplus becoming usable energy or heat. Constituent material potential is not recreated at bond rupture. |
@@ -1722,7 +1821,7 @@ Implementation boundary remains unchanged: implement the source/capture contract
 
 ## Energy baseline, dissipation/stress, and decomposition design — 2026-10-18
 
-**Status:** Design pass following the user's decisions on 2026-10-18. The rules below are current decisions; decomposition details explicitly marked *proposal / needs approval* are not yet settled. This is documentation only; no simulation source code or tests are changed by this entry.
+**Status:** The energy rules below record established decisions. The decomposition proposal that was previously marked *needs approval* was stale and contradicted the already-established architecture; the replacement decision below supersedes it. This is a design/status correction, not authorization to change constructor/Bob PR #196.
 
 ### 1. Initial energy baseline — decision
 
@@ -1754,32 +1853,54 @@ Do not treat the entire formation investment as structural energy if the realize
 
 - Do not introduce a universal intermediate-energy pool by default.
 - A realized bond may release its stored bond energy once when it breaks. The receiving destination depends on the specific modeled pathway and must be explicit.
-- Chemical accumulation and resonance are reaction/coupling signals, not energy holders. Chemical BREAK must be funded by already-accounted stored energy, explicitly recorded external capture, or a valid combination; every credited amount needs a corresponding source.
+- Chemical accumulation and resonance are reaction/coupling signals, not energy holders by themselves. A chemical reaction may legitimately release chemical potential, but the released amount must come from an explicitly defined chemical-energy change and be accounted for at the transition. An accumulated interaction signal alone is not proof that energy was released. Chemical BREAK may therefore be funded by a validated chemical-potential release, already-accounted stored energy, explicitly recorded external capture, or a valid combination; each source must be identified and credited no more than once.
 - The sun's 440 Hz signal is omnipresent and inexhaustible, but capture is explicit and rate-limited. Resonance controls coupling effectiveness; chemistry determines whether/how captured energy can be converted into usable energy.
 
-### 5. Decomposition — design review required; proposed direction is NOT YET APPROVED
+### 5. Death, bond breaking, and material return — established architecture
 
-The existing decomposition pathway predates the current chemistry model. Do not merely add a distance cutoff to its current nearest-organism transfer.
+**Decision (already established; not an open question): decomposition is not a separate chemistry system to design.** The unified energy ledger and ordinary physical/chemical rules are the mechanism. Do not pause energy unification to invent decomposition-specific behavior, special bond-breaking rules, a nearest-organism transfer policy, or a dedicated decomposition energy pool.
 
-The redesign must define these phases and their accounting:
-- **Death handoff:** transfer the dying organism's actual structure and usable-energy balance into a decomposing state exactly once; no energy or material may be duplicated or lost on a failed handoff.
-- **Bond breakdown:** remove one realized bond at a time and release that bond's stored `bond_energy` no more than once. Do not regenerate constituent material potential as a second energy reserve.
-- **Material return:** when the physical bonds are gone, return the realized constituent materials to the environment without duplicating, deleting, or changing their identity/quantity.
-- **Energy destination:** specify whether released bond energy is dissipated, retained temporarily by the decomposition process, or transferred/converted through an explicit local chemistry interaction. Do not transfer it to the nearest organism at arbitrary distance.
-- **Locality:** any biological transfer/reuse must follow an explicit physical/chemical interaction rule, not distance ranking alone. No numerical radius is approved by this entry.
+- **Death is an observed state produced by ordinary chemistry, not a hard-coded destruction event.** The organism is dead when its genome core has been breached. That breach may occur directly through bond-breaking chemistry or indirectly when inability to sustain itself causes stress damage that breaks open the core. There is no separate death-specific material conversion or bond-breaking rule. The only permitted special handling is reducing computational effort after core breach; the entity's remaining structure, bonds, materials, and energy continue to obey the normal physical and chemical rules. Death ends organism status, not physical existence: matter remains available for reuse through ordinary physical/chemical interactions.
+- **Existing BREAK is the structural mechanism.** A realized structural bond is broken by the same bond/chemistry rules and energy accounting used elsewhere. Bond energy may be released only once. Do not create a second decomposition-only energy yield or regenerate material potential as energy.
+- **Matter is conserved.** The realized constituent materials persist through structural bond breaking and become ordinary available physical material when no structural bonds remain. Do not duplicate, delete, or silently change material identity/quantity.
+- **Energy has one authority.** A death handoff moves actual usable-energy holdings (including developing-offspring energy) without creating or losing energy. BREAK settlement accounts for released bond energy, usable-energy change, work, and dissipation. Unrecovered energy may be explicitly dissipated as an accounted sink; it must not vanish merely because a lifecycle object is removed.
+- **No arbitrary nearest-organism transfer.** Energy can be reused only through an actual, local, chemistry-authorized interaction or an already-defined physical transfer rule. Distance ranking alone is not an energy-transfer mechanism. Do not add a new radius or special local-capture rule solely for decomposition.
+- **Do not preserve a legacy implementation merely because it exists.** The current code has a `DecomposingBody` lifecycle object and a dedicated bond-resolution path. Treat that as legacy orchestration to audit against the architecture—not as a required new physical or energy concept. Keep a temporary carrier only if the existing tick/lifecycle needs it; it must use ordinary BREAK settlement, preserve all holders/material, and cannot own a separate energy law. Remove or simplify it only after tests show the unified path covers the same lifecycle behavior.
 
-**Recommendation for the next decision:** make decomposition primarily a material-recycling process. Release each realized bond's stored energy exactly once; treat it as dissipated unless a real, local, chemistry-authorized interaction explicitly captures/transfers it. Avoid a permanent intermediate pool unless the decomposition mechanism demonstrably needs one. This recommendation needs the user's approval before implementation.
+This resolves the previous open questions: no additional user approval is needed for the decomposition architecture, energy destination policy, or nearest-organism rule. The remaining work is implementation and verification, not another design round.
 
-### 6. Remaining design gates before implementation
 
-- Choose the exact starting usable-energy endowment and confirm the initial bond-energy baseline is included in `E_initial`.
-- Approve or revise the proposed decomposition energy destination and local reuse rule.
-- Define the concrete 440 Hz capture eligibility and per-tick rate/capacity; this is still a mechanism design task, not implied by the resonance calculation.
-- Define the remaining movement/maintenance coefficient calibration procedure. The existing constants remain unchanged and are not validated by this design entry.
-- After these are resolved, write transaction invariants and tests for tick-zero reconciliation, COMBINE allocation, BREAK single-release, explicit capture, stress/dissipation, decomposition handoff/rollback, and whole-world reconciliation.
+### Death is chemistry-observed; simulation effort is reduced after core breach — 2026-10-19
 
-No source-code changes, tests, or constructor PR #196 changes are included in this design entry.
+Death is not a special-case lifecycle command that destroys, converts, or automatically disassembles an organism. It is an observational classification: the genome core is breached. A direct chemical bond break can breach it, or an organism's inability to sustain itself can cause stress damage that eventually breaches it. Both routes use ordinary chemistry and energy accounting. The only death-specific behavior permitted is reducing computational effort once the core is breached. Remaining matter, structural bonds, stored energy, and usable energy persist and continue through normal physical/chemical rules. Any `DecomposingBody` or recycling orchestration must be evaluated against this rule; it must not become a separate chemistry system or erase the body's physical existence.
 
+**Implementation checkpoint — 2026-10-19:** the simulation step now retains breached organisms in `Simulation::organisms`, derives living status from the realized genome cavity, skips biological maintenance/memory, material acquisition, decision/movement, and reproduction for bodies whose core is breached, and still runs the ordinary chemical-reaction pass on their physical structure. Stress damage may breach the core through the existing bond-breaking path. The former automatic recycling/decomposing-body handoff is no longer called by the normal tick lifecycle. Population reporting now counts only organisms with an intact qualifying core, while the headless and browser simulations continue advancing the physical world even when that count reaches zero. Regression coverage was updated to assert that a breached body's structure remains present and no material is moved to the environment solely because of death. In-flight BREAK/COMBINE transactions are allowed to finish after core breach: they already hold reserved physical/chemical state, and dropping them would risk losing material or energy. Breached organisms cannot initiate new transformations because their decision/action loop is disabled. **Source changes have not yet been compiled or test-run; this checkpoint is not a verified green build.**
+
+### 6. Remaining implementation gates — not design questions
+
+1. **Finish the global energy inventory.** Reconcile explicit initial energy plus source-backed external input against every final usable-energy holder, stored bond energy, and explicitly recorded dissipation/output. Internal transfers cancel. Do not mistake per-transaction balance or a partial holder counter for whole-world conservation.
+2. **Complete post-breach lifecycle verification.** Audit all biological entry points and pending transformations so a breached core receives no further biological processing, while ordinary chemistry and physical state remain active. Verify energy/material conservation and ensure legacy recycling/decomposition helpers cannot be reached from the normal death path. Add regression coverage for core breach caused by both direct bond-breaking chemistry and stress damage.
+3. **Unify structural BREAK.** Compare voluntary chemical BREAK, other BREAK pathways, and the current decomposing-body bond path. Identify which can call the same authoritative physical/energy settlement and what minimal lifecycle orchestration remains necessary. Preserve the rule that a bond's stored energy is released at most once.
+4. **Close the finished-body energy path.** If a temporary carrier reaches zero bonds with a positive usable-energy balance, explicitly account for the remainder before removing it. Do not silently drop the holder. Prefer an existing valid transfer/sink over a new decomposition-specific reservoir.
+5. **Wire world-tone capture after the ledger boundary is sound.** The source model and cached samples provide deterministic per-tick source values, while external-input transactions and a shared-budget primitive exist. The live tick still needs one shared source allowance, receiver allocation, bounded resonance-to-capture conversion, and source-backed settlement. Reflection must carry only remaining incoming energy and obey the same propagation/obstruction rules.
+6. **Then verify end-to-end.** Add tick-zero inventory, atomic death/handoff, one-time bond release, matter-return, repeated chemistry-cycle, shared-source competition, and whole-world reconciliation tests. Run formatting, compile, focused gates, full Rust tests, and Clippy on the exact resulting head; record results without calling the work green if any gate fails.
+
+**Ordering:** inventory and holder audit first; death/BREAK path audit second; implement the shared accounting/lifecycle correction once; audit the changed paths twice; then wire live world-tone capture. Do not reopen the resolved decomposition design questions, and do not change PR #196.
+
+### Exact-head code audit — 2026-10-19
+
+Read-only audit of the PR #202 branch after the architecture correction above. These are concrete code gaps, not open design questions:
+
+1. **Chemical BREAK source provenance is unresolved; chemical energy release itself is allowed.** `src/chemistry/chemical_reaction.rs` converts accumulated chemistry state with `normalized_chemistry_to_energy` and passes that amount to `settle_chemical_break_energy`; `src/chemistry/transformation.rs` records the amount as `potential_released`. The accumulator is a reaction-driving signal, not a reservoir, so this conversion alone does not demonstrate that the credited amount was physically released. A second overlap makes this especially important: `src/chemistry/combine.rs::intrinsic_bond_potential` uses the same normalized `interaction_potential` equation to set the realized bond's stored `bond_energy`. Chemical BREAK must therefore distinguish that already-accounted structural store from any additional chemical-potential change, and settle the actual change exactly once when the bond transitions. Do not prohibit legitimate chemical energy release; validate its source and prevent the same potential from being released twice.
+2. **Prepared COMBINE aggregate work accounting — corrected in the code change following this audit.** `src/chemistry/transformation.rs` now adds `ledger_delta.total_work_expended` when committing the prepared transaction. The change is source-reviewed but has not yet been compiled or tested.
+3. **Structural BREAK has multiple settlement paths.** Stress BREAK and the decomposing-body path release a bond's stored `bond_energy`; chemical BREAK uses a chemistry-generated quantity and a disruption-work allocation; voluntary BREAK for stored physical material derives interface potential through a separate adapter. Audit the distinctions, but converge on one authority for transaction validation and source attribution without falsely treating all three sources as identical.
+4. **Death-handoff atomicity needs a failure-path proof; a partial-transfer defect is not confirmed.** `src/chemistry/recycling.rs::recycle_dead_organism` moves stored material and reproductive construction into a temporary body and transfers parent/developing energy sequentially. The transfer helper validates amounts before mutation, and the amounts are prevalidated, so the sequential transfers appear designed to succeed under current preconditions. Do not call this a confirmed defect without a reachable failure case. Add a focused failure-path test or simplify the claim if inspection shows no such case.
+5. **The legacy body's arbitrary nearest-organism transfer — corrected in a follow-up code change.** `src/simulation/simulation.rs::process_decomposing_bodies` no longer transfers positive energy to the nearest organism based on distance alone. Released usable energy remains in the body's holder; any future transfer must use an already-authorized physical/chemical path.
+6. **Finished-body residual energy — explicit sink added, pending tests.** Before removing a finished body, the lifecycle now settles any positive residual usable-energy budget as dissipated heat through the shared transaction ledger. If settlement fails, the body remains rather than losing its holder. Non-finite or negative residual balances also retain the body for diagnosis. This closes silent holder deletion, but the sink choice and failure behavior still need focused regression coverage and end-to-end verification.
+7. **The ledger is still transaction-level, not global.** `EnergyTransaction::balanced` checks a per-transaction equation and `EnergyLedger` aggregates event counters; it does not prove that every `potential_released` value came from a debited source, that every holder is inventoried, or that final stored bond energy plus usable energy plus recorded sinks reconcile to initial energy plus external input. The external-input shared-budget primitive is not yet called by the live tick, and reflection is not an energy-bearing path.
+8. **The transaction schema cannot yet express stored structural energy as a source without re-labeling it.** `EnergyAllocation::balanced` treats `source_energy` as the only source and requires `structural_delta >= 0`; `EnergyTransaction::expenditure` likewise only admits nonnegative structural additions. Meanwhile, structural BREAK paths pass the released bond potential as `potential_released` while the bond is removed from the structure. Chemical BREAK passes an independently accumulated reaction amount as `potential_released` and leaves `structural_delta = 0`, even though the realized bond also disappears. This schema cannot distinguish a true chemical-potential release from a debit of the bond's already-stored energy, or represent both cleanly. Before wiring live world-tone capture, revise the authoritative transaction model to support explicit source provenance and signed structural-store changes, then migrate COMBINE/BREAK/decomposition together and prove one-time debits.
+
+**Audit limitation:** this pass inspected the current PR #202 source and README through GitHub. No Rust commands or tests were run locally. The README correction commit is `2ddd0857741b6a363b68cb09afadfcb464514602`; the PR remains draft, and no PR-triggered workflow run was returned for that README-only commit. Do not infer that the branch compiles or passes tests from this documentation change.
 
 ## Energy accounting implementation — transaction allocation slice — 2026-10-18
 
@@ -1790,3 +1911,429 @@ No source-code changes, tests, or constructor PR #196 changes are included in th
 - Chemical BREAK records its disruption barrier as work, not as newly retained structural energy. Other BREAK and decomposition transactions explicitly record zero work in this schema; this change does not redesign decomposition.
 - Focused regression assertions verify the allocation and conservation of the existing COMBINE debit, including the transient fluid-bond case. The serialized work counter defaults to zero when reading older ledger state.
 - **Boundary not yet solved:** this is not yet a simulation-wide inventory, source-backed settlement, external sun-capture implementation, or whole-world conservation proof. Those remain subsequent stages; do not claim global conservation from per-transaction balance alone.
+
+
+## Shared external-source budget settlement — 2026-10-19
+
+**Implementation slice on PR #202:** external inputs can now settle against a mutable `EnergySourceBudget` shared by all receivers drawing from the same accounting interval.
+
+- `EnergySourceBudget` validates that its initial allowance is finite and nonnegative.
+- `settle_external_input_from_budget` checks source identity, transaction balance, and remaining budget before settlement. On success it credits the holder, updates the ledger counters, and debits the budget; on failure, neither holder, ledger, nor budget changes.
+- The source allowance is an accounting primitive. The caller must define its scope (for example, a particular source during one tick) and pass the same budget instance to competing receivers. Creating a fresh budget per receiver would defeat shared-budget protection.
+- The transaction's `source_available` remains the local availability bound for that capture attempt. The shared budget's `remaining` is the aggregate unclaimed allowance; these are different constraints and are checked separately.
+- Regression tests cover competing claims against one budget, overspending, atomic rejection, and invalid budget initialization.
+
+**Still not implemented:** simulation tick owns no live shared world-tone budget yet; world-tone capture is not wired into the tick; reflection is not an energy-bearing field; and this primitive does not prove whole-world energy conservation. Ordinary chemical transactions still use `EnergyTransaction`, while external input uses `ExternalInputTransaction`; both now adapt to the same `EnergyAllocation` balance rule. Aggregate reconciliation across all holders and energy sinks remains open. No decomposition behavior is changed here.
+
+## Shared transaction allocation contract — 2026-10-19
+
+Both `EnergyTransaction` (chemical/internal energy) and `ExternalInputTransaction` (source-backed external energy) now expose an `EnergyAllocation` view and use the same balance validation:
+
+`source_energy = usable_delta + structural_delta + work_expended + heat_dissipated`
+
+- For chemical transactions, `source_energy` is the explicitly released chemical/bond potential. A pure expenditure can have zero released potential and a negative `usable_delta`; the holder-funded debit balances the positive structural, work, and dissipation allocations.
+- For external-input transactions, `source_energy` is the explicit external input, and `structural_delta` is zero in this allocation. External input still has its own source identity, local availability bound, and shared-budget settlement path.
+- The common allocation is a validation view, not a new energy reservoir and not permission to substitute one source type for another. It does not merge the two source counters or infer missing energy.
+- A focused regression checks that both transaction types satisfy the same balance primitive while retaining their distinct source and structural-allocation semantics.
+
+**Next boundary:** aggregate reconciliation still needs to include actual initial energy, every live holder, stored bond energy, and explicit dissipated/output energy. The common transaction rule is not itself a whole-world conservation proof. The live tick still does not settle world-tone capture against one shared source budget, and no decomposition behavior is changed by this slice.
+
+
+## Energy-holder audit and first reconciliation fix — 2026-10-19
+
+Audit of PR #202 at `24fbe6b741ad29e970e02311c14509e378e3d082` found that `total_usable_energy_held` counted live organisms and their developing offspring, but omitted the usable-energy budgets held by `DecomposingBody` instances. That made the held-energy counter drop when a dying organism transferred its usable energy into decomposition, even though the transfer created or destroyed no energy. The counter was also left at its default zero until the first lifecycle refresh, despite the initial organism receiving an explicit usable-energy allocation.
+
+The first reconciliation fix now:
+- includes live-organism usable energy, developing-offspring usable energy, and decomposing-body energy budgets in the same held-usable-energy total;
+- initializes that total when a simulation is created, using the initial organism's actual assigned energy;
+- refreshes the same total after the lifecycle processes deaths and decomposition.
+
+**Scope boundary:** this counter is still not a whole-world energy inventory. It measures usable energy held in these three holder classes only. It does not yet include energy retained structurally in bonds, quantify energy remaining in an active source/reflection field, or reconcile all historical flows against initial energy plus external input. Structural bond energy is a distinct store and must be inventoried without double-counting the released-potential flow counter. Initial construction also uses a very large starting allocation formula, so the initial baseline must be made explicit before a global conservation assertion is designed.
+
+**Verification:** source changes are committed on PR #202 only. Rust formatting, compilation, focused tests, and full tests have not been run in this GitHub-only pass; do not interpret this change as verified or as proof of conservation.
+
+
+## Deceased reproductive energy audit — 2026-10-19
+
+A follow-up audit found a second holder-transfer gap: recycling a dead organism transferred its own `usable_energy` into the decomposing body, but dropped `ReproductiveConstruction` without transferring its `developing_energy`. The narrow follow-up fix validates both energy stores before recycling, then transfers both into the body budget. A regression test covers a parent with 5 usable units and 3 developing-offspring units, expecting 8 units in the decomposing body.
+
+The decomposing-body usable-energy counter now includes that carried energy while the body exists. A follow-up lifecycle change now settles positive residual energy as an explicit dissipated-heat sink before removing a finished body; if settlement fails, the body is retained. Material release is also deferred until finalization succeeds to prevent repeated deposits. These changes still require focused and end-to-end tests. Do not claim whole-world conservation until the residual-energy path and bond/material stores are reconciled.
+
+**Verification:** no Rust formatting, compilation, or tests have been run in this GitHub-only pass.
+
+## Finished-body material release ordering — 2026-10-19
+
+A second lifecycle audit found that a finished `DecomposingBody` could deposit its constituent materials before the remaining usable-energy sink succeeded. If the energy holder was invalid or settlement failed, the body was retained but its material had already entered the environment; the next tick could deposit the same material again.
+
+The finalization order now settles residual energy first, then releases material and removes the body. If the holder is invalid or settlement fails, the body and its material remain together. A focused regression test forces an invalid residual-energy holder and checks that the finished body remains and environmental material quantity is unchanged.
+
+**Verification status:** the code and test are committed, but they have not been compiled or run. No PR-triggered workflow run or commit status was returned for this change. This is a source-level correction, not a claim that the branch is green.
+
+## Structural-store energy accounting slice — 2026-10-19
+
+A follow-up audit found that ordinary structural BREAK and the legacy decomposition BREAK path removed a realized bond while recording its bond energy as a generic `potential_released` source and leaving `structural_delta` at zero. That made the transaction look like a newly released source rather than a debit of energy already held in structure.
+
+- `EnergyAllocation` now permits a signed structural-store delta. Positive values represent energy retained in a realized bond; negative values represent removal of a previously stored structural-energy amount.
+- `EnergyLedger` now accumulates `total_structural_energy_delta` separately from non-structural potential release, with a serde default for compatibility.
+- Ordinary structural BREAK and the legacy decomposition BREAK path now record the released bond amount as `structural_delta = -gross` and do not relabel that stored energy as a new source. Prepared transformation ledger deltas preserve this counter.
+- A focused ledger test checks that a five-unit structural debit can fund two units of usable energy and three units of dissipation without incrementing the non-structural source counter.
+- Geometry regression coverage now includes an unobstructed edge, a partially shadowed edge, and a fully occluded edge.
+
+**Chemical BREAK source boundary updated in the follow-up:** reaction accumulation now serves only as the activation signal. The transaction debits the removed bond's stored energy through a negative structural delta, spends disruption work from that store first, and charges any work shortfall to the organism's usable-energy holder. The new focused tests cover the allocation equation and work-shortfall case. This is source-reviewed only: tests, compilation, formatting, Clippy, and the full Rust suite have not been run on this branch head. Whole-world conservation and live sunlight capture remain unverified.
+
+## Simplified unified energy rule — 2026-10-20
+
+**Design decision:** do not add density-based energy storage or a new per-element energy subsystem yet. Keep the existing usable-energy holder, explicitly allocated structural bond energy, and shared transaction authority. Resource-type potential describes what could be available; it is not itself energy currently held.
+
+The common rule is: every credited energy amount must have been explicitly allocated or received from a tracked source. A transformation moves energy between existing stores, spends it as work, or dissipates it as heat. It must not derive a fresh energy credit from material properties merely because a bond is broken.
+
+**First narrow implementation:** stored environmental compounds have pre-existing internal connection endpoints, but no energy allocation was recorded when those bonds were created. Their restoration into organism structure likewise assigns zero bond energy. Stored-material BREAK now changes connectivity without crediting usable energy, structural release, or heat. Ordinary structural bonds with a recorded `bond_energy` continue to release that recorded amount through the existing transaction rule. This removes the concrete unallocated-energy credit without adding a second storage model.
+
+**Second transition fix:** COMBINE now prepares and commits its replacement structure on the same completion tick. This removes the interval in which energy had been settled but the old structure remained live, and prevents chemical or stress-driven BREAK from mutating the live graph between preparation and commit. The inventory therefore stays simple: it counts the live committed graph and does not need to understand pending replacement graphs.
+
+**Shared structural BREAK settlement — 2026-10-20:** ordinary chemical BREAK and stress-driven BREAK now use one commit helper. It validates the proposed bond removal against a cloned structure, settles the signed structural-energy debit and usable/work/heat allocation through the ledger, then commits the graph change and records heat stress only after settlement succeeds. Chemical BREAK still pays its disruption work from the bond's stored energy first and charges any shortfall to the usable holder; stress BREAK uses its existing no-work yield rule. This refactor aligns commit ordering without changing the distinct physical rules. It is source-audited but not yet compiled or tested.
+
+**Regression coverage added (not yet run):** `src/tests/simulation_tests.rs::stored_material_break_does_not_credit_unallocated_energy` directly checks that stored-material BREAK changes neither usable energy nor ledger source, work, heat, or structural-energy counters. `src/simulation/simulation.rs::combine_prepares_at_completion_without_changing_break_timing` checks that COMBINE is prepared at completion while BREAK retains its existing prepare timing. `src/tests/phase3_authority_contract_tests.rs::decomposition_break_reconciles_usable_and_structural_energy` exercises the actual decomposition bond-break function and checks that the usable-energy gain is matched by a structural-store decrease, with no duplicate source credit. `src/tests/phase3_authority_contract_tests.rs::stress_break_reconciles_usable_and_structural_energy` exercises the actual stress-driven BREAK path and checks its usable-energy, structural-store, work, and heat deltas against one residual. `src/simulation/simulation.rs::simulation_step_advances_decomposition_before_inventory_refresh` checks that a simulation tick advances decomposition and refreshes the live inventory afterward. The staged-inventory-only test was removed because the staged state no longer exists in the intended lifecycle.
+
+**Latest source-path audit — 2026-10-20:** across the current live transaction construction sites inspected in `transformation.rs`, `decomposition.rs`, `state.rs`, `simulation.rs`, and `combine_runtime.rs`, no nonzero `potential_released` value is currently credited. COMBINE allocates energy from the organism's usable holder; stress-driven BREAK, chemical BREAK, and decomposition BREAK debit the realized bond store through a negative structural delta; stored-material BREAK credits nothing because its stored internal bonds have no recorded energy allocation. This closes the known live untracked-credit paths at source level, but does not prove every tick-level transition reconciles.
+
+**World-tone boundary:** the rotating source model is precomputed/sampled for perception, but the simulation tick does not call `settle_external_input` or `settle_external_input_from_budget`. No sunlight energy is currently credited, and no shared source allowance is yet enforced among receivers. Keep capture disabled until that integration is source-backed and a whole-world residual is tested.
+
+ **Lifecycle correction (2026-10-20):** do not invoke a separate decomposition processor from the production tick. A breached organism remains a physical structure and continues through the ordinary `chemical_reaction::accumulate`/`resolve` pass; biological maintenance and behavior may stop independently. “Decomposition” is an observation of chemistry after death, not a distinct process or energy source. The `DecomposingBody` carrier and its dedicated bond-break helper remain staged legacy code for focused accounting tests only; they are not the live death lifecycle. The production path must not recycle a breached organism merely to force a decomposition state. Keep world-tone capture disabled until the live chemical/stress BREAK paths and whole-world energy inventory reconcile under exact-head tests.
+
+
+
+**Verification status:** this GitHub-only pass has not run Rust commands or tests, and no CI status checks have been reported for the latest branch snapshot. The stored-material, legacy-carrier BREAK, and stress-driven BREAK regressions are added but unverified. The incorrect simulation-tick regression that treated legacy decomposition as a separate production process has been removed. The COMBINE prepare/commit timing change has been code-audited but has no dedicated integration regression yet. Whole-world conservation is not yet proven.
+
+
+## User-approved solar intensity and interception rule — 2026-10-20
+
+**Decision confirmed by the user:** the sun's 1–10 energy-unit output range is an intensity per tick per 1.0 unit of exposed projected width. The 2,400-tick cycle determines the current intensity $I_t$; the meaning of the unit is constant across the cycle.
+
+- Incident energy for an element is $E_{\mathrm{incident},i}=I_t L_{\mathrm{exposed},i}$, where $L_{\mathrm{exposed},i}$ is its unshadowed projected width perpendicular to the directional sunlight. At intensity 10, projected exposed width 1.0 intercepts 10 energy units per tick; width 0.5 intercepts 5.
+- This is an energy-flux rule, not a fixed energy pool divided equally among all visible elements. The model must not grant the same incident energy to overlapping/occluded elements or double-count the same incoming path.
+- Use directional geometric visibility and projected extent rather than detailed photon/ray simulation. Existing geometry primitives are groundwork only; the full exposure-to-energy allocation is not yet live.
+- Incident energy is not automatically absorbed energy. Material-specific resonance/chemistry determines the absorbed fraction; any energy not absorbed must remain unclaimed, continue onward, or enter an explicitly modeled reflection/loss path. The incoming energy balance must reconcile.
+- Do not apply a second independent incidence-angle multiplier if projected geometry already includes that effect. Do not invent per-material absorption constants without a defensible derivation/calibration.
+- This decision clarifies the previously recorded 1–10 source range: it is per tick per unit of exposed projected width, not the total energy budget for the entire map. The live simulation still does not perform solar capture or settlement; implementation and conservation tests remain required.
+
+## Latest exact-head verification — 2026-10-20
+
+Exact-head CI run [39458264248](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39458264248), commit `1fec8cdb244c7b5358d6534c76922378afa62b57`, completed with an overall **failure** result.
+
+- **Passed:** formatting, source-file-size check, COMBINE architecture check, Bob compact-storage checks, empty-library open/reopen, concurrent Bob initialization, focused Bob/fluid transaction and three-piece-cap checks, focused fluid coalescence/restoration checks, and focused chemical BREAK checks.
+- **Rust suite:** 457 passed, 28 failed, 1 ignored. The new `transformation::tests::stored_material_break_does_not_credit_unallocated_bond_energy` regression passed. The failure count remains 28, matching the earlier baseline of 28 failures; the suite is not green.
+- **Clippy:** failed with 60 production-binary errors and 38 test-compilation errors, primarily warnings promoted to errors across existing Bob, constructor, and other code. These are not treated as evidence that the energy-accounting change caused those issues; isolate them against a known baseline before cleanup.
+- **Energy-system boundary:** this run does not enable or verify live sunlight capture, a shared per-tick receiver scheduler, or end-to-end world conservation. Keep capture disabled until transition-level and tick-level reconciliation pass.
+
+This entry supersedes earlier statements that no exact-head CI result was available at the time those historical notes were written. PR202 remains open and Draft; PR196 is unchanged.
+
+
+## Visible world-tone capture primitive — 2026-10-20
+
+The latest implementation adds the first explicit geometry-to-ledger solar capture path, but does not yet enable it in the live tick scheduler.
+
+- Exposed polygon intervals now retain their owning body and constituent indices. This lets the capture path count only the receiver's visible surface instead of accidentally crediting a blocker or another body.
+- `settle_world_tone_capture` computes polygonal visibility against the supplied bodies, sums the receiver's unshadowed projected extent, converts it to incident energy using the configured intensity-per-width rule, and settles absorbed energy through the external-input ledger.
+- The absorbed input is split between usable energy and immediate heat using explicit caller-supplied fractions. No resource-specific absorption constants are invented. Unabsorbed energy is returned as a result but is not yet propagated/reflected to downstream bodies.
+- Unsupported geometry and invalid fractions fail closed before ledger credit. The operation is receiver-local, not a finite global solar pool; the future scheduler must invoke it at most once per receiver per tick.
+- Added focused tests for projected-width scaling and balanced ledger settlement, body ownership (a fully shadowed body receives no credit), and fail-closed validation.
+
+**Still outstanding:** select absorption/usable fractions from approved material properties, integrate this primitive into the simulation tick with a per-receiver deduplication guard, account for reflected/unabsorbed energy where applicable, and prove tick/world inventory conservation. This commit does not claim live solar capture is active.
+
+
+## PR #202 current audit checkpoint — 2026-10-20 (supersedes earlier status notes)
+
+**Verified head at audit start:** `e4d0f2a495c028be8647cc6830990e9e4e00f211`. The geometry-to-ledger prototype now supports aggregate receiver settlement and per-constituent settlement using each constituent's own projected exposure and existing resonance/damping response. The frame tracks hidden constituents at zero exposure, rejects unknown constituent indices, and prevents duplicate or mixed aggregate/per-constituent credits within one frame. The caller still supplies the usable-energy fraction; no retention coefficient has been invented.
+
+**Exact-head CI result:** formatting passed. Rust tests completed with **464 passed, 28 failed, 1 ignored**. The previous observed baseline was **457 passed, 28 failed, 1 ignored**, so this run adds seven passing tests without increasing the failure count; the 28 failures are in existing construction, geometry/contact, cavity/viability, harmonics, movement, reproduction, and storage paths, and are not claimed as fixed by PR #202. Clippy failed with broad existing production/test lint debt (60 production errors and 38 test-compilation errors in this run); it is not a green gate. Do not infer the PR-specific tests are all green solely from the aggregate comparison.
+
+**Hard blockers before live capture:**
+
+- Historical limitation at this earlier checkpoint: exposure discovery required polygonizable realized boundaries. The later exact point-source curved-visibility work and current mixed frame path supersede that restriction for supported circles, circular fluids, and exact fluid arcs; unsupported/invalid geometry still fails closed.
+- The exposure snapshot is built from supplied organism-body geometry; live integration must audit and include every relevant physical occluder, including environmental and stored/decomposing material where physically present. Omitting blockers can create false sunlight exposure.
+- The tick still does not settle world-tone capture. Do not wire the prototype into the live tick until boundary visibility and world-wide blocker coverage are sound, and usable-versus-heat allocation is defined from approved rules.
+- Transaction-level balance and these focused geometry/settlement tests are not proof of whole-world conservation. Reconcile all holders, stored bond energy, work, heat, external input, and any modeled output before claiming conservation.
+
+**Next implementation step:** audit the exact realized geometry and world-material inventory APIs, then add visibility support that preserves exact circle/fluid boundary semantics (or keep the entire capture frame fail-closed until it can). After that, connect the source to the tick and add tick-level conservation tests. Do not choose a polygonization tolerance or material retention fraction without an explicit design basis.
+
+
+## PR #202 follow-up audit — 2026-10-20 (latest observed head)
+
+- Head: `0ebb9542ebc9f735d62a1e91aef2f02d991d78b5`.
+- Exact-head CI run [39468731106](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39468731106) completed with failure. Formatting, source-size, COMBINE architecture, and all focused Bob/fluid/chemical gates passed. Rust tests: **465 passed, 28 failed, 1 ignored**. The new `physical_material_geometry_preserves_realized_shapes_and_world_placements` test passed. Compared with the previously recorded 457-pass baseline, there are eight additional passes and the same 28 failures; this comparison is not a green suite and does not establish the failures are unrelated without a controlled same-revision baseline. Clippy also failed.
+- The geometry helper adds no visibility behavior yet. It only converts realized physical material into placed constituent geometry, and requires the caller to resolve storage-intrinsic coordinates before use.
+- Exact fluid primitives already exist in `capillary_geometry.rs` (`CircularArcBoundary` and `MultiContactFluidBoundary`), but source-exposure discovery does not consume those exact boundaries. The right next step is to adapt exposure/occlusion around these existing analytic primitives rather than introduce sampled polygons or arbitrary tolerances.
+- Live capture remains disabled. The outstanding integration requirements remain: exact curved-boundary visibility, a complete world occluder inventory with correct transforms, an approved usable-energy/heat allocation rule, tick-level deduplication, and whole-world conservation tests.
+
+
+## PR #202 implementation pass — 2026-10-20 (current checkpoint)
+
+- Current PR head observed before this pass: `c2adcb783c304d28b058f2b82521f833f15d4cb6`; latest observed CI run: [39470904332](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39470904332).
+- Latest full-suite result: **466 passed, 28 failed, 1 ignored**. The previous checkpoint reported 465 passed with the same 28 failures. This is one additional passing test, not a green suite. The 28 failures have not yet been proven to be inherited because no controlled CI result for the exact base revision has been established.
+- Focused geometry/energy gates and formatting passed on that run. Clippy still fails with broad production and test-compilation diagnostics; separate base-branch lint debt from PR-introduced diagnostics before spending time on broad cleanup.
+- **Implementation decision:** do not connect the current prototype to `Simulation::step` yet. `visible_polygonal_intervals` returns `None` when any supplied constituent cannot be represented as a polygon. Simply skipping circles or fluids would be unsafe: the same body list currently serves as both receivers and occluders, so a skipped target could be treated as receiving zero exposure while still being required to cast a shadow. The next geometry change must explicitly distinguish receiver surfaces from occluders and preserve exact boundary semantics for each supported form.
+- **Pass order:** (1) inspect the exact physical-material and coordinate-transform APIs and design a complete snapshot contract; (2) extend exact visibility without polygonization; (3) connect one canonical settlement path to the live tick only after the usable-energy/heat rule is approved; (4) test tick-level conservation and duplicate-credit prevention; (5) compare full tests and Clippy against a controlled base-branch baseline.
+- **Do not infer completion from the new passing-test count.** Live capture remains unimplemented; source sampling, geometry-frame construction, and ledger settlement are still separate pieces. No material retention fraction or geometry approximation tolerance is authorized by this checkpoint.
+
+
+## PR #202 implementation pass 1 — source orbit validation — 2026-10-20
+
+- Commit: `819cb14324d3dc8f6ba2604901a89f4f7c53ab39`.
+- `WorldToneRuntimeConfig::sample` now rejects an orbit radius that does not clear the full rectangular world. The required radius is strictly greater than half the world diagonal; this prevents a source that is described as an external sun from travelling through the world or intersecting its corners.
+- Updated runtime-configuration and precomputed-cycle test fixtures to use a radius outside the 1000×800 world, and added a negative test for an orbit inside the world. The low-level parameter sampler remains geometry-agnostic; the world-bound rule belongs at the runtime configuration layer where width and height are known.
+- This is a bounded correctness fix, not live capture integration. The simulation still does not settle world-tone energy, and the exact-geometry/snapshot/energy-allocation blockers above remain.
+- Verification status at documentation time: GitHub Actions was still running a workflow triggered by the preceding commit, so this latest commit's full test result is **not yet verified**. Do not treat formatting or test success from the earlier head as verification of this change.
+
+
+## PR #202 implementation pass 2 — configuration activation guard — 2026-10-20
+
+- Commit: `21723d6251c389fc5cb203c45eb1fbad70e973d5`.
+- The runtime configuration entry point now validates the orbit against the actual environment dimensions before storing it. Previously, `configure_world_tone` checked only dimension-independent parameter validity, then could return success while precomputation rejected an orbit that crossed the world. It now rejects that configuration before changing the active source or cycle.
+- Added a focused regression test asserting that an inside-world orbit is rejected and leaves both runtime source and precomputed cycle unset.
+- Audit result: this closes the activation inconsistency introduced by the new radius invariant. It does **not** solve source integration, curved visibility, full-world occluder collection, or energy-allocation policy.
+- Exact-head CI is still unverified. The currently visible in-progress workflow was triggered before these latest commits; its success/failure cannot be used as evidence for commit `21723d6`.
+
+
+## PR #202 implementation pass 3 — geometry safety and formatting — 2026-10-20
+
+- Formatting failures in `src/geometry/source_exposure.rs` and `src/simulation/world_tone.rs` were corrected in commits `08cbe3f5b1cf9ec1483804dbf2f14c00a5fa91ef` and `fa01c57919ed5853fa3b60167d6f6c9adbb6a238`. The workflow triggered after those corrections advanced past formatting and the focused gates into Rust tests; its final result was still pending at this note.
+- Commit `75cef0f3cf6f96a01883fee2c1a6419996b29d63` makes polygonal visibility fail closed for non-convex target geometry. The current solver excludes a target constituent from its own occlusion test, which is safe for convex targets but could over-credit a concave target that shadows itself. A regression test covers the rejection.
+- This is a conservative correctness boundary, not general concave/self-occluding visibility support. Curved receiver visibility under blockers, complete world occluder snapshots, live tick integration, and whole-world energy reconciliation remain open. The latest commit's formatting and tests still require exact-head CI verification.
+
+
+## PR #202 implementation pass 4 — finite point-source curved visibility — 2026-10-20
+
+- The source model is a finite point source at the sun's center. Rays diverge from that position; the curved-boundary query does not substitute a single parallel direction for the whole arc.
+- Added `visible_circular_arc_intervals` in `src/geometry/source_exposure.rs`. It partitions supported circular receivers at critical rays through straight-boundary vertices and intersections, circular-arc endpoints and intersections, and circle tangencies, then classifies each resulting interval against realized occluder geometry. Returned intervals are exact circular arcs in world coordinates; no tessellated polygon is used.
+- Added `point_source_projected_arc_extent`, which integrates the local outward-normal projection using the actual source-to-boundary direction along each arc, with adaptive Simpson integration. It is a geometry measurement only and does not allocate or settle energy.
+- Supported as curved targets: circles, legacy nominal-area circular fluids, single circular-segment fluid arcs, and free arcs in valid multi-contact fluid boundaries. Straight contact edges and the implicit chord of a single circular-segment fluid are included as occluders but are not credited as exposed fluid surface. Compound-boundary self-shadowing is classified against the full realized boundary; invalid geometry fails closed.
+- Added tests for unoccluded point-source circle exposure, polygon and circle shadow transitions, circle/straight-boundary intersections, point-source projected extent, and multi-contact fluid arcs with their contact chord included in self-occlusion checks. Geometry-frame tests cover complete and partial shadows between circular receivers.
+- Historical status note from this pass: the point-source curved query initially fed only the exact-circular geometry-frame fallback. The current checkpoint above supersedes that limitation: the frame now calls both straight and curved visibility queries. Live tick settlement, complete world occluder inventory/transforms, approved energy/heat allocation, and whole-world conservation remain outstanding.
+- Exact-head CI is pending; do not treat earlier formatting or Clippy results as verification of this pass.
+
+## PR #202 — parallel-ray model decision supersedes earlier point-source notes — 2026-10-21
+
+**Current approved model:** sunlight is represented by one directional, parallel-ray signal at a time. The older finite point-source visibility model documented in the historical implementation notes is not the target model and must not be treated as complete merely because its curved-boundary calculations are analytic.
+
+- Keep the rotating source's precomputed cycle for direction, tone/frequency, and intensity; visibility for a tick uses one shared ray direction.
+- Shadow classification must use that same direction for every receiver and occluder in the frame. Projected-width calculations alone do not make finite-point-source visibility equivalent to parallel rays.
+- Preserve exact realized geometry and constituent attribution. Straight and curved receivers must agree on the same parallel visibility rule; no curve tessellation is introduced just to make visibility easier.
+- Keep energy settlement and reflection disabled unless their accounting is tied to unique incident energy. Reflection is a reduced-energy change in tone/frequency, not a second geometric ray and not an additional credit of the original incident energy.
+- This note records the approved model and the remaining implementation requirement; it does **not** claim that parallel-ray visibility, reflected-tone propagation, or whole-world conservation is implemented or verified.
+
+Next geometry milestone: replace finite-source angular shadow partitioning with directional parallel-ray interval classification, retaining exact analytic boundary intersections and projected widths for polygonal, circular, and supported fluid boundaries. Then test mixed straight/curved occlusion against one shared direction before relying on it for energy settlement.
+
+### Parallel-ray visibility implementation contract
+
+Use a coordinate frame derived once per tick from normalized sunlight direction d and its perpendicular p. Every boundary point x has ray lane q = dot(x, p) and depth z = dot(x, d); define the depth ordering consistently with sunlight travel direction.
+
+1. Build one immutable per-tick boundary snapshot from all physical occluders. Keep realized constituent identity on every boundary piece. Do not search each organism's local geometry independently.
+2. Build critical lane coordinates from straight-boundary endpoints, line/segment intersections, circle tangencies, circle/segment and circle/circle intersections, and endpoints of supported fluid arcs/chords. Sort and deduplicate them once. Between adjacent critical lanes, the set and order of boundary crossings is constant for supported non-degenerate geometry.
+3. For each receiver constituent, intersect its lane range with the sorted critical lanes. Classify one midpoint lane per resulting interval by intersecting a ray parallel to d against candidate boundaries; only the nearest physical boundary may receive direct incident energy. Use AABB/lane-range rejection before exact intersections so work scales with nearby candidate boundaries rather than every body for every lane.
+4. Integrate projected width on resulting unoccluded intervals. Straight edges use exact projected contribution; circular arcs use the existing analytic parallel-arc integral. Preserve unit identity through splitting so a constituent is credited at most once for each disjoint interval.
+5. Reject unsupported, inconsistent, degenerate, or non-finite boundary descriptions rather than silently polygonizing them or crediting uncertain exposure. Tests must include parallel-direction invariance under translation along d, partial polygon shadows, line endpoint transitions, circle/segment and circle/circle transitions, fluid arc/chord self-occlusion, coincident boundaries, and overlapping constituents.
+6. Keep geometry discovery separate from energy settlement. The frame may report incident exposed width, but only the source-backed shared budget and balanced energy transaction may allocate energy. Reflected-tone propagation must consume a bounded portion of incident energy and must never duplicate direct-input credit.
+
+**Performance gate:** build/sort the critical lane partition once per frame, use broad-phase candidate filtering, and reuse the partition for all receivers at the same direction. Do not run a full ray/geometry query for every organism on every tick. Benchmark large mixed scenes (including thousands of receivers) before enabling this path in live settlement. These are implementation requirements, not a claim that the algorithm is already present.
+
+
+**Curved-boundary precision rule:** keep canonical circle/arc definitions at full precision, but quantize derived curved-boundary ray-hit depths and curved-event lane coordinates to the nearest `0.01` world unit before they enter the visibility partition. This is a deliberate visibility approximation, not a change to stored material dimensions, nominal fluid area, resource energy, or the energy ledger. Straight-edge event coordinates remain unquantized apart from near-duplicate event merging (`1e-9`); tests must cover near-tangent circles and closely spaced curved events so the `0.01` grid cannot silently create duplicate exposure or energy credit.
+
+
+## PR #202 exact-head audit — 2026-10-21 (refreshed after workflow 39660330046)
+
+**Audit basis:** current branch ref `feature/external-input-ledger` at `078c08d96c592a225e217f4dc8a5af94cc2b51e3`; latest completed exact-head Rust workflow [39660330046](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39660330046), completed at 2026-10-21 19:23:14 UTC. This section supersedes earlier PR #202 status snapshots below.
+
+### Verified on the exact source head
+
+- Formatting, source-size, COMBINE architecture, Bob compact-storage/open-reopen/concurrent-initialization, focused Bob fluid transaction/three-piece-cap, fluid coalescence/restoration, and focused chemical BREAK gates passed.
+- The full Rust suite completed: **555 passed, 28 failed, 1 ignored**. The 28 failed test identities match the recorded baseline run [39630672842]; this is not a green full suite, but this run did not add new named failures against that baseline.
+- Clippy failed. Keep cleanup narrow and PR-relevant rather than chasing unrelated legacy lint debt.
+- The partial-absorption regression passed: the incident budget is divided between absorbed and unabsorbed signal, and absorbed energy is divided between its accounted destinations without crediting the unabsorbed remainder twice.
+- The incompatible-frequency overload regression passed: excess reservoir energy that is incompatible with all candidate bonds does not break a bond or consume that reservoir.
+
+### Latest implementation change — sunlight allocation (2026-10-21)
+
+- Corrected organism sunlight settlement so damping-derived energy is heat, not automatically stored energy. The existing material-response spectrum is scaled using the agreed `E = A²` convention; its energy is bounded by the incident budget, and the material damping ratio partitions that response energy between retained resonance and heat. If the bounded reservoir cannot represent the whole deposit, that response energy is dissipated as heat rather than lost, duplicated, or assigned by genome processing efficiency.
+- The interaction now reconciles incident energy into retained resonance, damping/overflow heat, and the remaining signal budget. The remaining amount is still diagnostic only; geometry-aware frequency-shifted onward propagation is not yet implemented.
+- Added/updated the focused regression to assert conservation across retained resonance, heat, and remaining signal.
+- Source/test commits: `8087a91dcb2229379826cfc072751ba653adc3f1`, `b41a562d78a6c167b94472d570f3696d454089b2`, `544ae78a99e1f140487eee837425fab0983de69c`, `12a75fcfa4d7224d5dc89159392e112fb2ff0ca0`, and `90d54c5b80cd5165e8e7d57000f8925dc22dd179` (formatting, compile, and response-energy partition follow-ups).
+- Verification status: exact-head CI has not yet completed for these changes. Do not treat the implementation as verified until CI finishes.
+
+### Current implementation state
+
+- **Direct sunlight is integrated into the live tick.** The precomputed rotating world-tone cycle feeds the shared geometric exposure/occlusion snapshot. Damping-derived energy is settled as heat; the existing material-response spectrum supplies retained resonance under the `E = A²` budget, and remaining energy is tracked as the continuing signal budget. If the bounded reservoir cannot accept the complete spectrum, that response energy becomes heat. Frequency-resolved retained energy can contribute to chemical BREAK, and over-capacity resonance can attempt to destabilize a physically realized bond without a hard storage cap. The remaining signal is not yet propagated onward through downstream geometry.
+- **These are integrated slices, not proof of a unified world model.** The live sunlight settlement currently handles living-organism units; environmental physical material, dead structures, stored objects, and developing material can cast shadows but still need heat-only settlement as receivers.
+- Multi-part structural units are not yet represented constituent-by-constituent in the geometry snapshot; they fail closed rather than receiving an invented exposure.
+- Unabsorbed signal remains diagnostic; it is not yet propagated onward as a frequency-shifted secondary resonance/aura signal. This is **propagation with changed frequency composition and reduced energy, not literal reflection or bouncing rays**. The secondary path must conserve its energy budget and must not introduce arbitrary reflection/retention coefficients or duplicate capture.
+- The resonance reservoir, chemical withdrawals, overload, usable-energy holders, bond energy, work and heat are not yet proven by an end-to-end whole-world inventory across every transaction and lifecycle path. In particular, verify that sunlight energy allocation follows the approved physical geometry/material response rather than an organism-selected policy, and reconcile all transfers so the same energy is never counted in both usable energy and retained resonance.
+- The legacy random stress-break authority remains active alongside the new overload path. It still handles stress/starvation damage; the developing-offspring stress path also remains to be migrated. Replace it only after the resonance-driven structural damage path preserves collapse/death behavior and is fully accounted for.
+- Keep constructor/Bob viability work in PR #196, not this PR.
+
+### Remaining merge gates, in order
+
+1. Verify/finish the physical energy allocation and world-inventory reconciliation, including initial holders, COMBINE/BREAK, bond-energy release, work, dissipation, death/decomposition, movement/maintenance and reproduction/development paths.
+2. Settle direct sunlight intercepted by every nonliving/developing physical receiver as heat, without biological usable-energy credit.
+3. Implement energy-conserving onward propagation of frequency-shifted signal using the existing material/resonance response and bounded geometry-aware exposure.
+4. Replace the legacy stress-break path (including developing offspring) through the unified resonance/chemistry mechanism.
+5. Run exact-head CI after the next source change. Formatting and focused gates currently pass, but the full suite and Clippy remain red; preserve the 28-test baseline comparison and do not claim merge readiness.
+
+**Status:** PR #202 remains Draft and not merge-ready. This audit is based on the latest verified source head and workflow above; any README-only commit or subsequent code change requires its own exact-head workflow before claiming current-head verification.
+
+## PR #202 wave-amplitude energy normalization — 2026-10-21
+
+The first implementation slice adopts the wave-amplitude interpretation for resonance energy:
+
+- Normalized wave energy is represented as amplitude squared; converting incident energy into a signal amplitude uses the square root.
+- The damped oscillator's dissipated-energy fraction is now expressed through its amplitude response and the squared dissipative amplitude, rather than a separately written numerator/denominator energy equation.
+- Focused tests cover energy/amplitude round-tripping and the squared damped-response relationship.
+- The world-tone cavity signal path now converts its per-tick incident energy intensity to amplitude before applying the material response.
+
+**This is a normalization step, not a completed unified energy model.** The steady-state oscillator response can exceed the incident amplitude, so its response amplitude must not be treated as an outgoing energy-bearing wave without accounting for where the additional response energy came from or explicitly bounding it. Nonlinear harmonic generation and strongest-component truncation also need an energy-preserving rule. That historical implementation was superseded on 2026-10-21: the current path treats damping-derived energy as heat and uses the bounded material-response spectrum for retained resonance. Exact-head verification remains required. The new code has passed formatting and architecture checks on the latest workflow; full Rust tests and Clippy are still running at the time of this note. Do not claim whole-world conservation or merge readiness from this slice.
+
+
+## PR #202 passive spectral response bound — 2026-10-21
+
+The resonance-spectrum response now has an explicit incident-energy ceiling:
+
+- A spectrum's normalized energy is the sum of each component's amplitude squared.
+- If the steady-state oscillator gain and generated harmonics would exceed the incident signal's energy budget, the full spectrum is scaled uniformly to that budget. This preserves relative component strengths while preventing the stateless response calculation from manufacturing extra signal energy.
+- Non-finite/unrepresentable spectral energy fails closed. Regression tests cover the energy ceiling with nonlinear harmonics and an overflow case.
+- This is a passive bound on the current spectral/perception response, not yet a complete physical storage-and-release oscillator or a global energy-conservation proof. It does not settle the outstanding sunlight usable-energy/heat split, secondary propagation, or environmental heat-only receivers.
+
+
+## PR #202 spectrum-strength normalization — 2026-10-21
+
+Spectrum magnitude now follows the wave-energy convention: independent frequency components contribute amplitude-squared energy, and their combined magnitude is the square root of the summed component energies. Both environmental-material and cavity-wall perception use the same calculation. This avoids inflating resonance strength merely because nonlinear response generated more frequency components. A regression test covers the root-sum-square relationship.
+
+This remains a signal-strength representation; it does not itself implement the still-outstanding geometry-mediated transfer of absorbed energy into chemical work or prove whole-world conservation.
+
+
+## PR #202 — persistent resonance, chemistry, and stress-break unification plan — 2026-10-21
+
+**Approved direction:** make resonance the shared physical mechanism for retained energy, chemical access, dissipation, and bond instability. Replace the separate random stress-break authority only after the resonance-driven path can account for structural changes through the existing energy ledger. Do not change PR #196 constructor/Bob behavior.
+
+### Implementation sequence
+
+1. **Define persistent, frequency-resolved retained resonance.** The current ToneSpectrum is primarily a transient received-signal representation, not stored energy. Add a compact organism-level reservoir that retains energy by frequency across ticks. Keep signal amplitude and physical energy explicitly distinct (energy = amplitude² in the current normalized convention). Bound storage/overload through a derived structural-handling capacity, not an arbitrary hard energy cap. The initial implementation should reuse the existing four-component spectral budget where safe; when a component cannot be represented, its energy must be explicitly transferred to a compatible component or dissipated, never silently discarded or duplicated.
+2. **Enforce one conservation path.** Every reservoir gain, frequency transformation, compatible withdrawal, dissipation, and structural release must be an explicit balanced transaction. The world inventory must count retained resonance exactly once. Do not count the same energy both as usable energy and resonant storage. Reject invalid/non-finite transactions atomically.
+3. **Couple chemistry to compatible resonance.** A reaction may draw only the portion of retained resonance compatible with that reaction's frequency. Material properties, realized geometry, and bond structure determine response and energy handling; organisms do not choose an energy-allocation policy. Reaction work, released bond energy, retained resonance, and heat must reconcile through the shared accounting model.
+4. **Replace stress-break's independent authority.** First connect overload and bond destabilization to retained resonance and the existing bond-energy/ledger settlement. Then replace the random stress-threshold bond selection with resonance-driven instability. Preserve stress as a diagnostic if useful, but it must not independently cause an unaccounted break. Keep structural collapse and death possible; overload must not become immortality or a free-energy source.
+5. **Verify in layers.** Add unit tests for frequency compatibility, retained energy across ticks, overload/bond destabilization, component overflow, invalid-input atomicity, and transaction conservation. Add chemistry and simulation regressions proving stress-break replacement and structural consequences. Run focused tests, formatting, full tests, and exact-head CI; compare failures against the known baseline of 28 failing test identities rather than treating them as new regressions.
+
+### Design constraints and merge gates
+
+- Prefer on-demand frequency compatibility calculations where practical; use a small bounded representation if persistent history or population-scale performance makes on-demand reconstruction impossible. Historical energy must actually be retained, not reconstructed from the current incoming signal.
+- Resonance strength, propagation, retained energy, and dissipation must share one consistent amplitude/energy convention. Heat is dissipated energy, not a separate unexplained loss.
+- Nonliving material may resonate and dissipate energy as heat but must not gain biological usable energy.
+- Do not remove the existing stress-break path until its replacement is live, conserved, and covered by regressions.
+- This is a staged plan, not a claim that the reservoir, chemistry coupling, or stress-break replacement is already implemented. PR #202 remains Draft until the sunlight, secondary-tone, energy-inventory, and exact-head CI merge gates are satisfied.
+
+
+## PR #202 — retained-resonance foundation — 2026-10-21
+
+The first implementation slice adds a serialized, organism-local `ResonantEnergyReservoir`, separate from the transient `ToneSpectrum`, and initializes it for newly constructed, reproduced, and developing organisms. It stores frequency-tagged energy (not amplitude), combines deposits at an existing frequency, bounds representation to the current four-component limit, and rejects invalid or unrepresentable deposits without mutating the reservoir. A caller must account rejected input as heat; the reservoir never silently discards it. Compatible withdrawal is bounded by the requested amount and weights access by the existing logarithmic frequency-match rule.
+
+Focused unit tests were added for retained-energy accumulation, bounded component overflow with no energy loss, and frequency-weighted withdrawal. This is only the data-model foundation: the live tick does not yet deposit received energy into the reservoir, chemistry does not yet withdraw from it, overload is not yet coupled to bond instability, and the stress-break path is intentionally unchanged. The reservoir is not yet included in the world inventory. These are explicit next steps, not completed behavior. Exact-head compile/test verification has not been established for this slice.
+
+
+## PR #202 — live sunlight retention and inventory integration — 2026-10-21
+
+The next integration slice now routes the processing-usable portion of captured world-tone energy into the organism's persistent resonance reservoir at the source frequency (currently 440 Hz), after the existing external-input transaction has settled successfully. The move is an internal transfer: energy is removed from `usable_energy` only after a cloned reservoir accepts the deposit. If the bounded reservoir rejects a deposit, the energy remains in the usable holder; it is not lost. This keeps the current capture transaction balanced while the spectral transfer model is being expanded.
+
+World inventory now tracks initial/current retained resonance as its own store alongside usable energy and structural bond energy. The inventory residual includes resonant-store changes, and the live sunlight regression now asserts that captured energy persists in the reservoir and that the complete inventory reconciles. The simulation refreshes the resonant inventory total after each tick.
+
+**Still outstanding:** chemistry has not yet withdrawn frequency-compatible reservoir energy, bond overload is not yet resonance-driven, and random stress-break remains active. The current capture-to-reservoir frequency assignment records the incoming source frequency; full material-response spectral partitioning and overload capacity remain later integration work. No exact-head CI or local Rust test run is available from the current GitHub tool connection, so these changes are not yet verified by compilation.
+
+
+## PR #202 — frequency-compatible chemistry integration — 2026-10-21
+
+Chemical BREAK operations now carry a reaction frequency derived from the logarithmic midpoint of the two bonded materials' natural frequencies. Resolution tries a bounded withdrawal from a cloned reservoir using the existing spectral compatibility curve. A stale/failed break does not commit that withdrawal. When compatible resonance is available, it supplies part of the disruption work, reducing the work charged against the bond/usable-energy balance while preserving the full physical work total; the added regression checks that bond energy plus reservoir debit exactly balances usable output, heat, and work.
+
+This is an incremental chemistry connection, not the stress-break replacement. Chemistry still uses its established contact/interface accumulation and activation logic, with resonance reducing the remaining bond-supplied activation/work requirement. The random stress-threshold path remains active until a separately tested overload-driven path can replace it without introducing free energy or losing structural collapse.
+
+
+## PR #202 — resonance integration audit — 2026-10-21
+
+A follow-up audit tightened the reservoir's fail-closed behavior: deposits and withdrawals now refuse to operate on a malformed/non-finite existing reservoir, and a regression verifies that an invalid reservoir is not mutated during a rejected deposit or withdrawal. The live solar capture regression checks retained energy and the world inventory balance. Chemical BREAK regressions check that compatible energy is consumed only on a successful bond break and is preserved when the candidate bond is stale.
+
+**Current integration state:** direct sunlight's processing-usable share is transferred into the persistent reservoir at the incident source frequency; the world inventory tracks this reservoir separately; chemical BREAK derives a reaction frequency from the two bonded materials and can use only frequency-compatible retained energy to supplement disruption work. Failed transactions do not commit reservoir withdrawals. The random stress-break pathway is not yet replaced, and there is no overload-capacity model yet. Whole-world accounting of secondary tones/nonliving receivers remains an outstanding PR merge gate.
+
+**Verification caveat:** GitHub's commit-status and PR-triggered workflow lookups returned no checks for the latest commits, and this environment has no working local checkout/network for running Cargo. Treat the new Rust tests as added but not yet executed; do not infer compile success from the commits.
+
+
+## PR #202 — resonance overload path — 2026-10-21
+
+A first overload mechanism is now wired into the survival pass. It treats the organism's realized bond-energy total as a geometry-dependent handling capacity without imposing a hard reservoir cap: retained resonance may exceed that capacity, and an over-capacity organism attempts to destabilize one physically realized bond. Candidate bonds are chosen deterministically from the existing non-genome-first structural set, using each bonded material pair's logarithmic-midpoint natural frequency and the reservoir's compatible-energy query. The selected bond's activation barrier is paid by compatible retained resonance first, with any remainder reconciled through the existing bond/usable-energy settlement. Reservoir withdrawal is committed only if the bond transaction succeeds. A regression covers below-capacity stability and above-capacity bond loss with a matching reservoir debit.
+
+The legacy stress-threshold/random-break path is **not yet removed**. For this transition, the survival pass avoids invoking both mechanisms to break two bonds in one pass: it attempts overload if the stress path did not already change structure. The old path remains a known next replacement task because it also currently handles starvation-related structural damage; removal must preserve death/collapse behavior rather than merely disabling damage. The developing-offspring stress path also remains to be migrated.
+
+
+## PR #202 — activation-barrier coupling refinement — 2026-10-21
+
+The chemistry coupling now uses the same non-mutating frequency-compatibility calculation during reaction accumulation. Compatible retained resonance lowers the remaining activation barrier; the actual reservoir debit is still deferred until resolution and committed only if the bond transaction succeeds. If earlier same-tick events consume the available resonance or invalidate the bond, resolution fails without consuming the reservoir. The overload path uses the same transaction settlement and work accounting, while its overload condition remains the aggregate retained-energy total exceeding the realized bond-energy capacity.
+
+
+## PR #202 — ordered downstream world-tone propagation implementation checkpoint — 2026-10-21
+
+This checkpoint supersedes the earlier statement that onward propagation is only diagnostic, but it is **not** a claim that the implementation has passed exact-head CI.
+
+- The shared parallel-ray geometry frame now preserves the ordered material hits for each projected-width lane, not just the nearest visible surface. The first-hit width derived from these paths is checked against the existing direct-exposure result before settlement; ambiguous or unsupported paths fail closed.
+- Each hit resolves its actual resource properties and applies the existing material/harmonic response to the incoming spectrum. The response changes frequency composition; outgoing amplitude is then normalized to the energy budget still available. This is continuing signal propagation through downstream material, **not literal reflection or a new source**.
+- Each lane stages its resonance deposits and reconciles incident energy into retained resonance, damping heat, and the signal that exits the modeled world. The escaped remainder is now tracked separately and included as an output term in the world-inventory residual. Failed/invalid allocations do not commit staged reservoir changes.
+- A geometry regression checks that ordered paths retain downstream hits and that the path first-hit widths reconcile with direct exposure. A ledger regression checks that capture, heat, and escape sum to the incident source exactly once.
+
+**Latest verified source checkpoint:** `476171f2c997b7d1a62d4ea2517150cd2278eb72`, workflow [39671409647](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39671409647). Formatting, source-size/COMBINE architecture checks, and all focused Bob/fluid/chemical-BREAK checks passed. The full Rust suite completed with **558 passed, 28 failed, 1 ignored**. The 28 failing test identities exactly match the recorded baseline run `39630672842` (538 passed, 28 failed, 1 ignored); this slice adds 20 passing tests without adding a failure. The new ordered-path geometry test, transformed-secondary-signal energy-budget test, and capture/heat/escape ledger regression all passed. Clippy still fails on broad existing debt (59 production errors and 38 test-compilation errors); inspection of this run found no Clippy diagnostics in the files changed for this propagation slice. This is not a green merge gate.
+
+**Subsequent source changes after the verified propagation checkpoint:** the legacy random stress-break authority has now been removed from the production survival path and developing-offspring path. Stress remains a state/maintenance indicator, but cannot independently break bonds; structural damage is routed through the frequency-compatible resonance/chemistry overload mechanism. The overload candidate helper and regression names now describe resonance-driven behavior, and a regression exercises the production survival path to ensure high stress without retained resonance does not randomly break a bond. These later source changes are awaiting exact-head CI.
+
+**Still open:** whole-world energy reconciliation across every lifecycle and transaction path; broader heat-only settlement for nonliving/dead/stored/developing receivers (these may occlude and participate in downstream signal paths, but the live source integration remains centered on living-organism receivers); and fresh exact-head verification after the stress-path migration. PR #202 remains Draft and not merge-ready.
+
+
+### Follow-up receiver-settlement correction — 2026-10-21
+
+The live ordered-path settlement now treats the material-response energy at a physical body without a living resonant reservoir as heat, rather than allowing the non-damped response portion to rejoin the travelling signal. Living receivers retain the non-damped response only when the staged reservoir deposit succeeds; failed deposits still convert the whole response to heat. In either case, outgoing signal is bounded by incoming energy minus the material-response energy, so response energy is not counted twice. A focused allocation regression covers living retention, nonliving heat-only behavior, and invalid allocations. This is a source change awaiting exact-head CI, not a claim of verified success.
+
+**Optimization note:** the slow `world_energy_inventory_reconciles_across_ordinary_ticks` test repeatedly rebuilds the full world-tone snapshot and exact lane/intersection geometry over five ticks. Before introducing a cache, the next audit should separate invariant geometry construction from source-direction-dependent exposure, then measure geometry builds/intersection work. Do not optimize by skipping physical receivers or weakening the energy ledger. PR #202 remains Draft; multi-part structural-unit geometry, complete heat-only receiver coverage, whole-world lifecycle reconciliation, and exact-head verification remain open.
+
+
+### Geometry hot-loop reduction — 2026-10-21
+
+The exact parallel-ray visibility solver now sweeps lane-sorted segment and arc extents alongside the sorted lane partition. For each lane interval, depth tests visit only surfaces whose projected lane ranges are active instead of rescanning every segment and arc in the world. This is an exact broad-phase optimization: it does not quantize additional geometry, skip receivers, change material response, or alter energy allocation. Existing exact-geometry and ordered-path regressions are the correctness gate; runtime improvement must be confirmed by the current full test workflow before claiming a speedup. This commit also includes the fail-closed formatting correction for the nonliving heat-only allocation regression. The full suite, broad legacy Clippy debt, complete receiver coverage, multi-part structural geometry, and whole-world lifecycle reconciliation remain open.
+
+
+### World-wide physical receiver coverage — 2026-10-21
+
+The snapshot no longer culls environmental physical material merely because it falls outside the angular spans of living-organism receivers. Every successfully realized body retained in the snapshot is now a target for ordered path settlement, so an exposed lane can settle response energy as heat even when no living organism lies behind it. This includes field physical material, organism structures (including dead structures still present in the organism collection), owner-relative stored material, developing structures/material, decomposing carriers, and physical material in active transformations. Living organisms can retain a compatible response in their resonance reservoir; receivers without a living reservoir settle their material response as heat. A regression now exercises an exposed environmental receiver with an empty living-organism set. Composite multi-part structural units still fail closed because their realized constituent geometry is not yet represented; that is an explicit remaining merge gate. This expansion removes the angular shortcut for field receivers and may increase runtime; the exact-head CI run must confirm correctness and measure the performance impact before claiming this receiver-coverage change is verified.
+
+
+### Depth-range broad-phase refinement — 2026-10-21
+
+To offset the wider all-receiver set without changing geometric authority, the exact visibility solver now rejects segment/segment and segment/arc intersection candidates whose conservative depth intervals are disjoint. Lane overlap and depth overlap are both necessary for a real intersection, so these checks can only remove impossible candidates; exact predicates still decide every remaining intersection. The current exact-head workflow must validate this change and measure whether it helps the expanded world-wide receiver workload.
+
+
+### Dense-world intersection fallback — 2026-10-21
+
+The exact intersection-event pass is now bounded to snapshots with at most 256 bodies. Larger worlds keep all physical receivers and all projected surface/arc boundary events, but use the midpoint of each resulting lane interval to order its interaction path rather than calculating every pairwise crossing. Each represented lane still allocates its incident energy exactly once among resonance retention, heat, and escaped remainder; geometric exposure and downstream ordering become approximate in dense worlds, as permitted for the performance target. Small-scene exact geometry regressions remain on the exact path, and a dense-scene regression plus the full test run must verify path-width and energy-budget invariants before this fallback is accepted.
+
+
+The dense-world fallback now has a dedicated 257-body regression: it verifies that downstream ordered hits are retained and that first-hit path widths reconcile with the same solver's direct exposure widths. The test and fallback are pending exact-head CI; do not treat them as verified until that run completes.
+
+
+### Dense-world performance measurement — 2026-10-21
+
+The first all-body receiver build, before the dense-world intersection fallback, completed the full Rust suite in **400.88 seconds**; `world_energy_inventory_reconciles_across_ordinary_ticks` took about **313 seconds**. This is a substantial regression versus the earlier receiver-culling run, so the fallback above is required rather than optional. The current exact-head run is testing the fallback and the 257-body ordered-path regression. Do not claim a performance improvement until that run completes and the test duration is compared.
+
+
+### Dense-world lane sampling refinement — 2026-10-21
+
+The intersection-event fallback alone did not yet demonstrate acceptable runtime: the first all-body run took 400.88 seconds overall, with the ordinary-tick inventory test at roughly 313 seconds. The large-world path now also partitions only occupied projected-lane spans on a 0.25-unit grid, while preserving exact bounds for surfaces narrower than the grid step. Energy accounting remains balanced per represented lane; geometric widths and crossing order are approximate at this scale. This stronger approximation is being added specifically to make all-receiver accounting viable with the seeded 5,000-particle cloud. It must pass the dense-scene regression and show a measured runtime reduction before acceptance.
+
+
+### Intersection fallback benchmark — 2026-10-21
+
+The first dense-world intersection fallback (pairwise crossing events skipped, but all exact surface-boundary lanes retained) reduced the full Rust suite from **400.88 seconds to 265.76 seconds**. The ordinary-tick world inventory regression completed in about **184 seconds**, down from roughly 313 seconds. This is a 34% reduction in total suite time but remains slower than the earlier 169-second run that omitted non-receiver physical bodies. The 0.25-unit occupied-lane grid refinement is the next performance step; its exact-head run must determine whether all-body receiver coverage can meet the runtime target.
+
+
+The dense lane grid's narrow-surface preservation now ignores zero-width segment projections: they carry no projected exposure width and were otherwise reintroducing a per-object lane boundary for every source-parallel edge. Nonzero surface spans at or below the 0.25-unit step remain explicit, so thin but exposed receivers retain lane boundaries without defeating the coarse grid.

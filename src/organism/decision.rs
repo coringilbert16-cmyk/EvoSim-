@@ -378,7 +378,7 @@ mod tests {
         assert!(!outcome_is_known(
             &history,
             ActionKind::Combine,
-            Some("Carbon+Methane")
+            Some("Carbon+Oxygen")
         ));
     }
 

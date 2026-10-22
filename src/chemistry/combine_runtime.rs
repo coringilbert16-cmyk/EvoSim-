@@ -1686,6 +1686,16 @@ mod fluid_coalescence_transaction_tests {
         assert!((*nominal_area - unit_area).abs() < 1e-9);
         assert!(boundary.is_valid());
         assert!(energy.is_finite() && energy >= 0.0);
+        let residual = energy - 100.0
+            + ledger.total_structural_energy_delta
+            + ledger.total_work_expended
+            + ledger.total_heat_dissipated
+            - ledger.total_external_energy_input
+            - ledger.total_potential_energy_released;
+        assert!(
+            residual.abs() <= 1e-9,
+            "live fluid COMBINE must reconcile energy; residual={residual}, ledger={ledger:?}"
+        );
     }
 
     #[test]

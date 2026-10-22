@@ -895,7 +895,7 @@ pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
             ("Phosphorus", 0.0),
             ("Sulfur", 0.0),
             ("Hydrogen", 0.0),
-            ("Methane", 0.0),
+            ("Oxygen", 0.0),
             ("Water", 0.0),
         ]
         .into_iter()

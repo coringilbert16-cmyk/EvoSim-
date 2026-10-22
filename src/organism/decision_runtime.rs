@@ -586,7 +586,7 @@ mod tests {
         let mut history = DecisionHistory::default();
         let candidate = ActionCandidate {
             action: ActionKind::Break,
-            context_key: Some("Methane".into()),
+            context_key: Some("Oxygen".into()),
         };
         record_consequence(
             &mut history,
@@ -596,7 +596,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        assert!(known_outcome(&history, ActionKind::Break, Some("Methane")));
+        assert!(known_outcome(&history, ActionKind::Break, Some("Oxygen")));
     }
 
     #[test]

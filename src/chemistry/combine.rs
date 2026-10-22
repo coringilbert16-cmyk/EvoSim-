@@ -278,8 +278,8 @@ mod tests {
     fn carbon(amount: f64) -> Material {
         Material::free_base("Carbon", amount)
     }
-    fn methane(amount: f64) -> Material {
-        Material::free_base("Methane", amount)
+    fn oxygen(amount: f64) -> Material {
+        Material::free_base("Oxygen", amount)
     }
     fn candidate(load_a: f64, load_b: f64) -> ConnectionPairCandidate {
         ConnectionPairCandidate {
@@ -310,15 +310,15 @@ mod tests {
     #[test]
     fn recipe_key_is_order_independent() {
         assert_eq!(
-            MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(2.0)]),
-            MaterialRecipeKey::from_inputs(&[methane(2.0), carbon(1.0)])
+            MaterialRecipeKey::from_inputs(&[carbon(1.0), oxygen(2.0)]),
+            MaterialRecipeKey::from_inputs(&[oxygen(2.0), carbon(1.0)])
         )
     }
     #[test]
     fn different_quantities_do_not_collide() {
         assert_ne!(
-            MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(2.0)]),
-            MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(3.0)])
+            MaterialRecipeKey::from_inputs(&[carbon(1.0), oxygen(2.0)]),
+            MaterialRecipeKey::from_inputs(&[carbon(1.0), oxygen(3.0)])
         )
     }
     #[test]

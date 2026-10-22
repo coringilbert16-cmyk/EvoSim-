@@ -61,7 +61,7 @@ mod integration_tests {
     }
 
     #[test]
-    fn death_with_no_remaining_bonds_releases_realized_structure() {
+    fn breached_genome_core_does_not_remove_or_recycle_physical_organism() {
         let mut s = Simulation::new(41, 10.0);
         let before_environment_amount = s.environment.field.total_amount();
         let organism = &mut s.organisms[0];
@@ -70,24 +70,21 @@ mod integration_tests {
         let initial_units = organism.structure.units.len();
         assert!(initial_units > 0);
 
-        let dead = Simulation::apply_survival_damage(
+        let breached = Simulation::apply_survival_damage(
             &mut s.organisms[0],
             &s.environment,
             &mut s.energy_ledger,
             &mut s.rng,
         );
-        assert!(dead);
-
-        let mut dead_organism = s.organisms.pop().expect("dead organism should be present");
-        let recycled = crate::recycling::recycle_dead_organism(
-            &mut s.environment,
-            &mut dead_organism,
-            &mut s.energy_ledger,
-        );
-        assert!(recycled.is_some());
-        assert!(s.organisms.is_empty());
+        assert!(breached);
+        assert_eq!(s.living_population(), 0);
+        assert_eq!(s.organisms.len(), 1);
+        assert_eq!(s.organisms[0].structure.units.len(), initial_units);
         assert!(s.decomposing_bodies.is_empty());
-        assert!(s.environment.field.total_amount() > before_environment_amount);
+        assert_eq!(
+            s.environment.field.total_amount(),
+            before_environment_amount
+        );
     }
 
     #[test]
@@ -439,6 +436,74 @@ mod integration_tests {
         assert_eq!(s.organisms[0].stored_material.physical_count(), 0);
     }
     #[test]
+    fn stored_material_break_does_not_credit_unallocated_energy() {
+        let mut s = Simulation::new(7, 10.0);
+        for cell in &mut s.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        add_test_break_bond(&mut s);
+        s.organisms[0].usable_energy = 100.0;
+        // This test sets a controlled holder balance after construction.
+        s.energy_ledger.initial_usable_energy_held = 100.0;
+        s.energy_ledger.total_usable_energy_held = 100.0;
+        let candidate = crate::decision_runtime::ActionCandidate {
+            action: ActionKind::Break,
+            context_key: Some("stored:0:bond:0".into()),
+        };
+        let mut transformation = Simulation::try_start_transformation(
+            &mut s.organisms[0],
+            &s.environment.catalog,
+            &mut s.next_transformation_id,
+            &candidate,
+        )
+        .expect("stored-material BREAK should start");
+        let before_gained = s.energy_ledger.total_usable_energy_gained;
+        let before_structural = s.energy_ledger.total_structural_energy_delta;
+        let before_work = s.energy_ledger.total_work_expended;
+        let before_heat = s.energy_ledger.total_heat_dissipated;
+        let before_released = s.energy_ledger.total_potential_energy_released;
+
+        assert!(Simulation::prepare_transformation(
+            &mut transformation,
+            &mut s.organisms[0],
+            &mut s.environment,
+            &mut s.energy_ledger,
+            None,
+        ));
+        assert_eq!(s.organisms[0].usable_energy, 100.0);
+        assert_eq!(s.energy_ledger.total_usable_energy_gained, before_gained);
+        assert_eq!(
+            s.energy_ledger.total_structural_energy_delta,
+            before_structural
+        );
+        assert_eq!(s.energy_ledger.total_work_expended, before_work);
+        assert_eq!(s.energy_ledger.total_heat_dissipated, before_heat);
+        assert_eq!(
+            s.energy_ledger.total_potential_energy_released,
+            before_released
+        );
+
+        crate::transformation::resolve_transformation(
+            &transformation,
+            &mut s.organisms[0],
+            &mut s.environment,
+            &mut s.energy_ledger,
+        );
+        assert_eq!(s.organisms[0].stored_material.physical_count(), 2);
+        assert_eq!(s.organisms[0].usable_energy, 100.0);
+        s.energy_ledger.total_usable_energy_held =
+            crate::reproduction::total_usable_energy_held(&s.organisms, &s.decomposing_bodies);
+        s.energy_ledger.total_structural_energy_held =
+            Simulation::structural_energy_held(&s.organisms, &s.decomposing_bodies);
+        let inventory = s.energy_inventory_snapshot();
+        assert!(
+            inventory.is_balanced(1e-9),
+            "stored-material BREAK must not create energy: {:?}",
+            inventory.residual()
+        );
+    }
+
+    #[test]
     fn break_resolution_changes_state_on_expected_tick() {
         let mut s = Simulation::new(7, 10.0);
         for cell in &mut s.environment.field.cells {
@@ -453,6 +518,8 @@ mod integration_tests {
         s.step();
         assert!(s.organisms[0].active_transformation_id.is_none());
         assert_eq!(s.organisms[0].stored_material.physical_count(), 2);
+        assert!(s.organisms[0].usable_energy <= 100.0);
+        assert_eq!(s.energy_ledger.total_structural_energy_delta, 0.0);
         assert!(s.organisms[0]
             .decision_history
             .has_knowledge(ActionKind::Break, Some("stored:0:bond:0")));

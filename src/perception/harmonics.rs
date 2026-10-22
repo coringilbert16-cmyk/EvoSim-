@@ -21,6 +21,142 @@ pub(crate) struct ToneComponent {
     pub(crate) phase_radians: f64,
 }
 
+/// Persistent energy retained by an organism's resonant structure.
+///
+/// This is deliberately separate from ToneSpectrum: that type represents the
+/// signal currently received, while this reservoir represents energy retained
+/// across ticks. Stored values are energy (amplitude squared), not amplitudes.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
+pub(crate) struct ResonantEnergyReservoir {
+    pub(crate) components: Vec<ResonantEnergyComponent>,
+}
+
+/// Energy held at one frequency. Phase is not stored because the reservoir
+/// tracks retained energy, not the instantaneous phase of a travelling signal.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ResonantEnergyComponent {
+    pub(crate) frequency_hz: f64,
+    pub(crate) energy: f64,
+}
+
+impl ResonantEnergyReservoir {
+    /// Add energy at a frequency. Returns false without mutation when input is
+    /// invalid or the bounded spectrum cannot represent another frequency;
+    /// the caller must settle rejected energy as heat rather than discard it.
+    pub(crate) fn deposit(&mut self, frequency_hz: f64, energy: f64) -> bool {
+        if self.total_energy().is_none() {
+            return false;
+        }
+        if !frequency_hz.is_finite() || frequency_hz <= 0.0 || !energy.is_finite() || energy < 0.0 {
+            return false;
+        }
+        if energy <= f64::EPSILON {
+            return true;
+        }
+        if let Some(component) = self
+            .components
+            .iter_mut()
+            .find(|component| (component.frequency_hz / frequency_hz).ln().abs() <= 1e-9)
+        {
+            let next = component.energy + energy;
+            if !next.is_finite() {
+                return false;
+            }
+            component.energy = next;
+            return true;
+        }
+        if self.components.len() >= MAX_SPECTRAL_COMPONENTS {
+            return false;
+        }
+        self.components.push(ResonantEnergyComponent {
+            frequency_hz,
+            energy,
+        });
+        self.components.sort_by(|a, b| {
+            a.frequency_hz
+                .partial_cmp(&b.frequency_hz)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        true
+    }
+
+    pub(crate) fn total_energy(&self) -> Option<f64> {
+        let mut total = 0.0;
+        for component in &self.components {
+            if !component.frequency_hz.is_finite()
+                || component.frequency_hz <= 0.0
+                || !component.energy.is_finite()
+                || component.energy < 0.0
+            {
+                return None;
+            }
+            total += component.energy;
+            if !total.is_finite() {
+                return None;
+            }
+        }
+        Some(total)
+    }
+
+    /// Energy accessible to a reaction at the requested frequency, before
+    /// any withdrawal. Invalid reservoir state fails closed.
+    pub(crate) fn compatible_energy(&self, reaction_frequency_hz: f64) -> f64 {
+        if !reaction_frequency_hz.is_finite()
+            || reaction_frequency_hz <= 0.0
+            || self.total_energy().is_none()
+        {
+            return 0.0;
+        }
+        self.components
+            .iter()
+            .map(|component| {
+                let distance = (component.frequency_hz / reaction_frequency_hz).ln().abs();
+                let compatibility = (-distance / SPECTRAL_MATCH_SIGMA).exp().clamp(0.0, 1.0);
+                component.energy * compatibility
+            })
+            .sum::<f64>()
+            .max(0.0)
+    }
+
+    /// Withdraw up to max_energy, weighted by logarithmic frequency
+    /// compatibility with the reaction. The returned amount is actual energy
+    /// removed from the reservoir. Callers must settle the same amount in the
+    /// reaction transaction; no separate energy is created by matching.
+    pub(crate) fn withdraw_compatible(
+        &mut self,
+        reaction_frequency_hz: f64,
+        max_energy: f64,
+    ) -> f64 {
+        if !reaction_frequency_hz.is_finite()
+            || reaction_frequency_hz <= 0.0
+            || !max_energy.is_finite()
+            || max_energy <= 0.0
+            || self.total_energy().is_none()
+        {
+            return 0.0;
+        }
+        let mut remaining = max_energy;
+        let mut withdrawn = 0.0;
+        for component in &mut self.components {
+            if remaining <= f64::EPSILON {
+                break;
+            }
+            let distance = (component.frequency_hz / reaction_frequency_hz).ln().abs();
+            let compatibility = (-distance / SPECTRAL_MATCH_SIGMA).exp().clamp(0.0, 1.0);
+            let available = component.energy * compatibility;
+            let take = available.min(remaining);
+            if take.is_finite() && take > 0.0 {
+                component.energy -= take;
+                remaining -= take;
+                withdrawn += take;
+            }
+        }
+        self.components
+            .retain(|component| component.energy > f64::EPSILON);
+        withdrawn
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
 pub(crate) struct ToneSpectrum {
     pub(crate) components: Vec<ToneComponent>,
@@ -123,6 +259,124 @@ pub(crate) fn resonance_response(
     1.0 / denominator.max(f64::EPSILON)
 }
 
+/// Convert wave amplitude to normalized wave energy.
+///
+/// The harmonic model uses a dimensionless normalization where energy is
+/// proportional to amplitude squared. This is the explicit boundary between
+/// spectral signal values and the energy ledger; callers must not treat raw
+/// amplitudes as energy.
+pub(crate) fn wave_energy_from_amplitude(amplitude: f64) -> f64 {
+    if !amplitude.is_finite() || amplitude <= 0.0 {
+        return 0.0;
+    }
+    let energy = amplitude * amplitude;
+    if energy.is_finite() {
+        energy
+    } else {
+        0.0
+    }
+}
+
+/// Bound a response spectrum to its incident energy budget.
+///
+/// Resonance gain is a steady-state displacement ratio, not a license to create
+/// outgoing wave energy. When that gain or nonlinear harmonics exceed the
+/// available budget, scale the whole spectrum uniformly so its summed
+/// amplitude-squared energy does not exceed the incident budget. Invalid or
+/// unrepresentable spectra fail closed.
+fn bound_spectrum_energy(spectrum: &mut ToneSpectrum, energy_budget: f64) {
+    if !energy_budget.is_finite() || energy_budget <= 0.0 {
+        spectrum.components.clear();
+        return;
+    }
+
+    let mut total_energy = 0.0;
+    for component in &spectrum.components {
+        if !component.amplitude.is_finite() || component.amplitude < 0.0 {
+            spectrum.components.clear();
+            return;
+        }
+        total_energy += component.amplitude * component.amplitude;
+        if !total_energy.is_finite() {
+            spectrum.components.clear();
+            return;
+        }
+    }
+
+    if total_energy > energy_budget && total_energy > 0.0 {
+        let scale = (energy_budget / total_energy).sqrt();
+        if !scale.is_finite() {
+            spectrum.components.clear();
+            return;
+        }
+        for component in &mut spectrum.components {
+            component.amplitude *= scale;
+        }
+    }
+}
+
+/// Convert normalized wave energy to its corresponding non-negative amplitude.
+pub(crate) fn wave_amplitude_from_energy(energy: f64) -> f64 {
+    if !energy.is_finite() || energy <= 0.0 {
+        return 0.0;
+    }
+    energy.sqrt()
+}
+
+/// Return the equivalent amplitude of a multi-frequency spectrum.
+///
+/// Distinct frequency components contribute energy additively, so their
+/// combined magnitude is the square root of summed amplitude-squared energy,
+/// not the arithmetic sum of amplitudes.
+fn spectrum_magnitude(spectrum: &ToneSpectrum) -> f64 {
+    let mut energy = 0.0;
+    for component in &spectrum.components {
+        if !component.amplitude.is_finite() || component.amplitude < 0.0 {
+            return 0.0;
+        }
+        energy += component.amplitude * component.amplitude;
+        if !energy.is_finite() {
+            return 0.0;
+        }
+    }
+    energy.sqrt()
+}
+
+/// Dimensionless fraction of incident wave energy dissipated by damping.
+///
+/// The oscillator response is an amplitude ratio. Damping couples that
+/// response to the dissipative channel with amplitude factor 2*zeta*r, where
+/// r is drive/natural frequency. Squaring the resulting damped amplitude gives
+/// the dissipated-energy fraction. This is derived from the wave-amplitude
+/// model, rather than maintained as a separate energy equation.
+pub(crate) fn resonant_absorption_fraction(
+    drive_frequency_hz: f64,
+    natural_frequency_hz: f64,
+    damping: f64,
+) -> f64 {
+    if !drive_frequency_hz.is_finite()
+        || !natural_frequency_hz.is_finite()
+        || !damping.is_finite()
+        || drive_frequency_hz <= 0.0
+        || natural_frequency_hz <= 0.0
+        || damping <= 0.0
+    {
+        return 0.0;
+    }
+    let ratio = drive_frequency_hz / natural_frequency_hz;
+    if !ratio.is_finite() {
+        return 0.0;
+    }
+    let response_amplitude = resonance_response(drive_frequency_hz, natural_frequency_hz, damping);
+    let dissipative_amplitude = 2.0 * damping * ratio * response_amplitude;
+    let fraction = wave_energy_from_amplitude(dissipative_amplitude);
+    if fraction.is_finite() {
+        fraction.clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
 /// Reactivity-driven nonlinear content. Integer multiples are used because
 /// real nonlinear oscillators commonly produce harmonic overtones.
 pub(crate) fn nonlinear_harmonic_amplitude(
@@ -192,7 +446,110 @@ fn material_response_to_drive(
         }
     }
     spectrum.retain_strongest();
+    bound_spectrum_energy(&mut spectrum, wave_energy_from_amplitude(signal_level));
     spectrum
+}
+
+/// Transform a continuing environmental signal through one material response.
+///
+/// The harmonic model determines relative frequency composition. The caller
+/// supplies the remaining physical energy budget after capture and dissipation;
+/// amplitudes are normalized so the outgoing spectrum carries exactly that
+/// budget under E = A². This is onward transmission, not a new emitted source
+/// and not a literal reflected ray.
+fn spectrum_energy(spectrum: &ToneSpectrum) -> Option<f64> {
+    let mut energy = 0.0;
+    for component in &spectrum.components {
+        if !component.frequency_hz.is_finite()
+            || component.frequency_hz <= 0.0
+            || !component.amplitude.is_finite()
+            || component.amplitude < 0.0
+            || !component.phase_radians.is_finite()
+        {
+            return None;
+        }
+        energy += component.amplitude * component.amplitude;
+        if !energy.is_finite() {
+            return None;
+        }
+    }
+    Some(energy)
+}
+
+/// Apply the existing material resonance and nonlinear response to every
+/// component of an incoming spectrum. The returned response keeps its natural
+/// response amplitude, but total energy cannot exceed the incoming spectrum.
+pub(crate) fn material_response_spectrum(
+    properties: ResourceProperties,
+    baselines: ResourceBaselines,
+    incoming: &ToneSpectrum,
+) -> Option<ToneSpectrum> {
+    let incoming_energy = spectrum_energy(incoming)?;
+    let mut transformed = ToneSpectrum::empty();
+    for component in &incoming.components {
+        if component.amplitude <= f64::EPSILON {
+            continue;
+        }
+        let response = material_response_to_drive(
+            properties,
+            baselines,
+            component.frequency_hz,
+            component.amplitude,
+            component.phase_radians,
+        );
+        transformed.merge_from(&response, 1.0);
+    }
+    bound_spectrum_energy(&mut transformed, incoming_energy);
+    Some(transformed)
+}
+
+/// Transform a continuing environmental signal through one material response.
+///
+/// The harmonic model determines relative frequency composition. The caller
+/// supplies the remaining physical energy budget after capture and dissipation;
+/// amplitudes are normalized so the outgoing spectrum carries exactly that
+/// budget under E = A². This is onward transmission, not a new emitted source
+/// and not a literal reflected ray.
+pub(crate) fn transform_signal_to_energy_budget(
+    properties: ResourceProperties,
+    baselines: ResourceBaselines,
+    incoming: &ToneSpectrum,
+    outgoing_energy_budget: f64,
+) -> Option<ToneSpectrum> {
+    let incoming_energy = spectrum_energy(incoming)?;
+    if !outgoing_energy_budget.is_finite()
+        || outgoing_energy_budget < 0.0
+        || outgoing_energy_budget > incoming_energy + 1e-9
+    {
+        return None;
+    }
+    if outgoing_energy_budget <= f64::EPSILON {
+        return Some(ToneSpectrum::empty());
+    }
+
+    let mut transformed = material_response_spectrum(properties, baselines, incoming)?;
+    let transformed_energy = spectrum_magnitude(&transformed).powi(2);
+    if !transformed_energy.is_finite() || transformed_energy <= f64::EPSILON {
+        return None;
+    }
+
+    // Keep the harmonic model's frequency weights, but let only the conserved
+    // remainder determine the outgoing signal's amplitude.
+    let scale = (outgoing_energy_budget / transformed_energy).sqrt();
+    if !scale.is_finite() {
+        return None;
+    }
+    for component in &mut transformed.components {
+        component.amplitude *= scale;
+    }
+    transformed.retain_strongest();
+    let final_energy = spectrum_magnitude(&transformed).powi(2);
+    if !final_energy.is_finite()
+        || (final_energy - outgoing_energy_budget).abs() > 1e-9 * outgoing_energy_budget.max(1.0)
+    {
+        return None;
+    }
+    Some(transformed)
 }
 
 /// Receive the rotating world tone through the organism's actual cavity-wall
@@ -207,7 +564,7 @@ pub(crate) fn world_tone_cavity_contribution(
     sample: crate::world_tone::WorldToneSample,
 ) -> (ToneSpectrum, Vec<ResonancePerception>) {
     let segments = cavity.boundary_segments();
-    if segments.is_empty() || sample.signal_energy_level <= f64::EPSILON {
+    if segments.is_empty() || sample.energy_intensity_per_tick_per_width <= f64::EPSILON {
         return (ToneSpectrum::empty(), Vec::new());
     }
     let center = cavity_center(cavity);
@@ -252,15 +609,11 @@ pub(crate) fn world_tone_cavity_contribution(
             properties,
             baselines,
             sample.frequency_hz,
-            sample.signal_energy_level * attenuation,
+            wave_amplitude_from_energy(sample.energy_intensity_per_tick_per_width * attenuation),
             0.0,
         );
         received.retain_strongest();
-        let magnitude = received
-            .components
-            .iter()
-            .map(|component| component.amplitude.max(0.0))
-            .sum::<f64>();
+        let magnitude = spectrum_magnitude(&received);
         if magnitude <= f64::EPSILON {
             continue;
         }
@@ -423,11 +776,7 @@ fn environmental_contribution(
 
     let mut received = ToneSpectrum::empty();
     add_spectrum(&mut received, &emitted, scale);
-    let magnitude = received
-        .components
-        .iter()
-        .map(|component| component.amplitude.max(0.0))
-        .sum::<f64>();
+    let magnitude = spectrum_magnitude(&received);
     if magnitude <= f64::EPSILON {
         return None;
     }
@@ -619,6 +968,112 @@ mod tests {
     use super::*;
 
     #[test]
+    fn retained_resonance_is_distinct_from_current_signal_and_conserves_energy() {
+        let mut reservoir = ResonantEnergyReservoir::default();
+        assert!(reservoir.deposit(440.0, 3.0));
+        assert!(reservoir.deposit(440.0, 2.0));
+        assert!((reservoir.total_energy().unwrap() - 5.0).abs() < 1e-12);
+        assert_eq!(reservoir.components.len(), 1);
+    }
+
+    #[test]
+    fn retained_resonance_rejects_unrepresentable_frequency_without_losing_energy() {
+        let mut reservoir = ResonantEnergyReservoir::default();
+        for (frequency, energy) in [(110.0, 1.0), (220.0, 2.0), (440.0, 3.0), (880.0, 4.0)] {
+            assert!(reservoir.deposit(frequency, energy));
+        }
+        assert!(!reservoir.deposit(1760.0, 5.0));
+        assert!((reservoir.total_energy().unwrap() - 10.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn compatible_resonance_query_is_frequency_weighted_without_mutation() {
+        let mut reservoir = ResonantEnergyReservoir::default();
+        assert!(reservoir.deposit(440.0, 2.0));
+        assert!(reservoir.deposit(1760.0, 2.0));
+        let original = reservoir.clone();
+        assert!(reservoir.compatible_energy(440.0) > 2.0);
+        assert!(reservoir.compatible_energy(440.0) < 4.0);
+        assert_eq!(reservoir, original);
+    }
+
+    #[test]
+    fn invalid_retained_resonance_state_fails_closed_without_mutation() {
+        let mut reservoir = ResonantEnergyReservoir {
+            components: vec![ResonantEnergyComponent {
+                frequency_hz: 440.0,
+                energy: f64::NAN,
+            }],
+        };
+        let original = reservoir.clone();
+        assert!(!reservoir.deposit(440.0, 1.0));
+        assert_eq!(reservoir.withdraw_compatible(440.0, 1.0), 0.0);
+        assert_eq!(reservoir.components.len(), original.components.len());
+        assert_eq!(
+            reservoir.components[0].frequency_hz,
+            original.components[0].frequency_hz
+        );
+        assert!(reservoir.components[0].energy.is_nan());
+    }
+
+    #[test]
+    fn retained_resonance_withdrawal_is_frequency_weighted_and_bounded() {
+        let mut reservoir = ResonantEnergyReservoir::default();
+        assert!(reservoir.deposit(440.0, 4.0));
+        assert!(reservoir.deposit(1760.0, 4.0));
+        let withdrawn = reservoir.withdraw_compatible(440.0, 2.0);
+        assert!(withdrawn > 0.0 && withdrawn <= 2.0);
+        assert!((reservoir.total_energy().unwrap() - (8.0 - withdrawn)).abs() < 1e-12);
+        assert_eq!(reservoir.withdraw_compatible(440.0, f64::NAN), 0.0);
+    }
+
+    #[test]
+    fn wave_amplitude_energy_conversion_round_trips() {
+        for energy in [0.0, 0.25, 1.0, 5.0, 10.0, 1_000.0] {
+            let amplitude = wave_amplitude_from_energy(energy);
+            assert!((wave_energy_from_amplitude(amplitude) - energy).abs() < 1e-10);
+        }
+        assert_eq!(wave_energy_from_amplitude(f64::NAN), 0.0);
+        assert_eq!(wave_amplitude_from_energy(f64::INFINITY), 0.0);
+    }
+
+    #[test]
+    fn damped_energy_fraction_is_squared_wave_response() {
+        let drive = 660.0;
+        let natural = 440.0;
+        let damping = 0.15;
+        let ratio = drive / natural;
+        let response = resonance_response(drive, natural, damping);
+        let dissipative_amplitude = 2.0 * damping * ratio * response;
+        let expected = wave_energy_from_amplitude(dissipative_amplitude);
+        assert!((resonant_absorption_fraction(drive, natural, damping) - expected).abs() < 1e-12);
+    }
+
+    #[test]
+    fn resonant_absorption_fraction_is_bounded_and_peaks_at_resonance() {
+        let damping = 0.2;
+        let resonant = resonant_absorption_fraction(440.0, 440.0, damping);
+        let below = resonant_absorption_fraction(220.0, 440.0, damping);
+        let above = resonant_absorption_fraction(880.0, 440.0, damping);
+        assert!((resonant - 1.0).abs() < 1e-12);
+        assert!((0.0..=1.0).contains(&below));
+        assert!((0.0..=1.0).contains(&above));
+        assert!(resonant > below);
+        assert!(resonant > above);
+    }
+
+    #[test]
+    fn resonant_absorption_fraction_rejects_invalid_inputs() {
+        assert_eq!(resonant_absorption_fraction(0.0, 440.0, 0.2), 0.0);
+        assert_eq!(resonant_absorption_fraction(440.0, f64::NAN, 0.2), 0.0);
+        assert_eq!(resonant_absorption_fraction(440.0, 440.0, 0.0), 0.0);
+        assert_eq!(
+            resonant_absorption_fraction(440.0, 440.0, f64::INFINITY),
+            0.0
+        );
+    }
+
+    #[test]
     fn spectral_similarity_is_symmetric_and_exact_match_is_one() {
         let a = ToneSpectrum {
             components: vec![ToneComponent {
@@ -722,8 +1177,7 @@ mod tests {
             source_x: 500.0,
             source_y: 0.0,
             frequency_hz: 440.0,
-            signal_energy_level: 8.0,
-            available_energy_per_tick: 10.0,
+            energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.0,
         };
         let (north_spectrum, north_perceptions) =
@@ -744,14 +1198,13 @@ mod tests {
             source_x: 500.0,
             source_y: 1000.0,
             frequency_hz: 110.0,
-            signal_energy_level: 0.0,
-            available_energy_per_tick: 1.0,
+            energy_intensity_per_tick_per_width: 1.0,
             orbital_phase: 0.5,
         };
         let (south_spectrum, south_perceptions) =
             world_tone_cavity_contribution(&catalog, &structure, &cavity, south);
-        assert!(south_spectrum.components.is_empty());
-        assert!(south_perceptions.is_empty());
+        assert!(!south_spectrum.components.is_empty());
+        assert!(!south_perceptions.is_empty());
     }
 
     #[test]
@@ -884,6 +1337,92 @@ mod tests {
         assert!((environmental_mass_scale(1.0, 1.0) - 0.5).abs() < 1e-12);
         assert!(environmental_mass_scale(10.0, 1.0) > environmental_mass_scale(1.0, 1.0));
         assert!(environmental_mass_scale(0.1, 1.0) < environmental_mass_scale(1.0, 1.0));
+    }
+
+    #[test]
+    fn spectrum_magnitude_is_root_sum_square_of_component_amplitudes() {
+        let spectrum = ToneSpectrum {
+            components: vec![
+                ToneComponent {
+                    frequency_hz: 440.0,
+                    amplitude: 0.6,
+                    phase_radians: 0.0,
+                },
+                ToneComponent {
+                    frequency_hz: 880.0,
+                    amplitude: 0.8,
+                    phase_radians: 0.0,
+                },
+            ],
+        };
+        assert!((spectrum_magnitude(&spectrum) - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn resonant_response_and_harmonics_cannot_exceed_incident_energy() {
+        let incident_amplitude = 0.75;
+        let spectrum = material_response_to_drive(
+            properties(1.0, 4.0, 1.0),
+            baselines(),
+            440.0,
+            incident_amplitude,
+            0.0,
+        );
+        let spectral_energy: f64 = spectrum
+            .components
+            .iter()
+            .map(|component| wave_energy_from_amplitude(component.amplitude))
+            .sum();
+        let incident_energy = wave_energy_from_amplitude(incident_amplitude);
+        assert!(spectral_energy <= incident_energy + 1e-12);
+        assert!(spectrum
+            .components
+            .iter()
+            .any(|component| (component.frequency_hz - 2.0 * 440.0).abs() < f64::EPSILON));
+    }
+
+    #[test]
+    fn unrepresentable_spectral_energy_fails_closed() {
+        let mut spectrum = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_hz: 440.0,
+                amplitude: f64::MAX,
+                phase_radians: 0.0,
+            }],
+        };
+        bound_spectrum_energy(&mut spectrum, 1.0);
+        assert!(spectrum.components.is_empty());
+    }
+
+    #[test]
+    fn transformed_secondary_signal_preserves_budget_and_material_harmonics() {
+        let input = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_hz: 440.0,
+                amplitude: 2.0,
+                phase_radians: 0.0,
+            }],
+        };
+        let output =
+            transform_signal_to_energy_budget(properties(1.0, 2.0, 1.0), baselines(), &input, 2.5)
+                .expect("valid residual budget should produce a transformed spectrum");
+        let energy: f64 = output
+            .components
+            .iter()
+            .map(|component| component.amplitude * component.amplitude)
+            .sum();
+        assert!((energy - 2.5).abs() < 1e-9);
+        assert!(output
+            .components
+            .iter()
+            .any(|component| (component.frequency_hz - 880.0).abs() < 1e-9));
+        assert!(transform_signal_to_energy_budget(
+            properties(1.0, 2.0, 1.0),
+            baselines(),
+            &input,
+            4.1,
+        )
+        .is_none());
     }
 
     #[test]

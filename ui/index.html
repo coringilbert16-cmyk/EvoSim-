@@ -82,7 +82,7 @@
     let interaction = null;
     let requestSerial = 0;
     let runtimeStatus = null;
-    let simulationDead = false;
+    let noLivingOrganisms = false;
     let historyViewTick = null;
     let historyTicks = [];
     const worldCache = {
@@ -105,7 +105,7 @@
         const response = await fetch('/observation/status', { cache: 'no-store' });
         if (!response.ok) throw new Error();
         runtimeStatus = await response.json();
-        simulationDead = runtimeStatus.population === 0;
+        noLivingOrganisms = runtimeStatus.population === 0;
         historyTicks = runtimeStatus.history_ticks || [];
         const slider = document.getElementById('history');
         slider.max = Math.max(0, historyTicks.length - 1);
@@ -170,9 +170,9 @@
       const speedValue = document.getElementById('speed-value');
 
       play.textContent = running ? 'Pause' : 'Play';
-      play.disabled = simulationDead;
-      back.disabled = simulationDead || currentTick <= firstTick;
-      forward.disabled = simulationDead;
+      play.disabled = false;
+      back.disabled = currentTick <= firstTick;
+      forward.disabled = false;
       if (runtimeStatus?.ticks_per_second != null) {
         speed.value = runtimeStatus.ticks_per_second;
         speedValue.textContent = Number(runtimeStatus.ticks_per_second).toFixed(1).replace(/\\.0$/, '');
@@ -180,7 +180,6 @@
     }
 
     async function stepForward() {
-      if (simulationDead) return;
       if (historyViewTick != null) await returnToLiveWorld();
       if (runtimeStatus?.running) await control('/control/pause');
       await control('/control/step');
@@ -191,7 +190,6 @@
     }
 
     async function stepBack() {
-      if (simulationDead) return;
       if (historyViewTick != null) await returnToLiveWorld();
       await refreshRuntimeStatus();
       const currentTick = runtimeStatus?.tick;
@@ -211,7 +209,6 @@
     }
 
     document.getElementById('play-toggle').addEventListener('click', async () => {
-      if (simulationDead) return;
       if (historyViewTick != null) await returnToLiveWorld();
       await control(runtimeStatus?.running ? '/control/pause' : '/control/resume');
     });
@@ -402,8 +399,8 @@
     }
     function selectedIndex() { return focusedOrganismId == null ? -1 : [...selectedIds].indexOf(focusedOrganismId); }
     function updateStatus() {
-      if (simulationDead) {
-        status.textContent = 'Organism died — simulation stopped at tick ' + (runtimeStatus?.tick ?? '?') + '. Press Reset to begin again.';
+      if (noLivingOrganisms) {
+        status.textContent = 'No living organisms — physical world continues at tick ' + (runtimeStatus?.tick ?? '?') + '.';
         updateControls();
         return;
       }
@@ -561,7 +558,7 @@
         clearWorldCache();
         selectedIds.clear();
         focusedOrganismId = '1';
-        simulationDead = false;
+        noLivingOrganisms = false;
         cameraInitialized = false;
         await refreshRuntimeStatus();
         await loadObservation('Structure', '1');

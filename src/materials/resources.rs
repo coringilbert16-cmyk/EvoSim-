@@ -584,7 +584,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
             },
         },
         BaseResource {
-            name: "Methane".into(),
+            name: "Oxygen".into(),
             properties: ResourceProperties {
                 mass: 0.75,
                 potential_energy: 20.0,
@@ -755,7 +755,7 @@ mod shape_tests {
         assert_eq!(catalog.len(), 7);
         let expected_names = [
             "Carbon",
-            "Methane",
+            "Oxygen",
             "Hydrogen",
             "Sulfur",
             "Nitrogen",
@@ -817,7 +817,7 @@ mod shape_tests {
             Form::RegularPolygon { sides: 6, .. }
         ));
         assert!(matches!(
-            find("Methane").shape.form,
+            find("Oxygen").shape.form,
             Form::RegularPolygon { sides: 3, .. }
         ));
         assert!(matches!(
@@ -854,7 +854,7 @@ mod shape_tests {
         let catalog = default_catalog();
         let find = |name: &str| catalog.iter().find(|r| r.name == name).unwrap();
 
-        for name in ["Carbon", "Methane"] {
+        for name in ["Carbon", "Oxygen"] {
             let vertices = find(name).shape.form.polygon_vertices().unwrap();
             for i in 0..vertices.len() {
                 assert!(

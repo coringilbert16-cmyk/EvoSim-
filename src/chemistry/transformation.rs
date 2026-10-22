@@ -3,8 +3,6 @@ use crate::decision_runtime::ActionCandidate;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
 use crate::structure::Placement;
-use rand::Rng;
-use rand_chacha::ChaCha8Rng;
 
 /// Release the intrinsic potential stored in an existing physical bond.
 ///
@@ -16,7 +14,7 @@ pub(crate) fn bond_break_energy_yield(
     bond_energy: f64,
     processing_efficiency: f64,
 ) -> Option<(f64, f64, f64)> {
-    if !bond_energy.is_finite() || bond_energy < 0.0 {
+    if !bond_energy.is_finite() || bond_energy < 0.0 || !processing_efficiency.is_finite() {
         return None;
     }
     let efficiency = processing_efficiency.clamp(0.0, 1.0);
@@ -26,111 +24,245 @@ pub(crate) fn bond_break_energy_yield(
         .then_some((bond_energy, usable, heat))
 }
 
-/// Resolve the intrinsic potential of a pre-bonded stored-material interface
-/// through the same chemistry authority used when forming bonds. Physical
-/// stored-material bonds currently retain endpoint identity but not a cached
-/// energy value, so this adapter derives the potential from the canonical
-/// material properties rather than duplicating the chemistry equation.
-fn break_energy_yield(
-    a: crate::resources::ResourceProperties,
-    b: crate::resources::ResourceProperties,
-    processing_efficiency: f64,
-) -> Option<(f64, f64, f64)> {
-    let strength = crate::combine::bond_strength(a, b);
-    let potential = crate::combine::intrinsic_bond_potential(a, b, strength);
-    bond_break_energy_yield(potential, processing_efficiency)
-}
-
 pub(crate) fn chemical_break_energy_yield(
-    reaction_energy: f64,
+    bond_energy: f64,
     disruption_cost: f64,
     processing_efficiency: f64,
 ) -> Option<(f64, f64, f64)> {
-    let usable_surplus =
-        crate::chemistry::chemical_break_surplus(reaction_energy, disruption_cost)?;
-    if !crate::chemistry::can_chemical_break(reaction_energy, disruption_cost) {
+    if !bond_energy.is_finite()
+        || bond_energy < 0.0
+        || !disruption_cost.is_finite()
+        || disruption_cost < 0.0
+        || !processing_efficiency.is_finite()
+    {
         return None;
     }
     let efficiency = processing_efficiency.clamp(0.0, 1.0);
-    let usable = usable_surplus * efficiency;
-    // The reaction energy is one conserved source. Bond disruption consumes
-    // disruption_cost from that source; only the remainder can become usable
-    // energy or heat. Do not count the disruption cost as heat as well.
-    let heat = (usable_surplus - usable).max(0.0);
+    // The accumulated reaction quantity is an activation signal, not an
+    // energy reservoir. The removed bond's stored energy pays disruption work
+    // first; any shortfall is charged to the organism's usable-energy holder.
+    let surplus = (bond_energy - disruption_cost).max(0.0);
+    let deficit = (disruption_cost - bond_energy).max(0.0);
+    let usable = surplus * efficiency - deficit;
+    let heat = (surplus - surplus * efficiency).max(0.0);
     (usable.is_finite()
         && heat.is_finite()
-        && (reaction_energy - disruption_cost - usable - heat).abs() <= 1e-9)
-        .then_some((reaction_energy, usable, heat))
+        && (usable - bond_energy + disruption_cost + heat).abs() <= 1e-9)
+        .then_some((bond_energy, usable, heat))
 }
 
-/// Apply a chemistry-caused BREAK after the chemistry system has produced a
-/// reaction-energy event. Chemistry supplies the energy; the structure still
-/// decides whether the exact bond exists. No intrinsic bond potential is
-/// released a second time, preventing double-counting.
-pub(crate) fn settle_chemical_break_energy(
+/// Apply a chemistry-caused BREAK after the chemistry system has crossed
+/// the activation threshold. Reaction accumulation is a trigger, not an energy
+/// reservoir: disruption work is paid from the removed bond's stored energy
+/// first, with any shortfall debited from the organism's usable-energy holder.
+/// Settle a chemistry BREAK where compatible retained resonance supplies part
+/// of the disruption work. The reservoir debit is committed by the caller only
+/// after this transaction succeeds; the remaining work is charged to the
+/// removed bond's energy/usable-energy balance.
+pub(crate) fn settle_chemical_break_energy_with_resonance(
     organism: &mut Organism,
     bond: crate::structure::Bond,
     reaction_energy: f64,
     disruption_cost: f64,
+    resonant_work: f64,
     processing_efficiency: f64,
     ledger: &mut EnergyLedger,
 ) -> bool {
+    if !resonant_work.is_finite()
+        || resonant_work < 0.0
+        || !disruption_cost.is_finite()
+        || disruption_cost < 0.0
+        || resonant_work > disruption_cost
+    {
+        return false;
+    }
+    let bond_supplied_work = disruption_cost - resonant_work;
+    let next_total_work = ledger.total_work_expended + disruption_cost;
+    if !next_total_work.is_finite()
+        || !crate::chemistry::can_chemical_break(reaction_energy, bond_supplied_work)
+    {
+        return false;
+    }
     let Some((gross, usable, heat)) =
-        chemical_break_energy_yield(reaction_energy, disruption_cost, processing_efficiency)
+        chemical_break_energy_yield(bond.bond_energy, bond_supplied_work, processing_efficiency)
     else {
         return false;
     };
-    let mut trial_structure = organism.structure.clone();
-    if trial_structure.break_matching_bond(bond).is_none() {
-        return false;
-    }
     let tx = EnergyTransaction {
         reason: EnergyReason::Break,
-        potential_released: gross,
+        potential_released: 0.0,
         usable_delta: usable,
-        structural_delta: 0.0,
-        work_expended: disruption_cost,
+        structural_delta: -gross,
+        // This balanced subtransaction charges the bond-supplied share. The
+        // resonant share is added to the same cumulative work total below.
+        work_expended: bond_supplied_work,
         heat_dissipated: heat,
     };
-    if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
+    if !settle_break_transaction(organism, bond, tx, ledger) {
         return false;
     }
-    organism.structure = trial_structure;
-    organism.mark_structure_changed();
-    organism.add_transaction_stress(heat);
+    // Prevalidated above so this final ledger update cannot overflow after the
+    // structure has changed. The reservoir debit is committed by the caller.
+    ledger.total_work_expended = next_total_work;
     true
 }
 
-fn settle_break_energy(
+/// Shared commit path for every BREAK of a realized structural bond. The
+/// candidate graph is validated before settlement; only a successful ledger
+/// transaction is followed by committing the graph mutation and heat stress.
+fn settle_break_transaction(
     organism: &mut Organism,
     bond: crate::structure::Bond,
-    usable: f64,
-    gross: f64,
-    heat: f64,
+    transaction: EnergyTransaction,
     ledger: &mut EnergyLedger,
 ) -> bool {
     let mut trial_structure = organism.structure.clone();
     if trial_structure.break_matching_bond(bond).is_none() {
         return false;
     }
-    let tx = EnergyTransaction {
-        reason: EnergyReason::Break,
-        potential_released: gross,
-        usable_delta: usable,
-        structural_delta: 0.0,
-        work_expended: 0.0,
-        heat_dissipated: heat,
-    };
-    if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
+    if !ledger.settle_transaction(&mut organism.usable_energy, transaction) {
         return false;
     }
     organism.structure = trial_structure;
     organism.mark_structure_changed();
-    organism.add_transaction_stress(heat);
+    organism.add_transaction_stress(transaction.heat_dissipated);
     true
 }
 
-fn stress_break_candidate_indices(organism: &Organism, environment: &Environment) -> Vec<usize> {
+/// Destabilize a structural bond when the organism's retained resonance
+/// exceeds the energy held by its complete bond network. The total bond energy
+/// is a geometry-dependent handling capacity, not a hard reservoir cap: excess
+/// energy remains stored until compatible resonance can do physical work.
+pub(crate) fn resolve_resonance_overload_break(
+    organism: &mut Organism,
+    environment: &Environment,
+    ledger: &mut EnergyLedger,
+) -> bool {
+    let Some(retained_energy) = organism.resonant_energy.total_energy() else {
+        return false;
+    };
+    let mut capacity = 0.0;
+    for bond in &organism.structure.bonds {
+        if !bond.bond_energy.is_finite() || bond.bond_energy < 0.0 {
+            return false;
+        }
+        capacity += bond.bond_energy;
+        if !capacity.is_finite() {
+            return false;
+        }
+    }
+    if retained_energy <= capacity + 1e-9 {
+        return false;
+    }
+
+    if crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog).is_err() {
+        return false;
+    }
+    let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
+    let mut best: Option<(usize, f64, f64)> = None;
+    for index in resonance_break_candidate_indices(organism, environment) {
+        let Some(bond) = organism.structure.bonds.get(index).copied() else {
+            continue;
+        };
+        let Some(barrier) = crate::chemistry::activation_barrier_from_bond_strength(bond.strength)
+        else {
+            continue;
+        };
+        if barrier <= 1e-9 {
+            continue;
+        }
+        let Some(unit_a) = organism
+            .structure
+            .unit_index(bond.endpoint_a.constituent_id)
+        else {
+            continue;
+        };
+        let Some(unit_b) = organism
+            .structure
+            .unit_index(bond.endpoint_b.constituent_id)
+        else {
+            continue;
+        };
+        let Some(properties_a) = organism
+            .structure
+            .units
+            .get(unit_a)
+            .and_then(|unit| unit.properties(&environment.catalog))
+        else {
+            continue;
+        };
+        let Some(properties_b) = organism
+            .structure
+            .units
+            .get(unit_b)
+            .and_then(|unit| unit.properties(&environment.catalog))
+        else {
+            continue;
+        };
+        let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
+        if !frequency_a.is_finite()
+            || frequency_a <= 0.0
+            || !frequency_b.is_finite()
+            || frequency_b <= 0.0
+        {
+            continue;
+        }
+        let reaction_frequency_hz = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        let compatible = organism
+            .resonant_energy
+            .compatible_energy(reaction_frequency_hz);
+        if !reaction_frequency_hz.is_finite()
+            || reaction_frequency_hz <= 0.0
+            || !compatible.is_finite()
+            || compatible <= 1e-9
+        {
+            continue;
+        }
+        let score = compatible / barrier;
+        if !score.is_finite() {
+            continue;
+        }
+        if best.map_or(true, |(_, _, best_score)| score > best_score) {
+            best = Some((index, reaction_frequency_hz, score));
+        }
+    }
+
+    let Some((target_index, reaction_frequency_hz, _)) = best else {
+        return false;
+    };
+    let Some(target) = organism.structure.bonds.get(target_index).copied() else {
+        return false;
+    };
+    let Some(barrier) = crate::chemistry::activation_barrier_from_bond_strength(target.strength)
+    else {
+        return false;
+    };
+    let mut trial_reservoir = organism.resonant_energy.clone();
+    let resonant_work = trial_reservoir.withdraw_compatible(reaction_frequency_hz, barrier);
+    if !resonant_work.is_finite() || resonant_work <= 1e-9 {
+        return false;
+    }
+    // The overload event itself supplies the full activation signal; the
+    // settlement below separately accounts how much work came from resonance.
+    let reaction_energy = barrier;
+    let processing_efficiency = organism.genome.processing_efficiency();
+    if !settle_chemical_break_energy_with_resonance(
+        organism,
+        target,
+        reaction_energy,
+        barrier,
+        resonant_work,
+        processing_efficiency,
+        ledger,
+    ) {
+        return false;
+    }
+    organism.resonant_energy = trial_reservoir;
+    true
+}
+
+fn resonance_break_candidate_indices(organism: &Organism, environment: &Environment) -> Vec<usize> {
     let genome_bonds =
         crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
             .ok()
@@ -139,8 +271,8 @@ fn stress_break_candidate_indices(organism: &Organism, environment: &Environment
             .unwrap_or_default();
 
     // Genome bonds are protected while ordinary structural bonds remain.
-    // Once those ordinary bonds are exhausted, the protected bonds become
-    // stress-break candidates so structural collapse can proceed normally.
+    // Once ordinary bonds are exhausted, compatible resonance may destabilize
+    // a genome-boundary bond through the same chemistry pathway.
     let ordinary_candidates: Vec<usize> = organism
         .structure
         .bonds
@@ -153,29 +285,6 @@ fn stress_break_candidate_indices(organism: &Organism, environment: &Environment
     }
 
     genome_bonds
-}
-
-pub(crate) fn resolve_stress_break(
-    organism: &mut Organism,
-    environment: &Environment,
-    ledger: &mut EnergyLedger,
-    rng: &mut ChaCha8Rng,
-) -> bool {
-    let candidate_indices = stress_break_candidate_indices(organism, environment);
-    if candidate_indices.is_empty() {
-        return false;
-    }
-    let target_index = candidate_indices[rng.gen_range(0..candidate_indices.len())];
-    let target = organism.structure.bonds[target_index];
-    // A physical bond stores its own intrinsic potential. Do not recreate
-    // constituent potential energy here: those material potentials were not
-    // consumed when the bond was formed.
-    let Some((gross, usable, heat)) =
-        bond_break_energy_yield(target.bond_energy, organism.genome.processing_efficiency())
-    else {
-        return false;
-    };
-    settle_break_energy(organism, target, usable, gross, heat, ledger)
 }
 
 impl Simulation {
@@ -474,8 +583,9 @@ impl Simulation {
             transformation.kind,
             crate::state::TransformationKind::Combine
         ) {
-            // Tick 2: resolve the candidate and settle its transaction. The
-            // resulting physical structure is held until Tick 3.
+            // Resolve and commit on the same completion tick. Preparing a
+            // replacement graph one tick early would leave it stale while
+            // chemical or stress-driven BREAK can still mutate the live graph.
             let mut trial_organism = organism.clone();
             // Candidate COMBINE only touches material in the organism's local
             // field bounds. Keep the trial environment sparse so a large
@@ -544,6 +654,14 @@ impl Simulation {
             let ledger_delta = EnergyLedger {
                 total_potential_energy_released: trial_ledger.total_potential_energy_released
                     - original_ledger.total_potential_energy_released,
+                total_structural_energy_delta: trial_ledger.total_structural_energy_delta
+                    - original_ledger.total_structural_energy_delta,
+                total_external_energy_input: trial_ledger.total_external_energy_input
+                    - original_ledger.total_external_energy_input,
+                total_world_tone_energy_unabsorbed: trial_ledger.total_world_tone_energy_unabsorbed
+                    - original_ledger.total_world_tone_energy_unabsorbed,
+                total_world_tone_energy_escaped: trial_ledger.total_world_tone_energy_escaped
+                    - original_ledger.total_world_tone_energy_escaped,
                 total_usable_energy_gained: trial_ledger.total_usable_energy_gained
                     - original_ledger.total_usable_energy_gained,
                 total_work_expended: trial_ledger.total_work_expended
@@ -552,6 +670,13 @@ impl Simulation {
                     - original_ledger.total_heat_dissipated,
                 total_usable_energy_held: trial_ledger.total_usable_energy_held
                     - original_ledger.total_usable_energy_held,
+                total_resonant_energy_held: trial_ledger.total_resonant_energy_held
+                    - original_ledger.total_resonant_energy_held,
+                // This value is a transaction delta, not a live inventory snapshot.
+                initial_usable_energy_held: 0.0,
+                initial_resonant_energy_held: 0.0,
+                total_structural_energy_held: 0.0,
+                initial_structural_energy_held: 0.0,
             };
             if let Some((cell_index, source)) = _attempt.environmental_source.as_ref() {
                 let Some(cell) = environment.field.cells.get_mut(*cell_index) else {
@@ -581,7 +706,12 @@ impl Simulation {
             let before_stress = organism.stress;
             organism.usable_energy += prepared_energy;
             ledger.total_potential_energy_released += ledger_delta.total_potential_energy_released;
+            ledger.total_structural_energy_delta += ledger_delta.total_structural_energy_delta;
+            ledger.total_external_energy_input += ledger_delta.total_external_energy_input;
+            ledger.total_world_tone_energy_unabsorbed +=
+                ledger_delta.total_world_tone_energy_unabsorbed;
             ledger.total_usable_energy_gained += ledger_delta.total_usable_energy_gained;
+            ledger.total_work_expended += ledger_delta.total_work_expended;
             ledger.total_heat_dissipated += ledger_delta.total_heat_dissipated;
             ledger.total_usable_energy_held += ledger_delta.total_usable_energy_held;
             transformation.prepared_energy = Some((before_energy, before_stress, 0.0));
@@ -595,43 +725,10 @@ impl Simulation {
             organism.active_transformation_id = None;
             return false;
         };
-        let Some(a) = stored
-            .material
-            .parts
-            .get(target.part_a)
-            .and_then(|(name, _)| {
-                environment
-                    .catalog
-                    .iter()
-                    .find(|resource| resource.name == *name)
-                    .map(|r| r.properties)
-            })
-        else {
-            organism.active_transformation_id = None;
-            return false;
-        };
-        let Some(b) = stored
-            .material
-            .parts
-            .get(target.part_b)
-            .and_then(|(name, _)| {
-                environment
-                    .catalog
-                    .iter()
-                    .find(|resource| resource.name == *name)
-                    .map(|r| r.properties)
-            })
-        else {
-            organism.active_transformation_id = None;
-            return false;
-        };
-        let Some((gross, usable, heat)) =
-            break_energy_yield(a, b, organism.genome.processing_efficiency())
-        else {
-            organism.active_transformation_id = None;
-            return false;
-        };
-
+        // Stored environmental compounds retain their bond endpoints, but
+        // no energy was allocated when those pre-existing bonds were created.
+        // Breaking one therefore changes connectivity only; deriving a fresh
+        // energy credit from resource properties would create energy.
         // Validate the exact bond before settling the transaction. The physical
         // structure itself is not changed until the following tick.
         if stored.break_internal_bond(target).is_none() {
@@ -639,21 +736,48 @@ impl Simulation {
             return false;
         }
 
+        let before_energy = organism.usable_energy;
         let tx = EnergyTransaction {
             reason: EnergyReason::Break,
-            potential_released: gross,
-            usable_delta: usable,
+            potential_released: 0.0,
+            usable_delta: 0.0,
             structural_delta: 0.0,
             work_expended: 0.0,
-            heat_dissipated: heat,
+            heat_dissipated: 0.0,
         };
         if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
             organism.active_transformation_id = None;
             return false;
         }
 
-        transformation.prepared_energy = Some((gross, usable, heat));
+        // Preserve the usual completion marker without claiming that stored
+        // material released usable energy or heat.
+        transformation.prepared_energy = Some((before_energy, 0.0, 0.0));
         true
+    }
+}
+
+/// Reverse a staged COMBINE settlement when its physical commit state is
+/// incomplete. Deltas are applied independently because serialized/corrupt
+/// prepared state may have lost one optional field.
+fn rollback_prepared_combine(
+    usable_energy: &mut f64,
+    ledger: &mut EnergyLedger,
+    energy_delta: Option<f64>,
+    ledger_delta: Option<&EnergyLedger>,
+) {
+    if let Some(delta) = energy_delta {
+        *usable_energy -= delta;
+    }
+    if let Some(delta) = ledger_delta {
+        ledger.total_potential_energy_released -= delta.total_potential_energy_released;
+        ledger.total_structural_energy_delta -= delta.total_structural_energy_delta;
+        ledger.total_external_energy_input -= delta.total_external_energy_input;
+        ledger.total_world_tone_energy_unabsorbed -= delta.total_world_tone_energy_unabsorbed;
+        ledger.total_usable_energy_gained -= delta.total_usable_energy_gained;
+        ledger.total_work_expended -= delta.total_work_expended;
+        ledger.total_heat_dissipated -= delta.total_heat_dissipated;
+        ledger.total_usable_energy_held -= delta.total_usable_energy_held;
     }
 }
 
@@ -675,7 +799,7 @@ pub(crate) fn resolve_transformation(
     transformation: &ActiveTransformation,
     organism: &mut Organism,
     environment: &mut Environment,
-    _ledger: &mut EnergyLedger,
+    ledger: &mut EnergyLedger,
 ) {
     if matches!(
         transformation.kind,
@@ -686,6 +810,17 @@ pub(crate) fn resolve_transformation(
             transformation.prepared_stored_material.as_ref(),
             transformation.prepared_stress,
         ) else {
+            // Preparation settles the energy transaction before the physical
+            // mutation is committed. If the prepared physical state is missing,
+            // reverse that staged settlement as well as restoring any reserved
+            // environmental source; otherwise a failed COMBINE can spend energy
+            // and ledger-account it without ever creating the bond.
+            rollback_prepared_combine(
+                &mut organism.usable_energy,
+                ledger,
+                transformation.prepared_usable_energy,
+                transformation.prepared_ledger.as_ref(),
+            );
             if let Some((cell_index, source)) = transformation.combine_environmental_source.as_ref()
             {
                 // Restore to the exact field cell from which the source was
@@ -700,8 +835,8 @@ pub(crate) fn resolve_transformation(
             return;
         };
 
-        // Tick 3: commit the physical mutation selected on tick 1 and
-        // prepared on tick 2.
+        // Commit the prepared physical mutation on the same completion
+        // tick as its energy transaction, before chemistry or stress can run.
         organism.structure = structure.clone();
         organism.stored_material = stored_material.clone();
         if stress.is_finite() {
@@ -846,6 +981,45 @@ mod tests {
     use super::*;
 
     #[test]
+    fn failed_prepared_combine_rolls_back_energy_and_every_ledger_delta() {
+        let mut usable_energy = 13.0;
+        let mut ledger = EnergyLedger {
+            total_potential_energy_released: 2.0,
+            total_structural_energy_delta: 5.0,
+            total_external_energy_input: 3.0,
+            total_world_tone_energy_unabsorbed: 9.0,
+            total_usable_energy_gained: 7.0,
+            total_work_expended: 11.0,
+            total_heat_dissipated: 17.0,
+            total_usable_energy_held: 19.0,
+            ..EnergyLedger::default()
+        };
+        let delta = EnergyLedger {
+            total_potential_energy_released: 1.0,
+            total_structural_energy_delta: 2.0,
+            total_external_energy_input: 1.0,
+            total_world_tone_energy_unabsorbed: 2.0,
+            total_usable_energy_gained: 3.0,
+            total_work_expended: 5.0,
+            total_heat_dissipated: 7.0,
+            total_usable_energy_held: 11.0,
+            ..EnergyLedger::default()
+        };
+
+        rollback_prepared_combine(&mut usable_energy, &mut ledger, Some(5.0), Some(&delta));
+
+        assert_eq!(usable_energy, 8.0);
+        assert_eq!(ledger.total_potential_energy_released, 1.0);
+        assert_eq!(ledger.total_structural_energy_delta, 3.0);
+        assert_eq!(ledger.total_external_energy_input, 2.0);
+        assert_eq!(ledger.total_world_tone_energy_unabsorbed, 7.0);
+        assert_eq!(ledger.total_usable_energy_gained, 4.0);
+        assert_eq!(ledger.total_work_expended, 6.0);
+        assert_eq!(ledger.total_heat_dissipated, 10.0);
+        assert_eq!(ledger.total_usable_energy_held, 8.0);
+    }
+
+    #[test]
     fn bond_break_releases_only_stored_bond_potential() {
         let (gross, usable, heat) = bond_break_energy_yield(4.0, 0.5).unwrap();
         assert_eq!(gross, 4.0);
@@ -855,22 +1029,167 @@ mod tests {
     }
 
     #[test]
-    fn chemical_break_requires_reaction_surplus() {
-        assert!(chemical_break_energy_yield(6.0, 5.0, 1.0).is_some());
-        assert!(chemical_break_energy_yield(5.0, 5.0, 1.0).is_some());
-        assert!(chemical_break_energy_yield(4.0, 5.0, 1.0).is_none());
+    fn bond_break_rejects_non_finite_processing_efficiency() {
+        assert!(bond_break_energy_yield(4.0, f64::NAN).is_none());
+        assert!(bond_break_energy_yield(4.0, f64::INFINITY).is_none());
+        assert!(bond_break_energy_yield(4.0, f64::NEG_INFINITY).is_none());
     }
 
     #[test]
-    fn chemical_break_energy_is_conserved_between_disruption_usable_energy_and_heat() {
-        let (released, usable, heat) = chemical_break_energy_yield(10.0, 4.0, 0.5).unwrap();
-        assert!((released - 10.0).abs() < 1e-12);
-        assert!((usable - 3.0).abs() < 1e-12);
-        assert!((heat - 3.0).abs() < 1e-12);
-        assert!((released - 4.0 - usable - heat).abs() < 1e-12);
+    fn stored_material_break_does_not_credit_unallocated_bond_energy() {
+        // Keep this accounting regression independent of the calibrated
+        // developmental constructor; it needs a holder and storage, not a genome.
+        let catalog = crate::resources::default_catalog();
+        let mut organism = crate::state::Organism {
+            id: "stored-break-accounting-test".into(),
+            developmental_origin: crate::state::Position { x: 0.0, y: 0.0 },
+            developmental_orientation_radians: 0.0,
+            occupied_cells: Vec::new(),
+            genome: crate::genome::initial_genome(),
+            harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+            resonant_energy: crate::harmonics::ResonantEnergyReservoir::default(),
+            experience_memory: crate::memory::ExperienceMemory::default(),
+            pending_movement_experience: None,
+            decision_history: crate::decision::DecisionHistory::default(),
+            usable_energy: 100.0,
+            stress: 0.0,
+            maintenance_debt: 0.0,
+            stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
+            stored_material: crate::material_storage::MaterialStorage::default(),
+            structure: crate::structure::OrganismStructure::new(),
+            active_transformation_id: None,
+            active_movement: None,
+            reproductive_construction: None,
+            structure_revision: 0,
+            position_revision: 0,
+            cached_cavity_revision: None,
+            cached_cavity: None,
+            cached_developmental_revision: None,
+            cached_developmental_realization: None,
+            peak_developmental_realization: 0.0,
+            cached_harmonic_key: None,
+            last_movement_attempt: None,
+        };
+        let mut environment = crate::state::Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog: catalog.clone(),
+            field: crate::environment::ActiveMaterialField::new(
+                1000.0,
+                1000.0,
+                crate::environment::DEFAULT_CELL_SIZE,
+            ),
+        };
+        let material = crate::resources::Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![crate::resources::InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
+        let physical = crate::physical_material::PhysicalMaterial::realized(
+            material,
+            vec![
+                crate::structure::Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("internally bonded physical material should be realizable");
+        assert!(organism.stored_material.store_physical_instance(physical));
+
+        let decision = crate::decision_runtime::ActionCandidate {
+            action: crate::decision::ActionKind::Break,
+            context_key: Some("stored:0:bond:0".into()),
+        };
+        let mut next_id = 1;
+        let mut transformation =
+            Simulation::try_start_transformation(&mut organism, &catalog, &mut next_id, &decision)
+                .expect("stored internal bond should be a BREAK candidate");
+        let before_energy = organism.usable_energy;
+        let mut ledger = crate::state::EnergyLedger::default();
+        let before_ledger = ledger;
+
+        assert!(Simulation::prepare_transformation(
+            &mut transformation,
+            &mut organism,
+            &mut environment,
+            &mut ledger,
+            None,
+        ));
+        assert_eq!(organism.usable_energy, before_energy);
+        assert_eq!(
+            transformation.prepared_energy,
+            Some((before_energy, 0.0, 0.0))
+        );
+        assert_eq!(
+            ledger.total_potential_energy_released,
+            before_ledger.total_potential_energy_released
+        );
+        assert_eq!(
+            ledger.total_external_energy_input,
+            before_ledger.total_external_energy_input
+        );
+        assert_eq!(
+            ledger.total_work_expended,
+            before_ledger.total_work_expended
+        );
+        assert_eq!(
+            ledger.total_heat_dissipated,
+            before_ledger.total_heat_dissipated
+        );
+        assert_eq!(
+            ledger.total_structural_energy_delta,
+            before_ledger.total_structural_energy_delta
+        );
     }
 
-    fn stress_break_test_organism() -> (
+    #[test]
+    fn chemical_break_energy_comes_from_the_removed_bond_not_the_reaction_signal() {
+        let (structural_energy, usable, heat) =
+            chemical_break_energy_yield(10.0, 4.0, 0.5).unwrap();
+        assert!((structural_energy - 10.0).abs() < 1e-12);
+        assert!((usable - 3.0).abs() < 1e-12);
+        assert!((heat - 3.0).abs() < 1e-12);
+        assert!((usable - structural_energy + 4.0 + heat).abs() < 1e-12);
+    }
+
+    #[test]
+    fn chemical_break_charges_a_work_shortfall_to_the_usable_holder() {
+        let (structural_energy, usable, heat) = chemical_break_energy_yield(4.0, 5.0, 0.5).unwrap();
+        assert!((structural_energy - 4.0).abs() < 1e-12);
+        assert!((usable + 1.0).abs() < 1e-12);
+        assert_eq!(heat, 0.0);
+        assert!((usable - structural_energy + 5.0 + heat).abs() < 1e-12);
+    }
+
+    #[test]
+    fn compatible_resonance_reduces_bond_supplied_work_without_energy_creation() {
+        let bond_energy = 4.0;
+        let total_disruption_work = 5.0;
+        let resonant_work = 2.0;
+        let bond_supplied_work = total_disruption_work - resonant_work;
+        let (structural_energy, usable, heat) =
+            chemical_break_energy_yield(bond_energy, bond_supplied_work, 0.5).unwrap();
+
+        assert!((structural_energy - bond_energy).abs() < 1e-12);
+        assert!((usable - 0.5).abs() < 1e-12);
+        assert!((heat - 0.5).abs() < 1e-12);
+        // Bond energy plus the reservoir debit exactly pays usable gain,
+        // dissipated heat, and the full physical disruption work.
+        let residual = -structural_energy - resonant_work + usable + heat + total_disruption_work;
+        assert!(residual.abs() < 1e-12);
+    }
+
+    fn resonance_break_test_organism() -> (
         crate::state::Organism,
         crate::state::Environment,
         Vec<usize>,
@@ -886,6 +1205,7 @@ mod tests {
             occupied_cells: vec![crate::state::Position { x: 0.0, y: 0.0 }],
             genome,
             harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+            resonant_energy: crate::harmonics::ResonantEnergyReservoir::default(),
             experience_memory: crate::memory::ExperienceMemory::default(),
             pending_movement_experience: None,
             decision_history: crate::decision::DecisionHistory::default(),
@@ -926,16 +1246,79 @@ mod tests {
     }
 
     #[test]
-    fn stress_break_candidates_prefer_non_genome_bonds() {
-        let (organism, environment, genome_bonds) = stress_break_test_organism();
-        let candidates = stress_break_candidate_indices(&organism, &environment);
+    fn resonance_overload_breaks_a_compatible_bond_only_above_structural_capacity() {
+        let mut simulation = crate::state::Simulation::new(918, 10.0);
+        let mut organism = simulation.organisms.remove(0);
+        let environment = simulation.environment.clone();
+        let capacity: f64 = organism
+            .structure
+            .bonds
+            .iter()
+            .map(|bond| bond.bond_energy)
+            .sum();
+        assert!(capacity.is_finite() && capacity > 0.0);
+        assert!(organism.resonant_energy.deposit(440.0, capacity * 0.5));
+        let original_bond_count = organism.structure.bonds.len();
+        let mut ledger = crate::state::EnergyLedger::default();
+        assert!(!resolve_resonance_overload_break(
+            &mut organism,
+            &environment,
+            &mut ledger,
+        ));
+        assert_eq!(organism.structure.bonds.len(), original_bond_count);
+
+        organism.resonant_energy = crate::harmonics::ResonantEnergyReservoir::default();
+        assert!(organism.resonant_energy.deposit(440.0, capacity + 1.0));
+        let before_resonance = organism.resonant_energy.total_energy().unwrap();
+        assert!(resolve_resonance_overload_break(
+            &mut organism,
+            &environment,
+            &mut ledger,
+        ));
+        assert_eq!(organism.structure.bonds.len(), original_bond_count - 1);
+        assert!(organism.resonant_energy.total_energy().unwrap() < before_resonance);
+    }
+
+    #[test]
+    fn resonance_overload_without_frequency_compatible_energy_preserves_structure() {
+        let mut simulation = crate::state::Simulation::new(918, 10.0);
+        let mut organism = simulation.organisms.remove(0);
+        let environment = simulation.environment.clone();
+        let capacity: f64 = organism
+            .structure
+            .bonds
+            .iter()
+            .map(|bond| bond.bond_energy)
+            .sum();
+        assert!(capacity.is_finite() && capacity > 0.0);
+        assert!(organism.resonant_energy.deposit(1.0e300, capacity + 1.0));
+        let original_bonds = organism.structure.bonds.clone();
+        let original_energy = organism.resonant_energy.total_energy().unwrap();
+        let mut ledger = crate::state::EnergyLedger::default();
+
+        assert!(!resolve_resonance_overload_break(
+            &mut organism,
+            &environment,
+            &mut ledger,
+        ));
+        assert_eq!(organism.structure.bonds.len(), original_bonds.len());
+        assert_eq!(
+            organism.resonant_energy.total_energy().unwrap(),
+            original_energy
+        );
+    }
+
+    #[test]
+    fn resonance_break_candidates_prefer_non_genome_bonds() {
+        let (organism, environment, genome_bonds) = resonance_break_test_organism();
+        let candidates = resonance_break_candidate_indices(&organism, &environment);
         assert!(!candidates.is_empty());
         assert!(candidates.iter().all(|index| !genome_bonds.contains(index)));
     }
 
     #[test]
-    fn stress_break_candidates_fall_back_to_genome_bonds_when_structure_is_exhausted() {
-        let (mut organism, environment, genome_bonds) = stress_break_test_organism();
+    fn resonance_break_candidates_fall_back_to_genome_bonds_when_structure_is_exhausted() {
+        let (mut organism, environment, genome_bonds) = resonance_break_test_organism();
         assert!(!genome_bonds.is_empty());
         let protected_bonds: Vec<_> = genome_bonds
             .iter()
@@ -946,7 +1329,7 @@ mod tests {
                 .iter()
                 .any(|candidate| candidate.has_same_identity(bond))
         });
-        let candidates = stress_break_candidate_indices(&organism, &environment);
+        let candidates = resonance_break_candidate_indices(&organism, &environment);
         assert_eq!(candidates.len(), organism.structure.bonds.len());
         assert!(!candidates.is_empty());
     }

@@ -155,7 +155,7 @@ jobs:
 
           material_names = {
               "Water", "Nitrogen", "Phosphorus", "Carbon",
-              "Sulfur", "Hydrogen", "Methane",
+              "Sulfur", "Hydrogen", "Oxygen",
           }
           temp = Path(os.environ["RUNNER_TEMP"])
           roots = {

@@ -28,7 +28,7 @@ pub(crate) fn appearance(resource: &BaseResource) -> ResourceAppearance {
     match resource.name.as_str() {
         "Carbon" => ResourceAppearance::new("#080808", "#777777", 255),
         "Sulfur" => ResourceAppearance::new("#D6D44A", "#A8A62F", 255),
-        "Methane" => ResourceAppearance::new("#F5F5F5", "#C93636", 255),
+        "Oxygen" => ResourceAppearance::new("#F5F5F5", "#C93636", 255),
         "Hydrogen" => ResourceAppearance::new("#E8E8E8", "#BDBDBD", 255),
         "Nitrogen" => ResourceAppearance::new("#315E9E", "#203F70", 255),
         "Phosphorus" => ResourceAppearance::new("#D65A32", "#9C3E23", 255),
@@ -64,7 +64,7 @@ mod tests {
         assert_eq!(appearance(&resource("Carbon")).fill, "#080808");
         assert_eq!(appearance(&resource("Sulfur")).fill, "#D6D44A");
         assert_eq!(
-            appearance(&resource("Methane")),
+            appearance(&resource("Oxygen")),
             ResourceAppearance::new("#F5F5F5", "#C93636", 255)
         );
         assert_eq!(appearance(&resource("Hydrogen")).fill, "#E8E8E8");

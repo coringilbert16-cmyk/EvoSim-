@@ -90,15 +90,15 @@ pub(crate) struct ActiveTransformation {
     pub(crate) complexity: f64,
     pub(crate) duration_ticks: u64,
     pub(crate) remaining_ticks: u64,
-    /// Energy transaction prepared during the middle tick, before structural mutation.
+    /// Energy transaction prepared on the completion tick before atomic commit.
     #[serde(default)]
     pub(crate) prepared_energy: Option<(f64, f64, f64)>,
     /// Perception and needs captured when a voluntary BREAK begins.
     #[serde(default)]
     pub(crate) pending_experience: Option<crate::memory::PendingTransformationExperience>,
     pub(crate) decision_context_key: Option<String>,
-    /// Deferred COMBINE state. Selection occurs on the first tick, energy
-    /// preparation on the second, and physical mutation on the third.
+    /// Deferred COMBINE state. Selection occurs on the first tick;
+    /// energy preparation and physical mutation commit together on completion.
     #[serde(default)]
     pub(crate) prepared_structure: Option<OrganismStructure>,
     #[serde(default)]
@@ -142,14 +142,45 @@ pub(crate) struct ReproductiveConstruction {
     #[serde(default)]
     pub(crate) needs_space: bool,
 }
-#[derive(Serialize, Deserialize, Clone, Copy, Default)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default)]
 pub(crate) struct EnergyLedger {
+    /// Explicit non-structural energy sources; stored bond energy release is
+    /// represented by the structural-store delta instead.
     pub(crate) total_potential_energy_released: f64,
+    /// Net change in energy stored in realized structure (positive stores, negative releases).
+    #[serde(default)]
+    pub(crate) total_structural_energy_delta: f64,
+    /// Energy received from explicit external sources, distinct from bond release.
+    #[serde(default)]
+    pub(crate) total_external_energy_input: f64,
+    /// Cumulative world-tone energy that was incident on exposed material but
+    /// not absorbed. This is throughput telemetry, not stored energy or an
+    /// inventory term; the remainder still needs explicit propagation/escape handling.
+    #[serde(default)]
+    pub(crate) total_world_tone_energy_unabsorbed: f64,
+    /// Residual world-tone energy that leaves the modeled world after propagation.
+    #[serde(default)]
+    pub(crate) total_world_tone_energy_escaped: f64,
     pub(crate) total_usable_energy_gained: f64,
     #[serde(default)]
     pub(crate) total_work_expended: f64,
     pub(crate) total_heat_dissipated: f64,
     pub(crate) total_usable_energy_held: f64,
+    /// Current retained resonant energy across organism reservoirs.
+    #[serde(default)]
+    pub(crate) total_resonant_energy_held: f64,
+    /// Tick-zero retained-resonance baseline.
+    #[serde(default)]
+    pub(crate) initial_resonant_energy_held: f64,
+    /// Usable-energy baseline captured at simulation tick zero.
+    #[serde(default)]
+    pub(crate) initial_usable_energy_held: f64,
+    /// Current stored bond energy across realized live and decomposing structures.
+    #[serde(default)]
+    pub(crate) total_structural_energy_held: f64,
+    /// Stored bond-energy baseline captured at simulation tick zero.
+    #[serde(default)]
+    pub(crate) initial_structural_energy_held: f64,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct Organism {
@@ -169,6 +200,9 @@ pub(crate) struct Organism {
     /// Spectrum currently present at the organism's physically realized genome cavity.
     #[serde(default)]
     pub(crate) harmonic_spectrum: crate::harmonics::ToneSpectrum,
+    /// Energy retained across ticks, distinct from the currently received signal.
+    #[serde(default)]
+    pub(crate) resonant_energy: crate::harmonics::ResonantEnergyReservoir,
     /// Associative memory learned from physically received resonance and its consequences.
     #[serde(default)]
     pub(crate) experience_memory: crate::memory::ExperienceMemory,
@@ -214,9 +248,7 @@ pub(crate) struct Organism {
 }
 pub(crate) const STRESS_DECAY_PER_TICK: f64 = 0.98;
 pub(crate) const INITIAL_STRESS_THRESHOLD: f64 = 100.0;
-pub(crate) const STRESS_THRESHOLD_DECAY: f64 = 0.90;
 pub(crate) const MAINTENANCE_ENERGY_PER_MASS: f64 = 0.001;
-pub(crate) const MIN_STRESS_THRESHOLD: f64 = 5.0;
 fn default_stress_threshold() -> f64 {
     INITIAL_STRESS_THRESHOLD
 }
@@ -423,27 +455,11 @@ impl Organism {
             self.stress += deficit + self.maintenance_debt;
         }
     }
-    pub(crate) fn apply_stress_damage(
-        &mut self,
-        environment: &Environment,
-        ledger: &mut EnergyLedger,
-        rng: &mut ChaCha8Rng,
-    ) -> bool {
-        if !self.stress.is_finite() || !self.stress_threshold.is_finite() {
-            return true;
-        }
-        while self.stress >= self.stress_threshold.max(MIN_STRESS_THRESHOLD) {
-            let threshold = self.stress_threshold.max(MIN_STRESS_THRESHOLD);
-            self.stress -= threshold;
-            self.stress_threshold = (threshold * STRESS_THRESHOLD_DECAY).max(MIN_STRESS_THRESHOLD);
-            if self.structure.bonds.is_empty() {
-                return true;
-            }
-            if !crate::transformation::resolve_stress_break(self, environment, ledger, rng) {
-                break;
-            }
-        }
-        false
+    /// Validate stress bookkeeping without granting stress an independent
+    /// authority to break physical bonds. Structural damage is resolved only
+    /// through the shared resonance/chemistry mechanism.
+    pub(crate) fn validate_stress_state(&self) -> bool {
+        !self.stress.is_finite() || !self.stress_threshold.is_finite()
     }
 }
 #[derive(Serialize, Deserialize, Clone)]
@@ -475,6 +491,8 @@ pub(crate) struct Simulation {
     pub(crate) seed_scale_reference: Option<(f64, f64)>,
     /// Optional rotating source; absent by default until world geometry and signal bounds are configured.
     pub(crate) world_tone: Option<crate::world_tone::WorldToneRuntimeConfig>,
+    /// Precomputed deterministic source samples for short cycles; long cycles fall back to direct sampling.
+    pub(crate) world_tone_cycle: Option<crate::world_tone::WorldToneCycle>,
 }
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
 pub(crate) const DESIRABILITY_MAX: f64 = 1.0;

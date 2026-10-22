@@ -2,32 +2,110 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 
+#[cfg(test)]
+use crate::energy_ledger::EnergyLedgerAuthority;
+
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
 use crate::decision_runtime::{
     select_action_with_developmental_scores, ActionCandidate, DecisionContext,
 };
-use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::genome::initial_genome;
 use crate::state::{EnergyLedger, Environment, Organism, Position, Simulation};
 use crate::structure::Placement;
 
+fn should_prepare_transformation(
+    kind: &crate::state::TransformationKind,
+    remaining_ticks: u64,
+) -> bool {
+    match kind {
+        crate::state::TransformationKind::Combine => remaining_ticks == 0,
+        _ => remaining_ticks == 1,
+    }
+}
+
 const BUDDING_AVAILABILITY_FRACTION: f64 = 0.90;
+
+fn restore_failed_transformation_material(
+    transformation: &crate::state::ActiveTransformation,
+    organism: Option<&mut Organism>,
+    environment: &mut Environment,
+) {
+    if let Some((cell_index, source)) = transformation.combine_environmental_source.as_ref() {
+        if let Some(cell) = environment.field.cells.get_mut(*cell_index) {
+            cell.physical_materials.push(source.clone());
+            environment.field.mark_changed_at_index(*cell_index);
+        }
+        return;
+    }
+
+    let Some(source) = transformation.stored_material.as_ref() else {
+        return;
+    };
+    if transformation.environmental_source {
+        if let Some(placement) = source
+            .placements
+            .as_ref()
+            .and_then(|placements| placements.first())
+        {
+            let _ = environment
+                .field
+                .deposit(placement.x, placement.y, source.clone());
+        }
+        return;
+    }
+
+    // A stored-material BREAK temporarily removes its source from the
+    // organism's storage when the transformation starts. If preparation fails,
+    // put that exact source back instead of silently dropping it.
+    if let Some(organism) = organism {
+        if organism
+            .stored_material
+            .store_physical_instance(source.clone())
+        {
+            return;
+        }
+    }
+    if let Some(placement) = source
+        .placements
+        .as_ref()
+        .and_then(|placements| placements.first())
+    {
+        let _ = environment
+            .field
+            .deposit(placement.x, placement.y, source.clone());
+    }
+}
 
 impl Simulation {
     /// Configure or disable the rotating source. Invalid values are rejected.
-    #[expect(
-        dead_code,
-        reason = "Runtime configuration remains staged until world geometry and signal bounds are selected"
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Runtime configuration helper is exercised by focused tests; the live tick uses the configured source cycle"
+        )
     )]
     pub(crate) fn configure_world_tone(
         &mut self,
         config: Option<crate::world_tone::WorldToneRuntimeConfig>,
     ) -> bool {
-        if config.is_some_and(|candidate| !candidate.is_valid()) {
+        if config.is_some_and(|candidate| {
+            !candidate.is_valid()
+                || candidate
+                    .sample(0, self.environment.width, self.environment.height)
+                    .is_none()
+        }) {
             return false;
         }
         self.world_tone = config;
+        self.world_tone_cycle = config.and_then(|candidate| {
+            crate::world_tone::WorldToneCycle::precompute(
+                candidate,
+                self.environment.width,
+                self.environment.height,
+            )
+        });
         for organism in &mut self.organisms {
             organism.cached_harmonic_key = None;
         }
@@ -40,6 +118,31 @@ impl Simulation {
         let seed_scale_reference =
             crate::juvenile::confirmed_seed_scale_reference(&environment.catalog).ok();
         let organism = Self::create_initial_organism();
+        let world_tone = crate::world_tone::WorldToneRuntimeConfig::default_for_world(
+            environment.width,
+            environment.height,
+        )
+        .expect("default world tone must remain outside the environment bounds");
+        let world_tone_cycle = crate::world_tone::WorldToneCycle::precompute(
+            world_tone,
+            environment.width,
+            environment.height,
+        )
+        .expect("default world tone cycle must be valid");
+        let mut energy_ledger = EnergyLedger::default();
+        energy_ledger.total_usable_energy_held =
+            crate::reproduction::total_usable_energy_held(std::slice::from_ref(&organism), &[]);
+        energy_ledger.initial_usable_energy_held = energy_ledger.total_usable_energy_held;
+        energy_ledger.total_resonant_energy_held =
+            crate::reproduction::total_resonant_energy_held(std::slice::from_ref(&organism));
+        energy_ledger.initial_resonant_energy_held = energy_ledger.total_resonant_energy_held;
+        energy_ledger.total_structural_energy_held = organism
+            .structure
+            .bonds
+            .iter()
+            .map(|bond| bond.bond_energy)
+            .sum();
+        energy_ledger.initial_structural_energy_held = energy_ledger.total_structural_energy_held;
         Self {
             tick: 0,
             ticks_per_second,
@@ -51,13 +154,14 @@ impl Simulation {
             chemistry_library: crate::chemistry_library::open_default_library()
                 .expect("chemistry library must open"),
             decomposing_bodies: Vec::new(),
-            energy_ledger: EnergyLedger::default(),
+            energy_ledger,
             next_organism_id: 2,
             next_transformation_id: 1,
             rng,
             decision_parameters: DecisionParameters::default(),
             seed_scale_reference,
-            world_tone: None,
+            world_tone: Some(world_tone),
+            world_tone_cycle: Some(world_tone_cycle),
         }
     }
     fn create_environment() -> Environment {
@@ -134,6 +238,7 @@ impl Simulation {
             occupied_cells: vec![anchor],
             genome,
             harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+            resonant_energy: crate::harmonics::ResonantEnergyReservoir::default(),
             experience_memory: crate::memory::ExperienceMemory::default(),
             pending_movement_experience: None,
             decision_history: crate::decision::DecisionHistory::default(),
@@ -436,18 +541,11 @@ impl Simulation {
             })
             .collect()
     }
+    #[cfg(test)]
     fn process_decomposing_bodies(&mut self) {
         let mut finished_indices = Vec::new();
         for index in 0..self.decomposing_bodies.len() {
             if self.decomposing_bodies[index].is_finished() {
-                let position = self.decomposing_bodies[index].position.clone();
-                let materials = self.decomposing_bodies[index]
-                    .release_finished_material(&self.environment.catalog);
-                for material in materials {
-                    self.environment
-                        .field
-                        .deposit(position.x, position.y, material);
-                }
                 finished_indices.push(index);
                 continue;
             }
@@ -458,36 +556,89 @@ impl Simulation {
             ) else {
                 continue;
             };
-            if step.net_energy > 0.0 {
-                if let Some(organism_index) = crate::decomposition::harvestable_decomposition_energy(
-                    &self.organisms,
-                    &self.decomposing_bodies[index].position,
-                ) {
-                    let amount = step
-                        .net_energy
-                        .min(self.decomposing_bodies[index].energy_budget);
-                    let (body, organism) = {
-                        let body = &mut self.decomposing_bodies[index].energy_budget;
-                        let organism = &mut self.organisms[organism_index].usable_energy;
-                        (body, organism)
-                    };
-                    let _ = self.energy_ledger.transfer(body, organism, amount);
-                }
-            }
-            if let Some(materials) = step.released_material {
-                let position = self.decomposing_bodies[index].position.clone();
-                for material in materials {
-                    self.environment
-                        .field
-                        .deposit(position.x, position.y, material);
-                }
+            // Released usable energy remains with the decomposing body.
+            // Distance alone is not an authorized transfer mechanism; a
+            // receiver must obtain it through a real, chemistry-authorized path.
+            if step.released_material.is_some() {
                 finished_indices.push(index);
             }
         }
         for index in finished_indices.into_iter().rev() {
+            let remaining = self.decomposing_bodies[index].energy_budget;
+            if !remaining.is_finite() || remaining < 0.0 {
+                // Preserve the holder for diagnosis rather than deleting an
+                // invalid energy balance. Crucially, do not release its
+                // material until this body's finalization can commit.
+                continue;
+            }
+            if remaining > 0.0 {
+                // A finished body cannot be removed while it still owns usable
+                // energy. Until an authorized receiver/path exists, explicitly
+                // settle the remainder as a sink rather than silently losing it.
+                let sink = crate::energy_ledger::EnergyTransaction {
+                    reason: crate::energy_ledger::EnergyReason::Decomposition,
+                    potential_released: 0.0,
+                    usable_delta: -remaining,
+                    structural_delta: 0.0,
+                    work_expended: 0.0,
+                    heat_dissipated: remaining,
+                };
+                if !self
+                    .energy_ledger
+                    .settle_transaction(&mut self.decomposing_bodies[index].energy_budget, sink)
+                {
+                    continue;
+                }
+            }
+
+            // Material release and holder removal happen only after the energy
+            // sink succeeds. Otherwise a retained body would re-release the
+            // same units on a later tick.
+            let position = self.decomposing_bodies[index].position.clone();
+            let materials =
+                self.decomposing_bodies[index].release_finished_material(&self.environment.catalog);
+            for material in materials {
+                self.environment
+                    .field
+                    .deposit(position.x, position.y, material);
+            }
             self.decomposing_bodies.remove(index);
         }
     }
+    fn has_intact_genome_core(
+        organism: &mut Organism,
+        catalog: &[crate::resources::BaseResource],
+    ) -> bool {
+        if let Some(cavity) = organism.genome_cavity_cached_ref(catalog) {
+            return cavity.qualifies();
+        }
+        // The cache API currently collapses analysis errors and a missing
+        // cavity. Distinguish them here so malformed geometry is not silently
+        // classified as death.
+        match crate::cavity::analyze_genome_cavity(&organism.structure, catalog) {
+            Ok(Some(cavity)) => cavity.qualifies(),
+            Ok(None) => false,
+            Err(_) => true,
+        }
+    }
+
+    pub(crate) fn living_population(&self) -> usize {
+        self.organisms
+            .iter()
+            .filter(|organism| {
+                match crate::cavity::analyze_genome_cavity(
+                    &organism.structure,
+                    &self.environment.catalog,
+                ) {
+                    Ok(Some(cavity)) => cavity.qualifies(),
+                    Ok(None) => false,
+                    // A geometry-analysis error is not proof that the core was breached.
+                    Err(_) => true,
+                }
+            })
+            .count()
+    }
+
     pub(crate) fn step(&mut self) {
         self.tick += 1;
 
@@ -497,7 +648,7 @@ impl Simulation {
             if transformation.remaining_ticks > 0 {
                 transformation.remaining_ticks -= 1
             }
-            if transformation.remaining_ticks == 1 {
+            if should_prepare_transformation(&transformation.kind, transformation.remaining_ticks) {
                 if let Some(organism) = self
                     .organisms
                     .iter_mut()
@@ -510,53 +661,19 @@ impl Simulation {
                         &mut self.energy_ledger,
                         self.seed_scale_reference,
                     ) {
-                        if let Some((cell_index, source)) =
-                            transformation.combine_environmental_source.as_ref()
-                        {
-                            if let Some(cell) = self.environment.field.cells.get_mut(*cell_index) {
-                                cell.physical_materials.push(source.clone());
-                                self.environment.field.mark_changed_at_index(*cell_index);
-                            }
-                        } else if transformation.environmental_source {
-                            if let Some(source) = transformation.stored_material.as_ref() {
-                                if let Some(placement) = source
-                                    .placements
-                                    .as_ref()
-                                    .and_then(|placements| placements.first())
-                                {
-                                    let _ = self.environment.field.deposit(
-                                        placement.x,
-                                        placement.y,
-                                        source.clone(),
-                                    );
-                                }
-                            }
-                        }
+                        restore_failed_transformation_material(
+                            &transformation,
+                            Some(organism),
+                            &mut self.environment,
+                        );
                         continue;
                     }
                 } else {
-                    if let Some((cell_index, source)) =
-                        transformation.combine_environmental_source.as_ref()
-                    {
-                        if let Some(cell) = self.environment.field.cells.get_mut(*cell_index) {
-                            cell.physical_materials.push(source.clone());
-                            self.environment.field.mark_changed_at_index(*cell_index);
-                        }
-                    } else if transformation.environmental_source {
-                        if let Some(source) = transformation.stored_material.as_ref() {
-                            if let Some(placement) = source
-                                .placements
-                                .as_ref()
-                                .and_then(|placements| placements.first())
-                            {
-                                let _ = self.environment.field.deposit(
-                                    placement.x,
-                                    placement.y,
-                                    source.clone(),
-                                );
-                            }
-                        }
-                    }
+                    restore_failed_transformation_material(
+                        &transformation,
+                        None,
+                        &mut self.environment,
+                    );
                     continue;
                 }
             }
@@ -583,39 +700,68 @@ impl Simulation {
                 );
             }
         }
+        // A completed physical/chemical transformation may itself breach the
+        // core, so refresh the observed living set before any biological work.
+        let mut living_ids: HashSet<String> = self
+            .organisms
+            .iter_mut()
+            .filter_map(|organism| {
+                Self::has_intact_genome_core(organism, &self.environment.catalog)
+                    .then(|| organism.id.clone())
+            })
+            .collect();
+
         let decision_parameters = self.decision_parameters;
         // The confirmed seed scale is deterministic for the catalog. Compute it
         // once per simulation tick instead of rebuilding the calibration
         // structure for every organism.
         let seed_reference = self.seed_scale_reference;
-        let world_tone_sample = self.world_tone.and_then(|config| {
-            config.sample(self.tick, self.environment.width, self.environment.height)
-        });
-        for organism in &mut self.organisms {
-            organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
-            crate::harmonics::update_organism_harmonics(
-                organism,
-                &self.environment,
-                world_tone_sample,
-                self.tick,
-            );
-            crate::memory::update_experience_memory(organism, &self.environment);
-            let budding_available = seed_reference
-                .and_then(|reference| {
-                    organism.developmental_realization_cached_for_reference(
-                        &self.environment.catalog,
-                        reference,
-                    )
+        let world_tone_sample = self
+            .world_tone_cycle
+            .as_ref()
+            .and_then(|cycle| cycle.sample(self.tick))
+            .or_else(|| {
+                self.world_tone.and_then(|config| {
+                    config.sample(self.tick, self.environment.width, self.environment.height)
                 })
-                .is_some_and(|realization| realization.overall > BUDDING_AVAILABILITY_FRACTION);
-            if budding_available && organism.reproductive_construction.is_none() {
-                let _ = crate::reproduction::begin_reproduction(
+            });
+        if let Some(sample) = world_tone_sample {
+            crate::world_tone_snapshot::WorldToneOccluderSnapshot::settle_living_organism_inputs(
+                self,
+                sample,
+                &living_ids,
+            );
+        }
+        for organism in &mut self.organisms {
+            let is_living = living_ids.contains(&organism.id);
+            if is_living {
+                organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
+                crate::harmonics::update_organism_harmonics(
                     organism,
-                    &mut self.rng,
-                    &self.environment.catalog,
-                    &mut self.energy_ledger,
+                    &self.environment,
+                    world_tone_sample,
+                    self.tick,
                 );
+                crate::memory::update_experience_memory(organism, &self.environment);
+                let budding_available = seed_reference
+                    .and_then(|reference| {
+                        organism.developmental_realization_cached_for_reference(
+                            &self.environment.catalog,
+                            reference,
+                        )
+                    })
+                    .is_some_and(|realization| realization.overall > BUDDING_AVAILABILITY_FRACTION);
+                if budding_available && organism.reproductive_construction.is_none() {
+                    let _ = crate::reproduction::begin_reproduction(
+                        organism,
+                        &mut self.rng,
+                        &self.environment.catalog,
+                        &mut self.energy_ledger,
+                    );
+                }
             }
+            // Chemical reactions remain part of the physical world after
+            // organism status ends; biological maintenance and memory do not.
             let chemical_operations = crate::chemical_reaction::accumulate(
                 organism,
                 &self.environment.catalog,
@@ -631,16 +777,26 @@ impl Simulation {
                     crate::chemical_reaction::resolve(operation, organism, &mut self.energy_ledger);
             }
 
-            let stored_amount_before_transfer = organism.stored_material.total_amount();
-            Self::transfer_contained_environmental_material(organism, &mut self.environment);
-            let acquired_amount =
-                (organism.stored_material.total_amount() - stored_amount_before_transfer).max(0.0);
-            if organism.active_movement.is_none() {
-                Self::finalize_pending_movement_experience(
-                    organism,
-                    &self.environment,
-                    acquired_amount,
-                );
+            // Recheck immediately after chemistry: if a reaction breached the
+            // genome core this tick, do not perform any later biological work.
+            let core_intact_after_chemistry =
+                Self::has_intact_genome_core(organism, &self.environment.catalog);
+            if !core_intact_after_chemistry {
+                living_ids.remove(&organism.id);
+            }
+            if core_intact_after_chemistry {
+                let stored_amount_before_transfer = organism.stored_material.total_amount();
+                Self::transfer_contained_environmental_material(organism, &mut self.environment);
+                let acquired_amount = (organism.stored_material.total_amount()
+                    - stored_amount_before_transfer)
+                    .max(0.0);
+                if organism.active_movement.is_none() {
+                    Self::finalize_pending_movement_experience(
+                        organism,
+                        &self.environment,
+                        acquired_amount,
+                    );
+                }
             }
         }
         {
@@ -648,14 +804,8 @@ impl Simulation {
             let mut movement_spatial_index =
                 crate::movement::MovementSpatialIndex::new(organisms, environment);
             for index in 0..organisms.len() {
-                if completed_organisms.contains(&organisms[index].id) {
-                    continue;
-                }
-                if organisms[index].structure.bonds.is_empty()
-                    && organisms[index].stress
-                        >= organisms[index]
-                            .stress_threshold
-                            .max(crate::state::MIN_STRESS_THRESHOLD)
+                if !living_ids.contains(&organisms[index].id)
+                    || completed_organisms.contains(&organisms[index].id)
                 {
                     continue;
                 }
@@ -1074,6 +1224,9 @@ impl Simulation {
         let mut offspring = Vec::new();
         let mut next_organism_id = self.next_organism_id;
         for organism in &mut self.organisms {
+            if !living_ids.contains(&organism.id) {
+                continue;
+            }
             if organism.reproductive_construction.is_some() {
                 let Some(parent_body) =
                     crate::reproduction::parent_body_geometry(organism, &self.environment.catalog)
@@ -1123,61 +1276,352 @@ impl Simulation {
         }
         self.next_organism_id = next_organism_id;
         self.organisms.extend(offspring);
-        let mut survivors = Vec::with_capacity(self.organisms.len());
-        for mut organism in self.organisms.drain(..) {
-            let dead = Self::apply_survival_damage(
-                &mut organism,
-                &self.environment,
-                &mut self.energy_ledger,
-                &mut self.rng,
-            );
-            if dead {
-                if organism.reproductive_construction.is_some() {
-                    let child_id = next_organism_id.to_string();
-                    if let Some(child) = crate::reproduction::finish_reproduction(
-                        &mut organism,
-                        child_id,
-                        &self.environment.catalog,
-                        &mut self.energy_ledger,
-                        self.seed_scale_reference,
-                    ) {
-                        next_organism_id += 1;
-                        survivors.push(child);
-                    }
-                }
-                if let Some(body) = crate::recycling::recycle_dead_organism(
-                    &mut self.environment,
-                    &mut organism,
+        // Stress can break the core through ordinary bond-breaking chemistry.
+        // A breached organism remains in the physical world; only living
+        // organisms receive biological stress processing on subsequent ticks.
+        for organism in &mut self.organisms {
+            if living_ids.contains(&organism.id) {
+                let _ = Self::apply_survival_damage(
+                    organism,
+                    &self.environment,
                     &mut self.energy_ledger,
-                ) {
-                    self.decomposing_bodies.push(body);
-                }
-            } else {
-                survivors.push(organism);
+                    &mut self.rng,
+                );
             }
         }
-        self.organisms = survivors;
-        self.process_decomposing_bodies();
-        let live_ids: HashSet<String> = self.organisms.iter().map(|o| o.id.clone()).collect();
-        self.active_transformations
-            .retain(|t| live_ids.contains(&t.organism_id));
-        self.energy_ledger.total_usable_energy_held =
-            crate::reproduction::total_usable_energy_held(&self.organisms);
+        // Death is observational: breached organisms remain physical structures
+        // and continue through the same ordinary chemical-reaction pass above.
+        // Do not invoke the legacy DecomposingBody bond-breaking path here.
+
+        // Keep in-flight physical/chemical transactions even if their organism's
+        // core has since been breached. Dropping one here could discard reserved
+        // material or energy held by the transaction. New transformations cannot
+        // be initiated by breached organisms because the decision loop is gated
+        // by living_ids. Existing BREAK/COMBINE transactions still settle normally.
+        self.energy_ledger.total_usable_energy_held = crate::reproduction::total_usable_energy_held(
+            &self.organisms,
+            &self.decomposing_bodies,
+        );
+        self.energy_ledger.total_resonant_energy_held =
+            crate::reproduction::total_resonant_energy_held(&self.organisms);
+        self.energy_ledger.total_structural_energy_held =
+            Self::structural_energy_held(&self.organisms, &self.decomposing_bodies);
     }
+    pub(crate) fn structural_energy_held(
+        organisms: &[crate::state::Organism],
+        decomposing_bodies: &[crate::decomposition::DecomposingBody],
+    ) -> f64 {
+        fn graph_energy(structure: &crate::structure::OrganismStructure) -> f64 {
+            structure.bonds.iter().map(|bond| bond.bond_energy).sum()
+        }
+
+        let organism_energy: f64 = organisms
+            .iter()
+            .map(|organism| {
+                graph_energy(&organism.structure)
+                    + organism
+                        .reproductive_construction
+                        .as_ref()
+                        .map_or(0.0, |construction| {
+                            graph_energy(&construction.developing_structure)
+                        })
+            })
+            .sum();
+        let decomposition_energy: f64 = decomposing_bodies
+            .iter()
+            .map(|body| graph_energy(&body.structure))
+            .sum();
+        organism_energy + decomposition_energy
+    }
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Energy inventory snapshot is currently used by reconciliation tests, not production telemetry"
+        )
+    )]
+    pub(crate) fn energy_inventory_snapshot(
+        &self,
+    ) -> crate::energy_ledger::EnergyInventorySnapshot {
+        crate::energy_ledger::EnergyInventorySnapshot {
+            initial_usable_energy: self.energy_ledger.initial_usable_energy_held,
+            current_usable_energy: self.energy_ledger.total_usable_energy_held,
+            initial_resonant_energy: self.energy_ledger.initial_resonant_energy_held,
+            current_resonant_energy: self.energy_ledger.total_resonant_energy_held,
+            initial_structural_energy: self.energy_ledger.initial_structural_energy_held,
+            current_structural_energy: self.energy_ledger.total_structural_energy_held,
+            external_energy_input: self.energy_ledger.total_external_energy_input,
+            world_tone_energy_escaped: self.energy_ledger.total_world_tone_energy_escaped,
+            other_energy_released: self.energy_ledger.total_potential_energy_released,
+            work_expended: self.energy_ledger.total_work_expended,
+            heat_dissipated: self.energy_ledger.total_heat_dissipated,
+        }
+    }
+
     pub(crate) fn apply_survival_damage(
         organism: &mut Organism,
         environment: &Environment,
         ledger: &mut EnergyLedger,
-        rng: &mut ChaCha8Rng,
+        _rng: &mut ChaCha8Rng,
     ) -> bool {
-        let threshold = organism
-            .stress_threshold
-            .max(crate::state::MIN_STRESS_THRESHOLD);
-        let lethal_before_decay = organism.stress >= threshold;
         organism.stress *= crate::state::STRESS_DECAY_PER_TICK;
-        if organism.structure.bonds.is_empty() && lethal_before_decay {
+        if organism.validate_stress_state() {
             return true;
         }
-        organism.apply_stress_damage(environment, ledger, rng)
+        // Resonance/chemistry is the only structural damage authority; there
+        // is no separate random stress-break path.
+        let _ =
+            crate::transformation::resolve_resonance_overload_break(organism, environment, ledger);
+        match crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog) {
+            Ok(Some(cavity)) => !cavity.qualifies(),
+            Ok(None) => true,
+            // Geometry-analysis failure is not evidence of death.
+            Err(_) => false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod decomposition_finalization_tests {
+    #[test]
+    fn combine_prepares_at_completion_without_changing_break_timing() {
+        use crate::state::TransformationKind;
+
+        assert!(!super::should_prepare_transformation(
+            &TransformationKind::Combine,
+            1,
+        ));
+        assert!(super::should_prepare_transformation(
+            &TransformationKind::Combine,
+            0,
+        ));
+        assert!(super::should_prepare_transformation(
+            &TransformationKind::Break,
+            1,
+        ));
+        assert!(!super::should_prepare_transformation(
+            &TransformationKind::Break,
+            0,
+        ));
+    }
+
+    use super::*;
+    use crate::structure::{OrganismStructure, Placement, StructuralUnit};
+
+    #[test]
+    fn failed_stored_break_restores_material_to_organism_storage() {
+        let mut simulation = Simulation::new(917, 10.0);
+        let placement = Placement {
+            x: 20.0,
+            y: 20.0,
+            rotation_radians: 0.0,
+        };
+        let source = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![placement],
+            &simulation.environment.catalog,
+        )
+        .expect("single resource should be physically realizable");
+        let amount = source.material.total_amount();
+        let original_count = simulation.organisms[0].stored_material.physical_count();
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(source.clone()));
+        let removed = simulation.organisms[0]
+            .stored_material
+            .take_physical_at(original_count)
+            .expect("test source should be removable from storage");
+        let expected_placements = removed.placements.clone();
+        let transformation = crate::state::ActiveTransformation {
+            id: 999,
+            organism_id: simulation.organisms[0].id.clone(),
+            kind: crate::state::TransformationKind::Break,
+            material: crate::resources::Material::free_base("", 0.0),
+            bond: None,
+            stored_material: Some(removed),
+            stored_bond: None,
+            environmental_source: false,
+            complexity: 1.0,
+            duration_ticks: 1,
+            remaining_ticks: 1,
+            prepared_energy: None,
+            pending_experience: None,
+            decision_context_key: Some("stored:0:bond:0".into()),
+            prepared_structure: None,
+            prepared_stored_material: None,
+            prepared_usable_energy: None,
+            prepared_stress: None,
+            prepared_ledger: None,
+            combine_environmental_source: None,
+        };
+
+        restore_failed_transformation_material(
+            &transformation,
+            Some(&mut simulation.organisms[0]),
+            &mut simulation.environment,
+        );
+
+        assert_eq!(
+            simulation.organisms[0].stored_material.physical_count(),
+            original_count + 1
+        );
+        assert!(
+            simulation.organisms[0]
+                .stored_material
+                .entries
+                .iter()
+                .any(|entry| match entry {
+                    crate::material_storage::StoredMaterial::Physical(instance) => {
+                        instance.placements.as_ref() == expected_placements.as_ref()
+                            && (instance.material.total_amount() - amount).abs() < 1e-12
+                    }
+                }),
+            "failed BREAK source should be restored with its original amount"
+        );
+    }
+
+    #[test]
+    fn live_world_tone_capture_settles_and_reconciles_world_energy() {
+        let mut simulation = Simulation::new(918, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        assert!(simulation.world_tone.is_some());
+
+        simulation.step();
+
+        assert!(
+            simulation.energy_ledger.total_external_energy_input > 0.0,
+            "live world tone should credit absorbed environmental energy"
+        );
+        assert!(
+            simulation.energy_ledger.total_resonant_energy_held > 0.0,
+            "captured world-tone energy should persist in the resonant reservoir"
+        );
+        assert!(
+            simulation.organisms[0]
+                .resonant_energy
+                .total_energy()
+                .is_some_and(|energy| energy > 0.0),
+            "organism reservoir should retain source energy across the tick"
+        );
+        let inventory = simulation.energy_inventory_snapshot();
+        assert!(
+            inventory.is_balanced(1e-9),
+            "world inventory after live sunlight capture: {:?}",
+            inventory.residual()
+        );
+    }
+
+    #[test]
+    fn world_tone_configuration_rejects_an_orbit_inside_the_world() {
+        let mut simulation = Simulation::new(917, 10.0);
+        let config = crate::world_tone::WorldToneRuntimeConfig {
+            parameters: crate::world_tone::WorldToneParameters {
+                minimum_energy_intensity_per_tick_per_width: 1.0,
+                maximum_energy_intensity_per_tick_per_width: 10.0,
+                orbital_period_ticks: 2_400,
+                envelope_curve: crate::world_tone::EnvelopeCurve::Cosine,
+            },
+            orbit_radius: 0.0,
+        };
+
+        assert!(simulation.configure_world_tone(None));
+        assert!(!simulation.configure_world_tone(Some(config)));
+        assert!(simulation.world_tone.is_none());
+        assert!(simulation.world_tone_cycle.is_none());
+    }
+
+    #[test]
+    fn initial_world_energy_inventory_uses_tick_zero_baseline() {
+        let simulation = Simulation::new(914, 10.0);
+        let inventory = simulation.energy_inventory_snapshot();
+
+        assert_eq!(
+            inventory.initial_usable_energy,
+            inventory.current_usable_energy
+        );
+        assert_eq!(
+            inventory.initial_structural_energy,
+            inventory.current_structural_energy
+        );
+        assert!(inventory.is_balanced(1e-9));
+    }
+
+    #[test]
+    fn world_energy_inventory_reconciles_across_ordinary_ticks() {
+        let mut simulation = Simulation::new(916, 10.0);
+
+        for tick in 1..=5 {
+            simulation.step();
+            let inventory = simulation.energy_inventory_snapshot();
+            assert!(
+                inventory.is_balanced(1e-9),
+                "world energy inventory must reconcile after ordinary tick {tick}: residual={:?}",
+                inventory.residual()
+            );
+        }
+    }
+
+    #[test]
+    fn stress_without_retained_resonance_cannot_authorize_a_random_bond_break() {
+        let mut simulation = Simulation::new(915, 10.0);
+        let before = simulation.energy_inventory_snapshot();
+        assert!(
+            before.is_balanced(1e-9),
+            "initial inventory: {:?}",
+            before.residual()
+        );
+        let original_bonds = simulation.organisms[0].structure.bonds.clone();
+
+        simulation.organisms[0].stress = 1.0e9;
+        let _ = Simulation::apply_survival_damage(
+            &mut simulation.organisms[0],
+            &simulation.environment,
+            &mut simulation.energy_ledger,
+            &mut simulation.rng,
+        );
+        assert_eq!(simulation.organisms[0].structure.bonds, original_bonds);
+
+        let after = simulation.energy_inventory_snapshot();
+        assert!(
+            after.is_balanced(1e-9),
+            "stress bookkeeping must not create or destroy energy: {:?}",
+            after.residual()
+        );
+    }
+
+    #[test]
+    fn invalid_finished_body_energy_holder_does_not_release_material() {
+        let mut simulation = Simulation::new(913, 10.0);
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let mut unit = StructuralUnit::new(
+            "Carbon".to_string(),
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(unit.realize_default_geometry(&catalog));
+        structure.add_unit(unit);
+        let mut body = crate::decomposition::DecomposingBody::new(
+            structure,
+            1.0,
+            Position { x: 500.0, y: 500.0 },
+        )
+        .expect("test body should be valid");
+        // Force the final energy settlement to reject the holder. The body
+        // must remain, and its constituent material must not be deposited yet.
+        body.energy_budget = f64::NAN;
+        simulation.decomposing_bodies.push(body);
+        let before = simulation.environment.field.total_amount();
+
+        simulation.process_decomposing_bodies();
+
+        assert_eq!(simulation.decomposing_bodies.len(), 1);
+        assert!(simulation.decomposing_bodies[0].is_finished());
+        assert_eq!(simulation.environment.field.total_amount(), before);
     }
 }

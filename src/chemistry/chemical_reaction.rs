@@ -12,6 +12,7 @@ pub(crate) struct ChemicalBreakOperation {
     pub(crate) bond: Bond,
     pub(crate) reaction_energy: f64,
     pub(crate) disruption_cost: f64,
+    pub(crate) reaction_frequency_hz: f64,
 }
 
 fn reaction_key(bond: &Bond, interface_signature: &str) -> String {
@@ -64,6 +65,7 @@ pub(crate) fn accumulate(
         !key.starts_with(&format!("{}|rev:", organism.id)) || key.starts_with(&current_prefix)
     });
     let mut cache = ConnectionCompatibilityCache::new();
+    let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
     let bonds = organism.structure.bonds.clone();
     let mut operations = Vec::new();
 
@@ -199,22 +201,40 @@ pub(crate) fn accumulate(
             continue;
         };
 
-        // Accumulation remains normalized chemistry state. Only when the
-        // activation threshold is crossed do we convert that state into the
-        // physical energy quantity consumed by the BREAK ledger transaction.
+        let frequency_a = crate::harmonics::natural_frequency_hz(a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_hz(b, baselines);
+        if !frequency_a.is_finite()
+            || frequency_a <= 0.0
+            || !frequency_b.is_finite()
+            || frequency_b <= 0.0
+        {
+            continue;
+        }
+        // The interface reaction couples to the logarithmic midpoint of
+        // its two realized materials' natural frequencies.
+        let reaction_frequency_hz = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        if !reaction_frequency_hz.is_finite() || reaction_frequency_hz <= 0.0 {
+            continue;
+        }
+
+        // Compatible retained resonance lowers the remaining activation
+        // requirement. It is not copied into the accumulator: resolve() will
+        // withdraw the same energy only if the bond transaction succeeds.
+        let resonance_credit = organism
+            .resonant_energy
+            .compatible_energy(reaction_frequency_hz)
+            .min(barrier);
+        let effective_barrier = (barrier - resonance_credit).max(0.0);
         let Some(reaction_energy) = crate::chemistry::normalized_chemistry_to_energy(next) else {
             continue;
         };
-        if crate::chemistry::activated(reaction_energy, barrier) {
-            // The activation barrier is the physical disruption work for
-            // this realized bond. Reuse that exact quantity; do not calculate
-            // a second constituent-derived BREAK cost.
-            let disruption_cost = barrier;
+        if crate::chemistry::activated(reaction_energy, effective_barrier) {
             operations.push(ChemicalBreakOperation {
                 organism_id: organism.id.clone(),
                 bond,
                 reaction_energy,
-                disruption_cost,
+                disruption_cost: barrier,
+                reaction_frequency_hz,
             });
             accumulation.remove(&key);
         } else {
@@ -232,15 +252,28 @@ pub(crate) fn resolve(
     if organism.id != operation.organism_id {
         return false;
     }
+    if organism.resonant_energy.total_energy().is_none() {
+        return false;
+    }
     let processing_efficiency = organism.genome.processing_efficiency();
-    let success = crate::transformation::settle_chemical_break_energy(
+    // Work from a trial reservoir. A failed or stale BREAK must not consume
+    // retained resonance; only a successfully settled structural transaction
+    // commits the frequency-compatible withdrawal.
+    let mut trial_reservoir = organism.resonant_energy.clone();
+    let resonant_work = trial_reservoir
+        .withdraw_compatible(operation.reaction_frequency_hz, operation.disruption_cost);
+    let success = crate::transformation::settle_chemical_break_energy_with_resonance(
         organism,
         operation.bond,
         operation.reaction_energy,
         operation.disruption_cost,
+        resonant_work,
         processing_efficiency,
         ledger,
     );
+    if success {
+        organism.resonant_energy = trial_reservoir;
+    }
     // A failed event is stale or physically invalid. Its accumulation was
     // already removed when the event crossed the barrier, and the next
     // structure revision will invalidate any remaining interface state.
@@ -275,6 +308,83 @@ mod material_identity_tests {
             "Carbon@1000000000+Hydrogen@1000000000"
         );
     }
+    #[test]
+    fn successful_chemical_break_consumes_only_compatible_retained_resonance() {
+        let mut simulation = crate::state::Simulation::new(920, 10.0);
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        let operation = ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            reaction_energy: 1_000.0,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+        };
+        let before = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .unwrap();
+        assert!(resolve(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.energy_ledger,
+        ));
+        let after = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .unwrap();
+        assert!((before - after - 0.5).abs() < 1e-9);
+        assert!(!simulation.organisms[0]
+            .structure
+            .bonds
+            .iter()
+            .any(|candidate| candidate.has_same_identity(&bond)));
+    }
+
+    #[test]
+    fn failed_stale_chemical_break_does_not_consume_retained_resonance() {
+        let mut simulation = crate::state::Simulation::new(921, 10.0);
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        let operation = ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            reaction_energy: 1_000.0,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+        };
+        assert!(simulation.organisms[0]
+            .structure
+            .break_matching_bond(bond)
+            .is_some());
+        let before = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .unwrap();
+        assert!(!resolve(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.energy_ledger,
+        ));
+        assert!(
+            (simulation.organisms[0]
+                .resonant_energy
+                .total_energy()
+                .unwrap()
+                - before)
+                .abs()
+                < 1e-12
+        );
+    }
+
     #[test]
     fn base_contact_key_matches_checked_in_cache_identity() {
         let carbon = Material::free_base("Carbon", 1.0);

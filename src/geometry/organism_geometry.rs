@@ -94,6 +94,128 @@ impl OrganismBodyGeometry {
         })
     }
 
+    /// Build a world-space body from every physically realized constituent.
+    ///
+    /// Unlike `from_structure`, this includes unbonded units as well as bonded
+    /// structural components. Sunlight occlusion follows physical presence, not
+    /// the organism's current connectivity classification.
+    /// Used by live world-tone exposure to include every realized structural unit.
+    pub(crate) fn from_all_realized_units(structure: &OrganismStructure) -> Option<Self> {
+        if structure.units.is_empty() {
+            return None;
+        }
+
+        let mut parts = Vec::with_capacity(structure.units.len());
+        let (mut min_x, mut max_x, mut min_y, mut max_y) = (
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+        );
+
+        for (unit_index, unit) in structure.units.iter().enumerate() {
+            // StructuralUnit is intentionally one physical constituent. Its
+            // constructor and deserializer enforce that invariant; composite
+            // materials belong in the physical-material representation, which
+            // carries one placement and realized shape per constituent. Reject
+            // malformed in-memory state rather than inventing constituent poses.
+            if unit.material.parts.len() != 1 {
+                return None;
+            }
+            let geometry = unit.geometry.as_ref()?;
+            let shape = geometry.shape();
+            let placement = unit.placement;
+            if !shape.is_valid()
+                || !placement.x.is_finite()
+                || !placement.y.is_finite()
+                || !placement.rotation_radians.is_finite()
+            {
+                return None;
+            }
+
+            let radius = shape.form.bounding_radius();
+            if !radius.is_finite() || radius < 0.0 {
+                return None;
+            }
+            min_x = min_x.min(placement.x - radius);
+            max_x = max_x.max(placement.x + radius);
+            min_y = min_y.min(placement.y - radius);
+            max_y = max_y.max(placement.y + radius);
+            parts.push(PlacedForm {
+                unit_index,
+                form: shape.form.clone(),
+                x: placement.x,
+                y: placement.y,
+                rotation_radians: placement.rotation_radians,
+            });
+        }
+
+        Some(Self {
+            parts,
+            min_x,
+            max_x,
+            min_y,
+            max_y,
+        })
+    }
+
+    /// Build aggregate geometry for a physically realized material in world coordinates.
+    ///
+    /// Unlike logical material stock, this object has constituent placements and may
+    /// cast shadows. This helper does not apply owner-relative storage transforms:
+    /// callers must resolve those transforms before passing stored material here.
+    /// The catalog validates and resolves each constituent's realized shape.
+    /// Used by the world-tone snapshot for environmental and stored physical objects.
+    pub(crate) fn from_physical_material(
+        physical: &crate::physical_material::PhysicalMaterial,
+        catalog: &[BaseResource],
+    ) -> Option<Self> {
+        let placements = physical.placements.as_ref()?;
+        if placements.is_empty() || placements.len() != physical.material.parts.len() {
+            return None;
+        }
+
+        let mut parts = Vec::with_capacity(placements.len());
+        let (mut min_x, mut max_x, mut min_y, mut max_y) = (
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+        );
+        for (unit_index, placement) in placements.iter().copied().enumerate() {
+            if !placement.x.is_finite()
+                || !placement.y.is_finite()
+                || !placement.rotation_radians.is_finite()
+            {
+                return None;
+            }
+            let shape = physical.realized_shape_for_part(unit_index, catalog)?;
+            let radius = shape.form.bounding_radius();
+            if !radius.is_finite() || radius < 0.0 {
+                return None;
+            }
+            min_x = min_x.min(placement.x - radius);
+            max_x = max_x.max(placement.x + radius);
+            min_y = min_y.min(placement.y - radius);
+            max_y = max_y.max(placement.y + radius);
+            parts.push(PlacedForm {
+                unit_index,
+                form: shape.form,
+                x: placement.x,
+                y: placement.y,
+                rotation_radians: placement.rotation_radians,
+            });
+        }
+
+        Some(Self {
+            parts,
+            min_x,
+            max_x,
+            min_y,
+            max_y,
+        })
+    }
+
     /// Test physical containment against the realized constituent geometry.
     ///
     /// The organism boundary is the union of its realized material geometry;
@@ -217,6 +339,405 @@ fn polygon_contains_vertices(x: f64, y: f64, vertices: &[(f64, f64)]) -> bool {
     inside
 }
 
+/// A visible, source-facing boundary probe on one realized constituent.
+///
+/// This is a geometric exposure candidate, not an energy allocation: one probe
+/// per constituent does not represent the full exposed surface area.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct SourceFacingSurfacePoint {
+    pub body_index: usize,
+    pub unit_index: usize,
+    pub x: f64,
+    pub y: f64,
+    pub normal_x: f64,
+    pub normal_y: f64,
+}
+
+/// Find one source-facing boundary point per constituent and discard points
+/// whose direct path is shadowed by any other realized material. Boundary
+/// geometry and normals come from the shared continuous surface query.
+#[allow(dead_code)] // Staged exposure query; energy capture is not wired yet.
+pub(crate) fn visible_source_facing_points(
+    source: (f64, f64),
+    bodies: &[OrganismBodyGeometry],
+) -> Vec<SourceFacingSurfacePoint> {
+    if !source.0.is_finite() || !source.1.is_finite() {
+        return Vec::new();
+    }
+
+    let mut visible = Vec::new();
+    for (body_index, body) in bodies.iter().enumerate() {
+        for part in &body.parts {
+            let dx = source.0 - part.x;
+            let dy = source.1 - part.y;
+            let (sin, cos) = part.rotation_radians.sin_cos();
+            let local_source_x = dx * cos + dy * sin;
+            let local_source_y = -dx * sin + dy * cos;
+            let shape = crate::resources::Shape {
+                form: part.form.clone(),
+            };
+            let Some(boundary) = crate::surface_geometry::boundary_point_toward(
+                &shape,
+                local_source_x,
+                local_source_y,
+            ) else {
+                continue;
+            };
+
+            let world_x = part.x + boundary.x * cos - boundary.y * sin;
+            let world_y = part.y + boundary.x * sin + boundary.y * cos;
+            let normal_x = boundary.normal_x * cos - boundary.normal_y * sin;
+            let normal_y = boundary.normal_x * sin + boundary.normal_y * cos;
+            let toward_source_x = source.0 - world_x;
+            let toward_source_y = source.1 - world_y;
+
+            // A tangent/back-facing surface cannot intercept a directional
+            // incoming signal from this source position.
+            if normal_x * toward_source_x + normal_y * toward_source_y <= 1e-9 {
+                continue;
+            }
+            if source_path_blocked(
+                source,
+                (world_x, world_y),
+                bodies,
+                body_index,
+                part.unit_index,
+            ) {
+                continue;
+            }
+
+            visible.push(SourceFacingSurfacePoint {
+                body_index,
+                unit_index: part.unit_index,
+                x: world_x,
+                y: world_y,
+                normal_x,
+                normal_y,
+            });
+        }
+    }
+    visible
+}
+
+/// Return whether the open segment from the source to a candidate surface point
+/// crosses any realized material before reaching that point. Geometry is tested
+/// in each constituent's local frame; no raster sampling or cell-size heuristic
+/// is used. The candidate constituent itself is excluded because the endpoint
+/// lies on its boundary.
+#[allow(dead_code)] // Staged geometry primitive; live capture wiring follows surface selection.
+pub(crate) fn source_path_blocked(
+    source: (f64, f64),
+    target: (f64, f64),
+    bodies: &[OrganismBodyGeometry],
+    target_body_index: usize,
+    target_unit_index: usize,
+) -> bool {
+    source_path_blocked_inner(
+        source,
+        target,
+        bodies,
+        target_body_index,
+        target_unit_index,
+        None,
+    )
+}
+
+/// Exact blocker test restricted to bodies whose conservative angular bounds
+/// overlap the target boundary interval. Candidate indices refer to `bodies`.
+pub(crate) fn source_path_blocked_for_candidates(
+    source: (f64, f64),
+    target: (f64, f64),
+    bodies: &[OrganismBodyGeometry],
+    target_body_index: usize,
+    target_unit_index: usize,
+    candidate_body_indices: &[usize],
+) -> bool {
+    source_path_blocked_inner(
+        source,
+        target,
+        bodies,
+        target_body_index,
+        target_unit_index,
+        Some(candidate_body_indices),
+    )
+}
+
+fn source_path_blocked_inner(
+    source: (f64, f64),
+    target: (f64, f64),
+    bodies: &[OrganismBodyGeometry],
+    target_body_index: usize,
+    target_unit_index: usize,
+    candidate_body_indices: Option<&[usize]>,
+) -> bool {
+    if !source.0.is_finite()
+        || !source.1.is_finite()
+        || !target.0.is_finite()
+        || !target.1.is_finite()
+        || (target.0 - source.0).hypot(target.1 - source.1) <= f64::EPSILON
+    {
+        return true;
+    }
+
+    let segment_bounds = (
+        source.0.min(target.0),
+        source.0.max(target.0),
+        source.1.min(target.1),
+        source.1.max(target.1),
+    );
+    if let Some(candidates) = candidate_body_indices {
+        for &body_index in candidates {
+            let Some(body) = bodies.get(body_index) else {
+                return true;
+            };
+            if body_blocks_segment(
+                body_index,
+                body,
+                source,
+                target,
+                target_body_index,
+                target_unit_index,
+                segment_bounds,
+            ) != Some(false)
+            {
+                return true;
+            }
+        }
+    } else {
+        for (body_index, body) in bodies.iter().enumerate() {
+            if body_blocks_segment(
+                body_index,
+                body,
+                source,
+                target,
+                target_body_index,
+                target_unit_index,
+                segment_bounds,
+            ) != Some(false)
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn body_blocks_segment(
+    body_index: usize,
+    body: &OrganismBodyGeometry,
+    source: (f64, f64),
+    target: (f64, f64),
+    target_body_index: usize,
+    target_unit_index: usize,
+    segment_bounds: (f64, f64, f64, f64),
+) -> Option<bool> {
+    if ![body.min_x, body.max_x, body.min_y, body.max_y]
+        .iter()
+        .all(|value| value.is_finite())
+        || body.min_x > body.max_x
+        || body.min_y > body.max_y
+    {
+        return None;
+    }
+    // Body bounds are conservative around every realized constituent, so a
+    // segment outside this box cannot cross any exact constituent shape.
+    if body.max_x < segment_bounds.0
+        || body.min_x > segment_bounds.1
+        || body.max_y < segment_bounds.2
+        || body.min_y > segment_bounds.3
+    {
+        return Some(false);
+    }
+    for part in &body.parts {
+        if body_index == target_body_index && part.unit_index == target_unit_index {
+            continue;
+        }
+        if segment_crosses_part(source, target, part) {
+            return Some(true);
+        }
+    }
+    Some(false)
+}
+
+fn segment_crosses_part(source: (f64, f64), target: (f64, f64), part: &PlacedForm) -> bool {
+    let to_local = |point: (f64, f64)| {
+        let dx = point.0 - part.x;
+        let dy = point.1 - part.y;
+        let (sin, cos) = part.rotation_radians.sin_cos();
+        (dx * cos + dy * sin, -dx * sin + dy * cos)
+    };
+    let a = to_local(source);
+    let b = to_local(target);
+    if form_contains_point(&part.form, 0.0, 0.0, 0.0, a.0, a.1) {
+        return true;
+    }
+
+    let intersects_segment =
+        |c: (f64, f64), d: (f64, f64)| segment_intersection_before_target(a, b, c, d);
+
+    match &part.form {
+        Form::Circle { radius } => {
+            let dx = b.0 - a.0;
+            let dy = b.1 - a.1;
+            let quadratic = dx * dx + dy * dy;
+            if quadratic <= f64::EPSILON {
+                return false;
+            }
+            let linear = 2.0 * (a.0 * dx + a.1 * dy);
+            let constant = a.0 * a.0 + a.1 * a.1 - radius * radius;
+            let discriminant = linear * linear - 4.0 * quadratic * constant;
+            if !discriminant.is_finite() || discriminant < -1e-9 {
+                return false;
+            }
+            let root = discriminant.max(0.0).sqrt();
+            let entry = (-linear - root) / (2.0 * quadratic);
+            let exit = (-linear + root) / (2.0 * quadratic);
+            [entry, exit]
+                .into_iter()
+                .any(|t| (-1e-9..(1.0 - 1e-9)).contains(&t))
+        }
+        Form::Line { length } => intersects_segment((-length * 0.5, 0.0), (length * 0.5, 0.0)),
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
+            let Some(vertices) = part.form.polygon_vertices() else {
+                return false;
+            };
+            vertices.iter().enumerate().any(|(index, &start)| {
+                intersects_segment(start, vertices[(index + 1) % vertices.len()])
+            })
+        }
+        Form::Fluid {
+            nominal_area,
+            boundary,
+            arc_boundary,
+            multi_contact_boundary,
+        } => {
+            if let Some(vertices) = boundary {
+                if vertices.iter().enumerate().any(|(index, &start)| {
+                    intersects_segment(start, vertices[(index + 1) % vertices.len()])
+                }) {
+                    return true;
+                }
+            }
+            if let Some(arc) = arc_boundary {
+                // The free circular interface and its flat contact chord
+                // jointly bound the fluid segment. The chord is not exposed
+                // fluid surface, but it must still block rays that enter the
+                // fluid through the contact edge.
+                let chord_start = arc.start_point();
+                let chord_end = arc.end_point();
+                if intersects_segment(chord_start, chord_end) {
+                    return true;
+                }
+                if arc
+                    .segment_intersections(a.0, a.1, b.0, b.1)
+                    .is_some_and(|hits| {
+                        hits.into_iter()
+                            .any(|point| parameter_before_target(a, b, point))
+                    })
+                {
+                    return true;
+                }
+            }
+            if let Some(multi) = multi_contact_boundary {
+                for piece in &multi.pieces {
+                    match piece {
+                        crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                            start_x,
+                            start_y,
+                            end_x,
+                            end_y,
+                            ..
+                        } => {
+                            if intersects_segment((*start_x, *start_y), (*end_x, *end_y)) {
+                                return true;
+                            }
+                        }
+                        crate::capillary_geometry::FluidBoundaryPiece::FreeArc(arc) => {
+                            if arc
+                                .segment_intersections(a.0, a.1, b.0, b.1)
+                                .is_some_and(|hits| {
+                                    hits.into_iter()
+                                        .any(|point| parameter_before_target(a, b, point))
+                                })
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            // Legacy fluid without an explicit boundary uses its nominal-area
+            // circular realization, consistent with form containment.
+            if boundary.is_none() && arc_boundary.is_none() && multi_contact_boundary.is_none() {
+                let radius = (nominal_area / std::f64::consts::PI).sqrt();
+                let dx = b.0 - a.0;
+                let dy = b.1 - a.1;
+                let length_squared = dx * dx + dy * dy;
+                if length_squared <= f64::EPSILON {
+                    return false;
+                }
+                let linear = 2.0 * (a.0 * dx + a.1 * dy);
+                let constant = a.0 * a.0 + a.1 * a.1 - radius * radius;
+                let discriminant = linear * linear - 4.0 * length_squared * constant;
+                if !discriminant.is_finite() || discriminant < -1e-9 {
+                    return false;
+                }
+                let root = discriminant.max(0.0).sqrt();
+                let entry = (-linear - root) / (2.0 * length_squared);
+                let exit = (-linear + root) / (2.0 * length_squared);
+                return [entry, exit]
+                    .into_iter()
+                    .any(|t| (-1e-9..(1.0 - 1e-9)).contains(&t));
+            }
+            false
+        }
+    }
+}
+
+fn parameter_before_target(a: (f64, f64), b: (f64, f64), point: (f64, f64)) -> bool {
+    let dx = b.0 - a.0;
+    let dy = b.1 - a.1;
+    let length_squared = dx * dx + dy * dy;
+    length_squared > f64::EPSILON
+        && ((point.0 - a.0) * dx + (point.1 - a.1) * dy) / length_squared < 1.0 - 1e-9
+}
+
+fn segment_intersection_before_target(
+    a: (f64, f64),
+    b: (f64, f64),
+    c: (f64, f64),
+    d: (f64, f64),
+) -> bool {
+    let rx = b.0 - a.0;
+    let ry = b.1 - a.1;
+    let sx = d.0 - c.0;
+    let sy = d.1 - c.1;
+    let qx = c.0 - a.0;
+    let qy = c.1 - a.1;
+    let denominator = rx * sy - ry * sx;
+
+    if denominator.abs() <= 1e-12 {
+        // Parallel segments only intersect when collinear. Handle that case
+        // explicitly: a ray running along a polygon edge is still occluded.
+        if (qx * ry - qy * rx).abs() > 1e-9 {
+            return false;
+        }
+        let ray_length_squared = rx * rx + ry * ry;
+        if ray_length_squared <= f64::EPSILON {
+            return false;
+        }
+        let tc = (qx * rx + qy * ry) / ray_length_squared;
+        let td = ((d.0 - a.0) * rx + (d.1 - a.1) * ry) / ray_length_squared;
+        let overlap_start = tc.min(td).max(0.0);
+        let overlap_end = tc.max(td).min(1.0);
+        return overlap_start <= overlap_end && overlap_start < 1.0 - 1e-9;
+    }
+
+    let t = (qx * sy - qy * sx) / denominator;
+    let u = (qx * ry - qy * rx) / denominator;
+    (-1e-9..=1.0 - 1e-9).contains(&t) && (-1e-9..=1.0 + 1e-9).contains(&u)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -236,6 +757,123 @@ mod tests {
             min_y: -10.0,
             max_y: 10.0,
         }
+    }
+
+    #[test]
+    fn physical_material_geometry_preserves_realized_shapes_and_world_placements() {
+        let catalog = crate::resources::default_catalog();
+        let physical = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon".to_owned(), 1.0),
+            vec![crate::structure::Placement {
+                x: 12.0,
+                y: -4.0,
+                rotation_radians: 0.25,
+            }],
+            &catalog,
+        )
+        .expect("catalog material should have a valid physical realization");
+
+        let geometry = OrganismBodyGeometry::from_physical_material(&physical, &catalog)
+            .expect("realized physical material should expose blocker geometry");
+        assert_eq!(geometry.parts.len(), 1);
+        assert_eq!(geometry.parts[0].unit_index, 0);
+        assert_eq!(geometry.parts[0].x, 12.0);
+        assert_eq!(geometry.parts[0].y, -4.0);
+        assert_eq!(geometry.parts[0].rotation_radians, 0.25);
+        assert!(matches!(
+            &geometry.parts[0].form,
+            Form::RegularPolygon { sides: 6, .. }
+        ));
+        assert!(geometry.min_x < 12.0 && geometry.max_x > 12.0);
+        assert!(geometry.min_y < -4.0 && geometry.max_y > -4.0);
+    }
+
+    #[test]
+    fn collinear_boundary_blocks_before_target_but_not_at_target_only() {
+        assert!(segment_intersection_before_target(
+            (-5.0, 0.0),
+            (5.0, 0.0),
+            (-1.0, 0.0),
+            (1.0, 0.0),
+        ));
+        assert!(!segment_intersection_before_target(
+            (-5.0, 0.0),
+            (5.0, 0.0),
+            (5.0, 0.0),
+            (6.0, 0.0),
+        ));
+    }
+
+    #[test]
+    fn visible_source_facing_points_respect_shadowing() {
+        let mut blocker = body(Form::Circle { radius: 0.75 });
+        blocker.parts[0].x = -3.0;
+        let target = body(Form::Circle { radius: 1.0 });
+
+        let visible = visible_source_facing_points((-5.0, 0.0), &[blocker, target]);
+        assert_eq!(visible.len(), 1);
+        assert_eq!(visible[0].body_index, 0);
+        assert!(visible[0].normal_x < -0.99);
+        assert!(visible[0].x < -3.0);
+    }
+
+    #[test]
+    fn visible_source_facing_points_reject_back_facing_geometry() {
+        let geometry = body(Form::Rectangle {
+            width: 2.0,
+            height: 1.0,
+        });
+        let visible = visible_source_facing_points((5.0, 0.0), &[geometry]);
+        assert_eq!(visible.len(), 1);
+        assert!(visible[0].normal_x > 0.99);
+        assert!(visible[0].x > 0.9);
+    }
+
+    #[test]
+    fn source_path_detects_an_intervening_circle_without_raster_sampling() {
+        let target_body = body(Form::Circle { radius: 1.0 });
+        let blocker = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Circle { radius: 1.0 },
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: -1.0,
+            max_x: 1.0,
+            min_y: -1.0,
+            max_y: 1.0,
+        };
+        assert!(source_path_blocked(
+            (-5.0, 0.0),
+            (5.0, 0.0),
+            &[blocker.clone(), target_body.clone()],
+            1,
+            0,
+        ));
+        assert!(!source_path_blocked(
+            (-5.0, 4.0),
+            (5.0, 4.0),
+            &[blocker, target_body],
+            1,
+            0,
+        ));
+    }
+
+    #[test]
+    fn source_path_ignores_only_the_target_surface_constituent() {
+        let target = body(Form::Rectangle {
+            width: 2.0,
+            height: 1.0,
+        });
+        assert!(!source_path_blocked(
+            (-5.0, 0.0),
+            (-1.0, 0.0),
+            &[target],
+            0,
+            0,
+        ));
     }
 
     #[test]

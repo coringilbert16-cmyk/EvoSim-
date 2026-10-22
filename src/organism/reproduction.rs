@@ -144,6 +144,7 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         occupied_cells: vec![construction.developmental_origin.clone()],
         genome: construction.child_genome.clone(),
         harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+        resonant_energy: crate::harmonics::ResonantEnergyReservoir::default(),
         experience_memory: crate::memory::ExperienceMemory::default(),
         pending_movement_experience: None,
         decision_history: crate::decision::DecisionHistory::default(),
@@ -492,6 +493,7 @@ fn anchor_structure(
         }],
         genome: child_genome.clone(),
         harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+        resonant_energy: crate::harmonics::ResonantEnergyReservoir::default(),
         experience_memory: crate::memory::ExperienceMemory::default(),
         pending_movement_experience: None,
         decision_history: crate::decision::DecisionHistory::default(),
@@ -520,8 +522,11 @@ fn anchor_structure(
     }
     Some((child.structure, child.stored_material, anchor_unit_index))
 }
-pub(crate) fn total_usable_energy_held(organisms: &[Organism]) -> f64 {
-    organisms
+pub(crate) fn total_usable_energy_held(
+    organisms: &[Organism],
+    decomposing_bodies: &[crate::decomposition::DecomposingBody],
+) -> f64 {
+    let organism_energy: f64 = organisms
         .iter()
         .map(|organism| {
             organism.usable_energy
@@ -530,6 +535,18 @@ pub(crate) fn total_usable_energy_held(organisms: &[Organism]) -> f64 {
                     .as_ref()
                     .map_or(0.0, |construction| construction.developing_energy)
         })
+        .sum();
+    let decomposition_energy: f64 = decomposing_bodies
+        .iter()
+        .map(|body| body.energy_budget)
+        .sum();
+    organism_energy + decomposition_energy
+}
+
+pub(crate) fn total_resonant_energy_held(organisms: &[Organism]) -> f64 {
+    organisms
+        .iter()
+        .map(|organism| organism.resonant_energy.total_energy().unwrap_or(f64::NAN))
         .sum()
 }
 
@@ -618,7 +635,7 @@ pub(crate) fn advance_construction(
     environment: &Environment,
     ledger: &mut EnergyLedger,
     parent_energy: &mut f64,
-    rng: &mut ChaCha8Rng,
+    _rng: &mut ChaCha8Rng,
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
     seed_reference: Option<(f64, f64)>,
 ) -> (ConstructionStatus, Option<f64>) {
@@ -633,7 +650,14 @@ pub(crate) fn advance_construction(
 
     let mut child = developing_organism(construction);
     child.apply_maintenance(&environment.catalog, ledger);
-    let dead = child.apply_stress_damage(environment, ledger, rng);
+    let dead = child.validate_stress_state();
+    if !dead {
+        let _ = crate::transformation::resolve_resonance_overload_break(
+            &mut child,
+            environment,
+            ledger,
+        );
+    }
     construction.developing_energy = child.usable_energy;
     construction.developing_stress = child.stress;
     construction.developing_maintenance_debt = child.maintenance_debt;
@@ -757,6 +781,7 @@ pub(crate) fn finish_reproduction(
         occupied_cells: vec![child_position],
         genome: construction.child_genome,
         harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+        resonant_energy: crate::harmonics::ResonantEnergyReservoir::default(),
         experience_memory: crate::memory::ExperienceMemory::default(),
         pending_movement_experience: None,
         decision_history: crate::decision::DecisionHistory::default(),
