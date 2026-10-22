@@ -1991,3 +1991,25 @@ The material oracle and world-tone snapshot both explicitly account for active-o
 **Required tests:** force destination rejection for contained acquisition and expulsion; compare the independent integer material oracle, original geometry/owner-relative origin, field contents, and parent storage. Also verify multi-object partial acquisition leaves every rejected source represented exactly once. No source change authorized until all audit templates are complete.
 
 **Next audit:** trace direct mutations of usable energy, resonant reservoirs, graph bonds, and environmental physical material that bypass a checked transaction/transfer helper.
+
+
+### 17.46 Shared energy-consumer cross-check — identify reusable transaction patterns and prioritize confirmed gaps — 2026-10-22, PR #205 head 12d8079230458da68a8dc3755a1d6a9b41347862
+
+**Status: Cross-domain ordering comparison complete for the inspected paths; integrated proof remains open.** No source/test changes.
+
+| Path | Candidate validation / source handling | Ledger and physical commit order | Current conclusion |
+|---|---|---|---|
+| Structural chemical BREAK | Cloned resonance reservoir; exact live bond revalidated by trial graph | Ledger settles before graph replacement; reservoir commits only on success | Good local atomicity pattern; failure and world inventory tests remain needed |
+| Resonance-overload BREAK | Cloned reservoir and selected bond; shared BREAK settlement | Ledger + graph commit first, reservoir assigned only on success | Good local pattern; reconcile identical bond/energy semantics with chemical BREAK |
+| COMBINE bond formation | Trial graph and exact endpoint checks | Ledger settles against candidate energy before trial graph replaces authoritative graph | Good local pattern; enclosing storage/source transfer still has separate failure risks |
+| Maintenance | Computes demand and attempted payment before mutation | Ledger debit succeeds before stress is added; unpaid balance becomes debt | No geometry-before-ledger defect observed in this function |
+| Movement | Validates movement/cost and mutates live position/occupancy first | Ledger settlement follows physical movement | Confirmed order defect; a rejected settlement leaves an uncharged move |
+| Contained acquisition | Removes contained environment sources into a returned batch | Storage attempt follows removal; failed storage relies on ignored-result deposit fallback | Confirmed best-effort ownership gap |
+| Expulsion | Removes parent storage source and transforms candidate to world placement | Final environment deposit result is returned without restoring original storage on rejection | Confirmed best-effort ownership gap |
+| Stored BREAK | Escrow source, then split into physical components | Components committed one-by-one; fallback results ignored | Confirmed partial-commit/escrow-loss risk |
+
+**Design implication:** use one invariant across these subsystems: physical mutation and its material/energy consequences form one transaction. Validate on trial state; validate all destinations; settle accounting; then commit every source/destination/geometry change as a unit. Where a destination API can reject, either reserve/validate it before source removal or keep the exact original source in a recoverable escrow until commit. A best-effort fallback is not a transaction boundary.
+
+**Prioritization for implementation after audit closure:** (1) fix source/destination atomicity for stored BREAK and material acquisition/expulsion; (2) fix movement geometry/ledger ordering; (3) add test-only rejection seams only if production interfaces cannot naturally exercise destination/ledger failure; (4) run cross-domain inventory tests for chemical BREAK, resonance overload, COMBINE, maintenance, and world tone. This is ordering by confirmed loss/partial-commit risk, not permission to begin implementation before the remaining audit templates are complete.
+
+**Still not proven:** global energy conservation across all holders, the exact-small-world sunlight approximation/error bound, the receiver-ownership decision in Section 17.38, and the full baseline-comparison gate at the implementation head. No runtime or performance benchmark was run in this audit.
