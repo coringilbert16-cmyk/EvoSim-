@@ -2078,3 +2078,24 @@ The schema-4 chemistry manifest uses a fixed equation fingerprint with a catalog
 - Closure options: narrow the delta struct to only fields COMBINE is allowed to mutate and assert all other deltas are zero, or commit/rollback every permitted field from one centralized delta application helper. Add a test that compares every EnergyLedger field before/after successful and rejected prepared COMBINE. Do not broaden the transaction's authority implicitly.
 
 **Next audit:** compare all fields in the energy-ledger schema against initialization, end-of-tick refresh, prepared transformation commit/rollback, and inventory snapshot equations; record intentional diagnostics versus authoritative stores. No implementation until the audit templates are complete.
+
+
+### 17.52 Energy-ledger field ownership map — inventory terms versus diagnostics/cache fields — 2026-10-22
+
+**Status: Field semantics mapped; one telemetry inconsistency confirmed.** Exact-head review of EnergyLedger, EnergyInventorySnapshot, settle_transaction, settle_external_input, settle_world_tone_paths, and end-of-tick held-counter refresh. No source/test changes.
+
+| Field | Intended role | In the independent inventory equation? | Finding |
+|---|---|---|---|
+| `total_external_energy_input` | Cumulative named external input | Yes, as external source | World-tone frame settlement adds incident input only after local balance validates |
+| `total_potential_energy_released` | Non-structural source, distinct from bond energy | Yes, as other source | Inspected live chemistry transactions set it to zero |
+| `total_structural_energy_delta` | Cumulative net bond-energy storage/release event | No; current bond holders are independently recomputed | Structural BREAK is a negative store delta; COMBINE is positive |
+| `total_work_expended`, `total_heat_dissipated`, `total_world_tone_energy_escaped` | Cumulative sinks | Yes | Transaction paths validate finite next totals before commit |
+| `total_world_tone_energy_unabsorbed` | Diagnostic throughput, not stored energy | No | Live snapshot path does not update it, although the legacy per-unit path does; its documented cumulative meaning is therefore incomplete for live-frame captures |
+| `total_usable_energy_gained` | Cumulative positive usable-holder deltas | No | Diagnostic, not a source or a holder; retained resonance must not be counted as usable energy |
+| `total_usable_energy_held`, `total_resonant_energy_held`, `total_structural_energy_held` | Cached current totals | No; snapshot recomputes from holders | Refreshed at end of tick; not authoritative mid-tick |
+| `initial_*_energy_held` | Tick-zero baselines | Yes, as initial terms | Must not also credit the same initial grant as an untracked second source |
+| `initial_condition_energy_settled` | One-time source guard | No | Prevents duplicate initial-condition grants; not itself energy |
+
+**Telemetry decision needed for Phase 10:** either update `total_world_tone_energy_unabsorbed` consistently from the live frame's path accounting, or redefine/document it as legacy per-unit diagnostic only. Do not add it to the conservation equation; incident input, retained reservoir delta, heat, and escape already account for the physical energy exactly once. Add a test that live-frame settlement and diagnostic semantics agree.
+
+**Next audit:** reconcile all fields in prepared COMBINE ledger deltas against this role map and close the remaining transfer/cache invalidation matrix. No implementation until the audit templates are complete.
