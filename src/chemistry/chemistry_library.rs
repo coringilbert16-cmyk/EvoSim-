@@ -660,7 +660,7 @@ mod tests {
             .append(true)
             .open(&data_path)
             .unwrap();
-        file.write_all(b"{\\"key\\":").unwrap();
+        file.write_all(br#"{"key":"#).unwrap();
         file.sync_data().unwrap();
 
         let error = rollback_appended_record(
