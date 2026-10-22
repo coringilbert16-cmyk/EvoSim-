@@ -414,3 +414,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Proposed target: one parent maintenance/stress/death lifecycle based on aggregate structural mass; no temporary child organism or separate developing stress/debt. Construction progress/core identity remain metadata. A construction reserve may remain only as an explicitly accounted parent-owned sub-holder.
 - **Open semantic item:** whether to retain an earmarked construction reserve and define its spend/release rule. Existing transfer is internal, but its failure result is ignored before construction proceeds. This is not being silently changed or treated as owner-approved.
 - Required tests and the no-code-until-audit-closure gate are recorded in Section 17.101. No source/test changes or fresh CI run.
+
+
+## Resume checkpoint — bounded energy/material call-site sweep (Section 17.102)
+
+- Plan commit: `5f5a3719be029fd84ec859b521a1c9e7124772fb`; PR #204 remains documentation-only.
+- Bounded exact-head review of high-risk chemistry/material/energy/movement/simulation/reproduction/world-tone modules found no additional live internal-energy-transfer API caller beyond construction reserve and quarantined legacy recycling.
+- Ignored deposit returns in initial landscape/resource-cloud seeding were noted; these are deterministic initialization paths using realized material and validated field indices, not new live chemistry energy paths.
+- This is not an exhaustive global source audit. Known rollback/ownership gaps remain open. No source/test changes or fresh CI run.
+- Next: settle the construction reserve semantics, reconcile whole-world material/energy inventories, then refresh PR #205 head/CI before implementation.
