@@ -547,6 +547,11 @@ impl PhysicalConstituentGraph {
         });
         self.genome_constituent_ids
             .retain(|id| !doomed.contains(id));
+        for group in &mut self.additional_genome_constituent_groups {
+            group.retain(|id| !doomed.contains(id));
+        }
+        self.additional_genome_constituent_groups
+            .retain(|group| !group.is_empty());
     }
 
     pub fn physical_id(&self, unit_index: usize) -> Option<PhysicalConstituentId> {
@@ -603,6 +608,12 @@ impl PhysicalConstituentGraph {
         ids.sort_unstable_by_key(|id| id.0);
         ids.dedup();
         ids.retain(|id| self.unit_index(*id).is_some());
+        let primary_ids: HashSet<_> = ids.iter().copied().collect();
+        for group in &mut self.additional_genome_constituent_groups {
+            group.retain(|id| !primary_ids.contains(id));
+        }
+        self.additional_genome_constituent_groups
+            .retain(|group| !group.is_empty());
         self.genome_constituent_ids = ids;
     }
 
@@ -1197,6 +1208,15 @@ mod tests {
         assert_eq!(decoded.genome_constituent_ids(), &[first_id]);
         assert_eq!(decoded.additional_genome_constituent_groups(), &[vec![second_id]]);
         assert_eq!(decoded.units.len(), 2);
+
+        let mut pruned = decoded.clone();
+        pruned.remove_units_by_physical_ids(&[second_id]);
+        assert!(pruned.additional_genome_constituent_groups().is_empty());
+        assert_eq!(pruned.units.len(), 1);
+
+        let mut reassigned = decoded;
+        reassigned.set_genome_constituent_ids([first_id, second_id]);
+        assert!(reassigned.additional_genome_constituent_groups().is_empty());
     }
 
     #[test]
