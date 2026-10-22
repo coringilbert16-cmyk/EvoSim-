@@ -144,3 +144,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Waiting/resume tests should preserve state while waiting and attach new material exactly once. Developmental scale should be tracked through the internal second-core region/progress, not a separate physical graph identity. Preserve the previously approved reproduction threshold unless the owner changes it.
 - Required future acceptance tests cover atomic anchor/growth, no-mutation on waiting/rejection, one-time movement/spatial indexing, attached-vs-stored resonance eligibility, post-death physical ownership, atomic division, and save/load migration/fail-closed behavior.
 - **Next:** finish saved-state compatibility and construction/geometry acceptance matrix; then reconcile all remaining chemistry audit rows and sign-off. No implementation until all audit templates close. PR #205 head/CI must be refreshed before first code change.
+
+
+## Cache/persistence dependency checkpoint — 2026-10-22, Section 17.74
+
+- **Plan commit:** `fec43f8b8b87462b238bf9e87bad78a72970221d`. PR #204 remains documentation-only.
+- Unified attached structure will require canonical `mark_structure_changed` invalidation for cavity/developmental/harmonic caches on successful attachment/growth/partition, with no invalidation on rejected candidates. Current construction mutates its own graph separately and therefore does not invalidate parent structure caches.
+- Parent cavity analysis currently sees only `organism.structure`; the aggregate model must preserve identity of the parent genome core and internal second core rather than treating the whole aggregate as one cavity. The construction anchor index currently indexes the separate graph and must be remapped/replaced.
+- Serialized parent structure and serialized `ReproductiveConstruction.developing_structure` are separate. New schema must migrate active legacy construction exactly once or fail closed without losing units/bonds/energy; simply ignoring/deleting the field loses physical state. Required tests cover round-trip, legacy migration/idempotence, cache invalidation, core identity, and movement/snapshot agreement.
+- **Next:** finish the canonical representation/migration acceptance matrix and reconcile it with the other open chemistry release gates. No source/test changes; PR #205 head remains historically audited at `12d8079230458da68a8dc3755a1d6a9b41347862`; re-fetch head/CI before implementation.
