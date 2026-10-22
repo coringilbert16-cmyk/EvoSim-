@@ -390,9 +390,9 @@ mod integration_tests {
         )
         .expect("base resource should have a valid physical realization");
         let before = s.organisms[0].stored_material.total_amount();
+        s.environment.field.deposit(anchor.x, anchor.y, physical);
         let inventory_before =
             integer_material_inventory(&s).expect("pre-transfer inventory is integral");
-        s.environment.field.deposit(anchor.x, anchor.y, physical);
         Simulation::transfer_contained_environmental_material(
             &mut s.organisms[0],
             &mut s.environment,
