@@ -181,3 +181,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - One aggregate graph must be the source for movement, collision, occlusion, cache invalidation, ordinary chemistry, and sunlight. Every attached surface may credit the living parent reservoir; stored material and transformation escrow stay separate and resonance-ineligible.
 - Division remains a single atomic partition of units, bonds, storage, core identities, and energy at the already-approved condition; cross-partition bonds must settle explicitly. Legacy serialized construction graphs need exactly-once migration or fail-closed recoverable handling.
 - Risks to close: stable unit/bond IDs and endpoint remapping, core-specific cavity identity, maintenance/overload semantics with two cores, migration idempotence, construction reserve-holder semantics, and atomic division. No implementation yet; audit templates remain open.
+
+
+## Serialization-scope correction — Section 17.78
+
+- **Plan commit:** `463b9f33c74a9f3ec42f6c06028098e1b174ef26`.
+- Correction to Sections 17.72/17.74/17.77: `ReproductiveConstruction` and `Organism` derive Serde traits, but the current `Simulation` itself does not, and no whole-world save/load path was found in reviewed runtime/server/process call sites. Confirmed production serialization is diagnostic/observation output (`serde_json::to_value` in `src/infrastructure/diagnostics.rs`), not simulation persistence.
+- Do not treat legacy world-save migration as a current required task. Current compatibility work is to revise diagnostic/observation JSON and tests so they represent the unified physical structure correctly. If world persistence is introduced later, migration/fail-closed handling becomes a prerequisite then.
+- This correction does not change single-authority structure, core identity, movement/geometry, cache invalidation, inventory, resonance, or division requirements.
+- **Next:** finish canonical aggregate/core-identity contract and diagnostic JSON impact matrix, then reconcile remaining chemistry audit rows. No source/test changes; refresh PR #205 head and CI before implementation.
