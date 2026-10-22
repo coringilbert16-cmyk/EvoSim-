@@ -2200,3 +2200,15 @@ A1 active identity and unknown-name behavior are substantially closed for inspec
 - README.md's current statement that live sunlight capture is disabled is stale against the inspected tick path. Section 17.57 records the mismatch and the decision not to edit README until the audit register is closed and the owner approves the documentation update. The README's PR #203 test checkpoint should remain historical rather than be overwritten without preserving provenance.
 
 **A17/A21 status:** the exact seed/quantity labels and README capture-status discrepancy are now evidenced. Fixing diagnostics and README remains a later scoped change; do not mix it into PR #204's audit-plan-only changes unless the owner authorizes it.
+
+
+### 17.60 Resonance invalid-property handling — epsilon clamps can turn malformed catalog data into a valid-looking response — 2026-10-22
+
+**Status: Adversarial numerical gap identified; default catalog is valid.** Exact-head review of natural_frequency_hz, damping_ratio, resonance_response, and world-tone body-property use. No source/test changes.
+
+- `natural_frequency_hz` applies `max(EPSILON)` to mass, cohesion, and their baselines without first rejecting nonfinite inputs. A NaN mass/cohesion can therefore be replaced by epsilon and yield a finite, plausible frequency instead of failing closed. `damping_ratio` similarly clamps reactivity with `max(0.0)` and has no explicit finite-input guard; malformed reactivity can be interpreted as zero damping. `resonance_response` clamps damping to epsilon but does not explicitly reject NaN damping.
+- The live world-tone snapshot reads catalog ResourceProperties for physical bodies and feeds them into resonance calculations. The normal seven-resource catalog has valid finite values, so this is not evidence of a default-run defect. It is an invalid-state contract gap: malformed/partially loaded catalog properties should not be silently converted into a neutral/baseline material response, particularly near the 440 Hz source where a tiny damping denominator can produce a very large amplitude response before energy bounding.
+- Add adversarial tests with NaN/infinite/negative mass, cohesion, reactivity, and baselines. The preferred contract is fail-closed (`None`/invalid response) before resonance calculation, not silently clamp malformed input to a physical epsilon. Keep epsilon floors for valid near-zero physical values only after finiteness and domain checks.
+- Existing downstream spectrum energy bounding prevents an unbounded amplitude from directly exceeding the incident energy budget, but it does not make malformed-property behavior scientifically valid. Keep this separate from conservation tests: it is a material-response validity issue, not by itself proof of energy creation.
+
+**Next audit:** enumerate all entry points that call natural_frequency_hz/damping_ratio and confirm they either validate catalog properties before calling or propagate a fail-closed result. No implementation until the audit templates are complete.
