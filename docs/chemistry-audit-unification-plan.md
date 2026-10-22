@@ -2267,3 +2267,17 @@ This confirms an adversarial invalid-state gap across several callers; it is not
 - No source/test changes were made. The audit template is not yet complete, so no implementation is authorized.
 
 **Next:** reconcile each remaining row against Section 17.7 and the Section 17.6 release gates, mark it source-inspection-complete, test-required, or owner-decision-blocked, then review whether any uninspected production mutation path remains.
+
+
+### 17.65 Remaining local-contract gaps — stale activation keys, prepared COMBINE ledger, and cache invalidation — 2026-10-22
+
+**Status: Three known gaps reconfirmed at exact PR #205 head.** Read-only review of `src/chemistry/chemical_reaction.rs`, `src/chemistry/transformation.rs`, `src/chemistry/chemistry_library.rs`, and `src/chemistry/energy_ledger.rs`. No source/test changes.
+
+1. **Bondless reaction accumulation cleanup:** `chemical_reaction::accumulate` returns immediately when `organism.structure.bonds.is_empty()`, before removing stale accumulation entries for that organism. The entries are activation state, not energy, but can persist after the graph loses all bonds. Add a regression that seeds a valid key, removes all bonds, runs accumulation, and verifies all keys for that organism are removed; preserve other organisms' keys.
+2. **Prepared COMBINE ledger delta contract:** preparation computes deltas for `total_world_tone_energy_escaped` and `total_resonant_energy_held`, but the commit path does not apply them and `rollback_prepared_combine` does not reverse them. The currently inspected COMBINE candidate should not change either field. This is a latent contract mismatch, not evidence of current energy leakage. Preferred smallest fix is an explicit invariant rejecting/asserting nonzero values for both fields, plus a test; alternatively centralize field-wise apply/rollback so every ledger field has symmetric semantics.
+3. **Catalog chemistry fingerprint:** `CHEMISTRY_EQUATION_FINGERPRINT` includes a manually maintained `catalog=resource-chemistry-v1` marker. `ChemistryKey` does not carry numeric chemical positions, while cached static potential depends on those positions and K/Dmax. Existing `rejects_equation_fingerprint_mismatch` proves a changed manifest string is rejected, but does not prove catalog-property changes require a fingerprint bump. Add a deterministic test/contract tying a change to a relevant catalog chemistry field to fingerprint invalidation, or derive the fingerprint from canonical relevant fields.
+4. **Transfer primitive:** `EnergyLedger::transfer` validates both holders and computes both next values before assignment, so its two-holder mutation is atomic. The remaining issue is the construction caller discarding its boolean result (Section 17.53/17.64), not a defect in the primitive itself.
+
+**Classification:** items 1–3 require focused regression/invariant coverage; item 4 requires a caller failure-policy decision and test. These do not close the higher-risk material-loss or movement rollback gates. No source/test changes were made.
+
+**Next:** reconcile these items and the Section 17.64 transition rows into a single exit checklist, then identify which uninspected source paths remain before audit templates can be declared complete. No implementation until that checklist is complete.
