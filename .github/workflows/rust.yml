@@ -224,7 +224,12 @@ jobs:
       - name: Run full Rust suite against constructor branch
         timeout-minutes: 5
         if: always()
-        run: cargo test --locked
+        run: |
+          # Reuse the isolated Bob library seeded above. Each Actions step has
+          # its own shell, so the earlier export does not carry into this step.
+          # Never use or seed the developer/default geometry_library/data store.
+          export EVOSIM_GEOMETRY_LIBRARY_DIR="$RUNNER_TEMP/evosim-bob-constructor-replay"
+          cargo test --locked
       - name: Run Clippy
         timeout-minutes: 5
         if: always()
