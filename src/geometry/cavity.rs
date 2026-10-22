@@ -8,6 +8,8 @@ use std::f64::consts::TAU;
 const EPS: f64 = 1e-8;
 const NODE_TOLERANCE: f64 = 1e-7;
 
+pub(crate) type CavityBoundarySegment = ((f64, f64), (f64, f64), usize);
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Point {
     x: f64,
@@ -58,7 +60,7 @@ impl GenomeCavity {
     /// Expose the realized cavity boundary geometry to harmonic reception.
     /// Every segment is an actual exposed edge of the material surrounding the
     /// empty cavity.
-    pub(crate) fn boundary_segments(&self) -> Vec<((f64, f64), (f64, f64), usize)> {
+    pub(crate) fn boundary_segments(&self) -> Vec<CavityBoundarySegment> {
         self.boundary_segments
             .iter()
             .map(|&(a, b, unit)| ((a.x, a.y), (b.x, b.y), unit))
