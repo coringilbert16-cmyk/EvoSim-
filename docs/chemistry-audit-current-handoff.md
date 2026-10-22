@@ -543,3 +543,10 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Movement remains deferred until the live construction graph is moved into canonical parent-owned structure. Then translation, collision/space checks, world-tone body enumeration, and revisions need one coordinated refactor. Notify user before starting that phase.
 - Next: focused anchor placement/contact audit, then atomic parent-funded growth transaction. PR #196 remains out of scope.
 
+
+
+## Core-specific cavity/cache audit — 2026-10-22, Section 17.117
+
+- `Organism::genome_cavity_cached_ref` currently scans the whole structure and writes the selected cavity boundary back as the primary genome IDs. That becomes unsafe with multiple cores in one aggregate: it may select the developing core and remove its IDs from the additional-core group.
+- Before aggregate migration, parent and developing genome cavity/viability checks must be core-anchored and retain separate genome/blueprint associations, even though physical units share one graph.
+- Next: test core-anchored cavity lookup with two qualifying cavities, including mutation/removal/serialization. Movement remains deferred until canonical aggregation is implemented.
