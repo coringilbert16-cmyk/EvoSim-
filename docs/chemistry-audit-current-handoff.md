@@ -615,3 +615,13 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Latest source head at this checkpoint: 80b0d0b9a05093b4983be71da7536763f4071724. Formatting and focused graph-merge tests passed. Full-suite workflow 39866415942 is still running; the preceding exact-head run 39866134452 reported 593 passed, 27 failed, 1 ignored, with exactly the same 27 named failure identities as the prior verified run, and Clippy remained at baseline 34 application-target / 15 test-target diagnostics.
 - Plan Section 17.124 recorded in PR #204 commit 0abd2b46690510be391a3483bada613225e981d3.
 
+
+
+## Core-specific viability groundwork — 2026-10-22, Section 17.125
+
+- Added validate_realized_organism_for_core to src/organism/viability.rs. It selects cavity geometry by surviving stable core IDs and measures extra structure within the selected cavity's connected component. The generic validator and live behavior remain unchanged.
+- Added a focused test for the known-core success / missing-core fail-closed contract and CI gate cargo test --locked core_specific_viability_.
+- Current source head: 17b2e6403703aa1cfb2e58223861103fce4194a3. Exact-head workflow 39867010714 is queued/in progress; formatting and focused test results are pending.
+- This is groundwork, not live integration. Next is to finish this focused gate, then continue the canonical aggregate migration with the coordinated movement/world-tone/energy-inventory/division changes already mapped in Section 17.124.
+- Plan Section 17.125 recorded in PR #204 commit ebe63022da65365ef44c208bf9c1b0f17f31fbbb.
+
