@@ -1769,7 +1769,7 @@ mod fluid_coalescence_transaction_tests {
         assert_eq!(structure.units.len(), 2);
         assert_eq!(structure.units[0].physical_id, survivor_id);
         assert_eq!(structure.units[0].material.parts[0].0, "Water");
-        assert!((structure.units[0].material.parts[0].1 - 1.0).abs() < 1e-9);
+        assert!((structure.units[0].material.parts[0].1 - 2.0).abs() < 1e-9);
         assert_eq!(structure.genome_constituent_ids(), &[survivor_id]);
         assert_eq!(structure.bonds.len(), 1);
         let retained = structure.bonds[0];
@@ -1792,7 +1792,7 @@ mod fluid_coalescence_transaction_tests {
         else {
             panic!("merged water must retain its exact multi-contact boundary");
         };
-        assert!((*nominal_area - unit_area).abs() < 1e-9);
+        assert!((*nominal_area - 2.0 * unit_area).abs() < 1e-9);
         assert!(boundary.is_valid());
         assert_eq!(boundary.pieces.len(), 2);
         assert!(boundary
@@ -1887,7 +1887,7 @@ mod fluid_coalescence_transaction_tests {
     #[test]
     fn fluid_bond_off_shared_interface_rejects_coalescence_atomically() {
         let (mut structure, catalog, unit_area) = build_bonded_pair(0.0, false);
-        let radius = (unit_area / PI).sqrt();
+        let radius = (2.0 * unit_area / PI).sqrt();
         structure.bonds[0].endpoint_a.location = ConnectionEndpoint::Fluid { x: 0.0, y: radius };
         let original_units = structure.units.clone();
         let original_bonds = structure.bonds.clone();
@@ -1908,7 +1908,7 @@ mod fluid_coalescence_transaction_tests {
     #[test]
     fn separated_bond_endpoints_on_shared_segment_reject_coalescence_atomically() {
         let (mut structure, catalog, unit_area) = build_bonded_pair(0.0, false);
-        let radius = (unit_area / PI).sqrt();
+        let radius = (2.0 * unit_area / PI).sqrt();
         structure.bonds[0].endpoint_a.location = ConnectionEndpoint::Fluid {
             x: -0.4 * radius,
             y: 0.0,
