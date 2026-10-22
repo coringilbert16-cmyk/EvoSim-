@@ -498,3 +498,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Reproduction requires a larger atomic set: parent usable energy, aggregate graph/bonds/core IDs, stored material, construction/core metadata, ledger, structure revision/cache invalidation, and source ownership. Division later partitions all physical units/bonds/core refs/storage and remaining energy exactly once.
 - Current source still represents construction as a separate graph and creates a temporary organism for its lifecycle. That cannot be repaired by a standalone energy formula or graph-merge helper. The next coherent change must have a live caller and failure-injection tests; no unused abstraction and no speculative ledger-field reversal.
 - No tests were run. Next step: one focused audit of the narrowest viable live construction-attachment transaction, then implement it with focused rejection/rollback tests within the five-minute command cap.
+
+## Latest implementation checkpoint — 2026-10-22, Section 17.113
+
+- Latest PR #205 head: `c57926fdf551472cfa274ca1f3550d1a93b29295` on `chemistry-unification-implementation-2026-10-22`.
+- One audited production change made: `finish_reproduction` now refuses to return a child unless `birth_ready_with_reference` validates readiness, restoring non-ready construction unchanged to the parent. Added focused regression `non_ready_construction_cannot_create_an_offspring`.
+- This is a narrow fail-closed fix only. It does not implement canonical aggregate ownership, parent-funded production, dead-parent gating, or atomic two-child division. No energy split formula or reserve holder was introduced.
+- GitHub Actions has not yet returned a workflow run for this commit in the available check; verification remains pending. No full suite was run manually.
+- Latest plan commit before this checkpoint: `634f17d5fb96ddf55f3b342d7ff83bcd14a87e98`; handoff before this checkpoint: `a9c2fbcae2d9fd64145b6dba407b46b03e5d0f0d`.
+- Next: verify the focused regression and formatting on exact head. Then continue one focused audit of candidate geometry/parent-energy/source-removal mutation ordering for a real aggregate attachment transaction; do not patch the old developing-energy flow in isolation.
