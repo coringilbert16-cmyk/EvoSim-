@@ -269,8 +269,7 @@ impl ChemistryLibrary {
                 std::io::ErrorKind::InvalidData,
                 format!(
                     "chemistry equation fingerprint mismatch: manifest={}, current={}",
-                    manifest.equation_fingerprint,
-                    CHEMISTRY_EQUATION_FINGERPRINT
+                    manifest.equation_fingerprint, CHEMISTRY_EQUATION_FINGERPRINT
                 ),
             ));
         }
@@ -757,7 +756,9 @@ mod tests {
             .err()
             .expect("legacy cache must be rejected");
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
-        assert!(error.to_string().contains("unsupported chemistry library schema version"));
+        assert!(error
+            .to_string()
+            .contains("unsupported chemistry library schema version"));
         let _ = fs::remove_dir_all(root);
     }
 
@@ -769,7 +770,9 @@ mod tests {
             .err()
             .expect("pre-unification cache must be rejected");
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
-        assert!(error.to_string().contains("unsupported chemistry library schema version"));
+        assert!(error
+            .to_string()
+            .contains("unsupported chemistry library schema version"));
         let _ = fs::remove_dir_all(root);
     }
 
