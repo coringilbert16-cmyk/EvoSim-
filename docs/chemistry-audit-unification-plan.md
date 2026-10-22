@@ -2176,3 +2176,15 @@ This summary consolidates Sections 17.32–17.54. Local ordering being sound doe
 - **Scope decision for this plan:** record the README mismatch now, but do not edit README in this audit-plan commit. Correct the current-status sentence and verification links only after the audit register is closed and the owner approves the docs change. This keeps PR #204's present plan/handoff focus intact and avoids suggesting that “live” means “validated.”
 
 **Next audit:** check the remaining A1 material/property fallbacks and verify whether each zero/default result is an intentional domain default or a fail-closed path. Then update the audit summary with only active-code findings, retaining historical references as historical.
+
+
+### 17.58 Resource/property fallback classification — 2026-10-22
+
+**Status: A1 follow-up completed for inspected paths.** Reviewed resources.rs, chemistry.rs, combine.rs, combine_runtime.rs, and chemical_reaction.rs at PR #205 head. No source/test changes.
+
+- Unknown names fail catalog validation; mass/potential/weighted-property queries return NaN for invalid material. The default catalog uses Oxygen for ID 6. Current active code and README do not use Methane as an identity; remaining search hits are historical archives.
+- Valid composites intentionally have no averaged chemical_position because averaging would erase constituent identity. Their weighted physical properties come from catalog-bound constituents; live chemistry operates on constituent units. Materials lacking a chemical position use the documented cohesion-based bond-potential fallback.
+- A staged helper maps failed interaction_potential to zero and bond_strength maps nonfinite cohesion to zero. The live COMBINE path requires valid properties and, when both positions exist, successful chemical_interaction before commit, so these helper fallbacks are not currently shown to admit an invalid live bond. Keep adversarial tests to protect against future callers bypassing that validation.
+- Empty-catalog baseline helpers return neutral values, but the production environment uses the non-empty seven-resource catalog. Test empty-catalog behavior explicitly; do not treat these values as properties for unknown resources.
+
+A1 active identity and unknown-name behavior are substantially closed for inspected production paths. Malformed catalog-property tests and all-entry-point validation remain evidence gates. Cache invalidation remains open per Sections 17.49–17.50.
