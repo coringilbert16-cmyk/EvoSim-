@@ -2123,3 +2123,30 @@ The schema-4 chemistry manifest uses a fixed equation fingerprint with a catalog
 - This confirms the current baseline/cache split for the represented holders. It does not close conservation across all event paths: movement's post-geometry ledger rejection, source/destination fallback failures, the COMBINE delta-field omission, world-tone receiver eligibility, and incomplete exact-geometry evidence remain open.
 
 **Next audit:** reconcile all transaction and holder-transition findings into one source-to-sink dependency matrix with a concrete regression oracle per row. Do not start implementation until the matrix and all required audit templates are complete.
+
+
+### 17.55 Consolidated source-to-sink matrix — 2026-10-22
+
+This summary consolidates Sections 17.32–17.54. Local ordering being sound does not mean integrated conservation has passed. No source/test changes.
+
+| Path | Source and destination | Current status / required evidence |
+|---|---|---|
+| Initial energy | Seed reserve → usable holder | One-time input transaction; tick-zero/no-op inventory tests remain required |
+| COMBINE graph bond | Usable energy + validated endpoints → graph bond | Trial graph and ledger before commit; assert staged ledger fields not permitted to change stay zero |
+| Chemical/resonance BREAK | Graph bond + compatible resonance → usable/work/heat | Trial graph/reservoir then settle; stale/retry/rejection inventory tests remain required |
+| Stored BREAK | Escrowed physical composite → split pieces | **Gap:** piece-by-piece commit and ignored fallback results; malformed completion may clear escrow |
+| Environmental COMBINE | Field object → active escrow → prepared graph/storage | Exact-cell restore exists; test missing source/cell and malformed prepared state |
+| Contained acquisition | Field physical object → parent storage | **Gap:** failed storage and failed fallback deposit can leave no holder |
+| Expulsion | Parent storage → environment | **Gap:** final deposit rejection does not restore original stored instance/frame |
+| Movement | Old position → new position; usable energy → heat | **Gap:** geometry changes before ledger settlement; rejection can leave an uncharged move |
+| Maintenance | Usable energy → heat; unpaid portion → debt | Settlement precedes stress update; rejection/debt tests remain required |
+| Construction reserve | Parent usable → developing usable | Atomic transfer primitive, but live caller ignores failure result; clarify/test underfunded behavior |
+| Construction growth/finish | Parent storage/construction → parent developing holders → child | Mostly staged; stale source and whole-step before/after inventory tests required |
+| World-tone frame | Incident source → retained resonance + heat + escaped signal | Local balance and staged commit exist; owner eligibility, exact-small-world oracle, error/performance evidence open |
+| Reaction accumulation | Per-organism revision/interface activation value | Not energy; **gap:** bondless early return can leave stale keys |
+| Chemistry cache | Material/interface key → static-potential record | Strict schema/fingerprint checks; chemical-position invalidation test required |
+| Legacy recycler | Parent stores → field + legacy carrier | Not a valid live death path; ignored deposit results; keep quarantined |
+
+**Cross-cutting invariant:** identify one source owner; validate physical preconditions and destinations; stage material, geometry, and energy; settle accounting; then commit once. On rejection, preserve the original source or all outputs in valid holders. Internal transfers cancel at world scale; diagnostic/cache counters are not separate energy stores.
+
+**Exit evidence:** every gap row needs focused failure-injection coverage plus the independent material/energy oracle. World tone also needs an independent exact-small-world exposure/first-hit comparison. The recorded full suite remains baseline-red; no source/test changes were made while consolidating this matrix.
