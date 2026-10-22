@@ -134,3 +134,13 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Production structural-energy totals and the independent test energy snapshot sum parent and developing graph separately; usable energy also includes a separate construction holder. Update authoritative totals/oracles with representation changes so bonds count once and holder ownership remains explicit.
 - Tick order currently advances construction after ordinary chemistry and applies maintenance/resonance-overload BREAK to a temporary developing Organism. Decide which aggregate biological actions apply to the parent versus the internal second core while preserving death/ordinary-chemistry rules.
 - **Next:** inspect serialization/load compatibility and tests for anchor/cavity/boundary/detachment semantics, then finish the canonical single-structure design and acceptance cases. Do not patch sunlight alone. Other audit templates remain open; no source/test changes. Recorded CI remains historical workflow `39833438679`.
+
+
+## Reproduction test-contract checkpoint — 2026-10-22, Section 17.73
+
+- **Plan commit:** `53cfa57aee0e195a087c56998ca39983d51715ad`. No source/test files changed.
+- Existing `anchor_starts_a_separate_physical_child_graph` explicitly asserts the now-rejected separate graph. Replace with a single-aggregate invariant: anchor leaves storage and enters parent structure exactly once; second core/progress remains internal.
+- Existing boundary/detachment tests assume a separate child graph can leave the parent boundary or lose graph-to-graph contact. Re-evaluate under internal/adjacent budding: parent ownership remains until division; if detachment is still valid, it needs a physical partition/bond event and explicit settlement, not contact alone.
+- Waiting/resume tests should preserve state while waiting and attach new material exactly once. Developmental scale should be tracked through the internal second-core region/progress, not a separate physical graph identity. Preserve the previously approved reproduction threshold unless the owner changes it.
+- Required future acceptance tests cover atomic anchor/growth, no-mutation on waiting/rejection, one-time movement/spatial indexing, attached-vs-stored resonance eligibility, post-death physical ownership, atomic division, and save/load migration/fail-closed behavior.
+- **Next:** finish saved-state compatibility and construction/geometry acceptance matrix; then reconcile all remaining chemistry audit rows and sign-off. No implementation until all audit templates close. PR #205 head/CI must be refreshed before first code change.
