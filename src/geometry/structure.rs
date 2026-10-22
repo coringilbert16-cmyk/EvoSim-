@@ -1189,11 +1189,19 @@ mod tests {
         let mut s = OrganismStructure::new();
         let first = s.add_unit(StructuralUnit::new(
             "Carbon",
-            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         ));
         let second = s.add_unit(StructuralUnit::new(
             "Carbon",
-            Placement { x: 2.0, y: 0.0, rotation_radians: 0.0 },
+            Placement {
+                x: 2.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         ));
         let first_id = s.physical_id(first).unwrap();
         let second_id = s.physical_id(second).unwrap();
@@ -1204,7 +1212,10 @@ mod tests {
         let encoded = serde_json::to_string(&s).unwrap();
         let decoded: OrganismStructure = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded.genome_constituent_ids(), &[first_id]);
-        assert_eq!(decoded.additional_genome_constituent_groups(), &[vec![second_id]]);
+        assert_eq!(
+            decoded.additional_genome_constituent_groups(),
+            &[vec![second_id]]
+        );
         assert_eq!(decoded.units.len(), 2);
 
         let mut pruned = decoded.clone();
