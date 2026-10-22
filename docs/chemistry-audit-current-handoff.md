@@ -162,3 +162,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Blindly merging attached construction units into the same graph could switch the parent’s active cavity/perception as the second core grows. The unified structure therefore needs core-specific cavity identity/query (or a non-owning analysis view referencing shared unit IDs) without duplicating physical units, bonds, energy, or receiver bodies.
 - Required tests: two qualifying cavities independently discoverable; parent active cavity does not switch as second core grows; child construction readiness targets its own cavity; mutation invalidates both results; attached surfaces map to parent resonance; division partitions each core and unit exactly once.
 - **Next:** define canonical single-owner physical state plus multi-core identity/query contract, then reconcile test matrix and remaining chemistry gates. Do not blind-append graphs or patch sunlight alone. No implementation yet; PR #205 head/CI refresh required before code changes.
+
+
+## Current tracker reconciliation — 2026-10-22, Section 17.76
+
+- **Plan commit:** `e14541333658fe818e2cad8acb515217d3c77440`. Section 17.7 Phase 1/8/9 statuses now reflect the owner decision; older audit checkpoints remain historical.
+- Receiver policy is **decided**: attached reproductive structure is ordinary parent structure and may contribute to the living parent’s resonance; stored material is excluded. Do not keep describing this as an open owner question.
+- Implementation/design blocker remains: current source serializes a separate `developing_structure` graph. Unification must preserve parent and second-core identity, avoid double-counting/movement, revise independent inventories, update cache invalidation, and define legacy save migration or fail-closed behavior.
+- Other audit gates remain open: deterministic transaction rejection tests with independent inventory assertions, exact-small-world world-tone oracle, cache catalog invalidation/restart, and whole-world conservation/long-run integrity. No source/test changes in this documentation series.
+- **Next:** finish single-authority aggregate/core-identity contract and serialized-state compatibility/test matrix; reconcile remaining audit rows; only then select the smallest implementation unit. Re-fetch PR #205 head/CI before code changes.
