@@ -170,7 +170,6 @@ enum NextConstructionResourceStatus {
     Available,
     Missing,
     NoFit,
-    Impossible,
 }
 
 pub(crate) fn construction_material_need_pressure(
@@ -713,10 +712,6 @@ pub(crate) fn advance_construction(
                 // pending; new material may make it solvable later.
                 construction.needs_space = false;
                 return (ConstructionStatus::Waiting, None);
-            }
-            NextConstructionResourceStatus::Impossible => {
-                construction.needs_space = false;
-                return (ConstructionStatus::DeadEnd, None);
             }
         }
     };
