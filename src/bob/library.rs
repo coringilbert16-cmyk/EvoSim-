@@ -3718,52 +3718,6 @@ fn rotational_symmetry_period(vertices: &[(f64, f64)]) -> f64 {
     std::f64::consts::TAU
 }
 
-fn normalize_global_pose(formation: &mut GeometryFormation, catalog: &[BaseResource]) {
-    if formation.constituents.is_empty() {
-        return;
-    }
-
-    for constituent in &mut formation.constituents {
-        if catalog
-            .iter()
-            .find(|r| r.name == constituent.resource)
-            .map(|r| matches!(r.shape.form, Form::Circle { .. }))
-            .unwrap_or(false)
-        {
-            constituent.placement.rotation_radians = 0.0;
-        }
-    }
-
-    let anchor_rotation = formation
-        .constituents
-        .iter()
-        .map(|c| normalized_angle(c.placement.rotation_radians))
-        .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-        .unwrap_or(0.0);
-
-    let (s, c) = anchor_rotation.sin_cos();
-    for constituent in &mut formation.constituents {
-        let x = constituent.placement.x;
-        let y = constituent.placement.y;
-        constituent.placement.x = x * c + y * s;
-        constituent.placement.y = -x * s + y * c;
-        constituent.placement.rotation_radians =
-            normalized_angle(constituent.placement.rotation_radians - anchor_rotation);
-    }
-
-    let (ox, oy) = formation
-        .constituents
-        .iter()
-        .find(|c| (c.placement.rotation_radians - 0.0).abs() <= 1e-12)
-        .map(|c| (c.placement.x, c.placement.y))
-        .unwrap_or((0.0, 0.0));
-
-    for constituent in &mut formation.constituents {
-        constituent.placement.x -= ox;
-        constituent.placement.y -= oy;
-    }
-}
-
 pub fn validate_formation(formation: &GeometryFormation, catalog: &[BaseResource]) -> bool {
     if formation.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
         || formation.constituents.is_empty()
