@@ -53,7 +53,7 @@ pub(crate) fn restore_material(
         material.parts.iter().zip(relative.iter()).enumerate()
     {
         let resource = catalog.iter().find(|resource| resource.name == *name)?;
-        if amount.fract().abs() > EPSILON
+        if (*amount).fract().abs() > EPSILON
             || *amount < 1.0
             || ((*amount - 1.0).abs() > EPSILON
                 && (material.parts.len() != 1
