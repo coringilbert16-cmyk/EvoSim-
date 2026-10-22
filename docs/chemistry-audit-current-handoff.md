@@ -423,3 +423,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Ignored deposit returns in initial landscape/resource-cloud seeding were noted; these are deterministic initialization paths using realized material and validated field indices, not new live chemistry energy paths.
 - This is not an exhaustive global source audit. Known rollback/ownership gaps remain open. No source/test changes or fresh CI run.
 - Next: settle the construction reserve semantics, reconcile whole-world material/energy inventories, then refresh PR #205 head/CI before implementation.
+
+
+## Resume checkpoint — parent-funded production costs (Section 17.103)
+
+- Plan commit: `d2250406cebf1ef40c558608e8ec2139be7d9d94`; PR #204 remains documentation-only.
+- **Owner decision settled:** all production costs draw directly from the parent's ordinary `usable_energy`. Remove the separate `reproductive_energy_allocation`/ `developing_energy` reserve path; do not invent a new cost equation.
+- Construction remains metadata over one aggregate. No temporary child lifecycle. Parent maintenance/stress/death runs once; debit plus construction mutation must be atomic. Parent death stops production and prevents offspring; division partitions ownership exactly once.
+- PR #205 head last inspected: `12d8079230458da68a8dc3755a1d6a9b41347862`; refresh before implementation. No source/test changes or fresh CI run.
+- Next: audit production cost formulas and division transaction boundaries, then reconcile tests/inventory gates before implementation.
