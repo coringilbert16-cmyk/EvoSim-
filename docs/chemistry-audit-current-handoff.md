@@ -49,7 +49,7 @@ At `0148437`:
 
 ## Next actions
 
-1. Check workflow [39819580515](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39819580515` for head `c22fe33` and the exact-head workflow for `ea2754b`; verify Hydrogen containment, active BREAK ownership, storage-restore inventory, both negative oracle tests, cache append rollback, full-suite baseline identity comparison, and Clippy.
+1. Check workflow [39819580515](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39819580515) for head `c22fe33` and the exact-head workflow for `ea2754b`; verify Hydrogen containment, active BREAK ownership, storage-restore inventory, both negative oracle tests, cache append rollback, full-suite baseline identity comparison, and Clippy.
 2. If the containment test fails, inspect its exact assertion/log first. Do not pull PR #196 constructor/Bob work into this branch.
 3. Continue Phase 3 material ownership/rollback/restore/decomposition coverage and Phase 4 persistence failure-injection coverage.
 4. Update this handoff and the detailed plan whenever the implementation head or meaningful verification state changes. No merge until the approved release gates have evidence.
