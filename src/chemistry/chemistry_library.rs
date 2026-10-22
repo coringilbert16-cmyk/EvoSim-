@@ -325,11 +325,7 @@ impl ChemistryLibrary {
     }
 
     pub fn insert(&mut self, record: ChemistryRecord) -> std::io::Result<bool> {
-        self.insert_with_persistence(
-            record,
-            append_record_and_sync,
-            persist_manifest_atomically,
-        )
+        self.insert_with_persistence(record, append_record_and_sync, persist_manifest_atomically)
     }
 
     fn insert_with_manifest_persistence<F>(
@@ -677,7 +673,12 @@ mod tests {
         let original_data = fs::read(&data_path).unwrap();
         let original_manifest = fs::read(&manifest_path).unwrap();
         let failed_record = ChemistryRecord {
-            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "injected-append-failure"),
+            key: ChemistryKey::new(
+                "Carbon",
+                "Hydrogen",
+                "rigid_edge",
+                "injected-append-failure",
+            ),
             static_potential: 0.75,
         };
         let failed_key = failed_record.key.clone();
