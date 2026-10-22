@@ -751,7 +751,10 @@ pub(crate) fn finish_reproduction(
 ) -> Option<Organism> {
     let construction = parent.reproductive_construction.take()?;
     let ready = birth_ready_with_reference(&construction, catalog, seed_reference);
-    if !ready && construction.developing_structure.units.is_empty() {
+    // Construction may only produce an offspring after the physical genome is
+    // validated and ready. Detached/dead/non-ready states are not a successful
+    // division transaction; retain the parent-owned construction unchanged.
+    if !ready {
         parent.reproductive_construction = Some(construction);
         return None;
     }
@@ -1083,6 +1086,43 @@ mod tests {
         );
         assert!(construction.developing_structure.units.len() > before_units);
         assert!(construction.developing_structure.bonds.len() > before_bonds);
+    }
+
+    #[test]
+    fn non_ready_construction_cannot_create_an_offspring() {
+        let mut simulation = Simulation::new(41, 20.0);
+        let mut parent = simulation.organisms.remove(0);
+        let mut ledger = EnergyLedger::default();
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
+        assert!(begin_reproduction(
+            &mut parent,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+        let original_units = parent
+            .reproductive_construction
+            .as_ref()
+            .unwrap()
+            .developing_structure
+            .units
+            .len();
+        assert!(original_units > 0);
+
+        let child = finish_reproduction(
+            &mut parent,
+            "should-not-exist".to_owned(),
+            &simulation.environment.catalog,
+            &mut ledger,
+            None,
+        );
+
+        assert!(child.is_none());
+        let retained = parent
+            .reproductive_construction
+            .as_ref()
+            .expect("non-ready construction remains parent-owned");
+        assert_eq!(retained.developing_structure.units.len(), original_units);
     }
 
     #[test]
