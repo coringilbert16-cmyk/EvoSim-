@@ -1,7 +1,7 @@
 # Chemistry Unification — Current Handoff
 
-**Plan:** `4cbf7bb6d2c7f52ad43e67ae9eec2624c8064a27`  
-**PR #205 audited head:** `12d8079230458da68a8dc3755a1d6a9b41347862`  
+**Plan (latest recorded plan commit):** `e34e52be71ee856f3b2d8be86973d6076aac4c28`  
+**PR #205 last audited head (historical; refresh before implementation):** `12d8079230458da68a8dc3755a1d6a9b41347862`  
 **CI:** [39833438679](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39833438679).
 
 PR #204 is documentation-only. Full decisions and audit records are in `docs/chemistry-audit-unification-plan.md`, Sections 14–17. No implementation source/tests changed during this audit series.
