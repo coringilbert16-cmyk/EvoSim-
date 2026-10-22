@@ -64,8 +64,33 @@ fn parent_child_position(
                     rotation_radians: parent_part.rotation_radians,
                 },
             };
-            if crate::material_geometry::placed_forms_overlap(&parent_part_form, &anchor_part, 0.0)
-            {
+            // `placed_forms_overlap` intentionally includes boundary touch,
+            // so it cannot by itself distinguish a valid attachment from
+            // interpenetrating matter. Require actual boundary contact with
+            // the intended parent part and reject penetration against every
+            // realized parent part before using this as the construction anchor.
+            let touches_target = crate::material_geometry::placed_forms_boundary_contact(
+                &parent_part_form,
+                &anchor_part,
+                0.0,
+            );
+            let penetrates_parent = body.parts.iter().any(|part| {
+                let existing = crate::material_geometry::PlacedMaterialPart {
+                    part_index: part.unit_index,
+                    form: part.form.clone(),
+                    placement: crate::structure::Placement {
+                        x: part.x,
+                        y: part.y,
+                        rotation_radians: part.rotation_radians,
+                    },
+                };
+                crate::material_geometry::placed_forms_penetrate(
+                    &existing,
+                    &anchor_part,
+                    0.0,
+                )
+            });
+            if touches_target && !penetrates_parent {
                 return Some(candidate);
             }
         }
