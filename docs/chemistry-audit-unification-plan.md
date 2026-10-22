@@ -979,3 +979,115 @@ Before the first production change, require:
 2. Owner-approved decisions for canonical resource identity/migration, initial energy/source treatment, internal composite-bond energy, and world-tone approximation bounds.
 3. A dependency-ordered implementation sequence with independent energy/material inventory oracles and failure-injection tests.
 4. One focused pre-change audit before each implementation change, bounded verification, and exact-head comparison against the accepted failure baseline.
+
+
+---
+
+## 12. Owner decisions recorded — 2026-10-22
+
+The project owner selected the following directions for the chemistry unification work. These decisions resolve the corresponding design questions in this plan. They do not mean the behavior has been implemented or verified. Production code changes remain gated on the dependency-ordered implementation plan and the project's change-approval workflow.
+
+### D1 — Canonical resource identity: Oxygen
+
+**Decision:** Retain Oxygen as the canonical identity for resource ID 6; do not rename it to Methane.
+
+**Implementation implications:** Update the approved resource vocabulary/specification to Oxygen so the catalog and governing design agree. Audit all resource names, serialized values, chemistry-cache keys, Bob/library keys, tests, and documentation for stale Methane assumptions. Do not silently treat Oxygen and Methane as aliases or distinct resources. Any historical data migration must preserve this chosen identity and be explicitly tested.
+
+### D2 — Initial energy: explicit one-time source transaction
+
+**Decision:** Represent initialization energy as an explicit, one-time external-source transaction (Option B).
+
+**Implementation implications:** Establish a defined pre-initialization/empty-state boundary, record initial energy exactly once, and include it in the same conservation equation as later external inputs. The tick-zero inventory must remain independently reportable. Repeated initialization, restore, or replay must not duplicate the source event.
+
+### D3 — Composite bond energy: explicit bond-owned record
+
+**Decision:** Each realized bond that carries stored energy has explicit, unambiguous energy ownership; a bond's stored energy can be settled/released no more than once (Option A).
+
+**Implementation implications:** Define stable bond identity or equivalent ownership, formation settlement, break settlement, rollback, and persistence behavior. A failed or retried BREAK must not release energy twice. This decision does not assume every topology edge necessarily stores nonzero energy; the chemistry contract must define which bonds do.
+
+### D4 — Numerical tolerance versus physical dissipation
+
+**Decision:** Separate numerical comparison tolerance from physical dissipation (Option A).
+
+**Implementation implications:** Epsilon comparisons may account for representation-level noise, but discarded stored energy cannot silently disappear. Any actual truncation/loss must be accounted for under an explicitly defined physical sink or avoided. Establish tolerances and a global residual budget from tests and measured long-run behavior, not arbitrary constants.
+
+### D5 — Sunlight/world-tone computation
+
+**Decision:** Use the fast first-hit/single-sweep approximation if it passes comparison against an exact small-world reference (Option A).
+
+**Implementation implications:** Preserve source-energy budgeting, occlusion/shadow semantics, and the agreed onward frequency-shifted propagation model (not mirror-ray reflection). Benchmark representative workloads, measure geometry and energy-allocation error, and document an acceptable error/performance budget before selecting final thresholds. Keep the current live capture path intact unless a separately approved change is justified by audit evidence.
+
+### D6 — Legacy persistence policy
+
+**Decision:** Reject all pre-unification saves and caches rather than migrating or implicitly accepting them (Option C).
+
+**Implementation implications:** Define an explicit unification-version boundary. Unsupported older saves/caches must fail with an actionable diagnostic; they must not be loaded with defaults that invent missing energy/material history. Fresh saves and caches must include the required version/schema and chemistry-equation/parameter identity. This policy applies to persisted simulation saves and chemistry caches; Bob geometry-library data must be separately assessed and only rejected if it is part of the affected legacy format, not assumed to be equivalent without evidence.
+
+### D7 — Units and quantity semantics
+
+**Decision:** Adopt the recommended documented, internally consistent simulation-unit contract (Option A). Keep reactivity distinct from harmonic response unless a single defensible equation proves they are the same quantity; use stronger typed representations incrementally where they prevent unit mixing.
+
+**Implementation implications:** Explicitly define energy, work, heat/dissipation, resonance/signal quantities, material amount, and conversions between them. Keep immutable resource potential distinct from usable/stored energy. Do not impose SI calibration without a model that supports it.
+
+### D8 — Atomic constituents and physical material representation
+
+**Decision:** Base resources are indivisible. There are no fractional atoms, and base resources may never be split. If the current chemistry mathematics requires fractional base atoms or breaking a base resource into smaller base-resource units, fix the equations or change the model values until valid, clean outcomes are obtained.
+
+**Implementation implications:** Replace any implicit fractional-atom semantics with explicit validation/invariants. Fractional numerical intermediates may exist only where they do not represent fractional physical atoms and where final outcomes conserve integer base-resource counts. The material inventory must count actual constituents across all holders and prove that reactions, composites, death, persistence, and rollback neither create nor destroy them. Fluid volume/deformation rules do not authorize splitting a base resource atom.
+
+### D9 — Tick ordering and multi-tick operations
+
+**Decision:** Define explicit deterministic tick phases and ordering (Option A), while allowing some operations to span multiple ticks to reduce per-tick computation.
+
+**Implementation implications:** A multi-tick operation must have explicit state, ownership/reservation rules, progress semantics, and atomic final commit. It must not duplicate or lose energy/material while pending. Define stale/cancelled operation behavior, deterministic tie-breaking, and the exact same-tick biological eligibility boundary when core breach occurs. Death ends biological activity, not physical existence; valid in-flight physical operations resolve according to the declared contract.
+
+### D10 — Resonance overload
+
+**Decision:** Resonance overload must destabilize bonds; it is not simply a rejected deposit or an automatically dissipated excess.
+
+**Implementation implications:** Specify which bonds are eligible, how overload magnitude selects or affects destabilization, how BREAK is scheduled/settled, and how stored bond energy and resonance energy are reconciled without double release. If destabilization spans ticks, its pending state must be deterministic, cancellable/rollback-safe, and conserve energy/material. Do not invent an arbitrary cap or dissipation rule as a substitute for overload behavior.
+
+### D11 — Conservation diagnostics
+
+**Decision:** Strict tests should fail on invariant violations; exploratory runtime diagnostics should report clearly labelled residuals without silently repairing state (Option A).
+
+**Implementation implications:** Diagnostics remain observational and cannot become an alternate accounting authority. Fatal runtime policy may be tightened later based on measured residual tolerance and operational needs.
+
+### D12 — Post-death chemistry
+
+**Decision:** Keep the legacy decomposition/recycling helper out of normal production death processing; post-death physical changes proceed through ordinary chemistry (Option A).
+
+**Implementation implications:** Death changes biological eligibility only. Dead organisms and their constituents remain in the world. Do not enable a separate recycling law without explicit future approval.
+
+### D13 — Chemistry cache validity
+
+**Decision:** Version cache identity by the chemistry equations and parameters (Option A), but reject pre-unification caches under D6.
+
+**Implementation implications:** A cache hit is valid only for matching canonical resource identity and matching chemistry-equation/parameter version. Invalid or stale cache data must not be used to authorize a reaction threshold or physical outcome.
+
+### D14 — Performance envelope
+
+**Decision:** Establish a representative workload and benchmark repeatably before choosing performance/error thresholds (Option A).
+
+**Implementation implications:** Measure runtime, memory, cache growth, and world-tone geometric/energy error. Use exact small-world behavior as an oracle where practical. Avoid unbounded all-pairs work, per-object sunlight ray tracing, or whole-world cloning per tick unless evidence justifies the cost.
+
+### D15 — Test baseline
+
+**Decision:** Preserve the exact baseline and compare named failures where available (Option A).
+
+**Implementation implications:** Keep the recorded main SHA and 563 passed / 28 failed / 1 ignored result as historical baseline evidence; do not call it green. Extract named failures and compare future runs by identity, not only aggregate count. Do not pull all known baseline failures into this chemistry change unless a failure blocks a required invariant or the owner separately authorizes it.
+
+### Updated dependency order
+
+1. Freeze the exact-head baseline and extract named failures where possible.
+2. Align the canonical resource vocabulary to Oxygen and define the unification version boundary.
+3. Define units, initial-source accounting, indivisible constituent accounting, bond-energy ownership, and numerical residual policy.
+4. Build independent test-only energy and integer material-inventory oracles, including the tick-zero source transaction.
+5. Define and test atomic COMBINE/BREAK/overload transactions, including resonance-triggered bond destabilization.
+6. Specify deterministic tick phases and multi-tick operation ownership/commit/cancellation behavior.
+7. Add fresh-format persistence/cache validation; reject pre-unification saves/caches explicitly.
+8. Validate post-death ordinary chemistry and world-tone source/settlement against the same inventory oracles.
+9. Benchmark the fast world-tone approximation against exact small-world references and set evidence-based error/performance thresholds.
+10. Run cross-domain failure-injection, long-run numerical, persistence, and integration tests; update README/spec only when the implementation supports the claims.
+
+**Implementation gate:** These owner decisions establish design direction. They do not authorize silently changing unrelated code or PR #196 constructor/Bob behavior. Begin with the smallest test-only inventory oracle and tick-zero source-accounting test, then make one audited production change at a time.
