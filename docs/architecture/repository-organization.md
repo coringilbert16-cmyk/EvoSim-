@@ -14,15 +14,16 @@ Current target:
 - src/infrastructure/ — cross-cutting process/library synchronization and diagnostics
 - src/ui/ — server-served visualization support
 
-Top-level persistent knowledge stores:
-- geometry_library/
-- chemistry_library/
+Persistent knowledge data:
+- chemistry_library/data/ — tracked chemistry cache records and manifest.
+- Geometry-library code and runtime lookup/generation live under src/bob/; there is no separate top-level geometry_library/ directory in the audited main tree.
 
 Supporting areas:
-- tests/
-- docs/
-- scripts/
-- ui/
+- src/tests/ — crate-internal contract and simulation tests.
+- docs/ — architecture, mechanics, plans, and audit evidence.
+- scripts/ — repository checks.
+- tools/ — focused audit utilities.
+- ui/ — browser assets, separate from Rust visualization support under src/ui/.
 
 Migration rules:
 1. Organize by responsibility, not historical filename.
@@ -39,7 +40,7 @@ Completed:
 - Major root-level implementation files have been moved into responsibility directories.
 - src/main.rs preserves existing crate-level module names through explicit path attributes.
 - Geometry-library documentation points at Bob's current library implementation.
-- Top-level chemistry-library and tests boundaries now exist.
+- The chemistry-library data root exists; tests remain under src/tests/ because they need crate-internal access.
 
 Still in migration:
 - Unit/contract tests remain beside executable modules in src/ because they depend on private crate internals.
