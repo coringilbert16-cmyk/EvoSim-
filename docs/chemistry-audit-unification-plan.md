@@ -2212,3 +2212,15 @@ A1 active identity and unknown-name behavior are substantially closed for inspec
 - Existing downstream spectrum energy bounding prevents an unbounded amplitude from directly exceeding the incident energy budget, but it does not make malformed-property behavior scientifically valid. Keep this separate from conservation tests: it is a material-response validity issue, not by itself proof of energy creation.
 
 **Next audit:** enumerate all entry points that call natural_frequency_hz/damping_ratio and confirm they either validate catalog properties before calling or propagate a fail-closed result. No implementation until the audit templates are complete.
+
+
+### 17.61 Resonance caller cross-check — caller-side finite checks do not catch inputs masked by epsilon clamps — 2026-10-22
+
+**Status: A7/A18 follow-up confirmed.** Callers inspected: live world-tone snapshot, legacy WorldToneFrame receiver, harmonic spectrum update, chemical BREAK accumulation, and resonance-overload BREAK candidate selection.
+
+- `chemical_reaction.rs` and `transformation.rs` check that the returned natural frequencies are finite and positive, but `natural_frequency_hz` can turn NaN mass/cohesion into epsilon-valued inputs before returning. The caller checks therefore do not reject those malformed properties.
+- `world_tone_snapshot.rs` checks damping output and bounds response energy, but a finite damping value produced from malformed reactivity is not enough to prove that the material properties were valid. The legacy per-unit capture path also relies on the same helper functions. Harmonic-spectrum generation uses these helpers and should share the same fail-closed contract.
+- The narrow common boundary is to validate ResourceProperties and ResourceBaselines inside natural_frequency_hz/damping_ratio before applying epsilon floors; return a non-finite/Option failure consistently and have callers skip that body/interface without changing the source budget. Avoid independently adding divergent checks in each caller.
+- Test coverage should exercise the helper directly and at least one live world-tone and one chemical-reaction call site with malformed catalog properties. Verify invalid material does not become a baseline-frequency resonator and does not change reservoir, ledger, or activation state.
+
+This confirms an adversarial invalid-state gap across several callers; it is not evidence of a default-catalog failure or of energy exceeding the incident budget. No implementation change.
