@@ -2188,3 +2188,15 @@ This summary consolidates Sections 17.32–17.54. Local ordering being sound doe
 - Empty-catalog baseline helpers return neutral values, but the production environment uses the non-empty seven-resource catalog. Test empty-catalog behavior explicitly; do not treat these values as properties for unknown resources.
 
 A1 active identity and unknown-name behavior are substantially closed for inspected production paths. Malformed catalog-property tests and all-entry-point validation remain evidence gates. Cache invalidation remains open per Sections 17.49–17.50.
+
+
+### 17.59 Diagnostic observability audit — seed header and energy label are not authoritative — 2026-10-22
+
+**Status: Reporting mismatch confirmed; no runtime change made.** Exact-head review of src/infrastructure/diagnostics.rs and README.md at PR #205 head 12d8079230458da68a8dc3755a1d6a9b41347862.
+
+- Diagnostics are opt-in and separate from normal headless output. The JSON header hard-codes `seed: 42` instead of reading the simulation's actual seed/configuration. A diagnostic run using another seed would therefore be mislabeled.
+- The per-organism snapshot serializes only `organism.usable_energy` under the generic key `energy`. It does not represent developing usable energy, retained resonance, or stored graph-bond energy. This is useful for a local transformation trace, but it must not be interpreted as a whole-organism or world energy inventory. Rename/label it as usable energy or include separately named holder fields in a future diagnostics task.
+- The recorder's opt-in file output is not the conservation oracle. Keep EnergyInventorySnapshot and integer material inventory as the independent accounting tools; do not derive world conservation from diagnostic event deltas alone.
+- README.md's current statement that live sunlight capture is disabled is stale against the inspected tick path. Section 17.57 records the mismatch and the decision not to edit README until the audit register is closed and the owner approves the documentation update. The README's PR #203 test checkpoint should remain historical rather than be overwritten without preserving provenance.
+
+**A17/A21 status:** the exact seed/quantity labels and README capture-status discrepancy are now evidenced. Fixing diagnostics and README remains a later scoped change; do not mix it into PR #204's audit-plan-only changes unless the owner authorizes it.
