@@ -3147,6 +3147,17 @@ Consequences:
 - **Still not implemented:** the reproductive graph is still separately stored. This slice does not make reproduction a canonical parent-owned aggregate or make production costs atomic. Movement is unchanged.
 - **Next:** finish exact-head CI, then audit stable core identity if all old boundary constituents disappear. Continue toward the first atomic parent-funded growth transaction only after core identity and anchor placement are reliable. Movement starts later, when the live construction graph actually moves into the parent-owned aggregate; notify the user before that coordinated refactor.
 
+
+
+## Reproduction anchor geometry and core identity guard (Section 17.119, 2026-10-22)
+
+- **Core identity lifecycle:** `Organism::genome_core_identity_established` distinguishes a never-yet-identified organism from one whose previously known core IDs have all disappeared. When identity has been established but no primary core IDs survive, cavity lookup returns no cavity rather than falling back to a different qualifying cavity. Existing serialized organisms with nonempty primary IDs infer established identity. This prevents silent genome substitution after core destruction.
+- **Exact-head compile audit:** CI at `548fb485c5850b7ccdc0cb3a622d569cd433fbd9` failed before running tests because the new identity flag was missing from two `Organism` initializers and `HashMap` was imported but unused. The initializer defaults and unused import were corrected in subsequent commits; require fresh exact-head CI to confirm.
+- **Anchor geometry audit:** `placed_forms_overlap` treats boundary touching as overlap (SAT separation uses strict less-than), so overlap alone is not a valid penetration test. More importantly, `parent_child_position` initially considered the anchor at the parent part's exact placement before trying aligned candidate placements. It now requires physical boundary contact with the intended parent constituent and rejects strict penetration against every realized parent part. A regression assertion checks both properties.
+- **Scope:** no collision relaxation was introduced. Anchor material remains separate construction geometry for now; this only makes its initial placement geometrically admissible. It does not solve canonical aggregate ownership, atomic parent-energy debit, source removal, ledger settlement, or revision/cache commit.
+- **Movement gate:** still deferred. Start movement only when the live developing structure is migrated into the parent-owned aggregate, and then coordinate translation, collision/space checks, world-tone body enumeration, and position/structure revisions together.
+- **Next:** validate the non-penetrating anchor placement test and exact-head compile/full suite; then design a transactional anchor promotion into the parent graph that preserves stable physical IDs and existing bonds.
+
 ## 18. Research references and annotated application to EvoSim — 2026-10-22
 
 **Purpose.** These references are an external research crosswalk for the plan, not a new physics specification and not evidence that any feature is already implemented. Use them to sharpen audits, design tests, and identify efficient abstractions. The owner-approved decisions in Sections 14 and 17 remain authoritative. In particular, do not import assumptions from models that do not conserve material, use different energy semantics, or omit EvoSim's physical geometry.
