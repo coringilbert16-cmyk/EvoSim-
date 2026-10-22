@@ -273,3 +273,13 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - `apply_push_plan` reinserts pushed physical material only when the translated first placement maps to a field index; no fallback exists. `can_translate_physical` may guarantee this for valid inputs, so treat as a targeted invariant to prove, not as confirmed material loss.
 - D16 still conflicts with the current movement path's separate translation of `ReproductiveConstruction.developing_structure`. Canonical future movement must cover the one authoritative parent-owned graph once, with core-specific identity and cache/spatial updates; do not patch movement in isolation.
 - **No source/test changes.** Audit templates remain open. Next work is to finish deterministic failure-injection rows for acquisition/expulsion/stored BREAK, COMBINE rollback, construction reserve transfer rejection, stale reaction keys, cache catalog/restart, and post-death aggregate inventory; reconcile against Section 17.6/phase tracker. Only after all templates close should a minimal implementation unit be selected. Refresh PR #205 head and CI before the first source/test change.
+
+
+## Resume checkpoint — acquisition/expulsion failure paths (2026-10-22)
+
+- **PR #204 plan commit:** `5ff519736755e6769267b1240792665a508861b3` (Section 17.87). PR #204 remains documentation-only.
+- **PR #205 audited head:** `12d8079230458da68a8dc3755a1d6a9b41347862`; workflow `39833438679` confirmed failed as recorded in the preceding checkpoint. No source/test changes.
+- Contained acquisition removes each contained field object before storage. If storage rejects, fallback deposit is conditional on a first placement and its boolean result is ignored. If storage and fallback both reject—or no placement exists—the original source has no rollback path.
+- Expulsion removes a stored object first. Multiple validation-failure branches attempt storage restoration but ignore the result; final field insertion rejection returns false without restoring storage. Exact instance/geometry/endpoints must be conserved, not just aggregate totals.
+- Required deterministic tests: storage reject + fallback success; storage + fallback rejection; missing/malformed placement; expulsion validation rejection with restoration success/failure; final destination rejection. Assert exact holder membership, physical instance and connection identity, cell/spatial indexes, and independent material inventory.
+- **Next:** audit stored BREAK escrow/partial-split and environmental COMBINE restoration/ledger rollback, then remaining construction/cache/reaction/post-death rows. Audit templates still open; do not change source/tests until all are complete. Refresh PR #205 head/CI before implementation.
