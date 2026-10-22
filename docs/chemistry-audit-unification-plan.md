@@ -688,9 +688,9 @@ Do not claim chemistry unification complete until all applicable gates have evid
 | A9 Work, heat, dissipation | Gap found | Movement/maintenance are heat-accounted; move precedes debit; stress and heat semantics need definition | Canonical sink/work semantics and failure-injection tests after audits |
 | A10 Stress/death/core breach | Gap found | Death is observational; breached bodies persist and chemistry continues; same-tick gate boundary remains | Tick-order and pending-transaction tests after audits |
 | A11 Post-death chemistry/material fate | Gap found | Live path is ordinary chemistry; legacy decomposition is test-only; recycling helper has no production caller found | Keep one live pathway; test/harden or quarantine legacy helper after audits |
-| A12 Energy consumers/transfers | Not started | — | — |
-| A13 Persistence/schema/recovery | Not started | — | — |
-| A14 Chemistry cache semantics | Not started | — | — |
+| A12 Energy consumers/transfers | Gap found | Initial energy is an implicit baseline; ignored transfer result and trial-energy allowances need explicit accounting; reproduction anchor transfer is staged separately | Define initial-energy boundary; surface transfer failures; prove deterministic trial/actual construction equivalence |
+| A13 Persistence/schema/recovery | Gap found | Serde defaults/aliases and skipped derived caches identified; authoritative save/load chain and atomic recovery not proven | Locate actual snapshot boundary; version/migrate ledger baselines; validate pending-operation cross-field invariants and malformed energy |
+| A14 Chemistry cache semantics | Gap found | Miss fallback exists; equation/parameter fingerprint not evidenced, so stale cache hits may alter reaction thresholds | Version cache semantics; prove hit/miss equivalence and invalid/corrupt-cache fallback; benchmark cold/hot lookups |
 | A15 Tick ordering/determinism | Not started | — | — |
 | A16 Material conservation | Not started | — | — |
 | A17 Diagnostics/observability | Not started | — | — |
