@@ -595,3 +595,14 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Movement is still deferred. Before migrating developing structure into the parent aggregate, notify the owner that the coordinated movement phase will need translation, collision/space checks, world-tone body enumeration, and position/structure revision changes together. PR #196 remains out of scope.
 - Governing plan updated in commit `22da84bcc4046100ef8e50217fc12c93f54e82ab` (Section 17.122).
 
+
+
+## Staged physical graph merge checkpoint — 2026-10-22, Section 17.123
+
+- Current PR #205 source head: `ed523c88d4937aa5fe55864d7218fe1db69adb32`.
+- Added `append_graph_remapping_ids` and two tests. The method stages a candidate graph, remaps source constituent IDs and bond endpoints, carries source primary/additional core groups into the merged identity metadata, preserves bond energy, and rejects malformed source references before destination mutation. Geometry/contact validation is intentionally outside this utility.
+- Added a dedicated CI step: `cargo test --locked append_graph_`.
+- The first CI run `39866008821` failed only the formatting step; three rustfmt layout changes were corrected. Current exact-head run `39866134452` passed formatting and is running the focused graph-merge tests. Result is pending; do not claim tests passed yet.
+- This is not live reproduction migration. Parent and developing graph remain separate; no energy holder or movement path was changed. After focused verification, audit overflow/invalid-destination cases and then decide the smallest coherent transaction for anchor promotion. Notify the owner before the later coordinated movement refactor.
+- Plan Section 17.123 recorded in PR #204 commit `f3beaef10308148de5761ad0c42921c163ad1231`.
+
