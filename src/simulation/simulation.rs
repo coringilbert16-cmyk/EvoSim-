@@ -610,8 +610,13 @@ impl Simulation {
             // sink succeeds. Otherwise a retained body would re-release the
             // same units on a later tick.
             let position = self.decomposing_bodies[index].position.clone();
-            let materials =
-                self.decomposing_bodies[index].release_finished_material(&self.environment.catalog);
+            let Some(materials) =
+                self.decomposing_bodies[index].release_finished_material(&self.environment.catalog)
+            else {
+                // Keep the holder intact if any constituent cannot be released
+                // with its authoritative material and geometry.
+                continue;
+            };
             for material in materials {
                 self.environment
                     .field
