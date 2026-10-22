@@ -58,7 +58,7 @@ impl PhysicalMaterial {
                     || material.has_internal_structure()
                     || resource.physical_state != crate::resources::PhysicalState::Fluid
                     || *amount < 1.0
-                    || (amount - amount.round()).abs() > 1e-9
+                    || (*amount - amount.round()).abs() > 1e-9
                 {
                     return None;
                 }
@@ -118,7 +118,7 @@ impl PhysicalMaterial {
             return None;
         }
         let (name, amount) = self.material.parts.first()?;
-        if !amount.is_finite() || *amount < 1.0 || (amount - amount.round()).abs() > 1e-9 {
+        if !amount.is_finite() || *amount < 1.0 || (*amount - amount.round()).abs() > 1e-9 {
             return None;
         }
         let resource = catalog.iter().find(|resource| resource.name == *name)?;
