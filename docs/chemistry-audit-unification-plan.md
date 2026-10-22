@@ -3174,7 +3174,7 @@ Consequences:
 
 - Exact tested source head `aa7750d35124a9d03952d70bd74cac99db13826c`, workflow run `39863749605`: **589 passed, 27 failed, 1 ignored**. The new core-identity initializer compiled; the known baseline failure pattern remains at 27. The anchor-geometry change and cavity-overlap ranking were added after this tested head, so these results do not validate those changes.
 - Strict Clippy still fails with the repository's existing 34 application-target and 15 test-target diagnostics.
-- Newer head `7631b67b178d26a559e6a54c1531391d6ab30962` passed formatting and is in the full Rust test stage at note time; it includes core-overlap ranking and anchor-placement assertions. A further core-identity regression test was then added at `c8ce07e0322b1fd880dbdc6261cfd1bc52d372c4`, so final validation must be against that newer head or later.
+- Newer head `7631b67b178d26a559e6a54c1531391d6ab30962` passed formatting and entered the full Rust test stage with core-overlap ranking and anchor-placement assertions. The primary-core-loss regression was then added at `c8ce07e0322b1fd880dbdc6261cfd1bc52d372c4`; formatting was corrected in `135bc4349263a80b5d3a67c8e2e40a3eeeea753f`. Exact-head CI for `135bc4349263a80b5d3a67c8e2e40a3eeeea753f` passed formatting and is in the full Rust test stage at note time.
 - Do not treat CI on an earlier commit as validation of later changes.
 
 ## 18. Research references and annotated application to EvoSim — 2026-10-22
