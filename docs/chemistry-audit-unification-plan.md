@@ -833,9 +833,9 @@ Do not claim chemistry unification complete until all applicable gates have evid
 | A6 Whole-world energy inventory | Gap found | Snapshot is test-only; no production global balance gate; material-internal bond energy absent | Independent inventory and end-of-tick reconciliation after audits |
 | A7 Resonance and reaction coupling | Gap found | Four-component cap; no explicit energy magnitude bound or general reservoir dissipation policy; epsilon pruning | Deposit/withdraw/serialization/spectrum energy invariants after audits |
 | A8 World tone and capture | Gap found | Live capture active despite README/plan disabled claim; global source budget and scaling unproven | Resolve status, profile and compare sweep approximation, prove global budget after audits |
-| A9 Work, heat, dissipation | Not started | — | — |
-| A10 Stress/death/core breach | Not started | — | — |
-| A11 Post-death chemistry/material fate | Not started | — | — |
+| A9 Work, heat, dissipation | Gap found | Movement/maintenance are heat-accounted; move precedes debit; stress and heat semantics need definition | Canonical sink/work semantics and failure-injection tests after audits |
+| A10 Stress/death/core breach | Gap found | Death is observational; breached bodies persist and chemistry continues; same-tick gate boundary remains | Tick-order and pending-transaction tests after audits |
+| A11 Post-death chemistry/material fate | Gap found | Live path is ordinary chemistry; legacy decomposition is test-only; recycling helper has no production caller found | Keep one live pathway; test/harden or quarantine legacy helper after audits |
 | A12 Energy consumers/transfers | Not started | — | — |
 | A13 Persistence/schema/recovery | Not started | — | — |
 | A14 Chemistry cache semantics | Not started | — | — |
