@@ -479,6 +479,34 @@ Equivalently, the residual source minus all destinations must be zero within EPS
 **Deliverable**
 - Dissipation/work/sink matrix; explicit heat policy; tests for energy partition and no silent loss.
 
+**Audit record — 2026-10-22**
+
+**Status: Gap found — many local sinks are explicit, but heat, work, and stress are not yet a single fully specified physical contract.**
+
+| Path | Current accounting | Audit implication |
+|---|---|---|
+| COMBINE | Usable-energy expenditure is split among structural bond energy, formation work, and heat/investment; work is derived from force over remaining approach distance. | Keep force, energy, work, and stored bond potential distinct; prove prior movement work is not charged again. |
+| BREAK | Existing bond energy is removed from structural inventory and allocated to usable energy, work/disruption, and heat according to the shared settlement math. | Prove the threshold and final settlement draw on compatible named stores exactly once. |
+| Movement | Each successful one-unit step debits usable energy and records the same amount as heat; work_expended is zero. | Current model treats locomotion cost as fully dissipated heat, not useful mechanical work. This is an explicit modeling choice but needs documentation/decision, and the physical move currently occurs before energy settlement, so an unexpected settlement failure may leave movement committed without the debit. |
+| Maintenance | Paid maintenance debits usable energy and records the payment as heat, then adds stress from that payment. Unpaid demand adds maintenance debt and stress without an energy debit. | Heat and stress are separate effects of the paid cost; debt is a biological pressure, not a physical energy holder. Confirm no caller double-counts stress as energy. |
+| World tone | Incident energy is partitioned into retained resonance, heat, and escaped signal; material response at nonliving/dead physical receivers becomes heat. | Local path accounting is explicit, but A6 still must prove global source budget and live inventory balance. |
+| Decomposition finalization | Remaining usable budget is explicitly debited and recorded as heat before removing a finished carrier. | This is a named sink in the test-only finalization helper, not proof that ordinary living bodies are automatically decomposed in production. |
+| Reaction accumulation | A fixed 10% of prior reaction accumulator is removed each tick. | The accumulator is a trigger-like chemistry quantity, not a physical energy reservoir; do not also book this mathematical decay as world heat unless the model explicitly defines it as energy. |
+
+**Findings / risk ranking**
+1. **P1 — energy-to-heat versus useful work semantics:** movement is fully counted as heat despite changing position; whether that is intentional should be decided at the model level, not fixed by relabeling counters. Formation work is tracked separately. The ledger's work counter should mean actual energy expended doing work under the chosen convention.
+2. **P1 — move/settle transaction is not fully atomic:** physical movement commits before the ledger debits usable energy. Inputs normally prevalidate cost/available energy, but a later counter overflow or settlement rejection could leave position changed without the corresponding debit. A15 must trace rollback and same-tick state.
+3. **P1 — heat-to-stress coupling:** paid maintenance and transaction heat can also increase biological stress. That may be a legitimate second consequence of the same dissipation, but stress must not be counted as a second energy sink or confused with stored heat.
+4. **P1 — world tone is the main live external input:** its geometry work is rebuilt per tick and its local path partition is balanced, but source output and whole-world budget remain unproven (A6/A8/A19).
+5. **P2 — no unified heat reservoir:** heat is recorded as a cumulative sink, not a modeled environmental temperature/energy field. That is acceptable only if the environment is explicitly an open boundary that receives irrecoverable heat; otherwise heat cannot participate in later chemistry.
+6. **P2 — dissipation terminology spans different mechanisms:** reaction-accumulator decay, harmonic damping, movement cost, maintenance cost, bond-break heat, and sunlight material response should have separate named quantities/rules with a clear common energy accounting convention.
+
+**Evidence inspected:** src/chemistry/combine.rs and combine_runtime.rs; src/chemistry/transformation.rs; src/perception/movement.rs; src/simulation/state.rs (apply_maintenance); src/simulation/world_tone_snapshot.rs; src/chemistry/chemistry.rs; src/chemistry/energy_ledger.rs; src/simulation/simulation.rs.
+
+- **Dependencies / downstream audits affected:** A2–A8, A10, A12, A15–A20. A9's semantic decisions depend on the full source/sink and consumer inventory.
+- **Decision required from project owner, if any:** no immediate decision; retain the current convention in this audit and list any semantic changes for a later explicit approval.
+- **Recommended smallest next change (if authorized):** after all audits, document canonical energy/work/heat semantics and add failure-injection tests around movement commit/debit. Do not alter movement or heat behavior before the complete audit. No production code change authorized now.
+
 ### A10 — Stress, damage, core breach, death, and biological eligibility
 
 **Questions**
@@ -496,6 +524,41 @@ Equivalently, the residual source minus all destinations must be zero within EPS
 **Deliverable**
 - Explicit state-transition table and tick-order diagram; regressions for chemical and stress-induced breach; proof that dead bodies persist physically and ordinary chemistry remains possible.
 
+**Audit record — 2026-10-22**
+
+**Status: Gap found — death is currently a derived biological eligibility state, while physical persistence and ordinary chemistry continue.**
+
+**Observed lifecycle**
+- The simulation determines living IDs from the genome-core/cavity analysis. A breached organism remains in the organism collection and remains part of the physical world; the simulation comments explicitly say death is observational and that ordinary chemistry continues after breach.
+- The tick's biological decision/movement/construction/survival-damage loops are gated by the living-ID set. Structural damage is not an independent random stress-break path: stress decay and resonance-overload resolution route structural change through the shared chemistry/BREAK mechanism.
+- Maintenance payment is applied as part of organism state logic; A12 must verify it is only applied to eligible living organisms and cannot continue biologically after breach. Debt/stress accumulation can cause an eventual core breach but is not itself a bond-break authority.
+- Invalid geometry-analysis results are not automatically treated as death in the survival-damage path; this is an important fail-closed distinction between dead and analysis failed.
+- Existing in-flight transformations are intentionally retained after breach, because dropping them could discard reserved material/energy. They are allowed to settle; new biological transformations should not start from breached organisms.
+
+**State transition table**
+
+| Starting state | Event | Physical body | Biological processing | Chemistry |
+|---|---|---|---|---|
+| Intact core | Ordinary tick | Retained | Eligible if other rules permit | Active |
+| Intact core | Chemical BREAK breaches core | Retained | Eligibility is recalculated according to tick-order rules; same-tick edge cases require tests | Continues |
+| Intact core | Unsustainable maintenance/stress causes chemical BREAK | Retained | Stops after breach is recognized | Continues |
+| Breached core | Later tick | Retained | New biological actions gated off | Continues |
+| Breached core with in-flight transaction | Pending BREAK/COMBINE resolves | Retained | No new decision required for the pending operation | Must settle atomically |
+| Geometry analysis failure | Unknown | Retained | Must not be declared dead solely from analysis error | Fail closed / diagnostic required |
+
+**Findings / risk ranking**
+1. **P1 — same-tick death boundary:** living eligibility is determined at a point in tick processing; a later reaction can breach a core after that set is formed. Verify whether biological actions can still occur later that tick, and define the precise transition point.
+2. **P1 — maintenance invocation and lifecycle eligibility:** the state method itself is not a death gate; prove the caller gates it. Debt/stress accumulation can cause an eventual core breach but is not a bond-break authority.
+3. **P1 — pending operations after death:** retaining in-flight transactions is preferable to silently dropping reservations, but test pending source removal, failed resolve, stale structure revision, and save/load across breach.
+4. **P2 — physical body vs legacy decomposition:** the approved rule is that death does not automatically disassemble the body. Do not activate recycling as a special death chemistry process. The legacy DecomposingBody subsystem must remain explicitly separate unless a future design decision changes the death model.
+5. **P2 — cavity predicate is a proxy for genome-core integrity:** ensure the approved core-breach predicate is stable and not conflated with general organism viability or maintenance debt alone.
+
+**Evidence inspected:** src/simulation/simulation.rs (living-ID gating, apply_survival_damage, pending transformations); src/simulation/state.rs (maintenance/stress); src/chemistry/transformation.rs (resonance-overload BREAK); src/cavity.rs and core analysis call paths; current README and approved death rule.
+
+- **Dependencies / downstream audits affected:** A4, A9, A11–A16, A18, A20. Exact tick ordering and maintenance callers remain open for A12/A15.
+- **Decision required from project owner, if any:** none to continue. Keep death observational and do not introduce a new decomposition law.
+- **Recommended smallest next change (if authorized):** after all audits, add same-tick core-breach and pending-operation tests that prove physical persistence and biological gating. No production code change authorized now.
+
 ### A11 — Post-death chemistry, decomposition/recycling, and material conservation
 
 **Questions**
@@ -511,6 +574,31 @@ Equivalently, the residual source minus all destinations must be zero within EPS
 
 **Deliverable**
 - Material/energy fate table for every lifecycle event; remove/disable legacy paths only after reachability is proven and tests cover the replacement path.
+
+**Audit record — 2026-10-22**
+
+**Status: Gap found — the approved live death model is observational, while a legacy decomposition carrier exists behind test-only orchestration.**
+
+**Observed current behavior**
+- Ordinary simulation comments state that breached organisms remain physical and continue the ordinary chemical-reaction pass. This matches the approved model: death is not a separate chemistry process.
+- A legacy DecomposingBody type can hold a structure and usable-energy budget. resolve_one_bond_with_ledger breaks its first bond, removes that bond's stored structural energy, and allocates usable credit/heat through the ledger. When the final bond is gone, material is released; process_decomposing_bodies settles any remaining usable budget as heat before removing the carrier.
+- Critical reachability distinction: process_decomposing_bodies is compiled with cfg(test), so this staged carrier orchestration is not part of the ordinary production tick. recycle_dead_organism exists in src/chemistry/recycling.rs, but repository search found no production caller; its tests exercise the helper directly. Thus it must not be described as the live death pathway.
+- The legacy decomposition energy accounting is internally understandable for its carrier, but it is a second bond-breaking orchestration and should not become a second law of chemistry. Current live bodies instead continue through ordinary reaction/BREAK code.
+- The legacy helper releases realized constituent material only when no graph bonds remain. Physical-material internal connections have no independently allocated bond_energy, so they must not receive the realized-graph bond yield unless they were explicitly funded in that representation.
+
+**Findings / risk ranking**
+1. **P0 — production reachability/documentation must be exact:** recycling is not a demonstrated live path and decomposition orchestration is test-only. Preserve this distinction in README and implementation planning; do not wire it into the live death flow as part of unification.
+2. **P1 — duplicate pathway risk:** if legacy decomposition were activated, it could compete with ordinary post-death chemistry over the same conceptual body. Any future lifecycle owner must be singular and explicit.
+3. **P1 — holder/material transfer atomicity:** recycle_dead_organism drains stored material and removes reproductive construction before all subsequent energy transfers are complete. If a later transfer unexpectedly fails, the function returns None after some state has already moved. The prevalidation reduces risk but does not make all mutations atomic under ledger-counter overflow or future failure modes.
+4. **P1 — energy sink at finalization:** the test-only finalizer sends any remaining carrier budget to heat because no authorized receiving path exists. That is a specific open-boundary decision, not an automatic rule that should be applied to every dead organism.
+5. **P2 — material deposit return behavior:** recycling deposits physical materials into the field before it has completed all energy transfers; field deposit failure/rollback and material conservation need adversarial tests.
+6. **P2 — test-only path can mislead audits:** phase/authority tests prove the helper's behavior, not that production runs it. CI results and test coverage must distinguish reachable production behavior from helper-only contracts.
+
+**Evidence inspected:** src/chemistry/decomposition.rs; src/chemistry/recycling.rs; src/simulation/simulation.rs (cfg(test) process_decomposing_bodies and ordinary tick comments); src/tests/phase3_authority_contract_tests.rs; repository searches for recycling and decomposition callers.
+
+- **Dependencies / downstream audits affected:** A4–A6, A9–A10, A12–A16, A18, A20. This audit corrects A4's provisional phrasing: the legacy decomposition helper is called by the test-only process function, not demonstrated as the normal production death pathway.
+- **Decision required from project owner, if any:** none now. Keep ordinary chemistry as the live post-death mechanism; don't enable legacy recycling/decomposition without explicit architectural approval.
+- **Recommended smallest next change (if authorized):** after all audits, test and either harden or clearly quarantine the recycling helper; keep it disconnected from production death processing unless the unified lifecycle plan explicitly chooses it. No production code change authorized now.
 
 ### A12 — Maintenance, movement, reproduction, development, and all energy consumers/transfers
 
