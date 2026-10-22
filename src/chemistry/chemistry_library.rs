@@ -764,7 +764,7 @@ mod tests {
     #[test]
     fn rejects_legacy_schema_three_store_without_migration() {
         let root = test_root("schema-three");
-        write_test_store(&root, 4, &[], 0);
+        write_test_store(&root, 3, &[], 0);
         let error = ChemistryLibrary::open(&root)
             .err()
             .expect("pre-unification cache must be rejected");
@@ -776,7 +776,7 @@ mod tests {
     #[test]
     fn rejects_legacy_record_keys_even_in_current_schema_manifest() {
         let root = test_root("legacy-record");
-        write_test_store(&root, 4, &[test_record_json(4, "legacy-edge")], 1);
+        write_test_store(&root, 4, &[test_record_json(3, "legacy-edge")], 1);
         let error = ChemistryLibrary::open(&root)
             .err()
             .expect("legacy record keys must be rejected");
