@@ -2069,3 +2069,10 @@ These papers and implementations inform the Bob qualifying-cavity search. They a
 
 **Application rule:** use these sources to improve diagnostics and search design, not to weaken EvoSim's live overlap, contact, bond, viability, or minimum-area checks. A candidate generator and an independent reference check should not rely entirely on the same assumptions.
 
+### Constructor milestone policy — agreed close-out clarification (2026-10-22)
+
+- **Cavity qualification is milestone 1, not full organism viability.** The production constructor may successfully report that the initial cavity milestone is reached without claiming that the resulting organism is viable. Viability must be evaluated separately against an explicit set of required milestones; the organism is viable only when every required milestone passes. Define and document the milestone set before treating a cavity-qualified construction as a viable organism. Do not invent a milestone count merely to create a threshold.
+- **Bob search is intentionally throttled low for now.** Keep the current bounded state/beam restrictions unchanged in this step. Document that the constructor's search is incomplete under this budget: exhausting its bounded search does not prove Bob has no useful suggestion or that no valid construction exists. Revisit the budget only in a separately audited change, while retaining the five-minute hard deadline and all live physical checks.
+- **Water acquisition fallback is a temporary bandaid.** The intended end state is for Bob's persisted suggestions to include Water placements. The runtime placement fallback exists only to bridge the current coverage gap and must not be mistaken for the intended long-term placement path. Track Water coverage as Bob-library work; remove the fallback only after persisted Water suggestions cover the required cases and focused tests verify that path.
+- These clarifications separate three different claims: *cavity milestone reached*, *all viability milestones passed*, and *search exhausted under a low budget*. They must not be reported as interchangeable.
+
