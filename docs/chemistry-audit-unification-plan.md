@@ -647,6 +647,8 @@ Owner/caller/test/status findings are summarized below and in the A0–A21 audit
 
 ## 8. Earlier implementation sequence — superseded by the formal plan in Section 17
 
+**Historical outline only:** retain the original sequence below as audit provenance. Section 17 is the authoritative plan and adds the concrete source-path findings from Section 16, the explicit cache-version boundary, the fractional-aggregate conflict with D8, independent integer constituent accounting, and evidence-based sunlight/performance gates.
+
 This is a dependency order, not permission to begin all changes immediately.
 
 1. **Establish baseline and inventory (A0).**
@@ -957,7 +959,7 @@ Record decisions here with date, rationale, affected audits, and any superseded 
 
 ## 13. Earlier dependency-ordered outline — superseded by the formal plan in Section 17
 
-**This is a proposal, not authorization to modify production code.** The owner has already selected D1–D15 in Section 14; do not treat those decisions as open. No production change begins until the owner explicitly approves the implementation sequence. Apply one focused pre-change audit before each implementation change; keep each command/test bounded to five minutes and compare failures against the exact `main` baseline recorded in A0.
+**Historical outline only; Section 17 is authoritative.** This older table is retained to preserve the audit trail, not as a second plan. The owner has selected D1–D15 in Section 14; do not treat those decisions as open. No production change begins until the owner explicitly approves Section 17's implementation sequence. Apply one focused pre-change audit before each implementation change; keep each command/test bounded to five minutes and compare failures against the exact `main` baseline recorded in A0.
 
 | Phase | Work and dependencies | Exit gate before advancing |
 |---|---|---|
