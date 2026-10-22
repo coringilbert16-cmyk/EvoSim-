@@ -6,6 +6,7 @@ This index is the entry point for repository documentation. It classifies docume
 
 - [Repository organization plan](architecture/repository-organization.md) — source boundaries, migration rules, and ownership.
 - [Large-module responsibility audit](architecture/large-module-boundaries.md) — audited candidate boundaries for source exposure, capillary geometry, and Bob's library; no code moved.
+- [Main-branch organization audit (2026-10-22)](architecture/main-organization-audit-2026-10-22.md) — audited the post-PR #202 main tree and ranked further cleanup opportunities.
 - [Repository stabilization audit](repository-stabilization-audit.md) — current-state correction at the top; older sections are historical audit evidence. Read the dated current-state correction first.
 - [PR audit and consolidation (2026-10-13)](pr-audit-consolidation-2026-10-13.md) — historical cross-PR audit; verify every status against the current README before relying on it.
 - [Local viewer / runner implementation audit](LOCAL_VIEWER_IMPLEMENTATION_AUDIT.md) — UI, runner, and integration audit.
