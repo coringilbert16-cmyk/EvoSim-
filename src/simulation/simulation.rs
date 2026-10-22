@@ -263,6 +263,7 @@ impl Simulation {
             stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
             stored_material,
             structure,
+            genome_core_identity_established: false,
             active_transformation_id: None,
             active_movement: None,
             reproductive_construction: None,
