@@ -246,8 +246,7 @@ mod tests {
         assert!(water.realize_default_geometry(&catalog));
         let mut structure = OrganismStructure::new();
         structure.add_unit(water);
-        let mut body =
-            DecomposingBody::new(structure, 0.0, Position { x: 0.0, y: 0.0 }).unwrap();
+        let mut body = DecomposingBody::new(structure, 0.0, Position { x: 0.0, y: 0.0 }).unwrap();
 
         assert!(
             body.release_finished_material(&catalog).is_none(),
