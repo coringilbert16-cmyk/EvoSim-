@@ -543,8 +543,7 @@ impl PhysicalConstituentGraph {
         source: &Self,
     ) -> Option<HashMap<PhysicalConstituentId, PhysicalConstituentId>> {
         let source_ids: HashSet<_> = source.units.iter().map(|unit| unit.physical_id).collect();
-        let destination_ids: HashSet<_> =
-            self.units.iter().map(|unit| unit.physical_id).collect();
+        let destination_ids: HashSet<_> = self.units.iter().map(|unit| unit.physical_id).collect();
         let source_max_id = source_ids.iter().map(|id| id.0).max().unwrap_or(0);
         let destination_max_id = destination_ids.iter().map(|id| id.0).max().unwrap_or(0);
         if source_ids.len() != source.units.len()
