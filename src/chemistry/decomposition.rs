@@ -41,11 +41,28 @@ impl DecomposingBody {
         self.structure
             .units
             .iter()
-            .filter_map(|unit| {
-                PhysicalMaterial::realized(unit.material.clone(), vec![unit.placement], catalog)
-            })
+            .filter_map(|unit| realize_released_unit(unit, catalog))
             .collect()
     }
+}
+
+fn realize_released_unit(
+    unit: &crate::structure::StructuralUnit,
+    catalog: &[crate::resources::BaseResource],
+) -> Option<PhysicalMaterial> {
+    if unit.material.parts.len() == 1 {
+        let (name, _) = unit.material.parts.first()?;
+        let resource = catalog.iter().find(|resource| resource.name == *name)?;
+        if resource.physical_state == crate::resources::PhysicalState::Fluid {
+            return PhysicalMaterial::realized_with_single_fluid_shape(
+                unit.material.clone(),
+                unit.placement,
+                unit.shape(catalog)?.clone(),
+                catalog,
+            );
+        }
+    }
+    PhysicalMaterial::realized(unit.material.clone(), vec![unit.placement], catalog)
 }
 
 pub(crate) struct DecompositionStep {
@@ -72,13 +89,7 @@ pub(crate) fn resolve_one_bond_with_ledger(
             trial_structure
                 .units
                 .iter()
-                .filter_map(|unit| {
-                    PhysicalMaterial::realized(
-                        unit.material.clone(),
-                        vec![unit.placement],
-                        &environment.catalog,
-                    )
-                })
+                .filter_map(|unit| realize_released_unit(unit, &environment.catalog))
                 .collect(),
         )
     } else {
