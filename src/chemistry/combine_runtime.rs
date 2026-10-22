@@ -1727,13 +1727,12 @@ mod fluid_coalescence_transaction_tests {
             y: 0.0,
             rotation_radians: 0.0,
         };
-        let stored = crate::physical_material::PhysicalMaterial::realized(
+        let stored = crate::physical_material::PhysicalMaterial::realized_with_single_fluid_shape(
             Material::free_base("Water", 2.0),
-            vec![origin],
+            origin,
+            shape.clone(),
             &catalog,
         )
-        .unwrap()
-        .with_single_fluid_shape(shape.clone(), &catalog)
         .expect("merged shape should be accepted as a realized single-fluid material");
         let encoded = serde_json::to_string(&stored).unwrap();
         let decoded: crate::physical_material::PhysicalMaterial =
