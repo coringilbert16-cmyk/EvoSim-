@@ -431,14 +431,6 @@ fn budding_scale_reached_with_reference(
         >= 0.80 * preferred
 }
 
-fn birth_ready(
-    construction: &ReproductiveConstruction,
-    catalog: &[crate::resources::BaseResource],
-) -> bool {
-    let seed_reference = crate::juvenile::confirmed_seed_scale_reference(catalog).ok();
-    birth_ready_with_reference(construction, catalog, seed_reference)
-}
-
 fn birth_ready_with_reference(
     construction: &ReproductiveConstruction,
     catalog: &[crate::resources::BaseResource],
