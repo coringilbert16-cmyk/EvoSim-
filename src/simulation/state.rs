@@ -521,3 +521,37 @@ pub(crate) struct Simulation {
 }
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
 pub(crate) const DESIRABILITY_MAX: f64 = 1.0;
+
+
+#[cfg(test)]
+mod genome_core_identity_tests {
+    use super::*;
+
+    #[test]
+    fn established_primary_core_does_not_fall_back_to_an_additional_core() {
+        let mut simulation = Simulation::new(31, 20.0);
+        let catalog = simulation.environment.catalog.clone();
+        let organism = &mut simulation.organisms[0];
+        let surviving_id = organism
+            .structure
+            .physical_id(0)
+            .expect("initial organism has a physical constituent");
+
+        organism.structure.clear_genome_constituent_ids();
+        organism
+            .structure
+            .add_genome_constituent_group([surviving_id]);
+        organism.genome_core_identity_established = true;
+        organism.mark_structure_changed();
+
+        assert!(
+            organism.genome_cavity_cached_ref(&catalog).is_none(),
+            "loss of the primary core must not silently select another core"
+        );
+        assert_eq!(
+            organism.structure.additional_genome_constituent_groups(),
+            &[vec![surviving_id]],
+            "cache refresh must not erase the independent additional core"
+        );
+    }
+}
