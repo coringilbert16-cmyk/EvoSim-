@@ -448,15 +448,6 @@ fn point_on_polygon_boundary(point: Point, polygon: &[Point]) -> bool {
     })
 }
 
-fn segment_in_polygon_boundary(a: Point, b: Point, polygon: &[Point]) -> bool {
-    (0..polygon.len()).any(|i| {
-        let p = polygon[i];
-        let q = polygon[(i + 1) % polygon.len()];
-        (p.sub(a).norm() <= NODE_TOLERANCE && q.sub(b).norm() <= NODE_TOLERANCE)
-            || (p.sub(b).norm() <= NODE_TOLERANCE && q.sub(a).norm() <= NODE_TOLERANCE)
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
