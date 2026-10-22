@@ -1762,3 +1762,28 @@ The test oracle has the necessary holder coverage, but existing regressions do n
 - Every failure regression should compare the full independent integer material oracle plus exact holder/geometry snapshots and the relevant energy/resonance ledger. A test that checks only total amount or a local inventory is insufficient.
 
 **Conclusion:** Normal-path and selected rollback tests exist, but the highest-risk failure atomicity cases in Section 17.35 remain untested. The next step is not a code change: complete the remaining transition and energy-holder audits, then choose the smallest test seam and production fix together. No source or test files changed.
+
+
+### 17.37 World-tone receiver mapping audit — parent-owned physical holdings versus resonance capture — 2026-10-22, PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862`
+
+**Scope / exact-head evidence:** Read the live tick at `src/simulation/simulation.rs`, the complete receiver mapping and settlement loop in `src/simulation/world_tone_snapshot.rs`, and the independent energy snapshot/ledger equation. This establishes current PR #205 behavior and supersedes older README-archive claims that live sunlight capture is disabled. No source/test changes.
+
+**Current behavior**
+- Live world-tone input is enabled in the inspected head. Each tick samples the precomputed `WorldToneCycle` when available, with direct sampling fallback, then calls `WorldToneOccluderSnapshot::settle_living_organism_inputs` for the current `living_ids`.
+- The occluder snapshot contains primary organism structures, developing structures, committed construction material, environmental physical material, legacy carrier structures, parent-stored physical material, and active-transformation physical sources. This is one shared world geometry/path set; it does not trace a separate source ray per organism.
+- Only primary organism structure bodies are mapped through `organism_body_indices` to a living organism's retained resonance reservoir. A breached/dead organism's primary structure is treated as a nonliving receiver. Developing structures, committed material, stored physical material, environmental objects, legacy carriers, and active transformation sources also have no organism-reservoir mapping.
+- For each interaction path, response energy is removed from the travelling signal once. A mapped living receiver can retain the non-damped response in its resonance reservoir; a receiver without a living reservoir converts the full material response to heat. Only the unresponded remainder continues onward; escaped energy is counted at the path end. Reservoirs are staged and committed only after the world-tone ledger transaction succeeds.
+- The independent energy snapshot counts current resonance in organism reservoirs, current usable energy including construction's developing energy, and graph bond energy in both primary and developing structures. It does not create a separate resonance reservoir for developing construction. The world-tone ledger reconciles captured resonance, heat, and escaped energy against incident external input.
+
+**Potential contract gap**
+The owner-approved Section 17.31 model makes the parent the sole authoritative owner of its entire physical aggregate until division, explicitly including stored physical material, committed reproductive material, developing structure/bonds, and associated energy. The live sunlight receiver map, however, treats all non-primary holdings as unowned-by-a-living-receiver physical objects: their response becomes heat even when they are physically parent-relative and still owned by a living parent. This may be an intentional rule for disconnected stored objects, but it is not documented as a deliberate distinction between ownership and energy harvesting, and it may prevent the approved aggregate from collecting resonance through its non-primary surfaces.
+
+Do not automatically map every occluder to the parent reservoir: a source can be physically in the environment, can overlap another body's angular/path lane, or may be a disconnected object whose energy should become heat. The audit must distinguish **physical receiver identity**, **authoritative energy owner**, and **living resonance eligibility** rather than collapsing them into one index.
+
+**Required resolution before claiming world-tone/chemistry unification**
+1. Define whether all physical surfaces owned by a living aggregate can deposit compatible resonance into the parent's single reservoir, or whether only its primary structural graph is biologically eligible. This is a scientific contract question, not an implementation detail.
+2. If non-primary parent-owned surfaces are eligible, map each such physical body to its owning organism without duplicating receiver hits or crediting environmental material to an owner. Preserve first-hit occlusion, one-time response removal, staged reservoir commits, and world energy balance.
+3. Test an occluded/visible parent-owned stored object and a developing structure separately; compare captured resonance, heat, escape, and the independent energy inventory. Include breached parent behavior and verify it remains a nonliving heat receiver.
+4. Keep source/path geometry shared and bounded; do not introduce per-organism ray tracing.
+
+**Next audit:** inspect the approved sunlight/world-tone decisions in the plan and compare them to this receiver-eligibility behavior. Determine whether existing owner approval settles this question or whether a concise decision is required before the live capture map changes. No code/tests until the audit templates are complete.
