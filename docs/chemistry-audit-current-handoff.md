@@ -1,6 +1,6 @@
 # Chemistry Unification — Current Handoff
 
-**Plan (latest recorded plan commit):** `5cbd1adcd1d109c16359a549bccd7a58b0e9c582`  
+**Plan (latest recorded plan commit):** `452c26286afe96256adcc8e1ca3b195451e14fa2`  
 **PR #205 last audited head (historical; refresh before implementation):** `12d8079230458da68a8dc3755a1d6a9b41347862`  
 **CI:** [39833438679](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39833438679).
 
@@ -245,3 +245,11 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - New refinement: movement rejection after geometry succeeds can leave pushed organisms and pushed field physical objects changed as well as the mover. Rollback/test scope includes all pushed entities, cell indexes, spatial index, construction anchors, and progress.
 - Targeted source review found no additional production `EnergyLedger.transfer` caller beyond the already-mapped construction-reserve transfer and quarantined legacy recycler. This is not proof of complete material failure-injection coverage.
 - **Next:** continue checking the remaining production material-mutation call sites against Section 17.84; then reconcile the phase tracker and release gates. Audit is not closed; do not change source/tests until all audit templates are complete.
+
+
+## Release-gate reconciliation — D16 included, not yet verified
+
+- Plan commit: `452c26286afe96256adcc8e1ca3b195451e14fa2`.
+- Section 17.6 now explicitly tracks D1–D16. D16 is settled and documented, but one aggregate graph, attached-unit resonance mapping, storage exclusion, core-specific cavity identity, inventory consistency, and failure atomicity remain implementation/verification obligations.
+- No source/test changes or fresh CI run. Latest recorded PR #205 head remains historical `12d8079230458da68a8dc3755a1d6a9b41347862`; workflow 39833438679 remains the latest recorded verification.
+- Next: finish auditing remaining physical-material mutation paths and close audit templates row by row. Re-fetch PR #205 head and CI before any code change.
