@@ -532,3 +532,14 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - A safe canonical aggregate requires explicit second-core membership/identity in the parent graph, plus an atomic live growth transaction owning geometry, source material, parent usable-energy debit, ledger, structure revision/cache invalidation, and exact rollback. World-tone and independent inventory paths must move with that change.
 - No scalar energy switch or unused merge helper is safe. Division and structural-mass energy partition remain downstream; no developing-energy holder or temporary-organism lifecycle should remain as a parallel model.
 - **Next:** design the smallest second-core membership representation and its first live growth transaction with focused failure-injection and independent-inventory tests. Keep PR #196 out of scope; stay within the five-minute command/test cap.
+
+
+## Aggregate-core representation slice — 2026-10-22, Section 17.116
+
+- PR #205 head `2f8ae39a9b065121a174c07e60a876ac7dae59e5` adds serializable additional genome-core ID groups to the physical graph without duplicating physical units; legacy primary genome-ID serialization is retained. Added tests cover round-trip, duplicate/cross-group ID filtering, deletion cleanup, and per-core recognition.
+- This is representation groundwork only. The reproductive lifecycle still stores a separate developing graph, committed material, developing energy, and temporary maintenance/stress state.
+- New blocker: reproduction anchor placement currently accepts overlap with a parent unit, then instantiates the anchor in a separate graph. A blind aggregate merge could duplicate overlapping matter. Audit whether the anchor should promote/reuse a constituent or whether placement/contact semantics need a validated alternative before implementation.
+- CI run `39861074268` passed formatting and structural checks at last observation; test stages were still in progress. No test-success claim yet.
+- Movement remains deferred until the live construction graph is moved into canonical parent-owned structure. Then translation, collision/space checks, world-tone body enumeration, and revisions need one coordinated refactor. Notify user before starting that phase.
+- Next: focused anchor placement/contact audit, then atomic parent-funded growth transaction. PR #196 remains out of scope.
+
