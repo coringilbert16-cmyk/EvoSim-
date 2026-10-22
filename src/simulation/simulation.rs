@@ -1332,23 +1332,45 @@ impl Simulation {
             .sum();
         organism_energy + decomposition_energy
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "Energy inventory snapshot is currently used by reconciliation tests, not production telemetry"
-        )
-    )]
+    /// Independent test oracle: recompute current stores from their owning state,
+    /// rather than trusting the production ledger's cached aggregate totals.
+    /// Cumulative flows and tick-zero baselines still come from the ledger because
+    /// those are transaction history, not a current-state inventory.
+    #[cfg(test)]
     pub(crate) fn energy_inventory_snapshot(
         &self,
     ) -> crate::energy_ledger::EnergyInventorySnapshot {
+        let current_usable_energy = self.organisms.iter().map(|organism| {
+            organism.usable_energy
+                + organism.reproductive_construction.as_ref()
+                    .map_or(0.0, |construction| construction.developing_energy)
+        }).sum::<f64>()
+            + self.decomposing_bodies.iter().map(|body| body.energy_budget).sum::<f64>();
+
+        let current_resonant_energy = self.organisms.iter()
+            .map(|organism| organism.resonant_energy.total_energy().unwrap_or(f64::NAN))
+            .sum::<f64>();
+
+        let organism_structural_energy = self.organisms.iter().map(|organism| {
+            let own = organism.structure.bonds.iter().map(|bond| bond.bond_energy).sum::<f64>();
+            let developing = organism.reproductive_construction.as_ref().map_or(0.0, |construction| {
+                construction.developing_structure.bonds.iter()
+                    .map(|bond| bond.bond_energy).sum::<f64>()
+            });
+            own + developing
+        }).sum::<f64>();
+        let current_structural_energy = organism_structural_energy
+            + self.decomposing_bodies.iter().map(|body| {
+                body.structure.bonds.iter().map(|bond| bond.bond_energy).sum::<f64>()
+            }).sum::<f64>();
+
         crate::energy_ledger::EnergyInventorySnapshot {
             initial_usable_energy: self.energy_ledger.initial_usable_energy_held,
-            current_usable_energy: self.energy_ledger.total_usable_energy_held,
+            current_usable_energy,
             initial_resonant_energy: self.energy_ledger.initial_resonant_energy_held,
-            current_resonant_energy: self.energy_ledger.total_resonant_energy_held,
+            current_resonant_energy,
             initial_structural_energy: self.energy_ledger.initial_structural_energy_held,
-            current_structural_energy: self.energy_ledger.total_structural_energy_held,
+            current_structural_energy,
             external_energy_input: self.energy_ledger.total_external_energy_input,
             world_tone_energy_escaped: self.energy_ledger.total_world_tone_energy_escaped,
             other_energy_released: self.energy_ledger.total_potential_energy_released,
