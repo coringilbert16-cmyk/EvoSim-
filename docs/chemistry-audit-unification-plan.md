@@ -1,10 +1,10 @@
 # Chemistry Audit and Unification Plan
 
-**Status:** Planning outline; audit findings are to be added section by section.  
+**Status:** Read-only audit register A0–A21 populated; unresolved gaps and implementation dependencies recorded. No production behavior changes have been made.  
 **Baseline branch:** `main`  
 **Baseline commit:** `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5`  
 **Plan opened:** 2026-10-22  
-**Scope:** Read-only audits first; no chemistry behavior changes are authorized by this document alone.
+**Scope:** Read-only audits complete for the planned register; production changes remain unauthorized until the owner reviews the findings and approves the implementation sequence. A0's exact-head CI/test-identity comparison remains blocked.
 
 ## 1. Purpose and acceptance target
 
@@ -1056,3 +1056,35 @@ Record decisions here with date, rationale, affected audits, and any superseded 
 - **Dependencies / downstream audits affected:** all previous audits; A20 is the implementation gate that must consume the findings from A0–A19 before sequencing any behavior changes.
 - **Decision required from project owner, if any:** none to continue read-only work. Before code begins, approve the invariant matrix and decide the initial-condition/source treatment, resource identity migration, internal-bond energy policy, and world-tone approximation error budget.
 - **Recommended smallest next change (if authorized):** after all audits, establish an integration-test matrix with independent energy/material inventory oracles and failure injection; then implement the smallest shared transaction primitive first. No production code change authorized now.
+
+
+### A21 — Documentation/spec alignment and implementation sequencing
+
+**Audit record — 2026-10-22**
+
+**Status: Gap found (audit plan complete; authoritative project status and several design choices require reconciliation).**
+
+- **Exact baseline and files/lines inspected:** `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5`; `README.md`; `docs/README.md`; `README_HANDOFF_ARCHIVE_2026-10-22.md`; `docs/chemistry-audit-unification-plan.md`; A0–A20 records and source references.
+- **Authoritative rule or equation found:** Master Technical Specification v2.4 (`EVOSIM-MASTER-2.4`) is design authority; the root README is the current implementation/status guide; dated handoffs are historical evidence. Current status claims must agree with the exact current tree, and unresolved behavior must remain explicitly unresolved rather than being promoted from an old handoff to a verified fact.
+- **Actual runtime call path:** the README currently states PR #203 is a draft/not merged and cites the older PR #202 source baseline, while the audited `main` SHA is `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5` and PR #203 is merged there. README also says live world-tone capture is disabled, while current `src/simulation/simulation.rs` and `src/simulation/world_tone_snapshot.rs` show configured source sampling and a live capture settlement call. The default resource catalog names Oxygen where the approved resource vocabulary names Methane; the handoff archive records the historical resource rename as Methane to Oxygen. These conflicts require a deliberate, source-backed status update and resource identity decision.
+- **State mutated and transaction boundary:** this audit changed only the audit plan document. No README, source, test, library data, workflow, or runtime behavior was changed. The current PR remains a documentation/planning vehicle; its commit history contains only updates to the audit plan.
+- **Energy/material source and sink:** the audit identifies unresolved source/holder/sink rules rather than choosing them prematurely: initial energy baseline treatment, global source budget and sunlight allocation, energy of internal composite bonds, numerical pruning, and full material ownership reconciliation. These must be resolved in the design sequence before implementation.
+- **Failure/rollback behavior:** not applicable to production behavior in this documentation-only audit. Documentation updates should be evidence-gated: do not claim CI success, a clean baseline, or disabled capture unless exact-head workflows and the live call path support the statement.
+- **Numerical edge cases and invalid-state behavior:** the project spec/resource identity mismatch affects persisted material names, geometry records, chemistry cache keys, tests and migrations. It must not be repaired by a global string replacement without catalog/ID/key migration coverage.
+- **Complexity and scaling implications:** recommended implementation order is: (1) establish exact-head CI/test evidence and correct status docs; (2) decide canonical resource identity and persistence/cache migration; (3) define units, energy inventory/source boundaries, material-holder inventory, and internal-bond policy; (4) specify tick order and transaction atomicity; (5) repair numerical invalid-state paths; (6) build independent energy/material oracle tests and failure injection; (7) profile the current world-tone frame and compare candidate first-hit approximations; (8) implement shared transaction/accounting primitives in small, dependency-ordered changes; (9) update README only after the relevant evidence passes. Constructor/Bob PR #196 remains separate and deferred.
+- **Tests already covering it:** the repository has local unit/contract tests and historical CI runs, but A0 could not verify current-head workflow/status results for `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5`; the README's old PR #202 counts cannot be represented as current-main results.
+- **Focused tests to add or run:** (1) exact-head CI status and failing-test identity extraction; (2) verify resource IDs/names across catalog, serialization fixtures, chemistry library and Bob library; (3) world-tone live-call-path and source-budget integration test; (4) full energy/material inventory matrix from A20; (5) equation-version cache invalidation; (6) persistence/migration tests for any resource or ledger schema change; (7) measured target-population benchmark and approximation error report.
+- **Findings ranked by severity:** **P0/P1** — root README has material status contradictions about PR #203 merge state and live world-tone capture; current project status needs correction after exact-head evidence is obtained. **P1** — resource identity differs from the approved resource vocabulary and affects persistence/cache compatibility. **P1** — A0 exact-head CI/test-identity comparison remains blocked. **P1** — world energy/material conservation and live source allocation remain unproven. **P2** — implementation sequence needs to enforce dependency order and keep PR #196 separate.
+- **Dependencies / downstream audits affected:** all A0–A20. This is the sequencing gate; it consolidates but does not resolve their findings.
+- **Decision required from project owner, if any:** before production changes, approve the canonical resource identity/migration, the initial energy/source accounting contract, internal composite-bond energy policy, and the acceptable error/performance budget for world-tone exposure. No decision is required to continue the read-only audit itself.
+- **Recommended smallest next change (if authorized):** the audit template is now populated through A21. Next, retrieve or rerun bounded exact-head CI evidence if available, reconcile the README's verified status statements, then present the dependency-ordered implementation plan for approval. Do not begin production code until the owner approves that plan. No production code change authorized now.
+
+## Audit completion and implementation gate
+
+The planned audit register A0–A21 has been populated. **Completion means the planned domains have been inspected and their gaps recorded; it does not mean chemistry is unified or conservation is proven.** All areas with unresolved questions remain marked as gaps or blocked, including A0's current-head CI/test identity comparison. No production code, tests, README status, resource catalog, or persistent library data has been changed in this workstream.
+
+Before the first production change, require:
+1. Exact-head baseline evidence or an explicit accepted limitation for A0.
+2. Owner-approved decisions for canonical resource identity/migration, initial energy/source treatment, internal composite-bond energy, and world-tone approximation bounds.
+3. A dependency-ordered implementation sequence with independent energy/material inventory oracles and failure-injection tests.
+4. One focused pre-change audit before each implementation change, bounded verification, and exact-head comparison against the accepted failure baseline.
