@@ -64,11 +64,11 @@ This section describes evidence gaps, not open owner decisions. Where earlier au
 9. Compare failing test identities and assertions with the accepted baseline. Do not treat the known 28 failures as new regressions without evidence, and do not assume the baseline is still identical without checking.
 10. Update this document as each audit completes. Update the root README only after verified decisions/status change; keep it the authoritative concise summary.
 
-## 5. Audit register — fill in after each audit
+## 5. Audit register — completed read-only record
 
-**Status interpretation for this handoff:** the detailed A0–A21 audit records below preserve findings and questions as written during the original read-only audit, before D1–D15 were consolidated. Their “Decision required from project owner” fields and provisional recommendations are historical snapshots, not current owner requests. Apply Section 14 for settled design direction and Section 15 for the later source reconciliation. A settled decision can still have an implementation gap. Current read-only continuation tasks are listed in Section 15.5.
+**Status interpretation for this handoff:** A0–A21 have audit records and summary rows; the final source-path closure is recorded in Section 16. Earlier “Decision required from project owner” fields and provisional recommendations are historical snapshots, not current owner requests. Apply Section 14 for settled design direction, Section 15 for the README/main reconciliation, and Section 16 for the final death, persistence/cache, and material-ownership call-path checks. A settled decision can still have an implementation gap. No audit is marked verified merely because a helper has tests.
 
-For every audit below, fill this record:
+The following is the required record schema used when adding or revising audit evidence:
 
 - **Status:** Not started / In progress / Verified / Gap found / Blocked.
 - **Exact baseline SHA and files/lines inspected:**
@@ -568,6 +568,8 @@ Equivalently, the residual source minus all destinations must be zero within EPS
 
 ### A11 — Post-death chemistry, decomposition/recycling, and material conservation
 
+**Final call-path closure — Section 16:** ordinary `Simulation::step` applies the same `chemical_reaction::accumulate` / `resolve` pass to breached organisms; the legacy `process_decomposing_bodies` method is `#[cfg(test)]`, and repository search found no production caller of `recycle_dead_organism`. Do not treat the legacy path as the live death pathway.
+
 **Questions**
 - Is any legacy decomposition/recycling path still reachable in the production tick?
 - Does post-death bond removal use the same BREAK transaction and physical invariants?
@@ -624,7 +626,7 @@ The completed audit records for these domains appear in the audit log below. The
 
 ## 7. Cross-cutting impact matrix
 
-Fill in the final “authoritative owner / callers / tests / status” columns as audits progress.
+Owner/caller/test/status findings are summarized below and in the A0–A21 audit log. Section 16 closes the final cross-cutting source-path checks; any item marked Gap found remains an implementation/evidence gap, not an unfilled owner decision.
 
 | Domain | Likely source-of-truth area | Downstream systems to trace | Key invariant |
 |---|---|---|---|
@@ -643,7 +645,7 @@ Fill in the final “authoritative owner / callers / tests / status” columns a
 | Diagnostics/UI | diagnostics, visualization, runtime | operators/tests | Distinct quantities and units; bounded overhead |
 | Performance | tick loop, indexes, caches, event queues | all above | Sparse/local bounded work at population scale |
 
-## 8. Implementation sequence — provisional dependency order
+## 8. Earlier implementation sequence — superseded by the formal plan in Section 17
 
 This is a dependency order, not permission to begin all changes immediately.
 
@@ -696,15 +698,15 @@ Do not claim chemistry unification complete until all applicable gates have evid
 | A10 Stress/death/core breach | Gap found | Death is observational; breached bodies persist and chemistry continues; same-tick gate boundary remains | Tick-order and pending-transaction tests after audits |
 | A11 Post-death chemistry/material fate | Gap found | Live path is ordinary chemistry; legacy decomposition is test-only; recycling helper has no production caller found | Keep one live pathway; test/harden or quarantine legacy helper after audits |
 | A12 Energy consumers/transfers | Gap found; initial-source decision settled by D2 | Initial energy is currently an implicit baseline; ignored transfer results and trial-energy allowances need explicit accounting; reproduction anchor transfer is staged separately | Implement one-time source transaction; surface transfer failures; prove deterministic trial/actual construction equivalence |
-| A13 Persistence/schema/recovery | Gap found; rejection policy settled by D6 | Serde defaults/aliases and skipped derived caches identified; authoritative save/load chain and atomic recovery not proven | Locate actual snapshot boundary; reject all pre-unification saves/caches with actionable errors; version fresh formats; validate pending-operation cross-field invariants and malformed energy |
-| A14 Chemistry cache semantics | Gap found | Miss fallback exists; equation/parameter fingerprint not evidenced, so stale cache hits may alter reaction thresholds | Version cache semantics; prove hit/miss equivalence and invalid/corrupt-cache fallback; benchmark cold/hot lookups |
+| A13 Persistence/schema/recovery | Gap found; D6 policy settled | No durable whole-simulation save/load path found in the audited source; runtime history is in-memory clones. `ChemistryLibrary` is durable and accepts schema 2 or 3; pending-operation fields have serde defaults. | Reject pre-unification chemistry caches; define a mandatory version boundary before any future durable simulation-save format; test malformed pending state and restart/corruption paths |
+| A14 Chemistry cache semantics | Gap found | Persistent `ChemistryKey` uses schema version 3; loader still accepts schema 2 keys/manifests. No chemistry equation/parameter fingerprint in the key was evidenced. | Add equation/parameter identity; reject pre-unification schema versions; prove cache-hit/recompute equivalence and benchmark cold/hot lookups |
 | A15 Tick ordering/determinism | Gap found | Pending transformations retain staged state and have restoration paths, but the full tick phase order and all stale/cancelled-operation rollback paths are not proven | Document authoritative phase order; test duration boundaries, save/load around commit, stale operations, and failure injection |
-| A16 Material conservation | Gap found; indivisibility rule settled by D8 | Multiple physical holders and transfer paths identified; no independent whole-world integer constituent inventory evidenced; `f64` material amounts do not enforce the rule | Trace holder ownership/counting and enforce indivisible base-resource counts; build independent test-only constituent inventory oracle |
+| A16 Material conservation | Gap found; D8 rule settled | `Material::is_valid` permits any positive finite `f64` amount and does not validate catalog membership; `Material::take` and aggregate transfer helpers can produce fractional parts. Physical storage enforces discreteness at a later boundary. | Enforce integer base-resource counts at authoritative ownership boundaries; separate fluid geometry/volume from atom count; build an independent whole-world constituent inventory oracle |
 | A17 Diagnostics/observability | Gap found | Recorder is staged/opt-in; inventory snapshot is test-oriented; diagnostic header hard-codes seed 42 and current-vs-cumulative values need clear labels | Report actual run configuration; isolate I/O failures; document units and inventory residual semantics; bound output volume |
 | A18 Numerical stability | Gap found | Reaction accumulation can overflow from extreme prior state; reservoir epsilon pruning and cumulative counter overflow lack a defined long-run fate/tolerance budget | Add adversarial overflow and drift tests; define numerical truncation and counter-overflow policy before shared math changes |
 | A19 Scalability/profiling | Gap found | World-tone geometry/exposure is a likely hotspot; no representative runtime/memory envelope or cache-growth measurements were found | Benchmark sparse/dense worlds and cache cold/hot paths; compare first-hit approximation to a trusted oracle with explicit error bounds |
 | A20 Cross-domain integration | Gap found | Local unit tests exist, but end-to-end energy/material reconciliation and cross-domain failure-injection coverage are unproven; exact-head main reports 563 passed/28 failed/1 ignored, while detailed failure identities are only commit-attested | Build independent inventory oracles and integration matrix covering full ticks, lifecycle, persistence, stale events, and failed commits |
-| A21 Documentation/sequence | Gap found | README is stale about PR #203 and world-tone capture; older audit text still contains pre-D1 Methane language; named baseline failure identities were not independently extracted in this pass | Reconcile current README and historical audit wording with Section 14; preserve the exact-head evidence limitation |
+| A21 Documentation/sequence | Gap found; design decisions reconciled | README status/capture claims are stale; historical Methane decision text is superseded by D1; exact-head named baseline failure identities remain unextracted | Use Section 16 for final call-path findings and Section 17 for the authoritative implementation sequence; preserve baseline evidence limitation |
 
 ## 11. Out of scope unless a direct dependency is proven
 
@@ -953,7 +955,7 @@ Record decisions here with date, rationale, affected audits, and any superseded 
 - Confirmed the dependency order keeps independent inventory oracles and transaction/failure-injection coverage ahead of behavior changes, and keeps PR #196 constructor/Bob work separate.
 - Scope remains documentation-only: no production code, tests, README, resource catalog, or persistent library data was changed. The plan is populated, but chemistry unification and whole-world conservation are not proven.
 
-## 13. Proposed dependency-ordered implementation plan
+## 13. Earlier dependency-ordered outline — superseded by the formal plan in Section 17
 
 **This is a proposal, not authorization to modify production code.** The owner has already selected D1–D15 in Section 14; do not treat those decisions as open. No production change begins until the owner explicitly approves the implementation sequence. Apply one focused pre-change audit before each implementation change; keep each command/test bounded to five minutes and compare failures against the exact `main` baseline recorded in A0.
 
@@ -1159,4 +1161,88 @@ The project owner selected the following directions for the chemistry unificatio
 
 ### 15.5 Updated resume point
 
-**Current task remains documentation-only.** The owner decisions D1–D15 stand. The next useful read-only audit is to trace the exact runtime call paths for (a) death/decomposing-body handling, (b) every cache key and persistence entry point, and (c) every physical material creation/transfer/split path. Add source/function/test references and mark each finding verified or still unknown. Do not create tests or modify production code in PR #204. Once those paths are mapped, revise the design questions so only genuinely unresolved decisions remain; do not repeat questions the code already answers.
+**Current task remains documentation-only.** The final death, persistence/cache, and material-ownership source-path checks are recorded in Section 16. The next step is to turn those findings and the existing A0–A21 register into the formal, dependency-ordered implementation plan in Section 17. D1–D15 stand; do not repeat settled questions. No production code or tests may change in PR #204.
+
+
+---
+
+## 16. Final handoff closure — source-path audits (2026-10-22)
+
+**Scope and evidence boundary:** read-only inspection of source at audited `main` SHA `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5`. This closes the three remaining source-path questions in Section 15.5. It does not prove whole-world conservation and does not authorize code/test changes. Source inspection is distinguished from runtime/test evidence throughout.
+
+### 16.1 Death and post-death call path — verified at source level; accounting still a gap
+
+**Files/functions inspected**
+
+- [`src/simulation/simulation.rs::Simulation::step`](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/src/simulation/simulation.rs#L620-L880)
+- [`src/simulation/simulation.rs::process_decomposing_bodies`](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/src/simulation/simulation.rs#L545-L615)
+- [`src/chemistry/recycling.rs::recycle_dead_organism`](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/src/chemistry/recycling.rs#L1-L55)
+- [`src/chemistry/chemical_reaction.rs::accumulate/resolve`](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/src/chemistry/chemical_reaction.rs)
+- [`src/simulation/state.rs::Simulation`](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/src/simulation/state.rs#L465-L510)
+
+**Findings**
+
+1. The production tick refreshes the living set from genome-core integrity. Maintenance, harmonics, memory, reproduction, movement, and other biological actions are gated by living status.
+2. The ordinary chemistry `accumulate`/`resolve` pass is called for each organism in the simulation loop, including a breached organism. Comments explicitly say physical chemistry continues after biological status ends.
+3. `process_decomposing_bodies` is compiled under `#[cfg(test)]`; it is not the production death pathway. Repository search found no production caller of `recycle_dead_organism`; its observed caller is its unit test. `decomposing_bodies` remains in simulation state and in accounting/observation/snapshot support, so the staged representation must not be mistaken for a normally populated production lifecycle.
+4. The recycling helper moves stored materials to the field before sequential energy transfers complete. No production defect is asserted because no production caller was found; if the helper is ever reconnected, it must first become an atomic staged transfer with rollback/failure-injection coverage.
+5. The energy inventory still includes legacy decomposing-body holders. Keep those holders in the independent inventory if the type remains supported, but do not add a second death chemistry path.
+
+**Status:** runtime architecture verified at source level; global post-death energy/material accounting and helper failure atomicity remain gaps. **Priority:** P1 for lifecycle/accounting correctness; helper hardening is gated on whether it is retained. **Dependencies:** A4–A6, A9–A13, A15–A16, A18, A20.
+
+**Tests already identified:** `recycling_preserves_parent_and_developing_offspring_energy`; test-only finalization test in `simulation.rs`; decomposition/phase-authority tests. These exercise helpers, not normal production death. No new tests were run or created during this audit.
+
+### 16.2 Persistence and cache identities — source-path inventory complete; version enforcement gap
+
+**Files/functions inspected**
+
+- [`src/simulation/state.rs`](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/src/simulation/state.rs)
+- [`src/simulation/runtime.rs::RuntimeState`](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/src/simulation/runtime.rs#L1-L70)
+- [`src/chemistry/chemistry_library.rs::ChemistryLibrary::open`](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/src/chemistry/chemistry_library.rs#L13-L285)
+- [`src/bob/library.rs`](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/src/bob/library.rs)
+
+**Findings**
+
+1. No durable whole-`Simulation` save/load entry point was found in the inspected source. `Simulation` is `Clone`, not serialized as a whole; `RuntimeState` keeps a bounded history of in-memory clones (capacity 30) and restores from that history. Individual state/transaction/material types derive serde, but this is not itself proof of a persistent simulation save format. Therefore there is no existing durable simulation-save loader identified here at which to reject legacy simulation saves. Any future durable save format must be born with the unified version marker and reject older/unversioned state; do not invent a migration path.
+2. `ChemistryLibrary` is a real persistent cache: `chemistry.jsonl` plus `manifest.json`, opened through `open_default_library()`. `CHEMISTRY_LIBRARY_SCHEMA_VERSION` is 3, but `ChemistryRecord::is_valid` and manifest validation accept versions 2 and 3. This conflicts with D6's reject-pre-unification-cache rule.
+3. `ChemistryKey` identifies canonicalized material names, interface class/signature, and schema version. No fingerprint for the equations/parameters that produced `static_potential` was found. D13 is not satisfied merely by the existing schema number.
+4. Bob's persistent geometry library has a separate schema/key contract and stores geometry formations, resource names, and formation signatures. It is not the same thing as the chemistry-potential cache. Audit its resource/catalog signature compatibility under D1; invalidate/version it only when a changed resource identity or geometry input can change the stored geometric result. Do not invalidate it merely because a chemistry equation changes if the cached result is geometry-only.
+5. Current chemistry-cache loading already rejects malformed records, duplicate keys, and manifest count mismatch in the inspected source; these protections should be retained while tightening the version/equation identity contract. The source also serializes commands/responses for the local process protocol; that is not simulation-state persistence.
+
+**Status:** current persistence/cache entry points mapped at source level; D6/D13 enforcement remains a gap. **Priority:** P1 before changing chemistry equations or trusting persistent cache hits. **Dependencies:** A1–A2, A13–A14, A20.
+
+**Tests already identified:** chemistry-library schema/key tests, duplicate-key/manifest-integrity tests, cache-hit/miss key tests, Bob library load/signature tests, in-memory runtime history/restore tests. Their existence does not prove a unified cache-version policy. No tests were run or created during this audit.
+
+### 16.3 Physical-material ownership and indivisible constituents — source-path inventory complete; rule enforcement gap
+
+**Files/functions inspected**
+
+- [`src/materials/resources.rs::Material::is_valid/take/combine_materials/merge_parts`](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/src/materials/resources.rs#L300-L470)
+- [`src/materials/material_transfer.rs::take_whole_unstructured`](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/src/materials/material_transfer.rs#L1-L100)
+- [`src/materials/material_storage.rs::MaterialStorage`](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/src/materials/material_storage.rs#L1-L120)
+- [`src/materials/physical_material.rs::PhysicalMaterial::realized`](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/src/materials/physical_material.rs#L1-L110)
+- [`src/materials/material_restoration.rs::restore_material`](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/src/materials/material_restoration.rs#L1-L90)
+- [`src/simulation/environment.rs`](https://github.com/coringilbert16-cmyk/EvoSim-/blob/cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5/src/simulation/environment.rs)
+
+**Findings**
+
+1. `Material::is_valid` requires nonempty names and finite positive amounts and validates internal-bond indices/duplicates. It does not require integer amounts and does not prove resource names exist in the active catalog. `fresh_energy` and mass/property aggregation have unknown-name fallback behavior, including zero contribution; D1's canonical Oxygen choice is not enough without fail-closed identity validation.
+2. `Material::take` proportionally splits each part by a floating-point fraction. The ecological `take_whole_unstructured` helper rounds the *total* aggregate transfer to whole units but allocates those units across constituent species by fractional shares and can leave fractional per-resource residuals. Its existing test explicitly transfers from a 3.5-unit aggregate and leaves 2.5. That behavior conflicts with D8 if each base-resource atom is indivisible; the test and representation must be reconciled, not preserved as the new invariant.
+3. Later physical boundaries are stricter: `MaterialStorage::is_discrete` checks integer amounts, `PhysicalMaterial::realized` requires one unit per physical constituent, and `restore_material` rejects fractional or non-unit constituents. This means the invariant is inconsistently enforced at different boundaries, not absent everywhere.
+4. Physical material is stored as a constituent list plus placements and internal connection endpoints. `combine_materials`/environment `merge_parts` aggregate names and amounts for ecological stock, while physical storage retains discrete realized objects. The independent inventory must count each actual constituent once across environment aggregates, field physical instances, organism structures, stored material, pending transformations, reproductive construction, and any supported legacy body.
+5. Fluid geometry/area is not an atom count. Preserve the approved Water shape/volume behavior in geometry, but do not represent fluid volume as a fractional number of base atoms to bypass D8. Define separate dimensional quantities for constituent count and realized geometry.
+
+**Status:** source paths and the main rule conflict are verified; independent whole-world constituent inventory and a consistent integer ownership boundary remain gaps. **Priority:** P1 because split/merge behavior can violate the settled model rule. **Dependencies:** A1–A2, A3–A6, A9, A11–A16, A18, A20.
+
+**Tests already identified:** `takes_only_whole_units`, `takes_only_available_whole_units_when_request_exceeds_stock`, `transfers_whole_units_from_fractional_aggregate`, `refuses_structured_material`, storage discreteness tests, physical realization/restoration tests, and material-combine tests. The fractional-aggregate test currently documents behavior that must change under D8. No tests were run or created during this audit.
+
+### 16.4 Handoff consistency and restart contract
+
+- **Authoritative design decisions:** Section 14, D1–D15. Historical decision fields in A0–A21 must not be read as new owner questions.
+- **Latest source reconciliation:** Section 15. **Final source-path closure:** this section, 16.1–16.3.
+- **Authoritative implementation sequence:** Section 17 will replace the earlier provisional sequence in Sections 8 and 13.
+- **Baseline:** `main` SHA `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5`; Rust workflow run `39705628427`; recorded 563 passed, 28 failed, 1 ignored. The commit message attests the 28 failures match the accepted baseline; named failures were not independently extracted in this pass.
+- **Change scope:** this PR remains information-only and draft. No production source, tests, README, geometry/chemistry cache data, or runtime behavior has changed here.
+- **Next resume point:** review Section 17's formal plan against D1–D15 and the gaps in A0–A21. Implementation is still blocked until the owner explicitly approves the sequence; when implementation begins, perform one focused audit before each change, preserve PR #196 constructor/Bob work as separate, and compare bounded verification to the exact-head baseline.
+
+**Handoff-prep status:** the three remaining source-path audits are now documented with files/functions, behavior, state ownership, tests already present, unresolved gates, priorities, and dependencies. The remaining unknowns are explicitly technical/evidentiary gaps rather than missing owner decisions.
