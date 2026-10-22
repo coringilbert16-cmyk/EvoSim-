@@ -370,3 +370,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - **No source/test changes.** This was a documentation and decision-reconciliation chunk only.
 - **Next:** continue the remaining production mutation-path/failure-row inventory, classify each row (source-inspection-complete, test-required, owner-decision-blocked, or release-gate-open), and reconcile independent inventories/release gates. No code until audit closure; one focused audit before each change.
 - **Verification caveat:** workflow 39833438679 is historical exact-head evidence, not a fresh run. It reported 585 passed, 27 baseline-identity failures, 1 ignored; Clippy had 34 application and 15 test diagnostics with no normalized identity changes. Do not describe the suite as green.
+
+
+## Resume checkpoint — prepared COMBINE rollback matrix (Section 17.97)
+
+- Plan commit: `e6635583b9c4d6062ac33415ec588241aecd6ff5`; PR #204 remains documentation-only.
+- Exact PR #205 source head inspected: `12d8079230458da68a8dc3755a1d6a9b41347862`.
+- The COMBINE rollback helper omits world-tone escaped and resonant-held fields, but the current `settle_transaction` API does not mutate those fields; the gap is missing explicit zero-delta/preservation assertions, not yet a proven live accounting defect.
+- Existing test `failed_prepared_combine_rolls_back_energy_and_every_ledger_delta` does not assert all ledger fields. A future focused test should initialize nonzero sentinel values and prove unmodified fields survive prepare/rollback, while proving every generated delta belongs to the transaction's mutation set.
+- No source/test changes. Continue failure-row coverage and audit closure; do not code until templates close. Refresh PR #205 head and CI immediately before the first implementation change.
