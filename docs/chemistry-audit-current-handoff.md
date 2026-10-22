@@ -153,3 +153,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Parent cavity analysis currently sees only `organism.structure`; the aggregate model must preserve identity of the parent genome core and internal second core rather than treating the whole aggregate as one cavity. The construction anchor index currently indexes the separate graph and must be remapped/replaced.
 - Serialized parent structure and serialized `ReproductiveConstruction.developing_structure` are separate. New schema must migrate active legacy construction exactly once or fail closed without losing units/bonds/energy; simply ignoring/deleting the field loses physical state. Required tests cover round-trip, legacy migration/idempotence, cache invalidation, core identity, and movement/snapshot agreement.
 - **Next:** finish the canonical representation/migration acceptance matrix and reconcile it with the other open chemistry release gates. No source/test changes; PR #205 head remains historically audited at `12d8079230458da68a8dc3755a1d6a9b41347862`; re-fetch head/CI before implementation.
+
+
+## Multi-core cavity identity checkpoint — 2026-10-22, Section 17.75
+
+- **Plan commit:** `b763207a5fe8b81db612db8f37c96fe735bd3ba9`. No source/test changes.
+- `analyze_genome_cavity` selects the largest qualifying cavity across connected components and accepts no core identity. Parent viability/harmonics use this analyzer; the child’s cavity is currently analyzed separately because its graph is separate.
+- Blindly merging attached construction units into the same graph could switch the parent’s active cavity/perception as the second core grows. The unified structure therefore needs core-specific cavity identity/query (or a non-owning analysis view referencing shared unit IDs) without duplicating physical units, bonds, energy, or receiver bodies.
+- Required tests: two qualifying cavities independently discoverable; parent active cavity does not switch as second core grows; child construction readiness targets its own cavity; mutation invalidates both results; attached surfaces map to parent resonance; division partitions each core and unit exactly once.
+- **Next:** define canonical single-owner physical state plus multi-core identity/query contract, then reconcile test matrix and remaining chemistry gates. Do not blind-append graphs or patch sunlight alone. No implementation yet; PR #205 head/CI refresh required before code changes.
