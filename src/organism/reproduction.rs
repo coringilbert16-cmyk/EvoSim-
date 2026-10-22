@@ -84,11 +84,7 @@ fn parent_child_position(
                         rotation_radians: part.rotation_radians,
                     },
                 };
-                crate::material_geometry::placed_forms_penetrate(
-                    &existing,
-                    &anchor_part,
-                    0.0,
-                )
+                crate::material_geometry::placed_forms_penetrate(&existing, &anchor_part, 0.0)
             });
             if touches_target && !penetrates_parent {
                 return Some(candidate);
@@ -889,11 +885,11 @@ mod tests {
             &body,
         ));
 
-        let anchor_unit = &construction.developing_structure.units
-            [construction.anchor_unit_index];
+        let anchor_unit = &construction.developing_structure.units[construction.anchor_unit_index];
         let anchor_part = crate::material_geometry::PlacedMaterialPart {
             part_index: construction.anchor_unit_index,
-            form: anchor_unit.shape(&simulation.environment.catalog)
+            form: anchor_unit
+                .shape(&simulation.environment.catalog)
                 .expect("anchor has a catalog shape")
                 .form
                 .clone(),
@@ -929,11 +925,7 @@ mod tests {
                         rotation_radians: part.rotation_radians,
                     },
                 };
-                !crate::material_geometry::placed_forms_penetrate(
-                    &parent_part,
-                    &anchor_part,
-                    0.0,
-                )
+                !crate::material_geometry::placed_forms_penetrate(&parent_part, &anchor_part, 0.0)
             }),
             "anchor must not interpenetrate any parent constituent"
         );
