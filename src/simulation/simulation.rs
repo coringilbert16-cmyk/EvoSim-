@@ -116,7 +116,7 @@ impl Simulation {
         let environment = Self::create_environment();
         let seed_scale_reference =
             crate::juvenile::confirmed_seed_scale_reference(&environment.catalog).ok();
-        let organism = Self::create_initial_organism();
+        let mut organism = Self::create_initial_organism();
         let world_tone = crate::world_tone::WorldToneRuntimeConfig::default_for_world(
             environment.width,
             environment.height,
