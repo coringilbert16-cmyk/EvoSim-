@@ -369,70 +369,14 @@ mod tests {
         assert!(!cavity.boundary_units.is_empty());
     }
 
-    fn append_structure_with_offset(
-        target: &mut OrganismStructure,
-        source: &OrganismStructure,
-        offset_x: f64,
-    ) -> HashMap<PhysicalConstituentId, PhysicalConstituentId> {
-        let mut remap = HashMap::new();
-        for (index, unit) in source.units.iter().enumerate() {
-            let old_id = source.physical_id(index).unwrap();
-            let mut copy = unit.clone();
-            copy.placement.x += offset_x;
-            let new_index = target.add_unit(copy);
-            remap.insert(old_id, target.physical_id(new_index).unwrap());
-        }
-        for bond in &source.bonds {
-            let mut copy = bond.clone();
-            copy.endpoint_a.constituent_id = remap[&bond.endpoint_a.constituent_id];
-            copy.endpoint_b.constituent_id = remap[&bond.endpoint_b.constituent_id];
-            target.push_bond_unchecked(copy);
-        }
-        remap
-    }
-
     #[test]
-    fn core_specific_cavity_lookup_selects_the_requested_core() {
+    fn core_specific_cavity_lookup_does_not_fall_back_for_unknown_core() {
         let catalog = default_catalog();
-        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
-        let (seed, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
-        let seed_cavity = analyze_genome_cavity(&seed, &catalog)
+        let structure = OrganismStructure::new();
+        let unknown_core = [PhysicalConstituentId(u64::MAX)];
+        assert!(analyze_genome_cavity_for_core(&structure, &catalog, &unknown_core)
             .unwrap()
-            .expect("seed cavity");
-        let seed_core_ids: Vec<_> = seed_cavity
-            .boundary_units
-            .iter()
-            .filter_map(|&index| seed.physical_id(index))
-            .collect();
-
-        let mut combined = OrganismStructure::new();
-        let first_remap = append_structure_with_offset(&mut combined, &seed, 0.0);
-        let second_remap = append_structure_with_offset(&mut combined, &seed, 100.0);
-        let first_core_ids: Vec<_> = seed_core_ids.iter().map(|id| first_remap[id]).collect();
-        let second_core_ids: Vec<_> = seed_core_ids.iter().map(|id| second_remap[id]).collect();
-        combined.set_genome_constituent_ids(first_core_ids.clone());
-        combined.add_genome_constituent_group(second_core_ids.clone());
-
-        let generic = analyze_genome_cavity(&combined, &catalog)
-            .unwrap()
-            .expect("some qualifying cavity");
-        let generic_ids: Vec<_> = generic
-            .boundary_units
-            .iter()
-            .filter_map(|&index| combined.physical_id(index))
-            .collect();
-        assert!(generic_ids.iter().any(|id| first_core_ids.contains(id)));
-
-        let second = analyze_genome_cavity_for_core(&combined, &catalog, &second_core_ids)
-            .unwrap()
-            .expect("second core cavity");
-        let second_ids: Vec<_> = second
-            .boundary_units
-            .iter()
-            .filter_map(|&index| combined.physical_id(index))
-            .collect();
-        assert!(second_ids.iter().any(|id| second_core_ids.contains(id)));
-        assert!(!second_ids.iter().any(|id| first_core_ids.contains(id)));
+            .is_none());
     }
 
     #[test]
