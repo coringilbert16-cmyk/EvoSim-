@@ -2294,3 +2294,32 @@ This confirms an adversarial invalid-state gap across several callers; it is not
 - The remaining changed-file coverage is represented in Sections 17.32–17.65: material restoration/transfer, chemistry cache, energy ledger, live world tone, simulation lifecycle, and test-only inventory oracles. This cross-check did not identify a new physical source or sink, but it does not replace the open failure-injection and integrated-conservation gates.
 
 **Next:** build the final row-by-row exit checklist, with every Section 17.55 transition classified as verified locally, test-required, or owner-decision-blocked; then compare that list against A0–A21 and Section 17.7 for omissions. No implementation until the audit templates are complete.
+
+
+### 17.67 Exit checklist reconciliation — transition status and remaining proof — 2026-10-22
+
+**Purpose:** turn the source-to-sink matrix (17.55), energy API map (17.56), source audits (17.57–17.66), A0–A21, and tracker (17.7) into one explicit closeout list. This is a reconciliation of recorded evidence, not a claim that the audit or chemistry implementation is complete.
+
+| Transition / gate | Classification now | Evidence still required before closure |
+|---|---|---|
+| Initial-condition energy | **Local path inspected; test-required** | Tick-zero/no-op independent inventory; prove the one-time source guard cannot duplicate the initial grant. |
+| COMBINE graph bond | **Local ordering verified; test-required** | Failure/retry inventory tests and an explicit zero invariant or symmetric handling for prepared escaped-tone/resonant-held ledger fields. |
+| Chemical / resonance BREAK | **Local ordering verified; test-required** | Stale/retry/rejection inventory tests; invalid-property helper and live-call-site regressions; exactly-once bond-energy settlement. |
+| Stored BREAK | **Gap confirmed; test-required** | Partial split failure, storage+deposit rejection, malformed completion, escrow restoration, and whole-world material inventory. |
+| Environmental COMBINE source | **Partial; test-required** | Missing source/cell and malformed prepared state must preserve source, storage, graph, and ledger. |
+| Contained acquisition | **Gap confirmed; test-required** | Inject storage rejection and fallback-deposit rejection; source must remain in a valid holder. |
+| Expulsion | **Gap confirmed; test-required** | Inject final destination rejection and restoration failure; original stored instance and inventory must remain recoverable. |
+| Movement | **Gap confirmed; test-required + D7 equation reconciliation** | Reject ledger settlement after geometry succeeds; rollback position/index/anchor/progress. Clarify heat-only cost versus explicit work without changing approved physics silently. |
+| Maintenance | **Local settlement ordering inspected; test-required** | Insufficient energy/debt, rejected transaction, and unchanged stress/ledger assertions. |
+| Construction reserve | **Atomic primitive verified; caller policy open/test-required** | Test failed transfer; choose explicit waiting/failure versus best-effort funding and assert both holders remain unchanged on rejection. |
+| Construction growth / finish | **Partial; test-required** | Stale source index, failed anchor/holder transfer, malformed finish, and whole-step before/after material + energy snapshots. |
+| World-tone frame | **Local frame balance/staged commit verified; owner decision + test-required** | Owner decision on non-primary parent-owned receiver eligibility; exact-small-world first-hit/allocation comparison; source-budget residual and representative runtime/memory evidence. |
+| Reaction accumulation | **Gap confirmed; test-required** | Bondless stale-key cleanup and helper output range/overflow tests; prove activation state remains outside physical-energy inventory. |
+| Chemistry cache | **Schema/manifest rollback locally verified; test-required** | Catalog-position-to-fingerprint invalidation, restart/reopen and failure-injection coverage beyond the existing append/manifest rollback tests. |
+| Post-death lifecycle / legacy recycler | **Owner architecture approved; production integration gap + test-required** | Multi-tick dead-parent inventory/holder tests for stored, committed, and developing material; ordinary chemistry must continue without enabling the quarantined legacy recycler. |
+| Independent world conservation / long-run | **Open release gate** | Independently derived energy and integer-material totals across transitions; distinguish numerical tolerance from physical dissipation; bounded long-run drift/reservoir checks. |
+| README / implementation docs | **Known reporting mismatch; deferred** | After audit closure and owner approval, correct live-capture status and update stale plan-authority link while preserving frozen-baseline history. |
+
+**Reconciliation result:** the recorded audit has no remaining ambiguity about the major known local mutation orderings, but it is **not ready to authorize implementation**. The next work is evidence design/closure for the test-required rows and the single owner-blocked receiver-eligibility rule; then perform one final source search for any production material/energy mutation path missing from this table. Do not mark any row closed merely because a helper or isolated unit test exists.
+
+**Implementation entry condition:** every test-required row has a deterministic failure test and independent inventory assertion; the receiver rule is decided; the final mutation-path search is reconciled; the plan/handoff/PR description are synchronized; and PR #205 exact head plus CI are re-fetched before the first code change.
