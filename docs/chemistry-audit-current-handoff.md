@@ -565,3 +565,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Exact-head CI at `548fb485c5850b7ccdc0cb3a622d569cd433fbd9` exposed two missing `genome_core_identity_established` initializers and an unused `HashMap` import; fixed in subsequent commits, pending fresh exact-head CI.
 - Anchor placement was using inclusive overlap as a proxy for contact, and its initial candidate exactly matched a parent part's position. It now requires boundary contact and no strict penetration against any parent part; a regression assertion was added.
 - No aggregate migration or movement changes yet. Next: verify fresh CI and then design atomic anchor promotion into parent-owned physical structure.
+
+
+## Core-overlap cavity ranking — 2026-10-22, Section 17.120
+
+- Core-specific cavity lookup now prefers candidates whose boundary contains more surviving stable core IDs, with area as tie-breaker; generic lookup remains largest-area based.
+- Added a focused ranking test. It does not replace a future geometric two-cavity regression fixture.
+- Reproduction anchor placement now requires boundary contact without penetration, and the existing test asserts both. Initial CI exposed formatting-only diffs; formatting was corrected. Exact-head CI is still needed.
+- Next: validate exact head, then implement atomic anchor promotion into the canonical parent graph. Movement remains deferred until aggregate migration.
+
