@@ -1485,3 +1485,19 @@ This entry supersedes Section 17.16's queued-workflow status. The exact-head wor
 - Commit `318c9afd5b1c3e6cf81ef7498829afef90838c21` applies exactly those rustfmt changes; intended behavior is unchanged.
 - **Current head:** `318c9afd5b1c3e6cf81ef7498829afef90838c21`. Exact-head workflow [39832607493](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39832607493) has started; at this handoff update, the toolchain setup step was still in progress and formatting/test outcomes were not yet available.
 - **Next action:** inspect workflow 39832607493. Verify formatting, then the new insert-path rollback test by name; record the full-suite status honestly, including any five-minute timeout. Do not infer success from the previous run or formatting-only commit.
+
+
+### 17.21 Phase 3/8 lifecycle ownership audit — decomposition path is test-only, not live-integrated
+
+**Audit status: Gap found.** Read-only inspection of PR #205 source at current head `318c9afd5b1c3e6cf81ef7498829afef90838c21` found that the dedicated post-death recycling/decomposition path is not connected to the live tick:
+
+- `src/chemistry/recycling.rs::recycle_dead_organism` is registered as a module, but source search found no production call site; the only observed call is its unit test. The function drains organism storage and committed developmental material into the environment, then transfers usable/developing energy into a new `DecomposingBody`.
+- `src/simulation/simulation.rs::process_decomposing_bodies` is annotated `#[cfg(test)]`. Its one-bond-per-step resolution, final energy sink, final material release, and holder removal are therefore test-only; this method is not part of the production tick path.
+- The live `step` computes `living_ids` from genome-core integrity and gates biological work, but the inspected live method does not call `recycle_dead_organism` or `process_decomposing_bodies`. A breached organism can be excluded from biological processing while the intended body-to-decomposition ownership transition remains unwired.
+- The existing tests validate isolated recycling/decomposition helpers and finalization behavior, not a live tick transitioning a dead organism into a persistent decomposition holder and continuing ordinary bond chemistry over subsequent ticks.
+
+**Impact:** Phase 8 is correctly marked not started, but the implementation handoff must not imply that post-death chemistry is active merely because the staged types/helpers and unit tests exist. This is an integration gap in the accepted lifecycle design, not a request to add a parallel decomposition law.
+
+**Next audit before any lifecycle code change:** trace the exact live death eligibility conditions and tick ordering (core breach versus unsustainable stress), active-transformation cancellation/rollback, organism vector ownership, and independent energy/material inventory across the proposed transition. Then specify the smallest atomic handoff that retains the dead body as physical material, transfers all stored/developing usable energy exactly once, and lets ordinary chemistry continue after death. Do not implement this lifecycle integration until that focused audit identifies every state holder and failure rollback. Continue one focused audit before each change; PR #204 remains documentation-only and PR #196 remains out of scope.
+
+**Parallel active work:** the cache append rollback regression is committed on PR #205 head `318c9afd`; workflow [39832607493](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39832607493) was in progress at the time of this audit. Record its result before treating the Phase 4 test as verified.
