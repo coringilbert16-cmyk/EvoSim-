@@ -43,6 +43,13 @@ pub(crate) fn restore_material(
         || connections.iter().any(|connection| {
             connection.part_a >= material.parts.len() || connection.part_b >= material.parts.len()
         })
+        || connections
+            .iter()
+            .zip(&material.internal_bonds)
+            .any(|(connection, bond)| {
+                !((connection.part_a == bond.part_a && connection.part_b == bond.part_b)
+                    || (connection.part_a == bond.part_b && connection.part_b == bond.part_a))
+            })
     {
         return None;
     }
