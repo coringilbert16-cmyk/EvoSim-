@@ -574,3 +574,11 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Reproduction anchor placement now requires boundary contact without penetration, and the existing test asserts both. Initial CI exposed formatting-only diffs; formatting was corrected. Exact-head CI is still needed.
 - Next: validate exact head, then implement atomic anchor promotion into the canonical parent graph. Movement remains deferred until aggregate migration.
 
+
+
+## Latest validation checkpoint — 2026-10-22, Section 17.121
+
+- Exact tested head `aa7750d35124a9d03952d70bd74cac99db13826c`: 589 passed, 27 failed, 1 ignored. The new core-identity initializer compiles; baseline failure pattern remains. This predates anchor-placement and cavity-ranking edits.
+- Strict Clippy remains red with 34 app-target and 15 test-target diagnostics.
+- Head `7631b67b178d26a559e6a54c1531391d6ab30962` passed formatting and was in full tests; new core-identity regression test was added afterward at `c8ce07e0322b1fd880dbdc6261cfd1bc52d372c4`. Validate the newer head before treating any of those edits as confirmed.
+
