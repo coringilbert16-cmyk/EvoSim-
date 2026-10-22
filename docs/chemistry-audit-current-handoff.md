@@ -207,3 +207,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - `analyze_genome_cavity` ignores that set for selection and returns the largest qualifying cavity, so a second core still needs core-specific cavity selection. `anchor_structure` currently returns an index in a separate graph and does not establish a second stable core identity.
 - Refined direction: one graph with a small collection of core references over shared physical IDs. Preserve parent boundary identity; anchor the second core to the transferred physical ID, then track its realized boundary IDs once a cavity qualifies. No “reproductive material” tag and no second physical graph. Reject dangling references atomically; partition core identity exactly once at division.
 - No source/test changes; remaining transaction and whole-world release gates remain open.
+
+
+## Graph ID-remapping checkpoint — Section 17.81
+
+- **Plan commit:** `da37ba8d5c8b334f6e8e6b6ed4a0aae78ef777e6`.
+- `PhysicalConstituentGraph::new` starts IDs at 1 and `add_unit` allocates from a graph-local counter, so parent and separate construction graphs can collide. Bonds refer to stable constituent IDs; naive vector concatenation is unsafe.
+- Any future graph merge must stage an injective old→new ID mapping, rewrite both endpoints of every incoming bond, remap second-core anchor/boundary references, validate the candidate, and commit atomically. Existing graph API has no complete atomic merge helper.
+- Required tests: colliding ID ranges remap correctly, bond endpoints remain valid, malformed endpoints reject without mutation, parent core IDs stay stable, second-core references remap once, and pure merge preserves structural-energy inventory.
+- No source/test changes; this is a candidate future implementation unit only after audit sign-off.
