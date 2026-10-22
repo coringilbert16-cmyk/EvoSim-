@@ -400,10 +400,15 @@ fn units_strictly_overlap(
 pub struct PhysicalConstituentGraph {
     pub units: Vec<StructuralUnit>,
     pub bonds: Vec<Bond>,
-    /// Stable physical constituents that established the genome cavity.
+    /// Stable physical constituents that established the primary genome cavity.
     /// Structural membership is derived from connectivity to these IDs.
     #[serde(default)]
     genome_constituent_ids: Vec<PhysicalConstituentId>,
+    /// Additional independently identified genome cores in a shared physical
+    /// aggregate. These are metadata only: each constituent still exists once
+    /// in `units`, and bonds still refer to its single stable physical ID.
+    #[serde(default)]
+    additional_genome_constituent_groups: Vec<Vec<PhysicalConstituentId>>,
     #[serde(default)]
     next_constituent_id: u64,
 }
@@ -418,6 +423,8 @@ impl<'de> Deserialize<'de> for PhysicalConstituentGraph {
             bonds: Vec<Bond>,
             #[serde(default)]
             genome_constituent_ids: Vec<PhysicalConstituentId>,
+            #[serde(default)]
+            additional_genome_constituent_groups: Vec<Vec<PhysicalConstituentId>>,
             #[serde(default)]
             next_constituent_id: u64,
         }
@@ -469,14 +476,35 @@ impl<'de> Deserialize<'de> for PhysicalConstituentGraph {
                 ));
             }
         }
+        let mut genome_constituent_ids: Vec<_> = s
+            .genome_constituent_ids
+            .into_iter()
+            .filter(|id| id.0 != 0 && used.contains(id))
+            .collect();
+        genome_constituent_ids.sort_unstable_by_key(|id| id.0);
+        genome_constituent_ids.dedup();
+        let primary_ids: HashSet<_> = genome_constituent_ids.iter().copied().collect();
+        let mut assigned_ids = primary_ids;
+        let additional_genome_constituent_groups = s
+            .additional_genome_constituent_groups
+            .into_iter()
+            .map(|group| {
+                let mut cleaned: Vec<_> = group
+                    .into_iter()
+                    .filter(|id| {
+                        id.0 != 0 && used.contains(id) && assigned_ids.insert(*id)
+                    })
+                    .collect();
+                cleaned.sort_unstable_by_key(|id| id.0);
+                cleaned
+            })
+            .filter(|group| !group.is_empty())
+            .collect();
         Ok(Self {
             units: s.units,
             bonds: s.bonds,
-            genome_constituent_ids: s
-                .genome_constituent_ids
-                .into_iter()
-                .filter(|id| id.0 != 0 && used.contains(id))
-                .collect(),
+            genome_constituent_ids,
+            additional_genome_constituent_groups,
             next_constituent_id: next,
         })
     }
@@ -487,6 +515,7 @@ impl PhysicalConstituentGraph {
             units: Vec::new(),
             bonds: Vec::new(),
             genome_constituent_ids: Vec::new(),
+            additional_genome_constituent_groups: Vec::new(),
             next_constituent_id: 1,
         }
     }
@@ -581,6 +610,38 @@ impl PhysicalConstituentGraph {
         self.genome_constituent_ids.clear();
     }
 
+    /// Additional genome-core groups in this same physical aggregate. The
+    /// primary core remains available through `genome_constituent_ids` for
+    /// compatibility with existing single-organism callers.
+    pub fn additional_genome_constituent_groups(&self) -> &[Vec<PhysicalConstituentId>] {
+        &self.additional_genome_constituent_groups
+    }
+
+    /// Register a distinct genome core without duplicating any physical unit.
+    /// IDs already assigned to the primary or another core are ignored.
+    pub fn add_genome_constituent_group(
+        &mut self,
+        ids: impl IntoIterator<Item = PhysicalConstituentId>,
+    ) {
+        let mut assigned: HashSet<_> = self.genome_constituent_ids.iter().copied().collect();
+        for group in &self.additional_genome_constituent_groups {
+            assigned.extend(group.iter().copied());
+        }
+        let mut group: Vec<_> = ids
+            .into_iter()
+            .filter(|id| id.0 != 0 && self.unit_index(*id).is_some() && assigned.insert(*id))
+            .collect();
+        group.sort_unstable_by_key(|id| id.0);
+        group.dedup();
+        if !group.is_empty() {
+            self.additional_genome_constituent_groups.push(group);
+        }
+    }
+
+    pub fn clear_additional_genome_constituent_groups(&mut self) {
+        self.additional_genome_constituent_groups.clear();
+    }
+
     /// The structural body is every bonded physical component that contains
     /// non-fluid material. Genome-boundary IDs are never required for structural
     /// membership, so the body can reorganize as the realized genome cavity changes.
@@ -609,14 +670,21 @@ impl PhysicalConstituentGraph {
         structural
     }
     pub fn genome_connected(&self, unit_index: usize) -> bool {
-        if unit_index >= self.units.len() || self.genome_constituent_ids.is_empty() {
+        if unit_index >= self.units.len()
+            || (self.genome_constituent_ids.is_empty()
+                && self.additional_genome_constituent_groups.is_empty())
+        {
             return false;
         }
         self.connected_component_containing(unit_index)
             .into_iter()
             .any(|index| {
-                self.genome_constituent_ids
-                    .contains(&self.units[index].physical_id)
+                let id = self.units[index].physical_id;
+                self.genome_constituent_ids.contains(&id)
+                    || self
+                        .additional_genome_constituent_groups
+                        .iter()
+                        .any(|group| group.contains(&id))
             })
     }
 
@@ -1104,6 +1172,31 @@ mod tests {
         let encoded = serde_json::to_string(&s).unwrap();
         let decoded: OrganismStructure = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded.genome_constituent_ids(), &[id]);
+        assert!(decoded.additional_genome_constituent_groups().is_empty());
+    }
+
+    #[test]
+    fn aggregate_genome_core_groups_round_trip_without_duplicating_units() {
+        let mut s = OrganismStructure::new();
+        let first = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+        ));
+        let second = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement { x: 2.0, y: 0.0, rotation_radians: 0.0 },
+        ));
+        let first_id = s.physical_id(first).unwrap();
+        let second_id = s.physical_id(second).unwrap();
+        s.set_genome_constituent_ids([first_id]);
+        s.add_genome_constituent_group([second_id, second_id, first_id]);
+        assert_eq!(s.units.len(), 2);
+        assert_eq!(s.additional_genome_constituent_groups(), &[vec![second_id]]);
+        let encoded = serde_json::to_string(&s).unwrap();
+        let decoded: OrganismStructure = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded.genome_constituent_ids(), &[first_id]);
+        assert_eq!(decoded.additional_genome_constituent_groups(), &[vec![second_id]]);
+        assert_eq!(decoded.units.len(), 2);
     }
 
     #[test]
