@@ -4165,8 +4165,8 @@ fn load_fluid_boundary_families(
     let Ok(file) = File::open(path) else {
         return out;
     };
-    let mut lines = BufReader::new(file).lines();
-    while let Some(line_result) = lines.next() {
+    let lines = BufReader::new(file).lines();
+    for line_result in lines {
         // Preserve the previous all-or-empty behavior if the file itself
         // cannot be read, without buffering the entire JSONL catalogue.
         let Ok(line) = line_result else {
