@@ -2539,3 +2539,16 @@ Section 17.7's current tracker rows for Phases 1, 8, and 9 have been updated to 
 - The core representation, cavity identity, movement, cache invalidation, independent inventories, resonance mapping, and atomic division concerns remain unchanged.
 
 **Corrected next task:** finish the canonical one-graph/core-identity contract and diagnostic/observation JSON impact matrix; do not spend effort on a nonexistent world-load migration path. No source/test changes.
+
+
+### 17.79 Diagnostic JSON contract under the unified structure — 2026-10-22
+
+**Status: Diagnostic consumer contract inspected; no dedicated module tests found in reviewed file.** Exact PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862`, `src/infrastructure/diagnostics.rs`.
+
+- The diagnostics capture stores `unit_count`, `bond_count`, `component_count`, `structural_mass`, and serialized `structure` from `organism.structure` only. It separately serializes the complete `organism.reproductive_construction` value as `reproductive_construction` JSON.
+- Under the single-structure model, these primary structure metrics naturally include attached reproductive units/bonds. The diagnostic construction object should expose nonphysical progress/core metadata and any explicit construction sub-ledger values only; it must not serialize a second physical graph or imply a separate physical owner.
+- The diagnostic delta/transition events compare snapshots of the organism, so changing where units are represented will change the expected shape of `structure`, counts, mass, connected components, and construction JSON. Keep event names and tick semantics stable unless an explicit version change is needed.
+- No dedicated test functions were found in the reviewed `diagnostics.rs` file for the shape/semantics of the reproductive-construction JSON. Add focused projection tests before or with the implementation: during construction, aggregate counts include attached units once; stored-material counts exclude attached units; construction JSON contains no duplicate physical structure; after division, child structure receives its partition exactly once.
+- This is an output compatibility contract, not a world-save/load migration requirement. Current runtime exposes diagnostic/observation serialization but no whole-world simulation persistence path was found.
+
+**Next:** finish the owner-facing canonical aggregate/core-identity contract and diagnostic JSON acceptance cases, then complete the outstanding chemistry transition-failure matrix and release gates. No source/test changes.
