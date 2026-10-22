@@ -6,6 +6,9 @@ use crate::resources::Form;
 use crate::structure::{Bond, ConnectionEndpoint, OrganismStructure, StructuralUnit};
 use crate::surface_geometry::boundary_point_toward;
 
+type Point2 = (f64, f64);
+type SegmentFeatureContact = (Point2, Point2);
+
 fn distance(
     a: crate::connection_geometry::WorldConnectionPoint,
     b: crate::connection_geometry::WorldConnectionPoint,
@@ -130,7 +133,7 @@ fn segment_feature_contacts(
     a1: (f64, f64),
     b0: (f64, f64),
     b1: (f64, f64),
-) -> Vec<((f64, f64), (f64, f64))> {
+) -> Vec<SegmentFeatureContact> {
     fn cross(a: (f64, f64), b: (f64, f64)) -> f64 {
         a.0 * b.1 - a.1 * b.0
     }
@@ -155,7 +158,7 @@ fn segment_feature_contacts(
         }
         Some(add(start, scale(edge, t.clamp(0.0, 1.0))))
     }
-    fn push_unique(out: &mut Vec<((f64, f64), (f64, f64))>, pair: ((f64, f64), (f64, f64))) {
+    fn push_unique(out: &mut Vec<SegmentFeatureContact>, pair: SegmentFeatureContact) {
         if !out.iter().any(|&(a, b)| {
             (a.0 - pair.0 .0).hypot(a.1 - pair.0 .1) <= 1e-10
                 && (a.1 - pair.0 .1).abs() <= 1e-10
