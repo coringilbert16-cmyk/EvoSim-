@@ -51,9 +51,11 @@ The latest focused audit is recorded in Section 17.26; the Clippy comparison is 
 - Current inventory tracks usable/developing energy, resonant energy, parent/developing structural bond energy, and active transformations. Active transformations intentionally settle after core breach. No approved death-transfer policy for resonant energy or intact developing-structure bonds is established yet.
 - Do not activate the legacy one-bond decomposition law or claim that a material/energy release policy is settled.
 
+**Recommended design (Section 17.29; proposal only, not yet an implementation contract):** introduce/reuse a generic detached physical-structure holder that preserves the existing developing graph, geometry, bond endpoints, and bond-energy state. It has no genome and performs no biological work, but participates in the same ordinary chemistry as other physical structures. Make core breach a one-time ownership transition; keep usable, developing, resonant, and structural bond energy distinct. Do not use `DecomposingBody` or flatten the graph into a fresh composition unless lossless preservation is proven.
+
 **Next steps:**
-1. Continue the focused design audit for a no-loss, atomic ownership transition: stored physical material, committed material, developing structure/bond energy, usable/developing/resonant energy, and in-flight transformations. Specify deterministic world placement independent of behavioral memory, rollback/retained ownership for failed deposits, and how developing-structure bonds remain represented and chemically addressable without losing their current endpoints/energy.
-2. Once that design audit is complete, implement and test the smallest scoped Phase 8 change on PR #205. Add independent material and energy inventory coverage across a breach and bounded live ticks.
+1. Audit the minimal world/environment home, stable ID, anchor transform, and every spatial/chemistry/persistence/inventory call site needed for a detached physical-structure collection. Define resonant-energy handling and prove atomic rollback or retained ownership for failed transfers.
+2. Once that focused design audit is complete, implement and test the smallest scoped Phase 8 change on PR #205. Add independent material and energy inventory coverage across a breach and bounded live ticks.
 3. Keep all phase gates open until exact-head evidence is verified. Update this handoff whenever head, evidence, or phase status changes.
 
 ## Separate reproduction requirement (not implemented here)
@@ -62,3 +64,6 @@ Internal/adjacent budding: at 100% of original organism size, begin building a s
 
 
 Latest Phase 8 design-audit addendum: Section 17.28 documents why `expel_physical_material` is not safe to loop on core breach. PR #205 comment [6348852052](https://github.com/coringilbert16-cmyk/EvoSim-/pull/205#issuecomment-6348852052) records the source finding. No code/test change has been made; next is still the design audit, not implementation.
+
+
+Recommendation added to the detailed plan in Section 17.29 (proposal only). The preferred direction is an intact generic detached physical-structure holder plus an atomic one-time ownership transition, not the legacy decomposition carrier. Next audit: world-state placement, spatial/chemistry/persistence call sites, stable identity/anchor semantics, resonant-energy policy, and no-loss rollback. No code change.
