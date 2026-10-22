@@ -677,6 +677,8 @@ impl Simulation {
                 initial_resonant_energy_held: 0.0,
                 total_structural_energy_held: 0.0,
                 initial_structural_energy_held: 0.0,
+                // This is a transaction delta; the source-once guard is unchanged.
+                initial_condition_energy_settled: original_ledger.initial_condition_energy_settled,
             };
             if let Some((cell_index, source)) = _attempt.environmental_source.as_ref() {
                 let Some(cell) = environment.field.cells.get_mut(*cell_index) else {
