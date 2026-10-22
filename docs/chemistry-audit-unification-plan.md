@@ -1863,3 +1863,40 @@ Do not silently infer either rule from D5's approximation decision or Section 17
 The material oracle and world-tone snapshot both explicitly account for active-operation source escrow without treating prepared trial state as another physical source. The energy snapshot is independent of ledger-held cache totals for its defined holder scope. These are valuable foundations, not proof of whole-world energy conservation: exact geometry/source allocation, transaction completion/rollback, all energy consumers, and the approved receiver-eligibility rule remain open. Do not broaden the snapshot's energy terms to count telemetry or topology-only connections as energy.
 
 **Next audit:** finish the holder-transition matrix for completed/cancelled/stale transformations and construction ownership, then reconcile the live tick phase ordering against each transaction boundary. No implementation change until the remaining audit templates are complete.
+
+
+### 17.41 Live tick-order audit — physical chemistry persists after breach; eligibility boundary is phase-specific — 2026-10-22, PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862`
+
+**Status: Production order mapped; cross-phase conservation and same-tick policy coverage remain incomplete.** Exact-head review of `Simulation::step` and `apply_survival_damage` in `src/simulation/simulation.rs`. No source/test changes.
+
+**Observed phase order**
+1. Increment tick.
+2. Advance active transformations; prepare due operations. On preparation failure or missing owner, call source-restoration helper. Remove failed operations from active list. Resolve completed transformations before determining current living IDs.
+3. Recompute the living set from intact genome cores after completed physical transformations.
+4. Sample world tone and settle the frame against that living set.
+5. For each organism in collection order: if currently living, apply maintenance, update harmonics and experience memory, and possibly begin reproductive construction; then run the ordinary structural chemical accumulator/resolver regardless of living status.
+6. Recheck core integrity immediately after chemistry and remove a newly breached organism from the living set before later behavior. If still intact, transfer contained environmental material and finalize pending movement experience.
+7. Process movement and decision/action work only for living organisms. Existing physical/chemical transformations are retained across death; new actions are gated by the living set.
+8. Advance reproductive construction only for organisms still in the living set; finish and append offspring when construction reports ready/detached/dead.
+9. Apply survival/stress damage to organisms still in the living set. Stress damage may trigger resonance-overload BREAK; death is not routed through the legacy decomposition path.
+10. Refresh cached held-energy totals for usable, resonant, and structural stores.
+
+**Conclusions supported by source**
+- A completed transformation can breach the core before world-tone capture; such an organism is absent from the living receiver set for that frame.
+- A core breach caused by ordinary chemistry occurs after world-tone settlement and after the living organism's maintenance/harmonics/memory/reproduction-start block for that tick. The immediate post-chemistry recheck prevents later movement/actions/construction advancement/stress processing for that organism in the same tick.
+- Dead/breached structures remain in the collection and continue through ordinary chemistry each tick. In-flight transformations are not silently dropped when their owner becomes breached.
+- This phase order creates an intentional-or-unresolved same-tick distinction between “breached before the living set is sampled” and “breached by chemistry later in the tick.” D9 explicitly requires a defined same-tick biological eligibility boundary, but source inspection alone does not establish that tests cover every boundary.
+
+**Remaining phase-order risks**
+- A world-tone frame runs before this tick's ordinary chemistry, so a core that chemistry opens later in the tick can still receive resonance during the earlier world-tone phase. Conversely, a completed transformation that opens the core first suppresses living capture that tick. Confirm that this ordering is the intended biological eligibility contract; do not alter ordering merely to make the two cases look symmetric.
+- Each organism's chemistry is resolved in collection order, and one organism's chemistry may alter its own living status before later phases; the tick does not appear to recompute all organisms' geometry or a single global chemistry event queue between every event. Stale event and cross-organism contact assumptions need test coverage.
+- Construction advances after movement/actions and only for currently living parents. The developing graph and committed material remain parent-owned under Section 17.31, but their reactions/capture eligibility are not derived from this phase ordering.
+- Held-energy caches are refreshed at the end of the tick; independent inventory snapshots must inspect live holders and not assume those cache totals are authoritative during intermediate phases.
+
+**Required regression scenarios**
+- Breach during a completed transformation before world-tone; breach during ordinary chemistry after world-tone; breach during end-of-tick stress processing.
+- Dead parent with pending stored BREAK/COMBINE escrow through success, failure, and cancellation, preserving exact material inventory and energy snapshot.
+- Multiple organisms where one organism's chemistry changes status while later organisms still have queued physical contacts; deterministic same-seed replay.
+- Construction with committed/developing holdings at each boundary; no biological advancement after breach and no death-time owner transfer.
+
+**Next audit:** trace transformation cancellation/stale-state and construction-finish transfer paths against this phase table; mark each source/holder transition as atomic, guarded, or unproven. No implementation until audit templates are complete.
