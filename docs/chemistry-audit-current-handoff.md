@@ -301,3 +301,13 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - `advance_construction` ignores the result of `EnergyLedger::transfer` and continues temporary-child maintenance/construction. Test whether reserve funding is required; if so, rejection must stop dependent work with both holders and ledger unchanged. D16 means this cannot be fixed alone: the current temporary child has a separate physical graph and lifecycle, contrary to the one parent-owned attached graph. Aggregate maintenance/stress/energy allocation remains to be designed.
 - `chemical_reaction::accumulate` returns on a bondless graph before removing stale revision-prefixed accumulation keys. These are runtime activation values, not physical energy, but cleanup and bondless/reformed-graph regression tests are missing.
 - **Next:** audit catalog fingerprint/restart and post-death aggregate inventory, then world-tone exact-small-world oracle and release gates. Audit templates remain open; no source/test changes until closure.
+
+
+## Resume checkpoint — cache invalidation and aggregate receiver (2026-10-22)
+
+- **PR #204 plan commit:** `118f4915c6c3a5b9562c88975df169ad9835220b` (Section 17.90). PR #204 remains documentation-only.
+- **PR #205 exact head:** `12d8079230458da68a8dc3755a1d6a9b41347862`. No source/test changes.
+- Cache schema 4 checks a manually versioned equation/catalog fingerprint. Existing mismatch test proves generic rejection, but there is no test proving a chemical-position change requires a fingerprint bump and invalidates/rejects old persisted records across reopen. Add catalog-dependency and restart tests; consider deterministic fingerprinting of canonical chemistry-relevant catalog fields.
+- The independent energy oracle and world-tone receiver collector still enumerate `developing_structure` separately from the parent's graph. D16 requires one parent-owned attached graph, one receiver enumeration for all attached units, stored-material capture excluded, and inventory/diagnostics/movement/cavity identity updated together. Do not patch the sunlight receiver alone.
+- Death remains ordinary chemistry on the parent-owned physical aggregate; no death-time ownership transfer or special decomposition object. A bounded-live-tick regression is still needed for a breached parent with non-empty storage and active construction, using independent material and energy-holder snapshots. The legacy decomposition path remains quarantined.
+- **Next:** close world-tone exact-small-world/performance oracle and whole-world material/energy accounting, reconcile the exit checklist, and enumerate remaining gates. No source/test changes until all audit templates close.
