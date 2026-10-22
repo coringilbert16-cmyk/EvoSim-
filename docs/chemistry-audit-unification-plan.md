@@ -1099,7 +1099,7 @@ The project owner selected the following directions for the chemistry unificatio
 
 **Implementation implications:**
 - Classify by actual physical state/attachment, not by a reproductive-material label. A unit attached to the organism is ordinary structure even if it was introduced during reproduction; it appears once in geometry, chemistry, structural-energy inventory, and resonance receiver mapping.
-- Remove the second physical-graph authority represented by `ReproductiveConstruction.developing_structure`. Keep only necessary nonphysical construction/core/progress metadata and explicitly justified accounting sub-holders; do not preserve a duplicate physical structure under a new name.
+- Eliminate `ReproductiveConstruction.developing_structure` as persistent/current construction state, not merely rename or demote it. Keep only necessary nonphysical construction/core/progress metadata and explicitly justified accounting sub-holders. A transient trial graph is permissible inside an atomic candidate calculation, but it must not become a second owned, serialized, moved, sensed, or inventoried physical structure.
 - Stored, unattached material remains a separate holder and does not credit the owner's resonance reservoir, although it may remain a physical occluder/receiver for onward signal propagation.
 - Map all attached surfaces to the owner's one resonance reservoir, subject to the same living/biological eligibility and energy-settlement rules as other attached structure. Do not double-count attached units or structural energy.
 - Update aggregate graph movement, collision/occlusion, chemistry reachability, cavity/core identity, caches, material/energy inventory oracles, and diagnostic JSON together. Preserve distinct genome-core identities as references over the shared physical graph; core identity is metadata, not a material tag.
@@ -2622,7 +2622,7 @@ This refines, rather than reverses, Section 17.77: one physical graph remains th
 **Canonical classification**
 - **Attached physical structure:** the one authoritative physical graph owned by the organism. This includes units introduced/committed during reproductive construction once they are structurally attached. They are not a separate “reproductive material” category and are not excluded from resonance because of their origin.
 - **Stored material:** unattached physical units in the organism's storage holder. These do not contribute to the owner's resonance capture. They remain physically present for material accounting and may still occlude/receive onward signal according to world-tone propagation rules.
-- **Construction state:** nonphysical metadata needed to track the second genome/core, progress, and any explicitly justified energy-accounting sub-holder. A separate physical `developing_structure` graph should not exist as an authoritative holder.
+- **Construction state:** nonphysical metadata needed to track the second genome/core, progress, and any explicitly justified energy-accounting sub-holder. The persistent/current `developing_structure` physical graph should be eliminated. A transient trial graph may exist only inside an atomic candidate calculation, never as a second owned physical state.
 
 **Consequences for implementation**
 1. Change physical-state representation so attachment, not reproductive designation, determines whether a unit belongs to the organism's structure and resonance receiver set.
