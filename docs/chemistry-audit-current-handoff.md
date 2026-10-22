@@ -359,3 +359,14 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Graph-local IDs begin at 1; deserialization repairs duplicate IDs inside one graph but is not a safe graph-merge procedure. Aggregate merge must stage ID remapping, rewrite bond endpoints and core references, validate, then commit atomically.
 - Existing cavity tests cover one qualifying cavity and an unbonded structure; structure tests cover per-graph IDs and ID serialization. No reviewed test covers two qualifying cavities in one connected aggregate, stable parent selection as a second cavity grows, merge collisions, exact-once division, or diagnostic projection. `diagnostics.rs` reports primary-graph counts/mass/JSON and separately serializes construction state; the inspected file has no local tests.
 - **Next:** finish and classify the remaining mutation/failure rows; reconcile the full audit matrix against Sections 17.6/17.7. Test gates remain open, and no source/test changes are allowed until every audit template closes.
+
+
+## Resume checkpoint — attached-structure resonance decision reconciled (2026-10-22)
+
+- **Plan commit:** `0b071c8a47c649dd55efdfef20563bd252a51dc8` (Section 17.96). PR #204 remains documentation-only.
+- **PR #205 audited source head:** `12d8079230458da68a8dc3755a1d6a9b41347862`. This is the latest head found during this resume; refresh head and CI before any source/test change.
+- **Decision closed:** any structurally attached unit is ordinary organism structure and counts toward the living organism's single resonance reservoir. No reproductive-material tag and no persistent developing-structure category. Material still in storage is excluded from resonance. This supersedes the old open choice in Sections 17.37–17.38; those sections remain historical evidence of the then-current implementation.
+- **Implementation mismatch:** current world-tone mapping credits only primary-structure bodies. Attached committed/developing structure must map through the eventual shared aggregate graph once; stored material remains capture-ineligible. Preserve escrow/source de-duplication, first-hit occlusion, staged settlement, and world-tone balance.
+- **No source/test changes.** This was a documentation and decision-reconciliation chunk only.
+- **Next:** continue the remaining production mutation-path/failure-row inventory, classify each row (source-inspection-complete, test-required, owner-decision-blocked, or release-gate-open), and reconcile independent inventories/release gates. No code until audit closure; one focused audit before each change.
+- **Verification caveat:** workflow 39833438679 is historical exact-head evidence, not a fresh run. It reported 585 passed, 27 baseline-identity failures, 1 ignored; Clippy had 34 application and 15 test diagnostics with no normalized identity changes. Do not describe the suite as green.
