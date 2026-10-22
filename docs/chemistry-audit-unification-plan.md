@@ -2099,3 +2099,15 @@ The schema-4 chemistry manifest uses a fixed equation fingerprint with a catalog
 **Telemetry decision needed for Phase 10:** either update `total_world_tone_energy_unabsorbed` consistently from the live frame's path accounting, or redefine/document it as legacy per-unit diagnostic only. Do not add it to the conservation equation; incident input, retained reservoir delta, heat, and escape already account for the physical energy exactly once. Add a test that live-frame settlement and diagnostic semantics agree.
 
 **Next audit:** reconcile all fields in prepared COMBINE ledger deltas against this role map and close the remaining transfer/cache invalidation matrix. No implementation until the audit templates are complete.
+
+
+### 17.53 Internal energy-transfer call-site audit — reproduction ignores transfer rejection; legacy recycling remains unsafe — 2026-10-22
+
+**Status: Call sites mapped; one unchecked live transfer result found.** Exact-head review of reproduction advancement, EnergyLedger::transfer, and recycling helper. No source/test changes.
+
+- `EnergyLedger::transfer` is atomic at the two-holder level: it validates both values and computes both next values before assigning either. It does not mutate cumulative energy-flow counters, which is appropriate for a pure internal transfer because the world total should not change.
+- `advance_construction` computes a bounded reserve transfer from parent usable energy to construction developing energy but discards the boolean result (`let _ = ledger.transfer(...)`) and continues into maintenance/construction. In ordinary valid states, the amount is bounded by the parent balance and the transfer should succeed. If either holder is invalid or the transfer rejects, the code silently proceeds without establishing the intended reserve. Decide whether this is deliberately best-effort funding; otherwise return a waiting/failure status and prove parent/construction holders remain unchanged. Add a test for rejected transfer rather than assuming the boolean cannot fail.
+- The other inspected transfer caller, `recycle_dead_organism`, checks the transfer result, but it is not safe to activate: it drains stored and committed material before checking every deposit result, removes reproductive construction, and clones the primary graph into a legacy DecomposingBody. Keep it quarantined and do not use it as the parent-aggregate death path.
+- No other production `ledger.transfer` call sites were found by the current source search beyond construction reserve transfer and the legacy recycler. The ledger unit test confirms successful transfers preserve the sum of the two holders.
+
+**Next audit:** inspect initialization and end-of-tick cached-holder refresh alongside prepared transformation deltas; ensure every cached/diagnostic field has one update policy and no cached value enters the independent inventory equation. No implementation until audit templates are complete.
