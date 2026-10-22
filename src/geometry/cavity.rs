@@ -2,7 +2,7 @@
 
 use crate::resources::{BaseResource, Form};
 use crate::structure::{OrganismStructure, PhysicalConstituentId, Placement};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::f64::consts::TAU;
 
 const EPS: f64 = 1e-8;
