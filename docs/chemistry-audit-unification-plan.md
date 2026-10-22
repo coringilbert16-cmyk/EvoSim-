@@ -2552,3 +2552,17 @@ Section 17.7's current tracker rows for Phases 1, 8, and 9 have been updated to 
 - This is an output compatibility contract, not a world-save/load migration requirement. Current runtime exposes diagnostic/observation serialization but no whole-world simulation persistence path was found.
 
 **Next:** finish the owner-facing canonical aggregate/core-identity contract and diagnostic JSON acceptance cases, then complete the outstanding chemistry transition-failure matrix and release gates. No source/test changes.
+
+
+### 17.80 Existing stable genome-boundary IDs can inform core identity — but cavity query ignores them — 2026-10-22
+
+**Status: Core-identity audit refined by exact source inspection.**
+
+- `OrganismStructure` (implemented as `PhysicalConstituentGraph`) already stores stable `PhysicalConstituentId` values and one `genome_constituent_ids` set. Juvenile realization derives that set from the qualifying cavity's actual boundary units. This is emergent geometry-derived identity metadata, not a resource/material role.
+- The set currently identifies the organism's established genome constituents for structural membership. However, `analyze_genome_cavity` does not use it to select a particular cavity; it recomputes enclosed regions across connected components and returns the largest qualifying cavity. Thus it does not by itself solve a second simultaneously developing core.
+- `anchor_structure` currently instantiates the second core's initial anchor in a separate graph and returns a unit index; it does not assign a second stable genome-boundary ID set. Construction later checks the cavity in that separate graph and requires the original anchor index to remain on its boundary.
+- **Refined design path:** preserve the existing parent's stable core identity, introduce a minimal second-core identity/reference when needed (initially anchored to the transferred physical constituent ID; once a cavity qualifies, track its realized boundary IDs), and make cavity queries core-specific without adding a “reproductive material” tag to units. The graph owns all units/bonds; core references only disambiguate which emergent cavity belongs to which genome.
+- A single global `genome_constituent_ids` set is insufficient for two cores. Prefer a small collection of core identities referencing existing physical IDs over a second structure graph. The identity must survive unit-index changes and be updated transactionally if a boundary constituent is removed or transformed.
+- Required tests: preserve parent boundary IDs while adding child anchor; independently select parent and second-core cavities in one connected aggregate; ensure growth/chemistry changes don't silently switch core identity; reject dangling core references atomically; division transfers the correct core identity to each child exactly once.
+
+This refines, rather than reverses, Section 17.77: one physical graph remains the recommendation; core identity is metadata over that graph, not a separate physical owner. No source/test changes.
