@@ -1,3 +1,16 @@
+# Current-state correction — 2026-10-22
+
+> **Read this addendum first.** Most of the detailed audit below records an earlier repository state and is retained as historical engineering evidence. Its statements about PR #186 as the integration target, the default branch being data-only, older test totals, and the old branch/catalogue status are superseded.
+
+- The current integration baseline is `main` at `8c84978cd003738d94a74eef9114b711689c3804`, after PR #202 merged.
+- PR #203, `maintenance/repo-stabilization-2026-10-22`, is the active draft maintenance branch. Keep it separate from PR #196 constructor work and PR #202 sunlight/world-chemistry work.
+- At PR #203 head `1414744`, formatting, source-size checks, the COMBINE architecture guard, and focused Bob/fluid/chemical tests passed. The full suite reported 563 passed, 28 failed, and 1 ignored; comparing test identities with the tested baseline found the same 28 failures.
+- Strict Clippy at `1414744` still fails: 44 application-target and 23 test-target errors, down from the baseline's 59 and 38. These are not a clean release signal; dead-code diagnostics require architectural review rather than blanket suppression.
+- After the documentation-only README update at `743a7d3`, exact-head CI was triggered and must be reviewed before any merge or draft-state change. Treat `1414744` as the latest fully evaluated code head until that run completes.
+- The design and current implementation summary in the root `README.md` takes precedence over contradictory historical sections below. Preserve those sections for traceability; do not treat old work orders as current tasks without re-auditing them.
+
+---
+
 # Repository stabilization audit — current integrity checkpoint, 2026-10-11
 
 > This current checkpoint supersedes earlier branch, catalogue, constructor, and CI statements below wherever they conflict. The detailed dated addenda are retained as historical engineering evidence.
