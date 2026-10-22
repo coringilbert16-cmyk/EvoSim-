@@ -543,10 +543,16 @@ impl PhysicalConstituentGraph {
         source: &Self,
     ) -> Option<HashMap<PhysicalConstituentId, PhysicalConstituentId>> {
         let source_ids: HashSet<_> = source.units.iter().map(|unit| unit.physical_id).collect();
+        let destination_ids: HashSet<_> =
+            self.units.iter().map(|unit| unit.physical_id).collect();
+        let source_max_id = source_ids.iter().map(|id| id.0).max().unwrap_or(0);
+        let destination_max_id = destination_ids.iter().map(|id| id.0).max().unwrap_or(0);
         if source_ids.len() != source.units.len()
             || source_ids.contains(&PhysicalConstituentId(0))
-            || source.next_constituent_id == 0
-            || self.next_constituent_id == 0
+            || source.next_constituent_id <= source_max_id
+            || destination_ids.len() != self.units.len()
+            || destination_ids.contains(&PhysicalConstituentId(0))
+            || self.next_constituent_id <= destination_max_id
             || self
                 .next_constituent_id
                 .checked_add(source.units.len() as u64)
@@ -1107,6 +1113,28 @@ mod tests {
                 .len(),
             3
         );
+    }
+
+    #[test]
+    fn append_graph_rejects_invalid_destination_ids_without_mutating_it() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut destination = OrganismStructure::new();
+        let first = destination.add_unit(StructuralUnit::new("Carbon", placement));
+        let second = destination.add_unit(StructuralUnit::new("Nitrogen", placement));
+        destination.units[second].physical_id = destination.units[first].physical_id;
+        let original_units = destination.units.clone();
+        let original_bonds = destination.bonds.clone();
+
+        let mut source = OrganismStructure::new();
+        source.add_unit(StructuralUnit::new("Sulfur", placement));
+
+        assert!(destination.append_graph_remapping_ids(&source).is_none());
+        assert_eq!(destination.units, original_units);
+        assert_eq!(destination.bonds, original_bonds);
     }
 
     #[test]
