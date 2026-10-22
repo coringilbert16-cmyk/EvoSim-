@@ -432,3 +432,13 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Construction remains metadata over one aggregate. No temporary child lifecycle. Parent maintenance/stress/death runs once; debit plus construction mutation must be atomic. Parent death stops production and prevents offspring; division partitions ownership exactly once.
 - PR #205 head last inspected: `12d8079230458da68a8dc3755a1d6a9b41347862`; refresh before implementation. No source/test changes or fresh CI run.
 - Next: audit production cost formulas and division transaction boundaries, then reconcile tests/inventory gates before implementation.
+
+
+## Resume checkpoint — production cost/division audit (Section 17.104)
+
+- Plan commit: `c7f93fd52cf1b09417e503865b269205c779726d`; PR #204 remains documentation-only.
+- Owner decision remains: production costs are debited from parent `usable_energy`; no separate `developing_energy` reserve. Clarification: do not delete the genome field `reproductive_energy_allocation` or its compatibility alias until its role in the Master Spec is checked. It must not be a separate energy holder.
+- Exact PR #205 head inspected: `12d8079230458da68a8dc3755a1d6a9b41347862`. Current construction uses that field as a reserve target, ignores transfer rejection, applies a second child lifecycle, and division creates a child with the developing holder's energy. Simulation may finish `Dead` construction; helper lacks Ready-only guard.
+- Candidate attachment already uses the bond-driven COMBINE energy-accounting path, but shared-aggregate atomic commit remains unimplemented. Constructor's `1.0e12` trial allowance remains separate and out of scope.
+- Narrow item to resolve from Master Spec: child usable energy after successful division. Do not invent a 50/50 split or reintroduce a production reserve. No source/test changes or fresh CI run.
+- Next: inspect Master Spec 2.4 and existing division rule; then complete division failure matrix and inventory reconciliation.
