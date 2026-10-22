@@ -17,8 +17,8 @@
 - Last fully verified implementation head: `686bcd0905d02c6ac4bee87e40280150765b63f9`; workflow [39814502886](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39814502886): **577 passed, 28 failed, 1 ignored**. All 28 failing test identities matched baseline exactly, with no new/missing identities. Cache missing-manifest rejection passed.
 - At that head, format, source-size, architecture, Bob persistence/reopen/concurrency, focused fluid transaction/coalescence/restoration, and chemical BREAK steps passed.
 - Strict Clippy failed with 34 application-target and 15 test-target diagnostics; normalized messages matched baseline.
-- Latest implementation head: `a1cc6e2693cd2e836d2f9ade37b84987e9215e7f`.
-- Workflow [39817430683](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39817430683) was still running its full Rust test step on intermediate head `4f4b2af` at last check. It does not verify the later cache rollback test or final test deduplication. No exact-head workflow result has yet been returned for `a1cc6e2`.
+- Latest implementation head: `25f1df51e5b25c1227887c7cff9e7de9178ef2fd`.
+- Intermediate workflow [39817430683](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39817430683) on `4f4b2af` finished with **581 passed, 28 failed, 1 ignored**; the 28 failures matched baseline exactly. The containment integration test still failed at fixture setup because no full Carbon fits in the seed chamber; the independent inventory assertion was not reached. Its source fixture correction did not resolve the baseline geometry failure. No exact-head workflow result has yet been returned for `a1cc6e2`.
 
 ## Phase tracker
 
@@ -43,12 +43,11 @@ At `a1cc6e2`:
 
 1. Two deduplicated independent-inventory negative tests assert exact rejection of an unknown resource identity and fractional Carbon amount.
 2. The production containment integration test now searches the largest interior region for a placement that fits a whole Carbon, clears unrelated environmental aggregates, and compares independent constituent inventory before/after the live `Simulation::transfer_contained_environmental_material` call. The prior fixture chose the smallest region and failed because no full Carbon fit; this test-only fixture correction must be verified before any production change is considered.
-3. A cache partial-append rollback test appends an incomplete row, invokes the rollback primitive with an injected error, and verifies original data bytes and manifest remain unchanged and the previously committed row can be reopened.
-4. The workflow on intermediate head `4f4b2af` has completed formatting, source-size, architecture, Bob, fluid, and chemical BREAK steps; full Rust tests were still in progress at last check. Do not treat that run as verification of `a1cc6e2`.
+3. A cache partial-append rollback test appends an incomplete row, invokes the rollback primitive with an injected error, and verifies original data bytes and manifest remain unchanged and the previously committed row can be reopened. The first attempt at `a1cc6e2` failed to compile because of an incorrectly escaped byte literal; the current source at `25f1df5` uses a raw byte string. Workflow [39818514455](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39818514455) is running; no pass is inferred.
 
 ## Next actions
 
-1. Check the workflow for exact head `a1cc6e2`; verify all focused steps, the full suite and named baseline failure identities, the production containment test, both negative oracle tests, cache append rollback test, and Clippy.
+1. Check workflow [39818514455](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39818514455) for exact head `25f1df5`; verify all focused steps, the full suite and named baseline failure identities, both negative oracle tests, cache append rollback test, and Clippy. Track the production containment integration test as blocked by the known seed-chamber fixture failure unless a fixture can be built without constructor/Bob scope.
 2. If the containment test fails, inspect its exact assertion/log first. Do not pull PR #196 constructor/Bob work into this branch.
 3. Continue Phase 3 material ownership/rollback/restore/decomposition coverage and Phase 4 persistence failure-injection coverage.
 4. Update this handoff and the detailed plan whenever the implementation head or meaningful verification state changes. No merge until the approved release gates have evidence.
