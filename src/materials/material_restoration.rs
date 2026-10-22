@@ -11,9 +11,7 @@ use crate::structure::{Bond, BondEndpoint, OrganismStructure, Placement, Structu
 const EPSILON: f64 = 1e-9;
 
 fn is_finite_placement(placement: Placement) -> bool {
-    placement.x.is_finite()
-        && placement.y.is_finite()
-        && placement.rotation_radians.is_finite()
+    placement.x.is_finite() && placement.y.is_finite() && placement.rotation_radians.is_finite()
 }
 
 fn transform_relative(origin: Placement, relative: Placement) -> Placement {
@@ -40,7 +38,9 @@ pub(crate) fn restore_material(
     let connections = instance.internal_connections.as_ref()?;
     let material = &instance.material;
     if !is_finite_placement(origin)
-        || relative.iter().any(|placement| !is_finite_placement(*placement))
+        || relative
+            .iter()
+            .any(|placement| !is_finite_placement(*placement))
         || !material.is_valid_for_catalog(catalog)
         || material.parts.is_empty()
         || relative.len() != material.parts.len()
