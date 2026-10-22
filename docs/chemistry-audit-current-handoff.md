@@ -1,6 +1,6 @@
 # Chemistry Unification — Current Handoff
 
-**Plan (latest recorded plan commit):** `56eb760a40bde64286a0bb33d946522e06b83c98`  
+**Plan (latest recorded plan commit):** `aac71feadbd70926d63ef59a44b134c34494db6e`  
 **PR #205 last audited head (historical; refresh before implementation):** `12d8079230458da68a8dc3755a1d6a9b41347862`  
 **CI:** [39833438679](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39833438679).
 
@@ -514,3 +514,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - A scalar-only switch to parent energy is unsafe: source removal and aggregate structure mutation are separate commits, and the candidate graph remains separate from the parent. It would violate both atomicity and the approved aggregate/resonance/lifecycle model.
 - Next code slice must provide a live parent-owned aggregate transaction: validate candidate placement and graph/core-ID remapping, stage parent energy and ledger, stage source removal, then commit structure/storage/energy/ledger/revision together or leave all unchanged. Remove the separate developing-energy transfer and temporary-organism lifecycle within that coherent change.
 - No source/test change from this audit; no additional owner decision required. Workflow `39856976428` for head `c57926fdf551472cfa274ca1f3550d1a93b29295` remained in progress at last check.
+
+
+## Research-reference update — 2026-10-22
+
+- **Latest plan commit:** `aac71feadbd70926d63ef59a44b134c34494db6e`. PR #204 remains documentation-only.
+- Section 18 of `docs/chemistry-audit-unification-plan.md` now contains an annotated research bibliography and crosswalk: reaction-network conservation/thermodynamic soundness, nonequilibrium reaction-network thermodynamics, RAF/autocatalytic sets, Smoldyn, MCell/CellBlender, and artificial chemistry/Stringmol.
+- Research annotations were added at the applicable core audit and implementation-plan sections. They identify potential audit/test methods and explicit limits; they do not change owner decisions or assert that recommended checks are implemented.
+- Main implications: separate reaction-rule invariants from atomic runtime settlement and whole-world inventory; check energy cycles independently of material conservation; use exact-small-world oracles before spatial optimization; treat autocatalysis/emergence as later validation after physics/accounting gates pass.
+- **Current PR #205 metadata was re-fetched:** head `c57926fdf551472cfa274ca1f3550d1a93b29295`. This metadata refresh is not a fresh CI verification. Continue to distinguish verified source state from historical workflow evidence, and keep PR #204 information-only.
