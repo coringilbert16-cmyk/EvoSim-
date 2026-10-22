@@ -2026,3 +2026,16 @@ The material oracle and world-tone snapshot both explicitly account for active-o
 - EnergyInventorySnapshot is a test-only oracle: it recomputes current usable/resonant/structural stores from holders, but its initial baselines and cumulative source/sink flows necessarily come from ledger history. Its balance check can therefore detect holder/accounting mismatch but cannot independently reconstruct every historical source event. Add cross-domain tests that compare actual holder deltas with event deltas and exact source provenance.
 
 **Next audit:** inspect cache/reaction accumulation invalidation and any remaining energy-changing path not yet mapped; distinguish non-energy activation signals from actual energy holders. No implementation until the audit templates are complete.
+
+
+### 17.48 Chemistry cache and reaction-accumulation audit — 2026-10-22
+
+**Status: Persistent cache guards verified; accumulation cleanup gap found.** Reviewed current PR #205 head 12d8079230458da68a8dc3755a1d6a9b41347862. No source/test changes.
+
+- Chemistry library schema 4 has an equation fingerprint. Loader rejects legacy schemas, fingerprint mismatch, a non-empty store without a manifest, duplicate keys, invalid records, and manifest entry-count mismatch. Insert refreshes under lock, rejects duplicates, appends/syncs a row, and atomically persists the manifest. Partial-append and manifest-failure rollback/reopen tests exist; the exact-head workflow passed the insert rollback test.
+- The fingerprint includes the approved equations and parameters plus a catalog-version marker. Catalog/resource chemistry changes must keep that marker current; the string does not itself hash all runtime catalog properties.
+- Reaction accumulation keys include organism ID, structure revision, bond endpoints, and interface signature. For non-empty structures, the accumulator removes stale revision keys before processing current bonds. Triggered events remove their own activation accumulation; a failed/stale BREAK does not commit its cloned resonance withdrawal.
+- **Gap:** the accumulator returns immediately when the primary structure has no bonds, before cleaning old keys. If the final bond disappears while other keys from that revision remain, the entries can persist on later bondless ticks. Dead organisms stay in the collection, so this can retain obsolete state as population grows. This is not physical energy, but it is a memory/performance concern.
+- Minimal fix candidate after audit completion: run stale-key cleanup before the empty-bond return, clearing that organism's entries when it has no bonds. Add a test where an organism with multiple accumulated keys loses its final bond, verifying obsolete keys disappear while another organism's entries remain. Do not change the activation/dissipation equations for this cleanup.
+
+**Next audit:** inspect remaining energy/material mutations and cache/catalog invalidation call sites; update the dependency matrix. No implementation until audit templates are complete.
