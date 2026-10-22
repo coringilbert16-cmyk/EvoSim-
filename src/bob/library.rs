@@ -3925,7 +3925,7 @@ struct ExposedEdgeInterval {
 /// validation already rejects positive-area penetration, another rigid polygon
 /// can only occlude a boundary edge by lying on that same boundary. We therefore
 /// project exact collinear edge overlaps onto the source edge and subtract them.
-pub fn exposed_polygon_edge_intervals(
+fn exposed_polygon_edge_intervals(
     formation: &GeometryFormation,
     anchor_index: usize,
     catalog: &[BaseResource],
