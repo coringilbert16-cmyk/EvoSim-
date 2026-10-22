@@ -2247,3 +2247,23 @@ This confirms an adversarial invalid-state gap across several callers; it is not
 - This is an invalid-input contract gap, not evidence that the default catalog produces invalid frequencies or that the current energy budget is exceeded. Keep it distinct from whole-world conservation and geometry accuracy.
 
 **Next audit:** close the remaining material/energy transition failure matrix against the phase tracker, then classify each remaining item as source-inspection-complete, owner-decision-blocked, or requiring a focused failure-injection test. No implementation until every audit template is complete.
+
+
+### 17.64 Transition failure matrix — source-ordering cross-check — 2026-10-22
+
+**Status: Source ordering reconfirmed for five high-risk transitions; deterministic rejection coverage remains incomplete.** Read-only review at PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862` of `src/perception/movement.rs`, `src/chemistry/expulsion.rs`, `src/organism/reproduction.rs`, and `src/simulation/simulation.rs`. No source/test changes.
+
+| Transition | Exact observed ordering | Failure classification / required evidence |
+|---|---|---|
+| Movement | `advance_movement` calls `try_move_cell_with_reason` (which changes positions/geometry) before `settle_transaction`; on settlement rejection it returns without restoring geometry or decrementing movement progress. | **Confirmed atomicity gap.** Inject ledger rejection after a successful move and compare positions, spatial index, construction anchor, energy, progress, and independent inventory. Prefer staged movement or a complete rollback. |
+| Expulsion | `expel_physical_material` removes the stored instance, computes destination and mutates placements, then returns the field deposit result directly. On destination rejection, the owned physical instance is no longer in storage and is not returned to the caller. Earlier validation-failure paths attempt to restore storage but ignore restoration failure. | **Confirmed ownership gap.** Test destination rejection and restoration rejection; source must remain in storage or a valid transaction holder with unchanged world inventory. |
+| Contained acquisition | `transfer_contained_environmental_material` removes all contained field objects first, then attempts storage. On storage failure it attempts a field deposit at the first placement and ignores the result. | **Confirmed ownership gap.** Force both storage and fallback-deposit rejection; assert no source disappears and the independent integer inventory is unchanged. |
+| Construction reserve | `advance_construction` computes a bounded transfer and ignores the boolean from atomic `ledger.transfer`, then continues maintenance/construction. | **Failure-policy gap.** Test rejected transfer with unchanged source/destination and decide in code whether the tick waits/fails or reserve funding is explicitly best-effort; do not silently assume success. |
+| Stored BREAK | Existing regression covers a failed stored-BREAK restoration path and inventory, but the live transformation still handles split pieces and fallback destinations incrementally. | **Partial coverage.** Add deterministic failure after the first split-piece commit, storage+deposit rejection, and malformed completion/escrow restoration. Validate the complete world inventory, not only storage count. |
+
+- Movement tests for blocked/non-finite movement and atomic push chains establish geometry rejection/propagation behavior, but do not exercise a ledger rejection *after* a successful geometry move; those are distinct transaction boundaries.
+- This pass does not close the remaining matrix: COMBINE prepared-ledger invariant, stale reaction keys, catalog-fingerprint invalidation/restart, maintenance debt/rejection, construction growth/finish stale-source rollback, world-tone exact-small-world oracle, and post-death stored/developing-holder reachability still require dedicated evidence.
+- Receiver eligibility for parent-owned stored/committed/developing surfaces remains **owner-decision-blocked** as recorded in Section 17.38; do not infer that physical ownership automatically grants resonance retention.
+- No source/test changes were made. The audit template is not yet complete, so no implementation is authorized.
+
+**Next:** reconcile each remaining row against Section 17.7 and the Section 17.6 release gates, mark it source-inspection-complete, test-required, or owner-decision-blocked, then review whether any uninspected production mutation path remains.
