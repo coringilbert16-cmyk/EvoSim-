@@ -467,3 +467,11 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - All production costs debit the parent's `usable_energy` atomically with structural mutations. No separate developing-energy holder/reserve. Only a successful atomic division creates resulting organisms; dead/non-Ready construction cannot produce offspring.
 - Do not implement the split formula against the old separate-child graph in isolation. It belongs inside the canonical aggregate/two-organism atomic partition, with exact-once material/bond/storage/energy ownership and rollback.
 - Documentation update commit: `85df557c9e33f9dfd5c381d6e5c68d47fe3b6c08`. PR #204 remains docs-only. Next: refresh PR #205 head and audit its current reproduction/division/ledger/test boundary before the next source change; commands/tests ≤5 minutes, compare failure identities against baseline.
+
+
+## Resume checkpoint — fresh reproduction transaction audit (Section 17.109, 2026-10-22)
+
+- Rechecked exact PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862`; no source changes or tests run.
+- Confirmed current code still moves energy from parent `usable_energy` into `developing_energy`, runs a temporary child's separate maintenance/stress/death/resonance lifecycle, and funds attachment trials from that temporary child's energy even when material comes from parent storage. Candidate structure/ledger/energy are prepared on clones, but parent material removal and the later construction/ledger commit are not one canonical aggregate transaction.
+- `finish_reproduction` can return a child from nonempty non-Ready construction, and the simulation routes `Dead` status toward finishing. Child receives the prohibited developing-energy holder. The approved structural-mass proportional division rule belongs after canonical aggregate partition into two validated outputs; it must not be patched into this old graph independently.
+- Next coherent implementation slice: one aggregate ownership model plus parent-energy debit/physical attachment atomicity, with failure-injection tests. Division is a separate later atomic transaction; child usable-energy shares follow validated post-split structural mass. PR #196 stays out of scope. Full suite not rerun because last full-suite process hit the hard five-minute bound; compare named failures to baseline after future source change.
