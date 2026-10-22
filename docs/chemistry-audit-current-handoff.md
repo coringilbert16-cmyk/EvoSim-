@@ -92,3 +92,13 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - No new distinct physical source/sink category was found beyond the existing Section 17.55 matrix. Initialization, COMBINE/BREAK, world-tone, material acquisition/expulsion, movement, construction, cache, and independent inventory paths are represented.
 - This is not proof of conservation or closure: deterministic rejection tests, whole-world inventory assertions, exact-small-world sunlight comparison, cache invalidation/restart coverage, and several lifecycle checks remain open. The legacy decomposition helper stays quarantined.
 - **Next:** complete audit-template sign-off by assigning each remaining row exact source/test references and a deterministic acceptance condition. Keep any row open if its proof requirement is not testable. No implementation until sign-off and the receiver-eligibility decision are complete.
+
+
+## Latest acceptance-test design checkpoint — 2026-10-22, Section 17.69
+
+- **Plan commit:** `977cae167cbef70b7295bfe5d1c5c44791b28928`. PR #204 remains documentation-only.
+- Section 17.69 now names the existing tests to preserve and the deterministic regressions required for each open transaction/release gate: source-once initialization, COMBINE ledger symmetry, chemical/resonance BREAK, stored BREAK, environmental COMBINE, acquisition, expulsion, movement rollback, maintenance, construction reserve/growth/finish, world tone, reaction accumulation, cache invalidation/restart, post-death holder reachability, numerical integrity, and docs/diagnostics.
+- Each new failure test must assert both object state and the independent material/energy oracle; helper-only tests or ledger counters alone are insufficient.
+- **No implementation yet.** The owner decision on non-primary receiver eligibility remains open, and the final audit-template sign-off has not been declared complete. No source/test changes.
+- PR #205 exact head reviewed in this audit series: `12d8079230458da68a8dc3755a1d6a9b41347862`. Latest recorded CI is still workflow 39833438679 and is not fresh.
+- **Next:** obtain owner direction on whether parent-owned stored/committed/developing surfaces can retain resonance energy, then finalize the audit-template sign-off. Do not change receiver mapping or begin code before that decision.
