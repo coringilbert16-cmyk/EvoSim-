@@ -5067,7 +5067,7 @@ pub fn generate_two_constituent_candidates(
         let half = *length / 2.0;
         let endpoints = [(-half, 0.0), (half, 0.0)];
         if let Some(tv) = target_vertices {
-            for (ti, &target_vertex) in tv.iter().enumerate() {
+            for &target_vertex in tv.iter() {
                 for (endpoint, &endpoint_position) in endpoints.iter().enumerate() {
                     for rotation in crate::rigid_boundary::line_endpoint_alignment_rotations(
                         endpoint,
