@@ -45,7 +45,8 @@ Still in migration:
 - Unit/contract tests remain beside executable modules in src/ because they depend on private crate internals.
 - chemistry_library/ now contains tracked schema-3 cache records and a manifest; the persistence code exists, but runtime hit/miss coverage and the long-term write/refresh authority still need verification.
 - Bob's large library.rs still needs an internal split into lookup/query/index/resolution/persistence/validation responsibilities.
-- Remaining documentation should be grouped under architecture, mechanics, libraries, decisions, and audits as those documents are touched.
+- [x] Added `docs/README.md` as an index-first taxonomy for the existing document set; file moves remain deferred until incoming links are audited.
+- Remaining documentation can be migrated under architecture, mechanics, libraries, decisions, and audits incrementally after link audits.
 
 Authority boundaries:
 Generated library data is runtime knowledge, not source code.
