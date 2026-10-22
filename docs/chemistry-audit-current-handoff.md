@@ -550,3 +550,10 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - `Organism::genome_cavity_cached_ref` currently scans the whole structure and writes the selected cavity boundary back as the primary genome IDs. That becomes unsafe with multiple cores in one aggregate: it may select the developing core and remove its IDs from the additional-core group.
 - Before aggregate migration, parent and developing genome cavity/viability checks must be core-anchored and retain separate genome/blueprint associations, even though physical units share one graph.
 - Next: test core-anchored cavity lookup with two qualifying cavities, including mutation/removal/serialization. Movement remains deferred until canonical aggregation is implemented.
+
+
+## Core-specific cavity lookup implementation — 2026-10-22, Section 17.118
+
+- PR #205 head `a5b95ca21acce5ced5b4ccae47d523fc8f357472` adds core-anchored cavity analysis, uses the anchor ID for reproduction readiness, and keeps the organism cavity cache from switching to another cavity while known primary-core IDs remain.
+- New two-cavity regression and all other Rust tests are not yet confirmed at the latest head; CI run `39862195685` has passed formatting, structural checks, and focused chemistry/Bob tests, while the full Rust test step remains in progress. Clippy pending.
+- Aggregate ownership, atomic parent-funded growth, and movement migration remain unimplemented. Next: finish CI and audit the all-core-constituents-removed identity edge case before changing aggregate ownership. Movement is deferred until canonical graph migration and must be announced before that refactor.
