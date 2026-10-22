@@ -600,168 +600,20 @@ Equivalently, the residual source minus all destinations must be zero within EPS
 - **Decision required from project owner, if any:** none now. Keep ordinary chemistry as the live post-death mechanism; don't enable legacy recycling/decomposition without explicit architectural approval.
 - **Recommended smallest next change (if authorized):** after all audits, test and either harden or clearly quarantine the recycling helper; keep it disconnected from production death processing unless the unified lifecycle plan explicitly chooses it. No production code change authorized now.
 
-### A12 — Maintenance, movement, reproduction, development, and all energy consumers/transfers
+### A12–A21 — Remaining audit domains
 
-**Questions**
-- Are maintenance and movement costs debited once from the actual holder?
-- Is movement work tied to realized movement and failure/rollback behavior?
-- Are reproductive allocation, parent debit, offspring credit, and development energy transfers balanced?
-- Are bootstrap/initial organism energy and constructor allowances kept distinct?
-- Can growth, acquisition, or constructor code manufacture energy from a budget or resource potential?
-- Do dormant/unfinished holders retain or settle energy?
+The completed audit records for these domains appear in the audit log below. The original question lists are consolidated here to avoid duplicating headings and leaving apparently empty templates.
 
-**Inspect**
-- `src/perception/movement.rs`, maintenance logic, `src/organism/reproduction.rs`, juvenile/development logic, constructor, resource acquisition, simulation initialization, offspring lifecycle, and all energy fields/usages.
-
-**Boundary**
-- Audit for chemistry coupling and invariants only. PR #196 constructor/Bob redesign and movement/reproduction redesign remain deferred; do not pull them into this workstream unless a directly proven conservation defect requires a narrowly scoped fix.
-
-**Deliverable**
-- Consumer/transfer inventory, per-path equations, failed-action behavior, and explicit initial-energy policy.
-
-### A13 — Material and energy persistence, schemas, concurrency, and recovery
-
-**Questions**
-- Are serialized organism reservoirs, bond energies, ledgers, world-tone state, and materials backward-compatible and validated?
-- Is the chemistry cache schema consistent with its manifest and every row?
-- Are duplicate keys, duplicate IDs, malformed/truncated rows, invalid records, and count mismatches detected rather than silently overwritten/skipped?
-- Can concurrent writers or crash/reopen paths lose or duplicate physical state?
-- Are caches safely rebuildable from authoritative data, and do cache misses preserve the same semantics as hits?
-- Does a schema migration change meaning or only representation?
-
-**Inspect**
-- `src/chemistry/chemistry_library.rs`, `chemistry_library/data/`, manifests, locks, atomic-write/rollback code, serde defaults, save/load, and persistence tests.
-
-**Deliverable**
-- Schema compatibility matrix; corruption/concurrency/recovery findings; migration plan only if needed; cache-versus-authority contract.
-
-### A14 — Chemistry cache semantics and geometry coupling
-
-**Questions**
-- Does the cache contain reusable static knowledge only, or is it accidentally treated as live physical truth?
-- Are keys canonical, symmetric where intended, versioned, and complete for relevant resource/interface properties?
-- Are stale/missing records handled deterministically and safely?
-- Can a cached potential override current material properties, realized geometry, live contact, or energy accounting?
-- What is the fallback cost and can runtime code accidentally trigger unbounded search or persistence writes?
-
-**Inspect**
-- Chemistry library keys, records, query/miss/insert paths, geometry reference library interfaces, contact signatures, current schema/data, and callers.
-
-**Deliverable**
-- Cache authority table, correctness requirements, hit/miss equivalence tests, and runtime performance budget.
-
-### A15 — Simulation ordering, event scheduling, determinism, and stale operations
-
-**Questions**
-- What is the precise tick order for world-tone sampling, perception, accumulation, reaction resolution, stress, death checks, maintenance, movement, reproduction, material updates, and ledger reconciliation?
-- Can event order affect outcomes in unintended ways?
-- Are pending events revalidated against the current bond graph and energy state before settlement?
-- Is reaction ordering deterministic across runs and save/load?
-- Does a large number of organisms or bonds cause unbounded queues or repeated scans?
-- Are source budgets scoped to a tick/region/receiver in a way that prevents duplicated claims?
-
-**Inspect**
-- `src/simulation/simulation.rs`, state and runtime, active transformations, accumulation maps, source snapshot/budget, all event queues and iteration order.
-
-**Deliverable**
-- Tick-sequence diagram, stale-event/duplicate-settlement risks, determinism policy, and asymptotic hotspot list.
-
-### A16 — Whole-world material conservation and physical representation
-
-**Questions**
-- Does each physical constituent have one authoritative identity/location at a time?
-- Do material transfer, expulsion, composite formation/splitting, fluid merge, death, and reproduction conserve constituent amounts?
-- Are structural bonds and composite-internal bonds represented consistently?
-- Can resource catalog properties diverge from restored physical materials?
-- Are non-physical logical materials accidentally persisted as if they were physical material?
-
-**Inspect**
-- Material/resource types, environment collections, physical material, structure/composite bond graphs, material storage/transfer/restoration, fluid coalescence, expulsion, reproduction, and serialization.
-
-**Deliverable**
-- Material inventory equation and object-identity invariants, with tests that compare before/after physical totals.
-
-### A17 — Diagnostics, observability, UI, and scientific interpretability
-
-**Questions**
-- Can we inspect where energy is stored, where it came from, where it went, and why an event failed without dumping unbounded logs?
-- Do diagnostics distinguish force, reaction accumulation, usable energy, bond energy, resonance energy, source input, work, heat, and material amount?
-- Are names/units consistent in UI, logs, serialized output, and tests?
-- Can conservation drift and performance regressions be detected from compact counters?
-- Are failure reasons sufficiently precise to separate geometry rejection, chemical ineligibility, insufficient energy, stale event, and conservation failure?
-
-**Inspect**
-- Diagnostics, resource visualization, server/UI boundaries, test helpers, errors, event summaries, and all energy-related metrics.
-
-**Deliverable**
-- Minimal instrumentation schema, unit labels, bounded aggregation strategy, and actionable error taxonomy. Avoid per-object/per-tick log spam.
-
-### A18 — Numerical stability and long-run behavior
-
-**Questions**
-- Can repeated tiny transactions accumulate drift beyond tolerance?
-- Are all calculations robust to non-finite input, overflow, underflow, extreme world size, and zero/near-zero mass or contact?
-- Are rounding/quantization used only for cache identity or metadata rather than silently changing physical values?
-- Do spectrum normalization and resource quantities preserve totals?
-- Can long simulations develop negative energy, unbounded resonance components, overflowed counters, or stale accumulation entries?
-
-**Inspect**
-- All audited equations and state containers, floating-point tolerances, quantization, serialization, long-run tests, and metrics.
-
-**Deliverable**
-- Numerical risk register, justified tolerance policy, property-based/adversarial tests, and a bounded long-run conservation test.
-
-### A19 — Scalability and profiling at target populations
-
-**Questions**
-- What is the complexity of each per-tick chemistry stage in organisms (N), constituents (M), bonds (B), candidate contacts (C), and spectral components (S)?
-- Which stages scan all organism pairs, all bonds per organism, all materials in the world, or all source/object pairs?
-- Can contact/event indexes be updated incrementally rather than rebuilt?
-- Are world-tone samples cached by tick/world configuration and exposure computed once per relevant surface?
-- Are full-world conservation snapshots debug/test-only, sampled, or incremental in production?
-- Are caches bounded and deterministic, and does cache miss/growth trigger expensive runtime discovery?
-- What happens under thousands of organisms, dense contact graphs, high reaction activity, and long lifetimes?
-
-**Inspect**
-- Tick loop, contact cache, reaction candidate generation, event accumulation, world-tone exposure, chemistry library persistence, energy accounting, and profiler/test harnesses.
-
-**Required approach**
-- Establish a measured baseline before optimization.
-- Prefer O(N + B + C) or similarly sparse/local work over O(N²) all-pairs processing where physical locality permits.
-- Avoid full-world clone-per-event; use narrow trial state or reversible transaction staging.
-- Keep expensive independent audits available in tests/debug mode, while production uses incremental accounting if its invariants can be proven.
-- Bound event queues, caches, histories, spectra, and persistence growth.
-- Characterize approximation error explicitly; do not trade away conservation or physical invariants for speed.
-
-**Deliverable**
-- Complexity table, benchmark scenarios and measurements, hot-path budget, and proposed optimization order based on evidence.
-
-### A20 — Cross-domain invariants and integration tests
-
-**Questions**
-- Which invariants must hold across more than one subsystem and cannot be established by isolated unit tests?
-- Do COMBINE → stored bond energy → BREAK → heat/usable energy balance?
-- Does world-tone input → resonance storage → compatible reaction withdrawal conserve the source input and energy remaining?
-- Does stress/core breach → death → ordinary post-death chemistry preserve material and energy?
-- Do parent → offspring energy transfers conserve the total?
-- Do save/load and failed transaction paths preserve the same inventory?
-
-**Inspect**
-- Cross-domain integration tests and all relevant transaction callers; add no test that assumes the behavior under test instead of measuring independent state before/after.
-
-**Deliverable**
-- End-to-end invariant matrix, adversarial scenario list, and exact CI commands with bounded timeouts.
-
-### A21 — Documentation/spec alignment and implementation sequencing
-
-**Questions**
-- Does README/spec agree with code, test expectations, and cache schemas?
-- Which rules are settled, which are parameters awaiting owner decision, and which are implementation gaps?
-- What is the smallest safe implementation order that minimizes rework?
-- Which gates must pass before live sunlight capture or broader organism viability can be claimed?
-
-**Deliverable**
-- Updated root README status, finalized equations/terms, migration notes, staged implementation PR plan, rollback conditions, and unresolved decision list.
+- **A12:** Energy consumers, internal transfers, initial conditions, and construction.
+- **A13:** Persistence, schema evolution, concurrency, and recovery.
+- **A14:** Chemistry cache authority, key semantics, fallback, and performance.
+- **A15:** Tick ordering, scheduling, determinism, and stale operations.
+- **A16:** Whole-world material conservation and physical representation.
+- **A17:** Diagnostics, observability, UI, and scientific interpretability.
+- **A18:** Numerical stability, invalid states, and long-run behavior.
+- **A19:** Scalability and profiling at target populations.
+- **A20:** Cross-domain invariants and integration tests.
+- **A21:** Documentation/spec alignment and implementation sequencing.
 
 ## 7. Cross-cutting impact matrix
 
