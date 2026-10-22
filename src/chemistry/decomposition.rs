@@ -187,7 +187,11 @@ mod tests {
         )
         .unwrap();
         assert!(water.realize_default_geometry(&catalog));
-        let unit_area = match &catalog.iter().find(|resource| resource.name == "Water").unwrap().shape.form {
+        let water = catalog
+            .iter()
+            .find(|resource| resource.name == "Water")
+            .unwrap();
+        let unit_area = match &water.shape.form {
             crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
             _ => panic!("default Water shape should have a measurable area"),
         };
@@ -197,7 +201,8 @@ mod tests {
             std::f64::consts::FRAC_PI_2,
         )
         .unwrap();
-        let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
+        let arc =
+            crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
         let shape = crate::resources::Shape {
             form: crate::resources::Form::Fluid {
                 nominal_area: merged_area,
@@ -209,12 +214,8 @@ mod tests {
         assert!(water.realize_fluid_geometry(shape.clone(), &catalog));
         let mut structure = OrganismStructure::new();
         structure.add_unit(water);
-        let mut body = DecomposingBody::new(
-            structure,
-            0.0,
-            Position { x: 0.0, y: 0.0 },
-        )
-        .unwrap();
+        let mut body =
+            DecomposingBody::new(structure, 0.0, Position { x: 0.0, y: 0.0 }).unwrap();
 
         let released = body.release_finished_material(&catalog);
         assert_eq!(released.len(), 1);
