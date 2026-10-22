@@ -654,10 +654,12 @@ mod tests {
         assert!(ledger.initial_condition_energy_settled);
 
         assert!(!ledger.settle_external_input(&mut holder, initial));
-        assert_eq!(holder, 12.5, "duplicate initial source must not credit holder");
         assert_eq!(
-            ledger.total_external_energy_input,
-            12.5,
+            holder, 12.5,
+            "duplicate initial source must not credit holder"
+        );
+        assert_eq!(
+            ledger.total_external_energy_input, 12.5,
             "duplicate initial source must not increase source accounting"
         );
     }
