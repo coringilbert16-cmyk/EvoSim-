@@ -436,6 +436,45 @@ mod integration_tests {
         assert_eq!(s.organisms[0].stored_material.physical_count(), 0);
     }
     #[test]
+    fn energy_inventory_snapshot_recomputes_current_holders_independently_of_ledger_totals() {
+        let mut simulation = Simulation::new(7102, 10.0);
+
+        let expected_usable = simulation.organisms.iter().map(|organism| {
+            organism.usable_energy
+                + organism.reproductive_construction.as_ref()
+                    .map_or(0.0, |construction| construction.developing_energy)
+        }).sum::<f64>()
+            + simulation.decomposing_bodies.iter().map(|body| body.energy_budget).sum::<f64>();
+        let expected_resonant = simulation.organisms.iter()
+            .map(|organism| organism.resonant_energy.total_energy().unwrap_or(f64::NAN))
+            .sum::<f64>();
+        let expected_structural = simulation.organisms.iter().map(|organism| {
+            organism.structure.bonds.iter().map(|bond| bond.bond_energy).sum::<f64>()
+                + organism.reproductive_construction.as_ref().map_or(0.0, |construction| {
+                    construction.developing_structure.bonds.iter()
+                        .map(|bond| bond.bond_energy).sum::<f64>()
+                })
+        }).sum::<f64>()
+            + simulation.decomposing_bodies.iter().map(|body| {
+                body.structure.bonds.iter().map(|bond| bond.bond_energy).sum::<f64>()
+            }).sum::<f64>();
+
+        // Poison only cached current totals. The independent inventory must
+        // still describe the live holders, not reproduce these ledger values.
+        simulation.energy_ledger.total_usable_energy_held = -101.0;
+        simulation.energy_ledger.total_resonant_energy_held = -102.0;
+        simulation.energy_ledger.total_structural_energy_held = -103.0;
+
+        let inventory = simulation.energy_inventory_snapshot();
+        assert_eq!(inventory.current_usable_energy, expected_usable);
+        assert_eq!(inventory.current_resonant_energy, expected_resonant);
+        assert_eq!(inventory.current_structural_energy, expected_structural);
+        assert_ne!(inventory.current_usable_energy, -101.0);
+        assert_ne!(inventory.current_resonant_energy, -102.0);
+        assert_ne!(inventory.current_structural_energy, -103.0);
+    }
+
+    #[test]
     fn stored_material_break_does_not_credit_unallocated_energy() {
         let mut s = Simulation::new(7, 10.0);
         for cell in &mut s.environment.field.cells {
