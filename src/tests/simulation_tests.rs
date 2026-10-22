@@ -351,6 +351,66 @@ mod integration_tests {
     }
 
     #[test]
+    fn restoration_rejects_non_finite_origin_without_mutating_inventory() {
+        let mut simulation = Simulation::new(7109, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.organisms[0].stored_material.entries.clear();
+
+        let catalog = simulation.environment.catalog.clone();
+        let material = Material::free_base("Carbon", 1.0);
+        let physical = PhysicalMaterial::realized(
+            material.clone(),
+            vec![Placement {
+                x: 20.0,
+                y: 20.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("single Carbon should be physically realizable");
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(physical));
+
+        let inventory_before =
+            integer_material_inventory(&simulation).expect("pre-restore inventory is integral");
+        let structure_before = serde_json::to_value(&simulation.organisms[0].structure)
+            .expect("structure snapshot should serialize");
+        let storage_before = simulation.organisms[0].stored_material.clone();
+        let stored = simulation.organisms[0]
+            .stored_material
+            .peek_matching_physical(&material)
+            .expect("stored Carbon should be available for validation");
+
+        assert!(crate::material_restoration::restore_material(
+            &mut simulation.organisms[0].structure,
+            &stored,
+            Placement {
+                x: f64::NAN,
+                y: 100.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        )
+        .is_none());
+
+        assert_eq!(
+            serde_json::to_value(&simulation.organisms[0].structure)
+                .expect("post-rejection structure should serialize"),
+            structure_before
+        );
+        assert_eq!(simulation.organisms[0].stored_material, storage_before);
+        assert_eq!(
+            integer_material_inventory(&simulation).expect("post-rejection inventory is integral"),
+            inventory_before,
+            "rejected non-finite restoration must not mutate material ownership"
+        );
+    }
+
+    #[test]
     fn integer_material_inventory_conserves_constituents_when_anchor_moves_to_offspring() {
         let mut simulation = Simulation::new(23, 20.0);
         assert!(simulation.organisms[0].store_material(Material::free_base("Carbon", 1.0)));
