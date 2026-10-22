@@ -662,9 +662,9 @@ Do not claim chemistry unification complete until all applicable gates have evid
 | A0 Baseline and inventory | Gap found; CI identity comparison blocked | main cbe3c5d; README stale re PR #203 and exact-head evidence | Fix baseline evidence / revisit after CI retrieval |
 | A1 Resource vocabulary/properties | Gap found | default_catalog contains Oxygen, not approved Methane; unknown-name zero fallbacks; composites have no chemical_position | Canonical resource identity and migration policy after all audits |
 | A2 Core chemistry math/units | Gap found | formulas located; implicit units, accumulator overflow, activation/settlement alignment remain to prove | Unit contract and adversarial tests after all audits |
-| A3 COMBINE and bond storage | Not started | — | — |
-| A4 BREAK paths | Not started | — | — |
-| A5 Ledger transaction algebra | Not started | — | — |
+| A3 COMBINE and bond storage | Gap found | Trial structure + balanced ledger transaction; structure clone per attempt; fluid transient special case | Caller matrix, fluid topology and clone-cost tests after audits |
+| A4 BREAK paths | Gap found | Shared realized-bond settle/commit; stored-material BREAK is zero-energy; recycling/decomposition paths identified | Stale/cancelled transformation and lifecycle material/energy tests after audits |
+| A5 Ledger transaction algebra | Gap found | Local balance equation verified; hand-maintained prepared ledger delta/rollback; world snapshot use unproven | Centralize reversible deltas and prove live inventory in A6 after audits |
 | A6 Whole-world energy inventory | Not started | — | — |
 | A7 Resonance and reaction coupling | Not started | — | — |
 | A8 World tone and capture | Not started | — | — |
