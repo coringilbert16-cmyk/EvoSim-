@@ -135,7 +135,6 @@ pub fn analyze_genome_cavity(
     Ok(best)
 }
 
-
 /// Analyze a qualifying cavity associated with a previously identified physical
 /// genome core. The core IDs identify the cavity being tracked; the actual
 /// boundary and topology are still re-derived from the current geometry.
