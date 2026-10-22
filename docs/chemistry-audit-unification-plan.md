@@ -100,7 +100,20 @@ Do not mark an audit Verified solely because code compiles or a helper has unit 
 - Current `main` workflow runs and baseline links.
 
 **Deliverable**
-- Exact baseline manifest, confirmed baseline test identities, current source-of-truth map, and explicit exclusions. No code changes.
+**Audit record — 2026-10-22**
+
+**Status: Gap found (baseline partially verified; fresh CI/test identity comparison blocked).**
+
+- **Exact baseline:** main resolved to merge commit cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5 during this audit. PR #203 is in fact **merged** (merge commit above; PR #203 head 6104cdf952c06cc3184e32abc2b116c9512935fa), contradicting README.md, which still calls it an unmerged draft. README's maintenance/test/Clippy claims describe older commit 67bceda1672891e7e390cf242295477bfb5cf3a0 or PR #202 source, not this current merge commit.
+- **CI evidence:** queried combined commit status and PR-triggered workflow runs for cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5; both returned empty results. This does **not** establish that no CI exists; it means current-head test results and the identities of the accepted 28 failures could not be verified from these connector endpoints. Do not represent the old 563/28/1 count or old Clippy counts as proven current-head results.
+- **Scope map established:** the crate is organized through src/main.rs path attributes. Chemistry-relevant active/staged modules include src/chemistry/{chemistry,chemical_reaction,combine,combine_runtime,energy_ledger,decomposition,transformation}.rs, src/materials/resources.rs, src/perception/harmonics.rs, src/simulation/{state,world_tone,world_tone_snapshot,simulation}.rs, plus physical-material, storage/transfer, geometry/contact, movement, maintenance, reproduction, persistence, diagnostics, and UI paths. Cargo.toml identifies a single Rust 2021 package; no separate library target was declared there.
+- **Important live-path conflict for later audit:** README.md says live world-tone capture remains disabled, but src/simulation/world_tone_snapshot.rs describes the live tick settling direct sunlight into an organism energy holder. A8 must determine the actual call path and gate; README alone is insufficient.
+- **Baseline failure identities:** **unverified**. The old run links may be useful historical evidence, but they cannot certify the current tree. A0 cannot be fully closed until exact-head CI/test evidence is obtained or the limitation is explicitly accepted.
+- **Out of scope confirmed:** PR #196 remains separate; this audit changes no production code and does not authorize chemistry behavior changes.
+- **Evidence:** README.md; PR #203 metadata/merge commit; Cargo.toml; src/main.rs; src/simulation/world_tone_snapshot.rs; current-head status/run queries (empty).
+- **Dependencies / downstream audits affected:** every audit must cite the main SHA it actually inspected. A0 must be revisited after a current-head CI/test comparison becomes available. A8 must resolve the world-tone enablement discrepancy.
+- **Decision required from project owner, if any:** none to continue read-only auditing. Do not update README's claimed baseline until exact-head evidence is found.
+- **Recommended smallest next change (if authorized):** after all audits, update the README's status block from verified merge and exact-head evidence; no change authorized now.
 
 ### A1 — Resource vocabulary, properties, and units
 
@@ -116,7 +129,33 @@ Do not mark an audit Verified solely because code compiles or a helper has unit 
 - Every read/write of `potential_energy`, `mass`, `reactivity`, `cohesion`, chemical position, and material-part quantities.
 
 **Deliverable**
-- Property/unit table; single-authority map; invalid/missing-resource policy; list of duplicate or contradictory formulas. No arbitrary geometry/catalog changes.
+**Audit record — 2026-10-22**
+
+**Status: Gap found.**
+
+| Property / representation | Current implementation evidence | Audit interpretation |
+|---|---|---|
+| Resource catalog | src/materials/resources.rs::default_catalog defines seven entries: Carbon, **Oxygen**, Hydrogen, Sulfur, Nitrogen, Phosphorus, Water. | **Critical catalog/spec mismatch:** approved EvoSim resource vocabulary uses Methane (resource ID 6), not Oxygen. Oxygen currently occupies the triangular resource entry (chemical position 1.5, potential energy 20, mass 0.75). Do not silently rename it during audit; trace every serialized/catalog/library key and define migration compatibility before any fix. |
+| Immutable properties | ResourceProperties holds mass, potential energy, legacy reactivity, optional chemical position, and cohesion; BaseResource adds physical state and shape. | Type-level distinction exists, but there is no dimensional type system; units are implicit f64s. Validate all catalog entries and consumers. |
+| Chemical coordinate | Catalog positions observed: Oxygen 1.5, Sulfur 3.5, Hydrogen 5.5, Water 7.0, Nitrogen 8.5, Carbon 10.5, Phosphorus 12.5. | Values match the intended ordered spectrum numerically except the named first resource. Catalog ordering itself is not the approved resource-ID order. |
+| Potential energy | Material::potential_energy calls fresh_energy, which multiplies catalog potential energy by amount; unknown names return 0.0. | The API is a catalog-derived fresh-material potential estimate, not a mutable wallet. Unknown resource names silently becoming zero can conceal lost or malformed material; inventory/restore/serialization paths must be audited before choosing fail-closed behavior. |
+| Material identity | Material stores parts: Vec<(String, f64)> plus indexed internal_bonds; validation checks positive finite amounts and bond indices/duplicates but not whether names exist in the supplied catalog (no catalog is passed). | Constituent identity and internal bonds are retained, but catalog membership is a separate validation responsibility. Fractional amounts are accepted; physical interpretation and geometry realization need cross-audit. |
+| Mixed properties | Material::weighted_properties amount-weights mass/potential energy/reactivity/cohesion, but returns chemical_position: None for both empty and nonempty composites. ResourceBaselines::from_catalog averages mass/potential energy/reactivity/cohesion and has no chemical-position field. | Deliberate avoidance of averaging chemical position preserves the need for constituent identity, but any caller using only the aggregate properties cannot derive chemistry from a composite. Audit whether callers correctly iterate constituents or fail closed. |
+| Baselines and ranges | ResourceBaselines::from_catalog averages raw catalog fields; property_ranges returns property ranges but leaves chemical position None. | These are summary/calibration helpers, not authoritative per-resource properties. Verify they are not reused as physical energy or as a synthetic resource. |
+| Physical geometry | Resource shapes are declared in the same catalog; Hydrogen is a 1.0×0.1 rectangle, Sulfur is a parallelogram, Nitrogen a 1×1 rectangle, Phosphorus a trapezoid, and Water is fluid with nominal area 0.5. | Geometry is catalog-coupled. Preserve approved geometry while tracing the Oxygen/Methane naming discrepancy and any saved geometry-library keys. |
+| Legacy reactivity | reactivity remains alongside chemical_position; current chemistry interaction uses chemical position, while harmonics use reactivity-derived damping/response. | These are two distinct mechanisms today, not a single interchangeable chemistry scalar. Decide after A7 whether the remaining reactivity role is intentional and physically interpretable. |
+
+**Findings / risk ranking**
+1. **P0 — resource identity mismatch:** the default catalog and its tests explicitly expect Oxygen while the approved resource set specifies Methane. A unification plan cannot be considered complete until IDs, catalog names, persisted materials, chemistry-library keys, geometry library entries, tests, and migrations agree.
+2. **P1 — invalid resource names can be silently assigned zero potential/mass:** fresh_energy and Material::mass default unknown names to zero. Determine whether any runtime paths can persist or transfer such entries; avoid changing this API until all callers and migration policy are known.
+3. **P1 — mixed material chemical position is intentionally absent:** ensure all chemistry consumers use realized constituent identity rather than treating a composite as one invented averaged species.
+4. **P2 — units are implicit:** field names do not encode units or whether values are per unit, per constituent, or aggregate; the audit must publish a canonical table before changing calculations.
+
+**Evidence inspected:** src/materials/resources.rs (ResourceProperties, ResourceBaselines::from_catalog, Material, fresh_energy, default_catalog and catalog tests); src/chemistry/combine.rs; src/perception/harmonics.rs; README.md and the approved project resource vocabulary.
+
+- **Dependencies / downstream audits affected:** A2, A3, A7, A8, A11, A13, A14, A16, A20, A21. The resource rename/migration decision must precede any change to persisted keys or library lookups.
+- **Decision required from project owner, if any:** no immediate decision requested; preserve the discrepancy as a blocking finding for the eventual unified catalog decision.
+- **Recommended smallest next change (if authorized):** after the full audit, define one canonical resource ID/name mapping and a compatibility/migration policy, then update catalog, tests, serialized references, and library keys together. No code change authorized now.
 
 ### A2 — Core chemistry mathematics and dimensional consistency
 
@@ -131,7 +170,38 @@ Do not mark an audit Verified solely because code compiles or a helper has unit 
 - `src/chemistry/chemistry.rs`, related constants, accumulation maps in simulation state, tests, diagnostics, and all duplicated formulas in callers.
 
 **Deliverable**
-- Equation/units sheet, invariant tests, dimensional ambiguity list, and proposed canonical API. Do not retune constants before units and callers are understood.
+**Audit record — 2026-10-22**
+
+**Status: Gap found (core formulas located; dimensional contract is not yet globally proven).**
+
+**Equation inventory from src/chemistry/chemistry.rs**
+- Chemical separation: D = min(|position_a - position_b|, Dmax); nonfinite inputs, k <= 0, and Dmax <= 0 fail with None.
+- Bounded static potential: (exp(kD) - 1) / (exp(k Dmax) - 1), clamped to [0,1]. Constants are Dmax=13 and k=1/13. Current catalog positions span 1.5 to 12.5, so catalog pairs do not reach the declared full-separation endpoint at 13.
+- Contact attenuation: (1 - distance/radius)^2 for distance in [0,radius]; zero outside the radius. It is bounded and nonincreasing, and is exactly zero at radius.
+- Attraction: static_potential × max_force × contact_factor. CHEMICAL_MAX_FORCE=1 is documented as a force scale, not an energy deposit.
+- Interface engagement clamps finite facing to [0,1].
+- Reaction accumulation: next = max(0, previous + potential × contact × engagement - dissipation × previous). Runtime caller passes CHEMICAL_DISSIPATION=0.10, so the formula removes 10% of the prior accumulator each tick while adding a bounded local interaction contribution.
+- Normalized reaction-to-energy conversion multiplies by CHEMICAL_ENERGY_PER_NORMALIZED_UNIT = max_force × characteristic_distance (numerically 1.0 under current constants). Bond strength is converted to an activation barrier through the same conversion function.
+- BREAK eligibility compares converted accumulated reaction energy against the effective activation barrier; the reaction accumulator is not itself a separately stored physical energy reservoir. BREAK settlement then uses bond-stored energy, usable energy, compatible resonant energy, work, and heat. These are distinct quantities and must not be counted as the same energy twice.
+
+**What is currently supported by source**
+- Inputs to the primitive math helpers are checked for finiteness and invalid sign/range where appropriate; invalid cases generally fail closed with None or false.
+- Potential and contact terms are bounded; interaction potential is symmetric in the two positions; contact is zero beyond radius.
+- The formula constants are centralized in src/chemistry/chemistry.rs and reused by src/chemistry/chemical_reaction.rs and src/chemistry/combine.rs for the main paths inspected.
+- This is **not** proof that every caller, serialized accumulator, or ledger transition obeys the same units or remains bounded over arbitrarily long runs.
+
+**Dimensional ambiguities / follow-up findings**
+1. **P1 — implicit units:** chemical positions and static potential are dimensionless, while force and energy are physical quantities. The conversion treats one normalized accumulator unit as force × distance; this is a chosen scale convention, not a derivation from an integrated force along the actual reaction trajectory. Document that contract explicitly or derive a physically grounded conversion during implementation planning.
+2. **P1 — accumulator ceiling not explicit:** with input term up to 1 and 10% linear dissipation, a sustained maximum input tends toward a steady-state accumulator near 10, not 1. The conversion can therefore yield energies above the nominal one-unit barrier ceiling. This may be intended for reaction accumulation, but the API/commentary should not imply the accumulator is bounded to [0,1]; decide whether an explicit cap is physically justified after inspecting persistence and runtime behavior.
+3. **P1 — reaction threshold vs disruption settlement:** activation uses effective_barrier reduced by compatible resonance, but the queued operation retains the full barrier as disruption_cost; the resolver separately withdraws compatible resonance and accounts for work. This can be coherent, but the audit must prove the trigger and the eventual energy/work transaction are exactly aligned for every case, including stale events and failed settlement.
+4. **P2 — distance domain differs by subsystem:** COMBINE permits candidate distance up to 0.1 (COMBINE_CONTACT_TOLERANCE), while chemistry attenuation uses radius 1.0; do not conflate geometric contact tolerance, interaction radius, and Bob's library/deduplication tolerance.
+5. **P2 — finite arithmetic at scale:** helper inputs are checked, but caller sums, accumulated values, and serialized prior state require end-to-end overflow/long-run checks. accumulate_reaction does not explicitly reject a nonfinite computed next before returning Some(next.max(0.0)); if arithmetic overflows, Some(infinity) is possible and must be caught at a boundary. This is a concrete primitive-level validation gap to cover with tests/fix only after audit completion.
+
+**Evidence inspected:** src/chemistry/chemistry.rs (constants, interaction/contact/attraction, conversion, accumulation, activation, unit tests); src/chemistry/chemical_reaction.rs (accumulation call, resonance credit, activation, queued operation); src/chemistry/combine.rs (force/work distinction and intrinsic bond potential); src/chemistry/transformation.rs (BREAK energy allocation); src/chemistry/energy_ledger.rs (allocation balance).
+
+- **Dependencies / downstream audits affected:** A3–A9, A15, A18, A20. The equation sheet is provisional until all callers and persisted reaction state are mapped.
+- **Decision required from project owner, if any:** none before the read-only audits complete. Do not retune constants now.
+- **Recommended smallest next change (if authorized):** add explicit unit/quantity documentation and adversarial overflow/long-run tests after the full audit, then decide whether the normalized-to-energy convention or accumulator range needs redesign. No code change authorized now.
 
 ### A3 — Physical interaction, COMBINE, formation work, and stored bond energy
 
