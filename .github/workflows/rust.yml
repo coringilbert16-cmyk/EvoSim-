@@ -218,15 +218,13 @@ jobs:
           cargo test --locked corner_free_nitrogen_ring_qualifies_as_genome_cavity
           cargo test --locked known_qualifying_cavities::tests::
           cargo test --locked known_qualifying_cavities::cavity_mutation::lineage_tests::
-      # HOLD: do not run the broad Rust suite while calibrating the cavity contract.
-      # A name filter cannot prevent unrelated tests from calling Simulation::new()
-      # and invoking the production constructor, so the entire broad suite is paused.
-      # Focused cavity tests above remain active; this step is intentionally non-executing.
-      - name: Hold broad Rust suite during constructor calibration
-        timeout-minutes: 1
+      # The constructor is the purpose of this branch, so verify the complete
+      # repository behavior rather than hiding constructor-dependent failures.
+      # The five-minute timeout is a hard acceptance boundary.
+      - name: Run full Rust suite against constructor branch
+        timeout-minutes: 5
         if: always()
-        run: |
-          echo "HOLD: broad Rust suite paused; constructor-dependent tests can run indirectly from unrelated test names."
+        run: cargo test --locked
       - name: Run Clippy
         timeout-minutes: 5
         if: always()
