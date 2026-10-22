@@ -126,8 +126,7 @@ pub fn analyze_genome_cavity(
     for component in structure.connected_components() {
         let candidate = analyze_genome_cavity_in_indices(structure, catalog, &component, None)?;
         if candidate.as_ref().is_some_and(|candidate| {
-            best.as_ref()
-                .is_none_or(|current: &GenomeCavity| candidate.area > current.area)
+            cavity_is_better(candidate, best.as_ref(), None)
         }) {
             best = candidate;
         }
@@ -159,13 +158,39 @@ pub fn analyze_genome_cavity_for_core(
         let candidate =
             analyze_genome_cavity_in_indices(structure, catalog, &component, Some(&core_indices))?;
         if candidate.as_ref().is_some_and(|candidate| {
-            best.as_ref()
-                .is_none_or(|current: &GenomeCavity| candidate.area > current.area)
+            cavity_is_better(candidate, best.as_ref(), Some(&core_indices))
         }) {
             best = candidate;
         }
     }
     Ok(best)
+}
+
+
+fn cavity_is_better(
+    candidate: &GenomeCavity,
+    current: Option<&GenomeCavity>,
+    required_core_indices: Option<&HashSet<usize>>,
+) -> bool {
+    let Some(current) = current else {
+        return true;
+    };
+    if let Some(core_indices) = required_core_indices {
+        let candidate_overlap = candidate
+            .boundary_units
+            .iter()
+            .filter(|index| core_indices.contains(index))
+            .count();
+        let current_overlap = current
+            .boundary_units
+            .iter()
+            .filter(|index| core_indices.contains(index))
+            .count();
+        if candidate_overlap != current_overlap {
+            return candidate_overlap > current_overlap;
+        }
+    }
+    candidate.area > current.area
 }
 
 fn analyze_genome_cavity_in_indices(
@@ -237,10 +262,7 @@ fn analyze_genome_cavity_in_indices(
             boundary_segments,
         };
 
-        if best
-            .as_ref()
-            .map_or(true, |current: &GenomeCavity| candidate.area > current.area)
-        {
+        if cavity_is_better(&candidate, best.as_ref(), required_core_indices) {
             best = Some(candidate);
         }
     }
@@ -367,6 +389,33 @@ mod tests {
             .expect("realized structure must contain a sealed qualifying cavity");
         assert!(cavity.qualifies(), "cavity={cavity:?}");
         assert!(!cavity.boundary_units.is_empty());
+    }
+
+    #[test]
+    fn core_specific_cavity_ranking_prefers_more_surviving_core_ids() {
+        let core_ids = HashSet::from([1_usize, 2, 3]);
+        let larger_unrelated_cavity = GenomeCavity {
+            area: 100.0,
+            boundary_units: vec![1],
+            minimum_area: 1.0,
+            boundary_segments: Vec::new(),
+        };
+        let smaller_matching_cavity = GenomeCavity {
+            area: 50.0,
+            boundary_units: vec![1, 2],
+            minimum_area: 1.0,
+            boundary_segments: Vec::new(),
+        };
+        assert!(cavity_is_better(
+            &smaller_matching_cavity,
+            Some(&larger_unrelated_cavity),
+            Some(&core_ids),
+        ));
+        assert!(!cavity_is_better(
+            &larger_unrelated_cavity,
+            Some(&smaller_matching_cavity),
+            Some(&core_ids),
+        ));
     }
 
     #[test]
