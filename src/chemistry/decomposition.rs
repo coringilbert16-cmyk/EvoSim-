@@ -169,6 +169,54 @@ mod tests {
     }
 
     #[test]
+    fn release_finished_material_preserves_aggregate_fluid_shape() {
+        let catalog = default_catalog();
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut water = StructuralUnit::from_material(
+            crate::resources::Material::free_base("Water", 2.0),
+            placement,
+        )
+        .unwrap();
+        assert!(water.realize_default_geometry(&catalog));
+        let unit_area = match &catalog.iter().find(|resource| resource.name == "Water").unwrap().shape.form {
+            crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+            _ => panic!("default Water shape should have a measurable area"),
+        };
+        let merged_area = 2.0 * unit_area;
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            merged_area,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .unwrap();
+        let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
+        let shape = crate::resources::Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: merged_area,
+                boundary: None,
+                arc_boundary: Some(arc),
+                multi_contact_boundary: None,
+            },
+        };
+        assert!(water.realize_fluid_geometry(shape.clone(), &catalog));
+        let mut structure = OrganismStructure::new();
+        structure.add_unit(water);
+        let mut body = DecomposingBody::new(
+            structure,
+            0.0,
+            Position { x: 0.0, y: 0.0 },
+        )
+        .unwrap();
+
+        let released = body.release_finished_material(&catalog);
+        assert_eq!(released.len(), 1);
+        assert_eq!(released[0].realized_shape_for_part(0, &catalog), Some(shape));
+    }
+
+    #[test]
     fn zero_bond_structure_is_finished() {
         let structure = minimal_realized_structure();
         let body = DecomposingBody::new(structure, 0.0, Position { x: 0.0, y: 0.0 }).unwrap();
