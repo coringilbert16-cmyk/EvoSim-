@@ -523,3 +523,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Research annotations were added at the applicable core audit and implementation-plan sections. They identify potential audit/test methods and explicit limits; they do not change owner decisions or assert that recommended checks are implemented.
 - Main implications: separate reaction-rule invariants from atomic runtime settlement and whole-world inventory; check energy cycles independently of material conservation; use exact-small-world oracles before spatial optimization; treat autocatalysis/emergence as later validation after physics/accounting gates pass.
 - **Current PR #205 metadata was re-fetched:** head `c57926fdf551472cfa274ca1f3550d1a93b29295`. This metadata refresh is not a fresh CI verification. Continue to distinguish verified source state from historical workflow evidence, and keep PR #204 information-only.
+
+
+## Latest aggregate-attachment feasibility audit — 2026-10-22, Section 17.115
+
+- PR #204 plan update adds Section 17.115 after a focused audit of exact PR #205 head `c57926fdf551472cfa274ca1f3550d1a93b29295`. No implementation source or tests changed during the audit.
+- The current split graph is enumerated separately by world-tone and energy inventory; its temporary organism has a separate energy/maintenance/stress lifecycle. The anchor begins in the parent's realized region while the parent's primary graph remains unchanged, so a naive graph merge would duplicate overlapping physical constituents.
+- A safe canonical aggregate requires explicit second-core membership/identity in the parent graph, plus an atomic live growth transaction owning geometry, source material, parent usable-energy debit, ledger, structure revision/cache invalidation, and exact rollback. World-tone and independent inventory paths must move with that change.
+- No scalar energy switch or unused merge helper is safe. Division and structural-mass energy partition remain downstream; no developing-energy holder or temporary-organism lifecycle should remain as a parallel model.
+- **Next:** design the smallest second-core membership representation and its first live growth transaction with focused failure-injection and independent-inventory tests. Keep PR #196 out of scope; stay within the five-minute command/test cap.
