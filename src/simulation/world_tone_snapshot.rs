@@ -795,7 +795,7 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_fails_closed_on_unexpanded_composite_structural_units() {
+    fn snapshot_fails_closed_on_invalid_composite_structural_unit_state() {
         use crate::resources::InternalBond;
 
         let mut simulation = Simulation::new(75, 1.0);
@@ -826,6 +826,44 @@ mod tests {
         assert!(
             WorldToneOccluderSnapshot::from_simulation(sample(), &simulation).is_none(),
             "an unbonded multi-constituent material must also fail closed"
+        );
+    }
+
+    #[test]
+    fn snapshot_represents_each_constituent_of_composite_physical_material() {
+        let mut simulation = Simulation::new(76, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        let composite = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: Vec::new(),
+            },
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 1.5,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("composite physical material must carry one realized placement per constituent");
+        assert!(simulation
+            .environment
+            .field
+            .deposit_physical(0.0, 0.0, composite));
+
+        let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
+            .expect("valid composite physical material should not invalidate the world snapshot");
+        assert!(
+            snapshot.body_properties.iter().any(|properties| properties.len() == 2),
+            "both constituent material responses must be present for composite geometry"
         );
     }
 
