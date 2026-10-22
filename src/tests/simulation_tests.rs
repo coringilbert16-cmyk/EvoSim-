@@ -609,9 +609,17 @@ mod integration_tests {
                         })
             })
             .sum::<f64>()
-            + simulation.decomposing_bodies.iter().map(|body| {
-                body.structure.bonds.iter().map(|bond| bond.bond_energy).sum::<f64>()
-            }).sum::<f64>();
+            + simulation
+                .decomposing_bodies
+                .iter()
+                .map(|body| {
+                    body.structure
+                        .bonds
+                        .iter()
+                        .map(|bond| bond.bond_energy)
+                        .sum::<f64>()
+                })
+                .sum::<f64>();
 
         // Poison only cached current totals. The independent inventory must
         // still describe the live holders, not reproduce these ledger values.
