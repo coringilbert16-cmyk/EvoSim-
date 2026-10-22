@@ -275,12 +275,22 @@ impl Organism {
         catalog: &[BaseResource],
     ) -> Option<&crate::cavity::GenomeCavity> {
         if self.cached_cavity_revision != Some(self.structure_revision) {
-            let cavity = crate::cavity::analyze_genome_cavity(&self.structure, catalog)
-                .ok()
-                .flatten()
-                .filter(|cavity| cavity.qualifies());
-            // Keep the stable IDs synchronized with the currently realized
-            // cavity, but never use them to determine which topology is the genome.
+            let known_core_ids = self.structure.genome_constituent_ids().to_vec();
+            let cavity = if known_core_ids.is_empty() {
+                crate::cavity::analyze_genome_cavity(&self.structure, catalog)
+            } else {
+                crate::cavity::analyze_genome_cavity_for_core(
+                    &self.structure,
+                    catalog,
+                    &known_core_ids,
+                )
+            }
+            .ok()
+            .flatten()
+            .filter(|cavity| cavity.qualifies());
+            // Once a physical cavity establishes this organism's core, keep
+            // analyzing that core. A breached core must not silently switch to
+            // another qualifying cavity in the same aggregate.
             let ids = cavity
                 .as_ref()
                 .map(|cavity| {
@@ -290,7 +300,7 @@ impl Organism {
                         .filter_map(|&index| self.structure.physical_id(index))
                         .collect::<Vec<_>>()
                 })
-                .unwrap_or_default();
+                .unwrap_or(known_core_ids);
             self.structure.set_genome_constituent_ids(ids);
             self.cached_cavity = Some(cavity);
             self.cached_cavity_revision = Some(self.structure_revision);
