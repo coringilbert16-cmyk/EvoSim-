@@ -434,9 +434,17 @@ fn birth_ready_with_reference(
     catalog: &[crate::resources::BaseResource],
     seed_reference: Option<(f64, f64)>,
 ) -> bool {
-    let Ok(cavity) =
-        crate::cavity::analyze_genome_cavity(&construction.developing_structure, catalog)
+    let Some(anchor_id) = construction
+        .developing_structure
+        .physical_id(construction.anchor_unit_index)
     else {
+        return false;
+    };
+    let Ok(cavity) = crate::cavity::analyze_genome_cavity_for_core(
+        &construction.developing_structure,
+        catalog,
+        &[anchor_id],
+    ) else {
         return false;
     };
     let Some(cavity) = cavity else {
