@@ -1950,3 +1950,30 @@ The material oracle and world-tone snapshot both explicitly account for active-o
 **Required closure evidence:** for every row, a test must compare the independent constituent inventory, exact holder ownership, physical geometry/placements, usable/resonant/structural energy, cumulative ledger deltas, and active-operation markers before and after both success and injected failure. The current normal-path and selected rollback tests do not satisfy this matrix.
 
 **Next audit:** enumerate construction transfer candidate failures and movement/maintenance/resonance energy paths in the same source→validation→commit→rollback schema. No implementation until all audit templates are complete.
+
+
+### 17.44 Movement, maintenance, and resonance-break transaction audit — movement can commit geometry before energy settlement — 2026-10-22, PR #205 head 12d8079230458da68a8dc3755a1d6a9b41347862
+
+**Status: Gap found.** Exact-head source review of src/perception/movement.rs, src/simulation/state.rs, src/chemistry/transformation.rs, and src/chemistry/energy_ledger.rs. No source/test changes.
+
+**Movement path**
+- start_movement chooses direction and distance using organism state but does not debit energy. Each actual step computes a one-unit movement cost and checks available usable energy before attempting geometry.
+- advance_movement calls try_move_cell_with_reason first. That routine mutates the organism's position/occupancy and the spatial/environment state on success. Only after the physical move does advance_movement submit an EnergyTransaction with usable_delta = -cost and heat_dissipated = cost.
+- If ledger settlement rejects (for example, invalid/overflowing cumulative ledger state), advance_movement returns InsufficientEnergy but does not roll back the already committed move. The code records the new position in diagnostics and leaves active.remaining_steps unchanged, so a later retry may move again without charging the failed step. The precheck makes ordinary insufficient-energy failure occur before geometry, but does not make the post-move ledger failure atomic.
+- This is a concrete transaction-boundary gap. The smallest repair must either stage the movement on candidate geometry and commit only after ledger acceptance, or provide a reliable rollback of all position/occupancy/spatial-index/environment changes when settlement fails. A test-only ledger-rejection seam may be needed if a deterministic invalid-ledger fixture cannot exercise this safely.
+- Movement currently classifies its full cost as heat and records zero explicit work. That is an existing model choice requiring reconciliation with D7's distinction between work and heat; do not change the split without tracing the movement cost equation and owner-approved units. At minimum, document whether the cost is intended to be dissipative locomotion cost or physical work delivered to an external body.
+
+**Maintenance path**
+- Maintenance computes demand from structural mass. It attempts a balanced transaction that debits usable energy and records the same amount as heat; stress is added only after settlement succeeds. A rejected transaction leaves the energy holder unchanged and the unpaid amount becomes maintenance debt. This path does not exhibit the same geometry-before-ledger ordering defect in the inspected function.
+- Reproductive construction calls the same maintenance method on a temporary developing-organism view. The resulting energy/stress/structure values are copied back to construction state. Because this child is a temporary projection of the parent-owned developing holders, integration tests must ensure its graph energy and developing-energy value replace the old values once, not coexist as duplicated holders.
+
+**Resonance-overload BREAK path**
+- The function clones the resonance reservoir, withdraws compatible energy on the clone, validates a structural bond candidate, and settles the bond BREAK through the shared transaction path. Only after settlement succeeds does it assign the cloned reservoir back to the organism. A failed bond/ledger settlement therefore does not commit the resonance withdrawal. The structural BREAK itself clones/validates the candidate graph, settles the ledger, then commits graph mutation; this ordering is transactionally stronger than movement.
+- The same BREAK helper handles stress/overload-driven physical damage; there is no independent random break path. Remaining work is to compare its ledger semantics against chemical BREAK and the independent energy oracle across successful and rejected transactions.
+
+**Required tests / next audit**
+1. Force movement geometry success followed by ledger rejection; assert position, occupancy, environment/spatial index, movement progress, usable energy, heat/work counters, and active movement are exactly unchanged.
+2. Test maintenance settlement rejection leaves usable energy and stress unchanged while accruing only the specified debt.
+3. Test resonance-overload BREAK settlement rejection preserves graph, reservoir, stress, and all ledger counters; success removes one bond and debits resonance exactly once.
+4. Reconcile movement's heat-only cost with D7's work/heat contract and measure actual displacement semantics before any equation change.
+5. Continue to audit other operations that mutate geometry before energy settlement; no implementation until the complete audit register is full.
