@@ -606,3 +606,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - This is not live reproduction migration. Parent and developing graph remain separate; no energy holder or movement path was changed. After focused verification, audit overflow/invalid-destination cases and then decide the smallest coherent transaction for anchor promotion. Notify the owner before the later coordinated movement refactor.
 - Plan Section 17.123 recorded in PR #204 commit `f3beaef10308148de5761ad0c42921c163ad1231`.
 
+
+
+## Canonical aggregate / movement migration audit — 2026-10-22, Section 17.124
+
+- Movement is now the next coordinated phase. Before canonicalizing the developing graph, the audit mapped the coupled paths: movement collision/translation currently sees only organism.structure and separately translates construction.developing_structure; world-tone snapshots enumerate the parent and developing graph as separate physical bodies; structural-energy and usable-energy inventories separately count developing holders; growth currently targets units in the separate child graph; generic viability selects a whole-graph cavity and cannot by itself validate the developing core; division must partition stable-ID components and energy atomically.
+- No aggregate or movement runtime changes were made during this audit. The implementation sequence must migrate reproduction state, parent-funded atomic growth, movement translation/collision, world-tone enumeration, energy inventory, core-specific viability, and division partitioning coherently. Do not simply call the graph-append helper and leave duplicate holders/call paths behind.
+- Latest source head at this checkpoint: 80b0d0b9a05093b4983be71da7536763f4071724. Formatting and focused graph-merge tests passed. Full-suite workflow 39866415942 is still running; the preceding exact-head run 39866134452 reported 593 passed, 27 failed, 1 ignored, with exactly the same 27 named failure identities as the prior verified run, and Clippy remained at baseline 34 application-target / 15 test-target diagnostics.
+- Plan Section 17.124 recorded in PR #204 commit 0abd2b46690510be391a3483bada613225e981d3.
+
