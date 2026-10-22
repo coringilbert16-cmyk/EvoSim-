@@ -387,3 +387,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Exact PR #205 head reviewed: `12d8079230458da68a8dc3755a1d6a9b41347862`.
 - Movement already has geometric push-chain atomicity tests, but not energy-ledger rejection after geometry succeeds. Containment has a successful transfer regression, but not combined storage/fallback rejection. Expulsion has no local tests and does not restore storage after final deposit rejection.
 - These are test-required gates after source inspection; no source/test changes made. Continue with stored BREAK/environmental COMBINE failure coverage and reconcile the full matrix before implementation. Refresh exact head/CI before code changes.
+
+
+## Resume checkpoint — BREAK/COMBINE failure coverage (Section 17.99)
+
+- Plan commit: `0b6754f0c209e91230dfa136e1eb6b9f5bce1677`; PR #204 remains documentation-only.
+- Exact PR #205 head reviewed: `12d8079230458da68a8dc3755a1d6a9b41347862`.
+- Stored BREAK normal-path and one restore-helper test exist, but malformed resolver state and partial multi-piece destination failure remain uncovered. Environmental COMBINE has helper/live-candidate rollback tests, but no end-to-end exact-cell source-restoration test for malformed prepared state.
+- Required assertions: exact material/source ownership, no partial ledger/energy/stress mutation, no duplicate restore, and unchanged field revision/index state on rejection. No source/test changes.
+- Next: reconcile Sections 17.86–17.99 into the authoritative failure matrix and release checklist before any implementation.
