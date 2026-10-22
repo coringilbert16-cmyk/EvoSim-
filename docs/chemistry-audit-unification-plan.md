@@ -1566,3 +1566,12 @@ This entry supersedes Section 17.16's queued-workflow status. The exact-head wor
 3. Only after that focused audit is complete, make the smallest scoped implementation change on PR #205 and add the independent material/energy inventory regression. Keep Phase 8 open until exact-head evidence passes.
 
 **Verification boundary:** workflow [39833438679](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39833438679) completed on `12d8079230458da68a8dc3755a1d6a9b41347862`: formatting and focused gates passed; the insert-path cache rollback test passed; full suite completed in 283.74 seconds with 585 passed, 27 baseline-matching failures, 1 ignored; Clippy had 34 app-target and 15 test-target diagnostics, with normalized identity comparison still outstanding. No source or test changes were made in this audit.
+
+
+### 17.27 Exact-head Clippy diagnostic comparison — baseline identities confirmed
+
+- Compared the normalized diagnostics in current PR #205 workflow [39833438679](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39833438679) on head `12d8079230458da68a8dc3755a1d6a9b41347862` against frozen baseline workflow [39705628427](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39705628427).
+- Both report 34 application-target and 15 test-target diagnostics. Normalized identities (diagnostic message + source path, ignoring line-number shifts) have no new and no removed entries.
+- Clippy remains failing because of baseline lint debt. No lint fix is warranted by this comparison; do not make lint-only changes.
+- This closes the Clippy comparison gate for head `12d8079`. Resume Phase 8 design audit from Section 17.26. Before a code change, specify how the unfinished developing structure remains a physical, chemically addressable holder with its existing bond energy and endpoints preserved, how resonant energy is owned after breach, and how failed environmental deposits roll back or retain ownership.
+- PR #205 comment [6348800724](https://github.com/coringilbert16-cmyk/EvoSim-/pull/205#issuecomment-6348800724) records the comparison. No source/test change occurred.
