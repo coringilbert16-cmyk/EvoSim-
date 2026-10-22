@@ -392,6 +392,7 @@ fn lock_chemistry_store(root: &Path) -> std::io::Result<File> {
         .read(true)
         .write(true)
         .create(true)
+        .truncate(false)
         .open(root.join(".chemistry.lock"))?;
     lock_file.lock()?;
     Ok(lock_file)

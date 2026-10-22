@@ -20,8 +20,9 @@ pub fn directional_compatibility(ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
 }
 
 /// Area of overlap between two circles (radii r1 and r2) whose centers
-/// are `distance` apart. Pure generic geometry used by acquisition as a
-/// bounded approximation of physical contact area.
+/// are `distance` apart. This helper currently has regression coverage but no
+/// production caller, so keep it out of non-test builds until it is integrated.
+#[cfg(test)]
 pub fn circle_overlap_area(r1: f64, r2: f64, distance: f64) -> f64 {
     let r1 = r1.max(0.0);
     let r2 = r2.max(0.0);

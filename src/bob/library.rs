@@ -235,19 +235,6 @@ pub enum LiveFamilyResolution {
     Unique,
 }
 
-/// Classifies whether a live interface identity is sufficient by itself to
-/// select one persisted Bob family. Most live contacts are not: a family also
-/// carries continuous edge/rotation information that endpoint topology alone
-/// cannot recover.
-pub fn classify_live_family_resolution(interface: &LiveGeometryInterface) -> LiveFamilyResolution {
-    match interface.interface_class {
-        "rigid_edge" | "rigid_point" | "rigid_vertex" | "fluid_boundary" | "rigid_surface" => {
-            LiveFamilyResolution::Unresolved
-        }
-        _ => LiveFamilyResolution::Unresolved,
-    }
-}
-
 /// Resolve a runtime contact using the geometry that was actually realized.
 ///
 /// Unlike the topology-only resolver above, this includes the local contact
@@ -1022,10 +1009,8 @@ fn multi_contact_boundary_matches_constraints(
             let center_parameter = (start_parameter + end_parameter) * 0.5;
             if start_distance <= TOLERANCE
                 && end_distance <= TOLERANCE
-                && start_parameter >= -TOLERANCE
-                && start_parameter <= 1.0 + TOLERANCE
-                && end_parameter >= -TOLERANCE
-                && end_parameter <= 1.0 + TOLERANCE
+                && (-TOLERANCE..=1.0 + TOLERANCE).contains(&start_parameter)
+                && (-TOLERANCE..=1.0 + TOLERANCE).contains(&end_parameter)
                 && (segment_length - constraint.contact_length).abs() <= TOLERANCE
                 && center_parameter >= constraint.edge_parameter_start - TOLERANCE
                 && center_parameter <= constraint.edge_parameter_end + TOLERANCE
@@ -1755,10 +1740,10 @@ impl GeometryFormation {
                     best = Some((candidate, remap));
                     ambiguous_best = false;
                 }
-                Some((existing, existing_mapping)) if candidate.signature == existing.signature => {
-                    if existing_mapping != &remap {
-                        ambiguous_best = true;
-                    }
+                Some((existing, existing_mapping))
+                    if candidate.signature == existing.signature && existing_mapping != &remap =>
+                {
+                    ambiguous_best = true;
                 }
                 _ => {}
             }
@@ -3420,8 +3405,7 @@ impl GeometryLibrary {
         formation: GeometryFormation,
         catalog: &[BaseResource],
     ) -> std::io::Result<bool> {
-        let mut candidates = Vec::new();
-        candidates.push(formation);
+        let candidates = vec![formation];
         Ok(self.insert_many(candidates, catalog)? > 0)
     }
 
@@ -3721,52 +3705,6 @@ fn rotational_symmetry_period(vertices: &[(f64, f64)]) -> f64 {
     std::f64::consts::TAU
 }
 
-fn normalize_global_pose(formation: &mut GeometryFormation, catalog: &[BaseResource]) {
-    if formation.constituents.is_empty() {
-        return;
-    }
-
-    for constituent in &mut formation.constituents {
-        if catalog
-            .iter()
-            .find(|r| r.name == constituent.resource)
-            .map(|r| matches!(r.shape.form, Form::Circle { .. }))
-            .unwrap_or(false)
-        {
-            constituent.placement.rotation_radians = 0.0;
-        }
-    }
-
-    let anchor_rotation = formation
-        .constituents
-        .iter()
-        .map(|c| normalized_angle(c.placement.rotation_radians))
-        .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-        .unwrap_or(0.0);
-
-    let (s, c) = anchor_rotation.sin_cos();
-    for constituent in &mut formation.constituents {
-        let x = constituent.placement.x;
-        let y = constituent.placement.y;
-        constituent.placement.x = x * c + y * s;
-        constituent.placement.y = -x * s + y * c;
-        constituent.placement.rotation_radians =
-            normalized_angle(constituent.placement.rotation_radians - anchor_rotation);
-    }
-
-    let (ox, oy) = formation
-        .constituents
-        .iter()
-        .find(|c| (c.placement.rotation_radians - 0.0).abs() <= 1e-12)
-        .map(|c| (c.placement.x, c.placement.y))
-        .unwrap_or((0.0, 0.0));
-
-    for constituent in &mut formation.constituents {
-        constituent.placement.x -= ox;
-        constituent.placement.y -= oy;
-    }
-}
-
 pub fn validate_formation(formation: &GeometryFormation, catalog: &[BaseResource]) -> bool {
     if formation.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
         || formation.constituents.is_empty()
@@ -3927,7 +3865,7 @@ struct ExposedEdgeInterval {
 /// validation already rejects positive-area penetration, another rigid polygon
 /// can only occlude a boundary edge by lying on that same boundary. We therefore
 /// project exact collinear edge overlaps onto the source edge and subtract them.
-pub fn exposed_polygon_edge_intervals(
+fn exposed_polygon_edge_intervals(
     formation: &GeometryFormation,
     anchor_index: usize,
     catalog: &[BaseResource],
@@ -4168,8 +4106,8 @@ fn load_fluid_boundary_families(
     let Ok(file) = File::open(path) else {
         return out;
     };
-    let mut lines = BufReader::new(file).lines();
-    while let Some(line_result) = lines.next() {
+    let lines = BufReader::new(file).lines();
+    for line_result in lines {
         // Preserve the previous all-or-empty behavior if the file itself
         // cannot be read, without buffering the entire JSONL catalogue.
         let Ok(line) = line_result else {
@@ -4877,15 +4815,13 @@ pub fn generate_rigid_vertex_contact_families(
                 nx * placement.rotation_radians.sin() + ny * placement.rotation_radians.cos(),
             );
             let outward_angle = world_n.1.atan2(world_n.0);
-            for candidate_vertex in 0..candidate_vertices.len() {
+            for (candidate_vertex, &(vertex_x, vertex_y)) in candidate_vertices.iter().enumerate() {
                 // A convex polygon remains outside the anchor while its selected
                 // vertex is on the supporting line whenever the polygon interior
                 // direction lies in the inward half-plane. The boundary of that
                 // admissible set is therefore a +/- pi/2 interval around the
                 // outward normal, adjusted by the local vertex radial direction.
-                let vertex_angle = candidate_vertices[candidate_vertex]
-                    .1
-                    .atan2(candidate_vertices[candidate_vertex].0);
+                let vertex_angle = vertex_y.atan2(vertex_x);
                 let center = outward_angle - vertex_angle;
                 let start = center - std::f64::consts::FRAC_PI_2;
                 let end = center + std::f64::consts::FRAC_PI_2;
@@ -5005,7 +4941,7 @@ pub fn generate_two_constituent_candidates(
 
     if let (Some(tv), Some(cv)) = (&target_vertices, &candidate_vertices) {
         for ti in 0..tv.len() {
-            for ci in 0..cv.len() {
+            for (ci, &candidate_vertex) in cv.iter().enumerate() {
                 for rotation in crate::rigid_boundary::corner_alignment_rotations(
                     &candidate_resource.shape,
                     ci,
@@ -5019,7 +4955,7 @@ pub fn generate_two_constituent_candidates(
                         target_placement,
                     )
                     .unwrap();
-                    let (cx, cy) = rotated_point(cv[ci], rotation);
+                    let (cx, cy) = rotated_point(candidate_vertex, rotation);
                     push_candidate(
                         &mut out,
                         target,
@@ -5072,15 +5008,15 @@ pub fn generate_two_constituent_candidates(
         let half = *length / 2.0;
         let endpoints = [(-half, 0.0), (half, 0.0)];
         if let Some(tv) = target_vertices {
-            for ti in 0..tv.len() {
-                for endpoint in 0..2 {
+            for &target_vertex in tv.iter() {
+                for (endpoint, &endpoint_position) in endpoints.iter().enumerate() {
                     for rotation in crate::rigid_boundary::line_endpoint_alignment_rotations(
                         endpoint,
                         0,
                         target_placement.rotation_radians,
                     ) {
-                        let (tx, ty) = world_point(tv[ti], target_placement);
-                        let (cx, cy) = rotated_point(endpoints[endpoint], rotation);
+                        let (tx, ty) = world_point(target_vertex, target_placement);
+                        let (cx, cy) = rotated_point(endpoint_position, rotation);
                         push_candidate(
                             &mut out,
                             target,

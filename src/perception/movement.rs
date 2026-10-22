@@ -232,14 +232,6 @@ fn select_movement_distance(
     tied.get(rng.gen_range(0..tied.len())).copied()
 }
 
-fn movement_energy_cost(realized_mass: f64, movement_efficiency: f64) -> f64 {
-    movement_energy_cost_for_distance(
-        realized_mass,
-        movement_efficiency,
-        MOVEMENT_REFERENCE_DISTANCE,
-    )
-}
-
 impl Simulation {
     pub(crate) fn start_movement(
         organism: &mut Organism,
@@ -1184,16 +1176,29 @@ mod tests {
         let masses = [2.7, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0];
         for pair in masses.windows(2) {
             assert!(
-                movement_energy_cost(pair[1], DEFAULT_MOVEMENT_EFFICIENCY)
-                    > movement_energy_cost(pair[0], DEFAULT_MOVEMENT_EFFICIENCY)
+                movement_energy_cost_for_distance(
+                    pair[1],
+                    DEFAULT_MOVEMENT_EFFICIENCY,
+                    MOVEMENT_REFERENCE_DISTANCE,
+                ) > movement_energy_cost_for_distance(
+                    pair[0],
+                    DEFAULT_MOVEMENT_EFFICIENCY,
+                    MOVEMENT_REFERENCE_DISTANCE,
+                )
             );
         }
     }
 
     #[test]
     fn movement_efficiency_changes_energy_cost_not_distance() {
-        assert!(movement_energy_cost(16.0, 1.0) < movement_energy_cost(16.0, 0.8));
-        assert!(movement_energy_cost(16.0, 0.5) > movement_energy_cost(16.0, 0.8));
+        assert!(
+            movement_energy_cost_for_distance(16.0, 1.0, MOVEMENT_REFERENCE_DISTANCE)
+                < movement_energy_cost_for_distance(16.0, 0.8, MOVEMENT_REFERENCE_DISTANCE)
+        );
+        assert!(
+            movement_energy_cost_for_distance(16.0, 0.5, MOVEMENT_REFERENCE_DISTANCE)
+                > movement_energy_cost_for_distance(16.0, 0.8, MOVEMENT_REFERENCE_DISTANCE)
+        );
         assert_eq!(MOVEMENT_REFERENCE_DISTANCE, 4.0);
     }
 

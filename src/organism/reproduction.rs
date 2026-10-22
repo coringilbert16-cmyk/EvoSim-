@@ -13,17 +13,12 @@ use crate::structure::OrganismStructure;
 use rand_chacha::ChaCha8Rng;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[expect(
-    dead_code,
-    reason = "DeadEnd is reserved for the approved P7 terminal construction condition"
-)]
 pub(crate) enum ConstructionStatus {
     Waiting,
     Progress,
     Ready,
     Detached,
     Dead,
-    DeadEnd,
 }
 
 pub(crate) fn parent_body_geometry(
@@ -174,7 +169,6 @@ enum NextConstructionResourceStatus {
     Available,
     Missing,
     NoFit,
-    Impossible,
 }
 
 pub(crate) fn construction_material_need_pressure(
@@ -433,14 +427,6 @@ fn budding_scale_reached_with_reference(
         &construction.developmental_origin,
     ) + 1e-9
         >= 0.80 * preferred
-}
-
-fn birth_ready(
-    construction: &ReproductiveConstruction,
-    catalog: &[crate::resources::BaseResource],
-) -> bool {
-    let seed_reference = crate::juvenile::confirmed_seed_scale_reference(catalog).ok();
-    birth_ready_with_reference(construction, catalog, seed_reference)
 }
 
 fn birth_ready_with_reference(
@@ -725,10 +711,6 @@ pub(crate) fn advance_construction(
                 // pending; new material may make it solvable later.
                 construction.needs_space = false;
                 return (ConstructionStatus::Waiting, None);
-            }
-            NextConstructionResourceStatus::Impossible => {
-                construction.needs_space = false;
-                return (ConstructionStatus::DeadEnd, None);
             }
         }
     };

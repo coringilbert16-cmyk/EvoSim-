@@ -1258,7 +1258,6 @@ impl Simulation {
                     crate::reproduction::ConstructionStatus::Ready
                         | crate::reproduction::ConstructionStatus::Detached
                         | crate::reproduction::ConstructionStatus::Dead
-                        | crate::reproduction::ConstructionStatus::DeadEnd
                 ) {
                     let child_id = next_organism_id.to_string();
                     if let Some(child) = crate::reproduction::finish_reproduction(

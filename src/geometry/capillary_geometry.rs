@@ -1367,14 +1367,6 @@ pub fn solve_water_against_solid(
     CapillaryContactFamily::solve(water_area, angle)
 }
 
-/// Normalize an arc parameter to [0, 2pi).
-pub fn normalize_arc_parameter(angle: f64) -> Option<f64> {
-    if !angle.is_finite() {
-        return None;
-    }
-    Some(angle.rem_euclid(TAU))
-}
-
 /// Solve one constant-curvature water boundary whose straight contact chord is
 /// split across multiple contiguous, collinear solid surfaces. This is one
 /// simultaneous capillary solution (one conserved area and one free arc), not
