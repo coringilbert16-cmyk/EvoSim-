@@ -2281,3 +2281,16 @@ This confirms an adversarial invalid-state gap across several callers; it is not
 **Classification:** items 1–3 require focused regression/invariant coverage; item 4 requires a caller failure-policy decision and test. These do not close the higher-risk material-loss or movement rollback gates. No source/test changes were made.
 
 **Next:** reconcile these items and the Section 17.64 transition rows into a single exit checklist, then identify which uninspected source paths remain before audit templates can be declared complete. No implementation until that checklist is complete.
+
+
+### 17.66 Touched-file closure cross-check — contract snapshot, staged graph API, and CI bounds — 2026-10-22
+
+**Status: Three cross-cutting boundaries classified; documentation correction deferred.** Read-only review at PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862` of `docs/CHEMISTRY_UNIFICATION_CONTRACT.md`, `README.md`, `.github/workflows/rust.yml`, and `src/geometry/structure.rs`. No source/test/document changes.
+
+- **Contract document:** `docs/CHEMISTRY_UNIFICATION_CONTRACT.md` correctly labels its dependency map as “main at the frozen commit,” so the schema-3/cache and old aggregate-transfer entries are historical baseline findings, not claims about the current implementation. However, its plan-authority link is pinned to an older plan commit (`09254d9e11fd021f42a0c8abbd43594cd7764c69`). Once the audit register is closed, update the link to the canonical current plan branch/path or a current immutable commit, while preserving the frozen-baseline distinction.
+- **README status:** `README.md` still states live sunlight capture is disabled, while current `Simulation::step` executes the world-tone snapshot/settlement path. Section 17.57 already records this as a factual mismatch. Correct the statement only after audit closure and owner approval; say “live, not yet validated,” not “disabled” and not “conserved.”
+- **Workflow bounds:** `.github/workflows/rust.yml` applies five-minute timeouts to formatting, source-size, architecture, focused chemistry, and full-suite steps. This matches the owner's command limit. The full suite has previously completed under five minutes on the recorded exact head, but its known baseline failures remain; time bounds do not constitute a pass.
+- **Staged graph API:** `src/geometry/structure.rs` is marked as a staged API retained for subsystem integration. Its direct bond insertion/removal methods are low-level graph mutations, not proof that production chemistry settles bond energy. Continue to audit live callers rather than treating method-level tests or public visibility as runtime reachability.
+- The remaining changed-file coverage is represented in Sections 17.32–17.65: material restoration/transfer, chemistry cache, energy ledger, live world tone, simulation lifecycle, and test-only inventory oracles. This cross-check did not identify a new physical source or sink, but it does not replace the open failure-injection and integrated-conservation gates.
+
+**Next:** build the final row-by-row exit checklist, with every Section 17.55 transition classified as verified locally, test-required, or owner-decision-blocked; then compare that list against A0–A21 and Section 17.7 for omissions. No implementation until the audit templates are complete.
