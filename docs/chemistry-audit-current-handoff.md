@@ -442,3 +442,13 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Candidate attachment already uses the bond-driven COMBINE energy-accounting path, but shared-aggregate atomic commit remains unimplemented. Constructor's `1.0e12` trial allowance remains separate and out of scope.
 - Narrow item to resolve from Master Spec: child usable energy after successful division. Do not invent a 50/50 split or reintroduce a production reserve. No source/test changes or fresh CI run.
 - Next: inspect Master Spec 2.4 and existing division rule; then complete division failure matrix and inventory reconciliation.
+
+
+## Resume checkpoint — division transaction boundary (Section 17.105)
+
+- Plan commit: `3972ef96e66793f5ea9037d899d7e158c2d67274`; PR #204 remains documentation-only.
+- README confirms the 80/80 target (roughly 160% aggregate, then two ~80% organisms), but its older separate-developing-graph prose conflicts with the owner's later decisions and must be reconciled. The Master Spec file itself was not found in the audited repository tree.
+- Current simulation may finish `Dead` construction; `finish_reproduction` can return a child from a nonempty but not-ready structure. Both conflict with the owner rule that dead/failed construction cannot create offspring.
+- Child currently receives `construction.developing_energy`; no separate holder is allowed. Production costs debit parent usable energy; remaining energy at division must partition exactly once, but no authoritative numeric split rule was found in the inspected README. Do not invent a 50/50 rule.
+- Division tests still needed: exact-once units/bonds/storage/energy, collision-safe IDs, cross-partition bond settlement, rollback on either-child validation failure, and no child from non-Ready states.
+- No source/test changes or fresh CI run. Next: check repository history for an established child-energy allocation rule; if absent, ask the owner one narrow question before implementing division.
