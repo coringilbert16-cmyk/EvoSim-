@@ -583,3 +583,15 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Exact head `7631b67b178d26a559e6a54c1531391d6ab30962`: 590 passed, 27 baseline failures, 1 ignored. The anchor-placement and core-overlap ranking regressions passed. Clippy remains at baseline 34 app-target and 15 test-target diagnostics.
 - Primary-core-loss regression was added at `c8ce07e0322b1fd880dbdc6261cfd1bc52d372c4`, formatted at `135bc4349263a80b5d3a67c8e2e40a3eeeea753f`. Exact-head CI for `135bc4349263a80b5d3a67c8e2e40a3eeeea753f` passed formatting and was still in full tests.
 
+
+
+## Latest checkpoint — 2026-10-22, Section 17.122
+
+- PR #205 current source head: `135bc4349263a80b5d3a67c8e2e40a3eeeea753f`.
+- Exact-head workflow [39864616964](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39864616964): formatting, architecture/source-size checks, and all focused Bob/fluid/restoration/BREAK gates passed. The full Rust suite timed out at five minutes while running 619 tests; Cargo emitted no final aggregate summary, so no full-suite pass/failure counts or baseline identity claim is made. The primary-core-loss regression passed. Strict Clippy remains red at 34 application-target and 15 test-target diagnostics; no new normalized comparison was made on this head.
+- Audit result: anchor placement now requires contact with the intended parent part and rejects strict penetration. `begin_reproduction` removes the selected physical anchor from parent storage and instantiates it into a separate developing graph, so the material is not duplicated in storage, but the parent structural graph remains unchanged.
+- No aggregate-merge primitive was found in the inspected structure API. Graph-local physical IDs are used by units, bond endpoints, and core-identity groups; naïve append would alias IDs. A correct merge must stage an old-to-new ID map, remap all bond endpoints and core groups, preserve bond energy once, and commit failure-atomically.
+- Next: design/test the staged graph-merge primitive and its rollback/identity invariants before integrating anchor promotion. Do not patch scalar energy prices or the old developing-energy reserve as a shortcut.
+- Movement is still deferred. Before migrating developing structure into the parent aggregate, notify the owner that the coordinated movement phase will need translation, collision/space checks, world-tone body enumeration, and position/structure revision changes together. PR #196 remains out of scope.
+- Governing plan updated in commit `22da84bcc4046100ef8e50217fc12c93f54e82ab` (Section 17.122).
+
