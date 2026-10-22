@@ -2150,3 +2150,16 @@ This summary consolidates Sections 17.32–17.54. Local ordering being sound doe
 **Cross-cutting invariant:** identify one source owner; validate physical preconditions and destinations; stage material, geometry, and energy; settle accounting; then commit once. On rejection, preserve the original source or all outputs in valid holders. Internal transfers cancel at world scale; diagnostic/cache counters are not separate energy stores.
 
 **Exit evidence:** every gap row needs focused failure-injection coverage plus the independent material/energy oracle. World tone also needs an independent exact-small-world exposure/first-hit comparison. The recorded full suite remains baseline-red; no source/test changes were made while consolidating this matrix.
+
+
+### 17.56 Energy API call-site closure — live frame settlement is separate from staged budget API — 2026-10-22
+
+**Status: Inspected caller set; no unlisted live energy API path found in the current search.** Exact-head call-site search plus source review; no source/test changes.
+
+- Live `settle_transaction` consumers are COMBINE bond formation, chemical/stress/resonance BREAK, maintenance, and movement. The legacy decomposition consumer is not called by the production tick. Their ordering is covered in Sections 17.44–17.46.
+- Live external-input settlement is used for the initial seed reserve. The legacy per-unit WorldToneFrame `settle_receiver` path is exercised in its own tests but is not the `Simulation::step` capture path. Live frame capture calls `settle_world_tone_paths` once after calculating the frame totals and stages reservoir commits until settlement succeeds.
+- `EnergySourceBudget` and `settle_external_input_from_budget` are defined and unit-tested as staged primitives, but the live world-tone frame does not call them. They therefore provide no evidence by themselves that live projected exposure is uniquely partitioned; that remains a geometry/snapshot oracle gate. The live frame's per-path balance is its current accounting authority.
+- `EnergyLedger::transfer` has two inspected production callers: reproductive reserve transfer and the unintegrated legacy recycler. The reproduction caller ignores the boolean result; the recycler checks it but is not a valid lifecycle integration path. No other live internal-transfer caller was found in the current search.
+- This map does not make the uncalled legacy APIs safe to activate. A future caller must either join the approved live transaction model or remain clearly quarantined with tests that do not imply production integration.
+
+**Next audit:** reconcile the final call-site map with the dependency/phase tracker and decide whether the remaining unfilled templates are source inspection, focused-test design, or owner decision. No implementation until audit completion.
