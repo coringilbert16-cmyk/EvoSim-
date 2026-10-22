@@ -1638,3 +1638,19 @@ At division (the reproduction requirement is 100% original size → construct ad
 5. Validate both resulting children and all destinations before committing; on failure, preserve the intact parent aggregate and retry safely.
 
 This reduces lifecycle complexity by making death a biological-state change rather than a mass-transfer event. The hard remaining work is correct chemistry enumeration/accessibility for all owned physical holders and a lossless, atomic division partition. Keep the implementation gate closed until those call sites and invariants are audited. No code/test changes were made.
+
+
+### 17.31 Owner approval — parent aggregate owns all holdings until division
+
+**Decision status: APPROVED by owner in conversation on 2026-10-22.** This supersedes the provisional status language in Section 17.30. The parent cell remains the complete authoritative owner of its physical body, stored material, committed reproductive material, developing structure and bonds, and associated energy until the division transaction. Core breach ends biological processing but does not trigger a death-time ownership transfer or special decomposition object. The second genome core remains part of the parent's unfinished internal construction until division.
+
+**This decision settles lifecycle ownership architecture, not chemistry completion.** The following must still be demonstrated:
+1. Ordinary chemistry enumerates and physically validates reactions against all applicable parent-owned physical holders (body structure, stored material, committed material, and developing structure) without treating ownership alone as accessibility and without adding a separate decomposition pathway.
+2. Material and energy inventories account for each constituent and each distinct energy category exactly once, including usable, developing, resonant, structural bond energy, external input, work, and heat. Every transaction has an authoritative source debit/transfer and a balanced settlement.
+3. Every physical transition (COMBINE, chemical BREAK, stress BREAK, storage entry/exit, movement/work, resonance/world-tone capture, dissipation, death, and relevant lifecycle operation) has atomic validation/commit semantics and tests for failed/stale operations.
+4. Developing-structure bond endpoints, geometry, and stored bond energy remain valid through ordinary chemistry and any later division partition. Cross-partition bonds have an explicit settlement rule.
+5. The approved reproduction lifecycle can eventually partition the parent aggregate atomically at 160% total size into two approximately 80%-size children; every unit, holder, bond, and energy store is assigned exactly once. This is a related lifecycle gate, but implementation remains separate and does not belong in PR #205 unless the owner explicitly expands scope.
+6. World-tone/sunlight input and propagation reconcile with the same energy inventory; source budget, capture, retained resonance, propagation/escape, and heat close without duplicate credit. Geometry and occlusion must be tested, and the implementation must meet the performance constraints already recorded in this plan.
+7. Focused regressions and bounded full-suite CI verify the changed paths. Existing baseline failures and Clippy diagnostics must be compared by identity; never claim success solely from counts or by treating baseline failures as new regressions.
+
+**Next focused audit:** trace the reaction-enumeration and validation path for parent-owned stored/committed/developing physical holdings, and compare it with the current independent material/energy inventory. Identify the smallest missing link before changing code. Keep PR #204 documentation-only and PR #205 as the implementation branch. No code or tests changed for this approval.
