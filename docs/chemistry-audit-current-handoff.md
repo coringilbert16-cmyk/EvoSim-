@@ -1,6 +1,6 @@
 # Chemistry Unification — Current Handoff
 
-**Plan (latest recorded plan commit):** `036ee59a7ede00938d04c55cf4b493986edadeef`  
+**Plan (latest recorded plan commit):** `56eb760a40bde64286a0bb33d946522e06b83c98`  
 **PR #205 last audited head (historical; refresh before implementation):** `12d8079230458da68a8dc3755a1d6a9b41347862`  
 **CI:** [39833438679](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39833438679).
 
@@ -261,5 +261,5 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - No new production internal-energy-transfer caller surfaced beyond construction reserve and the quarantined recycler already in Section 17.56. This is a bounded call-site audit, not passing test evidence.
 - Confirmed physical-material failure gaps: contained acquisition can lose a returned instance if storage and fallback deposit both reject; stored BREAK commits split pieces incrementally; expulsion can lose the removed source if destination/restoration rejects; environmental COMBINE exact-cell restoration and prepared-ledger rollback need malformed-state injection; the legacy recycler drains before deposits/transfers and stays quarantined.
 - Movement failure rollback includes the mover, pushed organisms, pushed field objects, indexes, anchors, and progress.
-- **Design clarification, plan commit `036ee59a7ede00938d04c55cf4b493986edadeef`:** remove `ReproductiveConstruction.developing_structure` from persistent/current construction state. Retain only nonphysical core/progress metadata and justified accounting sub-holders. A transient trial graph is acceptable inside an atomic candidate calculation, but not as a second owned physical structure.
-- **Next:** reconcile Sections 17.84–17.85 with the phase tracker and release checklist, then close each test-required audit template explicitly. No source/test changes; implementation remains gated.
+- **Design clarification, plan commit `036ee59a7ede00938d04c55cf4b493986edadeef` (tracker reconciled at `56eb760a40bde64286a0bb33d946522e06b83c98`):** remove `ReproductiveConstruction.developing_structure` from persistent/current construction state. Retain only nonphysical core/progress metadata and justified accounting sub-holders. A transient trial graph is acceptable inside an atomic candidate calculation, but not as a second owned physical structure.
+- **Next:** close each test-required audit template explicitly, beginning with the material-loss rejection tests and movement rollback; then proceed through COMBINE/BREAK, cache, world-tone, and whole-world inventory gates. No source/test changes; implementation remains gated.
