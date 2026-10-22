@@ -557,3 +557,11 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - PR #205 head `a5b95ca21acce5ced5b4ccae47d523fc8f357472` adds core-anchored cavity analysis, uses the anchor ID for reproduction readiness, and keeps the organism cavity cache from switching to another cavity while known primary-core IDs remain.
 - New two-cavity regression and all other Rust tests are not yet confirmed at the latest head; CI run `39862195685` has passed formatting, structural checks, and focused chemistry/Bob tests, while the full Rust test step remains in progress. Clippy pending.
 - Aggregate ownership, atomic parent-funded growth, and movement migration remain unimplemented. Next: finish CI and audit the all-core-constituents-removed identity edge case before changing aggregate ownership. Movement is deferred until canonical graph migration and must be announced before that refactor.
+
+
+## Reproduction anchor geometry and core identity — 2026-10-22, Section 17.119
+
+- Core identity now has an explicit established flag, so deleting all known primary-core IDs cannot cause a different cavity to silently become this organism's genome. Existing nonempty serialized core IDs infer identity.
+- Exact-head CI at `548fb485c5850b7ccdc0cb3a622d569cd433fbd9` exposed two missing `genome_core_identity_established` initializers and an unused `HashMap` import; fixed in subsequent commits, pending fresh exact-head CI.
+- Anchor placement was using inclusive overlap as a proxy for contact, and its initial candidate exactly matched a parent part's position. It now requires boundary contact and no strict penetration against any parent part; a regression assertion was added.
+- No aggregate migration or movement changes yet. Next: verify fresh CI and then design atomic anchor promotion into parent-owned physical structure.
