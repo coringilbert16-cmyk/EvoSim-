@@ -91,3 +91,12 @@ The owner explicitly approved the parent-aggregate ownership model: the parent r
 - Owner-approved invariant remains: parent owns body/storage/committed/developing holdings until division; death ends biological processing but does not transfer ownership or introduce a separate decomposition law. Ownership is not automatic chemical availability.
 - **Next audit:** compare `PhysicalMaterial` internal connections and stored-BREAK settlement with graph-bond settlement; trace holder take/drain/restore and energy-ledger paths. Determine which bond classes carry actual stored energy and which are eligible for ordinary chemistry, then reconcile those semantics against the independent material/energy oracle. No code or tests until the audit templates are complete.
 - Existing exact-head CI evidence at `12d8079` remains as documented above; before implementation, re-fetch the PR #205 head and run bounded verification only against that exact SHA.
+
+
+### Follow-up audit: stored physical-bond semantics and failure path
+
+- Plan Sections 17.32–17.33 are now recorded; latest plan commit `adbcd7ecbc35db3474e3c34b0157f07b4dec2ae4`. PR #204 remains documentation-only.
+- Exact PR #205 head audited: `12d8079230458da68a8dc3755a1d6a9b41347862`.
+- `PhysicalMaterialBond` stores constituent/end-point topology but no `bond_energy`. Stored-material BREAK validates and splits topology using a zero-energy transaction; this is intentional because no energy was allocated when the pre-existing internal connection was created. Do not derive free energy from resource potential.
+- Stored BREAK temporarily escrows its source on an `ActiveTransformation` linked to the parent. Preparation failure has a restoration helper. However, successful split-piece storage fallback attempts a world deposit using intrinsic-frame placement and ignores deposit failure; malformed completion with missing `prepared_energy` also clears the active ID without an evident source restore. These are failure-path candidates; they are not proof of common-path failure.
+- **Next:** trace all physical-material transitions among environment, parent storage, committed storage, active-transformation escrow, and developing structure; compare every transition and rollback with the independent integer material inventory. Establish the shared bond contract (funded graph bond vs unfunded physical connection) before proposing reaction-unification code. No code/test changes until the audit templates are complete.
