@@ -249,10 +249,16 @@ impl ChemistryLibrary {
             serde_json::from_slice(&fs::read(manifest_path)?)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
         } else {
+            if !entries.is_empty() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "chemistry manifest is missing for a non-empty cache; refusing to infer schema or equation fingerprint",
+                ));
+            }
             ChemistryLibraryManifest {
                 schema_version: CHEMISTRY_LIBRARY_SCHEMA_VERSION,
                 equation_fingerprint: CHEMISTRY_EQUATION_FINGERPRINT.into(),
-                entries: entries.len() as u64,
+                entries: 0,
             }
         };
         if manifest.schema_version != CHEMISTRY_LIBRARY_SCHEMA_VERSION {
@@ -745,6 +751,26 @@ mod tests {
         write_test_store(&root, 4, &[test_record_json(4, "edge")], 1);
         let library = ChemistryLibrary::open(&root).unwrap();
         assert_eq!(library.len(), 1);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_nonempty_cache_without_manifest_without_migration() {
+        let root = test_root("missing-manifest");
+        fs::create_dir_all(&root).unwrap();
+        let data_path = root.join("chemistry.jsonl");
+        let record = test_record_json(4, "edge");
+        fs::write(&data_path, format!("{record}\n")).unwrap();
+        let original_data = fs::read(&data_path).unwrap();
+
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("non-empty cache without a manifest must be rejected");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("manifest is missing"));
+        assert_eq!(fs::read(&data_path).unwrap(), original_data);
+        assert!(!root.join("manifest.json").exists());
+
         let _ = fs::remove_dir_all(root);
     }
 
