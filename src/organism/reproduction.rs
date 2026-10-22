@@ -888,6 +888,55 @@ mod tests {
             &construction.developing_structure,
             &body,
         ));
+
+        let anchor_unit = &construction.developing_structure.units
+            [construction.anchor_unit_index];
+        let anchor_part = crate::material_geometry::PlacedMaterialPart {
+            part_index: construction.anchor_unit_index,
+            form: anchor_unit.shape(&simulation.environment.catalog)
+                .expect("anchor has a catalog shape")
+                .form
+                .clone(),
+            placement: anchor_unit.placement,
+        };
+        assert!(
+            body.parts.iter().any(|part| {
+                let parent_part = crate::material_geometry::PlacedMaterialPart {
+                    part_index: part.unit_index,
+                    form: part.form.clone(),
+                    placement: crate::structure::Placement {
+                        x: part.x,
+                        y: part.y,
+                        rotation_radians: part.rotation_radians,
+                    },
+                };
+                crate::material_geometry::placed_forms_boundary_contact(
+                    &parent_part,
+                    &anchor_part,
+                    0.0,
+                )
+            }),
+            "anchor must contact the parent at a physical boundary"
+        );
+        assert!(
+            body.parts.iter().all(|part| {
+                let parent_part = crate::material_geometry::PlacedMaterialPart {
+                    part_index: part.unit_index,
+                    form: part.form.clone(),
+                    placement: crate::structure::Placement {
+                        x: part.x,
+                        y: part.y,
+                        rotation_radians: part.rotation_radians,
+                    },
+                };
+                !crate::material_geometry::placed_forms_penetrate(
+                    &parent_part,
+                    &anchor_part,
+                    0.0,
+                )
+            }),
+            "anchor must not interpenetrate any parent constituent"
+        );
     }
 
     #[test]
