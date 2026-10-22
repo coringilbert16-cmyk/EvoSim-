@@ -1,6 +1,6 @@
 # Chemistry Audit and Unification Plan
 
-**Status:** Read-only audit register A0–A21 populated; unresolved gaps and implementation dependencies recorded. No production behavior changes have been made.  
+**Status:** Read-only audit register A0–A21 populated; owner approved Section 17 and implementation is tracked separately in [PR #205](https://github.com/coringilbert16-cmyk/EvoSim-/pull/205). PR #204 remains documentation-only; no production behavior changes are made on this branch.  
 **Baseline branch:** `main`  
 **Baseline commit:** `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5`  
 **Plan opened:** 2026-10-22  
@@ -1330,4 +1330,25 @@ The project owner selected the following directions for the chemistry unificatio
 - [ ] Exact-head baseline comparison, bounded CI, failure-injection coverage, and representative performance evidence are recorded.
 - [ ] README and implementation docs describe only verified behavior.
 
-**Formal plan status:** ready for owner review as an information-only plan. No production change or test execution is implied. The next action after this planning PR is explicit owner approval; then create the separate implementation workstream and begin with one focused pre-change audit for Phase 0/1.
+**Formal plan status:** owner approval received for the scientific invariants, 12-phase order, and verification/completion gate. This document remains an information-only plan and audit register; implementation and tests are tracked in the separate [PR #205](https://github.com/coringilbert16-cmyk/EvoSim-/pull/205). The implementation base is `main` at `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5`; the recorded baseline is 563 passed, 28 failed, 1 ignored, with failure identities not yet independently matched in this implementation pass.
+
+### 17.7 Implementation progress tracker (updated 2026-10-22)
+
+This tracker records evidence from the separate implementation PR; it does not change the audit findings above or imply that an incomplete phase is verified. PR #204 itself remains documentation-only.
+
+| Phase | Status | Evidence / remaining gate |
+|---|---|---|
+| **0 — Freeze baseline and scope** | **Recorded** | Exact base SHA and workflow run are recorded above and in PR #205. The 28 baseline failure identities still need an independent list for reliable regression comparison. |
+| **1 — Contract and dependency map** | **Recorded** | Owner-approved contract is in `docs/CHEMISTRY_UNIFICATION_CONTRACT.md` on PR #205. |
+| **2 — Independent inventory oracles** | **Implemented; verification incomplete** | Test-only material and energy inventory checks have been added. They must be checked against named failures and cross-domain ownership paths before this phase can be called complete. |
+| **3 — Canonical resource identity and indivisible material ownership** | **In progress; regression gate open** | Catalog/whole-count validation and transfer rejection have been changed; fluid coalescence fixtures were adjusted to preserve area with whole Water counts. A full run reported 566 passed, 33 failed, 1 ignored, versus the recorded 563/28/1 baseline. That aggregate comparison is worse and is not acceptable evidence of completion; failure identities must be compared and regressions isolated. |
+| **4 — Chemistry cache version boundary** | **Implemented; verification pending** | Schema 4, equation fingerprinting, and rejection tests for schemas 2/3 and mismatched keys/fingerprints are in PR #205. The current-head workflow must complete successfully for the changed paths; old records are rejected, not migrated. |
+| **5 — Authoritative energy ledger and initial source** | **Started; verification pending** | An `InitialCondition` source and initial usable-energy settlement through `ExternalInputTransaction` were added. The latest workflow run `39805291760` at head `25b72bbef5ce452d02c7e67cb44065946d6805d3` was still in progress at the time of this update. The initial inventory assertion and source accounting must pass; stored-bond and world-tone flows remain to audit. |
+| **6 — COMBINE/BREAK, bond ownership, overload** | **Not started as a unified change** | Existing focused BREAK/COMBINE checks pass in workflow steps, but exactly-once bond-energy settlement, overload destabilization, and failure/rollback behavior are not yet proven. |
+| **7 — Energy consumers/transfers and deterministic tick phases** | **Not started** | Requires source/consumer inventory and atomic cancellation/retry evidence. |
+| **8 — Lifecycle and post-death chemistry** | **Not started** | Preserve ordinary chemistry after death; no parallel decomposition/recycling path is enabled. |
+| **9 — Sunlight correctness and performance** | **Not started** | Exact-small-world oracle, source-budget/occlusion checks, and representative scale measurements remain required. |
+| **10 — Long-run numerical integrity** | **Not started** | Tolerance-versus-dissipation, drift, overflow, and diagnostics gates remain required. |
+| **11 — Integrated verification** | **Not started** | Requires named baseline comparison, focused and full test evidence, strict Clippy results, and performance evidence. |
+
+**Current verification caveat:** the latest observed run was still executing the full Rust tests; the latest completed full run was red. Formatting, source-size, COMBINE architecture, Bob storage, focused fluid/restoration, and focused chemical BREAK workflow steps passed on that completed run, but those successes do not override the full-suite failures. Do not call PR #205 green or mark a phase complete until its stated evidence gate is met.
