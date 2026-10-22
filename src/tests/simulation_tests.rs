@@ -6,6 +6,89 @@ mod integration_tests {
     use crate::state::Simulation;
     use crate::structure::Placement;
 
+    /// Independent material oracle. It walks authoritative holders directly,
+    /// rejects fractional/unknown constituents, and never reads ledger totals.
+    fn integer_material_inventory(
+        simulation: &Simulation,
+    ) -> Result<std::collections::BTreeMap<String, u64>, String> {
+        fn add_material(
+            inventory: &mut std::collections::BTreeMap<String, u64>,
+            material: &Material,
+            catalog: &[crate::resources::BaseResource],
+        ) -> Result<(), String> {
+            for (name, amount) in &material.parts {
+                if !catalog.iter().any(|resource| resource.name == *name) {
+                    return Err(format!("unknown resource identity: {name}"));
+                }
+                if !amount.is_finite()
+                    || *amount <= 0.0
+                    || amount.fract().abs() > 1e-9
+                    || *amount > u64::MAX as f64
+                {
+                    return Err(format!("non-integer or invalid amount for {name}: {amount}"));
+                }
+                let count = amount.round() as u64;
+                let total = inventory.entry(name.clone()).or_default();
+                *total = total
+                    .checked_add(count)
+                    .ok_or_else(|| format!("constituent count overflow for {name}"))?;
+            }
+            Ok(())
+        }
+
+        let catalog = &simulation.environment.catalog;
+        let mut inventory = std::collections::BTreeMap::new();
+
+        // Environmental aggregate stock and already-realized objects.
+        for cell in &simulation.environment.field.cells {
+            for material in &cell.materials {
+                add_material(&mut inventory, material, catalog)?;
+            }
+            for physical in &cell.physical_materials {
+                add_material(&mut inventory, &physical.material, catalog)?;
+            }
+        }
+
+        // Living or breached organisms retain their physical structure and storage.
+        for organism in &simulation.organisms {
+            for unit in &organism.structure.units {
+                add_material(&mut inventory, &unit.material, catalog)?;
+            }
+            for material in organism.stored_material.iter_materials() {
+                add_material(&mut inventory, material, catalog)?;
+            }
+            if let Some(construction) = &organism.reproductive_construction {
+                for material in construction.committed_material.iter_materials() {
+                    add_material(&mut inventory, material, catalog)?;
+                }
+                for unit in &construction.developing_structure.units {
+                    add_material(&mut inventory, &unit.material, catalog)?;
+                }
+            }
+        }
+
+        // Active transformations own temporarily removed physical sources.
+        // The material field and prepared structures/storage/ledgers are
+        // descriptive or trial copies and must not be counted a second time.
+        for transformation in &simulation.active_transformations {
+            if let Some(physical) = &transformation.stored_material {
+                add_material(&mut inventory, &physical.material, catalog)?;
+            }
+            if let Some((_, physical)) = &transformation.combine_environmental_source {
+                add_material(&mut inventory, &physical.material, catalog)?;
+            }
+        }
+
+        // Legacy decomposition carriers remain material owners if present.
+        for body in &simulation.decomposing_bodies {
+            for unit in &body.structure.units {
+                add_material(&mut inventory, &unit.material, catalog)?;
+            }
+        }
+
+        Ok(inventory)
+    }
+
     fn structured_carbon_hydrogen() -> Material {
         Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
@@ -14,6 +97,46 @@ mod integration_tests {
                 part_b: 1,
             }],
         }
+    }
+
+    #[test]
+    fn integer_material_inventory_conserves_constituents_across_field_to_storage_transfer() {
+        let mut simulation = Simulation::new(7103, 10.0);
+
+        // Isolate the owners relevant to this transfer while retaining the
+        // organism's ordinary physical structure as part of the inventory.
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.organisms[0].stored_material.entries.clear();
+        simulation.environment.field.cells[0]
+            .materials
+            .push(Material::free_base("Carbon", 3.0));
+
+        let before = integer_material_inventory(&simulation).expect("fixture inventory is integral");
+        let taken = crate::material_transfer::take_whole_unstructured(
+            &mut simulation.environment.field.cells[0].materials[0],
+            1,
+        )
+        .expect("one whole carbon constituent should transfer");
+        let placement = Placement {
+            x: 10.0,
+            y: 10.0,
+            rotation_radians: 0.0,
+        };
+        let physical = PhysicalMaterial::realized(
+            taken,
+            vec![placement],
+            &simulation.environment.catalog,
+        )
+        .expect("whole carbon should be physically realizable");
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(physical));
+
+        let after = integer_material_inventory(&simulation).expect("result inventory is integral");
+        assert_eq!(after, before, "material ownership transfer changed constituent totals");
     }
 
     #[test]
