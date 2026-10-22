@@ -349,6 +349,32 @@ Equivalently, the residual source minus all destinations must be zero within EPS
 **Deliverable**
 - Holder/source/sink inventory, per-tick and cumulative conservation equations, independent snapshot/audit method, adversarial tests, and a statement of what is proven versus still unobservable.
 
+**Audit record — 2026-10-22**
+
+**Status: Gap found — a conservation snapshot and local accounting tests exist, but whole-world conservation is not enforced in production.**
+
+**Inventory map observed**
+- Usable energy is held by live/dead-but-still-present organisms and decomposing carriers; Simulation::energy_inventory_snapshot takes cumulative usable totals from the ledger, not by independently walking and summing every holder.
+- Retained resonance is stored in each organism's serialized ResonantEnergyReservoir; the ledger's current total is refreshed at the end of the simulation tick via total_resonant_energy_held.
+- Structural energy is stored on realized graph bonds. Simulation::structural_energy_held sums live organism graph bonds, developmental structures, and legacy decomposing-body structures. Internal bonds inside PhysicalMaterial are not separately energy-valued.
+- External input, escaped world-tone energy, non-structural source release, work, and heat are cumulative ledger counters. Internal transfers cancel and should not be counted as sources.
+- Tick-zero baselines are initialized from the initial organism, and later current totals are refreshed near the end of tick processing. The snapshot's residual equation includes the three physical stores, work, heat, escaped tone, external input, and other explicitly released energy.
+
+**Critical limitation:** Simulation::energy_inventory_snapshot() is explicitly marked as used by reconciliation tests, not production telemetry. No live per-tick balance assertion was found in the inspected simulation path. Tests can prove selected constructed scenarios, but do not establish conservation for arbitrary runtime histories, source allocation, holder creation/removal, or persistence recovery.
+
+**Findings / risk ranking**
+1. **P0 — no production world-conservation gate:** local transactions validate algebra, but the live simulation does not independently recompute the inventory and reject/log a non-balanced tick. Therefore global conservation is not yet proven.
+2. **P1 — current inventory totals are ledger-maintained:** a missed refresh or holder omitted from the helper can make the snapshot internally consistent while the physical world differs. A6 needs an independent enumerator over every live/dead organism, developing structure, decomposing body, and any other energy holder, compared against the ledger totals.
+3. **P1 — material/structural boundary:** graph bond energy is counted; PhysicalMaterial internal bonds have no independent energy store. This may be an intentional representation rule, but document it and prove no operation treats these bonds as previously funded structural energy.
+4. **P1 — lifecycle coverage:** death is observational in the current simulation tick; breached organisms remain physical and continue ordinary chemistry. Decomposing bodies remain a legacy carrier included in totals. Verify transitions into/out of those carriers, offspring construction, holder deletion, and finalization don't duplicate or omit usable/resonant/structural energy.
+5. **P2 — floating-point tolerance:** per-transaction 1e-9 balance checks and scale-relative source checks do not by themselves define a long-run residual budget. Test error growth as event count increases; distinguish per-transaction acceptance from whole-world tolerance.
+
+**Evidence inspected:** src/chemistry/energy_ledger.rs (EnergyInventorySnapshot::residual, is_balanced, ledger source/flow counters); src/simulation/simulation.rs (tick-zero initialization, end-of-tick totals, structural_energy_held, snapshot marked test-only); src/simulation/state.rs (serialized ledger fields and holders); src/reproduction.rs (usable/resonant holder sums); handoff archive only as historical corroboration, not current authority.
+
+- **Dependencies / downstream audits affected:** A4, A8–A16, A18–A20. No global-conservation claim should be made before these paths are independently reconciled.
+- **Decision required from project owner, if any:** none to continue audits. Whether internal bonds in stored physical materials should ever carry structural energy is a future model decision, not something to assume.
+- **Recommended smallest next change (if authorized):** after all audits, implement an independent world inventory and a deterministic end-of-tick conservation diagnostic first in tests/debug mode, then make any strict runtime policy decision based on measured behavior. No production code change authorized now.
+
 ### A7 — Resonance spectrum, reaction compatibility, and stored signal energy
 
 **Questions**
@@ -364,6 +390,31 @@ Equivalently, the residual source minus all destinations must be zero within EPS
 
 **Deliverable**
 - Spectrum-versus-energy contract, reservoir invariant table, compatibility/withdrawal transaction tests, and bounded-memory/per-tick cost assessment.
+
+**Audit record — 2026-10-22**
+
+**Status: Gap found — the reservoir is a real energy store with bounded component count, but its full lifecycle and numeric bounds are not yet proven.**
+
+**Representation and rules observed**
+- ToneSpectrum represents a currently received travelling signal; its ToneComponent.amplitude is converted to energy as amplitude squared. It is not itself a persistent store.
+- ResonantEnergyReservoir is serialized on each organism and stores (frequency_hz, energy) components. Deposit rejects non-finite/invalid inputs, merges nearly equal frequencies by logarithmic ratio tolerance, sorts new components, and rejects a fifth distinct component (MAX_SPECTRAL_COMPONENTS = 4). The caller is explicitly responsible for accounting rejected input as heat.
+- Total reservoir energy is summed and checked for finiteness. Reaction compatibility weights each component by an exponential function of logarithmic frequency distance; it changes the accessible amount, not the total stored energy. Withdrawal subtracts the actual amount withdrawn and returns that amount for the caller's ledger transaction.
+- World-tone capture stages reservoir copies for the whole source frame, checks that each accepted deposit increases stored energy by the expected retained amount, and commits staged reservoirs only after the aggregate source-path ledger settlement succeeds. If the spectral capacity rejects a deposit, the material response is routed to heat rather than silently dropped.
+- Resonance-overload handling compares retained energy with bond-energy handling capacity and uses the shared BREAK settlement path. Resonance is therefore both an energy store and a chemistry interaction input; it must never also be treated as a free energy source merely because it is frequency-compatible.
+
+**Findings / risk ranking**
+1. **P1 — component count bounded, energy magnitude not domain-bounded:** there can be at most four distinct components, but no explicit physical maximum for the energy accumulated at one frequency. Finiteness checks eventually reject overflow, but an extremely large finite store can still distort thresholds and arithmetic before overflow.
+2. **P1 — lifecycle dissipation/retention policy unclear:** no general per-tick reservoir dissipation was identified in the reservoir API. The approved 10% per-tick dissipation applies to the chemistry reaction accumulator; do not assume it automatically applies to retained resonance. A7/A9 must establish whether resonant energy is intentionally persistent, how it interacts with general energy dissipation, and which paths convert energy to heat.
+3. **P1 — withdrawal contract needs stronger tests:** compatibility is used both to estimate accessible energy and to calculate actual withdrawals. Prove the reported withdrawn amount, remaining component energy, reaction transaction debit, and failed-settlement rollback agree across multiple frequencies and tiny/huge values.
+4. **P2 — epsilon pruning changes representation:** withdrawal removes components at or below f64::EPSILON. Quantify whether this drops a non-negligible world-scale total under large populations/repeated operations, and ensure it is treated as a bounded numerical sink or retained without silent loss.
+5. **P2 — serialized malformed states:** deserialization can restore invalid/duplicate/over-capacity components unless a validation path is guaranteed before use. The API fails closed when total_energy() is invalid, but recovery behavior and diagnostics must be checked in A13/A18.
+6. **P2 — spectrum normalization must conserve energy:** transformation helpers create/merge/prune received spectra. Verify each spectral simplification's output energy against its input budget; an amplitude/frequency rewrite is not itself a source or sink.
+
+**Evidence inspected:** src/perception/harmonics.rs (ResonantEnergyReservoir, ToneSpectrum, MAX_SPECTRAL_COMPONENTS, transform and material-response helpers); src/chemistry/transformation.rs (resonance-overload and chemistry BREAK); src/simulation/world_tone_snapshot.rs (staged reservoir and heat fallback); src/simulation/state.rs (serialized organism reservoir).
+
+- **Dependencies / downstream audits affected:** A2, A4–A6, A8–A10, A13–A16, A18, A20. A bounded component count is a good scalability foundation but not a substitute for bounded values and explicit lifecycle accounting.
+- **Decision required from project owner, if any:** none before the remaining audits. Do not add arbitrary resonance caps or dissipation before proving the intended energy model.
+- **Recommended smallest next change (if authorized):** after all audits, add invariant/property tests for deposit, compatible withdrawal, serialization validation, and energy-preserving spectral transforms; choose explicit caps or dissipation only if the complete physical model requires them. No production code change authorized now.
 
 ### A8 — World tone/sunlight source, exposure, occlusion, propagation, and capture
 
@@ -386,6 +437,32 @@ Equivalently, the residual source minus all destinations must be zero within EPS
 
 **Deliverable**
 - Source-to-receiver flow model, complexity estimate for thousands of objects, deterministic reference tests, occlusion/energy-partition tests, and explicit enablement gate.
+
+**Audit record — 2026-10-22**
+
+**Status: Gap found — capture is active in the current tick path, and source allocation is transactionally staged, but this contradicts the README's disabled-capture claim and needs scalability proof.**
+
+**Observed source and geometry path**
+- WorldToneRuntimeConfig defines a single 440 Hz source, intensity 1–10 energy per tick per exposed projected width, a 2,400-tick orbit/day cycle, and an off-world radius validated against the world diagonal. WorldToneCycle precomputes source samples up to 65,536 ticks; the current 2,400-tick cycle fits. Samples describe source output, not receiver allocation.
+- Simulation passes the current world-tone sample to WorldToneOccluderSnapshot::settle_living_organism_inputs during its tick. The snapshot assembles realized geometry from organisms, developing offspring, environmental physical materials, decomposing structures, stored physical materials, and in-flight transformation material. Logical stock without physical placement is not an occluder.
+- The snapshot builds one world-wide exposure frame, checks that first-hit path widths reproduce direct geometric exposure widths, stages all organism resonance reservoirs, propagates a remaining signal through the ordered hit list, and partitions each path's incident energy into captured energy, heat, and escaped signal. It calls settle_world_tone_paths once for aggregate incident/captured/heat/escaped totals, then commits the staged reservoirs.
+- The propagation contract is onward continuation with transformed frequency composition, not literal mirror rays. The frame's direct exposure solver is based on finite-source geometry and visibility/occlusion, with a broad phase using body angular intervals and source distances. src/geometry/source_exposure.rs also contains exact projected-extent helpers and extensive shape/visibility logic.
+
+**Findings / risk ranking**
+1. **P0 — README/runtime discrepancy:** README says live capture is disabled, but current simulation calls the live settlement path and the snapshot mutates the ledger and commits retained energy. The real current behavior must be documented accurately; do not rely on old handoff text or README alone.
+2. **P1 — scalability risk remains unmeasured:** each tick constructs body geometry and a world-wide exposure frame; the visibility solver iterates bodies and parts and evaluates possible occluders for target geometry. This may be materially more expensive than a simple one-sweep/first-hit approximation at thousands of bodies. No measured large-population runtime or scaling curve was found in this audit. Profile before assuming it meets the project's performance target.
+3. **P1 — source allocation is per geometric lane, not yet independently proven as world-total physical exposure:** every path is balanced and aggregate ledger settlement is atomic, but the model must establish whether the sum of all lanes is the intended finite source budget for a point source. Per-width intensity multiplied by each path's projected width can produce a world total that grows with total exposed boundary extent; if that is intended, define the physical boundary/source budget clearly. Do not mistake local path conservation for a finite global solar power limit.
+4. **P1 — receiver subset parameter versus actual accounting:** from_simulation_for_organisms accepts a receiver subset, but the frame intentionally accounts every realized body as a heat receiver, even when no living organism lies behind it. Verify all bodies and all paths are included once, including overlap, multi-part bodies, fluid boundaries, and off-world/invalid geometry.
+5. **P1 — reservoir failure fallback is heat:** when a living organism cannot represent the retained spectrum within its four-component reservoir, the response energy becomes heat and onward signal only carries the unresponded remainder. This is conservative locally, but it can make capture efficiency depend on spectrum capacity; that should be observable and tested.
+6. **P2 — whole-frame abort policy:** invalid geometry or any inconsistent path returns without settling the entire source frame. This avoids partial credits but means one malformed unrelated physical object can suppress sunlight capture for every organism that tick. Need bounded diagnostics and a clear repair/failure policy.
+7. **P2 — source sample precomputation does not precompute exposure:** source coordinates/intensity are cached, but geometry/occlusion and receiver paths are rebuilt during the live tick. This is a likely hot path; cache invalidation must follow geometry/position/material revisions if later optimized.
+8. **P2 — approved approximation still unresolved:** the user's proposed radar-like single sweep/first hit may be a practical speed/accuracy trade-off, but the present algorithm is substantially richer. Compare energy allocation and shadow errors against an exact or trusted small-world reference before choosing a scalable approximation. No approximation is authorized by this audit.
+
+**Evidence inspected:** src/simulation/world_tone.rs (source parameters, cycle precompute, incident energy); src/simulation/world_tone_snapshot.rs (world geometry snapshot, first-hit checks, staged capture and final settlement); src/geometry/source_exposure.rs (visibility and exposed interval computation); src/simulation/simulation.rs (live tick invocation and energy totals); src/perception/harmonics.rs (material response/reservoir).
+
+- **Dependencies / downstream audits affected:** A5–A7, A9, A13–A15, A17–A20. A8 cannot be considered enabled-for-production-safe until the README discrepancy, finite source budget, whole-world inventory, and measured scalability are resolved.
+- **Decision required from project owner, if any:** no immediate decision needed to continue audits. The existing active behavior should not be silently disabled or retuned in this planning-only PR; a later implementation decision should follow the completed audit.
+- **Recommended smallest next change (if authorized):** after all audits, benchmark exact capture against the target population and a radar/first-hit approximation, record shadow and energy error, and reconcile source energy against a global budget. Until that is complete, treat live capture as active but not yet proven scalable or globally conserved. No production code change authorized now.
 
 ### A9 — Dissipation, heat, work, and environmental boundary
 
@@ -665,9 +742,9 @@ Do not claim chemistry unification complete until all applicable gates have evid
 | A3 COMBINE and bond storage | Gap found | Trial structure + balanced ledger transaction; structure clone per attempt; fluid transient special case | Caller matrix, fluid topology and clone-cost tests after audits |
 | A4 BREAK paths | Gap found | Shared realized-bond settle/commit; stored-material BREAK is zero-energy; recycling/decomposition paths identified | Stale/cancelled transformation and lifecycle material/energy tests after audits |
 | A5 Ledger transaction algebra | Gap found | Local balance equation verified; hand-maintained prepared ledger delta/rollback; world snapshot use unproven | Centralize reversible deltas and prove live inventory in A6 after audits |
-| A6 Whole-world energy inventory | Not started | — | — |
-| A7 Resonance and reaction coupling | Not started | — | — |
-| A8 World tone and capture | Not started | — | — |
+| A6 Whole-world energy inventory | Gap found | Snapshot is test-only; no production global balance gate; material-internal bond energy absent | Independent inventory and end-of-tick reconciliation after audits |
+| A7 Resonance and reaction coupling | Gap found | Four-component cap; no explicit energy magnitude bound or general reservoir dissipation policy; epsilon pruning | Deposit/withdraw/serialization/spectrum energy invariants after audits |
+| A8 World tone and capture | Gap found | Live capture active despite README/plan disabled claim; global source budget and scaling unproven | Resolve status, profile and compare sweep approximation, prove global budget after audits |
 | A9 Work, heat, dissipation | Not started | — | — |
 | A10 Stress/death/core breach | Not started | — | — |
 | A11 Post-death chemistry/material fate | Not started | — | — |
