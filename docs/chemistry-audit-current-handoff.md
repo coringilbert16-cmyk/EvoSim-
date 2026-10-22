@@ -190,3 +190,11 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Do not treat legacy world-save migration as a current required task. Current compatibility work is to revise diagnostic/observation JSON and tests so they represent the unified physical structure correctly. If world persistence is introduced later, migration/fail-closed handling becomes a prerequisite then.
 - This correction does not change single-authority structure, core identity, movement/geometry, cache invalidation, inventory, resonance, or division requirements.
 - **Next:** finish canonical aggregate/core-identity contract and diagnostic JSON impact matrix, then reconcile remaining chemistry audit rows. No source/test changes; refresh PR #205 head and CI before implementation.
+
+
+## Diagnostic JSON contract checkpoint — Section 17.79
+
+- **Plan commit:** `247f71340c8ad6d21788d694a2897f484d5c14d0`.
+- `src/infrastructure/diagnostics.rs` records `unit_count`, `bond_count`, `component_count`, `structural_mass`, and serialized `structure` from `organism.structure` only, while separately serializing the entire `reproductive_construction` object. With one authoritative graph, aggregate metrics must include attached units once; construction JSON must expose progress/core metadata and explicit sub-ledger values only, not a duplicate physical graph.
+- No dedicated tests for construction diagnostic JSON were found in the reviewed file. Add projection tests for aggregate counts/mass, stored-vs-attached counts, no duplicate physical graph in construction JSON, and exact-once child partition after division.
+- This is diagnostic output compatibility, not world-save/load migration. No source/test changes; other chemistry transaction tests and whole-world release gates remain open.
