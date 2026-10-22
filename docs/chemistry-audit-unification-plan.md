@@ -2579,3 +2579,24 @@ This refines, rather than reverses, Section 17.77: one physical graph remains th
 - Required tests: colliding source/destination ID ranges merge without endpoint aliasing; every incoming bond retains the same physical endpoints after remap; malformed/missing endpoints reject with no live mutation; parent core IDs remain unchanged; second-core references remap exactly; independent structural-energy inventory is identical before/after a pure graph merge.
 
 **Audit implication:** one authoritative graph is feasible in principle but requires a tested ID-remapping transaction, not vector concatenation. This helper is a candidate future implementation unit only after all audit templates are signed off. No source/test changes.
+
+
+### 17.82 Construction currently runs separate biological maintenance/death before division — owner model requires reconciliation — 2026-10-22
+
+**Status: Lifecycle contract gap confirmed at exact PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862`.** No source/test changes.
+
+- `advance_construction` builds a temporary `Organism` from `ReproductiveConstruction`, copies `developing_energy`, `developing_stress`, and `developing_maintenance_debt` into it, calls `apply_maintenance`, calls `validate_stress_state`, and—if not dead—calls resonance-overload BREAK. It then copies the temporary organism's energy/stress/debt/structure back into construction state.
+- This is a separate biological-maintenance/death/overload lifecycle for the unfinished core even though the owner-approved model says the parent remains the sole organism/owner until division. It also duplicates the structural graph, while the temporary child has its own empty resonance reservoir and its own stress threshold.
+- In `Simulation::tick`, a returned `ConstructionStatus::Dead` is included in the same finish branch as Ready and Detached. `finish_reproduction` takes the construction record and can still return a child when the developing structure is nonempty, even if readiness is false. Thus “Dead” does not reliably mean construction was abandoned; this needs a deterministic test and explicit intended semantics before implementation.
+- **Recommended model implication:** before division, apply biological maintenance/stress/death eligibility to the parent aggregate, not to a temporary child organism. Construction should be an internal process owned by the parent; the unfinished core is physical structure and geometry, not a second living organism. Keep any construction reserve as an explicitly parent-owned sub-holder only if needed for budgeting; it must not imply independent biological agency. A parent death stops construction progress while leaving all physical units and stored material in the world for ordinary chemistry.
+- Do not assume this recommendation authorizes silently deleting `developing_energy`, stress, or debt fields. First determine which are necessary accounting sub-holders versus duplicated child-organism state, then update the material/energy inventory and maintenance acceptance matrix.
+
+**Required tests:**
+
+1. No pre-split maintenance/death/resonance-overload processing occurs on a separate temporary organism.
+2. Construction advances only while parent is biologically eligible; dead parent retains construction physical units/material/energy but performs no growth/maintenance/finish behavior.
+3. Construction status cannot produce an offspring after a failed/dead construction unless an explicit, tested recovery rule permits it.
+4. Parent maintenance accounts for the full attached aggregate exactly once; unpaid maintenance/debt and stress are applied to the parent owner.
+5. If a separate reserve sub-holder remains, transfers are atomic and total parent-owned energy is conserved through waiting, growth, death, and division.
+
+**Open owner-facing semantic point:** confirm whether the parent’s existing maintenance/stress model should apply to the entire aggregate during internal budding, with no independent developing-core maintenance/death state. The current owner rules strongly suggest this, but the detailed energy/stress allocation should be explicit before code changes.
