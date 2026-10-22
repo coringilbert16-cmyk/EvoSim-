@@ -31,11 +31,12 @@ This README is the current repository guide and implementation-status summary. O
 - `src/construction/` and `src/organism/` — construction, organism state, decisions, and reproduction.
 - `src/perception/` — harmonic response, movement, and related perception logic.
 - `src/materials/` — resource definitions, physical-material handling, storage, transfer, and restoration.
+- `docs/README.md` — documentation index, grouped by architecture, geometry, chemistry, Bob, and organism-development topics.
 - `docs/` — focused architecture, implementation, and audit documents.
 - `scripts/`, `.github/workflows/` — repository checks and automation.
 - `ui/` — user-interface assets.
 
-`src/main.rs` is also the crate-level module registry: explicit `#[path]` declarations preserve existing module names while implementation files are grouped by responsibility. The `src/tests/` directory contains crate-internal contract and simulation tests; the top-level `ui/` contains browser assets, while `src/ui/` contains Rust-side visualization support. For current feature-level details, use the focused documents under `docs/` and the most recent dated checkpoint above. The handoff archive retains earlier decisions and evidence for traceability.
+`src/main.rs` is also the crate-level module registry: explicit `#[path]` declarations preserve existing module names while implementation files are grouped by responsibility. The `src/tests/` directory contains crate-internal contract and simulation tests; the top-level `ui/` contains browser assets, while `src/ui/` contains Rust-side visualization support. For current feature-level details, start with the [documentation index](docs/README.md), then use the focused document and most recent dated checkpoint above. The handoff archive retains earlier decisions and evidence for traceability.
 
 ## Build and verification
 
