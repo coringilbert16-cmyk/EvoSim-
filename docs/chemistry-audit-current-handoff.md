@@ -17,7 +17,7 @@
 - Last fully verified implementation head: `686bcd0905d02c6ac4bee87e40280150765b63f9`; workflow [39814502886](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39814502886): **577 passed, 28 failed, 1 ignored**. All 28 failing test identities matched baseline exactly, with no new/missing identities. Cache missing-manifest rejection passed.
 - At that head, format, source-size, architecture, Bob persistence/reopen/concurrency, focused fluid transaction/coalescence/restoration, and chemical BREAK steps passed.
 - Strict Clippy failed with 34 application-target and 15 test-target diagnostics; normalized messages matched baseline.
-- Latest implementation head: `55e47a3fff94eb7c3cc79c23b558f5bc5a530ba7`.
+- Latest implementation head: `ea2754be7fb40d7b527c048a4029a882b481ccc2`.
 - Intermediate workflow [39817430683](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39817430683) on `4f4b2af` finished with **581 passed, 28 failed, 1 ignored**; the 28 failures matched baseline exactly. The containment integration test still failed at fixture setup because no full Carbon fits in the seed chamber; the independent inventory assertion was not reached. Its source fixture correction did not resolve the baseline geometry failure. No exact-head workflow result has yet been returned for `a1cc6e2`.
 
 ## Phase tracker
@@ -49,7 +49,7 @@ At `0148437`:
 
 ## Next actions
 
-1. Check workflow [39819580515](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39819580515) for head `c22fe33` and the exact-head workflow for `55e47a3`; verify the Hydrogen containment inventory assertion, active BREAK ownership inventory assertion, both negative oracle tests, cache append rollback test, full-suite baseline identity comparison, and Clippy.
+1. Check workflow [39819580515](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39819580515` for head `c22fe33` and the exact-head workflow for `ea2754b`; verify Hydrogen containment, active BREAK ownership, storage-restore inventory, both negative oracle tests, cache append rollback, full-suite baseline identity comparison, and Clippy.
 2. If the containment test fails, inspect its exact assertion/log first. Do not pull PR #196 constructor/Bob work into this branch.
 3. Continue Phase 3 material ownership/rollback/restore/decomposition coverage and Phase 4 persistence failure-injection coverage.
 4. Update this handoff and the detailed plan whenever the implementation head or meaningful verification state changes. No merge until the approved release gates have evidence.
