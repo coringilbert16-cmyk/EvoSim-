@@ -65,7 +65,7 @@ Audited the current `main` commit `8c84978cd003738d94a74eef9114b711689c3804` (po
 2. Keep the concise README/archive/index model and refresh verification status only from completed exact-head runs.
 3. Audit documentation incoming links before any physical moves.
 4. Finish targeted Clippy cleanup separately from file extraction.
-5. Audit `src/construction/runtime.rs` boundaries and the experimental workflow lifecycle before deciding whether either should change.
+5. Audit `src/construction/runtime.rs` boundaries and the experimental workflow lifecycle before deciding whether either should change. The construction-runtime boundary audit is now documented; code extraction remains deferred.
 6. Split only one large source responsibility at a time, with focused tests and full CI comparison against the accepted baseline.
 
 ## Non-goals
