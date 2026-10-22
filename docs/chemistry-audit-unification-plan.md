@@ -24,6 +24,9 @@ A successful audit is not a claim that the system is already unified. Mark each 
 
 ## 2. Non-negotiable design constraints
 
+> **Research annotation — shared mechanisms and thermodynamic soundness (Section 18: R1, R2, R3).** Treat reaction rules as a network that must be checked for conserved material and forbidden energy-producing cycles, not merely as individually plausible events. Reuse the same authoritative BREAK/COMBINE settlement paths across ordinary chemistry, stress, and post-death chemistry. The literature supplies validation methods and modeling patterns, not a replacement for EvoSim's owner-approved physics.
+
+
 - **Shared mechanism, not parallel special cases.** Chemical BREAK, stress-triggered BREAK, and post-death bond changes should converge on the same authoritative physical validation and energy settlement. Lifecycle orchestration may differ only where necessary.
 - **Decomposition is chemistry after death.** Do not create a separate decomposition law that bypasses ordinary material, bond, or energy rules.
 - **Energy is accounted for once.** Separate external input, usable energy, persistent structural/bond energy, work, and dissipated heat. Internal transfers cancel in the world total. Release a stored bond energy at most once.
@@ -68,6 +71,9 @@ This section describes evidence gaps, not open owner decisions. Where earlier au
 10. Update this document as each audit completes. Update the root README only after verified decisions/status change; keep it the authoritative concise summary.
 
 ## 5. Audit register — completed read-only record
+
+> **Research annotation — independent proof layers (Section 18: R1–R3).** Keep three claims separate: (a) reaction/network rules are internally valid, (b) each runtime transition settles its source/holder/sink atomically, and (c) whole-world material and energy inventories reconcile. A proof at one level does not establish the others. Add reaction-network invariants as test or audit tools where compatible with the finite EvoSim resource model; do not imply this has already been implemented.
+
 
 **Status interpretation for this handoff:** A0–A21 have audit records and summary rows; the final source-path closure is recorded in Section 16. Earlier “Decision required from project owner” fields and provisional recommendations are historical snapshots, not current owner requests. Apply Section 14 for settled design direction, Section 15 for the README/main reconciliation, and Section 16 for the final death, persistence/cache, and material-ownership call-path checks. A settled decision can still have an implementation gap. No audit is marked verified merely because a helper has tests.
 
@@ -169,6 +175,9 @@ Do not mark an audit Verified solely because code compiles or a helper has unit 
 
 ### A2 — Core chemistry mathematics and dimensional consistency
 
+> **Research annotation — reaction-network invariants (Section 18: R1, R2).** Evaluate whether a compact formal representation of reactants/products and net changes can support automated conservation checks. The finite-network literature shows how stoichiometric invariants expose mass-creation/destruction and how energy-cycle constraints can expose perpetual-motion loops. Adapt only the checks that map to EvoSim's resource constituents and energy ledger; EvoSim's physical geometry and discrete resource rules still require separate validation.
+
+
 **Questions**
 - What are the authoritative definitions and units for chemical position, interaction potential, contact attenuation, attraction force, reaction accumulation, normalized chemistry-to-energy conversion, dissipation, and activation barrier?
 - Are constants defined once and used consistently?
@@ -214,6 +223,9 @@ Do not mark an audit Verified solely because code compiles or a helper has unit 
 - **Recommended smallest next change (if authorized):** add explicit unit/quantity documentation and adversarial overflow/long-run tests after the full audit, then decide whether the normalized-to-energy convention or accumulator range needs redesign. No code change authorized now.
 
 ### A3 — Physical interaction, COMBINE, formation work, and stored bond energy
+
+> **Research annotation — spatial reaction models (Section 18: R4, R5).** Smoldyn and MCell are useful precedents for separating local encounter eligibility from reaction probability/settlement. For EvoSim, retain live geometry/contact as authoritative; use candidate filtering to avoid testing impossible pairs, and keep cached data strictly non-authoritative. A reaction-network abstraction must not bypass collision, bond topology, or transaction rollback.
+
 
 **Questions**
 - How does a candidate physical interface become eligible for COMBINE?
@@ -344,6 +356,9 @@ Equivalently, the residual source minus all destinations must be zero within EPS
 
 ### A6 — Whole-world energy inventory and conservation proof
 
+> **Research annotation — two independent conservation checks (Section 18: R1, R2).** Add both transition-level assertions and global inventory checks. Reaction-network conservation laws can catch impossible net transformations, while world-scale ledgers catch runtime loss/duplication across holders and failed transfers. Energy requires an independent thermodynamic/ledger constraint; mass conservation alone cannot prove energy consistency.
+
+
 **Questions**
 - What energy exists at tick zero and at each subsequent tick?
 - Can we independently enumerate usable energy, persistent bond/structural energy, retained resonance energy, external input, work, heat/dissipation, and any legitimate boundary output?
@@ -387,6 +402,9 @@ Equivalently, the residual source minus all destinations must be zero within EPS
 
 ### A7 — Resonance spectrum, reaction compatibility, and stored signal energy
 
+> **Research annotation — emergent networks and energy pathways (Section 18: R2, R3).** Treat resonance as a way chemistry may become coupled, not as a second energy source. Test whether reaction/capture pathways transfer energy among explicit holders, and reject cycles that increase total usable energy without a legitimate external input. RAF theory is a useful conceptual lens for self-sustaining reaction sets, but does not itself validate EvoSim's energy equations.
+
+
 **Questions**
 - Are tone amplitudes/frequencies distinct from physical energy?
 - Is retained resonance a finite physical energy reservoir with explicit deposits, withdrawals, capacity, and dissipation?
@@ -427,6 +445,9 @@ Equivalently, the residual source minus all destinations must be zero within EPS
 - **Recommended smallest next change (if authorized):** after all audits, add invariant/property tests for deposit, compatible withdrawal, serialization validation, and energy-preserving spectral transforms; choose explicit caps or dissipation only if the complete physical model requires them. No production code change authorized now.
 
 ### A8 — World tone/sunlight source, exposure, occlusion, propagation, and capture
+
+> **Research annotation — spatial simulation and approximation (Section 18: R4, R5).** Spatial stochastic simulators demonstrate that geometry and locality can be represented without globally checking every possible interaction. Use this as precedent for a bounded spatial acceleration and exact-small-world oracle: compare the fast approximation against a trusted slower calculation on small scenes, while retaining the owner-approved one-source sweep, occlusion, onward frequency-shifted propagation, and explicit energy accounting. These references do not endorse literal ray reflection or per-object tracing.
+
 
 **Questions**
 - Are source position, frequency, intensity, orbit/day-cycle, and per-width units explicit and deterministic?
@@ -475,6 +496,9 @@ Equivalently, the residual source minus all destinations must be zero within EPS
 - **Recommended smallest next change (if authorized):** after all audits, benchmark exact capture against the target population and a radar/first-hit approximation, record shadow and energy error, and reconcile source energy against a global budget. Until that is complete, treat live capture as active but not yet proven scalable or globally conserved. No production code change authorized now.
 
 ### A9 — Dissipation, heat, work, and environmental boundary
+
+> **Research annotation — thermodynamic cycle checks (Section 18: R1, R2).** Distinguish conserved energy transfers from true external input and dissipation. Audit reaction loops for unearned energy production and ensure heat/dissipation is not also counted as an internal transfer. Reaction-network thermodynamics is a reference for cycle consistency, not permission to add unapproved physical quantities or equations.
+
 
 **Questions**
 - What is the meaning and unit of dissipation at reaction, resonance, source capture, maintenance, movement, and bond break?
@@ -777,6 +801,9 @@ Record decisions here with date, rationale, affected audits, and any superseded 
 
 ### A14 — Chemistry cache authority, keys, fallback, and performance
 
+> **Research annotation — hybrid modeling and candidate filtering (Section 18: R4, R5).** More detailed simulators control cost by restricting expensive calculations to plausible local interactions and by using abstractions where they preserve the relevant invariants. For EvoSim, profile candidate enumeration, cache only stable derived data with explicit invalidation, and keep a small exact oracle for correctness. Do not trade away authoritative contact/bond validation or conservation to gain speed.
+
+
 **Audit record — 2026-10-22**
 
 **Status: Gap found.**
@@ -883,6 +910,9 @@ Record decisions here with date, rationale, affected audits, and any superseded 
 - **Recommended smallest next change (if authorized):** after all audits, add explicit finite checks at accumulator boundaries and define a measured tolerance/pruning budget with adversarial tests. No production code change authorized now.
 
 ### A19 — Scalability and profiling at target populations
+
+> **Research annotation — computational trade-offs (Section 18: R4, R5).** Use a layered benchmark: exact small-world oracle first, then bounded profiling at representative object/population counts. Compare accuracy, runtime, and memory; avoid assuming that a more detailed particle model is automatically a better fit for EvoSim's geometry and performance envelope.
+
 
 **Audit record — 2026-10-22**
 
@@ -1278,6 +1308,9 @@ This decision supersedes any earlier open question about whether attached reprod
 
 ### 17.1 Target contract — invariants every phase must preserve
 
+> **Research annotation — formalize before optimizing (Section 18: R1–R3).** Where possible, express material and energy invariants as executable assertions over the finite resource catalog and transaction deltas. Keep rule-level validity, atomic runtime settlement, and whole-world inventory as separate acceptance gates. This is a proposed audit/test technique, not a claim that the current implementation already has a complete formal reaction network.
+
+
 1. **Resource identity and units (D1, D7).** Oxygen is canonical for resource ID 6. Resource names/IDs must resolve through the authoritative catalog. Unknown/stale names fail visibly at load, restore, and transaction boundaries; they must not quietly contribute zero energy/mass or act as aliases. Reactivity and chemical position remain distinct quantities. Define units/meaning for mass, potential energy, interaction potential, force, work, heat, resonant energy, bond energy, and geometry/volume.
 2. **Indivisible base constituents (D8).** A base atom is an integer count and cannot be fractionally extracted, split, or silently discarded. Geometry—especially fluid shape/area—is a separate quantity and must not be encoded as fractional atom count. Ecological aggregation may group integer counts by resource but may not fractionalize per-resource inventory.
 3. **One energy accounting equation (D2–D4, D11).** Every holder and flow is counted exactly once. Initialization is a one-time external-source transaction, not an implicit free baseline also counted as external input. Internal transfers cancel at world scale. Chemical release, source input, work, heat, escaped signal energy, and changes in usable/resonant/structural stores have distinct meanings. Numerical comparison tolerance is not physical dissipation; physical energy may not disappear through epsilon pruning.
@@ -1306,6 +1339,9 @@ This decision supersedes any earlier open question about whether attached reprod
 
 ### 17.3 Required independent accounting definitions
 
+> **Research annotation — conservation-law cross-check (Section 18: R1, R2).** Independently derive invariant totals from the physical resource representation and compare them against the ledger. If a reaction-network/stoichiometric representation is introduced for tests, ensure it is derived from the same approved reaction semantics but independently computes net constituent changes; avoid validating the ledger by merely reusing the ledger's own calculation.
+
+
 **Energy oracle.** Define the world balance from independently enumerated holder state, not cumulative ledger fields alone.
 
 - **Stores:** usable energy, resonant reservoir energy, and explicitly energy-bearing realized bonds.
@@ -1327,6 +1363,9 @@ This decision supersedes any earlier open question about whether attached reprod
 
 ### 17.5 Performance and test discipline
 
+> **Research annotation — exact oracle plus optimized path (Section 18: R4, R5).** Spatial simulators provide precedent for locality-aware acceleration, but EvoSim should establish correctness with small exact scenes before optimizing. Keep each benchmark and test bounded, report object counts/runtime, and test cache invalidation and geometry edge cases. Approximation is acceptable only when its error is measured and the governing physical constraints remain intact.
+
+
 - Keep each CI/test command within the hard five-minute limit. Timeout is incomplete evidence, not success or a fabricated failure count.
 - First run focused tests for the changed invariant and rollback paths, then integration coverage, then the full suite and strict Clippy.
 - Establish repeatable sparse/dense workloads with thousands of objects, stable seeds, recorded hardware/configuration, and cache-cold/cache-hot measurements before choosing numeric budgets.
@@ -1334,6 +1373,9 @@ This decision supersedes any earlier open question about whether attached reprod
 - Compare named failing tests/assertions to A0 where available. The original identity-extraction limitation has been superseded by the named-test comparison recorded in Section 17.7; retain the exact run/head context when updating that comparison.
 
 ### 17.6 Release gate — no phase may be called “unified” without evidence
+
+> **Research annotation — evidence standard (Section 18: R1–R5).** Release evidence should include: (1) reaction-level invariant checks, (2) injected transaction-failure tests, (3) independent whole-world inventory reconciliation, (4) exact-small-world spatial comparison, and (5) at least one emergence-oriented scenario demonstrating that self-sustaining behavior is not hard-coded. These complement rather than replace the existing owner-approved gates.
+
 
 - [ ] D1–D16 map to code/tests/docs; no settled decision remains an owner question. D16 is documented and owner-approved, but its one-graph representation and resonance receiver mapping are not yet implemented or verified.
 - [ ] Independent energy and integer constituent oracles do not reuse production counters as their source of truth.
@@ -3056,3 +3098,74 @@ Consequences:
 - The current simulation caller obtains `reproductive_construction` mutably while passing `&organism.structure` immutably. A canonical aggregate migration therefore needs an API/caller change that can stage from the parent’s full structure and then commit back to that same parent; adding a graph append utility alone cannot meet the contract.
 - **Audit decision:** do not patch `child.usable_energy` to `parent.usable_energy` in isolation. No further owner decision is needed. Next implementation slice should establish a transaction helper with a live parent-owned aggregate caller and failure tests for insufficient parent energy, rejected/missing source removal, invalid geometry/ID remapping, and unchanged parent structure/storage/energy/ledger on rejection. The old developing-energy transfer and temporary-organism lifecycle must be removed as part of that coherent slice, not retained as a parallel path.
 - No source/test change from this audit. Focused workflow `39856976428` for source head `c57926fdf551472cfa274ca1f3550d1a93b29295` was still running when checked; no result claimed.
+
+
+## 18. Research references and annotated application to EvoSim — 2026-10-22
+
+**Purpose.** These references are an external research crosswalk for the plan, not a new physics specification and not evidence that any feature is already implemented. Use them to sharpen audits, design tests, and identify efficient abstractions. The owner-approved decisions in Sections 14 and 17 remain authoritative. In particular, do not import assumptions from models that do not conserve material, use different energy semantics, or omit EvoSim's physical geometry.
+
+### 18.1 Annotated references
+
+**R1 — “What makes a reaction network ‘chemical’?” (Journal of Cheminformatics, 2022).** [Open-access article](https://doi.org/10.1186/s13321-022-00621-8) · [PMC full text](https://pmc.ncbi.nlm.nih.gov/articles/PMC9484159/).
+
+- **Relevant lesson:** a reaction network can be represented by reactants, products, and a stoichiometric matrix; conservation laws can be expressed as invariants, while thermodynamic-soundness conditions can rule out classes of impossible energy-producing cycles in finite networks.
+- **Apply to:** Sections 2, A1–A6, A9, 17.1, 17.3, 17.6, and the transaction/conservation matrix in Sections 17.84–17.100.
+- **Concrete use:** build test-only checks over EvoSim's actual resource/constituent changes and reaction outcomes; test for material invariants and forbidden net-energy creation cycles. Keep the runtime ledger and independent oracle independent.
+- **Limit:** EvoSim's seven resource IDs, constituent representation, bond mechanics, and energy properties are not automatically equivalent to ordinary molecular formulas. First prove that any formal mapping is faithful; do not fabricate stoichiometry where the current model has no such definition.
+
+**R2 — Avanzini, Falasco & Esposito, “Thermodynamics of non-elementary chemical reaction networks” (New Journal of Physics, 2020).** [Open-access article](https://doi.org/10.1088/1367-2630/abafea). See also Qian, “Stoichiometric network theory for nonequilibrium biochemical systems” (2003), [article DOI](https://doi.org/10.1046/j.1432-1033.2003.03357.x).
+
+- **Relevant lesson:** network-level energy accounting needs cycle consistency and explicit treatment of dissipation; mass balance alone does not establish thermodynamic validity.
+- **Apply to:** A5–A9, A12, A16, 17.3, 17.6, and all source→holder→sink/failure matrices.
+- **Concrete use:** verify that internal transfers cancel, external inputs have a named source, dissipation is counted once, and no closed reaction cycle manufactures usable energy. Keep any thermodynamic check aligned to EvoSim's owner-approved equations rather than importing chemical-potential or rate equations wholesale.
+- **Limit:** these papers address physical chemical networks with assumptions that may not match EvoSim's abstract resource model; use as consistency principles and audit methods, not as direct equations to copy.
+
+**R3 — RAF theory / “Autocatalytic Networks at the Basis of Life’s Origin and Organization” (Life, 2018).** [Open-access review](https://pmc.ncbi.nlm.nih.gov/articles/PMC6315399/).
+
+- **Relevant lesson:** self-sustaining autocatalytic sets can be analyzed in terms of whether reactions are supported by a supplied food set and the products of the network itself. This gives a formal vocabulary for chemistry that sustains further chemistry without assigning biological roles in advance.
+- **Apply to:** Sections 1, A7, A10–A11, 17.1, 17.6, and future emergence/viability tests.
+- **Concrete use:** once the underlying chemistry and accounting gates are trustworthy, create a diagnostic/test scenario that asks whether a local reaction network can persist or regenerate its required components under finite environmental inputs. Treat autocatalysis as an observed property, not a hard-coded organism classification.
+- **Limit:** RAF closure is not equivalent to a spatially viable EvoSim organism, does not prove evolution or reproduction, and does not establish energy feasibility unless energetic constraints are added separately.
+
+**R4 — Smoldyn, spatial biochemical simulation software.** [Official site and documentation](https://www.smoldyn.org/).
+
+- **Relevant lesson:** individual molecules can be simulated with local movement, reaction, binding, and surface constraints while treating much of the rest of the environment implicitly. This is a precedent for combining local physical events with computational abstractions rather than evaluating every possible pair globally.
+- **Apply to:** A3, A8, A14, A15, A19, 17.5, and the world-tone exact-small-world/scaling gate in Section 17.91.
+- **Concrete use:** investigate spatial indexing, local candidate generation, and exact-small-scene comparison before choosing an optimization. Preserve live geometry/contact as authoritative and quantify approximation error, runtime, and memory.
+- **Limit:** Smoldyn is a stochastic molecular simulator with different geometry, units, and physics; it is not a drop-in engine and does not validate EvoSim's proposed sunlight/world-tone sweep.
+
+**R5 — MCell / CellBlender, spatial stochastic reaction-diffusion modeling.** [Official documentation](https://www.mcell.org/documentation/index.html).
+
+- **Relevant lesson:** surface geometry, spatial encounter, stochastic reaction events, and complex boundaries can be represented as separate but interacting parts of a model. Its documentation is a useful design reference for the distinction between a geometrically possible encounter and a reaction event.
+- **Apply to:** A3–A4, A8, A15, A19, and the mutation/failure matrices in Sections 17.35–17.45 and 17.84–17.100.
+- **Concrete use:** keep physical eligibility, reaction selection, and atomic settlement conceptually separate; use failure injection to verify that rejected events leave both geometry and inventory unchanged. Consider locality-aware filtering for scale.
+- **Limit:** MCell's molecular and surface semantics differ from EvoSim's rigid/fluid resources and owner-approved bond rules; borrow architectural lessons, not reaction behavior.
+
+**R6 — Hickinbotham et al., “Maximizing the Adjacent Possible in Automata Chemistries” (Artificial Life, 2016).** [Open-access MIT Press article](https://direct.mit.edu/artl/article/22/1/49/2837/Maximizing-the-Adjacent-Possible-in-Automata).
+
+- **Relevant lesson:** artificial chemistries for open-ended evolution require deliberate separation between the stable low-level “physics” and the evolving behaviors enabled by that physics; soft/nondeterministic interactions and non-guaranteed persistence/death can affect evolutionary possibilities. The paper discusses Stringmol as a concrete automata-chemistry example.
+- **Apply to:** Sections 1, 2, A10–A11, A19–A21, 17.1, and future emergence/evolution validation.
+- **Concrete use:** after physical accounting is reliable, evaluate whether rules allow multiple behaviors to emerge from shared mechanisms, whether death leaves material available to ordinary chemistry, and whether viability is inferred from behavior rather than a list of hard-coded roles.
+- **Limit:** Stringmol explicitly makes simplifying assumptions, including unconstrained/saturated raw-material availability and an energy model unlike EvoSim's. Do not import those assumptions; EvoSim must retain its own conservation and geometry requirements.
+
+### 18.2 Crosswalk: where the lessons apply
+
+| EvoSim plan area | Research lesson to apply | Required evidence / guardrail |
+|---|---|---|
+| Resource/reaction definitions (A1–A2) | Formal reaction representation and invariants (R1–R2) | Test net constituent changes against approved resource semantics; document any mapping limits. |
+| COMBINE/BREAK, stored bonds, transformations (A3–A5) | Separate encounter eligibility, reaction rules, and settlement (R1, R4, R5) | Failed or rejected transitions preserve geometry, ownership, and inventory atomically. |
+| World inventory and energy ledger (A5–A9, A12, A16) | Independent conservation and cycle checks (R1–R2) | Internal transfers cancel; external sources are explicit; no unearned energy cycles; dissipation counted once. |
+| Resonance and world tone (A7–A8, Section 17.91) | Locality and bounded spatial approximation (R4–R5) | Exact-small-world oracle, occlusion coverage, energy reconciliation, measured speed/accuracy trade-off. |
+| Death and post-death chemistry (A10–A11, Phase 8) | Chemistry continues without a parallel decomposition law (R2, R3, R6) | Dead material remains physically accounted for and can undergo ordinary chemistry; biological processing remains gated. |
+| Cache and scalability (A14, A19, Sections 17.48–17.50, 17.91) | Optimize candidate discovery, not physical authority (R4–R5) | Profiled runtime/memory; cache invalidation tests; exact oracle comparison. |
+| Viability and emergence (Sections 1, A7, A10–A11, 17.6) | Autocatalysis and open-ended artificial chemistry (R3, R6) | Treat as a later diagnostic after conservation gates; no hard-coded role or premature claim of organism viability. |
+| Test strategy and release gates (Sections 5–6, 17.3–17.6, 17.84–17.100) | Layered independent proof (R1–R5) | Network-level checks, transaction-failure tests, global inventory, exact-small-world oracle, and bounded performance measurements. |
+
+### 18.3 Adoption rules
+
+1. **Do not replace the owner-approved model with a cited model.** References are tools for comparison, not authority over EvoSim decisions.
+2. **No new production implementation is authorized by this bibliography.** PR #204 remains documentation-only; any resulting code change belongs on PR #205 after the required focused audit.
+3. **Do not call chemistry unified based on literature alignment.** The Section 17.6 release gate and whole-world conservation evidence remain controlling.
+4. **Keep exactness and approximation explicit.** Use an exact small-case oracle before adopting spatial shortcuts, and preserve contact/bond validation and transaction atomicity.
+5. **Keep emergence testing downstream of trustworthy physics.** RAF/autocatalytic and artificial-chemistry concepts are useful only after material, energy, death, and spatial accounting are reliable.
+
