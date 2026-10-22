@@ -311,3 +311,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - The independent energy oracle and world-tone receiver collector still enumerate `developing_structure` separately from the parent's graph. D16 requires one parent-owned attached graph, one receiver enumeration for all attached units, stored-material capture excluded, and inventory/diagnostics/movement/cavity identity updated together. Do not patch the sunlight receiver alone.
 - Death remains ordinary chemistry on the parent-owned physical aggregate; no death-time ownership transfer or special decomposition object. A bounded-live-tick regression is still needed for a breached parent with non-empty storage and active construction, using independent material and energy-holder snapshots. The legacy decomposition path remains quarantined.
 - **Next:** close world-tone exact-small-world/performance oracle and whole-world material/energy accounting, reconcile the exit checklist, and enumerate remaining gates. No source/test changes until all audit templates close.
+
+
+## Resume checkpoint — world-tone oracle/performance (2026-10-22)
+
+- **PR #204 plan commit:** `06ae53673430a20a7f0e7bdce9c9ff57eab173e9` (Section 17.91). PR #204 remains documentation-only.
+- **PR #205 audited head:** `12d8079230458da68a8dc3755a1d6a9b41347862`. No source/test changes.
+- Current world-tone path stages reservoir updates and validates path-width consistency plus incident = retained + heat + escaped. Existing tests cover analytic individual shapes, partial/full shadows, receiver allocation, and local conservation. No independent exhaustive small-world oracle for the full path/receiver pipeline or current reproducible thousand-body performance benchmark was found in the reviewed tests.
+- Required gate: deterministic tiny worlds with independent geometric/exhaustive lane oracle, attached-vs-stored receiver cases, downstream frequency-shifted propagation, and independently recomputed energy totals; plus a bounded reproducible scale benchmark across increasing object counts. Historical 272-second geometry test is not fresh performance evidence.
+- D16 must be implemented across the authoritative graph and receiver map, not patched into sunlight alone. **Next:** finish whole-world material/energy proof and reconcile all audit rows with Section 17.6/phase tracker; then refresh exact PR #205 head/CI before implementation.
