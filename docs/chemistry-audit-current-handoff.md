@@ -1,6 +1,6 @@
 # Chemistry Unification — Current Handoff
 
-**Plan (latest recorded plan commit):** `0f66f7b5ae7d15244306afc30529a110493054a3`  
+**Plan (latest recorded plan commit):** `5cbd1adcd1d109c16359a549bccd7a58b0e9c582`  
 **PR #205 last audited head (historical; refresh before implementation):** `12d8079230458da68a8dc3755a1d6a9b41347862`  
 **CI:** [39833438679](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39833438679).
 
@@ -26,7 +26,7 @@ PR #204 is documentation-only. Full decisions and audit records are in `docs/che
 
 ## Next
 
-The current A0–A21 summary and Section 17.7 tracker are reconciled. Section 17.55 consolidates source→holder→sink paths; Section 17.56 maps energy APIs. Owner decision D16 / Section 17.83 now explicitly approves one authoritative physical graph: no reproductive-material tag and no separate physical `developing_structure`; any structurally attached unit is ordinary structure and participates in owner resonance, while only stored material is excluded. Finish remaining call-site/failure matrix before implementation. After audit closure, prioritize stored BREAK atomic ownership, checked acquisition/expulsion returns, movement geometry/ledger atomicity, bondless key cleanup, catalog fingerprint and prepared-ledger invariants, and construction-transfer rejection behavior. Re-fetch PR #205 head and CI before any code change. Do not claim chemistry unified until Section 17.6 release gates have evidence.
+The current A0–A21 summary and Section 17.7 tracker are reconciled. Section 17.55 consolidates source→holder→sink paths; Section 17.56 maps energy APIs. Owner decision D16 / Section 17.83 now explicitly approves one authoritative physical graph: no reproductive-material tag and no separate physical `developing_structure`; any structurally attached unit is ordinary structure and participates in owner resonance, while only stored material is excluded. The source/holder and transaction-failure matrix is consolidated in Section 17.84. A targeted exact-head mutation-call-site cross-check found no additional production `EnergyLedger.transfer` caller beyond construction reserve and the quarantined recycler; it refined movement rollback to include pushed organisms, pushed physical field objects, and their indexes. Remaining audit gates include aggregate graph/core identity, deterministic failure tests, cache invalidation/restart, world-tone exact-small-world oracle, post-death holder reachability, and whole-world conservation. After audit closure, prioritize stored BREAK atomic ownership, checked acquisition/expulsion returns, complete movement rollback, bondless key cleanup, catalog fingerprint and prepared-ledger invariants, and construction-transfer rejection behavior. Re-fetch PR #205 head and CI before any code change. Do not claim chemistry unified until Section 17.6 release gates have evidence.
 
 Future reproduction is separate: start adjacent budding at 100% original size, grow to 160% total, split into two roughly 80%-size children.
 
@@ -236,3 +236,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Sections 17.70–17.81 are historical evidence/recommendations to be read through this decision. Section 17.82's observation that current source has a separate graph remains valid; its exact parent maintenance/stress allocation question is still open, but cannot justify restoring a second physical graph.
 - No source/test changes. Audit closure remains blocked on the transition/failure matrix, core-specific cavity identity, inventory and diagnostic JSON reconciliation, world-tone exact-small-world tests, cache invalidation/restart, and whole-world conservation.
 - **Next:** complete the source/holder and transaction-failure matrices; then update/reconcile the exit checklist and release gates. No implementation until every audit template is complete. Before the first implementation change, refresh PR #205 head and current CI.
+
+## Source/holder matrix reconciliation — Section 17.84
+
+- **Plan commit:** `5cbd1adcd1d109c16359a549bccd7a58b0e9c582`. PR #204 remains documentation-only.
+- Section 17.84 applies D16 to current source and classifies the transition rows as locally inspected, confirmed gap, or test-required. The prior owner-decision blocker for attached-structure resonance is closed; implementation/oracle evidence is not.
+- Exact PR #205 head reviewed remains `12d8079230458da68a8dc3755a1d6a9b41347862`; no source/test files changed.
+- New refinement: movement rejection after geometry succeeds can leave pushed organisms and pushed field physical objects changed as well as the mover. Rollback/test scope includes all pushed entities, cell indexes, spatial index, construction anchors, and progress.
+- Targeted source review found no additional production `EnergyLedger.transfer` caller beyond the already-mapped construction-reserve transfer and quarantined legacy recycler. This is not proof of complete material failure-injection coverage.
+- **Next:** continue checking the remaining production material-mutation call sites against Section 17.84; then reconcile the phase tracker and release gates. Audit is not closed; do not change source/tests until all audit templates are complete.
