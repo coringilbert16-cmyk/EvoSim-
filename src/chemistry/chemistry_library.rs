@@ -10,7 +10,12 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 3;
+pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 4;
+
+/// Increment this fingerprint whenever chemistry equations, constants, or
+/// resource-chemistry semantics change. Existing derived cache rows are never
+/// relabeled or migrated across fingerprints.
+pub const CHEMISTRY_EQUATION_FINGERPRINT: &str = "evosim-chemistry-v1|potential=exp-k-dmax|contact=(1-d/r)^2|Dmax=13|k=1/13|contact_radius=1|max_force=1|energy_distance=contact_radius|energy_scale=max_force*energy_distance|reaction_dissipation=0.1/tick|catalog=resource-chemistry-v1";
 
 fn quantize(value: f64) -> i64 {
     (value * 1_000_000_000.0).round() as i64
@@ -172,10 +177,8 @@ pub struct ChemistryRecord {
 
 impl ChemistryRecord {
     fn is_valid(&self) -> bool {
-        matches!(
-            self.key.schema_version,
-            2 | CHEMISTRY_LIBRARY_SCHEMA_VERSION
-        ) && !self.key.material_a.is_empty()
+        self.key.schema_version == CHEMISTRY_LIBRARY_SCHEMA_VERSION
+            && !self.key.material_a.is_empty()
             && !self.key.material_b.is_empty()
             && !self.key.interface_class.is_empty()
             && !self.key.interface_signature.is_empty()
@@ -187,6 +190,7 @@ impl ChemistryRecord {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ChemistryLibraryManifest {
     pub schema_version: u32,
+    pub equation_fingerprint: String,
     pub entries: u64,
 }
 
@@ -247,18 +251,26 @@ impl ChemistryLibrary {
         } else {
             ChemistryLibraryManifest {
                 schema_version: CHEMISTRY_LIBRARY_SCHEMA_VERSION,
+                equation_fingerprint: CHEMISTRY_EQUATION_FINGERPRINT.into(),
                 entries: entries.len() as u64,
             }
         };
-        if !matches!(
-            manifest.schema_version,
-            2 | CHEMISTRY_LIBRARY_SCHEMA_VERSION
-        ) {
+        if manifest.schema_version != CHEMISTRY_LIBRARY_SCHEMA_VERSION {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!(
                     "unsupported chemistry library schema version: {}",
                     manifest.schema_version
+                ),
+            ));
+        }
+        if manifest.equation_fingerprint != CHEMISTRY_EQUATION_FINGERPRINT {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "chemistry equation fingerprint mismatch: manifest={}, current={}",
+                    manifest.equation_fingerprint,
+                    CHEMISTRY_EQUATION_FINGERPRINT
                 ),
             ));
         }
@@ -706,6 +718,7 @@ mod tests {
             root.join("manifest.json"),
             serde_json::to_vec(&ChemistryLibraryManifest {
                 schema_version,
+                equation_fingerprint: CHEMISTRY_EQUATION_FINGERPRINT.into(),
                 entries: manifest_entries,
             })
             .unwrap(),
@@ -728,36 +741,70 @@ mod tests {
     }
 
     #[test]
-    fn loads_current_schema_three_store() {
-        let root = test_root("schema-three");
-        write_test_store(&root, 3, &[test_record_json(3, "edge")], 1);
+    fn loads_current_schema_four_store() {
+        let root = test_root("schema-four");
+        write_test_store(&root, 4, &[test_record_json(4, "edge")], 1);
         let library = ChemistryLibrary::open(&root).unwrap();
         assert_eq!(library.len(), 1);
         let _ = fs::remove_dir_all(root);
     }
 
     #[test]
-    fn reads_legacy_schema_two_store_without_relabeling_keys() {
+    fn rejects_legacy_schema_two_store_without_migration() {
         let root = test_root("schema-two");
-        write_test_store(&root, 2, &[test_record_json(2, "legacy-edge")], 1);
-        let library = ChemistryLibrary::open(&root).unwrap();
-        assert_eq!(library.len(), 1);
-        assert!(library
-            .get(&ChemistryKey {
-                schema_version: 2,
-                material_a: "Carbon".into(),
-                material_b: "Hydrogen".into(),
-                interface_class: "rigid_edge".into(),
-                interface_signature: "legacy-edge".into(),
-            })
-            .is_some());
+        write_test_store(&root, 2, &[], 0);
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("legacy cache must be rejected");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("unsupported chemistry library schema version"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_legacy_schema_three_store_without_migration() {
+        let root = test_root("schema-three");
+        write_test_store(&root, 4, &[], 0);
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("pre-unification cache must be rejected");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("unsupported chemistry library schema version"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_legacy_record_keys_even_in_current_schema_manifest() {
+        let root = test_root("legacy-record");
+        write_test_store(&root, 4, &[test_record_json(4, "legacy-edge")], 1);
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("legacy record keys must be rejected");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("invalid chemistry record"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_equation_fingerprint_mismatch() {
+        let root = test_root("fingerprint-mismatch");
+        write_test_store(&root, 4, &[test_record_json(4, "edge")], 1);
+        let manifest_path = root.join("manifest.json");
+        let mut manifest: serde_json::Value =
+            serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+        manifest["equation_fingerprint"] = serde_json::Value::String("old-equations".into());
+        fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("mismatched equation cache must be rejected");
+        assert!(error.to_string().contains("fingerprint mismatch"));
         let _ = fs::remove_dir_all(root);
     }
 
     #[test]
     fn rejects_malformed_final_nonempty_record() {
         let root = test_root("truncated-tail");
-        write_test_store(&root, 3, &["{".into()], 1);
+        write_test_store(&root, 4, &["{".into()], 1);
         let error = ChemistryLibrary::open(&root)
             .err()
             .expect("corrupt store must be rejected");
@@ -768,8 +815,8 @@ mod tests {
     #[test]
     fn rejects_duplicate_persisted_keys() {
         let root = test_root("duplicate");
-        let row = test_record_json(3, "same-edge");
-        write_test_store(&root, 3, &[row.clone(), row], 1);
+        let row = test_record_json(4, "same-edge");
+        write_test_store(&root, 4, &[row.clone(), row], 1);
         let error = ChemistryLibrary::open(&root)
             .err()
             .expect("corrupt store must be rejected");
@@ -780,7 +827,7 @@ mod tests {
     #[test]
     fn rejects_manifest_count_mismatch() {
         let root = test_root("count-mismatch");
-        write_test_store(&root, 3, &[test_record_json(3, "edge")], 2);
+        write_test_store(&root, 4, &[test_record_json(4, "edge")], 2);
         let error = ChemistryLibrary::open(&root)
             .err()
             .expect("corrupt store must be rejected");
@@ -793,7 +840,7 @@ mod tests {
         let root = test_root("invalid-record");
         let invalid = serde_json::to_string(&ChemistryRecord {
             key: ChemistryKey {
-                schema_version: 3,
+                schema_version: 4,
                 material_a: "Carbon".into(),
                 material_b: "Hydrogen".into(),
                 interface_class: "rigid_edge".into(),
@@ -804,7 +851,7 @@ mod tests {
         .unwrap();
         // JSON does not represent NaN, so serialize a parseable record with a negative value.
         let invalid = invalid.replace("null", "-1.0");
-        write_test_store(&root, 3, &[invalid], 1);
+        write_test_store(&root, 4, &[invalid], 1);
         let error = ChemistryLibrary::open(&root)
             .err()
             .expect("corrupt store must be rejected");
