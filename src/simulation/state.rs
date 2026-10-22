@@ -224,6 +224,11 @@ pub(crate) struct Organism {
     pub(crate) stress_threshold: f64,
     pub(crate) stored_material: MaterialStorage,
     pub(crate) structure: OrganismStructure,
+    /// Once this organism has established a genome cavity, an empty set of
+    /// surviving boundary IDs means its core is gone, not that another cavity
+    /// in a shared aggregate may silently become its genome.
+    #[serde(default)]
+    pub(crate) genome_core_identity_established: bool,
     pub(crate) active_transformation_id: Option<u64>,
     #[serde(default)]
     pub(crate) reproductive_construction: Option<ReproductiveConstruction>,
@@ -276,8 +281,14 @@ impl Organism {
     ) -> Option<&crate::cavity::GenomeCavity> {
         if self.cached_cavity_revision != Some(self.structure_revision) {
             let known_core_ids = self.structure.genome_constituent_ids().to_vec();
-            let cavity = if known_core_ids.is_empty() {
+            // Existing serialized organisms with core IDs predate the explicit
+            // flag, so infer an established identity from those IDs as well.
+            let identity_established =
+                self.genome_core_identity_established || !known_core_ids.is_empty();
+            let cavity = if !identity_established {
                 crate::cavity::analyze_genome_cavity(&self.structure, catalog)
+            } else if known_core_ids.is_empty() {
+                Ok(None)
             } else {
                 crate::cavity::analyze_genome_cavity_for_core(
                     &self.structure,
@@ -302,6 +313,7 @@ impl Organism {
                 })
                 .unwrap_or(known_core_ids);
             self.structure.set_genome_constituent_ids(ids);
+            self.genome_core_identity_established |= cavity.is_some() || identity_established;
             self.cached_cavity = Some(cavity);
             self.cached_cavity_revision = Some(self.structure_revision);
         }
