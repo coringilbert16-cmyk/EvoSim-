@@ -36,6 +36,29 @@ impl PhysicalMaterial {
         placements: Vec<Placement>,
         catalog: &[BaseResource],
     ) -> Option<Self> {
+        Self::realized_inner(material, placements, catalog, false)
+    }
+
+    /// Realize one fluid constituent with its authoritative physical shape.
+    /// This is required for aggregated fluid counts and also preserves a
+    /// single fluid's deformed shape when it enters storage.
+    pub(crate) fn realized_with_single_fluid_shape(
+        material: Material,
+        placement: Placement,
+        shape: crate::resources::Shape,
+        catalog: &[BaseResource],
+    ) -> Option<Self> {
+        let mut instance = Self::realized_inner(material, vec![placement], catalog, true)?;
+        instance = instance.with_single_fluid_shape(shape, catalog)?;
+        Some(instance)
+    }
+
+    fn realized_inner(
+        material: Material,
+        placements: Vec<Placement>,
+        catalog: &[BaseResource],
+        allow_aggregate_fluid: bool,
+    ) -> Option<Self> {
         if !material.is_valid_for_catalog(catalog)
             || material.parts.is_empty()
             || placements.len() != material.parts.len()
@@ -57,6 +80,7 @@ impl PhysicalMaterial {
                 if material.parts.len() != 1
                     || material.has_internal_structure()
                     || resource.physical_state != crate::resources::PhysicalState::Fluid
+                    || !allow_aggregate_fluid
                     || *amount < 1.0
                     || (*amount - amount.round()).abs() > 1e-9
                 {
@@ -411,6 +435,49 @@ mod tests {
             realized_shapes: Some(vec![underfilled_shape]),
         };
         assert_eq!(underfilled.realized_shape_for_part(0, &catalog), None);
+    }
+
+    #[test]
+    fn aggregate_fluid_requires_and_preserves_an_authoritative_shape() {
+        let catalog = crate::resources::default_catalog();
+        let water = catalog
+            .iter()
+            .find(|resource| resource.name == "Water")
+            .unwrap();
+        let unit_area = match &water.shape.form {
+            crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+            _ => panic!("default Water shape should have a measurable area"),
+        };
+        let merged_area = 2.0 * unit_area;
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            merged_area,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .unwrap();
+        let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
+        let shape = crate::resources::Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: merged_area,
+                boundary: None,
+                arc_boundary: Some(arc),
+                multi_contact_boundary: None,
+            },
+        };
+        let material = Material::free_base("Water", 2.0);
+        let placement = Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 };
+
+        assert!(
+            PhysicalMaterial::realized(material.clone(), vec![placement], &catalog).is_none(),
+            "aggregate fluid cannot be stored with a one-unit default shape"
+        );
+        let physical = PhysicalMaterial::realized_with_single_fluid_shape(
+            material,
+            placement,
+            shape.clone(),
+            &catalog,
+        )
+        .expect("aggregate fluid with conserved-area geometry should be storable");
+        assert_eq!(physical.realized_shape_for_part(0, &catalog), Some(shape));
     }
 
     #[test]
