@@ -143,6 +143,57 @@ mod integration_tests {
     }
 
     #[test]
+    fn integer_material_inventory_conserves_constituents_across_storage_restore() {
+        let mut simulation = Simulation::new(7106, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.organisms[0].stored_material.entries.clear();
+
+        let catalog = simulation.environment.catalog.clone();
+        let physical = PhysicalMaterial::realized(
+            Material::free_base("Hydrogen", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("Hydrogen strip should be physically realizable");
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(physical));
+        let before =
+            integer_material_inventory(&simulation).expect("stored inventory is integral");
+
+        let stored = simulation.organisms[0]
+            .stored_material
+            .take_matching_physical(&Material::free_base("Hydrogen", 1.0))
+            .expect("stored Hydrogen should be removable for restoration");
+        let restored = crate::material_restoration::restore_material(
+            &mut simulation.organisms[0].structure,
+            &stored,
+            Placement {
+                x: 100.0,
+                y: 100.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        )
+        .expect("intact Hydrogen should restore into the physical structure");
+        assert_eq!(restored.len(), 1);
+
+        let after =
+            integer_material_inventory(&simulation).expect("restored inventory is integral");
+        assert_eq!(
+            after, before,
+            "restoring stored physical material must preserve constituent totals"
+        );
+    }
+
+    #[test]
     fn integer_material_inventory_conserves_constituents_when_anchor_moves_to_offspring() {
         let mut simulation = Simulation::new(23, 20.0);
         assert!(simulation.organisms[0].store_material(Material::free_base("Carbon", 1.0)));
