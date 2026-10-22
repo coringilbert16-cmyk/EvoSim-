@@ -405,3 +405,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Attached-structure resonance eligibility is settled by Section 17.96. Remaining design gap is the minimal reserve/debt/maintenance contract consistent with one aggregate and one biological lifecycle.
 - No source/test changes and no fresh CI run. PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862` remains the last inspected head; refresh before any implementation.
 - Next: finish reserve/debt/maintenance accounting design, perform a final production mutation/energy call-site sweep, reconcile inventory coverage, then refresh CI before coding. Do not claim global source audit or chemistry unification complete.
+
+
+## Resume checkpoint — construction reserve/maintenance semantics (Section 17.101)
+
+- Plan commit: `4b2d7175f652defe8f760e5d549f3ffc3635c6db`; PR #204 remains documentation-only.
+- Exact PR #205 head inspected: `12d8079230458da68a8dc3755a1d6a9b41347862`.
+- Proposed target: one parent maintenance/stress/death lifecycle based on aggregate structural mass; no temporary child organism or separate developing stress/debt. Construction progress/core identity remain metadata. A construction reserve may remain only as an explicitly accounted parent-owned sub-holder.
+- **Open semantic item:** whether to retain an earmarked construction reserve and define its spend/release rule. Existing transfer is internal, but its failure result is ignored before construction proceeds. This is not being silently changed or treated as owner-approved.
+- Required tests and the no-code-until-audit-closure gate are recorded in Section 17.101. No source/test changes or fresh CI run.
