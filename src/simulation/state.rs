@@ -522,7 +522,6 @@ pub(crate) struct Simulation {
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
 pub(crate) const DESIRABILITY_MAX: f64 = 1.0;
 
-
 #[cfg(test)]
 mod genome_core_identity_tests {
     use super::*;
