@@ -694,9 +694,9 @@ Do not claim chemistry unification complete until all applicable gates have evid
 | A15 Tick ordering/determinism | Gap found | Pending transformations retain staged state and have restoration paths, but the full tick phase order and all stale/cancelled-operation rollback paths are not proven | Document authoritative phase order; test duration boundaries, save/load around commit, stale operations, and failure injection |
 | A16 Material conservation | Gap found | Multiple physical holders and transfer paths identified; no independent production whole-world material inventory evidenced; fractional logical amounts lack a conversion contract | Define holder ownership/counting; decide fractional-to-physical policy; build independent test-only constituent inventory oracle |
 | A17 Diagnostics/observability | Gap found | Recorder is staged/opt-in; inventory snapshot is test-oriented; diagnostic header hard-codes seed 42 and current-vs-cumulative values need clear labels | Report actual run configuration; isolate I/O failures; document units and inventory residual semantics; bound output volume |
-| A18 Numerical stability | Not started | — | — |
-| A19 Scalability/profiling | Not started | — | — |
-| A20 Cross-domain integration | Not started | — | — |
+| A18 Numerical stability | Gap found | Reaction accumulation can overflow from extreme prior state; reservoir epsilon pruning and cumulative counter overflow lack a defined long-run fate/tolerance budget | Add adversarial overflow and drift tests; define numerical truncation and counter-overflow policy before shared math changes |
+| A19 Scalability/profiling | Gap found | World-tone geometry/exposure is a likely hotspot; no representative runtime/memory envelope or cache-growth measurements were found | Benchmark sparse/dense worlds and cache cold/hot paths; compare first-hit approximation to a trusted oracle with explicit error bounds |
+| A20 Cross-domain integration | Gap found | Local unit tests exist, but end-to-end energy/material reconciliation and cross-domain failure-injection coverage are unproven; exact-head CI identity remains blocked | Build independent inventory oracles and integration matrix covering full ticks, lifecycle, persistence, stale events, and failed commits |
 | A21 Documentation/sequence | Not started | — | — |
 
 ## 11. Out of scope unless a direct dependency is proven
