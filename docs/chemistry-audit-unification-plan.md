@@ -26,10 +26,10 @@ A successful audit is not a claim that the system is already unified. Mark each 
 - **Geometry remains authoritative.** Actual realized material shapes, contacts, bond identities, endpoint availability, non-penetration, and fluid boundary constraints decide whether a physical reaction can commit. A chemistry cache may accelerate lookup but cannot override live geometry.
 - **Transactions are atomic.** Validate against trial state, settle all energy/material consequences, then commit. Failed or stale events must not leave partial geometry, energy, resonance, or environment mutations.
 - **Death changes biological eligibility, not existence.** A breached genome core or the approved unsustainable-stress condition can end biological processing; the body and its constituents remain in the physical world and may continue ordinary chemistry.
-- **Sunlight/world tone remains disabled for live capture until conservation and allocation are proven.** The source is deterministic and directional; occlusion matters. “Reflection” means onward propagation with changed frequency composition, not literal mirror-ray tracing.
+- **World-tone capture status must follow the live call path, not stale documentation.** The audited source contains a live capture-settlement path, so capture must be described as present/active but not yet conservation-validated; do not claim it is disabled. This audit PR must not toggle runtime behavior. The source model is deterministic and directional; occlusion matters. “Reflection” means onward propagation with changed frequency composition, not literal mirror-ray tracing.
 - **Bob remains a geometry library worker/viewer.** Prefer persisted suggestions over repeated runtime geometric discovery. This chemistry work does not pull in deferred PR #196 constructor changes.
 - **Scalability is a correctness constraint.** Do not solve conservation by cloning the whole world each tick, doing all-pairs reaction scans, tracing a ray per object, retaining unbounded event histories, or persisting redundant derived state.
-- **No silent baseline rewriting.** Preserve the accepted 28-failure baseline as historical context; compare exact test identities and assertions rather than treating every existing failure as a new regression. Do not weaken physical invariants to make CI green.
+- **No silent baseline rewriting.** Preserve the previously reported 28-failure baseline as historical context, but do not claim its identities or count are verified for current `main` until exact-head evidence exists. Compare exact test identities and assertions rather than treating every existing failure as a new regression. Do not weaken physical invariants to make CI green.
 - **README is the current project guide.** Dated handoff archives are historical evidence and may contain superseded or contradictory snapshots. Confirm every finding against current `main`.
 
 ## 3. Baseline and known unresolved claims to verify
@@ -647,7 +647,7 @@ This is a dependency order, not permission to begin all changes immediately.
 5. **Unify resonance/reaction coupling (A7) and stress/death/post-death behavior (A10–A11).**
 6. **Audit every existing energy consumer and transfer (A9, A12), then event ordering (A15).**
 7. **Repair/verify persistence and cache semantics (A13–A14).**
-8. **Complete source exposure and world-tone capture design (A8), but do not enable live capture until its tests reconcile with A6.**
+8. **Resolve the existing world-tone capture path (A8) against the energy inventory (A6).** The audited source appears to perform live capture despite the README claim that it is disabled; establish the exact runtime gate and source budget, then include any containment or behavior change in the owner-approved implementation plan. Do not change capture behavior in this documentation-only PR.
 9. **Complete diagnostics and scaling benchmarks (A17, A19).**
 10. **Run cross-domain invariants and documentation alignment (A20–A21).**
 11. Only then implement the smallest coherent production changes in focused steps, with one audit before each change and exact-head CI comparison after each.
@@ -667,7 +667,7 @@ Do not claim chemistry unification complete until all applicable gates have evid
 - [ ] Material quantities/identities reconcile through transfer, composite changes, reproduction, death, and post-death chemistry.
 - [ ] Dead bodies stop biological processing while remaining physical and chemically interactive.
 - [ ] Persistence/cache corruption and schema incompatibility fail visibly and safely.
-- [ ] World-tone exposure, occlusion, source allocation, propagation, and resonance capture pass conservation and duplicate-claim tests before live capture is enabled.
+- [ ] World-tone exposure, occlusion, source allocation, propagation, and resonance capture pass conservation and duplicate-claim tests before capture behavior is considered validated and approved for continued use.
 - [ ] Performance is measured against declared target scenarios, including thousands of objects; no accidental quadratic or per-object ray-tracing regression.
 - [ ] Exact-head formatting, compile, focused tests, source-size/architecture checks, baseline comparison, and bounded integration tests are reported accurately.
 - [ ] README and this plan distinguish verified behavior, known baseline failures, open gaps, and unproven aspirations.
@@ -930,6 +930,17 @@ Record decisions here with date, rationale, affected audits, and any superseded 
 - **Dependencies / downstream audits affected:** all A0–A20. This is the sequencing gate; it consolidates but does not resolve their findings.
 - **Decision required from project owner, if any:** before production changes, approve the canonical resource identity/migration, the initial energy/source accounting contract, internal composite-bond energy policy, and the acceptable error/performance budget for world-tone exposure. No decision is required to continue the read-only audit itself.
 - **Recommended smallest next change (if authorized):** the audit template is now populated through A21. Next, retrieve or rerun bounded exact-head CI evidence if available, reconcile the README's verified status statements, then present the dependency-ordered implementation plan for approval. Do not begin production code until the owner approves that plan. No production code change authorized now.
+
+## 11. Consistency pass — 2026-10-22
+
+**Result: structural consistency pass completed; substantive gaps remain open.**
+
+- Cross-checked the 22 audit headings (A0–A21) against the 22 audit-register rows. Each planned domain has a corresponding audit record and a summary row; all are correctly represented as **Gap found** or **Blocked**, not as resolved or verified.
+- Reconciled the world-tone status language: source inspection indicates a live capture-settlement path despite the README's disabled-capture claim. The plan now treats capture as present but not yet conservation-validated and explicitly prohibits toggling runtime behavior in this documentation-only PR.
+- Clarified that the previously reported 28-failure count is historical context, not a verified current-main baseline. A0 remains blocked until exact-head CI/test identities are available or the limitation is explicitly accepted.
+- Confirmed that resource identity/migration, initial-energy treatment, internal composite-bond energy, numerical truncation, and world-tone approximation bounds remain decisions/gates—not decisions silently made by the audit.
+- Confirmed the dependency order keeps independent inventory oracles and transaction/failure-injection coverage ahead of behavior changes, and keeps PR #196 constructor/Bob work separate.
+- Scope remains documentation-only: no production code, tests, README, resource catalog, or persistent library data was changed. The plan is populated, but chemistry unification and whole-world conservation are not proven.
 
 ## Audit completion and implementation gate
 
