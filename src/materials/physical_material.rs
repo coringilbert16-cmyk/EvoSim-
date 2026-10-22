@@ -174,7 +174,9 @@ impl PhysicalMaterial {
         if !shape.is_valid() {
             return None;
         }
-        if shape != &resource.shape && resource.physical_state != crate::resources::PhysicalState::Fluid {
+        if shape != &resource.shape
+            && resource.physical_state != crate::resources::PhysicalState::Fluid
+        {
             return None;
         }
         if resource.physical_state == crate::resources::PhysicalState::Fluid {

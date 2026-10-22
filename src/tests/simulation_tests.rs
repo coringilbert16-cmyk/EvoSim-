@@ -25,7 +25,9 @@ mod integration_tests {
                     || amount.fract().abs() > 1e-9
                     || *amount > u64::MAX as f64
                 {
-                    return Err(format!("non-integer or invalid amount for {name}: {amount}"));
+                    return Err(format!(
+                        "non-integer or invalid amount for {name}: {amount}"
+                    ));
                 }
                 let count = amount.round() as u64;
                 let total = inventory.entry(name.clone()).or_default();
@@ -114,7 +116,8 @@ mod integration_tests {
             .materials
             .push(Material::free_base("Carbon", 3.0));
 
-        let before = integer_material_inventory(&simulation).expect("fixture inventory is integral");
+        let before =
+            integer_material_inventory(&simulation).expect("fixture inventory is integral");
         let taken = crate::material_transfer::take_whole_unstructured(
             &mut simulation.environment.field.cells[0].materials[0],
             1,
@@ -125,18 +128,18 @@ mod integration_tests {
             y: 10.0,
             rotation_radians: 0.0,
         };
-        let physical = PhysicalMaterial::realized(
-            taken,
-            vec![placement],
-            &simulation.environment.catalog,
-        )
-        .expect("whole carbon should be physically realizable");
+        let physical =
+            PhysicalMaterial::realized(taken, vec![placement], &simulation.environment.catalog)
+                .expect("whole carbon should be physically realizable");
         assert!(simulation.organisms[0]
             .stored_material
             .store_physical_instance(physical));
 
         let after = integer_material_inventory(&simulation).expect("result inventory is integral");
-        assert_eq!(after, before, "material ownership transfer changed constituent totals");
+        assert_eq!(
+            after, before,
+            "material ownership transfer changed constituent totals"
+        );
     }
 
     #[test]
@@ -562,22 +565,50 @@ mod integration_tests {
     fn energy_inventory_snapshot_recomputes_current_holders_independently_of_ledger_totals() {
         let mut simulation = Simulation::new(7102, 10.0);
 
-        let expected_usable = simulation.organisms.iter().map(|organism| {
-            organism.usable_energy
-                + organism.reproductive_construction.as_ref()
-                    .map_or(0.0, |construction| construction.developing_energy)
-        }).sum::<f64>()
-            + simulation.decomposing_bodies.iter().map(|body| body.energy_budget).sum::<f64>();
-        let expected_resonant = simulation.organisms.iter()
+        let expected_usable = simulation
+            .organisms
+            .iter()
+            .map(|organism| {
+                organism.usable_energy
+                    + organism
+                        .reproductive_construction
+                        .as_ref()
+                        .map_or(0.0, |construction| construction.developing_energy)
+            })
+            .sum::<f64>()
+            + simulation
+                .decomposing_bodies
+                .iter()
+                .map(|body| body.energy_budget)
+                .sum::<f64>();
+        let expected_resonant = simulation
+            .organisms
+            .iter()
             .map(|organism| organism.resonant_energy.total_energy().unwrap_or(f64::NAN))
             .sum::<f64>();
-        let expected_structural = simulation.organisms.iter().map(|organism| {
-            organism.structure.bonds.iter().map(|bond| bond.bond_energy).sum::<f64>()
-                + organism.reproductive_construction.as_ref().map_or(0.0, |construction| {
-                    construction.developing_structure.bonds.iter()
-                        .map(|bond| bond.bond_energy).sum::<f64>()
-                })
-        }).sum::<f64>()
+        let expected_structural = simulation
+            .organisms
+            .iter()
+            .map(|organism| {
+                organism
+                    .structure
+                    .bonds
+                    .iter()
+                    .map(|bond| bond.bond_energy)
+                    .sum::<f64>()
+                    + organism
+                        .reproductive_construction
+                        .as_ref()
+                        .map_or(0.0, |construction| {
+                            construction
+                                .developing_structure
+                                .bonds
+                                .iter()
+                                .map(|bond| bond.bond_energy)
+                                .sum::<f64>()
+                        })
+            })
+            .sum::<f64>()
             + simulation.decomposing_bodies.iter().map(|body| {
                 body.structure.bonds.iter().map(|bond| bond.bond_energy).sum::<f64>()
             }).sum::<f64>();

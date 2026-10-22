@@ -317,6 +317,12 @@ impl InternalBond {
     }
 }
 
+const MATERIAL_COUNT_EPSILON: f64 = 1e-9;
+
+fn is_whole_count(amount: f64) -> bool {
+    amount.is_finite() && amount >= 0.0 && (amount - amount.round()).abs() <= MATERIAL_COUNT_EPSILON
+}
+
 /// A material is defined by its composition and its internal structure.
 ///
 /// `parts` preserves constituent identity. Two constituents with the same
@@ -324,14 +330,6 @@ impl InternalBond {
 /// be preserved; aggregation is an ecological-storage concern, not a change
 /// to the physical identity of the material.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-const MATERIAL_COUNT_EPSILON: f64 = 1e-9;
-
-fn is_whole_count(amount: f64) -> bool {
-    amount.is_finite()
-        && amount >= 0.0
-        && (amount - amount.round()).abs() <= MATERIAL_COUNT_EPSILON
-}
-
 pub struct Material {
     pub parts: Vec<(String, f64)>,
     pub internal_bonds: Vec<InternalBond>,
@@ -349,9 +347,11 @@ impl Material {
         if self.parts.is_empty() {
             return self.internal_bonds.is_empty();
         }
-        if !self.parts.iter().all(|(name, amount)| {
-            !name.is_empty() && *amount > 0.0 && is_whole_count(*amount)
-        }) {
+        if !self
+            .parts
+            .iter()
+            .all(|(name, amount)| !name.is_empty() && *amount > 0.0 && is_whole_count(*amount))
+        {
             return false;
         }
         for (i, bond) in self.internal_bonds.iter().enumerate() {
@@ -371,9 +371,10 @@ impl Material {
     /// Validate constituent counts and membership in the authoritative catalog.
     pub fn is_valid_for_catalog(&self, catalog: &[BaseResource]) -> bool {
         self.is_valid()
-            && self.parts.iter().all(|(name, _)| {
-                catalog.iter().any(|resource| resource.name == *name)
-            })
+            && self
+                .parts
+                .iter()
+                .all(|(name, _)| catalog.iter().any(|resource| resource.name == *name))
     }
 
     pub fn has_internal_structure(&self) -> bool {
@@ -479,8 +480,11 @@ impl Material {
         }
         let taken = amount.min(total);
         let fraction = taken / total;
-        let allocations: Vec<f64> = self.parts.iter()
-            .map(|(_, quantity)| *quantity * fraction).collect();
+        let allocations: Vec<f64> = self
+            .parts
+            .iter()
+            .map(|(_, quantity)| *quantity * fraction)
+            .collect();
         if allocations.iter().any(|piece| !is_whole_count(*piece)) {
             return None;
         }
@@ -494,8 +498,12 @@ impl Material {
                 *quantity = 0.0;
             }
         }
-        self.parts.retain(|(_, quantity)| *quantity > MATERIAL_COUNT_EPSILON);
-        Some(Material { parts, internal_bonds: Vec::new() })
+        self.parts
+            .retain(|(_, quantity)| *quantity > MATERIAL_COUNT_EPSILON);
+        Some(Material {
+            parts,
+            internal_bonds: Vec::new(),
+        })
     }
 }
 
@@ -527,7 +535,9 @@ mod material_contract_tests {
         assert_eq!(mixture, original);
 
         let mut carbon = Material::free_base("Carbon", 3.0);
-        let taken = carbon.take(1.0).expect("one whole carbon should be extractable");
+        let taken = carbon
+            .take(1.0)
+            .expect("one whole carbon should be extractable");
         assert_eq!(taken.parts, vec![("Carbon".into(), 1.0)]);
         assert_eq!(carbon.parts, vec![("Carbon".into(), 2.0)]);
         assert!(carbon.take(0.5).is_none());
@@ -780,7 +790,8 @@ pub fn fresh_energy(catalog: &[BaseResource], name: &str, amount: f64) -> f64 {
     if !is_whole_count(amount) {
         return f64::NAN;
     }
-    catalog.iter()
+    catalog
+        .iter()
         .find(|resource| resource.name == name)
         .map(|resource| resource.properties.potential_energy * amount)
         .unwrap_or(f64::NAN)

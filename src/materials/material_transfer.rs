@@ -12,7 +12,11 @@ pub(crate) fn take_whole_unstructured(
     material: &mut Material,
     requested: usize,
 ) -> Option<Material> {
-    if requested == 0 || !material.is_valid() || material.has_internal_structure() || material.is_empty() {
+    if requested == 0
+        || !material.is_valid()
+        || material.has_internal_structure()
+        || material.is_empty()
+    {
         return None;
     }
 
