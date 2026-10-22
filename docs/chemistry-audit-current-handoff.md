@@ -119,3 +119,12 @@ The owner explicitly approved the parent-aggregate ownership model: the parent r
 - Highest-priority failure candidate remains physical material removed from a source holder followed by a destination deposit that can fail but whose result is ignored. Stored BREAK also commits pieces one at a time, so a later piece rejection can leave a partial split; its fallback placement is not proven world-relative.
 - The currently implemented construction finish boundary may emit a child on Ready, Detached, or Dead; this is existing reproduction lifecycle behavior and does not implement the owner-approved 100%→160% total growth / two ~80% children design. Do not redesign reproduction inside PR #205.
 - Next audit: inspect failure-injection hooks and tests for stored BREAK, contained-material transfer, and construction transfer; separate already-testable matrix cases from cases needing a future narrow test seam. No source/test changes.
+
+
+### Failure-injection coverage checkpoint — Section 17.36
+
+- Latest plan commit: dd15f2d5d6d814511b9bf60120606d540fa2020d.
+- Existing tests cover successful field-to-storage transfer, storage restoration and rejection rollback, exact-once active BREAK escrow inventory, zero-energy stored BREAK preparation, and reproduction waiting/resumption. The full independent material oracle covers the relevant authoritative holders.
+- Missing tests remain for partial multi-piece stored-BREAK commit, rejected storage plus rejected field deposit, failed containment-transfer fallback, malformed stored-BREAK completion restoration, stale construction source index, and every environmental COMBINE source-cell rollback variant.
+- Do not add a test seam yet. After all audit templates are complete, a narrow test-only destination-rejection seam may be needed to deterministically test partial piece rejection and fallback failure. Any regression must compare the full independent material oracle, holder/geometry snapshots, and energy/resonance ledger.
+- No source/test changes. PR #205 head remains the audited 12d8079230458da68a8dc3755a1d6a9b41347862; re-fetch before implementation.
