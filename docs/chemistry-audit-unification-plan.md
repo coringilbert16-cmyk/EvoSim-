@@ -2924,3 +2924,21 @@ This matrix consolidates the latest bounded source/test audits in Sections 17.86
 - The sweep also found ignored deposit returns in deterministic initial-landscape/resource-cloud seeding. These calls operate on already-realized material and a previously validated field index; they are initialization/seeding paths rather than live chemistry transactions, and no new energy source/sink path was found there. Keep exact seed-count behavior separate from chemistry conservation.
 - **Result:** no additional untracked live energy-transfer API caller was identified in this bounded high-risk sweep. This does not close the global source-path audit, nor does it make the known rollback paths safe.
 - **Next:** finish the construction reserve semantic contract, then perform the final inventory/source-sink reconciliation. Refresh PR #205 head and exact-head CI before any source/test change. PR #204 remains documentation-only; no code or tests changed.
+
+
+## Owner decision — all production costs use parent usable energy (Section 17.103, 2026-10-22)
+
+**Decision status: SETTLED by the owner.** All production/construction costs draw directly from the parent's ordinary `usable_energy`. Remove `reproductive_energy_allocation` as a separate earmarked reserve and do not transfer energy into a separate `developing_energy` holder. There is no separate construction-energy pool and no production-specific energy budget. The ordinary energy ledger remains authoritative; each production cost is charged exactly once to the parent under the same transaction/accounting rules as other parent costs.
+
+Consequences:
+1. Construction progress and core identity remain metadata over the parent's one canonical physical aggregate. Do not instantiate a temporary full child organism to run construction maintenance, stress, debt, resonance, overload, or death.
+2. Parent maintenance is applied once per tick and is based on aggregate structural mass after attached structure is unified. Stress and core-breach/death are parent lifecycle behavior, not a second developing lifecycle.
+3. Before any production mutation, validate and settle the parent energy debit atomically with the corresponding construction/material mutation. If the parent cannot afford the cost or settlement rejects, do not mutate structure, progress, stress, ledger, or ownership. Do not continue after a rejected debit.
+4. No reserve release/transfer path is needed. On parent death, construction progress stops and no offspring is created; attached physical material remains owned by the dead parent aggregate and continues ordinary chemistry. Only successful division creates child organisms and partitions the aggregate and all energy/material holders exactly once.
+5. This decision does not authorize inventing or changing the production cost equation, energy price, or genome-allocation rule. Preserve existing documented cost formulas, but route their costs directly through the parent's usable-energy holder. If the source does not define a cost unambiguously, record that exact formula as an open question rather than creating a reserve to hide it.
+
+**Implementation mismatch at audited PR #205 head** `12d8079230458da68a8dc3755a1d6a9b41347862`: construction transfers energy into `developing_energy`, ignores transfer rejection, then executes an independent temporary-organism lifecycle. These are now explicit migration targets, not unresolved design choices.
+
+**Acceptance gates:** (a) no `reproductive_energy_allocation`/separate `developing_energy` reserve in the target model; (b) production debit and structural change commit or reject together; (c) insufficient-energy/rejected-ledger paths leave exact pre-operation state unchanged; (d) aggregate maintenance/stress/death occurs once; (e) dead parent cannot produce offspring; (f) division partitions all physical/material/energy ownership exactly once; (g) independent integer material and energy inventories reconcile.
+
+**Next:** continue source/test audit of production cost formulas and division transaction boundaries; identify existing tests and exact missing failure-injection cases. Then reconcile these gates with the master contract and run a fresh PR #205 head/CI audit before source edits. PR #204 remains documentation-only.
