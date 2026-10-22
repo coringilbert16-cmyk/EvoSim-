@@ -198,3 +198,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - `src/infrastructure/diagnostics.rs` records `unit_count`, `bond_count`, `component_count`, `structural_mass`, and serialized `structure` from `organism.structure` only, while separately serializing the entire `reproductive_construction` object. With one authoritative graph, aggregate metrics must include attached units once; construction JSON must expose progress/core metadata and explicit sub-ledger values only, not a duplicate physical graph.
 - No dedicated tests for construction diagnostic JSON were found in the reviewed file. Add projection tests for aggregate counts/mass, stored-vs-attached counts, no duplicate physical graph in construction JSON, and exact-once child partition after division.
 - This is diagnostic output compatibility, not world-save/load migration. No source/test changes; other chemistry transaction tests and whole-world release gates remain open.
+
+
+## Core-identity refinement — Section 17.80
+
+- **Plan commit:** `e34e52be71ee856f3b2d8be86973d6076aac4c28`.
+- Existing `PhysicalConstituentGraph` has stable `PhysicalConstituentId` values and one `genome_constituent_ids` set, populated by juvenile realization from the actual cavity boundary. This is useful geometry-derived identity metadata, not a material/reproductive tag.
+- `analyze_genome_cavity` ignores that set for selection and returns the largest qualifying cavity, so a second core still needs core-specific cavity selection. `anchor_structure` currently returns an index in a separate graph and does not establish a second stable core identity.
+- Refined direction: one graph with a small collection of core references over shared physical IDs. Preserve parent boundary identity; anchor the second core to the transferred physical ID, then track its realized boundary IDs once a cavity qualifies. No “reproductive material” tag and no second physical graph. Reject dangling references atomically; partition core identity exactly once at division.
+- No source/test changes; remaining transaction and whole-world release gates remain open.
