@@ -3158,6 +3158,16 @@ Consequences:
 - **Movement gate:** still deferred. Start movement only when the live developing structure is migrated into the parent-owned aggregate, and then coordinate translation, collision/space checks, world-tone body enumeration, and position/structure revisions together.
 - **Next:** validate the non-penetrating anchor placement test and exact-head compile/full suite; then design a transactional anchor promotion into the parent graph that preserves stable physical IDs and existing bonds.
 
+
+
+## Core-overlap ranking audit (Section 17.120, 2026-10-22)
+
+- **Audit finding:** filtering candidate cavities to those that share *any* old core constituent is insufficient. Two cavities in one connected aggregate can share a boundary constituent; choosing the largest area among those candidates can still switch the organism's identity to a different cavity.
+- **Change:** core-specific cavity selection now ranks candidate boundaries by the number of surviving stable core IDs they contain, using area only as a tie-breaker. The generic whole-structure cavity analysis still selects by area, preserving its existing semantics.
+- A focused ranking test proves that a smaller cavity with stronger surviving-core overlap outranks a larger candidate sharing fewer core IDs. This is an algorithm-level regression, not yet a full geometric two-cavity fixture.
+- Anchor placement was also changed to require intended boundary contact and no strict penetration against any parent constituent; the existing reproduction-anchor test now asserts both. The first CI run after these edits failed formatting on the added assertions; formatting has since been corrected. Fresh exact-head CI is required.
+- **Next:** verify exact-head formatting, focused tests, full suite, and Clippy; then move to the first atomic anchor-promotion transaction only after the current baseline test failures are distinguished from regressions.
+
 ## 18. Research references and annotated application to EvoSim — 2026-10-22
 
 **Purpose.** These references are an external research crosswalk for the plan, not a new physics specification and not evidence that any feature is already implemented. Use them to sharpen audits, design tests, and identify efficient abstractions. The owner-approved decisions in Sections 14 and 17 remain authoritative. In particular, do not import assumptions from models that do not conserve material, use different energy semantics, or omit EvoSim's physical geometry.
