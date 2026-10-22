@@ -83,3 +83,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Exact PR #205 source head used for this audit series: `12d8079230458da68a8dc3755a1d6a9b41347862`. No source/test changes were made.
 - Latest recorded workflow 39833438679 remains historical and baseline-red (585 passed, 27 failed, 1 ignored; baseline failure identities only, normalized Clippy identities unchanged). Re-fetch current head/CI before any code change.
 - **Next:** final source search for production material/energy mutation paths missing from Section 17.67, then close audit templates and owner decision before implementation.
+
+
+## Latest production mutation-path checkpoint — 2026-10-22, Section 17.68
+
+- **Plan commit:** `5197f31bb4629fe7b69efc5ff6208ff2b2ccda2b`. PR #204 remains documentation-only.
+- Broad exact-head scan covered all 19 PR #205 changed paths plus movement, reproduction, world-tone, harmonics, and expulsion modules at `12d8079230458da68a8dc3755a1d6a9b41347862`. No source/test changes.
+- No new distinct physical source/sink category was found beyond the existing Section 17.55 matrix. Initialization, COMBINE/BREAK, world-tone, material acquisition/expulsion, movement, construction, cache, and independent inventory paths are represented.
+- This is not proof of conservation or closure: deterministic rejection tests, whole-world inventory assertions, exact-small-world sunlight comparison, cache invalidation/restart coverage, and several lifecycle checks remain open. The legacy decomposition helper stays quarantined.
+- **Next:** complete audit-template sign-off by assigning each remaining row exact source/test references and a deterministic acceptance condition. Keep any row open if its proof requirement is not testable. No implementation until sign-off and the receiver-eligibility decision are complete.
