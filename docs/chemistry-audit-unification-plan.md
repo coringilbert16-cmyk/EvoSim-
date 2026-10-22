@@ -1589,3 +1589,32 @@ Read-only follow-up inspection of `src/chemistry/expulsion.rs` on PR #205 head `
 **Design consequence:** do not loop `expel_physical_material` on core breach. The Phase 8 design must use deterministic placement independent of behavioral memory, retain ownership or roll back every failed insertion, and provide an intact, chemically addressable physical holder for developing structure/bond energy. The parent body's usable/resonant energy and in-flight transformation reservations must remain accounted exactly once. No code/test changes were made.
 
 PR #205 comment [6348852052](https://github.com/coringilbert16-cmyk/EvoSim-/pull/205#issuecomment-6348852052) records this addendum.
+
+
+### 17.29 Recommended Phase 8 design — generic detached physical structure + atomic ownership transfer
+
+**Recommendation for design review; not yet implemented or treated as a settled API contract.**
+
+Do not convert `ReproductiveConstruction.developing_structure` into a fresh ordinary `Material`, and do not reuse legacy `DecomposingBody`. Instead, introduce (or reuse if a suitable type is found during implementation audit) a **generic detached physical-structure holder** that owns the existing realized structure as-is and participates in the same ordinary structural chemistry rules. It has no genome and performs no biological work. Its purpose is physical ownership, not a special decomposition process.
+
+The holder must preserve:
+- the existing constituent units and realized geometry;
+- bond identities/endpoints and current bond-energy state;
+- world anchor/placement needed for collision, contact, and chemistry;
+- explicit ownership of associated usable/developing/resonant energy, keeping these energy categories distinct.
+
+The parent organism remains physically present and continues ordinary chemistry after core breach. Stored physical material and committed construction material should transfer into authoritative environmental/physical ownership using deterministic valid placements. The developing structure should transfer as a structure graph, not be flattened into a composition unless an audited lossless representation proves it preserves geometry, bond endpoints, and energy.
+
+**Death should be a one-time lifecycle/ownership transition**, not per-tick rediscovery and not a second decomposition law. Biological functions stop; existing chemical rules continue on every physical structural graph. Active transformations retain their existing settlement/rollback behavior and must never be orphaned by the transition. Resonant energy must remain a separately tracked reservoir until a deliberate rule determines whether and how it can be consumed or dissipated; do not silently reclassify it as usable energy.
+
+**Atomic transfer protocol:**
+1. Prepare: validate source holders, every destination/placement, geometry, and all energy ownership before draining anything.
+2. Commit: transfer the original holdings exactly once, retaining original object/graph identity and energy state where possible.
+3. Verify with independent material and per-category energy inventories.
+4. Roll back completely on failure, or retain each untransferred holding under its existing owner for a safe retry. Never drain-and-ignore insertion failure.
+
+**Regression design:** build a test organism with nonempty stored physical material, committed reproductive material, a nonempty developing structure with nonzero bond energy, developing energy, resonant energy, usable energy, and an in-flight transformation where feasible. Trigger an existing core-breach path, snapshot independent material and energy-category inventories, then run bounded live ticks. Assert the parent body remains physical, biological construction no longer advances, detached physical graphs and released material participate in ordinary chemistry, bonds remain intact until legitimately changed by chemistry, all holders are counted exactly once, and failed insertion preserves ownership. Do not introduce `DecomposingBody` or special one-bond decomposition.
+
+**Why this is preferred:** it preserves the existing physical graph and its bond energy rather than reconstructing them from composition, makes death a clear ownership boundary, and allows one general chemistry engine to handle living and nonliving physical structures. Main design cost/risk is extending spatial queries, collision/contact, chemical reaction enumeration, persistence/serialization, and independent inventory to the detached-structure collection; audit those call sites before coding.
+
+**Open decisions before implementation:** choose the minimal home for the detached-structure collection (environment/world state), define its stable ID and anchor transform, define whether resonant energy persists indefinitely or dissipates under an already approved energy law, and prove all transfer paths can fail without partial loss. This recommendation is a proposed design, not approval to start coding; complete the call-site/API audit first.
