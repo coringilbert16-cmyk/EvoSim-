@@ -72,3 +72,14 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - README's “live capture stays disabled” sentence is stale: capture/settlement is live but unvalidated. Update only after audit closure and owner approval.
 - CI steps use five-minute timeouts. The staged graph API in `src/geometry/structure.rs` is not evidence of live energy-settlement reachability; trace production callers.
 - **Next:** produce a row-by-row exit checklist for Section 17.55, classify each transition as locally verified, test-required, or owner-decision-blocked, and reconcile with A0–A21 and Section 17.7. No implementation until every audit template is complete.
+
+
+## Latest exit-checklist reconciliation — 2026-10-22, Section 17.67
+
+- **Plan commit:** `c10cca789ca18e2c953ca344d0ae0f43dee30062`. PR #204 remains documentation-only.
+- The source-to-sink matrix is now reconciled into 17 explicit transition/release-gate rows. Local transaction ordering is confirmed for several paths, but material-loss paths, movement rollback, construction failure handling, malformed resonance inputs, cache invalidation, stale activation keys, and global conservation remain open.
+- **Owner-decision blocker:** whether non-primary stored/committed/developing surfaces owned by a living parent can retain resonance energy. Do not infer this from ownership alone.
+- No implementation authorized: deterministic failure tests and independent inventory assertions are still missing for several rows, and the final production mutation-path search remains to be reconciled.
+- Exact PR #205 source head used for this audit series: `12d8079230458da68a8dc3755a1d6a9b41347862`. No source/test changes were made.
+- Latest recorded workflow 39833438679 remains historical and baseline-red (585 passed, 27 failed, 1 ignored; baseline failure identities only, normalized Clippy identities unchanged). Re-fetch current head/CI before any code change.
+- **Next:** final source search for production material/energy mutation paths missing from Section 17.67, then close audit templates and owner decision before implementation.
