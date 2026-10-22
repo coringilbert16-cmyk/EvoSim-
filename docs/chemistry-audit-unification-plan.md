@@ -2048,3 +2048,10 @@ The material oracle and world-tone snapshot both explicitly account for active-o
 - Minimal fix candidate after audit completion: run stale-key cleanup before the empty-bond return, clearing that organism's entries when it has no bonds. Add a test where an organism with multiple accumulated keys loses its final bond, verifying obsolete keys disappear while another organism's entries remain. Do not change the activation/dissipation equations for this cleanup.
 
 **Next audit:** inspect remaining energy/material mutations and cache/catalog invalidation call sites; update the dependency matrix. No implementation until audit templates are complete.
+
+
+### 17.49 Cache/catalog invalidation note — 2026-10-22
+
+The schema-4 chemistry manifest uses a fixed equation fingerprint with a catalog-version marker. ChemistryKey contains material names and interface identity, not the actual catalog property values; cached static potential depends on chemical position. Current tests prove mismatched fingerprints are rejected, but do not prove a catalog property change automatically changes the fingerprint. Phase 4 must document and test the version-bump contract, or derive a deterministic fingerprint from chemistry-relevant catalog fields. No source/test change.
+
+**Next audit:** enumerate the exact inputs to interaction_potential and ChemistryKey so cache invalidation covers every value affecting the cached result.
