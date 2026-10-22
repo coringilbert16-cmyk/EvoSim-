@@ -124,3 +124,13 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - **Important wording:** “committed reproductive structure” means attached physical structure being built; it is not `committed_material` (stored inventory). Do not include stored material in resonance or rename it into structure.
 - Current finish handles Ready, Detached, and Dead by taking the construction record and attempting to produce an offspring; this is not yet proof of the previously approved atomic division of all units, holders, bonds, and energy. Keep parent ownership until the approved division boundary.
 - **Next:** audit all `ReproductiveConstruction` call sites, geometry/collision/cache assumptions, and independent material/energy oracles; define a single authoritative structure representation and revise sunlight/transaction tests. Other audit templates remain open, so no implementation yet. Historical CI remains workflow `39833438679`, not fresh verification.
+
+
+## Cross-call-site representation checkpoint — 2026-10-22, Section 17.72
+
+- **Plan commit:** `956575b99f5900b70427ec0da374f1edd431bc6e`. PR #204 remains documentation-only; PR #205 source head audited remains `12d8079230458da68a8dc3755a1d6a9b41347862`.
+- `ReproductiveConstruction` is serialized and carries `developing_structure`, committed storage, genome, developmental frame, stress, anchor index, developing energy, and maintenance debt. Removing the second graph has persistence/schema implications.
+- Movement translates the parent structure and then separately translates the construction graph; `parent_body_geometry` sees only the parent graph, while construction checks contact/boundary against two graphs. A unified structure must avoid double movement and include attached units in collision/occupancy/geometry.
+- Production structural-energy totals and the independent test energy snapshot sum parent and developing graph separately; usable energy also includes a separate construction holder. Update authoritative totals/oracles with representation changes so bonds count once and holder ownership remains explicit.
+- Tick order currently advances construction after ordinary chemistry and applies maintenance/resonance-overload BREAK to a temporary developing Organism. Decide which aggregate biological actions apply to the parent versus the internal second core while preserving death/ordinary-chemistry rules.
+- **Next:** inspect serialization/load compatibility and tests for anchor/cavity/boundary/detachment semantics, then finish the canonical single-structure design and acceptance cases. Do not patch sunlight alone. Other audit templates remain open; no source/test changes. Recorded CI remains historical workflow `39833438679`.
