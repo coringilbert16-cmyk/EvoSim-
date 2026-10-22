@@ -374,9 +374,11 @@ mod tests {
         let catalog = default_catalog();
         let structure = OrganismStructure::new();
         let unknown_core = [PhysicalConstituentId(u64::MAX)];
-        assert!(analyze_genome_cavity_for_core(&structure, &catalog, &unknown_core)
-            .unwrap()
-            .is_none());
+        assert!(
+            analyze_genome_cavity_for_core(&structure, &catalog, &unknown_core)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
