@@ -355,6 +355,7 @@ mod integration_tests {
     fn contained_physical_material_becomes_storage_without_an_acquire_action() {
         let mut s = Simulation::new(21, 10.0);
         for cell in &mut s.environment.field.cells {
+            cell.materials.clear();
             cell.physical_materials.clear();
         }
         let organism = s.organisms[0].clone();
@@ -365,7 +366,7 @@ mod integration_tests {
         .expect("initial organism should expose an accessible interior region");
         let region = regions
             .iter()
-            .min_by(|a, b| {
+            .max_by(|a, b| {
                 a.area
                     .partial_cmp(&b.area)
                     .unwrap_or(std::cmp::Ordering::Equal)
@@ -421,12 +422,20 @@ mod integration_tests {
         )
         .expect("base resource should have a valid physical realization");
         let before = s.organisms[0].stored_material.total_amount();
+        let inventory_before =
+            integer_material_inventory(&s).expect("pre-transfer inventory is integral");
         s.environment.field.deposit(anchor.x, anchor.y, physical);
         Simulation::transfer_contained_environmental_material(
             &mut s.organisms[0],
             &mut s.environment,
         );
         assert_eq!(s.organisms[0].stored_material.total_amount(), before + 1.0);
+        let inventory_after =
+            integer_material_inventory(&s).expect("post-transfer inventory is integral");
+        assert_eq!(
+            inventory_after, inventory_before,
+            "production containment transfer must preserve constituent totals"
+        );
     }
 
     #[test]
