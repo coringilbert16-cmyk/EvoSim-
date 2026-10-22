@@ -459,3 +459,11 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - **Owner choice B recorded:** at successful division, proportionally split the parent's remaining ordinary `usable_energy` between the two resulting organisms. All production costs remain debited directly from parent `usable_energy`; no separate developing-energy holder.
 - The proportional denominator remains open. Repository documentation supports the physical 160%-aggregate → two ~80%-organism goal but does not define an energy ratio. Candidate for owner confirmation: allocate energy by each validated child's post-split structural mass. Do not assume this candidate is approved or implement arbitrary 50/50.
 - Division stays atomic and exact-once; dead/non-Ready construction cannot create offspring. No source/test changes. Implementation gate: settle the proportional basis, then refresh exact PR #205 head and CI before first source change.
+
+
+## Resume checkpoint — structural-mass proportional division (Section 17.108, 2026-10-22)
+
+- **Owner-approved rule:** on successful division, split the parent's remaining ordinary `usable_energy` in proportion to each validated resulting organism's post-split structural mass. For valid masses `m1`, `m2` and remaining energy `E`, use `E1 = E * m1 / (m1 + m2)`, `E2 = E - E1` (or the symmetric calculation with deterministic residue assignment), after validating finite positive masses and valid finite energy. The two allocations must sum exactly to `E` within the accounting representation.
+- All production costs debit the parent's `usable_energy` atomically with structural mutations. No separate developing-energy holder/reserve. Only a successful atomic division creates resulting organisms; dead/non-Ready construction cannot produce offspring.
+- Do not implement the split formula against the old separate-child graph in isolation. It belongs inside the canonical aggregate/two-organism atomic partition, with exact-once material/bond/storage/energy ownership and rollback.
+- Documentation update commit: `85df557c9e33f9dfd5c381d6e5c68d47fe3b6c08`. PR #204 remains docs-only. Next: refresh PR #205 head and audit its current reproduction/division/ledger/test boundary before the next source change; commands/tests ≤5 minutes, compare failure identities against baseline.
