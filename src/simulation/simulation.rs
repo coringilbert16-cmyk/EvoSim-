@@ -1628,8 +1628,11 @@ mod decomposition_finalization_tests {
         let simulation = Simulation::new(914, 10.0);
         let inventory = simulation.energy_inventory_snapshot();
 
+        // The starting usable reserve is an explicit external input, not a
+        // tick-zero stored baseline. Counting both would double-count it.
+        assert_eq!(inventory.initial_usable_energy, 0.0);
         assert_eq!(
-            inventory.initial_usable_energy,
+            inventory.external_energy_input,
             inventory.current_usable_energy
         );
         assert_eq!(
