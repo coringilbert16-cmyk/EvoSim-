@@ -491,9 +491,7 @@ impl<'de> Deserialize<'de> for PhysicalConstituentGraph {
             .map(|group| {
                 let mut cleaned: Vec<_> = group
                     .into_iter()
-                    .filter(|id| {
-                        id.0 != 0 && used.contains(id) && assigned_ids.insert(*id)
-                    })
+                    .filter(|id| id.0 != 0 && used.contains(id) && assigned_ids.insert(*id))
                     .collect();
                 cleaned.sort_unstable_by_key(|id| id.0);
                 cleaned
