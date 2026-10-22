@@ -2458,3 +2458,24 @@ No source or test files were changed in this checkpoint. PR #204 remains documen
 8. Save/load: a persisted aggregate cannot resurrect a legacy second graph, drop attached units, or count a unit twice. Define whether legacy serialized construction records need migration or fail-closed handling before changing the serialized model.
 
 **Audit implication:** do not preserve test names/expectations merely to minimize diff. The tests are evidence of current architecture, not higher authority than the owner-approved model. First specify the unified structure and save/load transition; then revise tests and implementation together. Chemistry audit remains open; no implementation authorized yet.
+
+
+### 17.74 Cache invalidation and serialized-state implications — unified structure cannot bypass organism revisions — 2026-10-22
+
+**Status: Dependency identified; migration policy remains open.** Source review at PR #205 head `12d8079230458da68a8dc3755a1d6a9b41347862`.
+
+- `Organism::mark_structure_changed` increments `structure_revision` and invalidates cached cavity, developmental realization, and harmonic key. The current construction path mutates `ReproductiveConstruction.developing_structure` separately, so it does not need to invalidate the parent’s structure caches today. Once attached units become part of `organism.structure`, every successful anchor/growth/rollback/partition mutation must call the canonical invalidation path exactly when committed; failed candidate changes must leave revisions/caches unchanged.
+- The parent’s genome cavity is computed from `organism.structure`. Under one aggregate graph, cavity analysis must still identify the parent’s actual genome core and the internal second core without reinterpreting the whole aggregate as one cavity or changing organism viability implicitly. The current anchor-boundary rule refers to an index in the separate construction graph; migration must remap/replace that identity when units are merged.
+- `ReproductiveConstruction` is serialized, while parent `structure` is serialized separately. The current deserializer can load a construction record as a separate graph. A new representation must define a versioned migration that merges each legacy construction graph exactly once into parent structure, or fail closed with a recoverable explicit error. Simply deleting/ignoring the old field would lose physical units, bonds, and bond energy; merging without an idempotence guard could duplicate them on repeated load/save.
+- The current `reproductive_construction` option is `serde(default)`, but `committed_material` and `developing_structure` within the record are required fields. Legacy/malformed record behavior must be tested separately from the normal new-schema round trip.
+- Geometry snapshot caches are built per frame and map organism indices to only the primary graph body. After unification, the parent mapping must include all attached structure units while stored material stays separate. Movement and structure revisions must ensure no stale cached geometry or resonance key survives a committed construction mutation.
+
+**Required acceptance cases:**
+
+1. New-schema save/load round-trip preserves each aggregate unit, bond, storage item, genome-core identity, and energy holder exactly once.
+2. Legacy save with active construction either migrates to the aggregate once or fails closed without silently losing state; repeated save/load cannot merge twice.
+3. Anchor attach and successful growth invalidate structure/cavity/developmental/harmonic caches; waiting/rejected growth leaves revisions and caches unchanged.
+4. Parent cavity/genome identity remains stable where expected while second-core construction evolves inside the same aggregate; explicit tests prove the two genome cores are not accidentally conflated.
+5. Movement translates attached units once and leaves stored material at owner-relative positions; snapshot geometry, collision checks, and receiver mapping agree on the same physical aggregate.
+
+No implementation is authorized by this audit. The serialized model, cache invalidation, and core-identity semantics must be designed together before the first structure-representation change.
