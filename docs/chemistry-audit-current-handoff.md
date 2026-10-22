@@ -43,8 +43,8 @@ At `0148437`:
 
 1. Two deduplicated independent-inventory negative tests assert exact rejection of an unknown resource identity and fractional Carbon amount.
 2. The production containment integration test now uses the narrow rigid Hydrogen strip (1.0 × 0.1) instead of a Carbon hexagon, because the intermediate run at `4f4b2af` showed the seed chamber could not fit a whole Carbon. It still compares independent constituent inventory before/after the live `Simulation::transfer_contained_environmental_material` call. This fixture change is test-only and awaits verification.
-3. A cache partial-append rollback test appends an incomplete row, invokes the rollback primitive with an injected error, and verifies original data bytes and manifest remain unchanged and the previously committed row can be reopened. The malformed byte literal from `a1cc6e2` was corrected at `25f1df5` using a raw byte string.
-4. Exact-head workflow [39818747953](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39818747953) is in progress. No pass is inferred.
+3. A cache partial-append rollback test appends an incomplete row, invokes the rollback primitive with an injected error, and verifies original data bytes and manifest remain unchanged and the previously committed row can be reopened. The malformed byte literal from `a1cc6e2` was corrected at `25f1df5` using a raw byte string. Workflow [39818514455](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39818514455) at `25f1df5` then reported **580 passed, 28 failed, 1 ignored**, with the same 28 named baseline failures; the new append-rollback test passed. Strict Clippy's normalized diagnostic messages matched baseline. This run predates the Hydrogen fixture change.
+4. Exact-head workflow [39818747953](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39818747953) for `0148437` is in progress. No pass is inferred.
 
 ## Next actions
 
