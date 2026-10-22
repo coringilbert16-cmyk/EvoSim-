@@ -152,6 +152,7 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         active_movement: None,
         reproductive_construction: None,
         structure: construction.developing_structure.clone(),
+        genome_core_identity_established: false,
         structure_revision: 0,
         position_revision: 0,
         cached_cavity_revision: None,
