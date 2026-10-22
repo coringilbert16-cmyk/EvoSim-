@@ -1977,3 +1977,17 @@ The material oracle and world-tone snapshot both explicitly account for active-o
 3. Test resonance-overload BREAK settlement rejection preserves graph, reservoir, stress, and all ledger counters; success removes one bond and debits resonance exactly once.
 4. Reconcile movement's heat-only cost with D7's work/heat contract and measure actual displacement semantics before any equation change.
 5. Continue to audit other operations that mutate geometry before energy settlement; no implementation until the complete audit register is full.
+
+
+### 17.45 Acquisition and expulsion atomicity audit — 2026-10-22, PR #205 head 12d8079230458da68a8dc3755a1d6a9b41347862
+
+**Status: Gap found.** Exact-head review of COMBINE bond formation, contained-material acquisition, expulsion, and storage. No source/test changes.
+
+- **COMBINE bond formation is a positive pattern:** validate and build a trial graph, settle the energy ledger, then commit the graph. Ledger rejection leaves the trial graph uncommitted. The enclosing multi-tick source/rollback issues remain separately open.
+- **Contained acquisition has best-effort restoration:** field objects are removed as a batch, then stored one at a time. If storage rejects an object, the code tries to deposit it back at its first placement but ignores the result. A rejected fallback leaves no authoritative holder in this path. Partial success is safe only if every failed item is retained or restored exactly.
+- **Expulsion has a final rejection gap:** it removes the exact storage entry, computes world placements, and returns the result of the final physical deposit directly. Unlike earlier failure branches, it does not restore the object if that final deposit rejects. Rollback must preserve the original intrinsic/owner-relative form, not the mutated candidate world placements.
+- **instantiate_one_unit** follows a sounder pattern: restore into a trial graph, remove the matching source, then commit the graph; failed source removal does not commit the trial graph.
+
+**Required tests:** force destination rejection for contained acquisition and expulsion; compare the independent integer material oracle, original geometry/owner-relative origin, field contents, and parent storage. Also verify multi-object partial acquisition leaves every rejected source represented exactly once. No source change authorized until all audit templates are complete.
+
+**Next audit:** trace direct mutations of usable energy, resonant reservoirs, graph bonds, and environmental physical material that bypass a checked transaction/transfer helper.
