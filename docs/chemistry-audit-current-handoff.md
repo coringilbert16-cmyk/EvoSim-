@@ -1,6 +1,6 @@
 # Chemistry Unification — Current Handoff
 
-**Plan (latest recorded plan commit):** `af5cb77dab1842e10c699980edbd715af3b4bbda`  
+**Plan (latest recorded plan commit):** `0f66f7b5ae7d15244306afc30529a110493054a3`  
 **PR #205 last audited head (historical; refresh before implementation):** `12d8079230458da68a8dc3755a1d6a9b41347862`  
 **CI:** [39833438679](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39833438679).
 
@@ -26,7 +26,7 @@ PR #204 is documentation-only. Full decisions and audit records are in `docs/che
 
 ## Next
 
-The current A0–A21 summary and Section 17.7 tracker are reconciled. Section 17.55 consolidates source→holder→sink paths; Section 17.56 maps energy APIs. Finish remaining call-site/failure matrix before implementation. After audit closure, prioritize stored BREAK atomic ownership, checked acquisition/expulsion returns, movement geometry/ledger atomicity, bondless key cleanup, catalog fingerprint and prepared-ledger invariants, and construction-transfer rejection behavior. Re-fetch PR #205 head and CI before any code change. Do not claim chemistry unified until Section 17.6 release gates have evidence.
+The current A0–A21 summary and Section 17.7 tracker are reconciled. Section 17.55 consolidates source→holder→sink paths; Section 17.56 maps energy APIs. Owner decision D16 / Section 17.83 now explicitly approves one authoritative physical graph: no reproductive-material tag and no separate physical `developing_structure`; any structurally attached unit is ordinary structure and participates in owner resonance, while only stored material is excluded. Finish remaining call-site/failure matrix before implementation. After audit closure, prioritize stored BREAK atomic ownership, checked acquisition/expulsion returns, movement geometry/ledger atomicity, bondless key cleanup, catalog fingerprint and prepared-ledger invariants, and construction-transfer rejection behavior. Re-fetch PR #205 head and CI before any code change. Do not claim chemistry unified until Section 17.6 release gates have evidence.
 
 Future reproduction is separate: start adjacent budding at 100% original size, grow to 160% total, split into two roughly 80%-size children.
 
@@ -226,3 +226,13 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Recommended implication: before division, maintenance/stress/death eligibility belongs to the parent aggregate; construction is an internal process, not a second living organism. Parent death stops growth while attached units/material remain physical and ordinary chemistry continues. Do not delete reserve/stress/debt fields until separating accounting sub-holders from duplicate child-organism state.
 - Required tests cover no separate pre-split maintenance/death/overload, dead-parent no-growth/finish, no offspring after dead construction without explicit recovery, parent aggregate maintenance once, and conserved parent-owned reserve across waiting/growth/death/division.
 - **Open semantic confirmation:** should parent maintenance/stress apply to the entire aggregate during internal budding, with no independent developing-core maintenance/death state? Existing owner rules strongly imply yes, but exact energy/stress allocation needs explicit confirmation before code changes.
+
+## Owner-confirmed aggregate-structure decision — D16 / Section 17.83
+
+- **Plan commit:** `0f66f7b5ae7d15244306afc30529a110493054a3`. PR #204 remains documentation-only.
+- Owner explicitly confirmed: reproductive material is not a special designation; committed reproductive structure and physical structure are the same; a separate authoritative developing physical graph should not exist; structurally attached units count for resonance; only stored material is excluded from owner capture.
+- Canonical representation: one parent-owned physical graph for all attached units. Construction retains only justified nonphysical core/progress metadata and explicitly defined accounting sub-holders. No physical units should be duplicated or classified by reproductive role.
+- Receiver mapping must enumerate the aggregate graph once and credit attached surfaces to the owner's resonance reservoir under the same eligibility/settlement rules as other attached structure. Stored material remains separate and does not credit the owner, though it may occlude/receive onward signal.
+- Sections 17.70–17.81 are historical evidence/recommendations to be read through this decision. Section 17.82's observation that current source has a separate graph remains valid; its exact parent maintenance/stress allocation question is still open, but cannot justify restoring a second physical graph.
+- No source/test changes. Audit closure remains blocked on the transition/failure matrix, core-specific cavity identity, inventory and diagnostic JSON reconciliation, world-tone exact-small-world tests, cache invalidation/restart, and whole-world conservation.
+- **Next:** complete the source/holder and transaction-failure matrices; then update/reconcile the exit checklist and release gates. No implementation until every audit template is complete. Before the first implementation change, refresh PR #205 head and current CI.
