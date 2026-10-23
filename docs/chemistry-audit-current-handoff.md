@@ -740,4 +740,4 @@ Live capture is active, not disabled. `Simulation::step` settles the precomputed
 
 ### World-tone nonliving-only path fix — verification pending
 
-Audit found that the world-tone path generator omitted lanes with no selected living receiver, even when dead/environmental physical surfaces intercepted the source. The path builder now includes all physical surface paths while keeping direct-exposure attribution targeted, and a regression requires nonliving response to settle as heat with remaining energy escaping. Current PR #205 head `908376e075df89764503a1641bc09a2545264160`; focused and full exact-head CI still required.
+An initial suspicion that world-tone omitted nonliving-only paths was disproven: `from_simulation_for_organisms` builds the live frame with every realized body as an energy-accounting target. The temporary all-surfaces path API was reverted to avoid duplicating existing behavior. A new regression and focused CI gate now pin the already-existing behavior that nonliving surfaces settle as heat and the remaining signal escapes. Current PR #205 head is being reverified after the formatting-only test change.
