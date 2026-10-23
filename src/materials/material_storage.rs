@@ -138,6 +138,12 @@ impl MaterialStorage {
         instances: Vec<PhysicalMaterial>,
         anchor: Placement,
     ) -> Option<Vec<StoredMaterial>> {
+        if !anchor.x.is_finite()
+            || !anchor.y.is_finite()
+            || !anchor.rotation_radians.is_finite()
+        {
+            return None;
+        }
         let mut prepared = Vec::with_capacity(instances.len());
         for instance in instances {
             let origin = instance
@@ -152,12 +158,19 @@ impl MaterialStorage {
             {
                 return None;
             }
-            let mut instance = instance.into_intrinsic_frame()?;
-            instance.owner_relative_origin = Some(Placement {
+            let owner_relative_origin = Placement {
                 x: origin.x - anchor.x,
                 y: origin.y - anchor.y,
                 rotation_radians: origin.rotation_radians,
-            });
+            };
+            if !owner_relative_origin.x.is_finite()
+                || !owner_relative_origin.y.is_finite()
+                || !owner_relative_origin.rotation_radians.is_finite()
+            {
+                return None;
+            }
+            let mut instance = instance.into_intrinsic_frame()?;
+            instance.owner_relative_origin = Some(owner_relative_origin);
             prepared.push(StoredMaterial::Physical(instance));
         }
         Some(prepared)
@@ -176,6 +189,12 @@ impl MaterialStorage {
         instance: PhysicalMaterial,
         anchor: Placement,
     ) -> Result<(), PhysicalMaterial> {
+        if !anchor.x.is_finite()
+            || !anchor.y.is_finite()
+            || !anchor.rotation_radians.is_finite()
+        {
+            return Err(instance);
+        }
         let Some(origin) = instance
             .placements
             .as_ref()
@@ -191,14 +210,21 @@ impl MaterialStorage {
         {
             return Err(instance);
         }
-        let mut instance = instance
-            .into_intrinsic_frame()
-            .expect("validated physical material must have an intrinsic origin");
-        instance.owner_relative_origin = Some(Placement {
+        let owner_relative_origin = Placement {
             x: origin.x - anchor.x,
             y: origin.y - anchor.y,
             rotation_radians: origin.rotation_radians,
-        });
+        };
+        if !owner_relative_origin.x.is_finite()
+            || !owner_relative_origin.y.is_finite()
+            || !owner_relative_origin.rotation_radians.is_finite()
+        {
+            return Err(instance);
+        }
+        let mut instance = instance
+            .into_intrinsic_frame()
+            .expect("validated physical material must have an intrinsic origin");
+        instance.owner_relative_origin = Some(owner_relative_origin);
         self.entries.insert(0, StoredMaterial::Physical(instance));
         Ok(())
     }
@@ -620,6 +646,44 @@ mod tests {
             anchor
         )
         .is_none());
+    }
+
+    #[test]
+    fn owner_anchor_storage_rejects_non_finite_anchor_without_mutating_inventory() {
+        use crate::physical_material::PhysicalMaterial;
+
+        let instance = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 1.0,
+                y: 2.0,
+                rotation_radians: 0.25,
+            }],
+            &catalog(),
+        )
+        .expect("valid physical material should realize");
+        let invalid_anchor = Placement {
+            x: f64::NAN,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        assert!(
+            MaterialStorage::prepare_physical_batch_at_owner_anchor(
+                vec![instance.clone()],
+                invalid_anchor,
+            )
+            .is_none(),
+            "batch acquisition must reject a non-finite owner anchor"
+        );
+
+        let mut storage = MaterialStorage::default();
+        assert!(
+            storage
+                .try_store_physical_instance_at_owner_anchor(instance, invalid_anchor)
+                .is_err(),
+            "single-object acquisition must return the original source on rejection"
+        );
+        assert!(storage.is_empty());
     }
 
     #[test]
