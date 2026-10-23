@@ -602,7 +602,8 @@ impl ActiveMaterialField {
             let Some(index) = self.index_for_position(x, y) else {
                 return false;
             };
-            if index >= self.cells.len() || !material.is_realized()
+            if index >= self.cells.len()
+                || !material.is_realized()
                 || material.material.is_empty()
                 || !material.material.is_valid()
             {
