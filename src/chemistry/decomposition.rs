@@ -294,12 +294,8 @@ mod tests {
             bond_energy: 10.0,
         });
 
-        let mut body = DecomposingBody::new(
-            structure,
-            100.0,
-            Position { x: 5.0, y: 7.0 },
-        )
-        .expect("decomposing body should be valid");
+        let mut body = DecomposingBody::new(structure, 100.0, Position { x: 5.0, y: 7.0 })
+            .expect("decomposing body should be valid");
         let bonds_before = body.structure.bonds.clone();
         let units_before = body.structure.units.clone();
         let energy_before = body.energy_budget;
@@ -331,7 +327,10 @@ mod tests {
             ledger.total_structural_energy_delta,
             ledger_before.total_structural_energy_delta
         );
-        assert_eq!(ledger.total_work_expended, ledger_before.total_work_expended);
+        assert_eq!(
+            ledger.total_work_expended,
+            ledger_before.total_work_expended
+        );
         assert_eq!(
             ledger.total_potential_energy_released,
             ledger_before.total_potential_energy_released
