@@ -350,6 +350,7 @@ impl PhysicalMaterial {
             return false;
         };
         if placements.is_empty()
+            || placements.len() != self.material.parts.len()
             || placements.iter().any(|placement| {
                 !placement.x.is_finite()
                     || !placement.y.is_finite()
@@ -836,6 +837,50 @@ mod tests {
         .expect("test material should realize");
         physical.placements.as_mut().unwrap()[0].x = f64::NAN;
         assert!(!physical.is_realized());
+    }
+
+    #[test]
+    fn realized_state_rejects_placement_count_mismatches() {
+        let catalog = crate::resources::default_catalog();
+        let material = Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: Vec::new(),
+        };
+        let valid = PhysicalMaterial::realized(
+            material,
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 1.5,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("valid unbonded composite should realize");
+
+        let mut missing = valid.clone();
+        missing.placements.as_mut().unwrap().pop();
+        assert!(
+            !missing.is_realized(),
+            "a persisted composite missing a constituent placement must fail closed"
+        );
+
+        let mut extra = valid;
+        extra.placements.as_mut().unwrap().push(Placement {
+            x: 3.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        });
+        assert!(
+            !extra.is_realized(),
+            "a persisted composite with an extra placement must fail closed"
+        );
     }
 
     #[test]
