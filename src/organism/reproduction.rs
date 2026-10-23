@@ -843,6 +843,7 @@ pub(crate) fn finish_reproduction(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::SeedableRng;
     use crate::genome::initial_genome;
     use crate::resources::{default_catalog, Material};
     use crate::state::Simulation;
