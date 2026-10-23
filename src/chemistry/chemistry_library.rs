@@ -25,10 +25,10 @@ fn quantize(value: f64) -> i64 {
 const INVALID_CHEMICAL_POSITION_KEY: i64 = i64::MIN;
 
 fn quantize_chemical_position(value: f64) -> i64 {
-    if !value.is_finite() || !(0.0..=crate::chemistry::CHEMICAL_D_MAX).contains(&value) {
-        INVALID_CHEMICAL_POSITION_KEY
-    } else {
+    if value.is_finite() {
         quantize(value)
+    } else {
+        INVALID_CHEMICAL_POSITION_KEY
     }
 }
 
@@ -181,12 +181,7 @@ impl ChemistryRecord {
                 self.key.chemical_position_b,
             ) {
                 (Some(a), Some(b)) => {
-                    a != INVALID_CHEMICAL_POSITION_KEY
-                        && b != INVALID_CHEMICAL_POSITION_KEY
-                        && a >= 0
-                        && b >= 0
-                        && a <= quantize(crate::chemistry::CHEMICAL_D_MAX)
-                        && b <= quantize(crate::chemistry::CHEMICAL_D_MAX)
+                    a != INVALID_CHEMICAL_POSITION_KEY && b != INVALID_CHEMICAL_POSITION_KEY
                 }
                 (None, None) => true,
                 _ => false,
@@ -515,7 +510,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_non_finite_and_out_of_domain_chemical_position_keys() {
+    fn rejects_non_finite_chemical_position_keys() {
         let root = test_root("invalid-position-key");
         let _ = fs::remove_dir_all(&root);
         let mut library = ChemistryLibrary::open(&root).unwrap();
@@ -525,7 +520,7 @@ mod tests {
             "Hydrogen",
             crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 0 },
         );
-        for invalid_position in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, -0.1, 13.1] {
+        for invalid_position in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             let key = ChemistryKey::from_live_geometry(
                 "Carbon",
                 "Hydrogen",
@@ -539,11 +534,11 @@ mod tests {
             };
             assert!(
                 !record.is_valid(),
-                "invalid chemical position {invalid_position:?} must not become a cache key"
+                "non-finite chemical position {invalid_position:?} must not become a cache key"
             );
             assert!(
                 !library.insert(record).unwrap(),
-                "invalid chemical position {invalid_position:?} must not persist"
+                "non-finite chemical position {invalid_position:?} must not persist"
             );
         }
         assert!(library.is_empty());
