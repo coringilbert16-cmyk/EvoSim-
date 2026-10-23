@@ -600,6 +600,8 @@ mod integration_tests {
 
         let material_before =
             integer_material_inventory(&s).expect("initial material inventory is integral");
+        let construction_before = serde_json::to_value(&s.organisms[0].reproductive_construction)
+            .expect("active reproductive construction should serialize");
         let initial_energy = s.energy_inventory_snapshot();
         assert!(
             initial_energy.is_balanced(1e-9),
@@ -632,6 +634,12 @@ mod integration_tests {
             assert!(
                 (inventory.current_structural_energy - expected_structural).abs() <= 1e-9,
                 "structural-energy holders must be counted once through tick {tick}"
+            );
+            assert_eq!(
+                serde_json::to_value(&s.organisms[0].reproductive_construction)
+                    .expect("active reproductive construction should serialize"),
+                construction_before,
+                "biological construction must not advance after core breach at tick {tick}"
             );
             assert!(
                 s.decomposing_bodies.is_empty(),
