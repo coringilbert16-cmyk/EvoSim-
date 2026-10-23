@@ -1233,7 +1233,8 @@ mod tests {
             total_structural_energy_delta: before_ledger.total_structural_energy_delta - 0.3,
             total_external_energy_input: before_ledger.total_external_energy_input + 0.4,
             initial_condition_energy_settled: false,
-            total_world_tone_energy_unabsorbed: before_ledger.total_world_tone_energy_unabsorbed + 0.5,
+            total_world_tone_energy_unabsorbed: before_ledger.total_world_tone_energy_unabsorbed
+                + 0.5,
             total_world_tone_energy_escaped: before_ledger.total_world_tone_energy_escaped + 0.6,
             total_usable_energy_gained: before_ledger.total_usable_energy_gained + 0.7,
             total_work_expended: before_ledger.total_work_expended + 0.8,
@@ -1557,15 +1558,15 @@ mod tests {
 
         let mut invalid_index = transformation.clone();
         invalid_index.combine_environmental_source_index = Some(usize::MAX);
-        let before_invalid_restore =
-            environment.field.cells[cell_index].physical_materials.clone();
+        let before_invalid_restore = environment.field.cells[cell_index]
+            .physical_materials
+            .clone();
         assert!(
             !restore_combine_environmental_source(&invalid_index, &mut environment),
             "corrupt source indices must fail closed instead of silently clamping"
         );
         assert_eq!(
-            environment.field.cells[cell_index].physical_materials,
-            before_invalid_restore,
+            environment.field.cells[cell_index].physical_materials, before_invalid_restore,
             "a rejected exact restore must not mutate the environmental inventory"
         );
     }
