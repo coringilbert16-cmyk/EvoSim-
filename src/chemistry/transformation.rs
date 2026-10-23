@@ -385,7 +385,7 @@ pub(crate) fn environmental_break_candidates(
         let Some(cell) = environment.field.cells.get(cell_index) else {
             continue;
         };
-        for instance in &cell.physical_materials {
+        for (material_index, instance) in cell.physical_materials.iter().enumerate() {
             let Some(connections) = instance.internal_connections.as_ref() else {
                 continue;
             };
@@ -435,7 +435,7 @@ pub(crate) fn environmental_break_candidates(
                     candidates.push(ActionCandidate {
                         action: ActionKind::Break,
                         context_key: Some(format!(
-                            "environment:cell:{cell_index}:bond:{bond_index}"
+                            "environment:cell:{cell_index}:material:{material_index}:bond:{bond_index}"
                         )),
                     });
                 }
@@ -467,8 +467,10 @@ pub(crate) fn try_start_environmental_break(
     }
     let key = decision.context_key.as_deref()?;
     let rest = key.strip_prefix("environment:")?;
-    let (cell_part, bond_part) = rest.rsplit_once(":bond:")?;
+    let (cell_material_part, bond_part) = rest.rsplit_once(":bond:")?;
+    let (cell_part, material_part) = cell_material_part.rsplit_once(":material:")?;
     let cell_index = cell_part.strip_prefix("cell:")?.parse::<usize>().ok()?;
+    let material_index = material_part.parse::<usize>().ok()?;
     let bond_index = bond_part.parse::<usize>().ok()?;
 
     let regions = crate::interior_geometry::find_accessible_interior_regions(
@@ -483,61 +485,55 @@ pub(crate) fn try_start_environmental_break(
         &organism.structure,
         &environment.catalog,
     )?;
-    let candidates = environment
+    let candidate_cells = environment
         .field
         .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
-    let selected = if candidates.contains(&cell_index) {
-        let cell = environment.field.cells.get(cell_index)?;
-        let mut selected = None;
-        for (material_index, instance) in cell.physical_materials.iter().enumerate() {
-            let Some(connections) = instance.internal_connections.as_ref() else {
-                continue;
-            };
-            let Some(target) = connections.get(bond_index).cloned() else {
-                continue;
-            };
-            if instance.placements.is_none() {
-                continue;
-            }
-            let mut hypothetical = organism.structure.clone();
-            let Some(indices) = crate::material_restoration::restore_material(
-                &mut hypothetical,
-                instance,
-                Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-                &environment.catalog,
-            ) else {
-                continue;
-            };
-            let Some(&a_index) = indices.get(target.part_a) else {
-                continue;
-            };
-            let Some(&b_index) = indices.get(target.part_b) else {
-                continue;
-            };
-            let endpoint_a = target.endpoint_a;
-            let endpoint_b = target.endpoint_b;
-            let point_a =
-                endpoint_a.world_point(&hypothetical.units[a_index], &environment.catalog)?;
-            let point_b =
-                endpoint_b.world_point(&hypothetical.units[b_index], &environment.catalog)?;
-            let accessible = regions.iter().any(|region| {
-                region.contains_point(point_a.x, point_a.y)
-                    || region.contains_point(point_b.x, point_b.y)
-            });
-            if accessible {
-                selected = Some((material_index, instance.clone(), target));
-                break;
-            }
+    if !candidate_cells.contains(&cell_index) {
+        return None;
+    }
+
+    let (target, accessible) = {
+        let instance = environment
+            .field
+            .cells
+            .get(cell_index)?
+            .physical_materials
+            .get(material_index)?;
+        let connections = instance.internal_connections.as_ref()?;
+        let target = connections.get(bond_index)?.clone();
+        let placements = instance.placements.as_ref()?;
+        if placements.len() != instance.material.parts.len() {
+            return None;
         }
-        selected
-    } else {
-        None
+
+        let mut hypothetical = organism.structure.clone();
+        let indices = crate::material_restoration::restore_material(
+            &mut hypothetical,
+            instance,
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &environment.catalog,
+        )?;
+        let &a_index = indices.get(target.part_a)?;
+        let &b_index = indices.get(target.part_b)?;
+        let point_a = target
+            .endpoint_a
+            .world_point(&hypothetical.units[a_index], &environment.catalog)?;
+        let point_b = target
+            .endpoint_b
+            .world_point(&hypothetical.units[b_index], &environment.catalog)?;
+        let accessible = regions.iter().any(|region| {
+            region.contains_point(point_a.x, point_a.y)
+                || region.contains_point(point_b.x, point_b.y)
+        });
+        (target, accessible)
     };
-    let (material_index, removed, target) = selected?;
+    if !accessible {
+        return None;
+    }
 
     environment.field.cells[cell_index]
         .physical_materials
@@ -771,6 +767,48 @@ pub(crate) fn original_stored_source_index(transformation: &ActiveTransformation
     index.parse().ok()
 }
 
+pub(crate) fn original_environmental_source_location(
+    transformation: &ActiveTransformation,
+) -> Option<(usize, usize)> {
+    let key = transformation.decision_context_key.as_deref()?;
+    let rest = key.strip_prefix("environment:")?;
+    let (cell_material_part, bond_part) = rest.rsplit_once(":bond:")?;
+    let _bond_index = bond_part.parse::<usize>().ok()?;
+    let (cell_part, material_part) = cell_material_part.rsplit_once(":material:")?;
+    let cell_index = cell_part.strip_prefix("cell:")?.parse::<usize>().ok()?;
+    let material_index = material_part.parse::<usize>().ok()?;
+    Some((cell_index, material_index))
+}
+
+/// Restore environmental BREAK escrow to the exact field cell and list position
+/// from which it was reserved. Returning false lets the caller preserve the source
+/// in another explicit holder if a malformed operation has lost its location key.
+pub(crate) fn restore_environmental_break_source(
+    transformation: &ActiveTransformation,
+    environment: &mut Environment,
+) -> bool {
+    if !transformation.environmental_source {
+        return false;
+    }
+    let Some(source) = transformation.stored_material.as_ref() else {
+        return false;
+    };
+    let Some((cell_index, material_index)) = original_environmental_source_location(transformation)
+    else {
+        return false;
+    };
+    {
+        let Some(cell) = environment.field.cells.get_mut(cell_index) else {
+            return false;
+        };
+        let insertion_index = material_index.min(cell.physical_materials.len());
+        cell.physical_materials
+            .insert(insertion_index, source.clone());
+    }
+    environment.field.mark_changed_at_index(cell_index);
+    true
+}
+
 fn restore_failed_stored_break_source(
     transformation: &ActiveTransformation,
     organism: &mut Organism,
@@ -781,18 +819,9 @@ fn restore_failed_stored_break_source(
     }
     if let Some(source) = transformation.stored_material.as_ref() {
         if transformation.environmental_source {
-            let deposited = source
-                .placements
-                .as_ref()
-                .and_then(|placements| placements.first())
-                .is_some_and(|placement| {
-                    environment
-                        .field
-                        .deposit(placement.x, placement.y, source.clone())
-                });
-            if !deposited {
-                // Preserve ownership if a malformed environmental escrow cannot
-                // be returned to the field; never silently discard the source.
+            if !restore_environmental_break_source(transformation, environment) {
+                // If the original location metadata is malformed, preserve the
+                // escrow in an explicit holder rather than silently losing it.
                 organism.stored_material.entries.push(
                     crate::material_storage::StoredMaterial::Physical(source.clone()),
                 );
@@ -1236,6 +1265,162 @@ mod tests {
             organism.stored_material.entries, entries_before,
             "failed stored BREAK must restore the source at its exact original index"
         );
+        assert_eq!(organism.active_transformation_id, None);
+    }
+
+    fn environmental_break_test_organism(
+        id: &str,
+        active_transformation_id: Option<u64>,
+    ) -> Organism {
+        Organism {
+            id: id.into(),
+            developmental_origin: crate::state::Position { x: 0.0, y: 0.0 },
+            developmental_orientation_radians: 0.0,
+            occupied_cells: Vec::new(),
+            genome: crate::genome::initial_genome(),
+            harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+            resonant_energy: crate::harmonics::ResonantEnergyReservoir::default(),
+            experience_memory: crate::memory::ExperienceMemory::default(),
+            pending_movement_experience: None,
+            decision_history: crate::decision::DecisionHistory::default(),
+            usable_energy: 100.0,
+            stress: 0.0,
+            maintenance_debt: 0.0,
+            stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
+            stored_material: crate::material_storage::MaterialStorage::default(),
+            structure: crate::structure::OrganismStructure::new(),
+            genome_core_identity_established: false,
+            active_transformation_id,
+            active_movement: None,
+            reproductive_construction: None,
+            structure_revision: 0,
+            position_revision: 0,
+            cached_cavity_revision: None,
+            cached_cavity: None,
+            cached_developmental_revision: None,
+            cached_developmental_realization: None,
+            peak_developmental_realization: 0.0,
+            cached_harmonic_key: None,
+            last_movement_attempt: None,
+        }
+    }
+
+    fn environmental_break_test_inventory(
+        catalog: &[crate::resources::BaseResource],
+    ) -> (
+        Environment,
+        usize,
+        crate::physical_material::PhysicalMaterial,
+        crate::physical_material::PhysicalMaterial,
+        crate::physical_material::PhysicalMaterial,
+    ) {
+        use crate::physical_material::PhysicalMaterial;
+        use crate::resources::{InternalBond, Material};
+        use crate::structure::Placement;
+
+        let mut environment = Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog: catalog.to_vec(),
+            field: crate::environment::ActiveMaterialField::new(
+                1000.0,
+                1000.0,
+                crate::environment::DEFAULT_CELL_SIZE,
+            ),
+        };
+        let make_single = |name: &str, x: f64| {
+            PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                }],
+                catalog,
+            )
+            .expect("single-resource environmental neighbor should be realizable")
+        };
+        let before = make_single("Nitrogen", 6.0);
+        let source = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                Placement {
+                    x: 10.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 10.838,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            catalog,
+        )
+        .expect("bonded environmental source should be realizable");
+        let after = make_single("Sulfur", 14.0);
+        let cell_index = environment
+            .field
+            .index_for_position(10.0, 10.0)
+            .expect("test source position must be in the field");
+        environment.field.cells[cell_index].physical_materials =
+            vec![before.clone(), after.clone()];
+        (environment, cell_index, before, source, after)
+    }
+
+    #[test]
+    fn failed_environmental_break_completion_restores_source_at_original_cell_index() {
+        let catalog = crate::resources::default_catalog();
+        let mut organism = environmental_break_test_organism(
+            "environmental-break-completion-test",
+            Some(731),
+        );
+        let (mut environment, cell_index, before, source, after) =
+            environmental_break_test_inventory(&catalog);
+        let transformation = ActiveTransformation {
+            id: 731,
+            organism_id: organism.id.clone(),
+            kind: crate::state::TransformationKind::Break,
+            material: crate::resources::Material::free_base("", 0.0),
+            bond: None,
+            stored_material: Some(source.clone()),
+            stored_bond: None,
+            environmental_source: true,
+            complexity: 1.0,
+            duration_ticks: 1,
+            remaining_ticks: 0,
+            prepared_energy: None,
+            pending_experience: None,
+            decision_context_key: Some(format!(
+                "environment:cell:{cell_index}:material:1:bond:0"
+            )),
+            prepared_structure: None,
+            prepared_stored_material: None,
+            prepared_usable_energy: None,
+            prepared_stress: None,
+            prepared_ledger: None,
+            combine_environmental_source: None,
+        };
+
+        resolve_transformation(
+            &transformation,
+            &mut organism,
+            &mut environment,
+            &mut EnergyLedger::default(),
+        );
+
+        assert_eq!(
+            environment.field.cells[cell_index].physical_materials,
+            vec![before, source, after],
+            "failed environmental BREAK must restore its source at its original cell index"
+        );
+        assert!(organism.stored_material.is_empty());
         assert_eq!(organism.active_transformation_id, None);
     }
 

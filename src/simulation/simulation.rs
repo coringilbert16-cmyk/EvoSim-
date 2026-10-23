@@ -48,14 +48,30 @@ fn restore_failed_transformation_material(
         return;
     };
     if transformation.environmental_source {
-        if let Some(placement) = source
-            .placements
-            .as_ref()
-            .and_then(|placements| placements.first())
+        if !crate::transformation::restore_environmental_break_source(transformation, environment)
         {
-            let _ = environment
-                .field
-                .deposit(placement.x, placement.y, source.clone());
+            if let Some(owner) = organism.as_deref_mut() {
+                owner.stored_material.entries.push(
+                    crate::material_storage::StoredMaterial::Physical(source.clone()),
+                );
+            } else {
+                // An owner can disappear while a multi-tick operation is active.
+                // If location metadata is corrupt too, retain the escrow in the
+                // world field rather than silently dropping it.
+                let deposited = source
+                    .placements
+                    .as_ref()
+                    .and_then(|placements| placements.first())
+                    .is_some_and(|placement| {
+                        environment
+                            .field
+                            .deposit(placement.x, placement.y, source.clone())
+                    });
+                if !deposited && !environment.field.cells.is_empty() {
+                    environment.field.cells[0].physical_materials.push(source.clone());
+                    environment.field.mark_changed_at_index(0);
+                }
+            }
         }
         return;
     }
@@ -1560,6 +1576,101 @@ mod decomposition_finalization_tests {
             "failed preparation must restore malformed escrow at its original index and preserve neighbor order"
         );
         assert_eq!(simulation.organisms[0].active_transformation_id, None);
+    }
+
+    #[test]
+    fn failed_environmental_break_preparation_restores_source_at_original_cell_index() {
+        use crate::physical_material::PhysicalMaterial;
+        use crate::resources::{InternalBond, Material};
+        use crate::state::{ActiveTransformation, TransformationKind};
+        use crate::structure::Placement;
+
+        let catalog = crate::resources::default_catalog();
+        let mut environment = Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog: catalog.clone(),
+            field: ActiveMaterialField::new(
+                1000.0,
+                1000.0,
+                crate::environment::DEFAULT_CELL_SIZE,
+            ),
+        };
+        let make_single = |name: &str, x: f64| {
+            PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("single-resource environmental neighbor should be realizable")
+        };
+        let before = make_single("Nitrogen", 6.0);
+        let source = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                Placement {
+                    x: 10.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 10.838,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("bonded environmental source should be realizable");
+        let after = make_single("Sulfur", 14.0);
+        let cell_index = environment
+            .field
+            .index_for_position(10.0, 10.0)
+            .expect("test source position must be in the field");
+        environment.field.cells[cell_index].physical_materials =
+            vec![before.clone(), after.clone()];
+        let transformation = ActiveTransformation {
+            id: 732,
+            organism_id: "missing-environmental-break-owner".into(),
+            kind: TransformationKind::Break,
+            material: Material::free_base("", 0.0),
+            bond: None,
+            stored_material: Some(source.clone()),
+            stored_bond: None,
+            environmental_source: true,
+            complexity: 1.0,
+            duration_ticks: 1,
+            remaining_ticks: 1,
+            prepared_energy: None,
+            pending_experience: None,
+            decision_context_key: Some(format!(
+                "environment:cell:{cell_index}:material:1:bond:0"
+            )),
+            prepared_structure: None,
+            prepared_stored_material: None,
+            prepared_usable_energy: None,
+            prepared_stress: None,
+            prepared_ledger: None,
+            combine_environmental_source: None,
+        };
+
+        restore_failed_transformation_material(&transformation, None, &mut environment);
+
+        assert_eq!(
+            environment.field.cells[cell_index].physical_materials,
+            vec![before, source, after],
+            "failed preparation must return environmental escrow to the original cell index"
+        );
     }
 
     #[test]
