@@ -1241,9 +1241,6 @@ mod tests {
         assert_eq!(subgraph.genome_constituent_ids(), &[child_a_id]);
         assert!(subgraph.additional_genome_constituent_groups().is_empty());
 
-        let added = subgraph
-            .clone()
-            .add_unit(StructuralUnit::new("Sulfur", placement));
         let mut extended = subgraph;
         let added = extended.add_unit(StructuralUnit::new("Sulfur", placement));
         assert_eq!(extended.physical_id(added), Some(PhysicalConstituentId(4)));
