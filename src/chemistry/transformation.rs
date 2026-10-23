@@ -765,12 +765,30 @@ impl Simulation {
 fn restore_failed_stored_break_source(
     transformation: &ActiveTransformation,
     organism: &mut Organism,
+    environment: &mut Environment,
 ) {
     if organism.active_transformation_id != Some(transformation.id) {
         return;
     }
-    if !transformation.environmental_source {
-        if let Some(source) = transformation.stored_material.as_ref() {
+    if let Some(source) = transformation.stored_material.as_ref() {
+        if transformation.environmental_source {
+            let deposited = source
+                .placements
+                .as_ref()
+                .and_then(|placements| placements.first())
+                .is_some_and(|placement| {
+                    environment
+                        .field
+                        .deposit(placement.x, placement.y, source.clone())
+                });
+            if !deposited {
+                // Preserve ownership if a malformed environmental escrow cannot
+                // be returned to the field; never silently discard the source.
+                organism.stored_material.entries.push(
+                    crate::material_storage::StoredMaterial::Physical(source.clone()),
+                );
+            }
+        } else {
             organism.stored_material.entries.push(
                 crate::material_storage::StoredMaterial::Physical(source.clone()),
             );
@@ -918,7 +936,7 @@ pub(crate) fn resolve_transformation(
         return;
     };
     let Some(target) = transformation.stored_bond.as_ref() else {
-        restore_failed_stored_break_source(transformation, organism);
+        restore_failed_stored_break_source(transformation, organism, environment);
         return;
     };
     if transformation.prepared_energy.is_none() {
