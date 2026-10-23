@@ -110,6 +110,27 @@ impl MaterialStorage {
             .is_ok()
     }
 
+    /// Validate and normalize already owner-relative stored objects as one batch.
+    /// Unlike environmental acquisition, preserve each object's owner-relative
+    /// anchor instead of deriving one from its intrinsic placement.
+    pub(crate) fn prepare_physical_batch(
+        instances: Vec<PhysicalMaterial>,
+    ) -> Option<Vec<StoredMaterial>> {
+        let mut prepared = Vec::with_capacity(instances.len());
+        for instance in instances {
+            if !instance.is_realized()
+                || instance.material.parts.is_empty()
+                || !instance.material.is_valid()
+                || !Self::is_discrete(&instance.material)
+            {
+                return None;
+            }
+            let instance = instance.into_intrinsic_frame()?;
+            prepared.push(StoredMaterial::Physical(instance));
+        }
+        Some(prepared)
+    }
+
     /// Validate and convert a batch of environmental physical objects into
     /// storage entries without mutating the holder. The caller can then remove
     /// the source objects and commit these prepared entries as one transfer.
