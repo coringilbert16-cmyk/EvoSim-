@@ -83,6 +83,10 @@ pub(crate) struct ActiveTransformation {
     pub(crate) stored_material: Option<crate::physical_material::PhysicalMaterial>,
     #[serde(default)]
     pub(crate) stored_bond: Option<crate::physical_material::PhysicalMaterialBond>,
+    /// Original owner-storage index captured when a stored BREAK reserves its source.
+    /// Kept separately from mutable decision metadata so rollback preserves exact order.
+    #[serde(default)]
+    pub(crate) stored_source_index: Option<usize>,
     /// True when the transformed physical material came directly from the
     /// environment rather than organism storage.
     #[serde(default)]
