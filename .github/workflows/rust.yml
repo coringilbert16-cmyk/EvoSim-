@@ -102,7 +102,7 @@ jobs:
         run: cargo test --locked live_geometry_key_distinguishes_chemical_positions_and_canonicalizes_them
       - name: Verify invalid chemical positions cannot poison cache identities
         timeout-minutes: 5
-        run: cargo test --locked rejects_non_finite_and_out_of_domain_chemical_position_keys
+        run: cargo test --locked rejects_non_finite_chemical_position_keys
       - name: Verify pre-position chemistry cache schema rejection
         timeout-minutes: 5
         run: cargo test --locked rejects_schema_four_store_after_chemical_position_key_migration
