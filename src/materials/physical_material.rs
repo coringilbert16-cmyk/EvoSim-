@@ -349,9 +349,20 @@ impl PhysicalMaterial {
                     || !placement.y.is_finite()
                     || !placement.rotation_radians.is_finite()
             })
+            || connections.len() != self.material.internal_bonds.len()
             || connections.iter().any(|connection| {
                 connection.part_a >= placements.len() || connection.part_b >= placements.len()
             })
+            || self
+                .material
+                .internal_bonds
+                .iter()
+                .zip(connections)
+                .any(|(bond, connection)| {
+                    !((bond.part_a == connection.part_a && bond.part_b == connection.part_b)
+                        || (bond.part_a == connection.part_b
+                            && bond.part_b == connection.part_a))
+                })
         {
             return false;
         }
@@ -820,6 +831,42 @@ mod tests {
         .expect("test material should realize");
         physical.placements.as_mut().unwrap()[0].x = f64::NAN;
         assert!(!physical.is_realized());
+    }
+
+    #[test]
+    fn realized_state_rejects_connections_that_disagree_with_material_bond_topology() {
+        let catalog = crate::resources::default_catalog();
+        let mut physical = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("test composite should realize");
+        let connection = &mut physical.internal_connections.as_mut().unwrap()[0];
+        connection.part_a = 0;
+        connection.part_b = 0;
+
+        assert!(
+            !physical.is_realized(),
+            "persisted connection endpoints must agree with declared material topology"
+        );
     }
 
     #[test]
