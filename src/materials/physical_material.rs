@@ -227,6 +227,12 @@ impl PhysicalMaterial {
     /// Break one pre-existing internal bond and return the resulting physically
     /// disconnected pieces. The bond itself must belong to this stored material.
     pub(crate) fn break_internal_bond(&self, target: &PhysicalMaterialBond) -> Option<Vec<Self>> {
+        // Persisted active transformations can reach completion without passing
+        // through the ordinary source-selection gate. Revalidate the whole
+        // object so malformed bond topology cannot be split into new objects.
+        if !self.is_realized() {
+            return None;
+        }
         let placements = self.placements.as_ref()?;
         let connections = self.internal_connections.as_ref()?;
         if self
@@ -862,10 +868,15 @@ mod tests {
         let connection = &mut physical.internal_connections.as_mut().unwrap()[0];
         connection.part_a = 0;
         connection.part_b = 0;
+        let malformed_target = physical.internal_connections.as_ref().unwrap()[0].clone();
 
         assert!(
             !physical.is_realized(),
             "persisted connection endpoints must agree with declared material topology"
+        );
+        assert!(
+            physical.break_internal_bond(&malformed_target).is_none(),
+            "stored BREAK completion must fail closed on malformed persisted topology"
         );
     }
 
