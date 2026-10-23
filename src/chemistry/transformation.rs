@@ -895,9 +895,9 @@ pub(crate) fn restore_combine_environmental_source(
     let Some(cell) = environment.field.cells.get_mut(*cell_index) else {
         return false;
     };
-    let insertion_index = transformation
-        .combine_environmental_source_index
-        .unwrap_or(cell.physical_materials.len());
+    let Some(insertion_index) = transformation.combine_environmental_source_index else {
+        return false;
+    };
     if insertion_index > cell.physical_materials.len() {
         return false;
     }
@@ -1568,6 +1568,17 @@ mod tests {
         assert_eq!(
             environment.field.cells[cell_index].physical_materials, before_invalid_restore,
             "a rejected exact restore must not mutate the environmental inventory"
+        );
+
+        let mut missing_index = transformation.clone();
+        missing_index.combine_environmental_source_index = None;
+        assert!(
+            !restore_combine_environmental_source(&missing_index, &mut environment),
+            "missing source indices must not be mistaken for exact restoration"
+        );
+        assert_eq!(
+            environment.field.cells[cell_index].physical_materials, before_invalid_restore,
+            "missing-index recovery must leave the environment unchanged"
         );
     }
 
