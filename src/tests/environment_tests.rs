@@ -171,3 +171,71 @@ fn exact_fluid_arc_region_check_allows_chord_contact_but_rejects_curve_escape() 
         &too_shallow_region,
     ));
 }
+
+
+#[test]
+fn physical_batch_deposit_rejects_late_invalid_destination_without_partial_commit() {
+    use crate::physical_material::PhysicalMaterial;
+    use crate::state::Simulation;
+    use crate::structure::Placement;
+
+    let simulation = Simulation::new(771, 10.0);
+    let catalog = &simulation.environment.catalog;
+    let make_carbon = |x: f64| {
+        PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x,
+                y: 12.5,
+                rotation_radians: 0.0,
+            }],
+            catalog,
+        )
+        .expect("carbon should be physically realizable")
+    };
+    let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let before_revision = field.revision;
+    let before_cells = field.cells.clone();
+
+    assert!(!field.deposit_physical_batch(vec![
+        (12.5, 12.5, make_carbon(12.5)),
+        (100.0, 12.5, make_carbon(37.5)),
+    ]));
+
+    assert_eq!(field.cells, before_cells);
+    assert_eq!(field.revision, before_revision);
+}
+
+#[test]
+fn physical_batch_deposit_commits_all_validated_objects() {
+    use crate::physical_material::PhysicalMaterial;
+    use crate::state::Simulation;
+    use crate::structure::Placement;
+
+    let simulation = Simulation::new(772, 10.0);
+    let catalog = &simulation.environment.catalog;
+    let make_carbon = |x: f64| {
+        PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x,
+                y: 12.5,
+                rotation_radians: 0.0,
+            }],
+            catalog,
+        )
+        .expect("carbon should be physically realizable")
+    };
+    let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+
+    assert!(field.deposit_physical_batch(vec![
+        (12.5, 12.5, make_carbon(12.5)),
+        (37.5, 12.5, make_carbon(37.5)),
+    ]));
+
+    assert_eq!(
+        field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>(),
+        2
+    );
+    assert_eq!(field.revision, 2);
+}
