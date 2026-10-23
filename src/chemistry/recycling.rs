@@ -86,5 +86,4 @@ mod tests {
         assert!(organism.reproductive_construction.is_none());
     }
 
-
 }
