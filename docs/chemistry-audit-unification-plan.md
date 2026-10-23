@@ -4174,3 +4174,9 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - The prior environmental BREAK exhausted-ID test still failed before its no-mutation assertions because its sealed 12N cavity fixture has no accessible interior, which is a required precondition for environmental BREAK. Commit `fc9ba543f6a9da22d694040caa09fd11a71b85f2` opens the top-center wall in that test fixture only, clears stale core metadata, and leaves the canonical sealed seed untouched for other tests. Exact-head CI is pending.
 - The three resonance-BREAK fixtures now use direct `confirmed_seed_baseline(...).realize(...)` to obtain the cavity-boundary bond set without calling `realize_initial`, whose stricter whole-organism viability gate correctly rejects a cavity-only scaffold. The exact-head run for this direct realization is `40032441111` and is still running; the current head after the environmental fixture fix is `fc9ba54`.
 - Do not call the 22 remaining failures all baseline until exact test identities are compared with the frozen baseline; several are known cavity/seed failures. The exact-head current workflow remains the authority for any regression claim.
+
+
+## Environmental BREAK fixture formatting retry — 2026-10-23 22:27 UTC
+
+- Workflow [40032657513](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40032657513) failed formatting before tests; rustfmt wanted the .find predicate collapsed to one line and the metadata-clearing method call split across the receiver chain. Commit `eb16b533193279c0259a264b1a956f53bf4249c1` applies exactly those two corrections.
+- Exact-head verification for `eb16b53` is pending. The environmental BREAK test now deliberately opens one top-center wall piece to satisfy its accessible-interior precondition; the next run must confirm that this geometry actually yields a candidate before its exhausted-ID assertions can be trusted.
