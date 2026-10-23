@@ -4152,3 +4152,10 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - The same test run exposed that the environmental BREAK exhausted-ID regression shared a cavity-only seed fixture that fails in `juvenile::realize_initial` before its assertions. Commit `3a2a4152ac3522501c6d1937b8d8d7022dbed63d` changes that test helper to use the complete valid realized-organism constructor fixture; this does not change constructor production behavior or PR #196.
 - The new developing-holder preflight test initially required a `SeedableRng` import; this was added and import order corrected. Formatting failure on predecessor `3a2a415` is not treated as verification of the current source.
 - Workflow [40031711788](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40031711788) is the current exact-head check for `afd1747`; it is in progress. No passing claim yet. Known baseline cavity/seed failures and strict Clippy debt still require exact-head comparison.
+
+
+## Exact-head formatting follow-up — 2026-10-23 22:17 UTC
+
+- Workflow [40031711788](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40031711788) for `afd1747` failed the formatting gate, so its focused/full tests were skipped. The diff was limited to rustfmt layout in the new deterministic attachment-transaction test.
+- Commit `224477192fdf750318075a7d3a22df339294e657` applies those formatting corrections. Exact-head workflow [40031811824](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40031811824) has passed formatting and the initial focused gates and is currently in the full Rust test step; result pending.
+- Do not report the source/test changes as verified until this exact-head run completes. The known strict-Clippy baseline diagnostics remain separate from the focused test result.
