@@ -669,10 +669,14 @@ impl Simulation {
                 // with its authoritative material and geometry.
                 continue;
             };
-            for material in materials {
-                self.environment
-                    .field
-                    .deposit(position.x, position.y, material);
+            let deposits = materials
+                .into_iter()
+                .map(|material| (position.x, position.y, material))
+                .collect();
+            if !self.environment.field.deposit_physical_batch(deposits) {
+                // A failed destination must not discard the body's remaining
+                // physical ownership. Keep the finished holder for a later retry.
+                continue;
             }
             self.decomposing_bodies.remove(index);
         }
@@ -2081,6 +2085,41 @@ mod decomposition_finalization_tests {
 
         assert_eq!(simulation.decomposing_bodies.len(), 1);
         assert!(simulation.decomposing_bodies[0].is_finished());
+        assert_eq!(simulation.environment.field.total_amount(), before);
+    }
+
+    #[test]
+    fn invalid_finished_body_position_preserves_released_material_ownership() {
+        let mut simulation = Simulation::new(914, 10.0);
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let mut unit = StructuralUnit::new(
+            "Carbon".to_string(),
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(unit.realize_default_geometry(&catalog));
+        structure.add_unit(unit);
+        let body = crate::decomposition::DecomposingBody::new(
+            structure,
+            0.0,
+            Position {
+                x: f64::NAN,
+                y: 500.0,
+            },
+        )
+        .expect("energy is valid even if the malformed position is rejected at deposit");
+        simulation.decomposing_bodies.push(body);
+        let before = simulation.environment.field.total_amount();
+
+        simulation.process_decomposing_bodies();
+
+        assert_eq!(simulation.decomposing_bodies.len(), 1);
+        assert!(simulation.decomposing_bodies[0].is_finished());
+        assert_eq!(simulation.decomposing_bodies[0].structure.units.len(), 1);
         assert_eq!(simulation.environment.field.total_amount(), before);
     }
 
