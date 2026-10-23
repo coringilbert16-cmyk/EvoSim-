@@ -60,7 +60,7 @@ The full test suite is currently **not green**. A maintenance change is acceptab
 - [x] Stage finished-body energy settlement and commit it only with a successful atomic physical-material deposit; focused rollback gate passed on an earlier PR #205 head.
 - [x] Gate late physical-restoration rollback independently; the destination-preservation regression passed on earlier verified heads. Current full Rust suite and Clippy remain pending.
 - [ ] Establish an ordinary-chemistry path for stored/developing holders after death without a separate decomposition law or loss of exact ownership.
-- [ ] Prove global material/energy conservation and live sunlight/world-tone allocation; do not infer completion from the current focused gates.
+- [ ] Prove whole-world material/energy conservation across all holders, reactions, sunlight capture, and lifecycle transitions; do not infer completion from focused gates.
 - [ ] Keep PR #196 constructor/Bob work separate from PR #205 chemistry changes.
 
 ## Specification authority
