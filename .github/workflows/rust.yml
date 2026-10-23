@@ -41,6 +41,7 @@ jobs:
           cargo test --locked successful_chemical_break_spends_only_resonance_needed_for_reaction_shortfall
           cargo test --locked chemical_break_reconciles_world_energy_inventory
           cargo test --locked chemical_break_with_resonance_shortfall_reconciles_world_inventory
+          cargo test --locked resonance_overload_break_reconciles_world_inventory
       - name: Run focused physical graph merge tests
         timeout-minutes: 5
         run: cargo test --locked append_graph_
