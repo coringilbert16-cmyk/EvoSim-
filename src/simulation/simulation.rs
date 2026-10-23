@@ -1635,7 +1635,6 @@ mod decomposition_finalization_tests {
     fn failed_environmental_break_preparation_restores_source_at_original_cell_index() {
         use crate::physical_material::PhysicalMaterial;
         use crate::resources::{InternalBond, Material};
-        use crate::state::{ActiveTransformation, TransformationKind};
         use crate::structure::Placement;
 
         let catalog = crate::resources::default_catalog();
