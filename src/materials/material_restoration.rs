@@ -117,6 +117,24 @@ pub(crate) fn restore_material(
                 return None;
             }
         }
+
+        // Restoration must not place a valid stored object through an already
+        // existing destination constituent. The staged graph includes both
+        // sets, but only the newly restored constituents are allowed to move.
+        for (existing_index, existing_unit) in trial.units.iter().enumerate() {
+            if indices.contains(&existing_index) {
+                continue;
+            }
+            let existing_shape = existing_unit.shape(catalog)?;
+            let existing_part = crate::material_geometry::PlacedMaterialPart {
+                part_index: indices.len() + existing_index,
+                form: existing_shape.form.clone(),
+                placement: existing_unit.placement,
+            };
+            if crate::material_geometry::placed_forms_penetrate(&left_part, &existing_part, 0.0) {
+                return None;
+            }
+        }
     }
 
     for connection in connections {
