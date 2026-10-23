@@ -516,6 +516,9 @@ mod tests {
 
     #[test]
     fn rejects_non_finite_and_out_of_domain_chemical_position_keys() {
+        let root = test_root("invalid-position-key");
+        let _ = fs::remove_dir_all(&root);
+        let mut library = ChemistryLibrary::open(&root).unwrap();
         let interface = crate::geometry_reference_library::resolve_live_contact_interface(
             "Carbon",
             crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
@@ -538,7 +541,14 @@ mod tests {
                 !record.is_valid(),
                 "invalid chemical position {invalid_position:?} must not become a cache key"
             );
+            assert!(
+                !library.insert(record).unwrap(),
+                "invalid chemical position {invalid_position:?} must not persist"
+            );
         }
+        assert!(library.is_empty());
+        assert!(ChemistryLibrary::open(&root).unwrap().is_empty());
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
