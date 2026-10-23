@@ -153,7 +153,7 @@ pub(crate) struct ReproductiveConstruction {
     #[serde(default)]
     pub(crate) needs_space: bool,
 }
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct EnergyLedger {
     /// Explicit non-structural energy sources; stored bond energy release is
     /// represented by the structural-store delta instead.
