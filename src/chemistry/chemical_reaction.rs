@@ -219,8 +219,8 @@ pub(crate) fn accumulate(
             continue;
         };
 
-        updated_keys.insert(key.clone());
         if next <= 0.0 {
+            updated_keys.insert(key.clone());
             accumulation.remove(&key);
             continue;
         }
@@ -256,6 +256,7 @@ pub(crate) fn accumulate(
         let Some(reaction_energy) = crate::chemistry::normalized_chemistry_to_energy(next) else {
             continue;
         };
+        updated_keys.insert(key.clone());
         if crate::chemistry::activated(reaction_energy, effective_barrier) {
             operations.push(ChemicalBreakOperation {
                 organism_id: organism.id.clone(),
