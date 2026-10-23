@@ -3386,3 +3386,13 @@ Consequences:
 - Strict Clippy remains red, but normalized diagnostic identity comparison against the frozen baseline is complete for this exact head: 38 unique source-path/diagnostic identities at baseline and head, no additions or removals. No unrelated lint cleanup.
 - The structural BREAK inventory regression also passed at prior exact head `1775f9b`. These two tests establish local and reaction-path world-energy reconciliation for their tested cases only; they do not establish complete conservation across every material transition or world-tone path.
 - Continue the stored-BREAK/expulsion failure-atomicity matrix before selecting any production fix. Current concrete gaps and next steps are recorded in the preceding Phase 5 transition-audit section. Keep whole-world material/energy conservation, exact-small-world sunlight/world-tone validation, and canonical aggregate ownership as open release gates.
+
+
+
+## Expulsion failure-atomicity fix — 2026-10-23
+
+- After auditing storage validation and `ActiveMaterialField::deposit_physical_at_index`, made one narrow source change in `src/chemistry/expulsion.rs`: expulsion now validates and computes the destination on a clone while the original remains in storage. It removes the source only after geometry validation, and if the destination rejects the transformed object it reinserts the exact original entry at its prior index. Early validation failures no longer attempt an unchecked re-store.
+- Added `expulsion::tests::malformed_stored_material_remains_owned_when_expulsion_validation_fails`, which injects a malformed persisted entry and asserts a failed expulsion preserves exact storage membership.
+- Implementation commit `3e01c5ced0cb44008d4b4c66be694f514e006604`; formatting-only follow-up `878088f5a580353b35c7fc498a3e211884615650`. The first workflow caught one rustfmt line-wrap only; it was corrected without other changes.
+- Exact-head workflow [39940649255](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39940649255) is running on `878088f`. Formatting and test outcomes are not yet verified at this head. Do not infer success from the prior formatting-only failure.
+- Scope intentionally does not change stored-BREAK behavior, material ownership architecture, or energy accounting. The stored-BREAK selection/escrow/completion/piece-destination failure matrix remains the next focused audit after this regression is verified.
