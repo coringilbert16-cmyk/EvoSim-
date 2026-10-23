@@ -357,8 +357,8 @@ pub(crate) fn build_nitrogen_ring_seed(
     let mut structure = crate::structure::OrganismStructure::new();
     let mut grid = [[None; 5]; 5];
 
-    for y in 0..5 {
-        for x in 0..5 {
+    for (y, row) in grid.iter_mut().enumerate() {
+        for (x, cell) in row.iter_mut().enumerate() {
             if (x == 0 || x == 4) && (y == 0 || y == 4) {
                 continue;
             }
@@ -373,18 +373,22 @@ pub(crate) fn build_nitrogen_ring_seed(
                 None,
                 catalog,
             )?;
-            grid[y][x] = Some(index);
+            *cell = Some(index);
         }
     }
 
-    for y in 0..5 {
-        for x in 0..5 {
-            let Some(a) = grid[y][x] else { continue };
+    for (y, row) in grid.iter().enumerate() {
+        for (x, slot) in row.iter().enumerate() {
+            let Some(a) = *slot else { continue };
             for (nx, ny) in [(x + 1, y), (x, y + 1)] {
-                if nx >= 5 || ny >= 5 {
+                let Some(b) = grid
+                    .get(ny)
+                    .and_then(|neighbor_row| neighbor_row.get(nx))
+                    .copied()
+                    .flatten()
+                else {
                     continue;
-                }
-                let Some(b) = grid[ny][nx] else { continue };
+                };
                 bond_units(&mut structure, a, b, catalog, ledger, energy)?;
             }
         }
