@@ -479,7 +479,11 @@ fn environmental_break_source_at(
         .get(cell_index)?
         .physical_materials
         .get(material_index)?;
-    let target = instance.internal_connections.as_ref()?.get(bond_index)?.clone();
+    let target = instance
+        .internal_connections
+        .as_ref()?
+        .get(bond_index)?
+        .clone();
     Some((instance.clone(), target))
 }
 
