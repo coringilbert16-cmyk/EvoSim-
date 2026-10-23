@@ -803,6 +803,9 @@ impl Simulation {
 /// when completion cannot commit. The active ID guards against restoring the
 /// same escrow twice if a stale completion is delivered.
 pub(crate) fn original_stored_source_index(transformation: &ActiveTransformation) -> Option<usize> {
+    if let Some(index) = transformation.stored_source_index {
+        return Some(index);
+    }
     let key = transformation.decision_context_key.as_deref()?;
     let rest = key.strip_prefix("stored:")?;
     let (index, _) = rest.split_once(":bond:")?;
