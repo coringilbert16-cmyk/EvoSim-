@@ -1633,8 +1633,12 @@ mod tests {
         aggregate.set_genome_constituent_ids([parent_id]);
         let child = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
         let child_id = aggregate.physical_id(child).unwrap();
-        let mut replacement = aggregate.subgraph_for_physical_ids(&[child_id], &[]).unwrap();
-        replacement.additional_genome_constituent_groups.push(Vec::new());
+        let mut replacement = aggregate
+            .subgraph_for_physical_ids(&[child_id], &[])
+            .unwrap();
+        replacement
+            .additional_genome_constituent_groups
+            .push(Vec::new());
 
         let before_units = aggregate.units.clone();
         let before_bonds = aggregate.bonds.clone();
@@ -1678,7 +1682,9 @@ mod tests {
             strength: 0.5,
             bond_energy: 1.0,
         });
-        let replacement = aggregate.subgraph_for_physical_ids(&[child_id], &[]).unwrap();
+        let replacement = aggregate
+            .subgraph_for_physical_ids(&[child_id], &[])
+            .unwrap();
 
         let before_units = aggregate.units.clone();
         let before_bonds = aggregate.bonds.clone();
