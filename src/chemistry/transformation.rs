@@ -1179,18 +1179,21 @@ mod tests {
         let before = make_neighbor("Nitrogen", -2.0);
         let after_one = make_neighbor("Phosphorus", 2.0);
         let after_two = make_neighbor("Sulfur", 4.0);
+        // Storage inserts at the front, so reverse insertion gives the
+        // intended holder order: before, source, after_one, after_two.
         assert!(organism
             .stored_material
-            .store_physical_instance(before.clone()));
-        assert!(organism
-            .stored_material
-            .store_physical_instance(source.clone()));
+            .store_physical_instance(after_two.clone()));
         assert!(organism
             .stored_material
             .store_physical_instance(after_one.clone()));
         assert!(organism
             .stored_material
-            .store_physical_instance(after_two.clone()));
+            .store_physical_instance(source.clone()));
+        assert!(organism
+            .stored_material
+            .store_physical_instance(before.clone()));
+        let entries_before = organism.stored_material.entries.clone();
 
         let decision = crate::decision_runtime::ActionCandidate {
             action: crate::decision::ActionKind::Break,
@@ -1203,9 +1206,9 @@ mod tests {
         assert_eq!(
             organism.stored_material.entries,
             vec![
-                crate::material_storage::StoredMaterial::Physical(before.clone()),
-                crate::material_storage::StoredMaterial::Physical(after_one.clone()),
-                crate::material_storage::StoredMaterial::Physical(after_two.clone()),
+                entries_before[0].clone(),
+                entries_before[2].clone(),
+                entries_before[3].clone(),
             ],
             "reserving the middle source must preserve the remaining entry order"
         );
@@ -1231,12 +1234,7 @@ mod tests {
 
         assert_eq!(
             organism.stored_material.entries,
-            vec![
-                crate::material_storage::StoredMaterial::Physical(before),
-                crate::material_storage::StoredMaterial::Physical(source),
-                crate::material_storage::StoredMaterial::Physical(after_one),
-                crate::material_storage::StoredMaterial::Physical(after_two),
-            ],
+            entries_before,
             "failed stored BREAK must restore the source at its exact original index"
         );
         assert_eq!(organism.active_transformation_id, None);
