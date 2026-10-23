@@ -109,10 +109,10 @@ pub(crate) struct ActiveTransformation {
     pub(crate) prepared_stress: Option<f64>,
     #[serde(default)]
     pub(crate) prepared_ledger: Option<EnergyLedger>,
-    /// Exact ledger state before staged COMBINE settlement, for failure-atomic rollback.
+    /// Exact ledger state before staged COMBINE settlement. Absent on legacy persisted transactions.
     #[serde(default)]
     pub(crate) prepared_ledger_before: Option<EnergyLedger>,
-    /// Exact usable-energy holder before staged COMBINE settlement.
+    /// Exact usable-energy value before staged COMBINE settlement; absent on legacy persisted transactions.
     #[serde(default)]
     pub(crate) prepared_usable_energy_before: Option<f64>,
     /// Environmental material removed when COMBINE begins, held until resolve.
