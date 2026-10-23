@@ -1377,10 +1377,8 @@ mod tests {
     #[test]
     fn failed_environmental_break_completion_restores_source_at_original_cell_index() {
         let catalog = crate::resources::default_catalog();
-        let mut organism = environmental_break_test_organism(
-            "environmental-break-completion-test",
-            Some(731),
-        );
+        let mut organism =
+            environmental_break_test_organism("environmental-break-completion-test", Some(731));
         let (mut environment, cell_index, before, source, after) =
             environmental_break_test_inventory(&catalog);
         let transformation = ActiveTransformation {
@@ -1397,9 +1395,7 @@ mod tests {
             remaining_ticks: 0,
             prepared_energy: None,
             pending_experience: None,
-            decision_context_key: Some(format!(
-                "environment:cell:{cell_index}:material:1:bond:0"
-            )),
+            decision_context_key: Some(format!("environment:cell:{cell_index}:material:1:bond:0")),
             prepared_structure: None,
             prepared_stored_material: None,
             prepared_usable_energy: None,
