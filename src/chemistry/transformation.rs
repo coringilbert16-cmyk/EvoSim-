@@ -911,10 +911,12 @@ fn rollback_prepared_combine(
         ledger.total_structural_energy_delta -= delta.total_structural_energy_delta;
         ledger.total_external_energy_input -= delta.total_external_energy_input;
         ledger.total_world_tone_energy_unabsorbed -= delta.total_world_tone_energy_unabsorbed;
+        ledger.total_world_tone_energy_escaped -= delta.total_world_tone_energy_escaped;
         ledger.total_usable_energy_gained -= delta.total_usable_energy_gained;
         ledger.total_work_expended -= delta.total_work_expended;
         ledger.total_heat_dissipated -= delta.total_heat_dissipated;
         ledger.total_usable_energy_held -= delta.total_usable_energy_held;
+        ledger.total_resonant_energy_held -= delta.total_resonant_energy_held;
     }
 }
 
@@ -1139,10 +1141,12 @@ mod tests {
             total_structural_energy_delta: 5.0,
             total_external_energy_input: 3.0,
             total_world_tone_energy_unabsorbed: 9.0,
+            total_world_tone_energy_escaped: 13.0,
             total_usable_energy_gained: 7.0,
             total_work_expended: 11.0,
             total_heat_dissipated: 17.0,
             total_usable_energy_held: 19.0,
+            total_resonant_energy_held: 23.0,
             ..EnergyLedger::default()
         };
         let delta = EnergyLedger {
@@ -1150,10 +1154,12 @@ mod tests {
             total_structural_energy_delta: 2.0,
             total_external_energy_input: 1.0,
             total_world_tone_energy_unabsorbed: 2.0,
+            total_world_tone_energy_escaped: 4.0,
             total_usable_energy_gained: 3.0,
             total_work_expended: 5.0,
             total_heat_dissipated: 7.0,
             total_usable_energy_held: 11.0,
+            total_resonant_energy_held: 6.0,
             ..EnergyLedger::default()
         };
 
@@ -1164,10 +1170,12 @@ mod tests {
         assert_eq!(ledger.total_structural_energy_delta, 3.0);
         assert_eq!(ledger.total_external_energy_input, 2.0);
         assert_eq!(ledger.total_world_tone_energy_unabsorbed, 7.0);
+        assert_eq!(ledger.total_world_tone_energy_escaped, 9.0);
         assert_eq!(ledger.total_usable_energy_gained, 4.0);
         assert_eq!(ledger.total_work_expended, 6.0);
         assert_eq!(ledger.total_heat_dissipated, 10.0);
         assert_eq!(ledger.total_usable_energy_held, 8.0);
+        assert_eq!(ledger.total_resonant_energy_held, 17.0);
     }
 
     #[test]
