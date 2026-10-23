@@ -24,44 +24,30 @@ pub(crate) fn recycle_dead_organism(
         return None;
     }
 
-    let mut body =
-        crate::decomposition::DecomposingBody::new(organism.structure.clone(), 0.0, position)?;
-
-    // Stage every energy transfer against local holder values and a copied
-    // ledger. A rejection in either transfer must not leave material drained,
-    // construction removed, or the first transfer committed on its own.
-    let mut staged_ledger = *ledger;
-    let mut staged_usable_energy = organism.usable_energy;
-    let mut staged_developing_energy = developing_energy;
-    let mut staged_body_energy = body.energy_budget;
-    if !staged_ledger.transfer(&mut staged_usable_energy, &mut staged_body_energy, energy) {
-        return None;
-    }
-    if !staged_ledger.transfer(
-        &mut staged_developing_energy,
-        &mut staged_body_energy,
-        developing_energy,
-    ) {
-        return None;
-    }
-
-    // The full energy transaction is now known to be valid. Commit holders
-    // and ledger together, then transfer stored material to the environment.
-    organism.usable_energy = staged_usable_energy;
-    if let Some(construction) = organism.reproductive_construction.as_mut() {
-        construction.developing_energy = staged_developing_energy;
-    }
-    *ledger = staged_ledger;
-    body.energy_budget = staged_body_energy;
-
     for entry in organism.stored_material.drain_entries() {
         let crate::material_storage::StoredMaterial::Physical(material) = entry;
         environment.field.deposit(position.x, position.y, material);
     }
-    if let Some(mut construction) = organism.reproductive_construction.take() {
+    let mut construction = organism.reproductive_construction.take();
+    if let Some(construction) = construction.as_mut() {
         for entry in construction.committed_material.drain_entries() {
             let crate::material_storage::StoredMaterial::Physical(material) = entry;
             environment.field.deposit(position.x, position.y, material);
+        }
+    }
+
+    let mut body =
+        crate::decomposition::DecomposingBody::new(organism.structure.clone(), 0.0, position)?;
+    if !ledger.transfer(&mut organism.usable_energy, &mut body.energy_budget, energy) {
+        return None;
+    }
+    if let Some(construction) = construction.as_mut() {
+        if !ledger.transfer(
+            &mut construction.developing_energy,
+            &mut body.energy_budget,
+            developing_energy,
+        ) {
+            return None;
         }
     }
     Some(body)
