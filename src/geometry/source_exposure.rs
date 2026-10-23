@@ -3944,7 +3944,8 @@ fn parallel_exposure_with_exact_intersections(
 #[cfg(test)]
 mod parallel_mixed_boundary_visibility_tests {
     use super::{
-        parallel_exposure_with_paths_for_targets, parallel_projected_widths_by_body_for_targets,
+        parallel_exposure_with_exact_intersections, parallel_exposure_with_paths_for_targets,
+        parallel_projected_widths_by_body_for_targets, ParallelRayInteractionPath,
     };
     use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
     use crate::resources::Form;
