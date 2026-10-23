@@ -40,7 +40,11 @@ fn restore_failed_transformation_material(
         if !crate::transformation::restore_combine_environmental_source(transformation, environment)
         {
             if let Some(owner) = organism.as_deref_mut() {
-                crate::transformation::quarantine_or_retain_environmental_source(source, owner, environment);
+                crate::transformation::quarantine_or_retain_environmental_source(
+                    source,
+                    owner,
+                    environment,
+                );
             } else {
                 crate::transformation::retain_environmental_escrow_in_field(source, environment);
             }
@@ -54,7 +58,11 @@ fn restore_failed_transformation_material(
     if transformation.environmental_source {
         if !crate::transformation::restore_environmental_break_source(transformation, environment) {
             if let Some(owner) = organism.as_deref_mut() {
-                crate::transformation::quarantine_or_retain_environmental_source(source, owner, environment);
+                crate::transformation::quarantine_or_retain_environmental_source(
+                    source,
+                    owner,
+                    environment,
+                );
             } else {
                 // An owner can disappear while a multi-tick operation is active.
                 // Keep the world-space source in the field if exact restoration fails.
