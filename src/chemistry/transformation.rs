@@ -1725,8 +1725,7 @@ mod tests {
             "corrupt environmental BREAK indices must fail closed"
         );
         assert_eq!(
-            environment.field.cells[cell_index].physical_materials,
-            before_invalid_restore,
+            environment.field.cells[cell_index].physical_materials, before_invalid_restore,
             "a rejected exact restore must not alter the environmental inventory"
         );
     }
