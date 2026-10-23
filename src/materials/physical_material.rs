@@ -337,12 +337,28 @@ impl PhysicalMaterial {
     }
 
     pub(crate) fn is_realized(&self) -> bool {
-        self.placements.is_some()
-            && self.internal_connections.is_some()
-            && self.realized_shapes.as_ref().map_or(true, |shapes| {
-                shapes.len() == self.material.parts.len()
-                    && shapes.iter().all(crate::resources::Shape::is_valid)
+        let Some(placements) = self.placements.as_ref() else {
+            return false;
+        };
+        let Some(connections) = self.internal_connections.as_ref() else {
+            return false;
+        };
+        if placements.is_empty()
+            || placements.iter().any(|placement| {
+                !placement.x.is_finite()
+                    || !placement.y.is_finite()
+                    || !placement.rotation_radians.is_finite()
             })
+            || connections.iter().any(|connection| {
+                connection.part_a >= placements.len() || connection.part_b >= placements.len()
+            })
+        {
+            return false;
+        }
+        self.realized_shapes.as_ref().map_or(true, |shapes| {
+            shapes.len() == self.material.parts.len()
+                && shapes.iter().all(crate::resources::Shape::is_valid)
+        })
     }
 
     /// Re-express this realization in a deterministic local frame anchored on
@@ -789,4 +805,51 @@ mod tests {
         assert_eq!(structure.units[indices[0]].placement.x, 10.0);
         assert_eq!(structure.units[indices[0]].placement.y, 20.0);
     }
+    #[test]
+    fn realized_state_rejects_non_finite_placement_coordinates() {
+        let catalog = crate::resources::default_catalog();
+        let mut physical = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("test material should realize");
+        physical.placements.as_mut().unwrap()[0].x = f64::NAN;
+        assert!(!physical.is_realized());
+    }
+
+    #[test]
+    fn realized_state_rejects_connections_outside_placement_indices() {
+        let catalog = crate::resources::default_catalog();
+        let mut physical = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 1.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("test composite should realize");
+        physical.internal_connections.as_mut().unwrap()[0].part_b = 2;
+        assert!(!physical.is_realized());
+    }
+
 }
