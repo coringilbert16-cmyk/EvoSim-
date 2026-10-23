@@ -279,7 +279,7 @@ impl WorldToneCaptureFrame {
         let phase = std::f64::consts::TAU * sample.orbital_phase;
         let toward_source = (phase.sin(), -phase.cos());
         let (projected_widths_by_unit, interaction_paths) =
-            crate::source_exposure::parallel_exposure_with_paths_for_all_surfaces(
+            crate::source_exposure::parallel_exposure_with_paths_for_targets(
                 toward_source,
                 bodies,
                 receiver_body_indices,
