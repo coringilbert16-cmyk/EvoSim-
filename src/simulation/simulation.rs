@@ -1701,7 +1701,7 @@ mod decomposition_finalization_tests {
             remaining_ticks: 1,
             prepared_energy: None,
             pending_experience: None,
-            decision_context_key: Some(format!("environment:cell:{cell_index}:material:1:bond:0")),
+            decision_context_key: Some("corrupted-after-reservation".into()),
             prepared_structure: None,
             prepared_stored_material: None,
             prepared_usable_energy: None,
@@ -1711,7 +1711,7 @@ mod decomposition_finalization_tests {
             prepared_usable_energy_before: None,
             combine_environmental_source: None,
             stored_source_index: None,
-            environmental_source_location: None,
+            environmental_source_location: Some((cell_index, 1)),
             combine_environmental_source_index: None,
         };
 
