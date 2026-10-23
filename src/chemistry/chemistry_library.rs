@@ -926,6 +926,20 @@ mod tests {
     }
 
     #[test]
+    fn rejects_schema_four_store_after_chemical_position_key_migration() {
+        let root = test_root("schema-four");
+        write_test_store(&root, 4, &[], 0);
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("schema-four cache must be rejected after the key contract changes");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error
+            .to_string()
+            .contains("unsupported chemistry library schema version"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn rejects_legacy_schema_three_store_without_migration() {
         let root = test_root("schema-three");
         write_test_store(&root, 3, &[], 0);
@@ -942,7 +956,7 @@ mod tests {
     #[test]
     fn rejects_legacy_record_keys_even_in_current_schema_manifest() {
         let root = test_root("legacy-record");
-        write_test_store(&root, 4, &[test_record_json(3, "legacy-edge")], 1);
+        write_test_store(&root, 5, &[test_record_json(3, "legacy-edge")], 1);
         let error = ChemistryLibrary::open(&root)
             .err()
             .expect("legacy record keys must be rejected");
