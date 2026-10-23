@@ -305,14 +305,21 @@ impl WorldToneOccluderSnapshot {
                 }
             }
         }
-        for (organism_index, organism) in simulation.organisms.iter().enumerate() {
+        let body_to_organism = &snapshot.body_resonance_owners;
+        if body_to_organism.len() != snapshot.body_properties.len() {
+            return;
+        }
+        for (body_index, owner) in body_to_organism.iter().enumerate() {
+            let Some(organism_index) = *owner else {
+                continue;
+            };
+            let Some(organism) = simulation.organisms.get(organism_index) else {
+                return;
+            };
             if !living_ids.contains(&organism.id) {
                 continue;
             }
-            let Some(body_index) = snapshot.body_index_for_organism(organism_index) else {
-                continue;
-            };
-            for unit_index in 0..organism.structure.units.len() {
+            for &(unit_index, _) in &snapshot.body_properties[body_index] {
                 let Some(expected) = snapshot
                     .frame
                     .projected_width_for_unit(body_index, unit_index)
@@ -330,11 +337,6 @@ impl WorldToneOccluderSnapshot {
                     return;
                 }
             }
-        }
-
-        let body_to_organism = snapshot.body_resonance_owners.clone();
-        if body_to_organism.len() != snapshot.body_properties.len() {
-            return;
         }
 
         // Work against staged reservoirs. Any invalid geometry, spectrum, or
