@@ -533,25 +533,38 @@ mod tests {
         };
         let first = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
-            vec![Placement { x: 21.0, y: 32.0, rotation_radians: 0.25 }],
+            vec![Placement {
+                x: 21.0,
+                y: 32.0,
+                rotation_radians: 0.25,
+            }],
             &catalog,
-        ).expect("first object should be realized");
+        )
+        .expect("first object should be realized");
         let second = PhysicalMaterial::realized(
             Material::free_base("Nitrogen", 1.0),
-            vec![Placement { x: 24.0, y: 35.0, rotation_radians: 0.5 }],
+            vec![Placement {
+                x: 24.0,
+                y: 35.0,
+                rotation_radians: 0.5,
+            }],
             &catalog,
-        ).expect("second object should be realized");
+        )
+        .expect("second object should be realized");
 
-        let prepared = MaterialStorage::prepare_physical_batch_at_owner_anchor(
-            vec![first, second],
-            anchor,
-        ).expect("valid batch should prepare atomically");
+        let prepared =
+            MaterialStorage::prepare_physical_batch_at_owner_anchor(vec![first, second], anchor)
+                .expect("valid batch should prepare atomically");
         let mut storage = MaterialStorage::default();
         storage.commit_prepared_physical_batch(prepared);
         assert_eq!(storage.physical_count(), 2);
-        let offsets: Vec<_> = storage.entries.iter().map(|entry| match entry {
-            StoredMaterial::Physical(instance) => instance.owner_relative_origin.unwrap(),
-        }).collect();
+        let offsets: Vec<_> = storage
+            .entries
+            .iter()
+            .map(|entry| match entry {
+                StoredMaterial::Physical(instance) => instance.owner_relative_origin.unwrap(),
+            })
+            .collect();
         assert_eq!(offsets[0].x, 4.0);
         assert_eq!(offsets[0].y, 5.0);
         assert_eq!(offsets[1].x, 1.0);
@@ -559,18 +572,28 @@ mod tests {
 
         let fractional = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.5),
-            vec![Placement { x: 1.0, y: 2.0, rotation_radians: 0.0 }],
+            vec![Placement {
+                x: 1.0,
+                y: 2.0,
+                rotation_radians: 0.0,
+            }],
             &catalog,
-        ).expect("fractional test object should have geometry");
+        )
+        .expect("fractional test object should have geometry");
         let valid = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
-            vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
             &catalog,
-        ).expect("test object should be realized");
-        assert!(MaterialStorage::prepare_physical_batch_at_owner_anchor(
-            vec![valid, fractional],
-            anchor,
-        ).is_none());
+        )
+        .expect("test object should be realized");
+        assert!(
+            MaterialStorage::prepare_physical_batch_at_owner_anchor(vec![valid, fractional], anchor)
+                .is_none()
+        );
     }
 
     #[test]
