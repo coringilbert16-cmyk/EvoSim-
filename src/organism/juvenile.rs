@@ -206,8 +206,7 @@ mod seed_geometry_tests {
         assert!(blueprint.elements.iter().all(|element| {
             let x = element.placement.x;
             let y = element.placement.y;
-            (x.abs() == 2.0 && y.abs() < 2.0)
-                || (y.abs() == 2.0 && x.abs() < 2.0)
+            (x.abs() == 2.0 && y.abs() < 2.0) || (y.abs() == 2.0 && x.abs() < 2.0)
         }));
     }
 }
