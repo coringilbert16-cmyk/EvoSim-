@@ -412,6 +412,31 @@ impl Simulation {
         ) else {
             return;
         };
+        // Most ticks have no contained material to acquire. Check first so we
+        // avoid cloning the entire world field for the common no-op path.
+        let has_contained_material = environment
+            .field
+            .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y)
+            .into_iter()
+            .any(|cell_index| {
+                environment
+                    .field
+                    .cells
+                    .get(cell_index)
+                    .is_some_and(|cell| {
+                        cell.physical_materials.iter().any(|physical| {
+                            crate::environment::ActiveMaterialField::physical_is_fully_inside_any_region(
+                                physical,
+                                &interior_regions,
+                                &environment.catalog,
+                            )
+                        })
+                    })
+            });
+        if !has_contained_material {
+            return;
+        }
+
         // Acquisition transfers an entire batch between authoritative holders.
         // Stage both sides so a rejected storage insertion cannot lose a source
         // after the field has already removed it.
