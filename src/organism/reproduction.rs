@@ -662,8 +662,8 @@ pub(crate) fn advance_construction(
     // Validate the persisted developing holder before any new parent-funded
     // reserve transfer. A non-finite construction must not drain its parent on
     // every subsequent tick while it remains attached for diagnosis.
-    let mut child = developing_organism(construction);
-    if child.validate_stress_state() {
+    let preflight_child = developing_organism(construction);
+    if preflight_child.validate_stress_state() {
         return (ConstructionStatus::Dead, None);
     }
 
@@ -680,6 +680,9 @@ pub(crate) fn advance_construction(
         }
     }
 
+    // Rebuild after the reserve transfer so the child snapshot contains the
+    // newly transferred energy rather than overwriting it with a stale balance.
+    let mut child = developing_organism(construction);
     child.apply_maintenance(&environment.catalog, ledger);
     let dead = child.validate_stress_state();
     if !dead {
