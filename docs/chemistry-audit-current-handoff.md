@@ -641,3 +641,9 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - PR #205 commit `294de15f58340c006dc6817da6ad19a5e640efee` makes reproduction readiness use the core-specific viability validator anchored to the developing anchor's stable physical ID, instead of validating whichever cavity the generic whole-graph lookup selects.
 - Exact-head CI for this commit is pending/not yet returned by the workflow lookup. No pass is claimed.
 - This is only the first integration prerequisite. The developing graph is still separate; the next audited change must plan failure-atomic anchor promotion and all coupled movement/collision, world-tone, energy inventory, growth, viability, and revision/cache paths before shared-graph ownership is enabled. Attached reproductive structure counts for resonance; stored material alone does not. See Section 17.127.
+
+
+## Verification correction — 2026-10-22, Section 17.128
+
+- Commit `294de15f58340c006dc6817da6ad19a5e640efee` failed the exact-head workflow's formatting check; rustfmt required a multiline import. The focused logic tests did not run on that commit.
+- Formatting-only fix is `080852d365dd66016985b90e0e931647313d628f`. Exact-head workflow status is not yet available from the lookup; no verification claim yet. Do not stack another source change before the focused gate passes.
