@@ -3376,3 +3376,13 @@ Consequences:
 - Compared normalized Clippy diagnostics from frozen baseline job `119584875250` with exact-head job `120361737293` (workflow [39937866113](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39937866113)), normalizing source line numbers and matching source path plus diagnostic text.
 - Result: **38 normalized diagnostic identities at baseline and 38 at the exact head; no new or removed identities.** Strict Clippy remains red due to existing repository lint debt. No lint-only cleanup is warranted for this chemistry pass.
 - This does not yet cover the newer `c85134d` exact-head workflow; its full Rust suite is still running. The latest chemical-BREAK regression must be verified from that workflow before closing its checkpoint.
+
+
+
+## Exact-head chemical BREAK verification — 2026-10-23
+
+- Exact-head workflow [39939797558](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39939797558) completed on `c85134d2469ee67a73d93ed524205aa87dbdbaad`. Formatting and every focused gate passed, including focused chemical BREAK tests.
+- New regression `chemical_reaction::material_identity_tests::chemical_break_reconciles_world_energy_inventory` **passed**. Full suite: **598 passed, 27 failed, 1 ignored** in 167.58 seconds. Named failure comparison against frozen baseline workflow [39705628427](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39705628427): 28 baseline failures, 27 at this head; the only baseline identity absent remains `simulation_tests::integration_tests::contained_physical_material_becomes_storage_without_an_acquire_action`; **no new failing identities**.
+- Strict Clippy remains red, but normalized diagnostic identity comparison against the frozen baseline is complete for this exact head: 38 unique source-path/diagnostic identities at baseline and head, no additions or removals. No unrelated lint cleanup.
+- The structural BREAK inventory regression also passed at prior exact head `1775f9b`. These two tests establish local and reaction-path world-energy reconciliation for their tested cases only; they do not establish complete conservation across every material transition or world-tone path.
+- Continue the stored-BREAK/expulsion failure-atomicity matrix before selecting any production fix. Current concrete gaps and next steps are recorded in the preceding Phase 5 transition-audit section. Keep whole-world material/energy conservation, exact-small-world sunlight/world-tone validation, and canonical aggregate ownership as open release gates.
