@@ -655,10 +655,13 @@ impl PhysicalConstituentGraph {
         let source_primary: HashSet<_> = self.genome_constituent_ids.iter().copied().collect();
         if source_primary.len() != self.genome_constituent_ids.len()
             || !source_primary.is_subset(&source_ids)
-            || self.additional_genome_constituent_groups.iter().any(|group| {
-                let group_ids: HashSet<_> = group.iter().copied().collect();
-                group_ids.len() != group.len() || !group_ids.is_subset(&source_ids)
-            })
+            || self
+                .additional_genome_constituent_groups
+                .iter()
+                .any(|group| {
+                    let group_ids: HashSet<_> = group.iter().copied().collect();
+                    group_ids.len() != group.len() || !group_ids.is_subset(&source_ids)
+                })
         {
             return None;
         }
@@ -741,17 +744,20 @@ impl PhysicalConstituentGraph {
         let destination_core_metadata_valid = destination_primary_ids.len()
             == self.genome_constituent_ids.len()
             && destination_primary_ids.is_subset(&destination_ids)
-            && self.additional_genome_constituent_groups.iter().all(|group| {
-                let group_ids: HashSet<_> = group.iter().copied().collect();
-                let valid = !group.is_empty()
-                    && group_ids.len() == group.len()
-                    && group_ids.is_subset(&destination_ids)
-                    && destination_core_ids.is_disjoint(&group_ids);
-                if valid {
-                    destination_core_ids.extend(group_ids);
-                }
-                valid
-            });
+            && self
+                .additional_genome_constituent_groups
+                .iter()
+                .all(|group| {
+                    let group_ids: HashSet<_> = group.iter().copied().collect();
+                    let valid = !group.is_empty()
+                        && group_ids.len() == group.len()
+                        && group_ids.is_subset(&destination_ids)
+                        && destination_core_ids.is_disjoint(&group_ids);
+                    if valid {
+                        destination_core_ids.extend(group_ids);
+                    }
+                    valid
+                });
         if old_ids.is_empty()
             || old.len() != old_ids.len()
             || old.contains(&PhysicalConstituentId(0))
