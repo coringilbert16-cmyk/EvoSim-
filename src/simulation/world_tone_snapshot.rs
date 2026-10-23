@@ -981,6 +981,8 @@ mod tests {
                 prepared_usable_energy: None,
                 prepared_stress: None,
                 prepared_ledger: None,
+                prepared_ledger_before: None,
+                prepared_usable_energy_before: None,
                 combine_environmental_source: None,
                 combine_environmental_source_index: None,
             });
