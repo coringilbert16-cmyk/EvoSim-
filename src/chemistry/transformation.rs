@@ -349,7 +349,6 @@ impl Simulation {
             prepared_stress: None,
             prepared_ledger: None,
             combine_environmental_source: None,
-        combine_environmental_source_index: None,
             combine_environmental_source_index: None,
         };
         *next_id += 1;
@@ -594,6 +593,7 @@ pub(crate) fn try_start_environmental_break(
         prepared_stress: None,
         prepared_ledger: None,
         combine_environmental_source: None,
+        combine_environmental_source_index: None,
     };
     *next_id += 1;
     organism.active_transformation_id = Some(t.id);
