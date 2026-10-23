@@ -311,9 +311,19 @@ mod tests {
             .cells
             .iter()
             .flat_map(|cell| cell.physical_materials.iter())
-            .filter(|material| material.material.parts.first().is_some_and(|part| part.0 == "Water"))
+            .filter(|material| {
+                material
+                    .material
+                    .parts
+                    .first()
+                    .is_some_and(|part| part.0 == "Water")
+            })
             .collect();
-        assert_eq!(deposited.len(), 1, "the transferred fluid must remain a single object");
+        assert_eq!(
+            deposited.len(),
+            1,
+            "the transferred fluid must remain a single object"
+        );
         assert_eq!(
             deposited[0].realized_shape_for_part(0, &catalog),
             Some(realized_shape),
