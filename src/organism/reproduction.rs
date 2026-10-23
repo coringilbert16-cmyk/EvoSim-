@@ -659,6 +659,14 @@ pub(crate) fn advance_construction(
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
     seed_reference: Option<(f64, f64)>,
 ) -> (ConstructionStatus, Option<f64>) {
+    // Validate the persisted developing holder before any new parent-funded
+    // reserve transfer. A non-finite construction must not drain its parent on
+    // every subsequent tick while it remains attached for diagnosis.
+    let mut child = developing_organism(construction);
+    if child.validate_stress_state() {
+        return (ConstructionStatus::Dead, None);
+    }
+
     let reserve_energy = construction.child_genome.reproductive_energy_allocation;
     if reserve_energy.is_finite() && reserve_energy > construction.developing_energy {
         let transfer =
@@ -672,7 +680,6 @@ pub(crate) fn advance_construction(
         }
     }
 
-    let mut child = developing_organism(construction);
     child.apply_maintenance(&environment.catalog, ledger);
     let dead = child.validate_stress_state();
     if !dead {
@@ -839,6 +846,65 @@ mod tests {
     use crate::genome::initial_genome;
     use crate::resources::{default_catalog, Material};
     use crate::state::Simulation;
+
+    #[test]
+    fn invalid_developing_holder_does_not_draw_parent_reserve_again() {
+        use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
+        use crate::resources::default_catalog;
+        use crate::state::Environment;
+
+        let catalog = default_catalog();
+        let environment = Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog: catalog.clone(),
+            field: ActiveMaterialField::new(1000.0, 1000.0, DEFAULT_CELL_SIZE),
+        };
+        let mut construction = ReproductiveConstruction {
+            committed_material: MaterialStorage::default(),
+            developing_structure: OrganismStructure::new(),
+            child_genome: initial_genome(),
+            developmental_origin: Position { x: 0.0, y: 0.0 },
+            developmental_orientation_radians: 0.0,
+            developing_stress: f64::NAN,
+            anchor_unit_index: 0,
+            developing_energy: 0.0,
+            developing_maintenance_debt: 0.0,
+            needs_space: false,
+        };
+        let mut parent_structure = OrganismStructure::new();
+        let mut parent_storage = MaterialStorage::default();
+        let mut ledger = EnergyLedger::default();
+        let ledger_before = ledger;
+        let mut parent_energy = 25.0;
+        let mut rng = ChaCha8Rng::seed_from_u64(1);
+        let body = crate::organism_geometry::OrganismBodyGeometry {
+            parts: Vec::new(),
+            min_x: 0.0,
+            max_x: 0.0,
+            min_y: 0.0,
+            max_y: 0.0,
+        };
+
+        let (status, stress) = advance_construction(
+            &parent_structure,
+            &mut parent_storage,
+            &mut construction,
+            &environment,
+            &mut ledger,
+            &mut parent_energy,
+            &mut rng,
+            &body,
+            None,
+        );
+
+        assert_eq!(status, ConstructionStatus::Dead);
+        assert_eq!(stress, None);
+        assert_eq!(parent_energy, 25.0);
+        assert_eq!(ledger, ledger_before);
+        assert!(parent_storage.is_empty());
+        assert!(construction.developing_stress.is_nan());
+    }
 
     #[test]
     fn developmental_scale_requires_eighty_percent_linear_target() {
