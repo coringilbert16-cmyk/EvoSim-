@@ -1,6 +1,16 @@
 use crate::state::{Environment, Organism};
 use crate::structure::Placement;
 
+fn expulsion_shape_for_part(
+    physical: &crate::physical_material::PhysicalMaterial,
+    part_index: usize,
+    catalog: &[crate::resources::BaseResource],
+) -> Option<crate::resources::Shape> {
+    // Stored fluid geometry is authoritative. Falling back to the catalog shape
+    // here can place a deformed stored fluid as if it had never deformed.
+    physical.realized_shape_for_part(part_index, catalog)
+}
+
 pub(crate) fn expel_physical_material(
     organism: &mut Organism,
     environment: &mut Environment,
@@ -88,7 +98,7 @@ pub(crate) fn expel_physical_material(
         let Some((name, _)) = physical.material.parts.get(index) else {
             return false;
         };
-        let Some(resource) = environment.catalog.iter().find(|r| r.name == *name) else {
+        let Some(shape) = expulsion_shape_for_part(&physical, index, &environment.catalog) else {
             return false;
         };
         let relative_origin = physical.owner_relative_origin.unwrap_or(Placement {
@@ -101,9 +111,7 @@ pub(crate) fn expel_physical_material(
         let local_dx = direction.0 * cos + direction.1 * sin;
         let local_dy = -direction.0 * sin + direction.1 * cos;
         let Some(boundary) = crate::surface_geometry::boundary_point_toward(
-            &crate::resources::Shape {
-                form: resource.shape.form.clone(),
-            },
+            &shape,
             local_dx,
             local_dy,
         ) else {
@@ -192,6 +200,48 @@ mod tests {
     use crate::resources::Material;
     use crate::state::Simulation;
     use crate::structure::Placement;
+
+    #[test]
+    fn expulsion_boundary_uses_authoritative_realized_fluid_shape() {
+        let catalog = crate::resources::default_catalog();
+        let water = catalog.iter().find(|resource| resource.name == "Water").unwrap();
+        let area = match &water.shape.form {
+            crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+            _ => panic!("default Water shape should have a measurable area"),
+        };
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            area,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .unwrap();
+        let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
+        let realized_shape = crate::resources::Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: area,
+                boundary: None,
+                arc_boundary: Some(arc),
+                multi_contact_boundary: None,
+            },
+        };
+        let physical = PhysicalMaterial::realized(
+            Material::free_base("Water", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .unwrap()
+        .with_single_fluid_shape(realized_shape.clone(), &catalog)
+        .expect("valid conserved-area fluid shape should be retained");
+
+        assert_eq!(
+            super::expulsion_shape_for_part(&physical, 0, &catalog),
+            Some(realized_shape),
+            "expulsion must use the stored fluid's authoritative realized boundary"
+        );
+    }
 
     #[test]
     fn malformed_stored_material_remains_owned_when_expulsion_validation_fails() {
