@@ -1621,8 +1621,7 @@ mod decomposition_finalization_tests {
         );
 
         let mut expected_entries = entries_before;
-        expected_entries.remove(1);
-        expected_entries.push(StoredMaterial::Physical(malformed));
+        expected_entries[1] = StoredMaterial::Physical(malformed);
         assert_eq!(
             simulation.organisms[0].stored_material.entries,
             expected_entries,
