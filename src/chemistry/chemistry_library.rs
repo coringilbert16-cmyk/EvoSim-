@@ -21,6 +21,17 @@ pub const CHEMISTRY_EQUATION_FINGERPRINT: &str = "evosim-chemistry-v1|potential=
 fn quantize(value: f64) -> i64 {
     (value * 1_000_000_000.0).round() as i64
 }
+
+const INVALID_CHEMICAL_POSITION_KEY: i64 = i64::MIN;
+
+fn quantize_chemical_position(value: f64) -> i64 {
+    if !value.is_finite() || !(0.0..=crate::chemistry::CHEMICAL_D_MAX).contains(&value) {
+        INVALID_CHEMICAL_POSITION_KEY
+    } else {
+        quantize(value)
+    }
+}
+
 pub fn quantized_amount(value: f64) -> i64 {
     quantize(value)
 }
@@ -97,8 +108,8 @@ impl ChemistryKey {
             interface.interface_class,
             interface.signature.clone(),
         );
-        key.chemical_position_a = Some(quantize(position_a));
-        key.chemical_position_b = Some(quantize(position_b));
+        key.chemical_position_a = Some(quantize_chemical_position(position_a));
+        key.chemical_position_b = Some(quantize_chemical_position(position_b));
         key
     }
 
@@ -165,6 +176,21 @@ impl ChemistryRecord {
             // keys carry neither. A half-populated key is never a valid identity.
             && (self.key.chemical_position_a.is_some()
                 == self.key.chemical_position_b.is_some())
+            && match (
+                self.key.chemical_position_a,
+                self.key.chemical_position_b,
+            ) {
+                (Some(a), Some(b)) => {
+                    a != INVALID_CHEMICAL_POSITION_KEY
+                        && b != INVALID_CHEMICAL_POSITION_KEY
+                        && a >= 0
+                        && b >= 0
+                        && a <= quantize(crate::chemistry::CHEMICAL_D_MAX)
+                        && b <= quantize(crate::chemistry::CHEMICAL_D_MAX)
+                }
+                (None, None) => true,
+                _ => false,
+            }
             && self.static_potential.is_finite()
             && self.static_potential >= 0.0
     }
@@ -486,6 +512,33 @@ mod tests {
         assert_eq!(key.interface_signature, interface.signature);
         assert_eq!(key.chemical_position_a, Some(10_500_000_000));
         assert_eq!(key.chemical_position_b, Some(5_500_000_000));
+    }
+
+    #[test]
+    fn rejects_non_finite_and_out_of_domain_chemical_position_keys() {
+        let interface = crate::geometry_reference_library::resolve_live_contact_interface(
+            "Carbon",
+            crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            "Hydrogen",
+            crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 0 },
+        );
+        for invalid_position in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, -0.1, 13.1] {
+            let key = ChemistryKey::from_live_geometry(
+                "Carbon",
+                "Hydrogen",
+                &interface,
+                invalid_position,
+                5.5,
+            );
+            let record = ChemistryRecord {
+                key,
+                static_potential: 0.5,
+            };
+            assert!(
+                !record.is_valid(),
+                "invalid chemical position {invalid_position:?} must not become a cache key"
+            );
+        }
     }
 
     #[test]
