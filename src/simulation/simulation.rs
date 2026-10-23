@@ -41,7 +41,9 @@ fn restore_failed_transformation_material(
         {
             if let Some(owner) = organism.as_deref_mut() {
                 if !crate::transformation::quarantine_environmental_source_in_storage(
-                    source, owner, environment,
+                    source,
+                    owner,
+                    environment,
                 ) {
                     owner.stored_material.entries.push(
                         crate::material_storage::StoredMaterial::Physical(source.clone()),
@@ -2115,11 +2117,13 @@ mod decomposition_finalization_tests {
         .expect("environmental source should be physically realized");
         let owner = &mut simulation.organisms[0];
         owner.occupied_cells = vec![Position { x: 500.0, y: 500.0 }];
-        assert!(crate::transformation::quarantine_environmental_source_in_storage(
-            &source,
-            owner,
-            &simulation.environment,
-        ));
+        assert!(
+            crate::transformation::quarantine_environmental_source_in_storage(
+                &source,
+                owner,
+                &simulation.environment,
+            )
+        );
         let crate::material_storage::StoredMaterial::Physical(stored) =
             &simulation.organisms[0].stored_material.entries[0];
         let placement = stored.placements.as_ref().unwrap()[0];
