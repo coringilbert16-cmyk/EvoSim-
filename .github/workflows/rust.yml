@@ -45,6 +45,10 @@ jobs:
       - name: Run focused physical graph merge tests
         timeout-minutes: 5
         run: cargo test --locked append_graph_
+      # Persisted owner-relative geometry is part of physical-material validity.
+      - name: Verify finite stored-material owner anchors
+        timeout-minutes: 5
+        run: cargo test --locked realized_state_rejects_non_finite_owner_relative_origin
       - name: Run focused core-specific viability test
         timeout-minutes: 5
         run: cargo test --locked core_specific_viability_
