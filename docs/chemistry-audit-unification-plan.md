@@ -3882,3 +3882,8 @@ Internal/adjacent budding remains the target: a second genome core begins beside
 - Exact-head CI for this new test has not yet appeared; validate the focused test and Clippy before treating it as passing.
 
 - Formatting follow-up: workflow 40007907509 correctly caught two long `assert_eq!` calls in the new world-tone integration test. Those assertions are now formatted in commit `da23d16f78b6c8c7dbba97c80eb7640caa267b36`; that exact-head workflow had not appeared when this note was written.
+
+## 17.187 BREAK overflow fixture must force a nonzero heat sink — 2026-10-23
+
+- Exact-head run 40008029317 confirmed formatting and focused chemistry-accumulation tests passed, but the chemical BREAK overflow regression still failed: the seeded bond plus disruption cost produced zero dissipated heat, so setting the cumulative heat counter to f64::MAX did not trigger a ledger rejection. This is a fixture issue, not evidence that the transaction guard is broken.
+- Updated the fixture to use a lower disruption cost and explicitly assert the seeded bond has energy surplus above that cost, which should make processing efficiency dissipate positive heat. The test continues to require atomic rejection and preservation of the bond graph, usable energy, resonance, and ledger counters. Exact-head verification is pending for commit 926d7de4c55fc5dbad74e717b44204f9efabb68a.
