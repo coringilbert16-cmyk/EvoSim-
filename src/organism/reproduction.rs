@@ -1067,6 +1067,9 @@ mod tests {
         let mut parent = simulation.organisms.remove(0);
         let mut ledger = EnergyLedger::default();
 
+        // Isolate this inventory-exhaustion scenario from the constructor's
+        // evolving seed stock: this test supplies exactly one available object.
+        parent.stored_material.entries.clear();
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
             &mut parent,
