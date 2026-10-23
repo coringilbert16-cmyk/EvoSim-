@@ -1659,11 +1659,12 @@ mod tests {
             .push(source);
         let candidate = environmental_break_candidates(&organism, &environment)
             .into_iter()
-            .find(|candidate| {
-                candidate.context_key.as_deref()
-                    == Some(format!("environment:cell:{cell_index}:material:0:bond:0").as_str())
-            })
+            .next()
             .expect("fixture must expose an accessible environmental BREAK candidate");
+        assert_eq!(
+            parse_environmental_break_context_key(candidate.context_key.as_deref().unwrap()),
+            Some((cell_index, 0, 0))
+        );
         let materials_before = environment.field.cells[cell_index].physical_materials.clone();
         let mut next_id = u64::MAX;
 
