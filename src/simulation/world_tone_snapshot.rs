@@ -1007,7 +1007,8 @@ mod tests {
             retained > 0.0,
             "attached developing material must credit its living owner's resonance reservoir"
         );
-        let settled = simulation.energy_ledger.total_resonant_energy_held - resonant;
+        let settled =
+            crate::reproduction::total_resonant_energy_held(&simulation.organisms) - resonant;
         assert!(
             ((simulation.energy_ledger.total_external_energy_input - external_before)
                 - settled
