@@ -793,7 +793,12 @@ mod integration_tests {
         );
         assert_eq!(s.organisms[0].stored_material.total_amount(), before);
         assert_eq!(
-            s.environment.field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>(),
+            s.environment
+                .field
+                .cells
+                .iter()
+                .map(|cell| cell.physical_materials.len())
+                .sum::<usize>(),
             1,
             "contained material must remain in the field while a transformation is active"
         );
