@@ -57,13 +57,15 @@ pub(crate) fn accumulate(
     accumulation: &mut std::collections::BTreeMap<String, f64>,
     chemistry_library: &mut ChemistryLibrary,
 ) -> Vec<ChemicalBreakOperation> {
+    if organism.structure.bonds.is_empty() {
+        let organism_prefix = format!("{}|rev:", organism.id);
+        accumulation.retain(|key, _| !key.starts_with(&organism_prefix));
+        return Vec::new();
+    }
     let current_prefix = format!("{}|rev:{}|", organism.id, organism.structure_revision);
     accumulation.retain(|key, _| {
         !key.starts_with(&format!("{}|rev:", organism.id)) || key.starts_with(&current_prefix)
     });
-    if organism.structure.bonds.is_empty() {
-        return Vec::new();
-    }
     let mut cache = ConnectionCompatibilityCache::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
     let bonds = organism.structure.bonds.clone();
@@ -436,12 +438,18 @@ mod material_identity_tests {
         simulation
             .chemical_reaction_accumulation
             .insert(stale_key.clone(), 0.75);
+        organism.structure.bonds.clear();
+        organism.mark_structure_changed();
+        let current_revision_key = format!(
+            "{}|rev:{}|stale-current-revision",
+            organism.id, organism.structure_revision
+        );
+        simulation
+            .chemical_reaction_accumulation
+            .insert(current_revision_key.clone(), 0.5);
         simulation
             .chemical_reaction_accumulation
             .insert(unrelated_key.clone(), 0.25);
-
-        organism.structure.bonds.clear();
-        organism.mark_structure_changed();
         assert!(accumulate(
             organism,
             &simulation.environment.catalog,
@@ -455,6 +463,12 @@ mod material_identity_tests {
                 .chemical_reaction_accumulation
                 .contains_key(&stale_key),
             "old-revision accumulation must be removed even when no bonds remain"
+        );
+        assert!(
+            !simulation
+                .chemical_reaction_accumulation
+                .contains_key(&current_revision_key),
+            "bondless organisms must not retain current-revision reaction entries"
         );
         assert_eq!(
             simulation
