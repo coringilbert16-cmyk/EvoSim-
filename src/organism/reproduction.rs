@@ -663,8 +663,12 @@ pub(crate) fn advance_construction(
     if reserve_energy.is_finite() && reserve_energy > construction.developing_energy {
         let transfer =
             (reserve_energy - construction.developing_energy).min(parent_energy.max(0.0));
-        if transfer > 0.0 {
-            let _ = ledger.transfer(parent_energy, &mut construction.developing_energy, transfer);
+        if transfer > 0.0
+            && !ledger.transfer(parent_energy, &mut construction.developing_energy, transfer)
+        {
+            // A rejected reserve transfer must not let construction, maintenance,
+            // or structural chemistry advance without the intended energy move.
+            return (ConstructionStatus::Waiting, None);
         }
     }
 
@@ -963,6 +967,47 @@ mod tests {
         );
         assert!(construction.developing_energy > 0.0);
         assert!(parent.usable_energy < before_parent_energy);
+    }
+
+    #[test]
+    fn rejected_parent_reserve_transfer_leaves_construction_unchanged() {
+        let mut simulation = Simulation::new(912, 20.0);
+        let mut parent = simulation.organisms.remove(0);
+        let mut ledger = EnergyLedger::default();
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
+        assert!(begin_reproduction(
+            &mut parent,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+        let mut construction = parent.reproductive_construction.take().unwrap();
+        let original_energy = construction.developing_energy;
+        let original_structure = construction.developing_structure.clone();
+        let original_storage = parent.stored_material.clone();
+        // This makes the otherwise positive reserve transfer reject its source
+        // validation, exercising the fail-closed path deterministically.
+        parent.usable_energy = f64::INFINITY;
+        let environment = simulation.environment.clone();
+        let body = parent_body_geometry(&parent, &environment.catalog).unwrap();
+
+        let (status, _) = advance_construction(
+            &parent.structure,
+            &mut parent.stored_material,
+            &mut construction,
+            &environment,
+            &mut ledger,
+            &mut parent.usable_energy,
+            &mut simulation.rng,
+            &body,
+            None,
+        );
+
+        assert_eq!(status, ConstructionStatus::Waiting);
+        assert_eq!(parent.usable_energy, f64::INFINITY);
+        assert_eq!(construction.developing_energy, original_energy);
+        assert_eq!(construction.developing_structure.units.len(), original_structure.units.len());
+        assert_eq!(parent.stored_material.entries, original_storage.entries);
     }
 
     #[test]
