@@ -138,10 +138,7 @@ impl MaterialStorage {
         instances: Vec<PhysicalMaterial>,
         anchor: Placement,
     ) -> Option<Vec<StoredMaterial>> {
-        if !anchor.x.is_finite()
-            || !anchor.y.is_finite()
-            || !anchor.rotation_radians.is_finite()
-        {
+        if !anchor.x.is_finite() || !anchor.y.is_finite() || !anchor.rotation_radians.is_finite() {
             return None;
         }
         let mut prepared = Vec::with_capacity(instances.len());
@@ -189,10 +186,7 @@ impl MaterialStorage {
         instance: PhysicalMaterial,
         anchor: Placement,
     ) -> Result<(), PhysicalMaterial> {
-        if !anchor.x.is_finite()
-            || !anchor.y.is_finite()
-            || !anchor.rotation_radians.is_finite()
-        {
+        if !anchor.x.is_finite() || !anchor.y.is_finite() || !anchor.rotation_radians.is_finite() {
             return Err(instance);
         }
         let Some(origin) = instance
