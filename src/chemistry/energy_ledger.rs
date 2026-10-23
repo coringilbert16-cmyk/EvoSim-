@@ -478,6 +478,30 @@ mod tests {
     }
 
     #[test]
+    fn world_tone_settlement_rejects_counter_overflow_without_partial_updates() {
+        let mut ledger = EnergyLedger::default();
+        ledger.total_external_energy_input = f64::MAX;
+        ledger.total_heat_dissipated = 7.0;
+        ledger.total_world_tone_energy_escaped = 3.0;
+
+        assert!(
+            !ledger.settle_world_tone_paths(10.0, 4.0, 2.0, 4.0),
+            "external-input counter overflow must reject the entire settlement"
+        );
+        assert_eq!(ledger.total_external_energy_input, f64::MAX);
+        assert_eq!(ledger.total_heat_dissipated, 7.0);
+        assert_eq!(ledger.total_world_tone_energy_escaped, 3.0);
+
+        assert!(
+            !ledger.settle_world_tone_paths(f64::INFINITY, 0.0, 0.0, 0.0),
+            "non-finite incident energy must reject before any ledger mutation"
+        );
+        assert_eq!(ledger.total_external_energy_input, f64::MAX);
+        assert_eq!(ledger.total_heat_dissipated, 7.0);
+        assert_eq!(ledger.total_world_tone_energy_escaped, 3.0);
+    }
+
+    #[test]
     fn world_inventory_reconciles_external_input_work_and_heat() {
         let inventory = EnergyInventorySnapshot {
             initial_usable_energy: 10.0,
