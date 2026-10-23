@@ -590,8 +590,7 @@ mod integration_tests {
         // usable energy was only transferred to construction, not created.
         let structural_baseline =
             Simulation::structural_energy_held(&s.organisms, &s.decomposing_bodies);
-        let resonant_baseline =
-            crate::reproduction::total_resonant_energy_held(&s.organisms);
+        let resonant_baseline = crate::reproduction::total_resonant_energy_held(&s.organisms);
         s.energy_ledger.initial_structural_energy_held = structural_baseline;
         s.energy_ledger.total_structural_energy_held = structural_baseline;
         s.energy_ledger.initial_resonant_energy_held = resonant_baseline;
