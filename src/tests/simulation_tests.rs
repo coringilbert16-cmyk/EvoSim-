@@ -643,19 +643,28 @@ mod integration_tests {
     #[test]
     fn storage_contains_discrete_independent_material_objects() {
         let mut o = Simulation::create_initial_organism();
+        let before_len = o.stored_material.len();
+        let before_unstructured = o.stored_material.count_unstructured();
+        let before_structured = o.stored_material.count_structured();
+        let before_amount = o.stored_material.total_amount();
+
         assert!(o.store_material(Material::free_base("Carbon", 5.0)));
-        assert_eq!(o.stored_material.len(), 6);
-        assert_eq!(o.stored_material.count_unstructured(), 5);
-        assert_eq!(o.stored_material.count_structured(), 1);
-        assert_eq!(o.stored_material.total_amount(), 8.0);
+
+        // Assert the storage contract relative to the constructor's actual
+        // starting inventory, rather than coupling this test to its seed layout.
+        assert_eq!(o.stored_material.len(), before_len + 1);
+        assert_eq!(o.stored_material.count_unstructured(), before_unstructured + 5);
+        assert_eq!(o.stored_material.count_structured(), before_structured);
+        assert_eq!(o.stored_material.total_amount(), before_amount + 5.0);
     }
     #[test]
     fn storage_preserves_a_compound_as_one_intact_object() {
         let mut o = Simulation::create_initial_organism();
+        let before_structured = o.stored_material.count_structured();
         let m = structured_carbon_hydrogen();
         assert!(o.store_material(m.clone()));
         assert!(o.stored_material.materials_snapshot().contains(&m));
-        assert_eq!(o.stored_material.count_structured(), 2);
+        assert_eq!(o.stored_material.count_structured(), before_structured + 1);
     }
     #[test]
     fn accessible_interior_starts_without_synthetic_water() {
