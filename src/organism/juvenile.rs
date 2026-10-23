@@ -159,7 +159,8 @@ pub(crate) fn realize_initial_with_reserve(
 
     let mut ledger = EnergyLedger::default();
     let mut energy = required_initial_energy + reserve_energy;
-    let mut structure = construct_calibration_structure(blueprint, catalog, &mut ledger, &mut energy)?;
+    let mut structure =
+        construct_calibration_structure(blueprint, catalog, &mut ledger, &mut energy)?;
     let remaining_energy = energy;
 
     if !remaining_energy.is_finite() || remaining_energy + EPS < reserve_energy {
