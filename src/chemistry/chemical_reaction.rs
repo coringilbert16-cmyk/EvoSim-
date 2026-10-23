@@ -675,7 +675,14 @@ mod material_identity_tests {
             ),
             "a cumulative work overflow must reject the BREAK"
         );
-        assert_eq!(simulation.organisms[0].structure, structure_before);
+        assert_eq!(
+            simulation.organisms[0].structure.units,
+            structure_before.units
+        );
+        assert_eq!(
+            simulation.organisms[0].structure.bonds,
+            structure_before.bonds
+        );
         assert_eq!(
             simulation.organisms[0]
                 .resonant_energy
