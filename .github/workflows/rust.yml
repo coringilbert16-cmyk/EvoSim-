@@ -79,6 +79,10 @@ jobs:
       - name: Run focused chemical BREAK tests
         timeout-minutes: 5
         run: cargo test --locked chemical_break_
+      # Snapshot rollback for prepared COMBINE must be visible before the full suite.
+      - name: Run focused COMBINE settlement rollback tests
+        timeout-minutes: 5
+        run: cargo test --locked failed_prepared_combine_
       # Transaction rollback tests must report independently of the slow full suite.
       - name: Run focused material-transfer rollback tests
         timeout-minutes: 5
