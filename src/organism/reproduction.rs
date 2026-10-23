@@ -753,6 +753,15 @@ pub(crate) fn advance_construction(
         }
     };
 
+    // Validate the candidate graph before consuming a parent-owned material
+    // entry or committing its staged energy ledger. A rejected placement must
+    // not partially commit the attachment transaction.
+    if !child_intersects_realized_parent_region(&child.structure, parent_body)
+        || !parent_child_in_contact(parent_structure, &child.structure)
+    {
+        return (ConstructionStatus::Detached, None);
+    }
+
     if let Some(parent_index) = transferred {
         if parent_storage.take_physical_at(parent_index).is_none() {
             return (ConstructionStatus::Waiting, None);
@@ -764,12 +773,6 @@ pub(crate) fn advance_construction(
     construction.needs_space = false;
     construction.developing_energy = child.usable_energy;
     construction.developing_stress = child.stress;
-    if !child_intersects_realized_parent_region(&construction.developing_structure, parent_body) {
-        return (ConstructionStatus::Detached, None);
-    }
-    if !parent_child_in_contact(parent_structure, &construction.developing_structure) {
-        return (ConstructionStatus::Detached, None);
-    }
     if birth_ready_with_reference(construction, &environment.catalog, seed_reference) {
         return (ConstructionStatus::Ready, None);
     }
