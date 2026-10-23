@@ -1665,11 +1665,17 @@ mod tests {
             parse_environmental_break_context_key(candidate.context_key.as_deref().unwrap()),
             Some((cell_index, 0, 0))
         );
-        let materials_before = environment.field.cells[cell_index].physical_materials.clone();
+        let materials_before = environment.field.cells[cell_index]
+            .physical_materials
+            .clone();
         let mut next_id = u64::MAX;
 
-        let started =
-            try_start_environmental_break(&mut organism, &mut environment, &mut next_id, &candidate);
+        let started = try_start_environmental_break(
+            &mut organism,
+            &mut environment,
+            &mut next_id,
+            &candidate,
+        );
         assert!(started.is_none());
         assert_eq!(
             environment.field.cells[cell_index].physical_materials,
