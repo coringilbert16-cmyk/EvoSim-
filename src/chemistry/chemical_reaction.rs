@@ -662,7 +662,7 @@ mod material_identity_tests {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
             reaction_energy: 0.25,
-            disruption_cost: 0.5,
+            disruption_cost: f64::MAX,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: 0.25,
@@ -673,7 +673,7 @@ mod material_identity_tests {
                 &mut simulation.organisms[0],
                 &mut simulation.energy_ledger,
             ),
-            "a cumulative work overflow must reject the BREAK"
+            "adding the disruption cost to cumulative work must overflow and reject the BREAK"
         );
         assert_eq!(
             simulation.organisms[0].structure.units,
