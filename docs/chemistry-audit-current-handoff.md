@@ -750,4 +750,4 @@ The chemistry equation bounds pairwise separation, not absolute coordinate value
 
 ### Stored BREAK preparation rollback
 
-PR #205 now restores a reserved stored BREAK source when bond metadata is missing/corrupt or ledger settlement rejects. The helper reinserts the source at the exact original storage index when valid, then clears the active transformation ID; the failure test checks exact storage entries and unchanged ledger. Focused gate is `cargo test --locked failed_stored_break`. Current head `320fafee735b9a4f3a2949a919ad2ef797ee805b`; verification pending.
+PR #205 now clears the active transformation ID on preparation failure and delegates restoration to the simulation-level rollback handler. This avoids a double-restore path; the live-tick test checks exact storage entries and unchanged ledger. Focused gate is `cargo test --locked failed_stored_break`. Current head `a0d8463cec242c65ad6930c28d78c1c834b78469`; verification pending.
