@@ -851,5 +851,4 @@ mod tests {
         physical.internal_connections.as_mut().unwrap()[0].part_b = 2;
         assert!(!physical.is_realized());
     }
-
 }
