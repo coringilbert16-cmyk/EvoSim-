@@ -420,63 +420,60 @@ impl Simulation {
         ) else {
             return;
         };
-        // Most ticks have no contained material to acquire. Check first so we
-        // avoid cloning the entire world field for the common no-op path.
-        let has_contained_material = environment
+        // Gather only the affected physical objects and their exact source
+        // indices. Preflight storage conversion before mutating either holder;
+        // this avoids cloning the entire world field or inventory.
+        let candidate_cells = environment
             .field
-            .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y)
-            .into_iter()
-            .any(|cell_index| {
-                environment
-                    .field
-                    .cells
-                    .get(cell_index)
-                    .is_some_and(|cell| {
-                        cell.physical_materials.iter().any(|physical| {
-                            crate::environment::ActiveMaterialField::physical_is_fully_inside_any_region(
-                                physical,
-                                &interior_regions,
-                                &environment.catalog,
-                            )
-                        })
-                    })
-            });
-        if !has_contained_material {
-            return;
+            .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
+        let mut source_indices = Vec::new();
+        let mut contained = Vec::new();
+        for cell_index in candidate_cells {
+            let Some(cell) = environment.field.cells.get(cell_index) else {
+                continue;
+            };
+            for (physical_index, physical) in cell.physical_materials.iter().enumerate() {
+                if crate::environment::ActiveMaterialField::physical_is_fully_inside_any_region(
+                    physical,
+                    &interior_regions,
+                    &environment.catalog,
+                ) {
+                    source_indices.push((cell_index, physical_index));
+                    contained.push(physical.clone());
+                }
+            }
         }
-
-        // Acquisition transfers an entire batch between authoritative holders.
-        // Stage both sides so a rejected storage insertion cannot lose a source
-        // after the field has already removed it.
-        let mut staged_field = environment.field.clone();
-        let mut staged_storage = organism.stored_material.clone();
-        let contained = staged_field.take_contained_physical_materials_in_regions(
-            &body,
-            &interior_regions,
-            &environment.catalog,
-        );
         if contained.is_empty() {
             return;
         }
-        for physical in contained {
-            if staged_storage
-                .try_store_physical_instance_at_owner_anchor(
-                    physical,
-                    Placement {
-                        x: anchor.x,
-                        y: anchor.y,
-                        rotation_radians: 0.0,
-                    },
-                )
-                .is_err()
-            {
-                // Discard both staged holders: the exact original field and
-                // storage remain authoritative until the complete batch succeeds.
-                return;
-            }
+
+        let Some(prepared_entries) =
+            crate::material_storage::MaterialStorage::prepare_physical_batch_at_owner_anchor(
+                contained,
+                Placement {
+                    x: anchor.x,
+                    y: anchor.y,
+                    rotation_radians: 0.0,
+                },
+            )
+        else {
+            // The field remains untouched if any member of the batch cannot be
+            // represented faithfully in storage.
+            return;
+        };
+
+        // Remove from highest index to lowest so each recorded source index
+        // remains valid. No other mutation can interleave within this call.
+        source_indices.sort_unstable_by(|left, right| right.cmp(left));
+        for (cell_index, physical_index) in source_indices {
+            environment.field.cells[cell_index]
+                .physical_materials
+                .remove(physical_index);
+            environment.field.mark_changed_at_index(cell_index);
         }
-        environment.field = staged_field;
-        organism.stored_material = staged_storage;
+        organism
+            .stored_material
+            .commit_prepared_physical_batch(prepared_entries);
     }
 
     fn current_needs(
