@@ -1086,6 +1086,14 @@ mod tests {
                 &simulation.organisms,
                 &simulation.decomposing_bodies,
             );
+        // Simulation::new may have accumulated setup-time flows. The oracle
+        // below is intentionally scoped to this reshaped fixture, so rebase
+        // every cumulative flow alongside the three held-energy baselines.
+        simulation.energy_ledger.total_external_energy_input = 0.0;
+        simulation.energy_ledger.total_potential_energy_released = 0.0;
+        simulation.energy_ledger.total_work_expended = 0.0;
+        simulation.energy_ledger.total_heat_dissipated = 0.0;
+        simulation.energy_ledger.total_world_tone_energy_escaped = 0.0;
 
         let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
             .expect("both physical receivers should be represented");
