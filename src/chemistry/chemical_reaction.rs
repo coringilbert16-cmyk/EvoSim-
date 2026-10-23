@@ -542,6 +542,63 @@ mod material_identity_tests {
     }
 
     #[test]
+    fn chemical_break_with_resonance_shortfall_reconciles_world_inventory() {
+        let mut simulation = crate::state::Simulation::new(925, 10.0);
+        assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        let retained_resonance = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .expect("retained resonance should have finite energy");
+        // The fixture deposit is part of the test's starting state, not a
+        // simulated world-tone input. Set the oracle's tick-zero baseline to
+        // that explicitly seeded reservoir so only the BREAK is measured.
+        simulation.energy_ledger.initial_resonant_energy_held = retained_resonance;
+        simulation.energy_ledger.total_resonant_energy_held = retained_resonance;
+        let before = simulation.energy_inventory_snapshot();
+        assert!(
+            before.is_balanced(1e-9),
+            "initial inventory: {:?}",
+            before.residual()
+        );
+
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        let operation = ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            reaction_energy: 0.25,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "test|rev:0|bond".into(),
+            accumulated_reaction: 0.25,
+        };
+        assert!(resolve(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.energy_ledger,
+        ));
+
+        let after = simulation.energy_inventory_snapshot();
+        assert!(
+            after.is_balanced(1e-9),
+            "resonance-assisted chemical BREAK must reconcile the world inventory: residual={:?}",
+            after.residual()
+        );
+        assert!(
+            (before.current_resonant_energy - after.current_resonant_energy - 0.25).abs() < 1e-9,
+            "only the reaction-energy shortfall should be withdrawn from resonance"
+        );
+        assert!(!simulation.organisms[0]
+            .structure
+            .bonds
+            .iter()
+            .any(|candidate| candidate.has_same_identity(&bond)));
+    }
+
+    #[test]
     fn failed_stale_chemical_break_does_not_consume_retained_resonance() {
         let mut simulation = crate::state::Simulation::new(921, 10.0);
         let bond = *simulation.organisms[0]
