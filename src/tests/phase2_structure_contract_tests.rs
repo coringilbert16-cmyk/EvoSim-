@@ -145,9 +145,13 @@ fn failed_late_physical_restoration_preserves_destination_structure() {
         &catalog,
     )
     .expect("non-overlapping stored compound should realize");
-    // Corrupt the persisted pose after realization so validation reaches the
-    // late pairwise penetration gate after staging both constituents.
-    instance.placements.as_mut().unwrap()[1].x = -1.0;
+    // Corrupt a persisted endpoint after realization. Restoration must stage
+    // both constituents, reject the invalid stored connection, and roll back.
+    instance
+        .internal_connections
+        .as_mut()
+        .unwrap()[0]
+        .endpoint_a = ConnectionEndpoint::LineEndpoint { point_index: 99 };
 
     let mut destination = OrganismStructure::new();
     let mut existing = StructuralUnit::new(
@@ -175,7 +179,7 @@ fn failed_late_physical_restoration_preserves_destination_structure() {
             &catalog,
         )
         .is_none(),
-        "overlapping persisted constituents must be rejected"
+        "invalid persisted endpoint must be rejected"
     );
     assert_eq!(destination.units, units_before);
     assert_eq!(destination.bonds, bonds_before);
