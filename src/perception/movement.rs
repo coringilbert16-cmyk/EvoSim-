@@ -313,6 +313,34 @@ impl Simulation {
             return Err(crate::state::MovementFailureReason::InsufficientEnergy);
         }
 
+        let transaction = EnergyTransaction {
+            reason: EnergyReason::Move,
+            potential_released: 0.0,
+            usable_delta: -cost,
+            structural_delta: 0.0,
+            work_expended: 0.0,
+            heat_dissipated: cost,
+        };
+        // Validate the ledger settlement against a cheap scalar snapshot before
+        // mutating world geometry. A malformed/overflowed ledger must not leave
+        // a completed move whose energy debit was rejected.
+        let mut preflight_ledger = *ledger;
+        let mut preflight_energy = usable_energy;
+        if !preflight_ledger.settle_transaction(&mut preflight_energy, transaction) {
+            organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
+                tick,
+                direction_x: Some(active.direction_x),
+                direction_y: Some(active.direction_y),
+                step: Some(active.decision_distance),
+                usable_energy,
+                active_transformation_id: organism.active_transformation_id,
+                result: Err(crate::state::MovementFailureReason::InsufficientEnergy),
+                old_position,
+                new_position: old_position.clone(),
+            });
+            return Err(crate::state::MovementFailureReason::InsufficientEnergy);
+        }
+
         let result = Self::try_move_cell_with_reason(
             organism,
             environment,
@@ -340,14 +368,6 @@ impl Simulation {
             return Err(reason);
         }
 
-        let transaction = EnergyTransaction {
-            reason: EnergyReason::Move,
-            potential_released: 0.0,
-            usable_delta: -cost,
-            structural_delta: 0.0,
-            work_expended: 0.0,
-            heat_dissipated: cost,
-        };
         if !ledger.settle_transaction(&mut organism.usable_energy, transaction) {
             organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
                 tick,
@@ -1858,5 +1878,50 @@ mod tests {
             assert!((moved.y - original.y).abs() < 1e-9);
             assert_eq!(moved.rotation_radians, original.rotation_radians);
         }
+    } 
+    #[test]
+    fn rejected_movement_energy_settlement_does_not_mutate_world_geometry() {
+        let simulation = Simulation::new(901, 20.0);
+        let mut organism = simulation.organisms[0].clone();
+        organism.usable_energy = 100.0;
+        let mut environment = empty_environment(&simulation);
+        let mut ledger = EnergyLedger::default();
+        ledger.total_heat_dissipated = f64::MAX;
+        let mut spatial_index = MovementSpatialIndex::new(&[], &environment);
+        let mut active = crate::state::ActiveMovement {
+            direction_x: 1.0,
+            direction_y: 0.0,
+            remaining_steps: 1,
+            step_interval: 1,
+            ticks_until_step: 0,
+            decision_distance: 1.0,
+            before_energy: organism.usable_energy,
+            before_stress: organism.stress,
+            before_developmental_realization: 0.0,
+        };
+        let original_position = organism.occupied_cells.clone();
+        let original_energy = organism.usable_energy;
+        let original_ledger = ledger;
+
+        let result = Simulation::advance_movement(
+            &mut [],
+            &mut organism,
+            &mut [],
+            &mut spatial_index,
+            &mut environment,
+            &mut ledger,
+            1,
+            &mut active,
+        );
+
+        assert_eq!(
+            result,
+            Err(crate::state::MovementFailureReason::InsufficientEnergy)
+        );
+        assert_eq!(organism.occupied_cells, original_position);
+        assert_eq!(organism.usable_energy, original_energy);
+        assert_eq!(ledger.total_heat_dissipated, original_ledger.total_heat_dissipated);
+        assert_eq!(active.remaining_steps, 1);
     }
+
 }
