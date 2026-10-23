@@ -366,8 +366,7 @@ impl PhysicalMaterial {
                 .zip(connections)
                 .any(|(bond, connection)| {
                     !((bond.part_a == connection.part_a && bond.part_b == connection.part_b)
-                        || (bond.part_a == connection.part_b
-                            && bond.part_b == connection.part_a))
+                        || (bond.part_a == connection.part_b && bond.part_b == connection.part_a))
                 })
         {
             return false;
