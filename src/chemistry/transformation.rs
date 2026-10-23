@@ -855,6 +855,39 @@ pub(crate) fn restore_environmental_break_source(
 /// when its original field location is no longer usable. Convert its geometry
 /// to the storage's intrinsic frame and retain its owner-relative anchor; never
 /// place world coordinates directly into the intrinsic storage representation.
+pub(crate) fn retain_environmental_escrow_in_field(
+    source: &crate::physical_material::PhysicalMaterial,
+    environment: &mut Environment,
+) {
+    let deposited = source
+        .placements
+        .as_ref()
+        .and_then(|placements| placements.first())
+        .is_some_and(|placement| {
+            environment
+                .field
+                .deposit(placement.x, placement.y, source.clone())
+        });
+    if !deposited && !environment.field.cells.is_empty() {
+        // Last-resort explicit world-field escrow. Never reinterpret a
+        // world-space placement as an owner-relative storage coordinate.
+        environment.field.cells[0]
+            .physical_materials
+            .push(source.clone());
+        environment.field.mark_changed_at_index(0);
+    }
+}
+
+pub(crate) fn quarantine_or_retain_environmental_source(
+    source: &crate::physical_material::PhysicalMaterial,
+    organism: &mut Organism,
+    environment: &mut Environment,
+) {
+    if !quarantine_environmental_source_in_storage(source, organism, environment) {
+        retain_environmental_escrow_in_field(source, environment);
+    }
+}
+
 pub(crate) fn quarantine_environmental_source_in_storage(
     source: &crate::physical_material::PhysicalMaterial,
     organism: &mut Organism,
@@ -894,14 +927,8 @@ fn restore_failed_stored_break_source(
     if let Some(source) = transformation.stored_material.as_ref() {
         if transformation.environmental_source {
             if !restore_environmental_break_source(transformation, environment) {
-                // Prefer a valid owner-relative storage representation if the
-                // original world-cell metadata is malformed. Raw escrow is a
-                // last-resort quarantine only if conversion itself fails.
-                if !quarantine_environmental_source_in_storage(source, organism, environment) {
-                    organism.stored_material.entries.push(
-                        crate::material_storage::StoredMaterial::Physical(source.clone()),
-                    );
-                }
+                // Never put world-space coordinates directly into storage.
+                quarantine_or_retain_environmental_source(source, organism, environment);
             }
         } else {
             // Stored BREAK escrow originated at this exact storage index. Since
@@ -1023,14 +1050,9 @@ pub(crate) fn resolve_transformation(
                 transformation.prepared_ledger.as_ref(),
             );
             if !restore_combine_environmental_source(transformation, environment) {
-                // Convert world geometry before using storage as the fallback
-                // holder; raw escrow remains a last resort if conversion fails.
+                // Convert world geometry before using storage as the fallback holder.
                 if let Some((_, source)) = transformation.combine_environmental_source.as_ref() {
-                    if !quarantine_environmental_source_in_storage(source, organism, environment) {
-                        organism.stored_material.entries.push(
-                            crate::material_storage::StoredMaterial::Physical(source.clone()),
-                        );
-                    }
+                    quarantine_or_retain_environmental_source(source, organism, environment);
                 }
             }
             organism.active_transformation_id = None;
