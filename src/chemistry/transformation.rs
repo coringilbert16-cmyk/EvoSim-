@@ -2173,18 +2173,12 @@ mod tests {
     ) {
         let genome = crate::genome::initial_genome();
         let catalog = crate::resources::default_catalog();
-        // The bare seed baseline is only a cavity scaffold; this fixture's
-        // resonance-BREAK tests need the full realized organism, including
-        // structure outside the genome boundary.
-        static STRUCTURE: std::sync::OnceLock<crate::structure::OrganismStructure> =
-            std::sync::OnceLock::new();
-        let structure = STRUCTURE
-            .get_or_init(|| {
-                crate::initial_organism_constructor::construct_valid(&catalog)
-                    .expect("test organism constructor must find a valid organism")
-                    .structure
-            })
-            .clone();
+        // These tests need only the confirmed cavity scaffold to enumerate
+        // genome-boundary bonds, not a fully viable initial organism. Realize
+        // the calibration blueprint directly instead of invoking the stricter
+        // whole-organism viability gate.
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
+        let structure = blueprint.realize(&catalog).unwrap();
         let organism = crate::state::Organism {
             id: "test".into(),
             developmental_origin: crate::state::Position { x: 0.0, y: 0.0 },
