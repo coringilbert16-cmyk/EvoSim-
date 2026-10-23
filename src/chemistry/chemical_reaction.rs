@@ -290,13 +290,24 @@ pub(crate) fn resolve(
     if organism.resonant_energy.total_energy().is_none() {
         return false;
     }
+    if !operation.reaction_energy.is_finite()
+        || operation.reaction_energy < 0.0
+        || !operation.disruption_cost.is_finite()
+        || operation.disruption_cost < 0.0
+    {
+        return false;
+    }
     let processing_efficiency = organism.genome.processing_efficiency();
+    // Resonance only supplies the shortfall between the accumulated reaction
+    // energy and the physical disruption barrier. Never spend stored resonance
+    // when the reaction itself already covers that barrier.
+    let required_resonance = (operation.disruption_cost - operation.reaction_energy).max(0.0);
     // Work from a trial reservoir. A failed or stale BREAK must not consume
     // retained resonance; only a successfully settled structural transaction
     // commits the frequency-compatible withdrawal.
     let mut trial_reservoir = organism.resonant_energy.clone();
-    let resonant_work = trial_reservoir
-        .withdraw_compatible(operation.reaction_frequency_hz, operation.disruption_cost);
+    let resonant_work =
+        trial_reservoir.withdraw_compatible(operation.reaction_frequency_hz, required_resonance);
     let success = crate::transformation::settle_chemical_break_energy_with_resonance(
         organism,
         operation.bond,
@@ -378,7 +389,7 @@ mod material_identity_tests {
         );
     }
     #[test]
-    fn successful_chemical_break_consumes_only_compatible_retained_resonance() {
+    fn successful_chemical_break_does_not_spend_resonance_when_reaction_covers_barrier() {
         let mut simulation = crate::state::Simulation::new(920, 10.0);
         let bond = *simulation.organisms[0]
             .structure
@@ -408,7 +419,46 @@ mod material_identity_tests {
             .resonant_energy
             .total_energy()
             .unwrap();
-        assert!((before - after - 0.5).abs() < 1e-9);
+        assert!((before - after).abs() < 1e-9);
+        assert!(!simulation.organisms[0]
+            .structure
+            .bonds
+            .iter()
+            .any(|candidate| candidate.has_same_identity(&bond)));
+    }
+
+    #[test]
+    fn successful_chemical_break_spends_only_resonance_needed_for_reaction_shortfall() {
+        let mut simulation = crate::state::Simulation::new(924, 10.0);
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        let operation = ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            reaction_energy: 0.25,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "test|rev:0|bond".into(),
+            accumulated_reaction: 0.25,
+        };
+        let before = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .unwrap();
+        assert!(resolve(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.energy_ledger,
+        ));
+        let after = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .unwrap();
+        assert!((before - after - 0.25).abs() < 1e-9);
         assert!(!simulation.organisms[0]
             .structure
             .bonds
