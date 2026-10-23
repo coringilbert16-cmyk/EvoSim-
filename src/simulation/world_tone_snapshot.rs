@@ -990,6 +990,9 @@ mod tests {
                 &simulation.decomposing_bodies,
             );
 
+        let external_before = simulation.energy_ledger.total_external_energy_input;
+        let heat_before = simulation.energy_ledger.total_heat_dissipated;
+        let escaped_before = simulation.energy_ledger.total_world_tone_energy_escaped;
         WorldToneOccluderSnapshot::settle_living_organism_inputs(
             &mut simulation,
             sample(),
@@ -1006,10 +1009,10 @@ mod tests {
         );
         let settled = simulation.energy_ledger.total_resonant_energy_held - resonant;
         assert!(
-            (simulation.energy_ledger.total_external_energy_input
+            ((simulation.energy_ledger.total_external_energy_input - external_before)
                 - settled
-                - simulation.energy_ledger.total_heat_dissipated
-                - simulation.energy_ledger.total_world_tone_energy_escaped)
+                - (simulation.energy_ledger.total_heat_dissipated - heat_before)
+                - (simulation.energy_ledger.total_world_tone_energy_escaped - escaped_before))
                 .abs()
                 <= 1e-7,
             "attached-structure resonance must remain within the source/sink budget"
