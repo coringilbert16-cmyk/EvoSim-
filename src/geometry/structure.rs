@@ -735,6 +735,23 @@ impl PhysicalConstituentGraph {
             .collect();
         let destination_max_id = destination_ids.iter().map(|id| id.0).max().unwrap_or(0);
         let replacement_max_id = replacement_ids.iter().map(|id| id.0).max().unwrap_or(0);
+        let destination_primary_ids: HashSet<_> =
+            self.genome_constituent_ids.iter().copied().collect();
+        let mut destination_core_ids = destination_primary_ids.clone();
+        let destination_core_metadata_valid = destination_primary_ids.len()
+            == self.genome_constituent_ids.len()
+            && destination_primary_ids.is_subset(&destination_ids)
+            && self.additional_genome_constituent_groups.iter().all(|group| {
+                let group_ids: HashSet<_> = group.iter().copied().collect();
+                let valid = !group.is_empty()
+                    && group_ids.len() == group.len()
+                    && group_ids.is_subset(&destination_ids)
+                    && destination_core_ids.is_disjoint(&group_ids);
+                if valid {
+                    destination_core_ids.extend(group_ids);
+                }
+                valid
+            });
         if old_ids.is_empty()
             || old.len() != old_ids.len()
             || old.contains(&PhysicalConstituentId(0))
@@ -743,6 +760,16 @@ impl PhysicalConstituentGraph {
             || destination_ids.contains(&PhysicalConstituentId(0))
             || self.next_constituent_id == 0
             || self.next_constituent_id <= destination_max_id
+            || !destination_core_metadata_valid
+            || self.bonds.iter().any(|bond| {
+                bond.endpoint_a.constituent_id == bond.endpoint_b.constituent_id
+                    || !destination_ids.contains(&bond.endpoint_a.constituent_id)
+                    || !destination_ids.contains(&bond.endpoint_b.constituent_id)
+                    || !bond.strength.is_finite()
+                    || !(0.0..=1.0).contains(&bond.strength)
+                    || !bond.bond_energy.is_finite()
+                    || bond.bond_energy < 0.0
+            })
             || replacement_ids.len() != replacement.units.len()
             || replacement_ids.contains(&PhysicalConstituentId(0))
             || replacement.next_constituent_id == 0
@@ -770,7 +797,7 @@ impl PhysicalConstituentGraph {
         }
 
         // A primary genome cannot be partially replaced by an attached graph.
-        let primary_ids: HashSet<_> = self.genome_constituent_ids.iter().copied().collect();
+        let primary_ids = destination_primary_ids;
         if !primary_ids.is_disjoint(&old) {
             return None;
         }
