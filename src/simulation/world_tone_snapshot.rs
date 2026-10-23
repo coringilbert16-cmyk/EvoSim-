@@ -1125,6 +1125,50 @@ mod tests {
     }
 
     #[test]
+    fn rejected_world_tone_ledger_settlement_does_not_commit_staged_resonance() {
+        let mut simulation = Simulation::new(89, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        for organism in &mut simulation.organisms {
+            organism.structure = OrganismStructure::new();
+            organism.stored_material.entries.clear();
+            organism.reproductive_construction = None;
+        }
+        simulation.decomposing_bodies.clear();
+        simulation.active_transformations.clear();
+
+        let catalog = simulation.environment.catalog.clone();
+        replace_with_nitrogen_square(&mut simulation.organisms[0], 5.0, 0.0, &catalog);
+        let living_id = simulation.organisms[0].id.clone();
+        let before_retained: Vec<f64> = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.resonant_energy.total_energy().unwrap())
+            .collect();
+        let before_external = simulation.energy_ledger.total_external_energy_input;
+        let before_escaped = simulation.energy_ledger.total_world_tone_energy_escaped;
+        simulation.energy_ledger.total_heat_dissipated = f64::MAX;
+
+        WorldToneOccluderSnapshot::settle_living_organism_inputs(
+            &mut simulation,
+            sample(),
+            &std::collections::HashSet::from([living_id]),
+        );
+
+        let after_retained: Vec<f64> = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.resonant_energy.total_energy().unwrap())
+            .collect();
+        assert_eq!(
+            after_retained, before_retained,
+            "staged resonance must not commit if cumulative heat settlement overflows"
+        );
+        assert_eq!(simulation.energy_ledger.total_external_energy_input, before_external);
+        assert_eq!(simulation.energy_ledger.total_world_tone_energy_escaped, before_escaped);
+        assert_eq!(simulation.energy_ledger.total_heat_dissipated, f64::MAX);
+    }
+
+    #[test]
     fn nonliving_material_response_becomes_heat_instead_of_rejoining_signal() {
         let response_energy = 3.25;
         let damping_heat = 0.75;
