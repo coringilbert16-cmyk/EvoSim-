@@ -4105,3 +4105,11 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - Implementation: both start functions now use checked_add before any source removal and commit the precomputed next ID only after the transformation is built. An exhausted ID rejects the start without changing storage, active-transformation ownership, or the counter.
 - Regression stored_break_rejects_exhausted_transformation_ids_without_reserving_source verifies the source entries and active state remain unchanged at u64::MAX.
 - PR #205 head 8568074c5a951a6a8d87b9309be4b6e836d55b76 contains both stored/environmental ID preflight and their exhausted-ID regressions, with rustfmt corrections. Workflow 40026980803 on predecessor c28724e19310dca47e9a93df31e9ac89a4dc75c9 passed Rust tests but failed formatting; Clippy remains red on repository-wide warnings-as-errors. Exact-head formatting/focused/full-suite/Clippy verification for 8568074 remains pending.
+
+
+## 17.212 Preflight offspring ID before detaching a completed construction (2026-10-23)
+
+- Audit finding: Simulation::step called finish_reproduction first and incremented next_organism_id afterward. At u64::MAX, overflow could panic or wrap after the developing graph had already been detached from the parent and returned as a child.
+- Implementation: checked_next_organism_id is now evaluated before finish_reproduction. If no next ID is available, the loop leaves the reproductive construction attached and does not consume it; on success, the precomputed next ID is committed only when a child is actually returned.
+- Regression organism_id_reservation_rejects_exhaustion_without_wrapping covers the counter boundary. This is the arithmetic guard; the production ordering is the important ownership safeguard.
+- PR #205 head 5f4c5d0717825300a2a16668a98614c066e4d314 includes the change. Workflow 40027451273 is running on predecessor 6f7b1ddf889d0b0d126c8a10bb66802802f0c79c; exact-head formatting/focused/full-suite/Clippy verification is pending.
