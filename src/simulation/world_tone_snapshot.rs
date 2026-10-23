@@ -1071,6 +1071,22 @@ mod tests {
             .field
             .deposit_physical(8.0, 0.0, downstream));
 
+        // Rebase the independent inventory oracle on the deliberately
+        // reshaped fixture so the following residual measures only world-tone
+        // source and sink flows, not test setup edits.
+        simulation.energy_ledger.initial_usable_energy_held =
+            crate::reproduction::total_usable_energy_held(
+                &simulation.organisms,
+                &simulation.decomposing_bodies,
+            );
+        simulation.energy_ledger.initial_resonant_energy_held =
+            crate::reproduction::total_resonant_energy_held(&simulation.organisms);
+        simulation.energy_ledger.initial_structural_energy_held =
+            Simulation::structural_energy_held(
+                &simulation.organisms,
+                &simulation.decomposing_bodies,
+            );
+
         let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
             .expect("both physical receivers should be represented");
         assert!(
@@ -1121,6 +1137,12 @@ mod tests {
             (incident_input - allocated).abs()
                 <= 1e-7 * incident_input.max(1.0),
             "the newly incident source energy must be allocated once across retained resonance, heat, and escape"
+        );
+        let inventory = simulation.energy_inventory_snapshot();
+        assert!(
+            inventory.is_balanced(1e-7),
+            "world-tone source and sink flows must reconcile with the full world inventory: residual={:?}",
+            inventory.residual()
         );
     }
 
