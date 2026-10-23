@@ -652,10 +652,22 @@ mod integration_tests {
 
         // Assert the storage contract relative to the constructor's actual
         // starting inventory, rather than coupling this test to its seed layout.
-        assert_eq!(o.stored_material.len(), before_len + 1);
-        assert_eq!(o.stored_material.count_unstructured(), before_unstructured + 5);
-        assert_eq!(o.stored_material.count_structured(), before_structured);
-        assert_eq!(o.stored_material.total_amount(), before_amount + 5.0);
+        assert_eq!(
+            o.stored_material.len(),
+            before_len + 1
+        );
+        assert_eq!(
+            o.stored_material.count_unstructured(),
+            before_unstructured + 5
+        );
+        assert_eq!(
+            o.stored_material.count_structured(),
+            before_structured
+        );
+        assert_eq!(
+            o.stored_material.total_amount(),
+            before_amount + 5.0
+        );
     }
     #[test]
     fn storage_preserves_a_compound_as_one_intact_object() {
