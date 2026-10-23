@@ -387,7 +387,41 @@ mod tests {
             .expect("test material should realize")
         };
         let before = make("Nitrogen", 0.0);
-        let mut source = make("Carbon", 0.0);
+        let water = catalog
+            .iter()
+            .find(|resource| resource.name == "Water")
+            .unwrap();
+        let area = match &water.shape.form {
+            crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+            _ => panic!("default Water shape should have a measurable area"),
+        };
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            area,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .unwrap();
+        let arc =
+            crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
+        let deformed_shape = crate::resources::Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: area,
+                boundary: None,
+                arc_boundary: Some(arc),
+                multi_contact_boundary: None,
+            },
+        };
+        let mut source = PhysicalMaterial::realized(
+            Material::free_base("Water", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .unwrap()
+        .with_single_fluid_shape(deformed_shape, &catalog)
+        .expect("valid deformed fluid should be storable");
         source.owner_relative_origin = Some(Placement {
             x: 1.0,
             y: 0.0,
