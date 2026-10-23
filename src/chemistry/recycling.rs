@@ -1,3 +1,4 @@
+use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::state::{EnergyLedger, Environment, Organism};
 
 pub(crate) fn recycle_dead_organism(
@@ -122,7 +123,17 @@ mod tests {
         organism.occupied_cells[0].x = 1.0e9;
 
         let storage_before = organism.stored_material.clone();
-        let construction_before = organism.reproductive_construction.clone();
+        let construction_before = organism
+            .reproductive_construction
+            .as_ref()
+            .map(|construction| {
+                (
+                    construction.committed_material.clone(),
+                    construction.developing_structure.clone(),
+                    construction.developing_energy,
+                )
+            })
+            .expect("construction started");
         let energy_before = organism.usable_energy;
         let mut ledger = EnergyLedger::default();
         let ledger_before = ledger;
@@ -134,7 +145,13 @@ mod tests {
         );
 
         assert_eq!(organism.stored_material, storage_before);
-        assert_eq!(organism.reproductive_construction, construction_before);
+        let construction_after = organism
+            .reproductive_construction
+            .as_ref()
+            .expect("failed recycling must retain construction");
+        assert_eq!(construction_after.committed_material, construction_before.0);
+        assert_eq!(construction_after.developing_structure, construction_before.1);
+        assert_eq!(construction_after.developing_energy, construction_before.2);
         assert_eq!(organism.usable_energy, energy_before);
         assert_eq!(ledger, ledger_before);
         assert_eq!(simulation.environment.field.total_amount(), field_before);
