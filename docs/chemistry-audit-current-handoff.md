@@ -736,3 +736,8 @@ Compared normalized diagnostic identities for PR #205 head `4872942ff1c7aa47f1e9
 ### World-tone lifecycle audit
 
 Live capture is active, not disabled. `Simulation::step` settles the precomputed source frame; all realized bodies remain occluders, and dead/nonliving physical receivers convert their material response to heat while only the unresponded signal continues. This is not proof of whole-world conservation. Stored/developing holder chemistry and canonical aggregate ownership remain open.
+
+
+### World-tone nonliving-only path fix — verification pending
+
+Audit found that the world-tone path generator omitted lanes with no selected living receiver, even when dead/environmental physical surfaces intercepted the source. The path builder now includes all physical surface paths while keeping direct-exposure attribution targeted, and a regression requires nonliving response to settle as heat with remaining energy escaping. Current PR #205 head `908376e075df89764503a1641bc09a2545264160`; focused and full exact-head CI still required.
