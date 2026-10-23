@@ -731,6 +731,60 @@ mod tests {
     }
 
     #[test]
+    fn failed_insert_keeps_stale_instance_refreshed_to_committed_store() {
+        let root = test_root("stale-refresh-failed-insert");
+        let _ = fs::remove_dir_all(&root);
+        let mut writer = ChemistryLibrary::open(&root).unwrap();
+        let mut stale = ChemistryLibrary::open(&root).unwrap();
+
+        let committed = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "already-committed"),
+            static_potential: 0.42,
+        };
+        assert!(writer.insert(committed.clone()).unwrap());
+
+        let failed = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "failed-after-refresh"),
+            static_potential: 0.73,
+        };
+        let failed_key = failed.key.clone();
+        let error = stale
+            .insert_with_persistence(
+                failed,
+                |file, row| {
+                    file.write_all(&row[..row.len().min(7)])?;
+                    file.sync_data()?;
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::WriteZero,
+                        "injected append failure after stale-state refresh",
+                    ))
+                },
+                persist_manifest_atomically,
+            )
+            .unwrap_err();
+
+        assert_eq!(error.kind(), std::io::ErrorKind::WriteZero);
+        assert_eq!(stale.len(), 1);
+        assert_eq!(stale.manifest.entries, 1);
+        assert_eq!(
+            stale.get(&committed.key).map(|record| record.static_potential),
+            Some(0.42)
+        );
+        assert!(stale.get(&failed_key).is_none());
+
+        let reopened = ChemistryLibrary::open(&root).unwrap();
+        assert_eq!(reopened.len(), 1);
+        assert_eq!(reopened.manifest.entries, 1);
+        assert!(reopened.get(&failed_key).is_none());
+        assert_eq!(
+            reopened.get(&committed.key).map(|record| record.static_potential),
+            Some(0.42)
+        );
+        drop(reopened);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn independent_instances_serialize_writes_and_refresh_stale_state() {
         let root = test_root("concurrent-writers");
         let _ = fs::remove_dir_all(&root);
