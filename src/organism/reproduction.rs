@@ -872,7 +872,7 @@ mod tests {
             developing_maintenance_debt: 0.0,
             needs_space: false,
         };
-        let mut parent_structure = OrganismStructure::new();
+        let parent_structure = OrganismStructure::new();
         let mut parent_storage = MaterialStorage::default();
         let mut ledger = EnergyLedger::default();
         let ledger_before = ledger;
