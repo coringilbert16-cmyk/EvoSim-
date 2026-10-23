@@ -139,7 +139,10 @@ mod tests {
             .map(|construction| {
                 (
                     construction.committed_material.clone(),
-                    construction.developing_structure.clone(),
+                    (
+                        construction.developing_structure.units.clone(),
+                        construction.developing_structure.bonds.clone(),
+                    ),
                     construction.developing_energy,
                 )
             })
@@ -160,7 +163,14 @@ mod tests {
             .as_ref()
             .expect("failed recycling must retain construction");
         assert_eq!(construction_after.committed_material, construction_before.0);
-        assert_eq!(construction_after.developing_structure, construction_before.1);
+        assert_eq!(
+            construction_after.developing_structure.units,
+            construction_before.1 .0
+        );
+        assert_eq!(
+            construction_after.developing_structure.bonds,
+            construction_before.1 .1
+        );
         assert_eq!(construction_after.developing_energy, construction_before.2);
         assert_eq!(organism.usable_energy, energy_before);
         assert_eq!(ledger, ledger_before);
