@@ -97,6 +97,11 @@ jobs:
       - name: Run focused movement settlement transaction test
         timeout-minutes: 5
         run: cargo test --locked successful_movement_commits_preflight_energy_and_ledger_after_geometry
+      # In-flight transformations must isolate stored-material snapshots from
+      # automatic contained-material acquisition.
+      - name: Run focused active-transformation acquisition isolation test
+        timeout-minutes: 5
+        run: cargo test --locked contained_physical_material_becomes_storage_without_an_acquire_action
       # Keep post-death holder conservation visible independently of the full suite.
       - name: Run focused post-death holder inventory test
         timeout-minutes: 5
