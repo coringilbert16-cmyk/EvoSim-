@@ -762,7 +762,10 @@ impl Simulation {
 /// Return an escrowed stored-material BREAK source to its authoritative holder
 /// when completion cannot commit. The active ID guards against restoring the
 /// same escrow twice if a stale completion is delivered.
-fn restore_failed_stored_break_source(transformation: &ActiveTransformation, organism: &mut Organism) {
+fn restore_failed_stored_break_source(
+    transformation: &ActiveTransformation,
+    organism: &mut Organism,
+) {
     if organism.active_transformation_id != Some(transformation.id) {
         return;
     }
