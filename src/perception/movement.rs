@@ -335,7 +335,7 @@ impl Simulation {
                 usable_energy,
                 active_transformation_id: organism.active_transformation_id,
                 result: Err(crate::state::MovementFailureReason::InsufficientEnergy),
-                old_position,
+                old_position: old_position.clone(),
                 new_position: old_position.clone(),
             });
             return Err(crate::state::MovementFailureReason::InsufficientEnergy);
