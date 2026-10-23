@@ -1552,6 +1552,15 @@ mod tests {
             "failed stored BREAK must restore the source at its exact original index"
         );
         assert_eq!(organism.active_transformation_id, None);
+
+        let mut legacy_transaction = transformation.clone();
+        legacy_transaction.stored_source_index = None;
+        legacy_transaction.decision_context_key = Some("stored:1:bond:0".into());
+        assert_eq!(
+            original_stored_source_index(&legacy_transaction),
+            Some(1),
+            "older serialized transactions must retain the decision-key fallback"
+        );
     }
 
     fn environmental_break_test_organism(
