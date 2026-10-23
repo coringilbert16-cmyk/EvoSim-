@@ -122,8 +122,6 @@ pub(crate) fn restore_material(
                 return None;
             }
         }
-
-
     }
 
     for connection in connections {
