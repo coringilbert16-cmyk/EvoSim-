@@ -930,19 +930,8 @@ pub(crate) fn resolve_transformation(
         return;
     };
 
-    for piece in pieces {
-        if transformation.environmental_source {
-            if let Some(placement) = piece
-                .placements
-                .as_ref()
-                .and_then(|placements| placements.first())
-            {
-                let _ = environment.field.deposit(placement.x, placement.y, piece);
-            }
-        } else if !organism
-            .stored_material
-            .store_physical_instance(piece.clone())
-        {
+    if transformation.environmental_source {
+        for piece in pieces {
             if let Some(placement) = piece
                 .placements
                 .as_ref()
@@ -951,6 +940,18 @@ pub(crate) fn resolve_transformation(
                 let _ = environment.field.deposit(placement.x, placement.y, piece);
             }
         }
+    } else {
+        // Stored source pieces remain in intrinsic coordinates. Stage every
+        // piece in a cloned holder so a rejected piece cannot leave a partial
+        // split committed or leak material into the world at a false location.
+        let mut staged_storage = organism.stored_material.clone();
+        for piece in pieces {
+            if !staged_storage.store_physical_instance(piece) {
+                restore_failed_stored_break_source(transformation, organism);
+                return;
+            }
+        }
+        organism.stored_material = staged_storage;
     }
     let (_, usable, heat) = transformation.prepared_energy.unwrap();
     organism.add_transaction_stress(heat);
