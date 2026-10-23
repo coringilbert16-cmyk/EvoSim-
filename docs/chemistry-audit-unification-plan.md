@@ -4084,23 +4084,16 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - PR #205 head b24286eb1ff3762e9e43a96751458b6eca49a356 contains the revert. Workflow 40024563912 failed at a focused chemistry gate because Simulation::new could not restore an initial Carbon; that evidence triggered the revert. Workflow 40024675369 ran on predecessor 6741a4887a9c3aa0b7329ecb8fe82ae81ab76e53 and cannot verify the reverted head. Exact-head formatting/focused/full-suite/Clippy verification remains pending.
 
 
-## 17.208 Capture environmental BREAK location at reservation (2026-10-23)
+## 17.209 Capture environmental BREAK location at reservation (2026-10-23)
 
-- **Audit finding:** environmental BREAK rollback reconstructed its cell/material index from mutable `decision_context_key`. If that key was corrupted after reservation, rollback could reject the original location and fall back to quarantine/retention elsewhere rather than restoring the source in its original environmental list.
-- **Implementation:** `ActiveTransformation.environmental_source_location` stores `(cell_index, material_index)` at the moment the source is removed. `try_start_environmental_break` sets it; `original_environmental_source_location` prefers it and falls back to the key for older serialized transactions. The completion rollback regression corrupts the key after setting captured location and asserts restoration at the original list index; its legacy fallback check explicitly clears the field and confirms invalid indices fail closed.
-- **Compatibility:** field is serde-defaulted and all in-repo literals initialize it. PR #205 head `6b7f55029e6c6bdf3f4a3a149f66c6615b3c96d7` has not yet completed CI verification.
+- Audit finding: environmental BREAK rollback previously reconstructed its cell/material index from mutable decision_context_key. If that key was corrupted after reservation, rollback could fail to restore the source in its original environmental list.
+- Implementation: ActiveTransformation.environmental_source_location stores (cell_index, material_index) when the source is removed. try_start_environmental_break sets it; original_environmental_source_location prefers it and falls back to the key for older serialized transactions.
+- Regression coverage corrupts decision_context_key after setting the captured location and verifies restoration at the original list index. It also clears the field to exercise the legacy-key fallback and fail-closed behavior.
+- The field is serde-defaulted and all in-repo ActiveTransformation literals initialize it. Current PR #205 head e9d6c86e2d8a2dad7e49be74879adbe0f0d0b5f0 has workflow 40025449497 running on that exact head; no result is claimed yet.
 
-
-## 17.208 Capture environmental BREAK location at reservation (2026-10-23)
-
-- **Audit finding:** environmental BREAK rollback reconstructed its cell/material index from mutable `decision_context_key`. If that key was corrupted after reservation, rollback could fail to restore the source in its original environmental list.
-- **Implementation:** `ActiveTransformation.environmental_source_location` stores `(cell_index, material_index)` at the moment the source is removed. `try_start_environmental_break` sets it; `original_environmental_source_location` prefers it and falls back to the key for older serialized transactions. The completion rollback regression corrupts the key after setting captured location and asserts restoration at the original list index; its legacy fallback check clears the field and confirms invalid indices fail closed.
-- **Compatibility:** field is serde-defaulted and all in-repo literals initialize it. PR #205 head `6b7f55029e6c6bdf3f4a3a149f66c6615b3c96d7` has not yet completed CI verification.
-
-
-## 17.209 Capture stored BREAK source index independently of decision metadata (2026-10-23)
+## 17.210 Capture stored BREAK source index independently of decision metadata (2026-10-23)
 
 - PR #205 added serde-defaulted source-location fields to ActiveTransformation: a stored BREAK captures its original storage index at reservation, while environmental BREAK captures its original cell/material index. Rollback prefers those captured fields and only falls back to parsing legacy decision_context_key values.
 - This avoids making exact rollback depend on mutable decision metadata. The stored-BREAK completion regression now corrupts decision_context_key after reservation and still expects the source to return to its exact original storage position.
 - A test-only WorldToneOccluderSnapshot ActiveTransformation fixture was updated to initialize the new defaulted fields after CI exposed the missing initializer.
-- Current PR #205 head e9d6c86e2d8a2dad7e49be74879adbe0f0d0b5f0 includes the fixture fix, restoration-file formatting fix, and regressions that corrupt decision_context_key after stored/environmental source locations are captured. Workflow 40025321071 is running on predecessor e7da4581e8b15ea8fb20f941f5906b8a05aeca39; exact-head verification of e9d6c86 remains pending.
+- Current PR #205 head e9d6c86e2d8a2dad7e49be74879adbe0f0d0b5f0 includes the fixture fix, restoration-file formatting fix, and regressions that corrupt decision_context_key after stored/environmental source locations are captured. Workflow 40025449497 is running on that exact head; no result is claimed yet.
