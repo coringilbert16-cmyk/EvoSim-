@@ -626,12 +626,26 @@ impl PhysicalConstituentGraph {
         ids: &[PhysicalConstituentId],
         primary_core_ids: &[PhysicalConstituentId],
     ) -> Option<Self> {
+        let source_ids: HashSet<_> = self.units.iter().map(|unit| unit.physical_id).collect();
+        let source_max_id = source_ids.iter().map(|id| id.0).max().unwrap_or(0);
         let selected: HashSet<_> = ids.iter().copied().collect();
         let primary: HashSet<_> = primary_core_ids.iter().copied().collect();
         if ids.is_empty()
+            || source_ids.len() != self.units.len()
+            || source_ids.contains(&PhysicalConstituentId(0))
+            || self.next_constituent_id == 0
+            || self.next_constituent_id <= source_max_id
+            || self.bonds.iter().any(|bond| {
+                !source_ids.contains(&bond.endpoint_a.constituent_id)
+                    || !source_ids.contains(&bond.endpoint_b.constituent_id)
+                    || !bond.strength.is_finite()
+                    || !(0.0..=1.0).contains(&bond.strength)
+                    || !bond.bond_energy.is_finite()
+                    || bond.bond_energy < 0.0
+            })
             || selected.len() != ids.len()
             || selected.contains(&PhysicalConstituentId(0))
-            || selected.iter().any(|id| self.unit_index(*id).is_none())
+            || !selected.is_subset(&source_ids)
             || primary.len() != primary_core_ids.len()
             || primary.iter().any(|id| !selected.contains(id))
         {
@@ -639,6 +653,15 @@ impl PhysicalConstituentGraph {
         }
 
         let source_primary: HashSet<_> = self.genome_constituent_ids.iter().copied().collect();
+        if source_primary.len() != self.genome_constituent_ids.len()
+            || !source_primary.is_subset(&source_ids)
+            || self.additional_genome_constituent_groups.iter().any(|group| {
+                let group_ids: HashSet<_> = group.iter().copied().collect();
+                group_ids.len() != group.len() || !group_ids.is_subset(&source_ids)
+            })
+        {
+            return None;
+        }
         if !source_primary.is_disjoint(&selected)
             && (source_primary != primary || !source_primary.is_subset(&selected))
         {
@@ -1416,6 +1439,12 @@ mod tests {
             .is_none());
         assert!(graph
             .subgraph_for_physical_ids(&[a_id, a_id], &[])
+            .is_none());
+
+        let mut invalid_next_id = graph.clone();
+        invalid_next_id.next_constituent_id = 2;
+        assert!(invalid_next_id
+            .subgraph_for_physical_ids(&[a_id, b_id], &[])
             .is_none());
     }
 
