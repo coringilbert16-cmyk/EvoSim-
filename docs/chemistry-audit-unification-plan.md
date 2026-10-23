@@ -3778,3 +3778,9 @@ Internal/adjacent budding remains the target: a second genome core begins beside
 - Workflow [39983427245](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39983427245) completed its Rust suite on exact source head `628f6b4dc8508659137ed404efef52abede1fb58`, which includes the stored-BREAK batch preflight/no-clone implementation. Formatting and all focused gates passed, including the focused physical graph merge, material-transfer rollback, Bob fluid transaction/three-piece cap, and post-death holder inventory checks.
 - Full suite: **626 passed, 23 failed, 1 ignored** in 293.68 seconds. The failure names match the same known 23-test subset; no new failure identity appeared. This verifies the stored-BREAK no-clone implementation against the Rust suite. Strict Clippy is still running on this exact head; its result is pending.
 - The later integrated COMBINE rollback regression is not part of `628f6b4`. Its exact-head workflow [39984122058](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39984122058) is running on `048d917` after formatting corrections; no behavior-test result is yet claimed for that regression.
+
+
+## 17.172 Stored BREAK no-clone Clippy reconciliation — 2026-10-23
+
+- Strict Clippy completed in workflow [39983427245](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39983427245) on `628f6b4` with the established **34 application-target and 15 test-target diagnostics**. No new lint attributable to the no-clone stored-BREAK path was identified. This remains baseline-red; no blanket lint suppression or unrelated cleanup was added.
+- The integrated COMBINE rollback test is being validated separately on exact head `048d917ade61f0be6120d80bb34a3e08d5830c5b`, workflow [39984122058](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39984122058). Its focused rollback gates have passed; full Rust suite is running and Clippy is pending.
