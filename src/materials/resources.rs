@@ -1082,9 +1082,11 @@ mod shape_tests {
         assert!(catalog
             .iter()
             .any(|r| matches!(r.shape.form, Form::RegularPolygon { sides, .. } if sides != 6)));
+        // Hydrogen is intentionally a finite-area rectangular strip, not
+        // a zero-width line; keep the test aligned with the resource contract.
         assert!(catalog
             .iter()
-            .any(|r| matches!(r.shape.form, Form::Line { .. })));
+            .any(|r| matches!(r.shape.form, Form::Rectangle { .. })));
     }
 
     #[test]
