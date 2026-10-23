@@ -662,8 +662,9 @@ pub(crate) fn advance_construction(
     // Validate the persisted developing holder before any new parent-funded
     // reserve transfer. A non-finite construction must not drain its parent on
     // every subsequent tick while it remains attached for diagnosis.
-    let preflight_child = developing_organism(construction);
-    if preflight_child.validate_stress_state() {
+    if !construction.developing_stress.is_finite()
+        || !crate::state::INITIAL_STRESS_THRESHOLD.is_finite()
+    {
         return (ConstructionStatus::Dead, None);
     }
 
