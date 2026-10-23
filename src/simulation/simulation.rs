@@ -67,18 +67,6 @@ fn restore_failed_transformation_material(
             .push(crate::material_storage::StoredMaterial::Physical(
                 source.clone(),
             ));
-    } else if transformation.environmental_source {
-        // Environmental sources retain world-space placements. If their owner
-        // disappeared, return the source to its original world location.
-        if let Some(placement) = source
-            .placements
-            .as_ref()
-            .and_then(|placements| placements.first())
-        {
-            let _ = environment
-                .field
-                .deposit(placement.x, placement.y, source.clone());
-        }
     }
 }
 
