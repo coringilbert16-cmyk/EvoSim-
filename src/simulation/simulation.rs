@@ -638,10 +638,12 @@ impl Simulation {
                 // material until this body's finalization can commit.
                 continue;
             }
+            // Stage energy dissipation without mutating the live holder or
+            // ledger. Material release and energy settlement are one ownership
+            // transition: either both commit, or the body remains unchanged.
+            let mut staged_ledger = self.energy_ledger.clone();
+            let mut staged_energy = remaining;
             if remaining > 0.0 {
-                // A finished body cannot be removed while it still owns usable
-                // energy. Until an authorized receiver/path exists, explicitly
-                // settle the remainder as a sink rather than silently losing it.
                 let sink = crate::energy_ledger::EnergyTransaction {
                     reason: crate::energy_ledger::EnergyReason::Decomposition,
                     potential_released: 0.0,
@@ -650,23 +652,17 @@ impl Simulation {
                     work_expended: 0.0,
                     heat_dissipated: remaining,
                 };
-                if !self
-                    .energy_ledger
-                    .settle_transaction(&mut self.decomposing_bodies[index].energy_budget, sink)
-                {
+                if !staged_ledger.settle_transaction(&mut staged_energy, sink) {
                     continue;
                 }
             }
 
-            // Material release and holder removal happen only after the energy
-            // sink succeeds. Otherwise a retained body would re-release the
-            // same units on a later tick.
             let position = self.decomposing_bodies[index].position.clone();
             let Some(materials) =
                 self.decomposing_bodies[index].release_finished_material(&self.environment.catalog)
             else {
-                // Keep the holder intact if any constituent cannot be released
-                // with its authoritative material and geometry.
+                // Keep the holder and live ledger intact if any constituent
+                // cannot be released with its authoritative material/geometry.
                 continue;
             };
             let deposits = materials
@@ -674,10 +670,11 @@ impl Simulation {
                 .map(|material| (position.x, position.y, material))
                 .collect();
             if !self.environment.field.deposit_physical_batch(deposits) {
-                // A failed destination must not discard the body's remaining
-                // physical ownership. Keep the finished holder for a later retry.
+                // A failed destination commits neither material nor energy.
                 continue;
             }
+            self.decomposing_bodies[index].energy_budget = staged_energy;
+            self.energy_ledger = staged_ledger;
             self.decomposing_bodies.remove(index);
         }
     }
@@ -2105,7 +2102,7 @@ mod decomposition_finalization_tests {
         structure.add_unit(unit);
         let body = crate::decomposition::DecomposingBody::new(
             structure,
-            0.0,
+            1.0,
             Position {
                 x: f64::NAN,
                 y: 500.0,
@@ -2114,12 +2111,15 @@ mod decomposition_finalization_tests {
         .expect("energy is valid even if the malformed position is rejected at deposit");
         simulation.decomposing_bodies.push(body);
         let before = simulation.environment.field.total_amount();
+        let before_ledger = simulation.energy_ledger.clone();
 
         simulation.process_decomposing_bodies();
 
         assert_eq!(simulation.decomposing_bodies.len(), 1);
         assert!(simulation.decomposing_bodies[0].is_finished());
         assert_eq!(simulation.decomposing_bodies[0].structure.units.len(), 1);
+        assert_eq!(simulation.decomposing_bodies[0].energy_budget, 1.0);
+        assert_eq!(simulation.energy_ledger, before_ledger);
         assert_eq!(simulation.environment.field.total_amount(), before);
     }
 
