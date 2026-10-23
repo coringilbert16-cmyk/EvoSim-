@@ -1620,6 +1620,70 @@ mod tests {
         assert_eq!(next_id, u64::MAX);
     }
 
+    #[test]
+    fn environmental_break_rejects_exhausted_transformation_ids_without_removing_source() {
+        use crate::physical_material::PhysicalMaterial;
+        use crate::resources::{InternalBond, Material};
+        use crate::state::Environment;
+        use crate::structure::Placement;
+
+        let catalog = crate::resources::default_catalog();
+        let mut environment = Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog: catalog.clone(),
+            field: crate::environment::ActiveMaterialField::new(
+                1000.0,
+                1000.0,
+                crate::environment::DEFAULT_CELL_SIZE,
+            ),
+        };
+        let source = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                Placement {
+                    x: 20.0,
+                    y: 20.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 20.838,
+                    y: 20.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("bonded environmental source should be physically realizable");
+        let cell_index = 0;
+        environment.field.cells[cell_index]
+            .physical_materials
+            .push(source);
+        let materials_before = environment.field.cells[cell_index].physical_materials.clone();
+        let mut organism = environmental_break_test_organism("exhausted-environmental-break-id", None);
+        let decision = ActionCandidate {
+            action: ActionKind::Break,
+            context_key: Some(format!("environment:cell:{cell_index}:material:0:bond:0")),
+        };
+        let mut next_id = u64::MAX;
+
+        let started =
+            try_start_environmental_break(&mut organism, &mut environment, &mut next_id, &decision);
+        assert!(started.is_none());
+        assert_eq!(
+            environment.field.cells[cell_index].physical_materials,
+            materials_before
+        );
+        assert_eq!(organism.active_transformation_id, None);
+        assert_eq!(next_id, u64::MAX);
+    }
+
     fn environmental_break_test_organism(
         id: &str,
         active_transformation_id: Option<u64>,
