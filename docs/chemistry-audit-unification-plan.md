@@ -3301,3 +3301,10 @@ Consequences:
 - This is a narrow prerequisite fix, not the aggregate migration: the developing graph remains separate, and movement/world-tone/energy-inventory call paths are unchanged. No broader migration is claimed.
 - Exact-head CI has not yet appeared in the workflow-run lookup for this commit. Do not mark the change verified until formatting and the focused core-specific/reproduction gates run at this exact head. Every command/test remains subject to the five-minute limit.
 - Next audit before another code change: design the failure-atomic anchor promotion into the parent's canonical graph, including the physical attachment bond/contact rule, old-to-new stable-ID mapping, primary/additional core-group identity, source storage debit, and rollback. Then inventory every coupled path before enabling shared ownership: movement collision and translation, world-tone resonance receivers (attached structure counts; stored material does not), structural-energy inventory, growth targeting, core-specific viability, and revision/cache invalidation. Do not remove `developing_structure` until those paths can be changed coherently.
+
+
+## 17.128 Formatting correction and exact-head verification gate — 2026-10-22
+
+- First implementation commit `294de15f58340c006dc6817da6ad19a5e640efee` was rejected at the formatting step because rustfmt wanted the new core-specific viability import wrapped across lines. The focused tests were skipped on that run; do not count it as verification of the logic.
+- Formatting-only correction: `080852d365dd66016985b90e0e931647313d628f`. Workflow lookup for this exact commit is currently `39880356246` (queued); verify formatting and the focused viability/reproduction gates before proceeding.
+- No further source changes until this exact-head gate is complete. The larger migration remains gated on a failure-atomic anchor promotion design and the coupled path audit in Section 17.127.
