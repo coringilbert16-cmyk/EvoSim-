@@ -761,3 +761,8 @@ Workflow #40023894861 failed at compilation because the environmental BREAK roll
 ### Live-tick stored BREAK fixture correction
 
 The first integration run showed the test's `physical_count() == 1` assumption was invalid because `Simulation::new` seeds default stored material. The current test clears the default storage entries before adding the escrow source, so the assertion now measures the intended single-source rollback. Current head `1ea2ea1dc07854c23d8ad255f8a2362d37b4f3f2`; workflow #40024344294 is queued.
+
+
+### Immutable stored BREAK rollback index
+
+`ActiveTransformation.stored_source_index` now captures the exact owner-storage index at reservation. Rollback prefers this field instead of mutable `decision_context_key`, so corrupting the key no longer reorders the source to the end. Legacy serialized transformations default the field to `None` and retain the context-key fallback. Regression expects original index 1 and unchanged neighbor ordering. Current PR #205 head `c214ab3b65fd80d7d02e1eba7f4266bf5e8a642d`; workflow #40024704699 is running.
