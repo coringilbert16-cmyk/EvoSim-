@@ -40,9 +40,13 @@ fn restore_failed_transformation_material(
         if !crate::transformation::restore_combine_environmental_source(transformation, environment)
         {
             if let Some(owner) = organism.as_deref_mut() {
-                owner.stored_material.entries.push(
-                    crate::material_storage::StoredMaterial::Physical(source.clone()),
-                );
+                if !crate::transformation::quarantine_environmental_source_in_storage(
+                    source, owner, environment,
+                ) {
+                    owner.stored_material.entries.push(
+                        crate::material_storage::StoredMaterial::Physical(source.clone()),
+                    );
+                }
             } else {
                 // If both the source cell and owner are unavailable, retain the
                 // escrow in the world rather than dropping it.
@@ -2090,5 +2094,39 @@ mod decomposition_finalization_tests {
         assert_eq!(simulation.decomposing_bodies.len(), 1);
         assert!(simulation.decomposing_bodies[0].is_finished());
         assert_eq!(simulation.environment.field.total_amount(), before);
+    }
+
+    #[test]
+    fn environmental_escrow_fallback_converts_world_pose_to_owner_relative_storage() {
+        use crate::physical_material::PhysicalMaterial;
+        use crate::resources::Material;
+        use crate::structure::Placement;
+
+        let mut simulation = Simulation::new(927, 10.0);
+        let source = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 700.0,
+                y: 800.0,
+                rotation_radians: 0.25,
+            }],
+            &simulation.environment.catalog,
+        )
+        .expect("environmental source should be physically realized");
+        let owner = &mut simulation.organisms[0];
+        owner.occupied_cells = vec![Position { x: 500.0, y: 500.0 }];
+        assert!(crate::transformation::quarantine_environmental_source_in_storage(
+            &source,
+            owner,
+            &simulation.environment,
+        ));
+        let crate::material_storage::StoredMaterial::Physical(stored) =
+            &simulation.organisms[0].stored_material.entries[0];
+        let placement = stored.placements.as_ref().unwrap()[0];
+        let owner_origin = stored.owner_relative_origin.unwrap();
+        assert!(placement.x.abs() < 1e-9 && placement.y.abs() < 1e-9);
+        assert!((owner_origin.x - 200.0).abs() < 1e-9);
+        assert!((owner_origin.y - 300.0).abs() < 1e-9);
+        assert!((owner_origin.rotation_radians - 0.25).abs() < 1e-9);
     }
 }
