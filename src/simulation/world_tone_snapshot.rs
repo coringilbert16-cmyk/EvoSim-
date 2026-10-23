@@ -1009,9 +1009,14 @@ mod tests {
         );
         let settled =
             crate::reproduction::total_resonant_energy_held(&simulation.organisms) - resonant;
+        let ledger_resonant_delta = simulation.energy_ledger.total_resonant_energy_held - resonant;
+        assert!(
+            (ledger_resonant_delta - settled).abs() <= 1e-7,
+            "world-tone ledger must track the resonance actually retained by the owner"
+        );
         assert!(
             ((simulation.energy_ledger.total_external_energy_input - external_before)
-                - settled
+                - ledger_resonant_delta
                 - (simulation.energy_ledger.total_heat_dissipated - heat_before)
                 - (simulation.energy_ledger.total_world_tone_energy_escaped - escaped_before))
                 .abs()
