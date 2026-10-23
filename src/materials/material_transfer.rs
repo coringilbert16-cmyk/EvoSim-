@@ -17,9 +17,10 @@ pub(crate) fn take_whole_unstructured(
         || !material.is_valid()
         || material.has_internal_structure()
         || material.is_empty()
-        || material.parts.iter().any(|(_, amount)| {
-            !amount.is_finite() || *amount <= 0.0 || amount.fract().abs() > 1e-9
-        })
+        || material
+            .parts
+            .iter()
+            .any(|(_, amount)| !amount.is_finite() || *amount <= 0.0 || amount.fract().abs() > 1e-9)
     {
         return None;
     }
