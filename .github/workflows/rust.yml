@@ -138,6 +138,9 @@ jobs:
         timeout-minutes: 5
         run: cargo test --locked breached_organism_material_and_energy_holders_reconcile_over_live_ticks
       # Finished-body release must commit energy and material ownership together.
+      - name: Verify nonliving world-tone energy settlement
+        timeout-minutes: 5
+        run: cargo test --locked nonliving_surface_receives_world_tone_energy_as_heat_without_living_receivers
       - name: Run focused decomposition finalization rollback test
         timeout-minutes: 5
         run: cargo test --locked invalid_finished_body_position_preserves_released_material_ownership
