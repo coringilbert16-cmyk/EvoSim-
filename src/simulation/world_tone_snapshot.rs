@@ -965,13 +965,12 @@ mod tests {
             &std::collections::HashSet::new(),
         );
 
-        let external_delta =
-            simulation.energy_ledger.total_external_energy_input - external_before;
+        let external_delta = simulation.energy_ledger.total_external_energy_input - external_before;
         let heat_delta = simulation.energy_ledger.total_heat_dissipated - heat_before;
         let escaped_delta =
             simulation.energy_ledger.total_world_tone_energy_escaped - escaped_before;
-        let resonant_delta =
-            crate::reproduction::total_resonant_energy_held(&simulation.organisms) - resonant_before;
+        let resonant_delta = crate::reproduction::total_resonant_energy_held(&simulation.organisms)
+            - resonant_before;
 
         assert!(
             external_delta > 0.0,
