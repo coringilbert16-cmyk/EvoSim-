@@ -1634,7 +1634,9 @@ mod tests {
             .structure
             .units
             .iter()
-            .find(|unit| unit.placement.x.abs() < 1e-9 && unit.placement.y < -1.5)
+            .find(|unit| {
+                unit.placement.x.abs() < 1e-9 && unit.placement.y < -1.5
+            })
             .map(|unit| unit.physical_id)
             .expect("seed has a top-center wall constituent");
         organism
