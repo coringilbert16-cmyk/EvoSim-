@@ -39,15 +39,20 @@ pub(crate) fn expel_physical_material(
     ) else {
         return false;
     };
-    let Some(mut physical) = organism.stored_material.take_physical_at(storage_index) else {
+    let Some(crate::material_storage::StoredMaterial::Physical(stored)) =
+        organism.stored_material.entries.get(storage_index)
+    else {
         return false;
     };
+    // Validate and compute the destination from a clone while the original
+    // remains authoritative in storage. Removing the source before validation
+    // makes every early return a potential material-loss path.
+    let original = stored.clone();
+    let mut physical = original.clone();
     let Some(placements) = physical.placements.as_ref() else {
-        let _ = organism.stored_material.store_physical_instance(physical);
         return false;
     };
     if placements.len() != physical.material.parts.len() {
-        let _ = organism.stored_material.store_physical_instance(physical);
         return false;
     }
 
@@ -71,7 +76,6 @@ pub(crate) fn expel_physical_material(
         body_support = body_support.max(projection);
     }
     if !body_support.is_finite() {
-        let _ = organism.stored_material.store_physical_instance(physical);
         return false;
     }
 
@@ -82,11 +86,9 @@ pub(crate) fn expel_physical_material(
     let mut material_near = f64::INFINITY;
     for (index, placement) in placements.iter().enumerate() {
         let Some((name, _)) = physical.material.parts.get(index) else {
-            let _ = organism.stored_material.store_physical_instance(physical);
             return false;
         };
         let Some(resource) = environment.catalog.iter().find(|r| r.name == *name) else {
-            let _ = organism.stored_material.store_physical_instance(physical);
             return false;
         };
         let relative_origin = physical.owner_relative_origin.unwrap_or(Placement {
@@ -105,7 +107,6 @@ pub(crate) fn expel_physical_material(
             local_dx,
             local_dy,
         ) else {
-            let _ = organism.stored_material.store_physical_instance(physical);
             return false;
         };
         let boundary_projection = boundary.x * direction.0 * cos - boundary.y * direction.0 * sin
@@ -117,13 +118,11 @@ pub(crate) fn expel_physical_material(
         material_near = material_near.min(projection);
     }
     if !material_near.is_finite() {
-        let _ = organism.stored_material.store_physical_instance(physical);
         return false;
     }
 
     let translation = body_support - material_near + f64::EPSILON;
     if !translation.is_finite() || translation <= 0.0 {
-        let _ = organism.stored_material.store_physical_instance(physical);
         return false;
     }
     let dx = direction.0 * translation;
@@ -146,7 +145,6 @@ pub(crate) fn expel_physical_material(
         .field
         .index_for_position(destination_x, destination_y)
     else {
-        let _ = organism.stored_material.store_physical_instance(physical);
         return false;
     };
     if let Some(world_placements) = physical.placements.as_mut() {
@@ -159,5 +157,69 @@ pub(crate) fn expel_physical_material(
             placement.rotation_radians += relative_origin.rotation_radians;
         }
     }
-    environment.field.deposit_physical_at_index(index, physical)
+    // All geometry checks are complete. Remove the authoritative source
+    // only now, and restore the exact original entry if the destination rejects
+    // the transformed instance.
+    let Some(removed) = organism.stored_material.take_physical_at(storage_index) else {
+        return false;
+    };
+    if environment.field.deposit_physical_at_index(index, physical) {
+        true
+    } else {
+        let restore_at = storage_index.min(organism.stored_material.entries.len());
+        organism.stored_material.entries.insert(
+            restore_at,
+            crate::material_storage::StoredMaterial::Physical(removed),
+        );
+        false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::expel_physical_material;
+    use crate::material_storage::StoredMaterial;
+    use crate::physical_material::PhysicalMaterial;
+    use crate::resources::Material;
+    use crate::state::Simulation;
+    use crate::structure::Placement;
+
+    #[test]
+    fn malformed_stored_material_remains_owned_when_expulsion_validation_fails() {
+        let mut simulation = Simulation::new(923, 10.0);
+        let mut physical = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &simulation.environment.catalog,
+        )
+        .expect("test material should realize");
+        physical.owner_relative_origin = Some(Placement {
+            x: 1.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        });
+        // Simulate malformed persisted state that the expulsion path must fail
+        // closed on without deleting the source from its authoritative holder.
+        physical.placements = None;
+        simulation.organisms[0]
+            .stored_material
+            .entries
+            .push(StoredMaterial::Physical(physical));
+        let original_entries = simulation.organisms[0].stored_material.entries.clone();
+
+        assert!(!expel_physical_material(
+            &mut simulation.organisms[0],
+            &mut simulation.environment,
+            0,
+        ));
+        assert_eq!(
+            simulation.organisms[0].stored_material.entries,
+            original_entries,
+            "failed expulsion validation must not remove or rewrite the stored source"
+        );
+    }
 }
