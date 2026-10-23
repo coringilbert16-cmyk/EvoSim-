@@ -696,6 +696,144 @@ impl PhysicalConstituentGraph {
         Some(graph)
     }
 
+    /// Atomically replace one attached subgraph while retaining the
+    /// aggregate's cross-boundary bonds and the destination's primary genome.
+    /// Existing selected IDs may be preserved by the replacement; any new IDs
+    /// must be unused in the aggregate. The caller owns geometry/contact checks.
+    pub(crate) fn replace_subgraph_for_physical_ids(
+        &mut self,
+        old_ids: &[PhysicalConstituentId],
+        replacement: &Self,
+    ) -> Option<()> {
+        let old: HashSet<_> = old_ids.iter().copied().collect();
+        let destination_ids: HashSet<_> =
+            self.units.iter().map(|unit| unit.physical_id).collect();
+        let replacement_ids: HashSet<_> = replacement
+            .units
+            .iter()
+            .map(|unit| unit.physical_id)
+            .collect();
+        if old_ids.is_empty()
+            || old.len() != old_ids.len()
+            || old.contains(&PhysicalConstituentId(0))
+            || old.iter().any(|id| !destination_ids.contains(id))
+            || destination_ids.len() != self.units.len()
+            || destination_ids.contains(&PhysicalConstituentId(0))
+            || replacement_ids.len() != replacement.units.len()
+            || replacement_ids.contains(&PhysicalConstituentId(0))
+            || replacement_ids
+                .iter()
+                .any(|id| destination_ids.contains(id) && !old.contains(id))
+            || replacement
+                .units
+                .iter()
+                .any(|unit| !unit.placement.x.is_finite()
+                    || !unit.placement.y.is_finite()
+                    || !unit.placement.rotation_radians.is_finite())
+            || replacement.bonds.iter().any(|bond| {
+                bond.endpoint_a.constituent_id == bond.endpoint_b.constituent_id
+                    || !replacement_ids.contains(&bond.endpoint_a.constituent_id)
+                    || !replacement_ids.contains(&bond.endpoint_b.constituent_id)
+                    || !bond.strength.is_finite()
+                    || !(0.0..=1.0).contains(&bond.strength)
+                    || !bond.bond_energy.is_finite()
+                    || bond.bond_energy < 0.0
+            })
+        {
+            return None;
+        }
+
+        // A primary genome cannot be partially replaced by an attached graph.
+        let primary_ids: HashSet<_> = self.genome_constituent_ids.iter().copied().collect();
+        if !primary_ids.is_disjoint(&old) {
+            return None;
+        }
+        for group in &self.additional_genome_constituent_groups {
+            let group_ids: HashSet<_> = group.iter().copied().collect();
+            if !group_ids.is_disjoint(&old) && !group_ids.is_subset(&old) {
+                return None;
+            }
+        }
+        // Preserve cross-boundary bonds only when the replacement still owns
+        // the selected endpoint; otherwise the replacement would leave a
+        // dangling physical bond in the aggregate.
+        if self.bonds.iter().any(|bond| {
+            let a_selected = old.contains(&bond.endpoint_a.constituent_id);
+            let b_selected = old.contains(&bond.endpoint_b.constituent_id);
+            a_selected != b_selected
+                && !(if a_selected {
+                    replacement_ids.contains(&bond.endpoint_a.constituent_id)
+                } else {
+                    replacement_ids.contains(&bond.endpoint_b.constituent_id)
+                })
+        }) {
+            return None;
+        }
+
+        let replacement_primary: HashSet<_> =
+            replacement.genome_constituent_ids.iter().copied().collect();
+        if replacement_primary.len() != replacement.genome_constituent_ids.len()
+            || !replacement_primary.is_subset(&replacement_ids)
+        {
+            return None;
+        }
+        let mut replacement_core_ids = replacement_primary.clone();
+        for group in &replacement.additional_genome_constituent_groups {
+            let group_ids: HashSet<_> = group.iter().copied().collect();
+            if group_ids.len() != group.len()
+                || !group_ids.is_subset(&replacement_ids)
+                || !replacement_core_ids.is_disjoint(&group_ids)
+            {
+                return None;
+            }
+            replacement_core_ids.extend(group_ids);
+        }
+
+        let mut staged = self.clone();
+        staged.units.retain(|unit| !old.contains(&unit.physical_id));
+        staged.units.extend(replacement.units.iter().cloned());
+        staged.bonds.retain(|bond| {
+            !(old.contains(&bond.endpoint_a.constituent_id)
+                && old.contains(&bond.endpoint_b.constituent_id))
+        });
+        staged.bonds.extend(replacement.bonds.iter().copied());
+        staged
+            .additional_genome_constituent_groups
+            .retain(|group| group.iter().all(|id| !old.contains(id)));
+        if staged.genome_constituent_ids.is_empty()
+            && !replacement.genome_constituent_ids.is_empty()
+        {
+            staged.set_genome_constituent_ids(replacement.genome_constituent_ids.clone());
+        } else if !replacement.genome_constituent_ids.is_empty() {
+            staged.add_genome_constituent_group(replacement.genome_constituent_ids.clone());
+        }
+        for group in &replacement.additional_genome_constituent_groups {
+            staged.add_genome_constituent_group(group.iter().copied());
+        }
+        let max_id = staged
+            .units
+            .iter()
+            .map(|unit| unit.physical_id.0)
+            .max()
+            .unwrap_or(0);
+        staged.next_constituent_id = staged
+            .next_constituent_id
+            .max(replacement.next_constituent_id)
+            .max(max_id.saturating_add(1))
+            .max(1);
+        if staged.units.iter().map(|unit| unit.physical_id).collect::<HashSet<_>>().len()
+            != staged.units.len()
+            || staged.bonds.iter().any(|bond| {
+                !staged.units.iter().any(|unit| unit.physical_id == bond.endpoint_a.constituent_id)
+                    || !staged.units.iter().any(|unit| unit.physical_id == bond.endpoint_b.constituent_id)
+            })
+        {
+            return None;
+        }
+        *self = staged;
+        Some(())
+    }
+
     /// Remove temporary physical constituents and every bond touching them.
     /// Bonds identify constituents by stable physical ID, so remaining units do
     /// not need index remapping.
@@ -1266,6 +1404,123 @@ mod tests {
             .subgraph_for_physical_ids(&[a_id, PhysicalConstituentId(999)], &[])
             .is_none());
         assert!(graph.subgraph_for_physical_ids(&[a_id, a_id], &[]).is_none());
+    }
+
+    #[test]
+    fn replacing_subgraph_preserves_cross_bonds_and_updates_only_attached_members() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent_index = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = aggregate.physical_id(parent_index).unwrap();
+        aggregate.set_genome_constituent_ids([parent_id]);
+        let child_a = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_b = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let child_a_id = aggregate.physical_id(child_a).unwrap();
+        let child_b_id = aggregate.physical_id(child_b).unwrap();
+        aggregate.add_genome_constituent_group([child_a_id]);
+        let endpoint = |id| {
+            BondEndpoint::new(
+                id,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: 0.0,
+                },
+            )
+        };
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(child_a_id),
+            endpoint_b: endpoint(child_b_id),
+            strength: 0.75,
+            bond_energy: 2.5,
+        });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(parent_id),
+            endpoint_b: endpoint(child_a_id),
+            strength: 0.5,
+            bond_energy: 1.25,
+        });
+
+        let mut replacement = aggregate
+            .subgraph_for_physical_ids(&[child_a_id, child_b_id], &[child_a_id])
+            .unwrap();
+        replacement.bonds[0].bond_energy = 3.5;
+        let new_index = replacement.add_unit(StructuralUnit::new("Sulfur", placement));
+        let new_id = replacement.physical_id(new_index).unwrap();
+        replacement.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(child_b_id),
+            endpoint_b: endpoint(new_id),
+            strength: 0.6,
+            bond_energy: 0.75,
+        });
+
+        assert!(aggregate
+            .replace_subgraph_for_physical_ids(&[child_a_id, child_b_id], &replacement)
+            .is_some());
+        assert_eq!(aggregate.units.len(), 4);
+        assert_eq!(aggregate.genome_constituent_ids(), &[parent_id]);
+        assert!(aggregate
+            .additional_genome_constituent_groups()
+            .contains(&vec![child_a_id]));
+        assert!(aggregate.bonds.iter().any(|bond| {
+            bond.endpoint_a.constituent_id == parent_id
+                && bond.endpoint_b.constituent_id == child_a_id
+                && (bond.bond_energy - 1.25).abs() < f64::EPSILON
+        }));
+        assert!(aggregate.bonds.iter().any(|bond| {
+            bond.endpoint_a.constituent_id == child_a_id
+                && bond.endpoint_b.constituent_id == child_b_id
+                && (bond.bond_energy - 3.5).abs() < f64::EPSILON
+        }));
+        assert!(aggregate.bonds.iter().any(|bond| {
+            bond.endpoint_a.constituent_id == child_b_id
+                && bond.endpoint_b.constituent_id == new_id
+        }));
+    }
+
+    #[test]
+    fn replacing_subgraph_rejects_lost_cross_bond_endpoint_atomically() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = aggregate.physical_id(parent).unwrap();
+        aggregate.set_genome_constituent_ids([parent_id]);
+        let child_a = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_b = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let child_a_id = aggregate.physical_id(child_a).unwrap();
+        let child_b_id = aggregate.physical_id(child_b).unwrap();
+        aggregate.add_genome_constituent_group([child_a_id]);
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(
+                parent_id,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                child_a_id,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            strength: 0.5,
+            bond_energy: 1.25,
+        });
+        let replacement = aggregate
+            .subgraph_for_physical_ids(&[child_b_id], &[])
+            .unwrap();
+        let before_units = aggregate.units.clone();
+        let before_bonds = aggregate.bonds.clone();
+        let before_groups = aggregate.additional_genome_constituent_groups.clone();
+
+        assert!(aggregate
+            .replace_subgraph_for_physical_ids(&[child_a_id, child_b_id], &replacement)
+            .is_none());
+        assert_eq!(aggregate.units, before_units);
+        assert_eq!(aggregate.bonds, before_bonds);
+        assert_eq!(aggregate.additional_genome_constituent_groups, before_groups);
     }
 
     #[test]
