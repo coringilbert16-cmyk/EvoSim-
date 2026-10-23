@@ -364,12 +364,18 @@ impl EnergyLedgerAuthority for EnergyLedger {
             return false;
         }
         let next_external = self.total_external_energy_input + incident_energy;
+        let next_resonant = self.total_resonant_energy_held + resonant_energy_captured;
         let next_heat = self.total_heat_dissipated + heat_dissipated;
         let next_escaped = self.total_world_tone_energy_escaped + escaped_energy;
-        if !next_external.is_finite() || !next_heat.is_finite() || !next_escaped.is_finite() {
+        if !next_external.is_finite()
+            || !next_resonant.is_finite()
+            || !next_heat.is_finite()
+            || !next_escaped.is_finite()
+        {
             return false;
         }
         self.total_external_energy_input = next_external;
+        self.total_resonant_energy_held = next_resonant;
         self.total_heat_dissipated = next_heat;
         self.total_world_tone_energy_escaped = next_escaped;
         true
@@ -455,6 +461,7 @@ mod tests {
         let mut ledger = EnergyLedger::default();
         assert!(ledger.settle_world_tone_paths(10.0, 4.0, 2.0, 4.0));
         assert_eq!(ledger.total_external_energy_input, 10.0);
+        assert_eq!(ledger.total_resonant_energy_held, 4.0);
         assert_eq!(ledger.total_heat_dissipated, 2.0);
         assert_eq!(ledger.total_world_tone_energy_escaped, 4.0);
         assert!(!ledger.settle_world_tone_paths(10.0, 4.0, 2.0, 3.0));
@@ -521,6 +528,22 @@ mod tests {
         assert_eq!(escape_overflow.total_external_energy_input, 17.0);
         assert_eq!(escape_overflow.total_heat_dissipated, 19.0);
         assert_eq!(escape_overflow.total_world_tone_energy_escaped, f64::MAX);
+
+        let mut resonant_overflow = EnergyLedger {
+            total_external_energy_input: 5.0,
+            total_resonant_energy_held: f64::MAX,
+            total_heat_dissipated: 7.0,
+            total_world_tone_energy_escaped: 3.0,
+            ..EnergyLedger::default()
+        };
+        assert!(
+            !resonant_overflow.settle_world_tone_paths(f64::MAX, f64::MAX, 0.0, 0.0),
+            "resonant-holder counter overflow must reject the entire settlement"
+        );
+        assert_eq!(resonant_overflow.total_external_energy_input, 5.0);
+        assert_eq!(resonant_overflow.total_resonant_energy_held, f64::MAX);
+        assert_eq!(resonant_overflow.total_heat_dissipated, 7.0);
+        assert_eq!(resonant_overflow.total_world_tone_energy_escaped, 3.0);
 
         assert!(
             !ledger.settle_world_tone_paths(f64::INFINITY, 0.0, 0.0, 0.0),
