@@ -1526,6 +1526,8 @@ mod tests {
             "reserving the middle source must preserve the remaining entry order"
         );
         transformation.stored_bond = None;
+        // Rollback must use the captured source index, not mutable decision metadata.
+        transformation.decision_context_key = Some("corrupted-after-reservation".into());
 
         let mut environment = crate::state::Environment {
             width: 1000.0,
