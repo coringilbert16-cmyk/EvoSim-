@@ -18,6 +18,9 @@ pub(crate) struct WorldToneOccluderSnapshot {
     /// Frame-wide exposure cache; organism indices below map into this frame.
     pub(crate) frame: WorldToneCaptureFrame,
     pub(crate) organism_body_indices: Vec<Option<usize>>,
+    /// Attached primary/developing structure belongs to the owner's resonance.
+    /// Stored, environmental, and legacy nonliving material has no owner.
+    body_resonance_owners: Vec<Option<usize>>,
     /// Material properties keyed by the constituent indices used by geometry.
     pub(crate) body_properties: Vec<Vec<(usize, ResourceProperties)>>,
     /// Number of bodies retained by the conservative receiver-angle broad phase.
@@ -60,6 +63,7 @@ impl WorldToneOccluderSnapshot {
         let mut bodies = Vec::new();
         let mut body_properties = Vec::new();
         let mut organism_body_indices = vec![None; simulation.organisms.len()];
+        let mut body_resonance_owners = Vec::<Option<usize>>::new();
 
         // Every organism remains a physical occluder regardless of whether its
         // genome is still intact. Structure placements are already world-space.
@@ -71,6 +75,7 @@ impl WorldToneOccluderSnapshot {
             organism_body_indices[organism_index] = Some(bodies.len());
             body_properties.push(structure_material_properties(&organism.structure, catalog)?);
             bodies.push(body);
+            body_resonance_owners.push(Some(organism_index));
         }
 
         // A developing offspring is a separate physical structure even
@@ -88,6 +93,7 @@ impl WorldToneOccluderSnapshot {
                 bodies.push(OrganismBodyGeometry::from_all_realized_units(
                     &construction.developing_structure,
                 )?);
+                body_resonance_owners.push(Some(organism_index));
             }
             if !construction.committed_material.entries.is_empty() {
                 let anchor = Placement {
@@ -101,6 +107,7 @@ impl WorldToneOccluderSnapshot {
                     bodies.push(body_from_owner_relative_material(
                         physical, anchor, catalog,
                     )?);
+                    body_resonance_owners.push(None);
                 }
             }
         }
@@ -116,6 +123,7 @@ impl WorldToneOccluderSnapshot {
                 bodies.push(OrganismBodyGeometry::from_physical_material(
                     physical, catalog,
                 )?);
+                body_resonance_owners.push(None);
             }
         }
 
@@ -132,6 +140,7 @@ impl WorldToneOccluderSnapshot {
             bodies.push(OrganismBodyGeometry::from_all_realized_units(
                 &decomposing.structure,
             )?);
+            body_resonance_owners.push(None);
         }
 
         // Stored objects are physically present at owner-relative positions.
@@ -178,6 +187,7 @@ impl WorldToneOccluderSnapshot {
                     owner_anchor(owner)?,
                     catalog,
                 )?);
+                body_resonance_owners.push(None);
             }
             if let Some((cell_index, physical)) = &transformation.combine_environmental_source {
                 let _ = simulation.environment.field.cells.get(*cell_index)?;
@@ -207,6 +217,9 @@ impl WorldToneOccluderSnapshot {
             .into_iter()
             .map(|index| index.and_then(|original| remapped_indices[original]))
             .collect();
+        if body_resonance_owners.len() != relevant_bodies.len() {
+            return None;
+        }
         let receiver_body_indices: Vec<_> = (0..relevant_bodies.len()).collect();
         if receiver_body_indices.is_empty() {
             return None;
@@ -220,6 +233,7 @@ impl WorldToneOccluderSnapshot {
         Some(Self {
             frame,
             organism_body_indices,
+            body_resonance_owners,
             body_properties: relevant_properties,
             occluder_count,
         })
@@ -316,15 +330,9 @@ impl WorldToneOccluderSnapshot {
             }
         }
 
-        let mut body_to_organism = vec![None; snapshot.body_properties.len()];
-        for (organism_index, body_index) in snapshot.organism_body_indices.iter().enumerate() {
-            if let Some(body_index) = body_index {
-                if let Some(slot) = body_to_organism.get_mut(*body_index) {
-                    *slot = Some(organism_index);
-                } else {
-                    return;
-                }
-            }
+        let body_to_organism = snapshot.body_resonance_owners.clone();
+        if body_to_organism.len() != snapshot.body_properties.len() {
+            return;
         }
 
         // Work against staged reservoirs. Any invalid geometry, spectrum, or
@@ -927,6 +935,11 @@ mod tests {
             .expect("developing physical material must be represented");
         assert_eq!(snapshot.occluder_count, 3);
         assert_eq!(snapshot.body_index_for_organism(0), Some(0));
+        assert_eq!(
+            snapshot.body_resonance_owners,
+            vec![Some(0), Some(0), None],
+            "the attached developing structure belongs to the parent resonance; committed storage remains a separate nonliving receiver"
+        );
     }
 
     #[test]
