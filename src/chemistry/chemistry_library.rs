@@ -1,7 +1,9 @@
 //! Persistent chemistry knowledge keyed by canonical physical interfaces.
 use crate::geometry_reference_library::LiveGeometryInterface;
 #[cfg(test)]
-use crate::geometry_reference_library::{GeometryRigidContactFamily, GeometryRigidPointContactFamily};
+use crate::geometry_reference_library::{
+    GeometryRigidContactFamily, GeometryRigidPointContactFamily,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
@@ -100,8 +102,6 @@ impl ChemistryKey {
         key
     }
 
-
-
     #[cfg(test)]
     pub fn from_geometry_rigid_contact(
         a: impl Into<String>,
@@ -130,16 +130,21 @@ impl ChemistryKey {
         b: impl Into<String>,
         family: &GeometryRigidPointContactFamily,
     ) -> Self {
-        Self::new(a, b, "rigid_point", format!(
-            "v{}|anchor_edge={}|candidate_endpoint={}|start={}|end={}|rotation_start={}|rotation_end={}",
-            family.schema_version,
-            family.anchor_edge,
-            family.candidate_endpoint,
-            quantize(family.anchor_parameter_start),
-            quantize(family.anchor_parameter_end),
-            quantize(family.candidate_rotation_start_radians),
-            quantize(family.candidate_rotation_end_radians),
-        ))
+        Self::new(
+            a,
+            b,
+            "rigid_point",
+            format!(
+                "v{}|anchor_edge={}|candidate_endpoint={}|start={}|end={}|rotation_start={}|rotation_end={}",
+                family.schema_version,
+                family.anchor_edge,
+                family.candidate_endpoint,
+                quantize(family.anchor_parameter_start),
+                quantize(family.anchor_parameter_end),
+                quantize(family.candidate_rotation_start_radians),
+                quantize(family.candidate_rotation_end_radians),
+            ),
+        )
     }
 }
 
@@ -465,6 +470,9 @@ pub fn open_default_library() -> std::io::Result<ChemistryLibrary> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::geometry_reference_library::{
+        GeometryRigidContactFamily, GeometryRigidPointContactFamily,
+    };
     #[test]
     fn live_geometry_interface_can_form_chemistry_key() {
         let interface = crate::geometry_reference_library::resolve_live_contact_interface(
