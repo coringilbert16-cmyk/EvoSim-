@@ -87,6 +87,9 @@ pub(crate) struct ActiveTransformation {
     /// Kept separately from mutable decision metadata so rollback preserves exact order.
     #[serde(default)]
     pub(crate) stored_source_index: Option<usize>,
+    /// Original environmental cell/material indices captured when BREAK reserves a source.
+    #[serde(default)]
+    pub(crate) environmental_source_location: Option<(usize, usize)>,
     /// True when the transformed physical material came directly from the
     /// environment rather than organism storage.
     #[serde(default)]
