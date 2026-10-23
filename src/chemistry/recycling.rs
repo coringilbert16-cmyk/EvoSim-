@@ -103,4 +103,44 @@ mod tests {
         assert_eq!(organism.usable_energy, 0.0);
         assert!(organism.reproductive_construction.is_none());
     }
+    #[test]
+    fn failed_dead_recycling_deposit_preserves_all_material_and_energy_owners() {
+        let mut simulation = Simulation::new(29, 20.0);
+        let mut organism = simulation.organisms.remove(0);
+        assert!(organism.store_material(Material::free_base("Carbon", 1.0)));
+        assert!(crate::reproduction::begin_reproduction(
+            &mut organism,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut EnergyLedger::default(),
+        ));
+        organism.usable_energy = 5.0;
+        organism
+            .reproductive_construction
+            .as_mut()
+            .expect("construction started")
+            .developing_energy = 3.0;
+        organism.occupied_cells[0].x = 1.0e9;
+
+        let storage_before = organism.stored_material.clone();
+        let construction_before = organism.reproductive_construction.clone();
+        let energy_before = organism.usable_energy;
+        let ledger = EnergyLedger::default();
+        let ledger_before = ledger;
+        let field_before = simulation.environment.field.total_amount();
+
+        assert!(recycle_dead_organism(
+            &mut simulation.environment,
+            &mut organism,
+            &mut ledger.clone(),
+        )
+        .is_none());
+
+        assert_eq!(organism.stored_material, storage_before);
+        assert_eq!(organism.reproductive_construction, construction_before);
+        assert_eq!(organism.usable_energy, energy_before);
+        assert_eq!(ledger, ledger_before);
+        assert_eq!(simulation.environment.field.total_amount(), field_before);
+    }
+
 }
