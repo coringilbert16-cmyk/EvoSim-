@@ -1457,6 +1457,74 @@ impl Simulation {
 #[cfg(test)]
 mod decomposition_finalization_tests {
     #[test]
+    fn failed_stored_break_preparation_restores_exact_malformed_escrow() {
+        use crate::decision::ActionKind;
+        use crate::decision_runtime::ActionCandidate;
+        use crate::material_storage::StoredMaterial;
+        use crate::physical_material::PhysicalMaterial;
+        use crate::resources::{InternalBond, Material};
+        use crate::structure::Placement;
+
+        let mut simulation = Simulation::new(923, 10.0);
+        let material = Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
+        let source = PhysicalMaterial::realized(
+            material,
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &simulation.environment.catalog,
+        )
+        .expect("test source should realize");
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(source));
+
+        let decision = ActionCandidate {
+            action: ActionKind::Break,
+            context_key: Some("stored:0:bond:0".into()),
+        };
+        let mut next_id = 1;
+        let mut transformation = Simulation::try_start_transformation(
+            &mut simulation.organisms[0],
+            &simulation.environment.catalog,
+            &mut next_id,
+            &decision,
+        )
+        .expect("stored BREAK should reserve source");
+        let stored = transformation.stored_material.as_mut().unwrap();
+        stored.placements = None;
+        let malformed = stored.clone();
+
+        restore_failed_transformation_material(
+            &transformation,
+            Some(&mut simulation.organisms[0]),
+            &mut simulation.environment,
+        );
+
+        assert_eq!(
+            simulation.organisms[0].stored_material.entries,
+            vec![StoredMaterial::Physical(malformed)],
+            "recovery must preserve malformed escrow instead of losing it or depositing intrinsic coordinates"
+        );
+        assert_eq!(simulation.organisms[0].active_transformation_id, None);
+    }
+
+    #[test]
     fn combine_prepares_at_completion_without_changing_break_timing() {
         use crate::state::TransformationKind;
 
