@@ -850,8 +850,12 @@ impl Simulation {
             // physical structure is applied immediately; conflicting events
             // naturally fail once an earlier event has changed that structure.
             for operation in chemical_operations {
-                let _ =
-                    crate::chemical_reaction::resolve(operation, organism, &mut self.energy_ledger);
+                let _ = crate::chemical_reaction::resolve_preserving_accumulation(
+                    operation,
+                    organism,
+                    &mut self.energy_ledger,
+                    &mut self.chemical_reaction_accumulation,
+                );
             }
 
             // Recheck immediately after chemistry: if a reaction breached the
