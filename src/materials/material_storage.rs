@@ -611,4 +611,35 @@ mod tests {
         ));
         assert!(storage.is_empty());
     }
+
+    #[test]
+    fn stored_split_batch_preflight_preserves_owner_relative_anchors() {
+        use crate::physical_material::PhysicalMaterial;
+
+        let mut source = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 8.0,
+                y: 12.0,
+                rotation_radians: 0.4,
+            }],
+            &catalog(),
+        )
+        .expect("split piece should be realized");
+        source.owner_relative_origin = Some(Placement {
+            x: 3.0,
+            y: -2.0,
+            rotation_radians: 0.7,
+        });
+
+        let prepared = MaterialStorage::prepare_physical_batch(vec![source])
+            .expect("valid stored split should prepare");
+        let StoredMaterial::Physical(piece) = &prepared[0];
+        let placement = piece.placements.as_ref().unwrap()[0];
+        assert!(placement.x.abs() < 1e-12 && placement.y.abs() < 1e-12);
+        let anchor = piece.owner_relative_origin.unwrap();
+        assert_eq!(anchor.x, 3.0);
+        assert_eq!(anchor.y, -2.0);
+        assert_eq!(anchor.rotation_radians, 0.7);
+    }
 }
