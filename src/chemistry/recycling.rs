@@ -1,6 +1,13 @@
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::state::{EnergyLedger, Environment, Organism};
 
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Kept disconnected until canonical post-death chemistry replaces legacy carriers"
+    )
+)]
 pub(crate) fn recycle_dead_organism(
     environment: &mut Environment,
     organism: &mut Organism,
