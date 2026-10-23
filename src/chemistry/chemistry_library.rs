@@ -10,12 +10,12 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 4;
+pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 5;
 
 /// Increment this fingerprint whenever chemistry equations, constants, or
 /// resource-chemistry semantics change. Existing derived cache rows are never
 /// relabeled or migrated across fingerprints.
-pub const CHEMISTRY_EQUATION_FINGERPRINT: &str = "evosim-chemistry-v1|potential=exp-k-dmax|contact=(1-d/r)^2|Dmax=13|k=1/13|contact_radius=1|max_force=1|energy_distance=contact_radius|energy_scale=max_force*energy_distance|reaction_dissipation=0.1/tick|catalog=resource-chemistry-v1";
+pub const CHEMISTRY_EQUATION_FINGERPRINT: &str = "evosim-chemistry-v1|potential=exp-k-dmax|contact=(1-d/r)^2|Dmax=13|k=1/13|contact_radius=1|max_force=1|energy_distance=contact_radius|energy_scale=max_force*energy_distance|reaction_dissipation=0.1/tick|catalog=resource-chemistry-v2|chemical-position=quantized-key-v1";
 
 fn quantize(value: f64) -> i64 {
     (value * 1_000_000_000.0).round() as i64
@@ -31,6 +31,13 @@ pub struct ChemistryKey {
     pub material_b: String,
     pub interface_class: String,
     pub interface_signature: String,
+    /// Quantized chemical positions used by the static-potential equation.
+    /// They belong in the cache key so a catalog position change cannot reuse
+    /// a potential calculated from the previous chemistry spectrum.
+    #[serde(default)]
+    pub chemical_position_a: Option<i64>,
+    #[serde(default)]
+    pub chemical_position_b: Option<i64>,
 }
 
 impl ChemistryKey {
@@ -51,6 +58,8 @@ impl ChemistryKey {
             material_b,
             interface_class: class.into(),
             interface_signature: interface.into(),
+            chemical_position_a: None,
+            chemical_position_b: None,
         }
     }
     pub fn signature(&self) -> String {
@@ -68,8 +77,26 @@ impl ChemistryKey {
         a: impl Into<String>,
         b: impl Into<String>,
         interface: &LiveGeometryInterface,
+        chemical_position_a: f64,
+        chemical_position_b: f64,
     ) -> Self {
-        Self::new(a, b, interface.interface_class, interface.signature.clone())
+        let material_a = a.into();
+        let material_b = b.into();
+        // Keep each quantized position attached to its canonical material name.
+        let (position_a, position_b) = if material_a <= material_b {
+            (chemical_position_a, chemical_position_b)
+        } else {
+            (chemical_position_b, chemical_position_a)
+        };
+        let mut key = Self::new(
+            material_a,
+            material_b,
+            interface.interface_class,
+            interface.signature.clone(),
+        );
+        key.chemical_position_a = Some(quantize(position_a));
+        key.chemical_position_b = Some(quantize(position_b));
+        key
     }
 
     pub fn from_geometry_contact(
@@ -493,9 +520,33 @@ mod tests {
             "Hydrogen",
             crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 0 },
         );
-        let key = ChemistryKey::from_live_geometry("Carbon", "Hydrogen", &interface);
+        let key = ChemistryKey::from_live_geometry("Carbon", "Hydrogen", &interface, 10.5, 5.5);
         assert_eq!(key.interface_class, "rigid_point");
         assert_eq!(key.interface_signature, interface.signature);
+        assert_eq!(key.chemical_position_a, Some(10_500_000_000));
+        assert_eq!(key.chemical_position_b, Some(5_500_000_000));
+    }
+
+    #[test]
+    fn live_geometry_key_distinguishes_chemical_positions_and_canonicalizes_them() {
+        let interface = crate::geometry_reference_library::resolve_live_contact_interface(
+            "Carbon",
+            crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            "Hydrogen",
+            crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 0 },
+        );
+        let canonical = ChemistryKey::from_live_geometry(
+            "Carbon", "Hydrogen", &interface, 10.5, 5.5,
+        );
+        let reversed = ChemistryKey::from_live_geometry(
+            "Hydrogen", "Carbon", &interface, 5.5, 10.5,
+        );
+        let changed_position = ChemistryKey::from_live_geometry(
+            "Carbon", "Hydrogen", &interface, 10.25, 5.5,
+        );
+        assert_eq!(canonical, reversed);
+        assert_ne!(canonical, changed_position);
+        assert_ne!(canonical.signature(), changed_position.signature());
     }
 
     #[test]
@@ -821,6 +872,8 @@ mod tests {
                 material_b: "Hydrogen".into(),
                 interface_class: "rigid_edge".into(),
                 interface_signature: signature.into(),
+                chemical_position_a: None,
+                chemical_position_b: None,
             },
             static_potential: 0.5,
         })
@@ -828,9 +881,9 @@ mod tests {
     }
 
     #[test]
-    fn loads_current_schema_four_store() {
-        let root = test_root("schema-four");
-        write_test_store(&root, 4, &[test_record_json(4, "edge")], 1);
+    fn loads_current_schema_five_store() {
+        let root = test_root("schema-five");
+        write_test_store(&root, 5, &[test_record_json(5, "edge")], 1);
         let library = ChemistryLibrary::open(&root).unwrap();
         assert_eq!(library.len(), 1);
         let _ = fs::remove_dir_all(root);
@@ -841,7 +894,7 @@ mod tests {
         let root = test_root("missing-manifest");
         fs::create_dir_all(&root).unwrap();
         let data_path = root.join("chemistry.jsonl");
-        let record = test_record_json(4, "edge");
+        let record = test_record_json(5, "edge");
         fs::write(&data_path, format!("{record}\n")).unwrap();
         let original_data = fs::read(&data_path).unwrap();
 
@@ -938,7 +991,7 @@ mod tests {
     #[test]
     fn rejects_manifest_count_mismatch() {
         let root = test_root("count-mismatch");
-        write_test_store(&root, 4, &[test_record_json(4, "edge")], 2);
+        write_test_store(&root, 5, &[test_record_json(5, "edge")], 2);
         let error = ChemistryLibrary::open(&root)
             .err()
             .expect("corrupt store must be rejected");
@@ -951,18 +1004,20 @@ mod tests {
         let root = test_root("invalid-record");
         let invalid = serde_json::to_string(&ChemistryRecord {
             key: ChemistryKey {
-                schema_version: 4,
+                schema_version: 5,
                 material_a: "Carbon".into(),
                 material_b: "Hydrogen".into(),
                 interface_class: "rigid_edge".into(),
                 interface_signature: "edge".into(),
+                chemical_position_a: None,
+                chemical_position_b: None,
             },
             static_potential: f64::NAN,
         })
         .unwrap();
         // JSON does not represent NaN, so serialize a parseable record with a negative value.
         let invalid = invalid.replace("null", "-1.0");
-        write_test_store(&root, 4, &[invalid], 1);
+        write_test_store(&root, 5, &[invalid], 1);
         let error = ChemistryLibrary::open(&root)
             .err()
             .expect("corrupt store must be rejected");

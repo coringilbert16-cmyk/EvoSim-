@@ -156,7 +156,7 @@ pub(crate) fn accumulate(
             reaction_key(&bond, &interface.signature)
         );
 
-        let key_record = ChemistryKey::from_live_geometry(&material_a, &material_b, &interface);
+        let key_record = ChemistryKey::from_live_geometry(&material_a, &material_b, &interface, position_a, position_b);
         let potential = match chemistry_library.get(&key_record) {
             Some(record) => record.static_potential,
             None => {
