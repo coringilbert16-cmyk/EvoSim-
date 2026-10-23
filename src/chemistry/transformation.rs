@@ -1155,7 +1155,8 @@ pub(crate) fn resolve_transformation(
         // Stored source pieces remain in intrinsic coordinates. Validate the
         // complete split before touching the holder, then commit the prepared
         // entries without cloning unrelated inventory.
-        let Some(prepared) = crate::material_storage::MaterialStorage::prepare_physical_batch(pieces)
+        let Some(prepared) =
+            crate::material_storage::MaterialStorage::prepare_physical_batch(pieces)
         else {
             restore_failed_stored_break_source(transformation, organism, environment);
             return;
