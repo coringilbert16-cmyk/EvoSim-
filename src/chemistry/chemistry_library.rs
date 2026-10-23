@@ -1,5 +1,7 @@
 //! Persistent chemistry knowledge keyed by canonical physical interfaces.
 use crate::geometry_reference_library::LiveGeometryInterface;
+#[cfg(test)]
+use crate::geometry_reference_library::{GeometryRigidContactFamily, GeometryRigidPointContactFamily};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
@@ -99,6 +101,46 @@ impl ChemistryKey {
     }
 
 
+
+    #[cfg(test)]
+    pub fn from_geometry_rigid_contact(
+        a: impl Into<String>,
+        b: impl Into<String>,
+        family: &GeometryRigidContactFamily,
+    ) -> Self {
+        Self::new(
+            a,
+            b,
+            "rigid_edge",
+            format!(
+                "v{}|anchor_edge={}|candidate_edge={}|rotation={}|start={}|end={}",
+                family.schema_version,
+                family.anchor_edge,
+                family.candidate_edge,
+                quantize(family.candidate_rotation_radians),
+                quantize(family.anchor_parameter_start),
+                quantize(family.anchor_parameter_end),
+            ),
+        )
+    }
+
+    #[cfg(test)]
+    pub fn from_geometry_rigid_point(
+        a: impl Into<String>,
+        b: impl Into<String>,
+        family: &GeometryRigidPointContactFamily,
+    ) -> Self {
+        Self::new(a, b, "rigid_point", format!(
+            "v{}|anchor_edge={}|candidate_endpoint={}|start={}|end={}|rotation_start={}|rotation_end={}",
+            family.schema_version,
+            family.anchor_edge,
+            family.candidate_endpoint,
+            quantize(family.anchor_parameter_start),
+            quantize(family.anchor_parameter_end),
+            quantize(family.candidate_rotation_start_radians),
+            quantize(family.candidate_rotation_end_radians),
+        ))
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
