@@ -1382,7 +1382,7 @@ mod tests {
     }
 
     #[test]
-    fn environmental_break_starts_from_the_exact_indexed_material_and_bond() {
+    fn failed_environmental_break_starts_from_the_exact_indexed_material_and_bond() {
         use crate::physical_material::PhysicalMaterial;
         use crate::resources::{InternalBond, Material};
         use crate::structure::Placement;
