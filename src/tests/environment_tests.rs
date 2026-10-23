@@ -239,3 +239,40 @@ fn physical_batch_deposit_commits_all_validated_objects() {
     );
     assert_eq!(field.revision, 2);
 }
+
+#[test]
+fn physical_batch_deposit_rejects_late_malformed_object_without_partial_commit() {
+    use crate::physical_material::PhysicalMaterial;
+    use crate::state::Simulation;
+    use crate::structure::Placement;
+
+    let simulation = Simulation::new(773, 10.0);
+    let catalog = &simulation.environment.catalog;
+    let valid = PhysicalMaterial::realized(
+        Material::free_base("Carbon", 1.0),
+        vec![Placement {
+            x: 12.5,
+            y: 12.5,
+            rotation_radians: 0.0,
+        }],
+        catalog,
+    )
+    .expect("carbon should be physically realizable");
+    let malformed = PhysicalMaterial {
+        material: Material::free_base("Carbon", 1.0),
+        placements: None,
+        internal_connections: None,
+        owner_relative_origin: None,
+        realized_shapes: None,
+    };
+    let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let before_cells = field.cells.clone();
+    let before_revision = field.revision;
+
+    assert!(!field.deposit_physical_batch(vec![
+        (12.5, 12.5, valid),
+        (37.5, 12.5, malformed),
+    ]));
+    assert_eq!(field.cells, before_cells);
+    assert_eq!(field.revision, before_revision);
+}
