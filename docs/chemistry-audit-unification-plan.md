@@ -4012,3 +4012,10 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - **Third slice:** remove duplicate movement and world-tone body registration; a developing constituent is part of the same physical organism and must not be translated or illuminated twice. Reconcile structural-energy inventory by counting the aggregate graph once. Keep stored/committed material as separate physical objects until a later chemistry-holder migration explicitly gives them authoritative bond energy and reaction ownership.
 - **Division is a separate final slice:** validate primary and developing cores from their respective ID groups; atomically split the aggregate, remap IDs/endpoints, conserve parent usable energy by post-split structural mass, and let organism decision logic choose when to divide after the 160% scale threshold. Do not combine this lifecycle change with the first anchor-admission patch.
 - No runtime change was made by this audit. The plan is sequenced to make each transaction independently testable and avoid the prohibited intermediate state where the same developing constituents exist in both the parent graph and a second child graph.
+
+
+### 17.202.1 Cross-boundary bond constraint
+
+- `replace_subgraph_for_physical_ids` preserves a cross-boundary bond only if the replacement still contains its selected endpoint. `remove_units_by_physical_ids` removes every bond touching removed constituents without energy settlement. Therefore the final division slice must enumerate cross-group bonds before mutation and settle each bond-energy release/heat transaction before removing either core group. It must not use the removal helper as an unaccounted shortcut.
+- During growth, keep stable IDs for all pre-existing child constituents so a cross-boundary bond remains attached when replacing the developing subgraph. Any new IDs must be allocated from the aggregate's ID space or remapped before commit; otherwise replacement can reject the candidate or create a dangling endpoint.
+- This constraint is an additional reason to keep aggregate admission/growth and final division as separate slices. No runtime change made.
