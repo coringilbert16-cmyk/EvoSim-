@@ -245,6 +245,9 @@ mod tests {
     #[test]
     fn expulsion_preserves_deformed_fluid_shape_through_environment_transfer() {
         let mut simulation = Simulation::new(929, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
         let catalog = simulation.environment.catalog.clone();
         let water = catalog
             .iter()
