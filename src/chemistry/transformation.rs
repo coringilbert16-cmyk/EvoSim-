@@ -1624,20 +1624,9 @@ mod tests {
     fn environmental_break_rejects_exhausted_transformation_ids_without_removing_source() {
         use crate::physical_material::PhysicalMaterial;
         use crate::resources::{InternalBond, Material};
-        use crate::state::Environment;
         use crate::structure::Placement;
 
-        let catalog = crate::resources::default_catalog();
-        let mut environment = Environment {
-            width: 1000.0,
-            height: 1000.0,
-            catalog: catalog.clone(),
-            field: crate::environment::ActiveMaterialField::new(
-                1000.0,
-                1000.0,
-                crate::environment::DEFAULT_CELL_SIZE,
-            ),
-        };
+        let (mut organism, mut environment, _) = resonance_break_test_organism();
         let source = PhysicalMaterial::realized(
             Material {
                 parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
@@ -1648,36 +1637,38 @@ mod tests {
             },
             vec![
                 Placement {
-                    x: 20.0,
-                    y: 20.0,
+                    x: 0.0,
+                    y: 0.0,
                     rotation_radians: 0.0,
                 },
                 Placement {
-                    x: 20.838,
-                    y: 20.0,
+                    x: 0.838,
+                    y: 0.0,
                     rotation_radians: 0.0,
                 },
             ],
-            &catalog,
+            &environment.catalog,
         )
         .expect("bonded environmental source should be physically realizable");
-        let cell_index = 0;
+        let cell_index = environment
+            .field
+            .index_for_position(0.0, 0.0)
+            .expect("source origin must be in the field");
         environment.field.cells[cell_index]
             .physical_materials
             .push(source);
-        let materials_before = environment.field.cells[cell_index]
-            .physical_materials
-            .clone();
-        let mut organism =
-            environmental_break_test_organism("exhausted-environmental-break-id", None);
-        let decision = ActionCandidate {
-            action: ActionKind::Break,
-            context_key: Some(format!("environment:cell:{cell_index}:material:0:bond:0")),
-        };
+        let candidate = environmental_break_candidates(&organism, &environment)
+            .into_iter()
+            .find(|candidate| {
+                candidate.context_key.as_deref()
+                    == Some(format!("environment:cell:{cell_index}:material:0:bond:0").as_str())
+            })
+            .expect("fixture must expose an accessible environmental BREAK candidate");
+        let materials_before = environment.field.cells[cell_index].physical_materials.clone();
         let mut next_id = u64::MAX;
 
         let started =
-            try_start_environmental_break(&mut organism, &mut environment, &mut next_id, &decision);
+            try_start_environmental_break(&mut organism, &mut environment, &mut next_id, &candidate);
         assert!(started.is_none());
         assert_eq!(
             environment.field.cells[cell_index].physical_materials,
