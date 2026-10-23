@@ -4097,3 +4097,11 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - This avoids making exact rollback depend on mutable decision metadata. The stored-BREAK completion regression now corrupts decision_context_key after reservation and still expects the source to return to its exact original storage position.
 - A test-only WorldToneOccluderSnapshot ActiveTransformation fixture was updated to initialize the new defaulted fields after CI exposed the missing initializer.
 - Workflow 40025449497 completed on predecessor e9d6c86e2d8a2dad7e49be74879adbe0f0d0b5f0: all focused gates passed (including stored/environmental BREAK rollback, post-death inventory, nonliving world-tone settlement, decomposition finalization, COMBINE settlement, material transfer, and late restoration rollback). Full suite: 663 passed, 23 failed, 1 ignored in 286.25s; the 23 failure identities are all in the frozen 28-failure baseline, five baseline failures are now passing, and there are zero new failure identities. Clippy still fails on repository-wide warnings-as-errors. PR #205 head 289b3e4e38f2f531c499d6582f1cf6fa70dc90b9 adds the legacy-key fallback assertion and serde-default compatibility test; exact-head workflow 40026017870 is in progress, so these latest test additions are not yet verified.
+
+
+## 17.211 Preflight transformation-ID exhaustion before reserving source material (2026-10-23)
+
+- Audit finding: stored and environmental BREAK removed their source before incrementing the next transformation ID. If the counter reached u64::MAX, debug builds could panic and release builds could wrap after source removal, violating the reservation transaction.
+- Implementation: both start functions now use checked_add before any source removal and commit the precomputed next ID only after the transformation is built. An exhausted ID rejects the start without changing storage, active-transformation ownership, or the counter.
+- Regression stored_break_rejects_exhausted_transformation_ids_without_reserving_source verifies the source entries and active state remain unchanged at u64::MAX.
+- PR #205 head 4c51cac37d58c5b1da888d72b246c87e0533f36d contains the preflight and regression. Exact-head formatting/focused/full-suite/Clippy verification is pending; workflow 40026017870 runs on predecessor 289b3e4e38f2f531c499d6582f1cf6fa70dc90b9.
