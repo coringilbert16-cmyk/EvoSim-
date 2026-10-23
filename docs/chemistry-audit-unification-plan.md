@@ -3849,3 +3849,9 @@ Internal/adjacent budding remains the target: a second genome core begins beside
 - Added `world_tone_settlement_rejects_counter_overflow_without_partial_updates` in `src/chemistry/energy_ledger.rs` on PR #205. It seeds the cumulative external-input counter at `f64::MAX`, attempts a valid-looking settlement whose cumulative addition overflows, and asserts external input, heat, and escape counters all remain unchanged. It also rejects non-finite incident input and checks the same unchanged state.
 - The implementation already stages the next cumulative counters and validates them before assignment; this regression locks in that transaction boundary against future refactors. This is targeted test coverage, not a claim that world-wide energy conservation is complete.
 - Exact-head CI is pending for the latest commit; do not report this test as passing until the run completes. Continue auditing source-to-sink accounting and active transformation settlement next.
+
+## 17.182 World-tone counter overflow coverage expanded — 2026-10-23
+
+- Expanded `world_tone_settlement_rejects_counter_overflow_without_partial_updates` on PR #205 to exercise overflow of each cumulative sink counter independently: external input, dissipated heat, and escaped energy. Each case asserts that all three cumulative counters remain unchanged, preventing a future edit from partially committing an earlier counter before discovering a later overflow.
+- Retained the non-finite incident-energy rejection assertion. The settlement function also validates that captured resonance + heat + escape balances incident energy before staging counters.
+- This is still ledger-level atomicity coverage, not a complete world-conservation proof. The latest test commit is `82e7787b0863c6547508e93908835454a4493aa3`; no workflow run had appeared for that exact head at the time of this note.
