@@ -625,3 +625,12 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - This is groundwork, not live integration. Next is to finish this focused gate, then continue the canonical aggregate migration with the coordinated movement/world-tone/energy-inventory/division changes already mapped in Section 17.124.
 - Plan Section 17.125 recorded in PR #204 commit ebe63022da65365ef44c208bf9c1b0f17f31fbbb.
 
+
+
+## Latest checkpoint — 2026-10-22, Section 17.126
+
+- PR #205 exact head: `17b2e6403703aa1cfb2e58223861103fce4194a3`. Workflow [39867010714](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39867010714): formatting, source/architecture checks, graph-merge tests, core-specific viability test, and focused Bob/fluid/restoration/BREAK gates passed. Full suite: 595 passed, 27 failed, 1 ignored (282.97s); Clippy failed. The 27 failure identities and Clippy identities have not yet been normalized against the frozen baseline on this head.
+- Audit confirmed the core-specific validator fails closed for missing stable core IDs, but reproduction readiness still follows its core-anchored cavity check with a generic whole-graph viability call. That must become core-specific before shared-graph integration.
+- Movement currently sees/translates the parent graph and separately translates the developing graph. World-tone and structural-energy inventory also enumerate/count developing structure separately. Those paths would double-move/double-count after a graph merge unless migrated together.
+- **Updated owner contract:** attached reproductive structure is ordinary parent-owned physical structure and participates in resonance; do not retain a separate developing-structure graph or special “committed reproductive material” class. Only genuinely stored material stays in storage. This supersedes the earlier transitional separate-graph description in Section 17.31.
+- No runtime source change in this audit. Next: atomically promote the reproduction anchor into the parent graph with ID/core-group remapping, then migrate movement/collision, world-tone enumeration, energy inventory, growth targeting, and core-specific viability as a coordinated slice. See plan Section 17.126.
