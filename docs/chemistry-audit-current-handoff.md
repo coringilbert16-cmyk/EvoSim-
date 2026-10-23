@@ -750,4 +750,9 @@ The chemistry equation bounds pairwise separation, not absolute coordinate value
 
 ### Stored BREAK preparation rollback
 
-PR #205 now clears the active transformation ID on preparation failure and delegates restoration to the simulation-level rollback handler. This avoids a double-restore path; the live-tick test checks exact storage entries and unchanged ledger. Focused gate is `cargo test --locked failed_stored_break`. Current head `a0d8463cec242c65ad6930c28d78c1c834b78469`; verification pending.
+PR #205 now clears the active transformation ID on preparation failure and delegates restoration to the simulation-level rollback handler. This avoids a double-restore path; the live-tick test checks exact storage entries and unchanged ledger. Focused gate is `cargo test --locked failed_stored_break`. Current head `43294cbeeba734a82b1ecd18031bd4e9fc3cb096`; verification pending.
+
+
+### Current verification retry
+
+Workflow #40023894861 failed at compilation because the environmental BREAK rollback test lacked imports for `ActiveTransformation` and `TransformationKind`. Those imports are restored on current PR #205 head `43294cbeeba734a82b1ecd18031bd4e9fc3cb096`; workflow #40024102939 is running. No runtime change is associated with this compile fix.
