@@ -85,5 +85,4 @@ mod tests {
         assert_eq!(organism.usable_energy, 0.0);
         assert!(organism.reproductive_construction.is_none());
     }
-
 }
