@@ -4096,3 +4096,11 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - **Audit finding:** environmental BREAK rollback reconstructed its cell/material index from mutable `decision_context_key`. If that key was corrupted after reservation, rollback could fail to restore the source in its original environmental list.
 - **Implementation:** `ActiveTransformation.environmental_source_location` stores `(cell_index, material_index)` at the moment the source is removed. `try_start_environmental_break` sets it; `original_environmental_source_location` prefers it and falls back to the key for older serialized transactions. The completion rollback regression corrupts the key after setting captured location and asserts restoration at the original list index; its legacy fallback check clears the field and confirms invalid indices fail closed.
 - **Compatibility:** field is serde-defaulted and all in-repo literals initialize it. PR #205 head `6b7f55029e6c6bdf3f4a3a149f66c6615b3c96d7` has not yet completed CI verification.
+
+
+## 17.209 Capture stored BREAK source index independently of decision metadata (2026-10-23)
+
+- PR #205 added serde-defaulted source-location fields to ActiveTransformation: a stored BREAK captures its original storage index at reservation, while environmental BREAK captures its original cell/material index. Rollback prefers those captured fields and only falls back to parsing legacy decision_context_key values.
+- This avoids making exact rollback depend on mutable decision metadata. The stored-BREAK completion regression now corrupts decision_context_key after reservation and still expects the source to return to its exact original storage position.
+- A test-only WorldToneOccluderSnapshot ActiveTransformation fixture was updated to initialize the new defaulted fields after CI exposed the missing initializer.
+- Current PR #205 head b4d52fd5f3a811d009a40375cd0b7781e132e05c includes the fixture fix and restoration-file formatting fix. Workflow 40025133645 ran on predecessor 813f8ec2496ac343ee550674bdf4003134f098e3 and failed on the missing fixture fields plus formatting; exact-head verification of b4d52fd remains pending.
