@@ -522,9 +522,21 @@ mod tests {
         let physical = PhysicalMaterial::realized(
             material,
             vec![
-                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                Placement { x: 0.838, y: 0.0, rotation_radians: 0.25 },
-                Placement { x: 1.676, y: 0.0, rotation_radians: 0.5 },
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.25,
+                },
+                Placement {
+                    x: 1.676,
+                    y: 0.0,
+                    rotation_radians: 0.5,
+                },
             ],
             &catalog,
         )
