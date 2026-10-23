@@ -3333,26 +3333,6 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
         bodies,
         target_body_indices,
         bodies.len() <= EXACT_INTERSECTION_BODY_LIMIT,
-        false,
-    )
-}
-
-/// Build ordered source-to-material paths for every represented lane that hits
-/// physical geometry, while still attributing direct exposure widths only to
-/// the requested target bodies. World-tone settlement uses this so nonliving
-/// surfaces and dead bodies are accounted as heat even when no living receiver
-/// lies downstream.
-pub(crate) fn parallel_exposure_with_paths_for_all_surfaces(
-    toward_source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
-    target_body_indices: &[usize],
-) -> Option<(ParallelExposureWidths, Vec<ParallelRayInteractionPath>)> {
-    parallel_exposure_with_exact_intersections(
-        toward_source,
-        bodies,
-        target_body_indices,
-        bodies.len() <= EXACT_INTERSECTION_BODY_LIMIT,
-        true,
     )
 }
 
@@ -3361,7 +3341,6 @@ fn parallel_exposure_with_exact_intersections(
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     target_body_indices: &[usize],
     exact_intersections: bool,
-    include_non_target_paths: bool,
 ) -> Option<(ParallelExposureWidths, Vec<ParallelRayInteractionPath>)> {
     use crate::capillary_geometry::FluidBoundaryPiece;
     use crate::resources::Form;
@@ -3912,7 +3891,7 @@ fn parallel_exposure_with_exact_intersections(
         // Unsupported or ambiguous front surfaces stop this lane rather than
         // allowing energy to jump through geometry the material model cannot settle.
         if path_hits.first().copied() == Some(nearest_identity)
-            && (include_non_target_paths || path_hits.iter().any(|(body, _)| target_mask[*body]))
+            && path_hits.iter().any(|(body, _)| target_mask[*body])
         {
             interaction_paths.push(ParallelRayInteractionPath {
                 projected_width: hi - lo,
