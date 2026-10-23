@@ -32,9 +32,10 @@ jobs:
       # Keep physical-graph ID remapping and rollback visible apart from the
       # known slow full-suite gate.
       # Keep chemistry accounting validation ahead of unrelated geometry gates.
-      - name: Run focused failed-reaction settlement accounting tests
+      - name: Run focused chemistry accumulation and settlement tests
         timeout-minutes: 5
         run: |
+          cargo test --locked unobserved_reaction_progress_dissipates_once_per_tick
           cargo test --locked failed_chemical_settlement_preserves_triggered_reaction_progress
           cargo test --locked chemical_break_reconciles_world_energy_inventory
       - name: Run focused physical graph merge tests
