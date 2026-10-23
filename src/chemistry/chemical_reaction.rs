@@ -427,6 +427,8 @@ mod material_identity_tests {
             reaction_energy: 1_000.0,
             disruption_cost: 0.0,
             reaction_frequency_hz: 440.0,
+            accumulation_key: "test|rev:0|bond".into(),
+            accumulated_reaction: 2.5,
         };
         assert!(resolve(
             operation,
@@ -461,6 +463,8 @@ mod material_identity_tests {
             reaction_energy: 1_000.0,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
+            accumulation_key: "test|rev:0|bond".into(),
+            accumulated_reaction: 2.5,
         };
         assert!(simulation.organisms[0]
             .structure
