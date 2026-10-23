@@ -57,13 +57,13 @@ pub(crate) fn accumulate(
     accumulation: &mut std::collections::BTreeMap<String, f64>,
     chemistry_library: &mut ChemistryLibrary,
 ) -> Vec<ChemicalBreakOperation> {
-    if organism.structure.bonds.is_empty() {
-        return Vec::new();
-    }
     let current_prefix = format!("{}|rev:{}|", organism.id, organism.structure_revision);
     accumulation.retain(|key, _| {
         !key.starts_with(&format!("{}|rev:", organism.id)) || key.starts_with(&current_prefix)
     });
+    if organism.structure.bonds.is_empty() {
+        return Vec::new();
+    }
     let mut cache = ConnectionCompatibilityCache::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
     let bonds = organism.structure.bonds.clone();
@@ -421,6 +421,46 @@ mod material_identity_tests {
                 - before)
                 .abs()
                 < 1e-12
+        );
+    }
+
+    #[test]
+    fn bondless_structure_discards_prior_revision_reaction_accumulation() {
+        let mut simulation = crate::state::Simulation::new(924, 10.0);
+        let organism = &mut simulation.organisms[0];
+        let stale_key = format!(
+            "{}|rev:{}|stale-reaction",
+            organism.id, organism.structure_revision
+        );
+        let unrelated_key = "other-organism|rev:3|unrelated".to_string();
+        simulation
+            .chemical_reaction_accumulation
+            .insert(stale_key.clone(), 0.75);
+        simulation
+            .chemical_reaction_accumulation
+            .insert(unrelated_key.clone(), 0.25);
+
+        organism.structure.bonds.clear();
+        organism.mark_structure_changed();
+        assert!(accumulate(
+            organism,
+            &simulation.environment.catalog,
+            &mut simulation.chemical_reaction_accumulation,
+            &mut simulation.chemistry_library,
+        )
+        .is_empty());
+
+        assert!(
+            !simulation
+                .chemical_reaction_accumulation
+                .contains_key(&stale_key),
+            "old-revision accumulation must be removed even when no bonds remain"
+        );
+        assert_eq!(
+            simulation
+                .chemical_reaction_accumulation
+                .get(&unrelated_key),
+            Some(&0.25)
         );
     }
 
