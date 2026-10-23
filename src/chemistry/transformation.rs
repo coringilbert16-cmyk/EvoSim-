@@ -474,7 +474,7 @@ fn environmental_break_source_at(
     bond_index: usize,
 ) -> Option<(
     crate::physical_material::PhysicalMaterial,
-    crate::resources::InternalBond,
+    crate::physical_material::PhysicalMaterialBond,
 )> {
     let instance = environment
         .field
@@ -532,7 +532,7 @@ pub(crate) fn try_start_environmental_break(
         let mut hypothetical = organism.structure.clone();
         let indices = crate::material_restoration::restore_material(
             &mut hypothetical,
-            instance,
+            &instance,
             Placement {
                 x: 0.0,
                 y: 0.0,
