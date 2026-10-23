@@ -49,6 +49,9 @@ jobs:
       - name: Verify finite stored-material owner anchors
         timeout-minutes: 5
         run: cargo test --locked realized_state_rejects_non_finite_owner_relative_origin
+      - name: Verify owner-anchor storage preflight
+        timeout-minutes: 5
+        run: cargo test --locked owner_anchor_storage_rejects_non_finite_anchor_without_mutating_inventory
       - name: Run focused core-specific viability test
         timeout-minutes: 5
         run: cargo test --locked core_specific_viability_
