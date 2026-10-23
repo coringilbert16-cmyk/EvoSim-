@@ -2106,6 +2106,49 @@ mod tests {
     }
 
     #[test]
+    fn resonance_overload_break_reconciles_world_inventory() {
+        let mut simulation = crate::state::Simulation::new(926, 10.0);
+        let capacity: f64 = simulation.organisms[0]
+            .structure
+            .bonds
+            .iter()
+            .map(|bond| bond.bond_energy)
+            .sum();
+        assert!(capacity.is_finite() && capacity > 0.0);
+        assert!(simulation.organisms[0]
+            .resonant_energy
+            .deposit(440.0, capacity + 1.0));
+        let seeded_resonance = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .expect("seeded resonance should have finite energy");
+        // This reservoir is an explicit test starting condition, not new
+        // world-tone input. Use it as the independent inventory baseline.
+        simulation.energy_ledger.initial_resonant_energy_held = seeded_resonance;
+        simulation.energy_ledger.total_resonant_energy_held = seeded_resonance;
+        let before = simulation.energy_inventory_snapshot();
+        assert!(
+            before.is_balanced(1e-9),
+            "initial overload inventory: {:?}",
+            before.residual()
+        );
+
+        assert!(resolve_resonance_overload_break(
+            &mut simulation.organisms[0],
+            &simulation.environment,
+            &mut simulation.energy_ledger,
+        ));
+        let after = simulation.energy_inventory_snapshot();
+        assert!(
+            after.is_balanced(1e-9),
+            "resonance-overload BREAK must reconcile the world inventory: residual={:?}",
+            after.residual()
+        );
+        assert!(after.current_resonant_energy < before.current_resonant_energy);
+        assert!(after.current_structural_energy < before.current_structural_energy);
+    }
+
+    #[test]
     fn resonance_overload_without_frequency_compatible_energy_preserves_structure() {
         let mut simulation = crate::state::Simulation::new(918, 10.0);
         let mut organism = simulation.organisms.remove(0);
