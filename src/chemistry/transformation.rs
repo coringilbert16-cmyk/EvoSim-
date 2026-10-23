@@ -1612,13 +1612,13 @@ mod tests {
         };
         let mut next_id = u64::MAX;
 
-        assert!(Simulation::try_start_transformation(
+        let started = Simulation::try_start_transformation(
             &mut organism,
             &catalog,
             &mut next_id,
             &decision,
-        )
-        .is_none());
+        );
+        assert!(started.is_none());
         assert_eq!(organism.stored_material.entries, before);
         assert_eq!(organism.active_transformation_id, None);
         assert_eq!(next_id, u64::MAX);
