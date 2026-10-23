@@ -4181,3 +4181,9 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 
 - Workflow [40032657513](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40032657513) failed formatting before tests; rustfmt wanted the .find predicate collapsed to one line and the metadata-clearing method call split across the receiver chain. Commit `eb16b533193279c0259a264b1a956f53bf4249c1` applies exactly those two corrections.
 - Exact-head verification for `eb16b53` is pending. The environmental BREAK test now deliberately opens one top-center wall piece to satisfy its accessible-interior precondition; the next run must confirm that this geometry actually yields a candidate before its exhausted-ID assertions can be trusted.
+
+
+## Environmental BREAK focused-gate confirmation — 2026-10-23 22:29 UTC
+
+- Workflow [40032923220](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40032923220) for head `753a5bc` passed formatting, source-size, architecture, and all 25 focused gates, including the environmental BREAK rollback gate; it has advanced to the full Rust test step. This confirms the opened-wall environmental fixture reaches the focused environmental BREAK gate without failing it.
+- The full Rust suite is still running; exact-head total/failure identities remain pending. The known Clippy warnings-as-errors issue is not yet rechecked on this head.
