@@ -255,12 +255,44 @@ mod tests {
     }
     #[test]
     fn rejected_decomposition_settlement_preserves_body_and_ledger() {
+        use crate::structure::{Bond, BondEndpoint, ConnectionEndpoint};
+
         let catalog = default_catalog();
-        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog)
-            .expect("confirmed seed should provide a bonded decomposition fixture");
-        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog)
-            .expect("confirmed seed should realize");
-        assert!(!structure.bonds.is_empty());
+        let mut structure = OrganismStructure::new();
+        let mut first = StructuralUnit::new(
+            "Carbon".to_string(),
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        let mut second = StructuralUnit::new(
+            "Carbon".to_string(),
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(first.realize_default_geometry(&catalog));
+        assert!(second.realize_default_geometry(&catalog));
+        structure.add_unit(first);
+        structure.add_unit(second);
+        let first_id = structure.units[0].physical_id;
+        let second_id = structure.units[1].physical_id;
+        structure.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(
+                first_id,
+                ConnectionEndpoint::Corner { point_index: 0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                second_id,
+                ConnectionEndpoint::Corner { point_index: 3 },
+            ),
+            strength: 1.0,
+            bond_energy: 10.0,
+        });
 
         let mut body = DecomposingBody::new(
             structure,
@@ -305,5 +337,4 @@ mod tests {
             ledger_before.total_potential_energy_released
         );
     }
-
 }
