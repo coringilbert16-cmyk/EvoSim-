@@ -1619,7 +1619,7 @@ mod decomposition_finalization_tests {
             &decision,
         )
         .expect("stored BREAK should reserve source");
-        transformation.context_key = Some("stored:999999:bond:0".into());
+        transformation.decision_context_key = Some("stored:999999:bond:0".into());
         let stored = transformation.stored_material.as_mut().unwrap();
         stored.placements = None;
         let malformed = stored.clone();
