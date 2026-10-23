@@ -1665,8 +1665,11 @@ mod tests {
         environment.field.cells[cell_index]
             .physical_materials
             .push(source);
-        let materials_before = environment.field.cells[cell_index].physical_materials.clone();
-        let mut organism = environmental_break_test_organism("exhausted-environmental-break-id", None);
+        let materials_before = environment.field.cells[cell_index]
+            .physical_materials
+            .clone();
+        let mut organism =
+            environmental_break_test_organism("exhausted-environmental-break-id", None);
         let decision = ActionCandidate {
             action: ActionKind::Break,
             context_key: Some(format!("environment:cell:{cell_index}:material:0:bond:0")),
