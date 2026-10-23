@@ -13,6 +13,10 @@ use crate::genome::initial_genome;
 use crate::state::{EnergyLedger, Environment, Organism, Position, Simulation};
 use crate::structure::Placement;
 
+fn checked_next_organism_id(current: u64) -> Option<u64> {
+    current.checked_add(1)
+}
+
 fn should_prepare_transformation(
     kind: &crate::state::TransformationKind,
     remaining_ticks: u64,
@@ -1346,6 +1350,12 @@ impl Simulation {
                         | crate::reproduction::ConstructionStatus::Detached
                         | crate::reproduction::ConstructionStatus::Dead
                 ) {
+                    // Reserve the next ID before finish_reproduction detaches
+                    // the developing graph from the parent. Exhaustion leaves
+                    // the construction intact instead of losing the child on overflow.
+                    let Some(next_id_after) = checked_next_organism_id(next_organism_id) else {
+                        continue;
+                    };
                     let child_id = next_organism_id.to_string();
                     if let Some(child) = crate::reproduction::finish_reproduction(
                         organism,
@@ -1354,7 +1364,7 @@ impl Simulation {
                         &mut self.energy_ledger,
                         self.seed_scale_reference,
                     ) {
-                        next_organism_id += 1;
+                        next_organism_id = next_id_after;
                         offspring.push(child);
                     }
                 }
@@ -1976,6 +1986,12 @@ mod decomposition_finalization_tests {
             "failed live preparation must preserve all constituent ownership"
         );
         assert_eq!(simulation.organisms[0].stored_material.physical_count(), 1);
+    }
+
+    #[test]
+    fn organism_id_reservation_rejects_exhaustion_without_wrapping() {
+        assert_eq!(checked_next_organism_id(u64::MAX), None);
+        assert_eq!(checked_next_organism_id(u64::MAX - 1), Some(u64::MAX));
     }
 
     #[test]
