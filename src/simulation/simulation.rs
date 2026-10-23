@@ -2109,7 +2109,10 @@ mod decomposition_finalization_tests {
             Some(&mut simulation.organisms[0]),
             &mut simulation.environment,
         ));
-        assert_eq!(simulation.organisms[0].stored_material.entries, storage_before);
+        assert_eq!(
+            simulation.organisms[0].stored_material.entries,
+            storage_before
+        );
         assert!(
             simulation.environment.field.cells[0]
                 .physical_materials
