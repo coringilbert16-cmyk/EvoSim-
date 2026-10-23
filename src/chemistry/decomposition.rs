@@ -293,10 +293,12 @@ mod tests {
         let bonds_before = body.structure.bonds.clone();
         let units_before = body.structure.units.clone();
         let energy_before = body.energy_budget;
-        let mut ledger = EnergyLedger::default();
         // Force rejection deterministically; adding a small increment to
         // f64::MAX can round away and is not a reliable overflow fixture.
-        ledger.total_heat_dissipated = f64::NAN;
+        let mut ledger = EnergyLedger {
+            total_heat_dissipated: f64::NAN,
+            ..EnergyLedger::default()
+        };
         let ledger_before = ledger;
 
         let environment = Environment {
