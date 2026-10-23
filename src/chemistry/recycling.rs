@@ -1,4 +1,3 @@
-use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::state::{EnergyLedger, Environment, Organism};
 
 pub(crate) fn recycle_dead_organism(
@@ -41,7 +40,7 @@ pub(crate) fn recycle_dead_organism(
 
     let mut body =
         crate::decomposition::DecomposingBody::new(organism.structure.clone(), 0.0, position)?;
-    let mut staged_ledger = ledger.clone();
+    let mut staged_ledger = *ledger;
     let mut staged_parent_energy = energy;
     let mut staged_developing_energy = developing_energy;
     if !staged_ledger.transfer(&mut staged_parent_energy, &mut body.energy_budget, energy) {
@@ -139,10 +138,8 @@ mod tests {
             .map(|construction| {
                 (
                     construction.committed_material.clone(),
-                    (
-                        construction.developing_structure.units.clone(),
-                        construction.developing_structure.bonds.clone(),
-                    ),
+                    construction.developing_structure.units.clone(),
+                    construction.developing_structure.bonds.clone(),
                     construction.developing_energy,
                 )
             })
@@ -165,13 +162,13 @@ mod tests {
         assert_eq!(construction_after.committed_material, construction_before.0);
         assert_eq!(
             construction_after.developing_structure.units,
-            construction_before.1 .0
+            construction_before.1
         );
         assert_eq!(
             construction_after.developing_structure.bonds,
-            construction_before.1 .1
+            construction_before.2
         );
-        assert_eq!(construction_after.developing_energy, construction_before.2);
+        assert_eq!(construction_after.developing_energy, construction_before.3);
         assert_eq!(organism.usable_energy, energy_before);
         assert_eq!(ledger, ledger_before);
         assert_eq!(simulation.environment.field.total_amount(), field_before);
