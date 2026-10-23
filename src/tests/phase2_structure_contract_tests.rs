@@ -125,6 +125,63 @@ fn realized_material_carries_exact_internal_connection_and_restores_without_comb
     );
 }
 
+
+#[test]
+fn failed_late_physical_restoration_preserves_destination_structure() {
+    let catalog = line_catalog();
+    let mut instance = PhysicalMaterial::realized(
+        bonded_material(),
+        vec![
+            Placement {
+                x: -1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ],
+        &catalog,
+    )
+    .expect("non-overlapping stored compound should realize");
+    // Corrupt the persisted pose after realization so validation reaches the
+    // late pairwise penetration gate after staging both constituents.
+    instance.placements.as_mut().unwrap()[1].x = -1.0;
+
+    let mut destination = OrganismStructure::new();
+    let mut existing = StructuralUnit::new(
+        "A",
+        Placement {
+            x: 20.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        },
+    );
+    assert!(existing.realize_default_geometry(&catalog));
+    destination.add_unit(existing);
+    let units_before = destination.units.clone();
+    let bonds_before = destination.bonds.clone();
+
+    assert!(
+        restore_material(
+            &mut destination,
+            &instance,
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        )
+        .is_none(),
+        "overlapping persisted constituents must be rejected"
+    );
+    assert_eq!(destination.units, units_before);
+    assert_eq!(destination.bonds, bonds_before);
+}
+
 #[test]
 fn new_structure_bond_is_formed_only_through_combine() {
     let catalog = line_catalog();
