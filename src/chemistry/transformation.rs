@@ -1627,6 +1627,27 @@ mod tests {
         use crate::structure::Placement;
 
         let (mut organism, mut environment, _) = resonance_break_test_organism();
+        // Environmental BREAK requires a genuinely accessible interior. Open
+        // the top-center wall of the 12N cavity scaffold for this test only;
+        // the sealed-cavity resonance tests keep the canonical seed unchanged.
+        let opening_id = organism
+            .structure
+            .units
+            .iter()
+            .find(|unit| unit.placement.x.abs() < 1e-9 && unit.placement.y < -1.5)
+            .map(|unit| unit.physical_id)
+            .expect("seed has a top-center wall constituent");
+        organism
+            .structure
+            .units
+            .retain(|unit| unit.physical_id != opening_id);
+        organism.structure.bonds.retain(|bond| {
+            bond.endpoint_a.constituent_id != opening_id
+                && bond.endpoint_b.constituent_id != opening_id
+        });
+        organism.structure.set_genome_constituent_ids([]);
+        organism.structure.clear_additional_genome_constituent_groups();
+
         let source = PhysicalMaterial::realized(
             Material {
                 parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
