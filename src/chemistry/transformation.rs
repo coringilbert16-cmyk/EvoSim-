@@ -764,7 +764,7 @@ impl Simulation {
 /// Return an escrowed stored-material BREAK source to its authoritative holder
 /// when completion cannot commit. The active ID guards against restoring the
 /// same escrow twice if a stale completion is delivered.
-fn original_stored_source_index(transformation: &ActiveTransformation) -> Option<usize> {
+pub(crate) fn original_stored_source_index(transformation: &ActiveTransformation) -> Option<usize> {
     let key = transformation.decision_context_key.as_deref()?;
     let rest = key.strip_prefix("stored:")?;
     let (index, _) = rest.split_once(":bond:")?;
