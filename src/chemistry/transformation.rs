@@ -316,7 +316,9 @@ impl Simulation {
             return None;
         }
 
-        let removed = organism.stored_material.entries.swap_remove(storage_index);
+        // Preserve the relative order of the other entries so a failed operation can
+        // restore the source at its exact original index.
+        let removed = organism.stored_material.entries.remove(storage_index);
         let crate::material_storage::StoredMaterial::Physical(stored_material) = removed;
         let stored_bond = stored_material
             .internal_connections
@@ -762,6 +764,13 @@ impl Simulation {
 /// Return an escrowed stored-material BREAK source to its authoritative holder
 /// when completion cannot commit. The active ID guards against restoring the
 /// same escrow twice if a stale completion is delivered.
+fn original_stored_source_index(transformation: &ActiveTransformation) -> Option<usize> {
+    let key = transformation.decision_context_key.as_deref()?;
+    let rest = key.strip_prefix("stored:")?;
+    let (index, _) = rest.split_once(":bond:")?;
+    index.parse().ok()
+}
+
 fn restore_failed_stored_break_source(
     transformation: &ActiveTransformation,
     organism: &mut Organism,
@@ -789,7 +798,14 @@ fn restore_failed_stored_break_source(
                 );
             }
         } else {
-            organism.stored_material.entries.push(
+            // Stored BREAK escrow originated at this exact storage index. Since
+            // reservation preserves the remaining entry order, reinserting here
+            // restores the previous holder contents when the transaction fails.
+            let index = original_stored_source_index(transformation)
+                .unwrap_or(organism.stored_material.entries.len())
+                .min(organism.stored_material.entries.len());
+            organism.stored_material.entries.insert(
+                index,
                 crate::material_storage::StoredMaterial::Physical(source.clone()),
             );
         }
@@ -1148,19 +1164,43 @@ mod tests {
             &catalog,
         )
         .expect("internally bonded physical material should be realizable");
-        assert!(organism
-            .stored_material
-            .store_physical_instance(source.clone()));
+        let make_neighbor = |name: &str, x: f64| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("single-resource storage neighbor should be realizable")
+        };
+        let before = make_neighbor("Nitrogen", -2.0);
+        let after_one = make_neighbor("Phosphorus", 2.0);
+        let after_two = make_neighbor("Sulfur", 4.0);
+        assert!(organism.stored_material.store_physical_instance(before.clone()));
+        assert!(organism.stored_material.store_physical_instance(source.clone()));
+        assert!(organism.stored_material.store_physical_instance(after_one.clone()));
+        assert!(organism.stored_material.store_physical_instance(after_two.clone()));
 
         let decision = crate::decision_runtime::ActionCandidate {
             action: crate::decision::ActionKind::Break,
-            context_key: Some("stored:0:bond:0".into()),
+            context_key: Some("stored:1:bond:0".into()),
         };
         let mut next_id = 1;
         let mut transformation =
             Simulation::try_start_transformation(&mut organism, &catalog, &mut next_id, &decision)
                 .expect("stored internal bond should start BREAK");
-        assert!(organism.stored_material.is_empty());
+        assert_eq!(
+            organism.stored_material.entries,
+            vec![
+                crate::material_storage::StoredMaterial::Physical(before.clone()),
+                crate::material_storage::StoredMaterial::Physical(after_one.clone()),
+                crate::material_storage::StoredMaterial::Physical(after_two.clone()),
+            ],
+            "reserving the middle source must preserve the remaining entry order"
+        );
         transformation.stored_bond = None;
 
         let mut environment = crate::state::Environment {
@@ -1183,8 +1223,13 @@ mod tests {
 
         assert_eq!(
             organism.stored_material.entries,
-            vec![crate::material_storage::StoredMaterial::Physical(source)],
-            "failed stored BREAK must return its escrowed source without mutation"
+            vec![
+                crate::material_storage::StoredMaterial::Physical(before),
+                crate::material_storage::StoredMaterial::Physical(source),
+                crate::material_storage::StoredMaterial::Physical(after_one),
+                crate::material_storage::StoredMaterial::Physical(after_two),
+            ],
+            "failed stored BREAK must restore the source at its exact original index"
         );
         assert_eq!(organism.active_transformation_id, None);
     }
