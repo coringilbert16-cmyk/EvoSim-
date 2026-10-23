@@ -4038,3 +4038,11 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 
 - Workflow #40021029556 on `4872942ff1c7aa47f1e961c312af888cb69b3951` was compared against baseline workflow #39705628427 using normalized diagnostic identities (message plus source path, ignoring line shifts). No new diagnostic identities were found; three prior identities disappeared. Strict Clippy still fails because the repository retains baseline lint debt.
 - That older head still emitted a dead-code warning for the intentionally disconnected legacy recycler and clone-on-copy warnings in the simulation transaction path. The current branch has since added a test-only-aware, narrowly scoped dead-code expectation and removed the two redundant ledger clones; these changes still require exact-head verification.
+
+
+## 17.204 Post-death world-tone behavior audit (2026-10-23)
+
+- **Confirmed:** live `Simulation::step` calls `WorldToneOccluderSnapshot::settle_living_organism_inputs`; direct environmental capture is not disabled. The snapshot includes realized geometry for all organisms regardless of core integrity, environmental physical materials, stored physical objects, pending transformation sources, developing structures, and legacy carriers.
+- **Confirmed:** each interaction path propagates through its ordered material hits. A living owner may retain the non-damped response in its resonance reservoir; a dead organism or other nonliving physical receiver converts its material response to heat, and only the unresponded remainder continues downstream. Dead surfaces therefore remain occluders and physical energy receivers without receiving biological resonance storage.
+- **Documentation correction:** the README's earlier statement that live capture stays disabled is stale and must be replaced with the actual state: capture is active through the precomputed world-tone frame and energy ledger, but whole-world conservation across all holders, death transitions, and reaction paths is not yet proven.
+- **Scope remains open:** this confirms world-tone handling of existing dead physical bodies, not the missing ordinary-chemistry reachability of stored compounds or the separate developing graph. Canonical aggregate migration and post-death holder integration remain open.
