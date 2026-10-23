@@ -1179,10 +1179,18 @@ mod tests {
         let before = make_neighbor("Nitrogen", -2.0);
         let after_one = make_neighbor("Phosphorus", 2.0);
         let after_two = make_neighbor("Sulfur", 4.0);
-        assert!(organism.stored_material.store_physical_instance(before.clone()));
-        assert!(organism.stored_material.store_physical_instance(source.clone()));
-        assert!(organism.stored_material.store_physical_instance(after_one.clone()));
-        assert!(organism.stored_material.store_physical_instance(after_two.clone()));
+        assert!(organism
+            .stored_material
+            .store_physical_instance(before.clone()));
+        assert!(organism
+            .stored_material
+            .store_physical_instance(source.clone()));
+        assert!(organism
+            .stored_material
+            .store_physical_instance(after_one.clone()));
+        assert!(organism
+            .stored_material
+            .store_physical_instance(after_two.clone()));
 
         let decision = crate::decision_runtime::ActionCandidate {
             action: crate::decision::ActionKind::Break,
