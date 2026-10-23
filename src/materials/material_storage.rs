@@ -570,16 +570,20 @@ mod tests {
         assert_eq!(offsets[1].x, 1.0);
         assert_eq!(offsets[1].y, 2.0);
 
-        let fractional = PhysicalMaterial::realized(
-            Material::free_base("Carbon", 1.5),
-            vec![Placement {
+        // Persisted/corrupt input can carry a realized-looking fractional
+        // rigid constituent even though the normal constructor rejects it.
+        // Batch preflight must reject this malformed later member atomically.
+        let fractional = PhysicalMaterial {
+            material: Material::free_base("Carbon", 1.5),
+            placements: Some(vec![Placement {
                 x: 1.0,
                 y: 2.0,
                 rotation_radians: 0.0,
-            }],
-            &catalog,
-        )
-        .expect("fractional test object should have geometry");
+            }]),
+            internal_connections: Some(Vec::new()),
+            owner_relative_origin: None,
+            realized_shapes: None,
+        };
         let valid = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
             vec![Placement {
