@@ -653,6 +653,10 @@ mod material_identity_tests {
             .resonant_energy
             .total_energy()
             .expect("resonance must be finite");
+        assert!(
+            bond.bond_energy > 0.25,
+            "fixture bond must leave a positive energy surplus so the BREAK dissipates heat"
+        );
         // Make the final heat-counter addition overflow while keeping the
         // physical BREAK inputs ordinary and otherwise admissible.
         simulation.energy_ledger.total_heat_dissipated = f64::MAX;
