@@ -4130,3 +4130,10 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - Added regression `rejected_parent_material_attachment_keeps_source_and_developing_graph_atomic` in commit `4e7e53454e1914357ddf958aef969c3f8a50fd8f`. It requires an attachable parent-held material candidate, forces the destination-region validation to reject it, and asserts the parent inventory and developing graph are unchanged by that rejected attachment.
 - Workflow [40030756462](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40030756462) verifies the production fix on `d289bf8`; workflow [40030896393](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40030896393) verifies the regression test on `4e7e534`. Both are in progress at this checkpoint; no pass is claimed.
 - This is a narrow atomicity improvement, not the canonical parent-owned aggregate migration. Keep the separate developing graph and division-energy split open until the broader ownership boundary is implemented coherently.
+
+
+## Construction-status gate audit — 2026-10-23 21:46 UTC
+
+- A second audit of the reproduction finalization path found that `Simulation::step` called `finish_reproduction` for `Ready`, `Detached`, and `Dead`. The finalizer independently rechecked geometry/readiness but had no access to the prior status, so a detached or stress-dead construction that still passed geometry-only readiness could be admitted as an offspring.
+- Commit `b50b2a5d245c4ec89483189694c8dd031dbb8308` narrows finalization to `ConstructionStatus::Ready` only. `Detached` and `Dead` no longer run the separate readiness check as a route to offspring creation. This does not yet solve the larger question of how detached/dead developing material becomes an available physical aggregate; that remains part of the canonical ownership migration.
+- Exact-head workflow for `b50b2a5` is pending. Do not treat the in-progress predecessor runs as verification of this change.
