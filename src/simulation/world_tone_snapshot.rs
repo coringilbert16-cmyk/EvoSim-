@@ -1168,7 +1168,7 @@ mod tests {
             .collect();
         let before_external = simulation.energy_ledger.total_external_energy_input;
         let before_escaped = simulation.energy_ledger.total_world_tone_energy_escaped;
-        simulation.energy_ledger.total_heat_dissipated = f64::MAX;
+        simulation.energy_ledger.total_heat_dissipated = f64::NAN;
 
         WorldToneOccluderSnapshot::settle_living_organism_inputs(
             &mut simulation,
@@ -1193,7 +1193,7 @@ mod tests {
             simulation.energy_ledger.total_world_tone_energy_escaped,
             before_escaped
         );
-        assert_eq!(simulation.energy_ledger.total_heat_dissipated, f64::MAX);
+        assert!(simulation.energy_ledger.total_heat_dissipated.is_nan());
     }
 
     #[test]
