@@ -1,8 +1,5 @@
 //! Persistent chemistry knowledge keyed by canonical physical interfaces.
-use crate::geometry_reference_library::{
-    GeometryContactFamily, GeometryFluidBoundaryFamily, GeometryRigidContactFamily,
-    GeometryRigidPointContactFamily, GeometryRigidVertexContactFamily, LiveGeometryInterface,
-};
+use crate::geometry_reference_library::LiveGeometryInterface;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
@@ -101,101 +98,7 @@ impl ChemistryKey {
         key
     }
 
-    pub fn from_geometry_contact(
-        a: impl Into<String>,
-        b: impl Into<String>,
-        family: &GeometryContactFamily,
-    ) -> Self {
-        Self::new(
-            a,
-            b,
-            "rigid_surface",
-            format!(
-                "v{}|anchor_edge={}|angle={}|radius={}|edge_start={}|edge_end={}|length={}",
-                family.schema_version,
-                family.anchor_edge,
-                quantize(family.contact_angle_radians),
-                quantize(family.curvature_radius),
-                quantize(family.edge_parameter_start),
-                quantize(family.edge_parameter_end),
-                quantize(family.contact_length),
-            ),
-        )
-    }
 
-    pub fn from_geometry_fluid_boundary(
-        a: impl Into<String>,
-        b: impl Into<String>,
-        family: &GeometryFluidBoundaryFamily,
-    ) -> Self {
-        Self::new(a, b, "fluid_boundary", format!(
-            "v{}|anchor_edge={}|area={}|angle={}|radius={}|arc={}|length={}|edge_start={}|edge_end={}",
-            family.schema_version,
-            family.anchor_edge,
-            quantize(family.area),
-            quantize(family.contact_angle_radians),
-            quantize(family.curvature_radius),
-            quantize(family.free_arc_angle_radians),
-            quantize(family.contact_length),
-            quantize(family.edge_parameter_start),
-            quantize(family.edge_parameter_end),
-        ))
-    }
-
-    pub fn from_geometry_rigid_contact(
-        a: impl Into<String>,
-        b: impl Into<String>,
-        family: &GeometryRigidContactFamily,
-    ) -> Self {
-        Self::new(
-            a,
-            b,
-            "rigid_edge",
-            format!(
-                "v{}|anchor_edge={}|candidate_edge={}|rotation={}|start={}|end={}",
-                family.schema_version,
-                family.anchor_edge,
-                family.candidate_edge,
-                quantize(family.candidate_rotation_radians),
-                quantize(family.anchor_parameter_start),
-                quantize(family.anchor_parameter_end),
-            ),
-        )
-    }
-
-    pub fn from_geometry_rigid_point(
-        a: impl Into<String>,
-        b: impl Into<String>,
-        family: &GeometryRigidPointContactFamily,
-    ) -> Self {
-        Self::new(a, b, "rigid_point", format!(
-            "v{}|anchor_edge={}|candidate_endpoint={}|start={}|end={}|rotation_start={}|rotation_end={}",
-            family.schema_version,
-            family.anchor_edge,
-            family.candidate_endpoint,
-            quantize(family.anchor_parameter_start),
-            quantize(family.anchor_parameter_end),
-            quantize(family.candidate_rotation_start_radians),
-            quantize(family.candidate_rotation_end_radians),
-        ))
-    }
-
-    pub fn from_geometry_rigid_vertex(
-        a: impl Into<String>,
-        b: impl Into<String>,
-        family: &GeometryRigidVertexContactFamily,
-    ) -> Self {
-        Self::new(a, b, "rigid_vertex", format!(
-            "v{}|anchor_edge={}|candidate_vertex={}|start={}|end={}|rotation_start={}|rotation_end={}",
-            family.schema_version,
-            family.anchor_edge,
-            family.candidate_vertex,
-            quantize(family.anchor_parameter_start),
-            quantize(family.anchor_parameter_end),
-            quantize(family.candidate_rotation_start_radians),
-            quantize(family.candidate_rotation_end_radians),
-        ))
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -350,9 +253,11 @@ impl ChemistryLibrary {
         self.insert(record)?;
         Ok(self.get(&key).map(|record| record.static_potential))
     }
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.entries.len()
     }
+    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
