@@ -947,6 +947,48 @@ mod tests {
     }
 
     #[test]
+    fn nonliving_surface_receives_world_tone_energy_as_heat_without_living_receivers() {
+        let mut simulation = Simulation::new(77, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        replace_with_nitrogen_square(&mut simulation.organisms[0], 5.0, 0.0, &catalog);
+
+        let external_before = simulation.energy_ledger.total_external_energy_input;
+        let heat_before = simulation.energy_ledger.total_heat_dissipated;
+        let escaped_before = simulation.energy_ledger.total_world_tone_energy_escaped;
+        let resonant_before =
+            crate::reproduction::total_resonant_energy_held(&simulation.organisms);
+
+        WorldToneOccluderSnapshot::settle_living_organism_inputs(
+            &mut simulation,
+            sample(),
+            &std::collections::HashSet::new(),
+        );
+
+        let external_delta =
+            simulation.energy_ledger.total_external_energy_input - external_before;
+        let heat_delta = simulation.energy_ledger.total_heat_dissipated - heat_before;
+        let escaped_delta =
+            simulation.energy_ledger.total_world_tone_energy_escaped - escaped_before;
+        let resonant_delta =
+            crate::reproduction::total_resonant_energy_held(&simulation.organisms) - resonant_before;
+
+        assert!(
+            external_delta > 0.0,
+            "nonliving physical surfaces still intercept the external world-tone source"
+        );
+        assert!(
+            heat_delta > 0.0,
+            "nonliving material response must be accounted as heat"
+        );
+        assert!(resonant_delta.abs() <= 1e-9);
+        assert!(
+            (external_delta - heat_delta - escaped_delta).abs() <= 1e-7,
+            "the nonliving-only world-tone frame must balance into heat and escaped signal"
+        );
+    }
+
+    #[test]
     fn attached_developing_structure_can_retain_world_tone_for_its_owner() {
         let mut simulation = Simulation::new(74, 1.0);
         clear_environment_physical_material(&mut simulation);
