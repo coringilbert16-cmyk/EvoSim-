@@ -295,6 +295,19 @@ impl PhysicalMaterial {
                     internal_connections.push(Self::remapped_bond(bond, &remap));
                 }
             }
+            // A split component may begin at a different constituent than
+            // the original stored object. Move its owner-relative anchor by
+            // that constituent's source-frame offset, rotated into owner space.
+            // Keep the original owner anchor absent for environmental material.
+            let owner_relative_origin = self.owner_relative_origin.map(|origin| {
+                let first = piece_placements[0];
+                let (sin, cos) = origin.rotation_radians.sin_cos();
+                Placement {
+                    x: origin.x + first.x * cos - first.y * sin,
+                    y: origin.y + first.x * sin + first.y * cos,
+                    rotation_radians: origin.rotation_radians + first.rotation_radians,
+                }
+            });
             pieces.push(Self {
                 material: Material {
                     parts,
@@ -302,7 +315,7 @@ impl PhysicalMaterial {
                 },
                 placements: Some(piece_placements),
                 internal_connections: Some(internal_connections),
-                owner_relative_origin: self.owner_relative_origin,
+                owner_relative_origin,
                 realized_shapes: self.realized_shapes.as_ref().map(|shapes| {
                     members
                         .iter()
@@ -483,6 +496,66 @@ mod tests {
         )
         .expect("aggregate fluid with conserved-area geometry should be storable");
         assert_eq!(physical.realized_shape_for_part(0, &catalog), Some(shape));
+    }
+
+    #[test]
+    fn breaking_stored_compound_preserves_rotated_owner_relative_component_offsets() {
+        let catalog = crate::resources::default_catalog();
+        let material = Material {
+            parts: vec![
+                ("Carbon".into(), 1.0),
+                ("Hydrogen".into(), 1.0),
+                ("Carbon".into(), 1.0),
+            ],
+            internal_bonds: vec![
+                InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                },
+                InternalBond {
+                    part_a: 1,
+                    part_b: 2,
+                },
+            ],
+        };
+        let owner_rotation = 0.7_f64;
+        let physical = PhysicalMaterial::realized(
+            material,
+            vec![
+                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                Placement { x: 0.838, y: 0.0, rotation_radians: 0.25 },
+                Placement { x: 1.676, y: 0.0, rotation_radians: 0.5 },
+            ],
+            &catalog,
+        )
+        .expect("stored compound should be realizable");
+        let mut physical = physical;
+        physical.owner_relative_origin = Some(Placement {
+            x: 3.0,
+            y: -2.0,
+            rotation_radians: owner_rotation,
+        });
+        let target = physical.internal_connections.as_ref().unwrap()[0].clone();
+
+        let pieces = physical.break_internal_bond(&target).expect("stored bond");
+        assert_eq!(pieces.len(), 2);
+        let offset = 0.838_f64;
+        let expected = Placement {
+            x: 3.0 + offset * owner_rotation.cos(),
+            y: -2.0 + offset * owner_rotation.sin(),
+            rotation_radians: owner_rotation + 0.25,
+        };
+        let actual = pieces[1]
+            .owner_relative_origin
+            .expect("second component retains its distinct owner-relative anchor");
+        assert!((actual.x - expected.x).abs() <= 1e-12);
+        assert!((actual.y - expected.y).abs() <= 1e-12);
+        assert!((actual.rotation_radians - expected.rotation_radians).abs() <= 1e-12);
+        assert_eq!(
+            pieces[0].owner_relative_origin,
+            physical.owner_relative_origin,
+            "the component anchored at the original first constituent keeps the original owner offset"
+        );
     }
 
     #[test]
