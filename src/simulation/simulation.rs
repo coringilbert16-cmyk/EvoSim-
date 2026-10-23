@@ -1904,6 +1904,8 @@ mod decomposition_finalization_tests {
             cell.materials.clear();
             cell.physical_materials.clear();
         }
+        // Isolate the source index from the default organism inventory.
+        simulation.organisms[0].stored_material.entries.clear();
         // Model a breached owner: the in-flight transaction must still return
         // its escrow even though biological decisions will no longer run.
         simulation.organisms[0].structure = crate::structure::OrganismStructure::new();
