@@ -1612,12 +1612,8 @@ mod tests {
         };
         let mut next_id = u64::MAX;
 
-        let started = Simulation::try_start_transformation(
-            &mut organism,
-            &catalog,
-            &mut next_id,
-            &decision,
-        );
+        let started =
+            Simulation::try_start_transformation(&mut organism, &catalog, &mut next_id, &decision);
         assert!(started.is_none());
         assert_eq!(organism.stored_material.entries, before);
         assert_eq!(organism.active_transformation_id, None);
