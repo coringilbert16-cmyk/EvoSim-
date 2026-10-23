@@ -350,6 +350,7 @@ impl PhysicalMaterial {
             return false;
         };
         if placements.is_empty()
+            || !self.material.is_valid()
             || placements.len() != self.material.parts.len()
             || placements.iter().any(|placement| {
                 !placement.x.is_finite()
@@ -880,6 +881,26 @@ mod tests {
         assert!(
             !extra.is_realized(),
             "a persisted composite with an extra placement must fail closed"
+        );
+    }
+
+    #[test]
+    fn realized_state_rejects_invalid_persisted_material_composition() {
+        let catalog = crate::resources::default_catalog();
+        let mut physical = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("valid single constituent should realize");
+        physical.material.parts[0].1 = 1.5;
+        assert!(
+            !physical.is_realized(),
+            "fractional persisted rigid constituent must not count as realized geometry"
         );
     }
 
