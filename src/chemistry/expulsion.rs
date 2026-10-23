@@ -209,12 +209,13 @@ mod tests {
             .stored_material
             .entries
             .push(StoredMaterial::Physical(physical));
+        let storage_index = simulation.organisms[0].stored_material.entries.len() - 1;
         let original_entries = simulation.organisms[0].stored_material.entries.clone();
 
         assert!(!expel_physical_material(
             &mut simulation.organisms[0],
             &mut simulation.environment,
-            0,
+            storage_index,
         ));
         assert_eq!(
             simulation.organisms[0].stored_material.entries, original_entries,
