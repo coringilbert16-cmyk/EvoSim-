@@ -1514,18 +1514,21 @@ mod decomposition_finalization_tests {
         let neighbor_before = make_neighbor("Nitrogen", -2.0);
         let neighbor_after_one = make_neighbor("Phosphorus", 2.0);
         let neighbor_after_two = make_neighbor("Sulfur", 4.0);
+        // Storage inserts at the front, so reverse insertion gives a source at
+        // index one with a distinct physical object on either side.
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(neighbor_before.clone()));
-        assert!(simulation.organisms[0]
-            .stored_material
-            .store_physical_instance(source));
+            .store_physical_instance(neighbor_after_two.clone()));
         assert!(simulation.organisms[0]
             .stored_material
             .store_physical_instance(neighbor_after_one.clone()));
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(neighbor_after_two.clone()));
+            .store_physical_instance(source));
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(neighbor_before.clone()));
+        let entries_before = simulation.organisms[0].stored_material.entries.clone();
 
         let decision = ActionCandidate {
             action: ActionKind::Break,
@@ -1549,14 +1552,11 @@ mod decomposition_finalization_tests {
             &mut simulation.environment,
         );
 
+        let mut expected_entries = entries_before;
+        expected_entries[1] = StoredMaterial::Physical(malformed);
         assert_eq!(
             simulation.organisms[0].stored_material.entries,
-            vec![
-                StoredMaterial::Physical(neighbor_before),
-                StoredMaterial::Physical(malformed),
-                StoredMaterial::Physical(neighbor_after_one),
-                StoredMaterial::Physical(neighbor_after_two),
-            ],
+            expected_entries,
             "failed preparation must restore malformed escrow at its original index and preserve neighbor order"
         );
         assert_eq!(simulation.organisms[0].active_transformation_id, None);
