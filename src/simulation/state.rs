@@ -113,6 +113,11 @@ pub(crate) struct ActiveTransformation {
     #[serde(default)]
     pub(crate) combine_environmental_source:
         Option<(usize, crate::physical_material::PhysicalMaterial)>,
+    /// Original index within the environmental cell, for exact COMBINE rollback.
+    /// Optional for compatibility with persisted transformations created before
+    /// indexed environmental-source escrow was recorded.
+    #[serde(default)]
+    pub(crate) combine_environmental_source_index: Option<usize>,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ReproductiveConstruction {
