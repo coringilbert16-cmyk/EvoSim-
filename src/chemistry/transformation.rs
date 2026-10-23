@@ -841,9 +841,11 @@ pub(crate) fn restore_environmental_break_source(
         let Some(cell) = environment.field.cells.get_mut(cell_index) else {
             return false;
         };
-        let insertion_index = material_index.min(cell.physical_materials.len());
+        if material_index > cell.physical_materials.len() {
+            return false;
+        }
         cell.physical_materials
-            .insert(insertion_index, source.clone());
+            .insert(material_index, source.clone());
     }
     environment.field.mark_changed_at_index(cell_index);
     true
@@ -1711,6 +1713,21 @@ mod tests {
         );
         assert!(organism.stored_material.is_empty());
         assert_eq!(organism.active_transformation_id, None);
+
+        let mut invalid_location = transformation.clone();
+        invalid_location.decision_context_key =
+            Some(format!("environment:cell:{cell_index}:material:99:bond:0"));
+        let before_invalid_restore =
+            environment.field.cells[cell_index].physical_materials.clone();
+        assert!(
+            !restore_environmental_break_source(&invalid_location, &mut environment),
+            "corrupt environmental BREAK indices must fail closed"
+        );
+        assert_eq!(
+            environment.field.cells[cell_index].physical_materials,
+            before_invalid_restore,
+            "a rejected exact restore must not alter the environmental inventory"
+        );
     }
 
     #[test]
