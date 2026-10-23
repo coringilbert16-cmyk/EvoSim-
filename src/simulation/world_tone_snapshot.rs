@@ -1108,6 +1108,8 @@ mod tests {
                 bond: None,
                 stored_material: Some(stored),
                 stored_bond: None,
+                stored_source_index: None,
+                environmental_source_location: None,
                 environmental_source: false,
                 complexity: 1.0,
                 duration_ticks: 1,
