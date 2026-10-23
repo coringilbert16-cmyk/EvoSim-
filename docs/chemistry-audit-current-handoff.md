@@ -719,3 +719,10 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - PR #205 head `1318d2f64dbe71dd57271761f40580bfabc6cd20`, workflow [40019005755](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40019005755), passed the dedicated decomposition-finalization rollback test and the late physical-restoration rollback test. The corrected physical graph merge tests also passed.
 - The full Rust suite is running on this exact head. Strict Clippy and named failure comparison are not yet available; keep the suite status pending.
 - Next work remains ordinary-chemistry participation for post-death holders and the world-wide material/energy inventory. The current change only ensures a failed finished-body release cannot partially settle energy while leaving material behind.
+
+
+## Resume note — Phase 8 aggregate ownership audit (2026-10-23)
+
+The next coherent implementation step is canonical aggregate/identity migration, not activation of `recycle_dead_organism`. The live tick continues chemistry on the primary graph after core breach, but stored compounds, committed material, and the separate developing graph are not enumerated by ordinary reaction accumulation. Energy inventory already counts developing bond energy and resonant energy, so the migration must preserve those stores, stable physical IDs/endpoints, genome-core membership, and bond energy. Stored physical compounds have endpoint metadata but no allocated bond-energy store; stored BREAK must not mint energy. See plan Section 17.201. PR #196 remains out of scope.
+
+Current PR #205 head at the time of this handoff: `83a88c887ec4476485369fa9abe6425cbf9ca899`; exact-head workflow is running. Do not treat it as verified until the stale-cache rollback test, recycling rollback compile/focused gates, full-suite named-failure comparison, and Clippy diagnostics have been inspected.
