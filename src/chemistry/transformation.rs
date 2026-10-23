@@ -1717,8 +1717,9 @@ mod tests {
         let mut invalid_location = transformation.clone();
         invalid_location.decision_context_key =
             Some(format!("environment:cell:{cell_index}:material:99:bond:0"));
-        let before_invalid_restore =
-            environment.field.cells[cell_index].physical_materials.clone();
+        let before_invalid_restore = environment.field.cells[cell_index]
+            .physical_materials
+            .clone();
         assert!(
             !restore_environmental_break_source(&invalid_location, &mut environment),
             "corrupt environmental BREAK indices must fail closed"
