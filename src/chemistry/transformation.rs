@@ -348,6 +348,10 @@ impl Simulation {
             prepared_usable_energy: None,
             prepared_stress: None,
             prepared_ledger: None,
+        prepared_ledger_before: None,
+        prepared_usable_energy_before: None,
+            prepared_ledger_before: None,
+            prepared_usable_energy_before: None,
             combine_environmental_source: None,
             combine_environmental_source_index: None,
         };
@@ -592,6 +596,8 @@ pub(crate) fn try_start_environmental_break(
         prepared_usable_energy: None,
         prepared_stress: None,
         prepared_ledger: None,
+        prepared_ledger_before: None,
+        prepared_usable_energy_before: None,
         combine_environmental_source: None,
         combine_environmental_source_index: None,
     };
@@ -733,6 +739,8 @@ impl Simulation {
             transformation.prepared_usable_energy = Some(prepared_energy);
             transformation.prepared_stress = Some(prepared_stress);
             transformation.prepared_ledger = Some(ledger_delta);
+            transformation.prepared_ledger_before = Some(original_ledger);
+            transformation.prepared_usable_energy_before = Some(organism.usable_energy);
 
             let before_energy = organism.usable_energy;
             let before_stress = organism.stress;
@@ -902,13 +910,23 @@ pub(crate) fn restore_combine_environmental_source(
 fn rollback_prepared_combine(
     usable_energy: &mut f64,
     ledger: &mut EnergyLedger,
+    usable_energy_before: Option<f64>,
     energy_delta: Option<f64>,
+    ledger_before: Option<&EnergyLedger>,
     ledger_delta: Option<&EnergyLedger>,
 ) {
-    if let Some(delta) = energy_delta {
+    if let Some(before) = usable_energy_before {
+        *usable_energy = before;
+    } else if let Some(delta) = energy_delta {
+        // Compatibility for transformations persisted before before-state
+        // snapshots were introduced. Newly prepared transactions use exact restore.
         *usable_energy -= delta;
     }
-    if let Some(delta) = ledger_delta {
+
+    if let Some(before) = ledger_before {
+        *ledger = *before;
+    } else if let Some(delta) = ledger_delta {
+        // Legacy serialized transactions have only the staged delta available.
         ledger.total_potential_energy_released -= delta.total_potential_energy_released;
         ledger.total_structural_energy_delta -= delta.total_structural_energy_delta;
         ledger.total_external_energy_input -= delta.total_external_energy_input;
@@ -959,7 +977,9 @@ pub(crate) fn resolve_transformation(
             rollback_prepared_combine(
                 &mut organism.usable_energy,
                 ledger,
+                transformation.prepared_usable_energy_before,
                 transformation.prepared_usable_energy,
+                transformation.prepared_ledger_before.as_ref(),
                 transformation.prepared_ledger.as_ref(),
             );
             if !restore_combine_environmental_source(transformation, environment) {
@@ -1460,6 +1480,10 @@ mod tests {
             prepared_usable_energy: None,
             prepared_stress: None,
             prepared_ledger: None,
+        prepared_ledger_before: None,
+        prepared_usable_energy_before: None,
+            prepared_ledger_before: None,
+            prepared_usable_energy_before: None,
             combine_environmental_source: Some((cell_index, source.clone())),
             combine_environmental_source_index: Some(1),
         };
@@ -1535,6 +1559,10 @@ mod tests {
             prepared_usable_energy: None,
             prepared_stress: None,
             prepared_ledger: None,
+        prepared_ledger_before: None,
+        prepared_usable_energy_before: None,
+            prepared_ledger_before: None,
+            prepared_usable_energy_before: None,
             combine_environmental_source: None,
             combine_environmental_source_index: None,
         };
@@ -1582,6 +1610,10 @@ mod tests {
             prepared_usable_energy: None,
             prepared_stress: None,
             prepared_ledger: None,
+        prepared_ledger_before: None,
+        prepared_usable_energy_before: None,
+            prepared_ledger_before: None,
+            prepared_usable_energy_before: None,
             combine_environmental_source: None,
             combine_environmental_source_index: None,
         };
