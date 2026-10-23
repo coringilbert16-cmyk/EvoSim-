@@ -345,9 +345,8 @@ mod material_identity_tests {
             ("organism|rev:4|bond-b".to_string(), 1.0),
             ("other|rev:4|bond-c".to_string(), 3.0),
         ]);
-        let updated = std::collections::BTreeSet::from([
-            "organism|rev:4|bond-a".to_string(),
-        ]);
+        let updated =
+            std::collections::BTreeSet::from(["organism|rev:4|bond-a".to_string()]);
 
         dissipate_unupdated_accumulations(
             &mut accumulation,
