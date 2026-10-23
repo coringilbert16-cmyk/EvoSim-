@@ -160,15 +160,25 @@ pub(crate) fn expel_physical_material(
     // All geometry checks are complete. Remove the authoritative source
     // only now, and restore the exact original entry if the destination rejects
     // the transformed instance.
-    let Some(removed) = organism.stored_material.take_physical_at(storage_index) else {
+    // Preserve inventory order during rollback. The ordinary take helper
+    // uses swap_remove, which would reorder an unrelated last entry if the
+    // destination rejects this expulsion.
+    let Some(crate::material_storage::StoredMaterial::Physical(current)) =
+        organism.stored_material.entries.get(storage_index)
+    else {
         return false;
+    };
+    if !current.is_realized() {
+        return false;
+    }
+    let removed = match organism.stored_material.entries.remove(storage_index) {
+        crate::material_storage::StoredMaterial::Physical(instance) => instance,
     };
     if environment.field.deposit_physical_at_index(index, physical) {
         true
     } else {
-        let restore_at = storage_index.min(organism.stored_material.entries.len());
         organism.stored_material.entries.insert(
-            restore_at,
+            storage_index,
             crate::material_storage::StoredMaterial::Physical(removed),
         );
         false
@@ -221,5 +231,50 @@ mod tests {
             simulation.organisms[0].stored_material.entries, original_entries,
             "failed expulsion validation must not remove or rewrite the stored source"
         );
+    }
+
+    #[test]
+    fn rejected_destination_restores_expulsion_source_and_neighbor_order() {
+        let mut simulation = Simulation::new(928, 10.0);
+        let catalog = simulation.environment.catalog.clone();
+        let make = |name: &str, x: f64| {
+            PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("test material should realize")
+        };
+        let before = make("Nitrogen", 0.0);
+        let mut source = make("Carbon", 0.0);
+        source.owner_relative_origin = Some(Placement {
+            x: 1.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        });
+        let after_one = make("Phosphorus", 0.0);
+        let after_two = make("Sulfur", 0.0);
+        simulation.organisms[0].stored_material.entries = vec![
+            StoredMaterial::Physical(before),
+            StoredMaterial::Physical(source),
+            StoredMaterial::Physical(after_one),
+            StoredMaterial::Physical(after_two),
+        ];
+        let original = simulation.organisms[0].stored_material.entries.clone();
+        let storage_index = 1;
+        // Keep grid dimensions valid but remove destination cells so the final
+        // deposit rejects after all geometry checks have completed.
+        simulation.environment.field.cells.clear();
+
+        assert!(!expel_physical_material(
+            &mut simulation.organisms[0],
+            &mut simulation.environment,
+            storage_index,
+        ));
+        assert_eq!(simulation.organisms[0].stored_material.entries, original);
     }
 }
