@@ -766,3 +766,8 @@ The first integration run showed the test's `physical_count() == 1` assumption w
 ### Immutable stored BREAK rollback index
 
 `ActiveTransformation.stored_source_index` now captures the exact owner-storage index at reservation. Rollback prefers this field instead of mutable `decision_context_key`, so corrupting the key no longer reorders the source to the end. Legacy serialized transformations default the field to `None` and retain the context-key fallback. Regression expects original index 1 and unchanged neighbor ordering. Current PR #205 head `c214ab3b65fd80d7d02e1eba7f4266bf5e8a642d`; workflow #40024704699 is running.
+
+
+### Immutable environmental BREAK location
+
+`ActiveTransformation.environmental_source_location` now captures the exact cell/material indices at reservation. Rollback uses it before consulting mutable context metadata, while old serialized transformations default to `None` and retain the legacy fallback. Regression corrupts the context key and verifies restoration at the original location. Current PR #205 head `6b7f55029e6c6bdf3f4a3a149f66c6615b3c96d7`; CI pending.
