@@ -1425,6 +1425,46 @@ mod tests {
     }
 
     #[test]
+    fn failed_combine_restores_environmental_source_at_original_list_index() {
+        let catalog = crate::resources::default_catalog();
+        let (mut environment, cell_index, before, source, after) =
+            environmental_break_test_inventory(&catalog);
+        let transformation = ActiveTransformation {
+            id: 733,
+            organism_id: "combine-source-rollback-test".into(),
+            kind: crate::state::TransformationKind::Combine,
+            material: crate::resources::Material::free_base("", 0.0),
+            bond: None,
+            stored_material: None,
+            stored_bond: None,
+            environmental_source: false,
+            complexity: 1.0,
+            duration_ticks: 1,
+            remaining_ticks: 0,
+            prepared_energy: None,
+            pending_experience: None,
+            decision_context_key: None,
+            prepared_structure: None,
+            prepared_stored_material: None,
+            prepared_usable_energy: None,
+            prepared_stress: None,
+            prepared_ledger: None,
+            combine_environmental_source: Some((cell_index, source.clone())),
+            combine_environmental_source_index: Some(1),
+        };
+
+        assert!(restore_combine_environmental_source(
+            &transformation,
+            &mut environment
+        ));
+        assert_eq!(
+            environment.field.cells[cell_index].physical_materials,
+            vec![before, source, after],
+            "failed COMBINE must restore escrow to the exact source list position"
+        );
+    }
+
+    #[test]
     fn failed_environmental_break_context_selects_exact_material_and_bond_indices() {
         let catalog = crate::resources::default_catalog();
         let (mut environment, cell_index, before, source, after) =
