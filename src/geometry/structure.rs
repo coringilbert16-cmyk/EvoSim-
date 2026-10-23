@@ -1583,6 +1583,50 @@ mod tests {
     }
 
     #[test]
+    fn replacing_subgraph_rejects_dangling_destination_bond_atomically() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = aggregate.physical_id(parent).unwrap();
+        aggregate.set_genome_constituent_ids([parent_id]);
+        let child = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_id = aggregate.physical_id(child).unwrap();
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(
+                child_id,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                crate::structure::PhysicalConstituentId(u64::MAX),
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+        let replacement = aggregate.subgraph_for_physical_ids(&[child_id], &[]).unwrap();
+
+        let before_units = aggregate.units.clone();
+        let before_bonds = aggregate.bonds.clone();
+        let before_primary = aggregate.genome_constituent_ids.clone();
+        let before_groups = aggregate.additional_genome_constituent_groups.clone();
+
+        assert!(aggregate
+            .replace_subgraph_for_physical_ids(&[child_id], &replacement)
+            .is_none());
+        assert_eq!(aggregate.units, before_units);
+        assert_eq!(aggregate.bonds, before_bonds);
+        assert_eq!(aggregate.genome_constituent_ids, before_primary);
+        assert_eq!(
+            aggregate.additional_genome_constituent_groups,
+            before_groups
+        );
+    }
+
+    #[test]
     fn replacing_subgraph_rejects_lost_cross_bond_endpoint_atomically() {
         let placement = Placement {
             x: 0.0,
