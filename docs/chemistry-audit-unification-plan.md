@@ -4159,3 +4159,10 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - Workflow [40031711788](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40031711788) for `afd1747` failed the formatting gate, so its focused/full tests were skipped. The diff was limited to rustfmt layout in the new deterministic attachment-transaction test.
 - Commit `224477192fdf750318075a7d3a22df339294e657` applies those formatting corrections. Exact-head workflow [40031811824](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40031811824) has passed formatting and the initial focused gates and is currently in the full Rust test step; result pending.
 - Do not report the source/test changes as verified until this exact-head run completes. The known strict-Clippy baseline diagnostics remain separate from the focused test result.
+
+
+## Test-fixture runtime containment — 2026-10-23 22:20 UTC
+
+- The exact-head run [40031811824](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40031811824) passed formatting and the focused gates but remained in the full Rust test step substantially longer than prior full-suite runs; no result is available yet. Its test fixture had been changed to call the full organism constructor separately from three parallel resonance-BREAK tests.
+- Commit `52f5a9cd9eb42902b3cbc8fdb3ffc0765bd1adc1` caches that immutable realized test structure in a thread-safe `OnceLock`, so parallel callers share one constructor invocation and each test receives its own clone. This is test-runtime containment, not a production behavior change.
+- The new exact-head run for `52f5a9c` is pending. The older in-progress run remains inconclusive; do not claim the full suite passed or failed until its final state is available.
