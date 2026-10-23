@@ -847,10 +847,10 @@ pub(crate) fn finish_reproduction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::SeedableRng;
     use crate::genome::initial_genome;
     use crate::resources::{default_catalog, Material};
     use crate::state::Simulation;
+    use rand::SeedableRng;
 
     #[test]
     fn invalid_developing_holder_does_not_draw_parent_reserve_again() {
