@@ -1163,8 +1163,14 @@ mod tests {
             after_retained, before_retained,
             "staged resonance must not commit if cumulative heat settlement overflows"
         );
-        assert_eq!(simulation.energy_ledger.total_external_energy_input, before_external);
-        assert_eq!(simulation.energy_ledger.total_world_tone_energy_escaped, before_escaped);
+        assert_eq!(
+            simulation.energy_ledger.total_external_energy_input,
+            before_external
+        );
+        assert_eq!(
+            simulation.energy_ledger.total_world_tone_energy_escaped,
+            before_escaped
+        );
         assert_eq!(simulation.energy_ledger.total_heat_dissipated, f64::MAX);
     }
 
