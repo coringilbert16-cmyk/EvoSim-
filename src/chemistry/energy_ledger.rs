@@ -487,7 +487,7 @@ mod tests {
         };
 
         assert!(
-            !ledger.settle_world_tone_paths(10.0, 4.0, 2.0, 4.0),
+            !ledger.settle_world_tone_paths(f64::MAX, 0.0, 0.0, f64::MAX),
             "external-input counter overflow must reject the entire settlement"
         );
         assert_eq!(ledger.total_external_energy_input, f64::MAX);
@@ -501,7 +501,7 @@ mod tests {
             ..EnergyLedger::default()
         };
         assert!(
-            !heat_overflow.settle_world_tone_paths(10.0, 4.0, 2.0, 4.0),
+            !heat_overflow.settle_world_tone_paths(f64::MAX, 0.0, f64::MAX, 0.0),
             "heat counter overflow must reject the entire settlement"
         );
         assert_eq!(heat_overflow.total_external_energy_input, 11.0);
@@ -515,7 +515,7 @@ mod tests {
             ..EnergyLedger::default()
         };
         assert!(
-            !escape_overflow.settle_world_tone_paths(10.0, 4.0, 2.0, 4.0),
+            !escape_overflow.settle_world_tone_paths(f64::MAX, 0.0, 0.0, f64::MAX),
             "escape counter overflow must reject the entire settlement"
         );
         assert_eq!(escape_overflow.total_external_energy_input, 17.0);
