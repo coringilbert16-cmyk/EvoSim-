@@ -1695,6 +1695,47 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn world_energy_inventory_reconciles_across_structural_break() {
+        let mut simulation = Simulation::new(917, 10.0);
+        let before = simulation.energy_inventory_snapshot();
+        assert!(before.is_balanced(1e-9), "initial inventory: {:?}", before.residual());
+
+        let organism = simulation.organisms.first().expect("initial organism exists");
+        let bond = *organism
+            .structure
+            .bonds
+            .first()
+            .expect("initial organism has a realized bond");
+        let organism_id = organism.id.clone();
+
+        let organism = simulation
+            .organisms
+            .iter_mut()
+            .find(|organism| organism.id == organism_id)
+            .expect("selected organism remains present");
+        assert!(crate::transformation::settle_chemical_break_energy_with_resonance(
+            organism,
+            bond,
+            1.0e9,
+            0.0,
+            0.0,
+            1.0,
+            &mut simulation.energy_ledger,
+        ));
+
+        let after = simulation.energy_inventory_snapshot();
+        assert!(
+            after.is_balanced(1e-9),
+            "structural BREAK must reconcile the world inventory: residual={:?}",
+            after.residual()
+        );
+        assert!(
+            !simulation.organisms[0].structure.bonds.contains(&bond),
+            "successful BREAK must remove the selected bond"
+        );
+    }
+
+    #[test]
     fn world_energy_inventory_reconciles_across_ordinary_ticks() {
         let mut simulation = Simulation::new(916, 10.0);
 
