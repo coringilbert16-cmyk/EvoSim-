@@ -16,7 +16,7 @@ pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 5;
 /// Increment this fingerprint whenever chemistry equations, constants, or
 /// resource-chemistry semantics change. Existing derived cache rows are never
 /// relabeled or migrated across fingerprints.
-pub const CHEMISTRY_EQUATION_FINGERPRINT: &str = "evosim-chemistry-v1|potential=exp-k-dmax|contact=(1-d/r)^2|Dmax=13|k=1/13|contact_radius=1|max_force=1|energy_distance=contact_radius|energy_scale=max_force*energy_distance|reaction_dissipation=0.1/tick|catalog=resource-chemistry-v2|chemical-position=quantized-key-v2|finite-domain=0..13";
+pub const CHEMISTRY_EQUATION_FINGERPRINT: &str = "evosim-chemistry-v1|potential=exp-k-dmax|contact=(1-d/r)^2|Dmax=13|k=1/13|contact_radius=1|max_force=1|energy_distance=contact_radius|energy_scale=max_force*energy_distance|reaction_dissipation=0.1/tick|catalog=resource-chemistry-v2|chemical-position=quantized-key-v2|finite-only";
 
 fn quantize(value: f64) -> i64 {
     (value * 1_000_000_000.0).round() as i64
