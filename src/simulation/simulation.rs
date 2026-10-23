@@ -1880,6 +1880,9 @@ mod decomposition_finalization_tests {
             cell.materials.clear();
             cell.physical_materials.clear();
         }
+        // Model a breached owner: the in-flight transaction must still return
+        // its escrow even though biological decisions will no longer run.
+        simulation.organisms[0].structure = crate::structure::OrganismStructure::new();
         let catalog = simulation.environment.catalog.clone();
         let source = PhysicalMaterial::realized(
             Material {
