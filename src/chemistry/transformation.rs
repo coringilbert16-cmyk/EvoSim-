@@ -348,8 +348,6 @@ impl Simulation {
             prepared_usable_energy: None,
             prepared_stress: None,
             prepared_ledger: None,
-        prepared_ledger_before: None,
-        prepared_usable_energy_before: None,
             prepared_ledger_before: None,
             prepared_usable_energy_before: None,
             combine_environmental_source: None,
@@ -1185,7 +1183,14 @@ mod tests {
             ..EnergyLedger::default()
         };
 
-        rollback_prepared_combine(&mut usable_energy, &mut ledger, Some(5.0), Some(&delta));
+        rollback_prepared_combine(
+            &mut usable_energy,
+            &mut ledger,
+            None,
+            Some(5.0),
+            None,
+            Some(&delta),
+        );
 
         assert_eq!(usable_energy, 8.0);
         assert_eq!(ledger.total_potential_energy_released, 1.0);
@@ -1198,6 +1203,58 @@ mod tests {
         assert_eq!(ledger.total_heat_dissipated, 10.0);
         assert_eq!(ledger.total_usable_energy_held, 8.0);
         assert_eq!(ledger.total_resonant_energy_held, 17.0);
+    }
+
+    #[test]
+    fn failed_prepared_combine_restores_exact_energy_and_ledger_snapshot() {
+        let before_energy = 12.345678901234;
+        let before_ledger = EnergyLedger {
+            total_potential_energy_released: 1.25,
+            total_structural_energy_delta: 2.5,
+            total_external_energy_input: 3.75,
+            initial_condition_energy_settled: true,
+            total_world_tone_energy_unabsorbed: 4.125,
+            total_world_tone_energy_escaped: 5.25,
+            total_usable_energy_gained: 6.5,
+            total_work_expended: 7.75,
+            total_heat_dissipated: 8.875,
+            total_usable_energy_held: 9.25,
+            total_resonant_energy_held: 10.5,
+            initial_resonant_energy_held: 11.75,
+            initial_usable_energy_held: 12.875,
+            total_structural_energy_held: 13.25,
+            initial_structural_energy_held: 14.5,
+        };
+        let mut usable_energy = before_energy + 0.1;
+        let mut ledger = EnergyLedger {
+            total_potential_energy_released: before_ledger.total_potential_energy_released + 0.2,
+            total_structural_energy_delta: before_ledger.total_structural_energy_delta - 0.3,
+            total_external_energy_input: before_ledger.total_external_energy_input + 0.4,
+            initial_condition_energy_settled: false,
+            total_world_tone_energy_unabsorbed: before_ledger.total_world_tone_energy_unabsorbed + 0.5,
+            total_world_tone_energy_escaped: before_ledger.total_world_tone_energy_escaped + 0.6,
+            total_usable_energy_gained: before_ledger.total_usable_energy_gained + 0.7,
+            total_work_expended: before_ledger.total_work_expended + 0.8,
+            total_heat_dissipated: before_ledger.total_heat_dissipated + 0.9,
+            total_usable_energy_held: before_ledger.total_usable_energy_held + 1.0,
+            total_resonant_energy_held: before_ledger.total_resonant_energy_held + 1.1,
+            initial_resonant_energy_held: 99.0,
+            initial_usable_energy_held: 98.0,
+            total_structural_energy_held: 97.0,
+            initial_structural_energy_held: 96.0,
+        };
+
+        rollback_prepared_combine(
+            &mut usable_energy,
+            &mut ledger,
+            Some(before_energy),
+            Some(0.1),
+            Some(&before_ledger),
+            None,
+        );
+
+        assert_eq!(usable_energy, before_energy);
+        assert_eq!(ledger, before_ledger);
     }
 
     #[test]
@@ -1480,8 +1537,6 @@ mod tests {
             prepared_usable_energy: None,
             prepared_stress: None,
             prepared_ledger: None,
-        prepared_ledger_before: None,
-        prepared_usable_energy_before: None,
             prepared_ledger_before: None,
             prepared_usable_energy_before: None,
             combine_environmental_source: Some((cell_index, source.clone())),
@@ -1559,8 +1614,6 @@ mod tests {
             prepared_usable_energy: None,
             prepared_stress: None,
             prepared_ledger: None,
-        prepared_ledger_before: None,
-        prepared_usable_energy_before: None,
             prepared_ledger_before: None,
             prepared_usable_energy_before: None,
             combine_environmental_source: None,
@@ -1610,8 +1663,6 @@ mod tests {
             prepared_usable_energy: None,
             prepared_stress: None,
             prepared_ledger: None,
-        prepared_ledger_before: None,
-        prepared_usable_energy_before: None,
             prepared_ledger_before: None,
             prepared_usable_energy_before: None,
             combine_environmental_source: None,
