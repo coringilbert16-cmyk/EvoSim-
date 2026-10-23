@@ -945,6 +945,76 @@ mod tests {
     }
 
     #[test]
+    fn attached_developing_structure_can_retain_world_tone_for_its_owner() {
+        let mut simulation = Simulation::new(74, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        simulation.decomposing_bodies.clear();
+        simulation.active_transformations.clear();
+        let catalog = simulation.environment.catalog.clone();
+
+        // Isolate the attached physical construction as the only body. The
+        // living receiver set is explicit here so this test isolates ownership
+        // routing rather than genome viability.
+        replace_with_nitrogen_square(&mut simulation.organisms[0], 5.0, 0.0, &catalog);
+        let developing_structure =
+            std::mem::replace(&mut simulation.organisms[0].structure, OrganismStructure::new());
+        let owner_id = simulation.organisms[0].id.clone();
+        simulation.organisms[0].reproductive_construction =
+            Some(crate::state::ReproductiveConstruction {
+                committed_material: crate::material_storage::MaterialStorage::default(),
+                developing_structure,
+                child_genome: simulation.organisms[0].genome.clone(),
+                developmental_origin: Position { x: 5.0, y: 0.0 },
+                developmental_orientation_radians: 0.0,
+                developing_stress: 0.0,
+                anchor_unit_index: 0,
+                developing_energy: 0.0,
+                developing_maintenance_debt: 0.0,
+                needs_space: false,
+            });
+
+        let structural = Simulation::structural_energy_held(
+            &simulation.organisms,
+            &simulation.decomposing_bodies,
+        );
+        let resonant = crate::reproduction::total_resonant_energy_held(&simulation.organisms);
+        simulation.energy_ledger.initial_structural_energy_held = structural;
+        simulation.energy_ledger.total_structural_energy_held = structural;
+        simulation.energy_ledger.initial_resonant_energy_held = resonant;
+        simulation.energy_ledger.total_resonant_energy_held = resonant;
+        simulation.energy_ledger.total_usable_energy_held =
+            crate::reproduction::total_usable_energy_held(
+                &simulation.organisms,
+                &simulation.decomposing_bodies,
+            );
+
+        WorldToneOccluderSnapshot::settle_living_organism_inputs(
+            &mut simulation,
+            sample(),
+            &std::collections::HashSet::from([owner_id]),
+        );
+
+        let retained = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .expect("owner resonance reservoir remains valid");
+        assert!(
+            retained > 0.0,
+            "attached developing material must credit its living owner's resonance reservoir"
+        );
+        let settled = simulation.energy_ledger.total_resonant_energy_held - resonant;
+        assert!(
+            (simulation.energy_ledger.total_external_energy_input
+                - settled
+                - simulation.energy_ledger.total_heat_dissipated
+                - simulation.energy_ledger.total_escaped_energy)
+                .abs()
+                <= 1e-7,
+            "attached-structure resonance must remain within the source/sink budget"
+        );
+    }
+
+    #[test]
     fn active_transformation_keeps_removed_stored_material_in_snapshot() {
         let mut simulation = Simulation::new(72, 1.0);
         clear_environment_physical_material(&mut simulation);
