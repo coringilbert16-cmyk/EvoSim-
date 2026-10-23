@@ -713,17 +713,24 @@ impl PhysicalConstituentGraph {
             .iter()
             .map(|unit| unit.physical_id)
             .collect();
+        let destination_max_id = destination_ids.iter().map(|id| id.0).max().unwrap_or(0);
+        let replacement_max_id = replacement_ids.iter().map(|id| id.0).max().unwrap_or(0);
         if old_ids.is_empty()
             || old.len() != old_ids.len()
             || old.contains(&PhysicalConstituentId(0))
             || old.iter().any(|id| !destination_ids.contains(id))
             || destination_ids.len() != self.units.len()
             || destination_ids.contains(&PhysicalConstituentId(0))
+            || self.next_constituent_id == 0
+            || self.next_constituent_id <= destination_max_id
             || replacement_ids.len() != replacement.units.len()
             || replacement_ids.contains(&PhysicalConstituentId(0))
-            || replacement_ids
-                .iter()
-                .any(|id| destination_ids.contains(id) && !old.contains(id))
+            || replacement.next_constituent_id == 0
+            || replacement.next_constituent_id <= replacement_max_id
+            || replacement_ids.iter().any(|id| {
+                !old.contains(id)
+                    && (destination_ids.contains(id) || id.0 < self.next_constituent_id)
+            })
             || replacement
                 .units
                 .iter()
