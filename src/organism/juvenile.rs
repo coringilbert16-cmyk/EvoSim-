@@ -29,8 +29,8 @@ pub(crate) fn confirmed_seed_baseline(
     // core material or an unrelated carbon chain.
     let mut elements = Vec::with_capacity(12);
     let mut grid = [[None; 5]; 5];
-    for y in 0..5 {
-        for x in 0..5 {
+    for (y, row) in grid.iter_mut().enumerate() {
+        for (x, cell) in row.iter_mut().enumerate() {
             if (x == 0 || x == 4) && (y == 0 || y == 4) {
                 continue;
             }
@@ -46,19 +46,21 @@ pub(crate) fn confirmed_seed_baseline(
                     rotation_radians: 0.0,
                 },
             });
-            grid[y][x] = Some(index);
+            *cell = Some(index);
         }
     }
 
     let mut connections = Vec::with_capacity(12);
-    for y in 0..5 {
-        for x in 0..5 {
-            let Some(a) = grid[y][x] else { continue };
+    for (y, row) in grid.iter().enumerate() {
+        for (x, slot) in row.iter().enumerate() {
+            let Some(a) = *slot else { continue };
             for (nx, ny) in [(x + 1, y), (x, y + 1)] {
-                if nx >= 5 || ny >= 5 {
-                    continue;
-                }
-                if let Some(b) = grid[ny][nx] {
+                if let Some(b) = grid
+                    .get(ny)
+                    .and_then(|neighbor_row| neighbor_row.get(nx))
+                    .copied()
+                    .flatten()
+                {
                     connections.push(BlueprintConnection {
                         element_a: a,
                         element_b: b,
