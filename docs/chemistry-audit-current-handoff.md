@@ -731,3 +731,8 @@ Current PR #205 head at the time of this handoff: `0f9992a80131a6a6b702a25c33e13
 ### Strict Clippy comparison (prior head only)
 
 Compared normalized diagnostic identities for PR #205 head `4872942ff1c7aa47f1e961c312af888cb69b3951` / workflow #40021029556 against baseline #39705628427. No new identities were found and three prior identities disappeared. Clippy remains baseline-red. The current head adds a scoped expectation for the disconnected legacy recycler, removes two `EnergyLedger` clone-on-copy sites, and changes cache-key validation; rerun and compare diagnostics at the current head before claiming no delta.
+
+
+### World-tone lifecycle audit
+
+Live capture is active, not disabled. `Simulation::step` settles the precomputed source frame; all realized bodies remain occluders, and dead/nonliving physical receivers convert their material response to heat while only the unresponded signal continues. This is not proof of whole-world conservation. Stored/developing holder chemistry and canonical aggregate ownership remain open.
