@@ -4020,9 +4020,7 @@ mod parallel_mixed_boundary_visibility_tests {
                 .expect("fast lane sweep should produce valid paths");
 
         assert_eq!(exact_widths.len(), fast_widths.len());
-        for (body_index, (exact, fast)) in
-            exact_widths.iter().zip(&fast_widths).enumerate()
-        {
+        for (body_index, (exact, fast)) in exact_widths.iter().zip(&fast_widths).enumerate() {
             let exact_width: f64 = exact.iter().map(|(_, width)| *width).sum();
             let fast_width: f64 = fast.iter().map(|(_, width)| *width).sum();
             assert!(
