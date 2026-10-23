@@ -750,9 +750,14 @@ The chemistry equation bounds pairwise separation, not absolute coordinate value
 
 ### Stored BREAK preparation rollback
 
-PR #205 now clears the active transformation ID on preparation failure and delegates restoration to the simulation-level rollback handler. This avoids a double-restore path; the live-tick test checks exact storage entries and unchanged ledger. Focused gate is `cargo test --locked failed_stored_break`. Current head `43294cbeeba734a82b1ecd18031bd4e9fc3cb096`; verification pending.
+PR #205 now clears the active transformation ID on preparation failure and delegates restoration to the simulation-level rollback handler. This avoids a double-restore path; the live-tick test checks exact storage entries and unchanged ledger. Focused gate is `cargo test --locked failed_stored_break`. Current head `1ea2ea1dc07854c23d8ad255f8a2362d37b4f3f2`; verification pending.
 
 
 ### Current verification retry
 
-Workflow #40023894861 failed at compilation because the environmental BREAK rollback test lacked imports for `ActiveTransformation` and `TransformationKind`. Those imports are restored on current PR #205 head `43294cbeeba734a82b1ecd18031bd4e9fc3cb096`; workflow #40024102939 is running. No runtime change is associated with this compile fix.
+Workflow #40023894861 failed at compilation because the environmental BREAK rollback test lacked imports for `ActiveTransformation` and `TransformationKind`. Those imports are restored on current PR #205 head `1ea2ea1dc07854c23d8ad255f8a2362d37b4f3f2`; workflow #40024102939 is running. No runtime change is associated with this compile fix.
+
+
+### Live-tick stored BREAK fixture correction
+
+The first integration run showed the test's `physical_count() == 1` assumption was invalid because `Simulation::new` seeds default stored material. The current test clears the default storage entries before adding the escrow source, so the assertion now measures the intended single-source rollback. Current head `1ea2ea1dc07854c23d8ad255f8a2362d37b4f3f2`; workflow #40024344294 is queued.
