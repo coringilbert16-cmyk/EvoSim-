@@ -340,6 +340,72 @@ fn bond_units(
     Ok(())
 }
 
+/// Build the established 12-piece, corner-free nitrogen cavity seed.
+///
+/// This is a deterministic physical fixture for Bob's qualifying-cavity seed
+/// and calibration tests. It uses the same live restoration and bond-energy
+/// transactions as ordinary construction; it does not bypass physical contact.
+pub(crate) fn build_nitrogen_ring_seed(
+    catalog: &[BaseResource],
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Result<crate::structure::OrganismStructure, String> {
+    let nitrogen = catalog
+        .iter()
+        .find(|resource| resource.name == "Nitrogen")
+        .ok_or_else(|| "catalog has no Nitrogen resource".to_string())?;
+    let mut structure = crate::structure::OrganismStructure::new();
+    let mut grid = [[None; 5]; 5];
+
+    for y in 0..5 {
+        for x in 0..5 {
+            if (x == 0 || x == 4) && (y == 0 || y == 4) {
+                continue;
+            }
+            if x != 0 && x != 4 && y != 0 && y != 4 {
+                continue;
+            }
+            let index = add_unit(
+                &mut structure,
+                nitrogen,
+                (x as f64 - 2.0, y as f64 - 2.0),
+                None,
+                None,
+                catalog,
+            )?;
+            grid[y][x] = Some(index);
+        }
+    }
+
+    for y in 0..5 {
+        for x in 0..5 {
+            let Some(a) = grid[y][x] else { continue };
+            for (nx, ny) in [(x + 1, y), (x, y + 1)] {
+                if nx >= 5 || ny >= 5 {
+                    continue;
+                }
+                let Some(b) = grid[ny][nx] else { continue };
+                bond_units(&mut structure, a, b, catalog, ledger, energy)?;
+            }
+        }
+    }
+
+    // The four side groups meet diagonally at the cavity's omitted corners.
+    // These corner bonds keep the twelve wall pieces in one connected graph.
+    for ((ax, ay), (bx, by)) in [
+        ((1, 0), (0, 1)),
+        ((3, 0), (4, 1)),
+        ((0, 3), (1, 4)),
+        ((4, 3), (3, 4)),
+    ] {
+        let a = grid[ay][ax].expect("corner-adjacent side unit must exist");
+        let b = grid[by][bx].expect("corner-adjacent side unit must exist");
+        bond_units(&mut structure, a, b, catalog, ledger, energy)?;
+    }
+
+    Ok(structure)
+}
+
 /// Place the fixed geometric scaffold directly, while using the ordinary
 /// physical bond transaction for every permanent connection. There is no
 /// speculative placement search and no recursive body-plan search.
