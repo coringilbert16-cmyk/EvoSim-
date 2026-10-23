@@ -1321,6 +1321,70 @@ mod tests {
     }
 
     #[test]
+    fn failed_prepared_combine_restores_energy_ledger_and_environmental_source_together() {
+        let catalog = crate::resources::default_catalog();
+        let (mut environment, cell_index, before, source, after) =
+            environmental_break_test_inventory(&catalog);
+        environment.field.cells[cell_index].physical_materials = vec![before.clone(), after.clone()];
+
+        let mut simulation = crate::state::Simulation::new(931, 10.0);
+        let mut organism = simulation.organisms.remove(0);
+        let before_energy = 12.345678901234;
+        organism.usable_energy = before_energy + 2.5;
+        organism.stress = 4.75;
+        organism.active_transformation_id = Some(733);
+
+        let before_ledger = EnergyLedger::default();
+        let mut staged_ledger = before_ledger;
+        staged_ledger.total_work_expended = 2.0;
+        staged_ledger.total_heat_dissipated = 3.0;
+        staged_ledger.total_external_energy_input = 5.0;
+
+        let transformation = ActiveTransformation {
+            id: 733,
+            organism_id: organism.id.clone(),
+            kind: crate::state::TransformationKind::Combine,
+            material: crate::resources::Material::free_base("", 0.0),
+            bond: None,
+            stored_material: None,
+            stored_bond: None,
+            environmental_source: true,
+            complexity: 1.0,
+            duration_ticks: 1,
+            remaining_ticks: 0,
+            prepared_energy: Some((before_energy, organism.stress, 0.0)),
+            pending_experience: None,
+            decision_context_key: None,
+            prepared_structure: None,
+            prepared_stored_material: Some(organism.stored_material.clone()),
+            prepared_usable_energy: Some(2.5),
+            prepared_stress: Some(0.75),
+            prepared_ledger: Some(staged_ledger),
+            prepared_ledger_before: Some(before_ledger),
+            prepared_usable_energy_before: Some(before_energy),
+            combine_environmental_source: Some((cell_index, source.clone())),
+            combine_environmental_source_index: Some(1),
+        };
+
+        resolve_transformation(
+            &transformation,
+            &mut organism,
+            &mut environment,
+            &mut staged_ledger,
+        );
+
+        assert_eq!(organism.usable_energy, before_energy);
+        assert_eq!(organism.stress, 4.75, "failed COMBINE must not apply staged stress");
+        assert_eq!(staged_ledger, before_ledger);
+        assert_eq!(
+            environment.field.cells[cell_index].physical_materials,
+            vec![before, source, after],
+            "failed COMBINE must restore the source at its original index"
+        );
+        assert_eq!(organism.active_transformation_id, None);
+    }
+
+    #[test]
     fn bond_break_releases_only_stored_bond_potential() {
         let (gross, usable, heat) = bond_break_energy_yield(4.0, 0.5).unwrap();
         assert_eq!(gross, 4.0);
