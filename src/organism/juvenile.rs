@@ -106,6 +106,37 @@ pub(crate) fn realize_initial(
     realize_initial_with_reserve(blueprint, catalog, JUVENILE_INITIAL_ENERGY_RESERVE)
 }
 
+fn is_canonical_nitrogen_seed(blueprint: &StructuralBlueprint) -> bool {
+    blueprint.elements.len() == 12
+        && blueprint.connections.len() == 12
+        && blueprint.elements.iter().all(|element| {
+            element.material.parts.len() == 1
+                && element.material.parts[0].0 == "Nitrogen"
+                && element.material.parts[0].1 == 1.0
+        })
+        && blueprint.elements.iter().all(|element| {
+            let x = element.placement.x;
+            let y = element.placement.y;
+            (x.abs() == 2.0 && y.abs() < 2.0) || (y.abs() == 2.0 && x.abs() < 2.0)
+        })
+}
+
+fn construct_calibration_structure(
+    blueprint: &StructuralBlueprint,
+    catalog: &[BaseResource],
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Result<OrganismStructure, String> {
+    if is_canonical_nitrogen_seed(blueprint) {
+        crate::initial_organism_constructor::build_nitrogen_ring_seed(catalog, ledger, energy)
+    } else {
+        crate::construction_runtime::construct_blueprint_bond_driven(
+            blueprint, catalog, ledger, energy,
+        )
+        .map(|(structure, _)| structure)
+    }
+}
+
 pub(crate) fn realize_initial_with_reserve(
     blueprint: &StructuralBlueprint,
     catalog: &[BaseResource],
@@ -120,12 +151,7 @@ pub(crate) fn realize_initial_with_reserve(
 
     let mut trial_ledger = EnergyLedger::default();
     let mut trial_energy = TRIAL_ENERGY;
-    crate::construction_runtime::construct_blueprint_bond_driven(
-        blueprint,
-        catalog,
-        &mut trial_ledger,
-        &mut trial_energy,
-    )?;
+    construct_calibration_structure(blueprint, catalog, &mut trial_ledger, &mut trial_energy)?;
     let required_initial_energy = TRIAL_ENERGY - trial_energy;
     if !required_initial_energy.is_finite() || required_initial_energy < 0.0 {
         return Err("juvenile construction produced an invalid energy requirement".into());
@@ -133,12 +159,7 @@ pub(crate) fn realize_initial_with_reserve(
 
     let mut ledger = EnergyLedger::default();
     let mut energy = required_initial_energy + reserve_energy;
-    let (mut structure, _) = crate::construction_runtime::construct_blueprint_bond_driven(
-        blueprint,
-        catalog,
-        &mut ledger,
-        &mut energy,
-    )?;
+    let mut structure = construct_calibration_structure(blueprint, catalog, &mut ledger, &mut energy)?;
     let remaining_energy = energy;
 
     if !remaining_energy.is_finite() || remaining_energy + EPS < reserve_energy {
