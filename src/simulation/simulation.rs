@@ -1954,6 +1954,11 @@ mod decomposition_finalization_tests {
         transformation.duration_ticks = 2;
         transformation.remaining_ticks = 2;
         simulation.active_transformations.push(transformation);
+        assert_eq!(
+            rollback_material_inventory(&simulation),
+            inventory_before,
+            "reserved source must remain counted while held by an in-flight transformation"
+        );
 
         // The first tick reaches preparation, where the persisted target is
         // malformed. The simulation-level rollback must return the escrow.
