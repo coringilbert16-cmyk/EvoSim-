@@ -13,6 +13,10 @@ pub(crate) struct ChemicalBreakOperation {
     pub(crate) reaction_energy: f64,
     pub(crate) disruption_cost: f64,
     pub(crate) reaction_frequency_hz: f64,
+    /// Preserve accumulated progress if settlement fails without changing the
+    /// physical structure (for example, because the event became stale).
+    pub(crate) accumulation_key: String,
+    pub(crate) accumulated_reaction: f64,
 }
 
 fn reaction_key(bond: &Bond, interface_signature: &str) -> String {
@@ -243,6 +247,8 @@ pub(crate) fn accumulate(
                 reaction_energy,
                 disruption_cost: barrier,
                 reaction_frequency_hz,
+                accumulation_key: key.clone(),
+                accumulated_reaction: next,
             });
             accumulation.remove(&key);
         } else {
@@ -285,6 +291,24 @@ pub(crate) fn resolve(
     // A failed event is stale or physically invalid. Its accumulation was
     // already removed when the event crossed the barrier, and the next
     // structure revision will invalidate any remaining interface state.
+    success
+}
+
+/// Resolve a triggered reaction while preserving its accumulated progress
+/// if settlement fails. A later structure revision naturally invalidates the
+/// old key through the normal revision-pruning path.
+pub(crate) fn resolve_preserving_accumulation(
+    operation: ChemicalBreakOperation,
+    organism: &mut Organism,
+    ledger: &mut crate::state::EnergyLedger,
+    accumulation: &mut std::collections::BTreeMap<String, f64>,
+) -> bool {
+    let key = operation.accumulation_key.clone();
+    let accumulated_reaction = operation.accumulated_reaction;
+    let success = resolve(operation, organism, ledger);
+    if !success {
+        accumulation.insert(key, accumulated_reaction);
+    }
     success
 }
 
