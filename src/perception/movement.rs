@@ -368,20 +368,13 @@ impl Simulation {
             return Err(reason);
         }
 
-        if !ledger.settle_transaction(&mut organism.usable_energy, transaction) {
-            organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
-                tick,
-                direction_x: Some(active.direction_x),
-                direction_y: Some(active.direction_y),
-                step: Some(active.decision_distance),
-                usable_energy,
-                active_transformation_id: organism.active_transformation_id,
-                result: Err(crate::state::MovementFailureReason::InsufficientEnergy),
-                old_position,
-                new_position,
-            });
-            return Err(crate::state::MovementFailureReason::InsufficientEnergy);
-        }
+        // The world mutation above has no fallible step after its push plan is
+        // applied. Commit the exact preflighted energy/ledger state now rather
+        // than invoking a second fallible settlement after geometry has moved.
+        // If geometry rejects, this snapshot is simply discarded and neither
+        // energy nor ledger has changed.
+        organism.usable_energy = preflight_energy;
+        *ledger = preflight_ledger;
 
         active.remaining_steps = active.remaining_steps.saturating_sub(1);
         active.ticks_until_step = if active.remaining_steps == 0 {
@@ -1879,6 +1872,55 @@ mod tests {
             assert_eq!(moved.rotation_radians, original.rotation_radians);
         }
     }
+    #[test]
+    fn successful_movement_commits_preflight_energy_and_ledger_after_geometry() {
+        let simulation = Simulation::new(902, 20.0);
+        let mut organism = simulation.organisms[0].clone();
+        organism.usable_energy = 100.0;
+        let mut environment = empty_environment(&simulation);
+        let mut ledger = EnergyLedger::default();
+        let mut spatial_index = MovementSpatialIndex::new(&[], &environment);
+        let mut active = crate::state::ActiveMovement {
+            direction_x: 1.0,
+            direction_y: 0.0,
+            remaining_steps: 1,
+            step_interval: 1,
+            ticks_until_step: 0,
+            decision_distance: 1.0,
+            before_energy: organism.usable_energy,
+            before_stress: organism.stress,
+            before_developmental_realization: 0.0,
+        };
+        let original_x = organism.occupied_cells[0].x;
+        let original_energy = organism.usable_energy;
+        let expected_cost = movement_energy_cost_for_distance(
+            organism.structural_mass(&environment.catalog),
+            organism.genome.movement_efficiency(),
+            1.0,
+        );
+
+        let result = Simulation::advance_movement(
+            &mut [],
+            &mut organism,
+            &mut [],
+            &mut spatial_index,
+            &mut environment,
+            &mut ledger,
+            1,
+            &mut active,
+        );
+
+        assert_eq!(result, Ok(MovementProgress::Complete));
+        assert!(
+            organism.occupied_cells[0].x > original_x,
+            "successful movement must commit its geometry"
+        );
+        assert!((organism.usable_energy - (original_energy - expected_cost)).abs() < 1e-9);
+        assert!((ledger.total_heat_dissipated - expected_cost).abs() < 1e-9);
+        assert_eq!(ledger.total_work_expended, 0.0);
+        assert_eq!(active.remaining_steps, 0);
+    }
+
     #[test]
     fn rejected_movement_energy_settlement_does_not_mutate_world_geometry() {
         let simulation = Simulation::new(901, 20.0);

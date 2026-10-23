@@ -79,6 +79,18 @@ jobs:
       - name: Run focused chemical BREAK tests
         timeout-minutes: 5
         run: cargo test --locked chemical_break_
+      # Rollback gates for stored and environmental BREAK must be visible
+      # independently of the slow full suite and its known baseline failures.
+      - name: Run focused stored BREAK rollback tests
+        timeout-minutes: 5
+        run: cargo test --locked failed_stored_break
+      - name: Run focused environmental BREAK rollback tests
+        timeout-minutes: 5
+        run: cargo test --locked failed_environmental_break
+      # Movement geometry and energy settlement commit from one preflight snapshot.
+      - name: Run focused movement settlement transaction test
+        timeout-minutes: 5
+        run: cargo test --locked successful_movement_commits_preflight_energy_and_ledger_after_geometry
       # Keep post-death holder conservation visible independently of the full suite.
       - name: Run focused post-death holder inventory test
         timeout-minutes: 5
