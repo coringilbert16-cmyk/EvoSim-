@@ -590,10 +590,11 @@ mod tests {
             &catalog,
         )
         .expect("test object should be realized");
-        assert!(
-            MaterialStorage::prepare_physical_batch_at_owner_anchor(vec![valid, fractional], anchor)
-                .is_none()
-        );
+        assert!(MaterialStorage::prepare_physical_batch_at_owner_anchor(
+            vec![valid, fractional],
+            anchor
+        )
+        .is_none());
     }
 
     #[test]
