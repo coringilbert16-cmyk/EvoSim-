@@ -2176,9 +2176,15 @@ mod tests {
         // The bare seed baseline is only a cavity scaffold; this fixture's
         // resonance-BREAK tests need the full realized organism, including
         // structure outside the genome boundary.
-        let construction = crate::initial_organism_constructor::construct_valid(&catalog)
-            .expect("test organism constructor must find a valid organism");
-        let structure = construction.structure;
+        static STRUCTURE: std::sync::OnceLock<crate::structure::OrganismStructure> =
+            std::sync::OnceLock::new();
+        let structure = STRUCTURE
+            .get_or_init(|| {
+                crate::initial_organism_constructor::construct_valid(&catalog)
+                    .expect("test organism constructor must find a valid organism")
+                    .structure
+            })
+            .clone();
         let organism = crate::state::Organism {
             id: "test".into(),
             developmental_origin: crate::state::Position { x: 0.0, y: 0.0 },
