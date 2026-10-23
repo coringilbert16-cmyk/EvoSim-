@@ -3912,8 +3912,7 @@ fn parallel_exposure_with_exact_intersections(
         // Unsupported or ambiguous front surfaces stop this lane rather than
         // allowing energy to jump through geometry the material model cannot settle.
         if path_hits.first().copied() == Some(nearest_identity)
-            && (include_non_target_paths
-                || path_hits.iter().any(|(body, _)| target_mask[*body]))
+            && (include_non_target_paths || path_hits.iter().any(|(body, _)| target_mask[*body]))
         {
             interaction_paths.push(ParallelRayInteractionPath {
                 projected_width: hi - lo,
