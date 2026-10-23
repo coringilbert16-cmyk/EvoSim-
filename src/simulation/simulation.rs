@@ -1872,7 +1872,6 @@ mod decomposition_finalization_tests {
     fn failed_stored_break_preparation_restores_escrow_through_live_tick() {
         use crate::physical_material::PhysicalMaterial;
         use crate::resources::{InternalBond, Material};
-        use crate::state::{ActiveTransformation, TransformationKind};
         use crate::structure::Placement;
 
         let mut simulation = Simulation::new(931, 10.0);
