@@ -28,6 +28,11 @@ fn transform_relative(origin: Placement, relative: Placement) -> Placement {
 /// The stored constituent arrangement and stored internal bond endpoints are
 /// authoritative. If either is absent, restoration fails rather than deriving
 /// a new physical connection from composition and geometry.
+///
+/// This helper also stages candidate graphs, so it validates the restored
+/// material's own geometry and connections but does not impose a destination-wide
+/// overlap policy. Callers must validate new-versus-existing geometry before
+/// committing a candidate into a nonempty structure.
 pub(crate) fn restore_material(
     structure: &mut OrganismStructure,
     instance: &PhysicalMaterial,
