@@ -6,7 +6,7 @@
 use crate::combine_runtime::DevelopmentalContext;
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::material_storage::MaterialStorage;
-use crate::organism_viability::{validate_realized_organism, OrganismViabilityRequirements};
+use crate::organism_viability::{validate_realized_organism_for_core, OrganismViabilityRequirements};
 use crate::resources::Material;
 use crate::state::{EnergyLedger, Environment, Organism, Position, ReproductiveConstruction};
 use crate::structure::OrganismStructure;
@@ -478,10 +478,11 @@ fn birth_ready_with_reference(
     {
         return false;
     }
-    if validate_realized_organism(
+    if validate_realized_organism_for_core(
         &construction.developing_structure,
         catalog,
         OrganismViabilityRequirements::default(),
+        &[anchor_id],
     )
     .is_err()
     {
