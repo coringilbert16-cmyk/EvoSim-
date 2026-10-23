@@ -641,7 +641,7 @@ impl Simulation {
             // Stage energy dissipation without mutating the live holder or
             // ledger. Material release and energy settlement are one ownership
             // transition: either both commit, or the body remains unchanged.
-            let mut staged_ledger = self.energy_ledger.clone();
+            let mut staged_ledger = self.energy_ledger;
             let mut staged_energy = remaining;
             if remaining > 0.0 {
                 let sink = crate::energy_ledger::EnergyTransaction {
@@ -2111,7 +2111,7 @@ mod decomposition_finalization_tests {
         .expect("energy is valid even if the malformed position is rejected at deposit");
         simulation.decomposing_bodies.push(body);
         let before = simulation.environment.field.total_amount();
-        let before_ledger = simulation.energy_ledger.clone();
+        let before_ledger = simulation.energy_ledger;
 
         simulation.process_decomposing_bodies();
 
