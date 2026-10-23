@@ -746,3 +746,8 @@ An initial suspicion that world-tone omitted nonliving-only paths was disproven:
 ### Cache-key validation follow-up
 
 The chemistry equation bounds pairwise separation, not absolute coordinate values. The cache key guard rejects NaN/infinities and finite extremes whose scaled integer keys would saturate or collide with the reserved sentinel; finite representable custom catalog positions remain valid. Fingerprint: `chemical-position=quantized-key-v2|finite-representable-only`. PR #205 head `a2301bc57646caa5f8367024672b7732bccaccd0`; exact-head verification is running.
+
+
+### Stored BREAK preparation rollback
+
+PR #205 now restores a reserved stored BREAK source when bond metadata is missing/corrupt or ledger settlement rejects. The helper reinserts the source at the exact original storage index when valid, then clears the active transformation ID; the failure test checks exact storage entries and unchanged ledger. Focused gate is `cargo test --locked failed_stored_break`. Current head `320fafee735b9a4f3a2949a919ad2ef797ee805b`; verification pending.
