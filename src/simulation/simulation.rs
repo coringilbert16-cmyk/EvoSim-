@@ -1870,6 +1870,78 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn failed_stored_break_preparation_restores_escrow_through_live_tick() {
+        use crate::physical_material::PhysicalMaterial;
+        use crate::resources::{InternalBond, Material};
+        use crate::state::{ActiveTransformation, TransformationKind};
+        use crate::structure::Placement;
+
+        let mut simulation = Simulation::new(931, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        let catalog = simulation.environment.catalog.clone();
+        let source = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                Placement {
+                    x: 20.0,
+                    y: 20.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 20.838,
+                    y: 20.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("bonded stored source should be physically realizable");
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(source));
+        let inventory_before = rollback_material_inventory(&simulation);
+
+        let decision = crate::decision_runtime::ActionCandidate {
+            action: crate::decision::ActionKind::Break,
+            context_key: Some("stored:0:bond:0".into()),
+        };
+        let mut next_id = 1;
+        let mut transformation = Simulation::try_start_transformation(
+            &mut simulation.organisms[0],
+            &catalog,
+            &mut next_id,
+            &decision,
+        )
+        .expect("stored bond should reserve for BREAK");
+        transformation.stored_bond = None;
+        transformation.duration_ticks = 2;
+        transformation.remaining_ticks = 2;
+        simulation.active_transformations.push(transformation);
+
+        // The first tick reaches preparation, where the persisted target is
+        // malformed. The simulation-level rollback must return the escrow.
+        simulation.step();
+
+        assert!(simulation.active_transformations.is_empty());
+        assert_eq!(simulation.organisms[0].active_transformation_id, None);
+        assert_eq!(
+            rollback_material_inventory(&simulation),
+            inventory_before,
+            "failed live preparation must preserve all constituent ownership"
+        );
+        assert_eq!(simulation.organisms[0].stored_material.physical_count(), 1);
+    }
+
+    #[test]
     fn initial_usable_energy_enters_through_an_explicit_source_transaction() {
         let simulation = Simulation::new(916, 10.0);
         let initial_usable_energy = simulation.organisms[0].usable_energy;
