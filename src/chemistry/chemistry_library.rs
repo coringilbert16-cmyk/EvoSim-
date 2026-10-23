@@ -64,12 +64,14 @@ impl ChemistryKey {
     }
     pub fn signature(&self) -> String {
         format!(
-            "v{}|{}|{}|{}|{}",
+            "v{}|{}|{}|{}|{}|chemical_positions={:?},{:?}",
             self.schema_version,
             self.material_a,
             self.material_b,
             self.interface_class,
-            self.interface_signature
+            self.interface_signature,
+            self.chemical_position_a,
+            self.chemical_position_b
         )
     }
 
@@ -612,7 +614,7 @@ mod tests {
     fn pre_unification_sulfur_interaction_cache_record_is_not_reused() {
         // D6 rejects pre-unification chemistry caches without migration. The
         // repository cache was reset to the current schema; the old cached
-        // interaction must not be treated as authoritative under schema four.
+        // interaction must not be treated as authoritative under schema five.
         let library = ChemistryLibrary::open("chemistry_library/data").unwrap();
         let key = ChemistryKey::new(
             "Hydrogen",
@@ -952,7 +954,7 @@ mod tests {
     #[test]
     fn rejects_equation_fingerprint_mismatch() {
         let root = test_root("fingerprint-mismatch");
-        write_test_store(&root, 4, &[test_record_json(4, "edge")], 1);
+        write_test_store(&root, 5, &[test_record_json(5, "edge")], 1);
         let manifest_path = root.join("manifest.json");
         let mut manifest: serde_json::Value =
             serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
@@ -968,7 +970,7 @@ mod tests {
     #[test]
     fn rejects_malformed_final_nonempty_record() {
         let root = test_root("truncated-tail");
-        write_test_store(&root, 4, &["{".into()], 1);
+        write_test_store(&root, 5, &["{".into()], 1);
         let error = ChemistryLibrary::open(&root)
             .err()
             .expect("corrupt store must be rejected");
@@ -979,8 +981,8 @@ mod tests {
     #[test]
     fn rejects_duplicate_persisted_keys() {
         let root = test_root("duplicate");
-        let row = test_record_json(4, "same-edge");
-        write_test_store(&root, 4, &[row.clone(), row], 1);
+        let row = test_record_json(5, "same-edge");
+        write_test_store(&root, 5, &[row.clone(), row], 1);
         let error = ChemistryLibrary::open(&root)
             .err()
             .expect("corrupt store must be rejected");
