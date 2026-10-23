@@ -1954,6 +1954,7 @@ mod decomposition_finalization_tests {
         )
         .expect("stored bond should reserve for BREAK");
         transformation.stored_bond = None;
+        transformation.decision_context_key = Some("corrupted-after-reservation".into());
         transformation.duration_ticks = 2;
         transformation.remaining_ticks = 2;
         simulation.active_transformations.push(transformation);
