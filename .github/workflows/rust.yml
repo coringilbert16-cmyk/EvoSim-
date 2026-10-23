@@ -106,6 +106,13 @@ jobs:
       - name: Run focused chemical BREAK tests
         timeout-minutes: 5
         run: cargo test --locked chemical_break_
+      # Cache writes must preserve both disk bytes and refreshed in-memory state on failure.
+      - name: Run focused chemistry cache persistence rollback tests
+        timeout-minutes: 5
+        run: |
+          cargo test --locked insert_partial_append_failure_rolls_back_original_cache_bytes_and_reopens_cleanly
+          cargo test --locked manifest_failure_rolls_back_appended_record_and_reopens_cleanly
+          cargo test --locked failed_insert_keeps_stale_instance_refreshed_to_committed_store
       # Rollback gates for stored and environmental BREAK must be visible
       # independently of the slow full suite and its known baseline failures.
       - name: Run focused stored BREAK rollback tests
