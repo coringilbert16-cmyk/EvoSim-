@@ -456,6 +456,17 @@ pub(crate) fn has_environmental_break_candidate(
     !environmental_break_candidates(organism, environment).is_empty()
 }
 
+fn parse_environmental_break_context_key(key: &str) -> Option<(usize, usize, usize)> {
+    let rest = key.strip_prefix("environment:")?;
+    let (cell_material_part, bond_part) = rest.rsplit_once(":bond:")?;
+    let (cell_part, material_part) = cell_material_part.rsplit_once(":material:")?;
+    Some((
+        cell_part.strip_prefix("cell:")?.parse().ok()?,
+        material_part.parse().ok()?,
+        bond_part.parse().ok()?,
+    ))
+}
+
 fn environmental_break_source_at(
     environment: &Environment,
     cell_index: usize,
@@ -482,12 +493,8 @@ pub(crate) fn try_start_environmental_break(
         return None;
     }
     let key = decision.context_key.as_deref()?;
-    let rest = key.strip_prefix("environment:")?;
-    let (cell_material_part, bond_part) = rest.rsplit_once(":bond:")?;
-    let (cell_part, material_part) = cell_material_part.rsplit_once(":material:")?;
-    let cell_index = cell_part.strip_prefix("cell:")?.parse::<usize>().ok()?;
-    let material_index = material_part.parse::<usize>().ok()?;
-    let bond_index = bond_part.parse::<usize>().ok()?;
+    let (cell_index, material_index, bond_index) =
+        parse_environmental_break_context_key(key)?;
 
     let regions = crate::interior_geometry::find_accessible_interior_regions(
         &organism.structure,
@@ -1398,13 +1405,9 @@ mod tests {
         environment.field.cells[cell_index].physical_materials =
             vec![before.clone(), source.clone(), after.clone()];
         let decision_key = format!("environment:cell:{cell_index}:material:1:bond:0");
-        let rest = decision_key.strip_prefix("environment:").unwrap();
-        let (cell_material_part, bond_part) = rest.rsplit_once(":bond:").unwrap();
-        let (cell_part, material_part) =
-            cell_material_part.rsplit_once(":material:").unwrap();
-        let parsed_cell = cell_part.strip_prefix("cell:").unwrap().parse::<usize>().unwrap();
-        let parsed_material = material_part.parse::<usize>().unwrap();
-        let parsed_bond = bond_part.parse::<usize>().unwrap();
+        let (parsed_cell, parsed_material, parsed_bond) =
+            parse_environmental_break_context_key(&decision_key)
+                .expect("valid decision context should parse");
         let (selected, selected_bond) = environmental_break_source_at(
             &environment,
             parsed_cell,
