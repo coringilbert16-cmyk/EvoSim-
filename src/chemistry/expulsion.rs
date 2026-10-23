@@ -110,11 +110,9 @@ pub(crate) fn expel_physical_material(
         let (sin, cos) = total_rotation.sin_cos();
         let local_dx = direction.0 * cos + direction.1 * sin;
         let local_dy = -direction.0 * sin + direction.1 * cos;
-        let Some(boundary) = crate::surface_geometry::boundary_point_toward(
-            &shape,
-            local_dx,
-            local_dy,
-        ) else {
+        let Some(boundary) =
+            crate::surface_geometry::boundary_point_toward(&shape, local_dx, local_dy)
+        else {
             return false;
         };
         let boundary_projection = boundary.x * direction.0 * cos - boundary.y * direction.0 * sin
