@@ -1008,7 +1008,10 @@ mod tests {
         assert_eq!(status, ConstructionStatus::Waiting);
         assert_eq!(parent.usable_energy, f64::INFINITY);
         assert_eq!(construction.developing_energy, original_energy);
-        assert_eq!(format!("{:?}", construction.developing_structure), original_structure);
+        assert_eq!(
+            format!("{:?}", construction.developing_structure),
+            original_structure
+        );
         assert_eq!(construction.developing_stress, original_stress);
         assert_eq!(construction.developing_maintenance_debt, original_debt);
         assert_eq!(parent.stored_material.entries, original_storage.entries);
