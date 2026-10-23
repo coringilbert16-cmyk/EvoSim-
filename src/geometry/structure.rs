@@ -559,22 +559,51 @@ impl PhysicalConstituentGraph {
         {
             return None;
         }
-        if source.bonds.iter().any(|bond| {
-            bond.endpoint_a.constituent_id == bond.endpoint_b.constituent_id
-                || !source_ids.contains(&bond.endpoint_a.constituent_id)
-                || !source_ids.contains(&bond.endpoint_b.constituent_id)
-                || !bond.bond_energy.is_finite()
-                || bond.bond_energy < 0.0
-        }) {
+        let valid_bonds = |bonds: &[Bond], ids: &HashSet<PhysicalConstituentId>| {
+            !bonds.iter().any(|bond| {
+                bond.endpoint_a.constituent_id == bond.endpoint_b.constituent_id
+                    || !ids.contains(&bond.endpoint_a.constituent_id)
+                    || !ids.contains(&bond.endpoint_b.constituent_id)
+                    || !bond.strength.is_finite()
+                    || !(0.0..=1.0).contains(&bond.strength)
+                    || !bond.bond_energy.is_finite()
+                    || bond.bond_energy < 0.0
+            })
+        };
+        if !valid_bonds(&self.bonds, &destination_ids)
+            || !valid_bonds(&source.bonds, &source_ids)
+        {
             return None;
         }
-        let source_core_ids: HashSet<_> = source
-            .genome_constituent_ids
-            .iter()
-            .chain(source.additional_genome_constituent_groups.iter().flatten())
-            .copied()
-            .collect();
-        if source_core_ids.iter().any(|id| !source_ids.contains(id)) {
+        let valid_core_metadata = |primary_ids: &[PhysicalConstituentId],
+                                   groups: &[Vec<PhysicalConstituentId>],
+                                   ids: &HashSet<PhysicalConstituentId>| {
+            let primary: HashSet<_> = primary_ids.iter().copied().collect();
+            if primary.len() != primary_ids.len() || !primary.is_subset(ids) {
+                return false;
+            }
+            let mut assigned = primary;
+            groups.iter().all(|group| {
+                let group_ids: HashSet<_> = group.iter().copied().collect();
+                let valid = !group.is_empty()
+                    && group_ids.len() == group.len()
+                    && group_ids.is_subset(ids)
+                    && assigned.is_disjoint(&group_ids);
+                if valid {
+                    assigned.extend(group_ids);
+                }
+                valid
+            })
+        };
+        if !valid_core_metadata(
+            &self.genome_constituent_ids,
+            &self.additional_genome_constituent_groups,
+            &destination_ids,
+        ) || !valid_core_metadata(
+            &source.genome_constituent_ids,
+            &source.additional_genome_constituent_groups,
+            &source_ids,
+        ) {
             return None;
         }
 
@@ -1712,6 +1741,29 @@ mod tests {
             aggregate.additional_genome_constituent_groups,
             before_groups
         );
+    }
+
+    #[test]
+    fn append_graph_rejects_empty_source_genome_group_without_mutating_destination() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut destination = OrganismStructure::new();
+        destination.add_unit(StructuralUnit::new("Carbon", placement));
+        let before_units = destination.units.clone();
+        let before_bonds = destination.bonds.clone();
+
+        let mut source = OrganismStructure::new();
+        let parent = source.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let parent_id = source.physical_id(parent).unwrap();
+        source.set_genome_constituent_ids([parent_id]);
+        source.additional_genome_constituent_groups.push(Vec::new());
+
+        assert!(destination.append_graph_remapping_ids(&source).is_none());
+        assert_eq!(destination.units, before_units);
+        assert_eq!(destination.bonds, before_bonds);
     }
 
     #[test]
