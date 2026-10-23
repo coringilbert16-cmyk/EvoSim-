@@ -55,6 +55,20 @@ fn material_identity(material: &crate::resources::Material) -> String {
         .join("+")
 }
 
+fn dissipate_unupdated_accumulations(
+    accumulation: &mut std::collections::BTreeMap<String, f64>,
+    current_prefix: &str,
+    updated_keys: &std::collections::BTreeSet<String>,
+) {
+    accumulation.retain(|key, value| {
+        if !key.starts_with(current_prefix) || updated_keys.contains(key) {
+            return true;
+        }
+        *value *= 1.0 - crate::chemistry::CHEMICAL_DISSIPATION;
+        value.is_finite() && *value > 0.0
+    });
+}
+
 pub(crate) fn accumulate(
     organism: &Organism,
     catalog: &[BaseResource],
@@ -74,6 +88,7 @@ pub(crate) fn accumulate(
     let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
     let bonds = organism.structure.bonds.clone();
     let mut operations = Vec::new();
+    let mut updated_keys = std::collections::BTreeSet::new();
 
     for bond in bonds {
         let Some(unit_a) = organism
@@ -204,6 +219,7 @@ pub(crate) fn accumulate(
             continue;
         };
 
+        updated_keys.insert(key.clone());
         if next <= 0.0 {
             accumulation.remove(&key);
             continue;
@@ -255,6 +271,10 @@ pub(crate) fn accumulate(
             accumulation.insert(key, next);
         }
     }
+    // Reaction progress loses energy every tick even when a previously known
+    // interface cannot be resolved this tick. Otherwise missing geometry or
+    // invalid chemistry data accidentally pauses dissipation indefinitely.
+    dissipate_unupdated_accumulations(accumulation, &current_prefix, &updated_keys);
     operations
 }
 
@@ -316,6 +336,28 @@ pub(crate) fn resolve_preserving_accumulation(
 mod material_identity_tests {
     use super::*;
     use crate::resources::Material;
+
+    #[test]
+    fn unobserved_reaction_progress_dissipates_once_per_tick() {
+        let mut accumulation = std::collections::BTreeMap::from([
+            ("organism|rev:4|bond-a".to_string(), 2.0),
+            ("organism|rev:4|bond-b".to_string(), 1.0),
+            ("other|rev:4|bond-c".to_string(), 3.0),
+        ]);
+        let updated = std::collections::BTreeSet::from([
+            "organism|rev:4|bond-a".to_string(),
+        ]);
+
+        dissipate_unupdated_accumulations(
+            &mut accumulation,
+            "organism|rev:4|",
+            &updated,
+        );
+
+        assert_eq!(accumulation.get("organism|rev:4|bond-a"), Some(&2.0));
+        assert!((accumulation["organism|rev:4|bond-b"] - 0.9).abs() < 1e-12);
+        assert_eq!(accumulation.get("other|rev:4|bond-c"), Some(&3.0));
+    }
 
     #[test]
     fn one_unit_base_material_keeps_legacy_resource_name() {
