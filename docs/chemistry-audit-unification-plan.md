@@ -4089,3 +4089,10 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - **Audit finding:** environmental BREAK rollback reconstructed its cell/material index from mutable `decision_context_key`. If that key was corrupted after reservation, rollback could reject the original location and fall back to quarantine/retention elsewhere rather than restoring the source in its original environmental list.
 - **Implementation:** `ActiveTransformation.environmental_source_location` stores `(cell_index, material_index)` at the moment the source is removed. `try_start_environmental_break` sets it; `original_environmental_source_location` prefers it and falls back to the key for older serialized transactions. The completion rollback regression corrupts the key after setting captured location and asserts restoration at the original list index; its legacy fallback check explicitly clears the field and confirms invalid indices fail closed.
 - **Compatibility:** field is serde-defaulted and all in-repo literals initialize it. PR #205 head `6b7f55029e6c6bdf3f4a3a149f66c6615b3c96d7` has not yet completed CI verification.
+
+
+## 17.208 Capture environmental BREAK location at reservation (2026-10-23)
+
+- **Audit finding:** environmental BREAK rollback reconstructed its cell/material index from mutable `decision_context_key`. If that key was corrupted after reservation, rollback could fail to restore the source in its original environmental list.
+- **Implementation:** `ActiveTransformation.environmental_source_location` stores `(cell_index, material_index)` at the moment the source is removed. `try_start_environmental_break` sets it; `original_environmental_source_location` prefers it and falls back to the key for older serialized transactions. The completion rollback regression corrupts the key after setting captured location and asserts restoration at the original list index; its legacy fallback check clears the field and confirms invalid indices fail closed.
+- **Compatibility:** field is serde-defaulted and all in-repo literals initialize it. PR #205 head `6b7f55029e6c6bdf3f4a3a149f66c6615b3c96d7` has not yet completed CI verification.
