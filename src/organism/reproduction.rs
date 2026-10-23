@@ -1021,6 +1021,72 @@ mod tests {
     }
 
     #[test]
+    fn rejected_parent_material_attachment_keeps_source_and_developing_graph_atomic() {
+        let mut simulation = Simulation::new(313, 20.0);
+        let mut parent = simulation.organisms.remove(0);
+        let mut ledger = EnergyLedger::default();
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
+        assert!(begin_reproduction(
+            &mut parent,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+
+        let mut construction = parent
+            .reproductive_construction
+            .take()
+            .expect("reproduction is active");
+        let child = developing_organism(&construction);
+        let preferred = construction_preferred_resource(&child)
+            .expect("developing genome has a preferred resource")
+            .to_owned();
+        assert!(parent.store_material(Material::free_base(preferred, 1.0)));
+        assert!(
+            try_child_construction(
+                &child,
+                &parent.stored_material,
+                &simulation.environment,
+                &ledger,
+                None,
+            )
+            .is_some(),
+            "fixture must produce an attachable candidate before the destination rejection"
+        );
+
+        let stored_before = parent.stored_material.entries.clone();
+        let units_before = construction.developing_structure.units.len();
+        let body = parent_body_geometry(&parent, &simulation.environment.catalog)
+            .expect("parent body is realized");
+        let mut rejecting_body = body.clone();
+        rejecting_body.parts.clear();
+        let environment = simulation.environment.clone();
+
+        let (status, _) = advance_construction(
+            &parent.structure,
+            &mut parent.stored_material,
+            &mut construction,
+            &environment,
+            &mut ledger,
+            &mut parent.usable_energy,
+            &mut simulation.rng,
+            &rejecting_body,
+            None,
+        );
+
+        assert_eq!(status, ConstructionStatus::Detached);
+        assert_eq!(
+            parent.stored_material.entries, stored_before,
+            "a rejected attachment must not consume parent-owned material"
+        );
+        assert_eq!(
+            construction.developing_structure.units.len(),
+            units_before,
+            "a rejected attachment must not commit the candidate graph"
+        );
+    }
+
+    #[test]
     fn crossing_parent_boundary_does_not_detach_while_contact_remains() {
         let mut simulation = Simulation::new(17, 20.0);
         let mut parent = simulation.organisms.remove(0);
