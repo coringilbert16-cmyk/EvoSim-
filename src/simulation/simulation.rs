@@ -1472,6 +1472,9 @@ mod decomposition_finalization_tests {
         use crate::structure::Placement;
 
         let mut simulation = Simulation::new(923, 10.0);
+        // Isolate this test's source from the default organism inventory so
+        // stored:0:bond:0 unambiguously selects the material created below.
+        simulation.organisms[0].stored_material.entries.clear();
         let material = Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
             internal_bonds: vec![InternalBond {
