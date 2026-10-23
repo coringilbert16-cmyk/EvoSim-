@@ -605,7 +605,7 @@ pub(crate) fn try_start_environmental_break(
         environmental_source_location: Some((cell_index, material_index)),
         combine_environmental_source_index: None,
     };
-    *next_id += 1;
+    *next_id = next_id_after;
     organism.active_transformation_id = Some(t.id);
     Some(t)
 }
