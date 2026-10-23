@@ -1113,7 +1113,9 @@ mod tests {
             &catalog,
         )
         .expect("internally bonded physical material should be realizable");
-        assert!(organism.stored_material.store_physical_instance(source.clone()));
+        assert!(organism
+            .stored_material
+            .store_physical_instance(source.clone()));
 
         let decision = crate::decision_runtime::ActionCandidate {
             action: crate::decision::ActionKind::Break,
@@ -1137,7 +1139,12 @@ mod tests {
             ),
         };
         let mut ledger = crate::state::EnergyLedger::default();
-        resolve_transformation(&transformation, &mut organism, &mut environment, &mut ledger);
+        resolve_transformation(
+            &transformation,
+            &mut organism,
+            &mut environment,
+            &mut ledger,
+        );
 
         assert_eq!(
             organism.stored_material.entries,
