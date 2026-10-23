@@ -648,6 +648,50 @@ pub(crate) fn begin_reproduction(
     false
 }
 
+fn commit_candidate_attachment(
+    parent_structure: &OrganismStructure,
+    parent_storage: &mut MaterialStorage,
+    construction: &mut ReproductiveConstruction,
+    environment: &Environment,
+    ledger: &mut EnergyLedger,
+    parent_body: &crate::organism_geometry::OrganismBodyGeometry,
+    child: Organism,
+    candidate_ledger: EnergyLedger,
+    transferred: Option<usize>,
+    before_units: usize,
+    seed_reference: Option<(f64, f64)>,
+) -> ConstructionStatus {
+    // Validate before consuming a parent-owned material entry or publishing
+    // the candidate ledger/graph. A rejected placement must not partially
+    // commit the attachment transaction.
+    if !child_intersects_realized_parent_region(&child.structure, parent_body)
+        || !parent_child_in_contact(parent_structure, &child.structure)
+    {
+        return ConstructionStatus::Detached;
+    }
+
+    let candidate_units = child.structure.units.len();
+    if let Some(parent_index) = transferred {
+        if parent_storage.take_physical_at(parent_index).is_none() {
+            return ConstructionStatus::Waiting;
+        }
+    }
+    *ledger = candidate_ledger;
+    construction.committed_material = child.stored_material;
+    construction.developing_structure = child.structure;
+    construction.needs_space = false;
+    construction.developing_energy = child.usable_energy;
+    construction.developing_stress = child.stress;
+
+    if birth_ready_with_reference(construction, &environment.catalog, seed_reference) {
+        ConstructionStatus::Ready
+    } else if candidate_units > before_units {
+        ConstructionStatus::Progress
+    } else {
+        ConstructionStatus::Waiting
+    }
+}
+
 pub(crate) fn advance_construction(
     parent_structure: &OrganismStructure,
     parent_storage: &mut MaterialStorage,
@@ -764,34 +808,20 @@ pub(crate) fn advance_construction(
         }
     };
 
-    // Validate the candidate graph before consuming a parent-owned material
-    // entry or committing its staged energy ledger. A rejected placement must
-    // not partially commit the attachment transaction.
-    if !child_intersects_realized_parent_region(&child.structure, parent_body)
-        || !parent_child_in_contact(parent_structure, &child.structure)
-    {
-        return (ConstructionStatus::Detached, None);
-    }
-
-    if let Some(parent_index) = transferred {
-        if parent_storage.take_physical_at(parent_index).is_none() {
-            return (ConstructionStatus::Waiting, None);
-        }
-    }
-    *ledger = candidate_ledger;
-    construction.committed_material = child.stored_material;
-    construction.developing_structure = child.structure;
-    construction.needs_space = false;
-    construction.developing_energy = child.usable_energy;
-    construction.developing_stress = child.stress;
-    if birth_ready_with_reference(construction, &environment.catalog, seed_reference) {
-        return (ConstructionStatus::Ready, None);
-    }
-    if construction.developing_structure.units.len() > before_units {
-        (ConstructionStatus::Progress, None)
-    } else {
-        (ConstructionStatus::Waiting, None)
-    }
+    let status = commit_candidate_attachment(
+        parent_structure,
+        parent_storage,
+        construction,
+        environment,
+        ledger,
+        parent_body,
+        child,
+        candidate_ledger,
+        transferred,
+        before_units,
+        seed_reference,
+    );
+    (status, None)
 }
 
 pub(crate) fn finish_reproduction(
@@ -1093,68 +1123,89 @@ mod tests {
 
     #[test]
     fn rejected_parent_material_attachment_keeps_source_and_developing_graph_atomic() {
-        let mut simulation = Simulation::new(313, 20.0);
-        let mut parent = simulation.organisms.remove(0);
-        let mut ledger = EnergyLedger::default();
-        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
-        assert!(begin_reproduction(
-            &mut parent,
-            &mut simulation.rng,
-            &simulation.environment.catalog,
-            &mut ledger,
-        ));
+        use crate::material_storage::StoredMaterial;
+        use crate::physical_material::PhysicalMaterial;
+        use crate::structure::{Placement, StructuralUnit};
 
-        let mut construction = parent
-            .reproductive_construction
-            .take()
-            .expect("reproduction is active");
-        let child = developing_organism(&construction);
-        let preferred = construction_preferred_resource(&child)
-            .expect("developing genome has a preferred resource")
-            .to_owned();
-        assert!(parent.store_material(Material::free_base(preferred, 1.0)));
-        assert!(
-            try_child_construction(
-                &child,
-                &parent.stored_material,
-                &simulation.environment,
-                &ledger,
-                None,
-            )
-            .is_some(),
-            "fixture must produce an attachable candidate before the destination rejection"
+        let catalog = default_catalog();
+        let mut original_unit = StructuralUnit::new(
+            "Carbon",
+            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
         );
+        assert!(original_unit.realize_default_geometry(&catalog));
+        let mut original_structure = OrganismStructure::new();
+        original_structure.add_unit(original_unit);
 
-        let stored_before = parent.stored_material.entries.clone();
-        let units_before = construction.developing_structure.units.len();
-        let body = parent_body_geometry(&parent, &simulation.environment.catalog)
-            .expect("parent body is realized");
-        let mut rejecting_body = body.clone();
-        rejecting_body.parts.clear();
-        let environment = simulation.environment.clone();
+        let mut construction = ReproductiveConstruction {
+            committed_material: MaterialStorage::default(),
+            developing_structure: original_structure.clone(),
+            child_genome: initial_genome(),
+            developmental_origin: Position { x: 0.0, y: 0.0 },
+            developmental_orientation_radians: 0.0,
+            developing_stress: 0.0,
+            anchor_unit_index: 0,
+            developing_energy: 10.0,
+            developing_maintenance_debt: 0.0,
+            needs_space: false,
+        };
+        let source = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement { x: 100.0, y: 100.0, rotation_radians: 0.0 }],
+            &catalog,
+        )
+        .expect("parent-held source must be a valid physical constituent");
+        let mut parent_storage = MaterialStorage::default();
+        parent_storage.entries.push(StoredMaterial::Physical(source));
+        let stored_before = parent_storage.entries.clone();
 
-        let (status, _) = advance_construction(
-            &parent.structure,
-            &mut parent.stored_material,
+        let mut child = developing_organism(&construction);
+        let mut candidate_unit = StructuralUnit::new(
+            "Carbon",
+            Placement { x: 2.0, y: 0.0, rotation_radians: 0.0 },
+        );
+        assert!(candidate_unit.realize_default_geometry(&catalog));
+        child.structure.add_unit(candidate_unit);
+
+        let parent_structure = OrganismStructure::new();
+        let rejecting_body = crate::organism_geometry::OrganismBodyGeometry {
+            parts: Vec::new(),
+            min_x: 0.0,
+            max_x: 0.0,
+            min_y: 0.0,
+            max_y: 0.0,
+        };
+        let environment = Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog: catalog.clone(),
+            field: crate::environment::ActiveMaterialField::new(
+                1000.0, 1000.0, crate::environment::DEFAULT_CELL_SIZE,
+            ),
+        };
+        let mut ledger = EnergyLedger::default();
+        let ledger_before = ledger;
+        let mut candidate_ledger = ledger;
+        candidate_ledger.total_heat_dissipated = 9.0;
+        let units_before = construction.developing_structure.units.clone();
+
+        let status = commit_candidate_attachment(
+            &parent_structure,
+            &mut parent_storage,
             &mut construction,
             &environment,
             &mut ledger,
-            &mut parent.usable_energy,
-            &mut simulation.rng,
             &rejecting_body,
+            child,
+            candidate_ledger,
+            Some(0),
+            units_before.len(),
             None,
         );
 
         assert_eq!(status, ConstructionStatus::Detached);
-        assert_eq!(
-            parent.stored_material.entries, stored_before,
-            "a rejected attachment must not consume parent-owned material"
-        );
-        assert_eq!(
-            construction.developing_structure.units.len(),
-            units_before,
-            "a rejected attachment must not commit the candidate graph"
-        );
+        assert_eq!(parent_storage.entries, stored_before);
+        assert_eq!(construction.developing_structure.units, units_before);
+        assert_eq!(ledger, ledger_before);
     }
 
     #[test]
