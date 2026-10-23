@@ -631,9 +631,7 @@ impl PhysicalConstituentGraph {
         if ids.is_empty()
             || selected.len() != ids.len()
             || selected.contains(&PhysicalConstituentId(0))
-            || selected
-                .iter()
-                .any(|id| self.unit_index(*id).is_none())
+            || selected.iter().any(|id| self.unit_index(*id).is_none())
             || primary.len() != primary_core_ids.len()
             || primary.iter().any(|id| !selected.contains(id))
         {
@@ -1356,14 +1354,8 @@ mod tests {
         let child_a_id = aggregate.physical_id(child_a).unwrap();
         let child_b_id = aggregate.physical_id(child_b).unwrap();
         aggregate.add_genome_constituent_group([child_a_id]);
-        let endpoint = |id| {
-            BondEndpoint::new(
-                id,
-                ConnectionEndpoint::Boundary {
-                    angle_radians: 0.0,
-                },
-            )
-        };
+        let endpoint =
+            |id| BondEndpoint::new(id, ConnectionEndpoint::Boundary { angle_radians: 0.0 });
         aggregate.push_bond_unchecked(Bond {
             endpoint_a: endpoint(child_a_id),
             endpoint_b: endpoint(child_b_id),
@@ -1380,7 +1372,10 @@ mod tests {
         let subgraph = aggregate
             .subgraph_for_physical_ids(&[child_a_id, child_b_id], &[child_a_id])
             .expect("valid child subset");
-        assert_eq!(subgraph.physical_constituent_ids(), vec![child_a_id, child_b_id]);
+        assert_eq!(
+            subgraph.physical_constituent_ids(),
+            vec![child_a_id, child_b_id]
+        );
         assert_eq!(subgraph.bonds.len(), 1);
         assert_eq!(subgraph.bonds[0].bond_energy, 2.5);
         assert_eq!(subgraph.genome_constituent_ids(), &[child_a_id]);
@@ -1410,7 +1405,9 @@ mod tests {
         assert!(graph
             .subgraph_for_physical_ids(&[a_id, PhysicalConstituentId(999)], &[])
             .is_none());
-        assert!(graph.subgraph_for_physical_ids(&[a_id, a_id], &[]).is_none());
+        assert!(graph
+            .subgraph_for_physical_ids(&[a_id, a_id], &[])
+            .is_none());
     }
 
     #[test]
