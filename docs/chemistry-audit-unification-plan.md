@@ -4076,16 +4076,9 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - PR #205 head af3ee7e04816fc5ad66670cf4e76ec63368615d3 includes the latest oracle assertion. Workflow 40024344294 is still running on predecessor 1ea2ea1dc07854c23d8ad255f8a2362d37b4f3f2; exact-head verification is pending. No passing claim yet.
 
 
-## 17.208 Restoration must validate against the existing destination graph (2026-10-23)
+## 17.208 Restoration overlap check belongs at the caller transaction boundary (2026-10-23)
 
-- Audit of material_restoration.rs found that the staged validator rejected penetration among constituents of the restored object but never compared a restored constituent with pre-existing destination units. Thus a physically valid stored object could be admitted through an existing destination constituent.
-- Production change: restore_material now checks every restored constituent against all pre-existing destination constituents with the same geometry penetration predicate. It still stages the destination graph clone and commits only after every geometry and bond check succeeds.
-- Regression restoration_rejects_penetration_into_existing_destination_atomically places two Carbon hexagons at the same origin, requires restoration to reject the overlap, and verifies destination units and bonds remain unchanged.
-- PR #205 head 1094e50160af01165d2c977a6ba5868394cf660a includes the production fix and regression. Exact-head formatting/focused/full-suite/Clippy verification is pending; workflow 40024344294 is running on predecessor 1ea2ea1dc07854c23d8ad255f8a2362d37b4f3f2 and does not verify this change.
-
-
-## 17.207 Capture stored BREAK source index as transaction metadata (2026-10-23)
-
-- **Audit finding:** rollback reconstructed the original storage index from `decision_context_key`. That string is decision metadata and may be stale or corrupted after source reservation. On failure, a malformed key caused the escrowed source to be appended to storage, changing neighbor ordering instead of restoring the prior holder state.
-- **Implementation:** `ActiveTransformation` now has a serde-defaulted `stored_source_index`, captured from the actual storage index when `try_start_transformation` removes the source. `original_stored_source_index` prefers this immutable transaction field and only falls back to parsing the context key for legacy persisted transactions. The malformed-context regression now expects the source to return at index 1, preserving surrounding entries.
-- **Compatibility:** the new field defaults to `None` when loading older serialized transformations; those still use the legacy context-key fallback. All in-repo struct literals initialize the field. Workflow #40024704699 is verifying PR #205 head `c214ab3b65fd80d7d02e1eba7f4266bf5e8a642d`.
+- A proposed generic change made restore_material reject penetration between restored constituents and pre-existing destination units. The focused chemistry gate disproved that as a safe generic contract: Simulation::new failed while the initial organism constructor was staging a construction unit, before its own candidate validation could run. This was a regression introduced by the proposal, not accepted behavior.
+- The generic destination-overlap loop and its coincident-Carbon regression were reverted. No production behavior change from this proposal remains.
+- The audit still identifies a useful boundary distinction: restore_material is used to stage candidates that callers validate later, so it cannot globally reject every intermediate overlap without migrating those callers. Any future strict-restoration API must be explicit and used only at authoritative commit boundaries, with constructor staging and live COMBINE paths audited separately.
+- PR #205 head b24286eb1ff3762e9e43a96751458b6eca49a356 contains the revert. Workflow 40024563912 failed at a focused chemistry gate because Simulation::new could not restore an initial Carbon; that evidence triggered the revert. Workflow 40024675369 ran on predecessor 6741a4887a9c3aa0b7329ecb8fe82ae81ab76e53 and cannot verify the reverted head. Exact-head formatting/focused/full-suite/Clippy verification remains pending.
