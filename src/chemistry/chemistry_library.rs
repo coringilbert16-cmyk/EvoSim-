@@ -211,6 +211,10 @@ impl ChemistryRecord {
             && !self.key.material_b.is_empty()
             && !self.key.interface_class.is_empty()
             && !self.key.interface_signature.is_empty()
+            // Live chemistry keys carry both positions; geometry-only library
+            // keys carry neither. A half-populated key is never a valid identity.
+            && (self.key.chemical_position_a.is_some()
+                == self.key.chemical_position_b.is_some())
             && self.static_potential.is_finite()
             && self.static_potential >= 0.0
     }
@@ -1009,6 +1013,22 @@ mod tests {
             .err()
             .expect("corrupt store must be rejected");
         assert!(error.to_string().contains("entry count mismatch"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_partial_chemical_position_keys() {
+        let root = test_root("partial-chemical-position");
+        let mut value: serde_json::Value =
+            serde_json::from_str(&test_record_json(5, "edge")).unwrap();
+        value["key"]["chemical_position_a"] = serde_json::Value::from(10_i64);
+        value["key"]["chemical_position_b"] = serde_json::Value::Null;
+        write_test_store(&root, 5, &[serde_json::to_string(&value).unwrap()], 1);
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("partial chemical position identity must be rejected");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("invalid chemistry record"));
         let _ = fs::remove_dir_all(root);
     }
 
