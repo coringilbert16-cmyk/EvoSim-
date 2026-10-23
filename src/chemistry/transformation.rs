@@ -1233,8 +1233,7 @@ mod tests {
         );
 
         assert_eq!(
-            organism.stored_material.entries,
-            entries_before,
+            organism.stored_material.entries, entries_before,
             "failed stored BREAK must restore the source at its exact original index"
         );
         assert_eq!(organism.active_transformation_id, None);
