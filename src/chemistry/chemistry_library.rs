@@ -16,7 +16,7 @@ pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 5;
 /// Increment this fingerprint whenever chemistry equations, constants, or
 /// resource-chemistry semantics change. Existing derived cache rows are never
 /// relabeled or migrated across fingerprints.
-pub const CHEMISTRY_EQUATION_FINGERPRINT: &str = "evosim-chemistry-v1|potential=exp-k-dmax|contact=(1-d/r)^2|Dmax=13|k=1/13|contact_radius=1|max_force=1|energy_distance=contact_radius|energy_scale=max_force*energy_distance|reaction_dissipation=0.1/tick|catalog=resource-chemistry-v2|chemical-position=quantized-key-v2|finite-only";
+pub const CHEMISTRY_EQUATION_FINGERPRINT: &str = "evosim-chemistry-v1|potential=exp-k-dmax|contact=(1-d/r)^2|Dmax=13|k=1/13|contact_radius=1|max_force=1|energy_distance=contact_radius|energy_scale=max_force*energy_distance|reaction_dissipation=0.1/tick|catalog=resource-chemistry-v2|chemical-position=quantized-key-v2|finite-representable-only";
 
 fn quantize(value: f64) -> i64 {
     (value * 1_000_000_000.0).round() as i64
@@ -25,10 +25,16 @@ fn quantize(value: f64) -> i64 {
 const INVALID_CHEMICAL_POSITION_KEY: i64 = i64::MIN;
 
 fn quantize_chemical_position(value: f64) -> i64 {
-    if value.is_finite() {
-        quantize(value)
-    } else {
+    if !value.is_finite() {
+        return INVALID_CHEMICAL_POSITION_KEY;
+    }
+    let scaled = value * 1_000_000_000.0;
+    // The invalid sentinel is i64::MIN; reject values that would saturate or
+    // collide with that sentinel during the integer conversion.
+    if !scaled.is_finite() || scaled <= i64::MIN as f64 || scaled >= i64::MAX as f64 {
         INVALID_CHEMICAL_POSITION_KEY
+    } else {
+        scaled.round() as i64
     }
 }
 
@@ -510,7 +516,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_non_finite_chemical_position_keys() {
+    fn rejects_unrepresentable_chemical_position_keys() {
         let root = test_root("invalid-position-key");
         let _ = fs::remove_dir_all(&root);
         let mut library = ChemistryLibrary::open(&root).unwrap();
@@ -520,7 +526,13 @@ mod tests {
             "Hydrogen",
             crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 0 },
         );
-        for invalid_position in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        for invalid_position in [
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::MAX,
+            f64::MIN,
+        ] {
             let key = ChemistryKey::from_live_geometry(
                 "Carbon",
                 "Hydrogen",
@@ -534,11 +546,11 @@ mod tests {
             };
             assert!(
                 !record.is_valid(),
-                "non-finite chemical position {invalid_position:?} must not become a cache key"
+                "unrepresentable chemical position {invalid_position:?} must not become a cache key"
             );
             assert!(
                 !library.insert(record).unwrap(),
-                "non-finite chemical position {invalid_position:?} must not persist"
+                "unrepresentable chemical position {invalid_position:?} must not persist"
             );
         }
         assert!(library.is_empty());
