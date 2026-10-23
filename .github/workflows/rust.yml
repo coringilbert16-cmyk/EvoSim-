@@ -76,6 +76,12 @@ jobs:
           cargo test --locked unsupported_fluid_union_rolls_back_structure_and_bond
       # Keep the chemistry BREAK energy gate visible independently of the
       # repository's known unrelated baseline failures.
+      - name: Verify chemistry cache position-key invalidation
+        timeout-minutes: 5
+        run: cargo test --locked live_geometry_key_distinguishes_chemical_positions_and_canonicalizes_them
+      - name: Verify pre-position chemistry cache schema rejection
+        timeout-minutes: 5
+        run: cargo test --locked rejects_schema_four_store_after_chemical_position_key_migration
       - name: Run focused chemical BREAK tests
         timeout-minutes: 5
         run: cargo test --locked chemical_break_
