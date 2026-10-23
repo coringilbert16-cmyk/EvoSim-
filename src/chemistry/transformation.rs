@@ -1152,17 +1152,17 @@ pub(crate) fn resolve_transformation(
             return;
         }
     } else {
-        // Stored source pieces remain in intrinsic coordinates. Stage every
-        // piece in a cloned holder so a rejected piece cannot leave a partial
-        // split committed or leak material into the world at a false location.
-        let mut staged_storage = organism.stored_material.clone();
-        for piece in pieces {
-            if !staged_storage.store_physical_instance(piece) {
-                restore_failed_stored_break_source(transformation, organism, environment);
-                return;
-            }
-        }
-        organism.stored_material = staged_storage;
+        // Stored source pieces remain in intrinsic coordinates. Validate the
+        // complete split before touching the holder, then commit the prepared
+        // entries without cloning unrelated inventory.
+        let Some(prepared) = crate::material_storage::MaterialStorage::prepare_physical_batch(pieces)
+        else {
+            restore_failed_stored_break_source(transformation, organism, environment);
+            return;
+        };
+        organism
+            .stored_material
+            .commit_prepared_physical_batch(prepared);
     }
     let (_, usable, heat) = transformation.prepared_energy.unwrap();
     organism.add_transaction_stress(heat);
