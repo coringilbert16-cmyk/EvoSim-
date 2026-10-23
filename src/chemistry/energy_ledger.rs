@@ -479,10 +479,12 @@ mod tests {
 
     #[test]
     fn world_tone_settlement_rejects_counter_overflow_without_partial_updates() {
-        let mut ledger = EnergyLedger::default();
-        ledger.total_external_energy_input = f64::MAX;
-        ledger.total_heat_dissipated = 7.0;
-        ledger.total_world_tone_energy_escaped = 3.0;
+        let mut ledger = EnergyLedger {
+            total_external_energy_input: f64::MAX,
+            total_heat_dissipated: 7.0,
+            total_world_tone_energy_escaped: 3.0,
+            ..EnergyLedger::default()
+        };
 
         assert!(
             !ledger.settle_world_tone_paths(10.0, 4.0, 2.0, 4.0),
