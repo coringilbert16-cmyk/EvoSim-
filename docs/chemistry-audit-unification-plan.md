@@ -3417,3 +3417,10 @@ Consequences:
 - Added `failed_stored_break_preparation_restores_exact_malformed_escrow` to exercise a real stored-BREAK reservation, corrupt the escrow placements after reservation, and verify failed-preparation recovery preserves exact storage membership and clears the active marker. Test commit: `cb9990708501aeb01fd3bfb884f4f52555b2f479`.
 - Formatting CI on intermediate head `62151c4` caught a rustfmt preference for a multi-line helper signature; corrected at `51cfcbdf0ee5c95069c167b370e315a9e1adfe80`. The newer test commit and final helper formatting have not yet passed exact-head CI; no regression pass is claimed.
 - Environmental-source BREAK still has separate destination failure handling; this work does not claim its atomicity or whole-world conservation.
+
+
+## Environmental BREAK destination atomicity and recovery marker — 2026-10-23
+
+- Further inspection found environmental-source BREAK completion deposited split pieces individually and ignored failures. Commit `4e7c491bc0bff4b956f6e07d72ea9eeaf858f80` now stages all piece deposits on a cloned material field and commits the field only when every piece is deposited. On any failure it discards the staged field and returns the original source through the guarded recovery path.
+- A separate audit of `Simulation::step` showed failed preparation restored the source but did not clear the organism's `active_transformation_id`. Commit `3e4f114a094d332a57e6650da38331bdddc3b3f5` clears the matching active marker as recovery begins, including early-return recovery paths.
+- These are narrow transaction fixes, not proof of all transformation failure atomicity. Exact-head CI still needs to validate compile, formatting, focused BREAK/expulsion tests, and full-suite failure identities.
