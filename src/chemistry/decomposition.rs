@@ -253,4 +253,57 @@ mod tests {
             "invalid aggregate fluid must not be silently dropped during release"
         );
     }
+    #[test]
+    fn rejected_decomposition_settlement_preserves_body_and_ledger() {
+        let catalog = default_catalog();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog)
+            .expect("confirmed seed should provide a bonded decomposition fixture");
+        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog)
+            .expect("confirmed seed should realize");
+        assert!(!structure.bonds.is_empty());
+
+        let mut body = DecomposingBody::new(
+            structure,
+            100.0,
+            Position { x: 5.0, y: 7.0 },
+        )
+        .expect("decomposing body should be valid");
+        let bonds_before = body.structure.bonds.clone();
+        let units_before = body.structure.units.clone();
+        let energy_before = body.energy_budget;
+        let mut ledger = EnergyLedger::default();
+        // Force rejection deterministically; adding a small increment to
+        // f64::MAX can round away and is not a reliable overflow fixture.
+        ledger.total_heat_dissipated = f64::NAN;
+        let ledger_before = ledger;
+
+        let environment = Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog,
+            field: crate::environment::ActiveMaterialField::new(
+                1000.0,
+                1000.0,
+                crate::environment::DEFAULT_CELL_SIZE,
+            ),
+        };
+        assert!(
+            resolve_one_bond_with_ledger(&mut body, &environment, &mut ledger).is_none(),
+            "rejected ledger settlement must reject the decomposition step"
+        );
+        assert_eq!(body.structure.bonds, bonds_before);
+        assert_eq!(body.structure.units, units_before);
+        assert_eq!(body.energy_budget, energy_before);
+        assert!(ledger.total_heat_dissipated.is_nan());
+        assert_eq!(
+            ledger.total_structural_energy_delta,
+            ledger_before.total_structural_energy_delta
+        );
+        assert_eq!(ledger.total_work_expended, ledger_before.total_work_expended);
+        assert_eq!(
+            ledger.total_potential_energy_released,
+            ledger_before.total_potential_energy_released
+        );
+    }
+
 }
