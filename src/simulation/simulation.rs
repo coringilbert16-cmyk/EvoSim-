@@ -1711,6 +1711,7 @@ mod decomposition_finalization_tests {
             prepared_ledger_before: None,
             prepared_usable_energy_before: None,
             combine_environmental_source: None,
+            stored_source_index: None,
             combine_environmental_source_index: None,
         };
 
@@ -1860,6 +1861,7 @@ mod decomposition_finalization_tests {
             prepared_ledger_before: None,
             prepared_usable_energy_before: None,
             combine_environmental_source: None,
+            stored_source_index: None,
             combine_environmental_source_index: None,
         };
 
@@ -2270,6 +2272,7 @@ mod decomposition_finalization_tests {
             prepared_ledger_before: None,
             prepared_usable_energy_before: None,
             combine_environmental_source: Some((usize::MAX, source.clone())),
+            stored_source_index: None,
             combine_environmental_source_index: Some(0),
         };
         simulation.organisms[0].active_transformation_id = Some(transformation.id);
