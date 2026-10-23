@@ -7,14 +7,12 @@ pub(crate) fn recycle_dead_organism(
     ledger: &mut EnergyLedger,
 ) -> Option<crate::decomposition::DecomposingBody> {
     let position = organism.occupied_cells.first().cloned()?;
+    let energy = organism.usable_energy;
     let developing_energy = organism
         .reproductive_construction
         .as_ref()
         .map_or(0.0, |construction| construction.developing_energy);
-    let energy = organism.usable_energy;
     let total_energy = energy + developing_energy;
-    // Validate both stores before moving material or energy, so malformed
-    // state cannot leave a partially recycled organism.
     if !energy.is_finite()
         || energy < 0.0
         || !developing_energy.is_finite()
@@ -24,32 +22,52 @@ pub(crate) fn recycle_dead_organism(
         return None;
     }
 
-    for entry in organism.stored_material.drain_entries() {
+    // Stage every ownership change against local copies. No material is
+    // removed from its live holder and no energy counter changes until all
+    // destinations and both energy transfers have passed validation.
+    let mut staged_storage = organism.stored_material.clone();
+    let mut staged_construction = organism.reproductive_construction.clone();
+    let mut deposits = Vec::new();
+    for entry in staged_storage.drain_entries() {
         let crate::material_storage::StoredMaterial::Physical(material) = entry;
-        environment.field.deposit(position.x, position.y, material);
+        deposits.push((position.x, position.y, material));
     }
-    let mut construction = organism.reproductive_construction.take();
-    if let Some(construction) = construction.as_mut() {
+    if let Some(construction) = staged_construction.as_mut() {
         for entry in construction.committed_material.drain_entries() {
             let crate::material_storage::StoredMaterial::Physical(material) = entry;
-            environment.field.deposit(position.x, position.y, material);
+            deposits.push((position.x, position.y, material));
         }
     }
 
     let mut body =
         crate::decomposition::DecomposingBody::new(organism.structure.clone(), 0.0, position)?;
-    if !ledger.transfer(&mut organism.usable_energy, &mut body.energy_budget, energy) {
+    let mut staged_ledger = ledger.clone();
+    let mut staged_parent_energy = energy;
+    let mut staged_developing_energy = developing_energy;
+    if !staged_ledger.transfer(&mut staged_parent_energy, &mut body.energy_budget, energy) {
         return None;
     }
-    if let Some(construction) = construction.as_mut() {
-        if !ledger.transfer(
-            &mut construction.developing_energy,
+    if let Some(construction) = staged_construction.as_mut() {
+        if !staged_ledger.transfer(
+            &mut staged_developing_energy,
             &mut body.energy_budget,
             developing_energy,
         ) {
             return None;
         }
+        construction.developing_energy = staged_developing_energy;
     }
+
+    // Batch deposit validates every destination and object before mutating the
+    // field. After this succeeds, the remaining holder/ledger assignments are
+    // infallible and commit the same ownership transition.
+    if !environment.field.deposit_physical_batch(deposits) {
+        return None;
+    }
+    organism.usable_energy = staged_parent_energy;
+    organism.stored_material = staged_storage;
+    organism.reproductive_construction = None;
+    *ledger = staged_ledger;
     Some(body)
 }
 
