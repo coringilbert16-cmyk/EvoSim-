@@ -1130,7 +1130,11 @@ mod tests {
         let catalog = default_catalog();
         let mut original_unit = StructuralUnit::new(
             "Carbon",
-            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         );
         assert!(original_unit.realize_default_geometry(&catalog));
         let mut original_structure = OrganismStructure::new();
@@ -1150,18 +1154,28 @@ mod tests {
         };
         let source = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
-            vec![Placement { x: 100.0, y: 100.0, rotation_radians: 0.0 }],
+            vec![Placement {
+                x: 100.0,
+                y: 100.0,
+                rotation_radians: 0.0,
+            }],
             &catalog,
         )
         .expect("parent-held source must be a valid physical constituent");
         let mut parent_storage = MaterialStorage::default();
-        parent_storage.entries.push(StoredMaterial::Physical(source));
+        parent_storage
+            .entries
+            .push(StoredMaterial::Physical(source));
         let stored_before = parent_storage.entries.clone();
 
         let mut child = developing_organism(&construction);
         let mut candidate_unit = StructuralUnit::new(
             "Carbon",
-            Placement { x: 2.0, y: 0.0, rotation_radians: 0.0 },
+            Placement {
+                x: 2.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         );
         assert!(candidate_unit.realize_default_geometry(&catalog));
         child.structure.add_unit(candidate_unit);
@@ -1179,7 +1193,9 @@ mod tests {
             height: 1000.0,
             catalog: catalog.clone(),
             field: crate::environment::ActiveMaterialField::new(
-                1000.0, 1000.0, crate::environment::DEFAULT_CELL_SIZE,
+                1000.0,
+                1000.0,
+                crate::environment::DEFAULT_CELL_SIZE,
             ),
         };
         let mut ledger = EnergyLedger::default();
