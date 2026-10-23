@@ -4041,7 +4041,10 @@ mod parallel_mixed_boundary_visibility_tests {
             assert!(paths.iter().all(|path| {
                 path.hits.iter().all(|(body, unit)| {
                     *body < bodies.len()
-                        && bodies[*body].parts.iter().any(|part| part.unit_index == *unit)
+                        && bodies[*body]
+                            .parts
+                            .iter()
+                            .any(|part| part.unit_index == *unit)
                 })
             }));
         }
