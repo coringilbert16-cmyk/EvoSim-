@@ -62,17 +62,16 @@ fn restore_failed_transformation_material(
 
     // A stored-material BREAK temporarily removes its source from the
     // organism's storage when the transformation starts. If preparation fails,
-    // put that exact source back instead of silently dropping it.
+    // return that exact escrow to the same holder position. Intrinsic coordinates
+    // are not world coordinates and must never be used as a fallback deposit.
     if let Some(organism) = organism {
-        // The source was already owned by storage before this transformation
-        // began. Recovery must preserve that exact escrow even if validation
-        // now rejects it; intrinsic coordinates are not world coordinates.
-        organism
-            .stored_material
-            .entries
-            .push(crate::material_storage::StoredMaterial::Physical(
-                source.clone(),
-            ));
+        let index = crate::transformation::original_stored_source_index(transformation)
+            .unwrap_or(organism.stored_material.entries.len())
+            .min(organism.stored_material.entries.len());
+        organism.stored_material.entries.insert(
+            index,
+            crate::material_storage::StoredMaterial::Physical(source.clone()),
+        );
     }
 }
 
@@ -1499,13 +1498,38 @@ mod decomposition_finalization_tests {
             &simulation.environment.catalog,
         )
         .expect("test source should realize");
+        let catalog = simulation.environment.catalog.clone();
+        let make_neighbor = |name: &str, x: f64| {
+            PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("single-resource storage neighbor should be realizable")
+        };
+        let neighbor_before = make_neighbor("Nitrogen", -2.0);
+        let neighbor_after_one = make_neighbor("Phosphorus", 2.0);
+        let neighbor_after_two = make_neighbor("Sulfur", 4.0);
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(neighbor_before.clone()));
         assert!(simulation.organisms[0]
             .stored_material
             .store_physical_instance(source));
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(neighbor_after_one.clone()));
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(neighbor_after_two.clone()));
 
         let decision = ActionCandidate {
             action: ActionKind::Break,
-            context_key: Some("stored:0:bond:0".into()),
+            context_key: Some("stored:1:bond:0".into()),
         };
         let mut next_id = 1;
         let mut transformation = Simulation::try_start_transformation(
@@ -1527,8 +1551,13 @@ mod decomposition_finalization_tests {
 
         assert_eq!(
             simulation.organisms[0].stored_material.entries,
-            vec![StoredMaterial::Physical(malformed)],
-            "recovery must preserve malformed escrow instead of losing it or depositing intrinsic coordinates"
+            vec![
+                StoredMaterial::Physical(neighbor_before),
+                StoredMaterial::Physical(malformed),
+                StoredMaterial::Physical(neighbor_after_one),
+                StoredMaterial::Physical(neighbor_after_two),
+            ],
+            "failed preparation must restore malformed escrow at its original index and preserve neighbor order"
         );
         assert_eq!(simulation.organisms[0].active_transformation_id, None);
     }
