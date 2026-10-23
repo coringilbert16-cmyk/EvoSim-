@@ -647,3 +647,10 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 
 - Commit `294de15f58340c006dc6817da6ad19a5e640efee` failed the exact-head workflow's formatting check; rustfmt required a multiline import. The focused logic tests did not run on that commit.
 - Formatting-only fix is `080852d365dd66016985b90e0e931647313d628f`. Exact-head workflow status is not yet available from the lookup; no verification claim yet. Do not stack another source change before the focused gate passes.
+
+
+## Canonical construction design audit — 2026-10-22, Section 17.129
+
+- Target model is one parent-owned physical graph for all attached units, including the second genome's structure. Reproductive construction should retain genome/developmental metadata only—not a second graph or separate developing energy/stress/maintenance accounts. Parent usable energy funds construction atomically; parent maintenance, stress, death, and resonance operate once over the aggregate. Only unattached stored material remains in storage.
+- Growth should trial against the full parent graph for collision truth but restrict attachment anchors to the developing core's stable IDs/component. Source storage, graph mutation, bond/energy settlement, and core-ID update must commit/rollback together. Do not invent an attachment bond or energy; define whether contact alone is sufficient or use the ordinary bond path.
+- Movement, world-tone, energy inventory, core-specific viability, and eventual division must migrate together. Current exact-head workflow for commit `080852d365dd66016985b90e0e931647313d628f` remains in progress; no verification claim yet. See plan Section 17.129.
