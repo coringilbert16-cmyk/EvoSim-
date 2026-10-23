@@ -376,6 +376,16 @@ impl Simulation {
         organism: &mut Organism,
         environment: &mut Environment,
     ) {
+        // A multi-tick transformation may hold an escrowed storage index or a
+        // prepared storage snapshot. Acquiring contained material while it is
+        // in flight can shift a stored-BREAK rollback index or let a prepared
+        // COMBINE snapshot overwrite newly acquired material. Defer acquisition
+        // until the transformation resolves so the transaction's holder view
+        // remains isolated for its full lifetime.
+        if organism.active_transformation_id.is_some() {
+            return;
+        }
+
         let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
             &organism.structure,
             &environment.catalog,
