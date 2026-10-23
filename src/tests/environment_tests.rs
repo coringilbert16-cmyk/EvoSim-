@@ -172,7 +172,6 @@ fn exact_fluid_arc_region_check_allows_chord_contact_but_rejects_curve_escape() 
     ));
 }
 
-
 #[test]
 fn physical_batch_deposit_rejects_late_invalid_destination_without_partial_commit() {
     use crate::physical_material::PhysicalMaterial;
@@ -234,7 +233,11 @@ fn physical_batch_deposit_commits_all_validated_objects() {
     ]));
 
     assert_eq!(
-        field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>(),
+        field
+            .cells
+            .iter()
+            .map(|cell| cell.physical_materials.len())
+            .sum::<usize>(),
         2
     );
     assert_eq!(field.revision, 2);
@@ -269,10 +272,7 @@ fn physical_batch_deposit_rejects_late_malformed_object_without_partial_commit()
     let before_cells = field.cells.clone();
     let before_revision = field.revision;
 
-    assert!(!field.deposit_physical_batch(vec![
-        (12.5, 12.5, valid),
-        (37.5, 12.5, malformed),
-    ]));
+    assert!(!field.deposit_physical_batch(vec![(12.5, 12.5, valid), (37.5, 12.5, malformed),]));
     assert_eq!(field.cells, before_cells);
     assert_eq!(field.revision, before_revision);
 }
