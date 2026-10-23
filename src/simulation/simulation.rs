@@ -48,8 +48,7 @@ fn restore_failed_transformation_material(
         return;
     };
     if transformation.environmental_source {
-        if !crate::transformation::restore_environmental_break_source(transformation, environment)
-        {
+        if !crate::transformation::restore_environmental_break_source(transformation, environment) {
             if let Some(owner) = organism.as_deref_mut() {
                 owner.stored_material.entries.push(
                     crate::material_storage::StoredMaterial::Physical(source.clone()),
@@ -68,7 +67,9 @@ fn restore_failed_transformation_material(
                             .deposit(placement.x, placement.y, source.clone())
                     });
                 if !deposited && !environment.field.cells.is_empty() {
-                    environment.field.cells[0].physical_materials.push(source.clone());
+                    environment.field.cells[0]
+                        .physical_materials
+                        .push(source.clone());
                     environment.field.mark_changed_at_index(0);
                 }
             }
@@ -1590,11 +1591,7 @@ mod decomposition_finalization_tests {
             width: 1000.0,
             height: 1000.0,
             catalog: catalog.clone(),
-            field: ActiveMaterialField::new(
-                1000.0,
-                1000.0,
-                crate::environment::DEFAULT_CELL_SIZE,
-            ),
+            field: ActiveMaterialField::new(1000.0, 1000.0, crate::environment::DEFAULT_CELL_SIZE),
         };
         let make_single = |name: &str, x: f64| {
             PhysicalMaterial::realized(
@@ -1653,9 +1650,7 @@ mod decomposition_finalization_tests {
             remaining_ticks: 1,
             prepared_energy: None,
             pending_experience: None,
-            decision_context_key: Some(format!(
-                "environment:cell:{cell_index}:material:1:bond:0"
-            )),
+            decision_context_key: Some(format!("environment:cell:{cell_index}:material:1:bond:0")),
             prepared_structure: None,
             prepared_stored_material: None,
             prepared_usable_energy: None,
