@@ -1561,6 +1561,14 @@ mod tests {
             Some(1),
             "older serialized transactions must retain the decision-key fallback"
         );
+
+        let mut legacy_json = serde_json::to_value(&transformation).unwrap();
+        let fields = legacy_json.as_object_mut().unwrap();
+        fields.remove("stored_source_index");
+        fields.remove("environmental_source_location");
+        let decoded: ActiveTransformation = serde_json::from_value(legacy_json).unwrap();
+        assert_eq!(decoded.stored_source_index, None);
+        assert_eq!(decoded.environmental_source_location, None);
     }
 
     fn environmental_break_test_organism(
