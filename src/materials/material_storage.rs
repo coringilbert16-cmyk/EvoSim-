@@ -110,6 +110,46 @@ impl MaterialStorage {
             .is_ok()
     }
 
+    /// Validate and convert a batch of environmental physical objects into
+    /// storage entries without mutating the holder. The caller can then remove
+    /// the source objects and commit these prepared entries as one transfer.
+    pub(crate) fn prepare_physical_batch_at_owner_anchor(
+        instances: Vec<PhysicalMaterial>,
+        anchor: Placement,
+    ) -> Option<Vec<StoredMaterial>> {
+        let mut prepared = Vec::with_capacity(instances.len());
+        for instance in instances {
+            let origin = instance
+                .placements
+                .as_ref()
+                .and_then(|placements| placements.first())
+                .copied()?;
+            if !instance.is_realized()
+                || instance.material.parts.is_empty()
+                || !instance.material.is_valid()
+                || !Self::is_discrete(&instance.material)
+            {
+                return None;
+            }
+            let mut instance = instance.into_intrinsic_frame()?;
+            instance.owner_relative_origin = Some(Placement {
+                x: origin.x - anchor.x,
+                y: origin.y - anchor.y,
+                rotation_radians: origin.rotation_radians,
+            });
+            prepared.push(StoredMaterial::Physical(instance));
+        }
+        Some(prepared)
+    }
+
+    /// Commit entries previously validated by the batch preparation method.
+    /// Reversing before front insertion preserves the old per-item insertion
+    /// ordering while avoiding a clone of the existing inventory.
+    pub(crate) fn commit_prepared_physical_batch(&mut self, mut prepared: Vec<StoredMaterial>) {
+        prepared.reverse();
+        self.entries.splice(0..0, prepared);
+    }
+
     pub(crate) fn try_store_physical_instance_at_owner_anchor(
         &mut self,
         instance: PhysicalMaterial,
@@ -479,6 +519,58 @@ mod tests {
         ));
         assert!(storage.take_unstructured(1).is_none());
         assert_eq!(storage.materials_snapshot(), vec![m]);
+    }
+
+    #[test]
+    fn prepared_physical_batch_preserves_owner_offsets_and_rejects_fractional_members() {
+        use crate::physical_material::PhysicalMaterial;
+
+        let catalog = catalog();
+        let anchor = Placement {
+            x: 20.0,
+            y: 30.0,
+            rotation_radians: 0.0,
+        };
+        let first = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement { x: 21.0, y: 32.0, rotation_radians: 0.25 }],
+            &catalog,
+        ).expect("first object should be realized");
+        let second = PhysicalMaterial::realized(
+            Material::free_base("Nitrogen", 1.0),
+            vec![Placement { x: 24.0, y: 35.0, rotation_radians: 0.5 }],
+            &catalog,
+        ).expect("second object should be realized");
+
+        let prepared = MaterialStorage::prepare_physical_batch_at_owner_anchor(
+            vec![first, second],
+            anchor,
+        ).expect("valid batch should prepare atomically");
+        let mut storage = MaterialStorage::default();
+        storage.commit_prepared_physical_batch(prepared);
+        assert_eq!(storage.physical_count(), 2);
+        let offsets: Vec<_> = storage.entries.iter().map(|entry| match entry {
+            StoredMaterial::Physical(instance) => instance.owner_relative_origin.unwrap(),
+        }).collect();
+        assert_eq!(offsets[0].x, 4.0);
+        assert_eq!(offsets[0].y, 5.0);
+        assert_eq!(offsets[1].x, 1.0);
+        assert_eq!(offsets[1].y, 2.0);
+
+        let fractional = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.5),
+            vec![Placement { x: 1.0, y: 2.0, rotation_radians: 0.0 }],
+            &catalog,
+        ).expect("fractional test object should have geometry");
+        let valid = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            &catalog,
+        ).expect("test object should be realized");
+        assert!(MaterialStorage::prepare_physical_batch_at_owner_anchor(
+            vec![valid, fractional],
+            anchor,
+        ).is_none());
     }
 
     #[test]
