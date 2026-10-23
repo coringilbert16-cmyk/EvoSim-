@@ -762,7 +762,7 @@ impl Simulation {
             return false;
         };
         let Some(target) = transformation.stored_bond.as_ref() else {
-            organism.active_transformation_id = None;
+            restore_failed_stored_break_source(transformation, organism, environment);
             return false;
         };
         // Stored environmental compounds retain their bond endpoints, but
@@ -772,7 +772,7 @@ impl Simulation {
         // Validate the exact bond before settling the transaction. The physical
         // structure itself is not changed until the following tick.
         if stored.break_internal_bond(target).is_none() {
-            organism.active_transformation_id = None;
+            restore_failed_stored_break_source(transformation, organism, environment);
             return false;
         }
 
@@ -786,7 +786,7 @@ impl Simulation {
             heat_dissipated: 0.0,
         };
         if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
-            organism.active_transformation_id = None;
+            restore_failed_stored_break_source(transformation, organism, environment);
             return false;
         }
 
@@ -1538,6 +1538,75 @@ mod tests {
             "failed stored BREAK must restore the source at its exact original index"
         );
         assert_eq!(organism.active_transformation_id, None);
+    }
+
+    #[test]
+    fn failed_stored_break_preparation_restores_escrowed_source() {
+        use crate::physical_material::PhysicalMaterial;
+        use crate::resources::{InternalBond, Material};
+        use crate::structure::Placement;
+
+        let catalog = crate::resources::default_catalog();
+        let mut organism = environmental_break_test_organism("stored-break-prepare-failure", None);
+        let source = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("bonded stored source should be physically realizable");
+        assert!(organism.stored_material.store_physical_instance(source));
+        let entries_before = organism.stored_material.entries.clone();
+        let decision = ActionCandidate {
+            action: ActionKind::Break,
+            context_key: Some("stored:0:bond:0".into()),
+        };
+        let mut next_id = 1;
+        let mut transformation =
+            Simulation::try_start_transformation(&mut organism, &catalog, &mut next_id, &decision)
+                .expect("stored bond should reserve for BREAK");
+        transformation.stored_bond = None;
+
+        let mut environment = Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog,
+            field: crate::environment::ActiveMaterialField::new(
+                1000.0,
+                1000.0,
+                crate::environment::DEFAULT_CELL_SIZE,
+            ),
+        };
+        let mut ledger = EnergyLedger::default();
+        assert!(!Simulation::prepare_transformation(
+            &mut transformation,
+            &mut organism,
+            &mut environment,
+            &mut ledger,
+            None,
+        ));
+        assert_eq!(
+            organism.stored_material.entries, entries_before,
+            "failed preparation must return the exact source to storage"
+        );
+        assert_eq!(organism.active_transformation_id, None);
+        assert_eq!(ledger, EnergyLedger::default());
     }
 
     fn environmental_break_test_organism(
