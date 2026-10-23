@@ -767,7 +767,9 @@ mod tests {
         assert_eq!(stale.len(), 1);
         assert_eq!(stale.manifest.entries, 1);
         assert_eq!(
-            stale.get(&committed.key).map(|record| record.static_potential),
+            stale
+                .get(&committed.key)
+                .map(|record| record.static_potential),
             Some(0.42)
         );
         assert!(stale.get(&failed_key).is_none());
@@ -777,7 +779,9 @@ mod tests {
         assert_eq!(reopened.manifest.entries, 1);
         assert!(reopened.get(&failed_key).is_none());
         assert_eq!(
-            reopened.get(&committed.key).map(|record| record.static_potential),
+            reopened
+                .get(&committed.key)
+                .map(|record| record.static_potential),
             Some(0.42)
         );
         drop(reopened);
