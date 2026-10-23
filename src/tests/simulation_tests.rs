@@ -853,8 +853,11 @@ mod integration_tests {
     #[test]
     fn structural_material_is_not_opened_by_storage() {
         let mut o = Simulation::create_initial_organism();
-        assert!(o.store_material(structured_carbon_hydrogen()));
-        assert_eq!(o.stored_material.count_structured(), 2);
+        let before_structured = o.stored_material.count_structured();
+        let material = structured_carbon_hydrogen();
+        assert!(o.store_material(material.clone()));
+        assert_eq!(o.stored_material.count_structured(), before_structured + 1);
+        assert!(o.stored_material.materials_snapshot().contains(&material));
     }
 
     fn add_test_break_bond(s: &mut Simulation) {
