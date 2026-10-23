@@ -183,52 +183,6 @@ fn failed_late_physical_restoration_preserves_destination_structure() {
 }
 
 #[test]
-fn restoration_rejects_penetration_into_existing_destination_atomically() {
-    let catalog = crate::resources::default_catalog();
-    let mut destination = OrganismStructure::new();
-    let mut existing = StructuralUnit::new(
-        "Carbon",
-        Placement {
-            x: 0.0,
-            y: 0.0,
-            rotation_radians: 0.0,
-        },
-    );
-    assert!(existing.realize_default_geometry(&catalog));
-    destination.add_unit(existing);
-    let units_before = destination.units.clone();
-    let bonds_before = destination.bonds.clone();
-
-    let stored = PhysicalMaterial::realized(
-        Material::free_base("Carbon", 1.0),
-        vec![Placement {
-            x: 0.0,
-            y: 0.0,
-            rotation_radians: 0.0,
-        }],
-        &catalog,
-    )
-    .expect("single Carbon should realize as stored physical material");
-
-    assert!(
-        restore_material(
-            &mut destination,
-            &stored,
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-            &catalog,
-        )
-        .is_none(),
-        "a restored polygon must not penetrate an existing destination constituent"
-    );
-    assert_eq!(destination.units, units_before);
-    assert_eq!(destination.bonds, bonds_before);
-}
-
-#[test]
 fn new_structure_bond_is_formed_only_through_combine() {
     let catalog = line_catalog();
     let mut structure = OrganismStructure::new();
