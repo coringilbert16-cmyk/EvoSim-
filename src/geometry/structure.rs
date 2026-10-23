@@ -653,16 +653,24 @@ impl PhysicalConstituentGraph {
         }
 
         let source_primary: HashSet<_> = self.genome_constituent_ids.iter().copied().collect();
-        if source_primary.len() != self.genome_constituent_ids.len()
-            || !source_primary.is_subset(&source_ids)
-            || self
+        let mut source_core_ids = source_primary.clone();
+        let source_core_metadata_valid = source_primary.len() == self.genome_constituent_ids.len()
+            && source_primary.is_subset(&source_ids)
+            && self
                 .additional_genome_constituent_groups
                 .iter()
-                .any(|group| {
+                .all(|group| {
                     let group_ids: HashSet<_> = group.iter().copied().collect();
-                    group_ids.len() != group.len() || !group_ids.is_subset(&source_ids)
-                })
-        {
+                    let valid = !group.is_empty()
+                        && group_ids.len() == group.len()
+                        && group_ids.is_subset(&source_ids)
+                        && source_core_ids.is_disjoint(&group_ids);
+                    if valid {
+                        source_core_ids.extend(group_ids);
+                    }
+                    valid
+                });
+        if !source_core_metadata_valid {
             return None;
         }
         if !source_primary.is_disjoint(&selected)
@@ -1479,6 +1487,40 @@ mod tests {
         invalid_next_id.next_constituent_id = 2;
         assert!(invalid_next_id
             .subgraph_for_physical_ids(&[a_id, b_id], &[])
+            .is_none());
+    }
+
+    #[test]
+    fn subgraph_rejects_empty_or_overlapping_genome_groups() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut empty_group_graph = OrganismStructure::new();
+        let parent = empty_group_graph.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = empty_group_graph.physical_id(parent).unwrap();
+        empty_group_graph.set_genome_constituent_ids([parent_id]);
+        let child = empty_group_graph.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_id = empty_group_graph.physical_id(child).unwrap();
+        empty_group_graph
+            .additional_genome_constituent_groups
+            .push(Vec::new());
+        assert!(empty_group_graph
+            .subgraph_for_physical_ids(&[child_id], &[])
+            .is_none());
+
+        let mut overlapping_group_graph = OrganismStructure::new();
+        let parent = overlapping_group_graph.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = overlapping_group_graph.physical_id(parent).unwrap();
+        overlapping_group_graph.set_genome_constituent_ids([parent_id]);
+        let child = overlapping_group_graph.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_id = overlapping_group_graph.physical_id(child).unwrap();
+        overlapping_group_graph
+            .additional_genome_constituent_groups
+            .push(vec![parent_id]);
+        assert!(overlapping_group_graph
+            .subgraph_for_physical_ids(&[child_id], &[])
             .is_none());
     }
 
