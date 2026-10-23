@@ -3855,3 +3855,9 @@ Internal/adjacent budding remains the target: a second genome core begins beside
 - Expanded `world_tone_settlement_rejects_counter_overflow_without_partial_updates` on PR #205 to exercise overflow of each cumulative sink counter independently: external input, dissipated heat, and escaped energy. Each case asserts that all three cumulative counters remain unchanged, preventing a future edit from partially committing an earlier counter before discovering a later overflow.
 - Retained the non-finite incident-energy rejection assertion. The settlement function also validates that captured resonance + heat + escape balances incident energy before staging counters.
 - This is still ledger-level atomicity coverage, not a complete world-conservation proof. The latest test commit is `82e7787b0863c6547508e93908835454a4493aa3`; no workflow run had appeared for that exact head at the time of this note.
+
+## 17.183 Chemical BREAK work-overflow transaction regression — 2026-10-23
+
+- Added `chemical_break_ledger_overflow_preserves_bond_and_resonance` in `src/chemistry/chemical_reaction.rs` on PR #205. The test seeds compatible retained resonance, sets cumulative work to `f64::MAX`, then attempts a BREAK whose work addition overflows. It requires rejection while preserving the graph's units/bonds, usable energy, resonance reservoir, and existing work/heat counters.
+- This tests the cross-subsystem boundary: a failed structural transaction must not consume resonance from its trial reservoir or mutate the bond graph when the ledger refuses settlement. It complements the world-tone sink-counter overflow regression.
+- Exact-head CI has not yet appeared for the latest test commit. Prior workflow `40007106124` remains in progress on an earlier head; results from that run cannot validate this later commit.
