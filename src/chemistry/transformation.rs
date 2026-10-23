@@ -897,8 +897,10 @@ pub(crate) fn restore_combine_environmental_source(
     };
     let insertion_index = transformation
         .combine_environmental_source_index
-        .unwrap_or(cell.physical_materials.len())
-        .min(cell.physical_materials.len());
+        .unwrap_or(cell.physical_materials.len());
+    if insertion_index > cell.physical_materials.len() {
+        return false;
+    }
     cell.physical_materials
         .insert(insertion_index, source.clone());
     environment.field.mark_changed_at_index(*cell_index);
@@ -1551,6 +1553,20 @@ mod tests {
             environment.field.cells[cell_index].physical_materials,
             vec![before, source, after],
             "failed COMBINE must restore escrow to the exact source list position"
+        );
+
+        let mut invalid_index = transformation.clone();
+        invalid_index.combine_environmental_source_index = Some(usize::MAX);
+        let before_invalid_restore =
+            environment.field.cells[cell_index].physical_materials.clone();
+        assert!(
+            !restore_combine_environmental_source(&invalid_index, &mut environment),
+            "corrupt source indices must fail closed instead of silently clamping"
+        );
+        assert_eq!(
+            environment.field.cells[cell_index].physical_materials,
+            before_invalid_restore,
+            "a rejected exact restore must not mutate the environmental inventory"
         );
     }
 
