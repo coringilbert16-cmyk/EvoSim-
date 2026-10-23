@@ -472,7 +472,10 @@ fn environmental_break_source_at(
     cell_index: usize,
     material_index: usize,
     bond_index: usize,
-) -> Option<(crate::physical_material::PhysicalMaterial, crate::resources::InternalBond)> {
+) -> Option<(
+    crate::physical_material::PhysicalMaterial,
+    crate::resources::InternalBond,
+)> {
     let instance = environment
         .field
         .cells
@@ -497,8 +500,7 @@ pub(crate) fn try_start_environmental_break(
         return None;
     }
     let key = decision.context_key.as_deref()?;
-    let (cell_index, material_index, bond_index) =
-        parse_environmental_break_context_key(key)?;
+    let (cell_index, material_index, bond_index) = parse_environmental_break_context_key(key)?;
 
     let regions = crate::interior_geometry::find_accessible_interior_regions(
         &organism.structure,
@@ -1412,13 +1414,9 @@ mod tests {
         let (parsed_cell, parsed_material, parsed_bond) =
             parse_environmental_break_context_key(&decision_key)
                 .expect("valid decision context should parse");
-        let (selected, selected_bond) = environmental_break_source_at(
-            &environment,
-            parsed_cell,
-            parsed_material,
-            parsed_bond,
-        )
-        .expect("context key should resolve the indexed environmental source");
+        let (selected, selected_bond) =
+            environmental_break_source_at(&environment, parsed_cell, parsed_material, parsed_bond)
+                .expect("context key should resolve the indexed environmental source");
         assert_eq!(selected, source);
         assert_eq!(
             selected_bond,
