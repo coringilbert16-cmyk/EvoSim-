@@ -654,19 +654,19 @@ mod integration_tests {
         // starting inventory, rather than coupling this test to its seed layout.
         assert_eq!(
             o.stored_material.len(),
-            before_len + 1
+            before_len + 1,
         );
         assert_eq!(
             o.stored_material.count_unstructured(),
-            before_unstructured + 5
+            before_unstructured + 5,
         );
         assert_eq!(
             o.stored_material.count_structured(),
-            before_structured
+            before_structured,
         );
         assert_eq!(
             o.stored_material.total_amount(),
-            before_amount + 5.0
+            before_amount + 5.0,
         );
     }
     #[test]
@@ -678,7 +678,7 @@ mod integration_tests {
         assert!(o.stored_material.materials_snapshot().contains(&m));
         assert_eq!(
             o.stored_material.count_structured(),
-            before_structured + 1
+            before_structured + 1,
         );
     }
     #[test]
