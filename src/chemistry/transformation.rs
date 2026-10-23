@@ -1400,10 +1400,19 @@ mod tests {
         .expect("initial organism should expose accessible interior");
         let region = regions
             .iter()
-            .max_by(|a, b| a.area.partial_cmp(&b.area).unwrap_or(std::cmp::Ordering::Equal))
+            .max_by(|a, b| {
+                a.area
+                    .partial_cmp(&b.area)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .expect("initial organism should have an accessible region");
         let (min_x, max_x, min_y, max_y) = region.boundary.iter().fold(
-            (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY),
+            (
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+            ),
             |(min_x, max_x, min_y, max_y), &(x, y)| {
                 (min_x.min(x), max_x.max(x), min_y.min(y), max_y.max(y))
             },
@@ -1416,11 +1425,22 @@ mod tests {
                 let candidate = PhysicalMaterial::realized(
                     Material {
                         parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-                        internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+                        internal_bonds: vec![InternalBond {
+                            part_a: 0,
+                            part_b: 1,
+                        }],
                     },
                     vec![
-                        Placement { x, y, rotation_radians: 0.0 },
-                        Placement { x: x + 0.838, y, rotation_radians: 0.0 },
+                        Placement {
+                            x,
+                            y,
+                            rotation_radians: 0.0,
+                        },
+                        Placement {
+                            x: x + 0.838,
+                            y,
+                            rotation_radians: 0.0,
+                        },
                     ],
                     &simulation.environment.catalog,
                 )
@@ -1444,26 +1464,31 @@ mod tests {
             .expect("source anchor should map to a field cell");
         let before = PhysicalMaterial::realized(
             Material::free_base("Nitrogen", 1.0),
-            vec![Placement { x: anchor.x - 0.1, y: anchor.y, rotation_radians: 0.0 }],
+            vec![Placement {
+                x: anchor.x - 0.1,
+                y: anchor.y,
+                rotation_radians: 0.0,
+            }],
             &simulation.environment.catalog,
         )
         .expect("preceding neighbor should be realizable");
         let after = PhysicalMaterial::realized(
             Material::free_base("Sulfur", 1.0),
-            vec![Placement { x: anchor.x + 0.1, y: anchor.y, rotation_radians: 0.0 }],
+            vec![Placement {
+                x: anchor.x + 0.1,
+                y: anchor.y,
+                rotation_radians: 0.0,
+            }],
             &simulation.environment.catalog,
         )
         .expect("following neighbor should be realizable");
         simulation.environment.field.cells[cell_index].physical_materials =
             vec![before.clone(), source.clone(), after.clone()];
 
-        let candidates = environmental_break_candidates(organism, &simulation.environment);
-        let decision = candidates
+        let expected_key = format!("environment:cell:{cell_index}:material:1:bond:0");
+        let decision = environmental_break_candidates(organism, &simulation.environment)
             .into_iter()
-            .find(|candidate| {
-                candidate.context_key.as_deref()
-                    == Some(format!("environment:cell:{cell_index}:material:1:bond:0").as_str())
-            })
+            .find(|candidate| candidate.context_key.as_deref() == Some(expected_key.as_str()))
             .expect("candidate should identify the exact source index and bond");
         let mut next_id = 1;
         let transformation = try_start_environmental_break(
@@ -1475,9 +1500,19 @@ mod tests {
         .expect("indexed environmental BREAK should start");
 
         assert_eq!(transformation.stored_material, Some(source));
-        assert_eq!(transformation.stored_bond, Some(
-            transformation.stored_material.as_ref().unwrap().internal_connections.as_ref().unwrap()[0].clone()
-        ));
+        assert_eq!(
+            transformation.stored_bond,
+            Some(
+                transformation
+                    .stored_material
+                    .as_ref()
+                    .unwrap()
+                    .internal_connections
+                    .as_ref()
+                    .unwrap()[0]
+                    .clone()
+            )
+        );
         assert_eq!(
             simulation.environment.field.cells[cell_index].physical_materials,
             vec![before, after],
