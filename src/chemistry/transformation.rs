@@ -872,13 +872,16 @@ fn restore_failed_stored_break_source(
             // Stored BREAK escrow originated at this exact storage index. Since
             // reservation preserves the remaining entry order, reinserting here
             // restores the previous holder contents when the transaction fails.
-            let index = original_stored_source_index(transformation)
-                .unwrap_or(organism.stored_material.entries.len())
-                .min(organism.stored_material.entries.len());
-            organism.stored_material.entries.insert(
-                index,
-                crate::material_storage::StoredMaterial::Physical(source.clone()),
-            );
+            let entry = crate::material_storage::StoredMaterial::Physical(source.clone());
+            if let Some(index) = original_stored_source_index(transformation)
+                .filter(|index| *index <= organism.stored_material.entries.len())
+            {
+                organism.stored_material.entries.insert(index, entry);
+            } else {
+                // Corrupt/missing index metadata cannot support exact positional
+                // rollback. Preserve the escrow without claiming the old order.
+                organism.stored_material.entries.push(entry);
+            }
         }
     }
     organism.active_transformation_id = None;
