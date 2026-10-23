@@ -147,11 +147,8 @@ fn failed_late_physical_restoration_preserves_destination_structure() {
     .expect("non-overlapping stored compound should realize");
     // Corrupt a persisted endpoint after realization. Restoration must stage
     // both constituents, reject the invalid stored connection, and roll back.
-    instance
-        .internal_connections
-        .as_mut()
-        .unwrap()[0]
-        .endpoint_a = ConnectionEndpoint::LineEndpoint { point_index: 99 };
+    instance.internal_connections.as_mut().unwrap()[0].endpoint_a =
+        ConnectionEndpoint::LineEndpoint { point_index: 99 };
 
     let mut destination = OrganismStructure::new();
     let mut existing = StructuralUnit::new(
