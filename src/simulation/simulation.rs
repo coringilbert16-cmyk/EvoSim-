@@ -25,43 +25,6 @@ fn should_prepare_transformation(
 
 const BUDDING_AVAILABILITY_FRACTION: f64 = 0.90;
 
-fn retain_environmental_escrow_in_field(
-    source: &crate::physical_material::PhysicalMaterial,
-    environment: &mut Environment,
-) {
-    let deposited = source
-        .placements
-        .as_ref()
-        .and_then(|placements| placements.first())
-        .is_some_and(|placement| {
-            environment
-                .field
-                .deposit(placement.x, placement.y, source.clone())
-        });
-    if !deposited && !environment.field.cells.is_empty() {
-        // Last-resort explicit world-field escrow. Never reinterpret a
-        // world-space placement as an owner-relative storage coordinate.
-        environment.field.cells[0]
-            .physical_materials
-            .push(source.clone());
-        environment.field.mark_changed_at_index(0);
-    }
-}
-
-fn quarantine_or_retain_environmental_source(
-    source: &crate::physical_material::PhysicalMaterial,
-    owner: &mut Organism,
-    environment: &mut Environment,
-) {
-    if !crate::transformation::quarantine_environmental_source_in_storage(
-        source,
-        owner,
-        environment,
-    ) {
-        retain_environmental_escrow_in_field(source, environment);
-    }
-}
-
 fn restore_failed_transformation_material(
     transformation: &crate::state::ActiveTransformation,
     mut organism: Option<&mut Organism>,
@@ -77,9 +40,9 @@ fn restore_failed_transformation_material(
         if !crate::transformation::restore_combine_environmental_source(transformation, environment)
         {
             if let Some(owner) = organism.as_deref_mut() {
-                quarantine_or_retain_environmental_source(source, owner, environment);
+                crate::transformation::quarantine_or_retain_environmental_source(source, owner, environment);
             } else {
-                retain_environmental_escrow_in_field(source, environment);
+                crate::transformation::retain_environmental_escrow_in_field(source, environment);
             }
         }
         return true;
@@ -91,11 +54,11 @@ fn restore_failed_transformation_material(
     if transformation.environmental_source {
         if !crate::transformation::restore_environmental_break_source(transformation, environment) {
             if let Some(owner) = organism.as_deref_mut() {
-                quarantine_or_retain_environmental_source(source, owner, environment);
+                crate::transformation::quarantine_or_retain_environmental_source(source, owner, environment);
             } else {
                 // An owner can disappear while a multi-tick operation is active.
                 // Keep the world-space source in the field if exact restoration fails.
-                retain_environmental_escrow_in_field(source, environment);
+                crate::transformation::retain_environmental_escrow_in_field(source, environment);
             }
         }
         return true;
