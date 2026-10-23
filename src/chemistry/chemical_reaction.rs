@@ -653,16 +653,17 @@ mod material_identity_tests {
             .resonant_energy
             .total_energy()
             .expect("resonance must be finite");
-        simulation.energy_ledger.total_work_expended = f64::MAX;
+        // Make the final heat-counter addition overflow while keeping the
+        // physical BREAK inputs ordinary and otherwise admissible.
+        simulation.energy_ledger.total_heat_dissipated = f64::MAX;
         let structure_before = simulation.organisms[0].structure.clone();
-        let heat_before = simulation.energy_ledger.total_heat_dissipated;
         let usable_before = simulation.organisms[0].usable_energy;
 
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
             reaction_energy: 0.25,
-            disruption_cost: f64::MAX,
+            disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: 0.25,
@@ -673,7 +674,7 @@ mod material_identity_tests {
                 &mut simulation.organisms[0],
                 &mut simulation.energy_ledger,
             ),
-            "adding the disruption cost to cumulative work must overflow and reject the BREAK"
+            "a cumulative heat-counter overflow must reject the BREAK"
         );
         assert_eq!(
             simulation.organisms[0].structure.units,
@@ -691,8 +692,8 @@ mod material_identity_tests {
             resonance_before
         );
         assert_eq!(simulation.organisms[0].usable_energy, usable_before);
-        assert_eq!(simulation.energy_ledger.total_work_expended, f64::MAX);
-        assert_eq!(simulation.energy_ledger.total_heat_dissipated, heat_before);
+        assert_eq!(simulation.energy_ledger.total_heat_dissipated, f64::MAX);
+        assert_eq!(simulation.energy_ledger.total_work_expended, 0.0);
     }
 
     #[test]
