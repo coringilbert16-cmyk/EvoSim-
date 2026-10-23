@@ -4059,3 +4059,10 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 
 - Follow-up audit found that the interaction equation bounds `abs(position_a - position_b)` by Dmax; it does not impose an absolute `[0, Dmax]` domain on either coordinate. The cache guard was narrowed to reject only non-finite positions, avoiding an unnecessary restriction on finite custom catalog coordinates.
 - The fingerprint is now `chemical-position=quantized-key-v2|finite-representable-only`; the tracked zero-entry manifest was updated accordingly. The test and dedicated workflow filter now cover NaN and positive/negative infinity. Verify this narrowed behavior on the current exact head.
+
+
+## 17.206 Stored BREAK preparation rollback must restore reserved source (2026-10-23)
+
+- `prepare_transformation` previously cleared `active_transformation_id` and returned false when a stored BREAK had missing/corrupt bond metadata or its ledger settlement was rejected, leaving the reserved physical source in transformation escrow without restoring the authoritative holder.
+- The current implementation now calls `restore_failed_stored_break_source` for those failure branches. For owner-stored material it reinserts at the original storage index when metadata is valid, preserving entry order; it clears the active transformation ID only after restoration. No ledger transaction is committed on these failure paths.
+- Regression `failed_stored_break_preparation_restores_escrowed_source` is covered by the existing focused `cargo test --locked failed_stored_break` workflow gate. PR #205 head `320fafee735b9a4f3a2949a919ad2ef797ee805b` is still in CI; verify exact-head test/full-suite/Clippy results before claiming it passes.
