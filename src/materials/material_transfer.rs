@@ -6,8 +6,9 @@ use crate::resources::Material;
 ///
 /// This is deliberately separate from `Material::take`: the latter is a
 /// legacy aggregate operation that can represent fractional material and must
-/// not be used for organism-facing physical transfer. Structured material is
-/// never fractionally extracted here.
+/// not be used for organism-facing physical transfer. Every constituent count
+/// must already be a whole number; a whole aggregate total does not make
+/// fractional per-resource counts physically valid.
 pub(crate) fn take_whole_unstructured(
     material: &mut Material,
     requested: usize,
@@ -16,6 +17,9 @@ pub(crate) fn take_whole_unstructured(
         || !material.is_valid()
         || material.has_internal_structure()
         || material.is_empty()
+        || material.parts.iter().any(|(_, amount)| {
+            !amount.is_finite() || *amount <= 0.0 || amount.fract().abs() > 1e-9
+        })
     {
         return None;
     }
