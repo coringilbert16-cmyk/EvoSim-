@@ -79,6 +79,10 @@ jobs:
       - name: Run focused chemical BREAK tests
         timeout-minutes: 5
         run: cargo test --locked chemical_break_
+      # Transaction rollback tests must report independently of the slow full suite.
+      - name: Run focused stored BREAK rollback tests
+        timeout-minutes: 5
+        run: cargo test --locked failed_stored_break
       # Expensive headless multigeneration validation is paused while the seed
       # topology is being finalized. Keep the normal Rust/Clippy gates active.
       - name: Run Rust tests
