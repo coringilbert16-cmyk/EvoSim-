@@ -1772,6 +1772,30 @@ mod decomposition_finalization_tests {
             for material in organism.stored_material.iter_materials() {
                 add(&mut totals, material);
             }
+            if let Some(construction) = organism.reproductive_construction.as_ref() {
+                for unit in &construction.developing_structure.units {
+                    add(&mut totals, &unit.material);
+                }
+                for material in construction.committed_material.iter_materials() {
+                    add(&mut totals, material);
+                }
+            }
+        }
+        // In-flight BREAK/environmental COMBINE sources are authoritative
+        // holders while removed from storage or the world field. Do not count
+        // prepared COMBINE snapshots: they intentionally duplicate live state.
+        for transformation in &simulation.active_transformations {
+            if let Some(source) = transformation.stored_material.as_ref() {
+                add(&mut totals, &source.material);
+            }
+            if let Some((_, source)) = transformation.combine_environmental_source.as_ref() {
+                add(&mut totals, &source.material);
+            }
+        }
+        for body in &simulation.decomposing_bodies {
+            for unit in &body.structure.units {
+                add(&mut totals, &unit.material);
+            }
         }
         for cell in &simulation.environment.field.cells {
             for material in &cell.materials {
