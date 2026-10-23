@@ -34,11 +34,7 @@ pub(crate) fn recycle_dead_organism(
     let mut staged_usable_energy = organism.usable_energy;
     let mut staged_developing_energy = developing_energy;
     let mut staged_body_energy = body.energy_budget;
-    if !staged_ledger.transfer(
-        &mut staged_usable_energy,
-        &mut staged_body_energy,
-        energy,
-    ) {
+    if !staged_ledger.transfer(&mut staged_usable_energy, &mut staged_body_energy, energy) {
         return None;
     }
     if !staged_ledger.transfer(
@@ -117,7 +113,8 @@ mod tests {
         };
 
         assert!(
-            recycle_dead_organism(&mut simulation.environment, &mut organism, &mut ledger).is_none(),
+            recycle_dead_organism(&mut simulation.environment, &mut organism, &mut ledger)
+                .is_none(),
             "invalid ledger must reject recycling before any holder commits"
         );
         assert_eq!(organism.stored_material.entries, stored_before);
