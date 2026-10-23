@@ -95,9 +95,6 @@ pub(crate) fn expel_physical_material(
         .unwrap_or(0.0);
     let mut material_near = f64::INFINITY;
     for (index, placement) in placements.iter().enumerate() {
-        let Some((name, _)) = physical.material.parts.get(index) else {
-            return false;
-        };
         let Some(shape) = expulsion_shape_for_part(&physical, index, &environment.catalog) else {
             return false;
         };
