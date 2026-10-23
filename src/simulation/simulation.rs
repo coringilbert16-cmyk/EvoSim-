@@ -25,6 +25,43 @@ fn should_prepare_transformation(
 
 const BUDDING_AVAILABILITY_FRACTION: f64 = 0.90;
 
+fn retain_environmental_escrow_in_field(
+    source: &crate::physical_material::PhysicalMaterial,
+    environment: &mut Environment,
+) {
+    let deposited = source
+        .placements
+        .as_ref()
+        .and_then(|placements| placements.first())
+        .is_some_and(|placement| {
+            environment
+                .field
+                .deposit(placement.x, placement.y, source.clone())
+        });
+    if !deposited && !environment.field.cells.is_empty() {
+        // Last-resort explicit world-field escrow. Never reinterpret a
+        // world-space placement as an owner-relative storage coordinate.
+        environment.field.cells[0]
+            .physical_materials
+            .push(source.clone());
+        environment.field.mark_changed_at_index(0);
+    }
+}
+
+fn quarantine_or_retain_environmental_source(
+    source: &crate::physical_material::PhysicalMaterial,
+    owner: &mut Organism,
+    environment: &mut Environment,
+) {
+    if !crate::transformation::quarantine_environmental_source_in_storage(
+        source,
+        owner,
+        environment,
+    ) {
+        retain_environmental_escrow_in_field(source, environment);
+    }
+}
+
 fn restore_failed_transformation_material(
     transformation: &crate::state::ActiveTransformation,
     mut organism: Option<&mut Organism>,
@@ -40,33 +77,9 @@ fn restore_failed_transformation_material(
         if !crate::transformation::restore_combine_environmental_source(transformation, environment)
         {
             if let Some(owner) = organism.as_deref_mut() {
-                if !crate::transformation::quarantine_environmental_source_in_storage(
-                    source,
-                    owner,
-                    environment,
-                ) {
-                    owner.stored_material.entries.push(
-                        crate::material_storage::StoredMaterial::Physical(source.clone()),
-                    );
-                }
+                quarantine_or_retain_environmental_source(source, owner, environment);
             } else {
-                // If both the source cell and owner are unavailable, retain the
-                // escrow in the world rather than dropping it.
-                let deposited = source
-                    .placements
-                    .as_ref()
-                    .and_then(|placements| placements.first())
-                    .is_some_and(|placement| {
-                        environment
-                            .field
-                            .deposit(placement.x, placement.y, source.clone())
-                    });
-                if !deposited && !environment.field.cells.is_empty() {
-                    environment.field.cells[0]
-                        .physical_materials
-                        .push(source.clone());
-                    environment.field.mark_changed_at_index(0);
-                }
+                retain_environmental_escrow_in_field(source, environment);
             }
         }
         return true;
@@ -78,28 +91,11 @@ fn restore_failed_transformation_material(
     if transformation.environmental_source {
         if !crate::transformation::restore_environmental_break_source(transformation, environment) {
             if let Some(owner) = organism.as_deref_mut() {
-                owner.stored_material.entries.push(
-                    crate::material_storage::StoredMaterial::Physical(source.clone()),
-                );
+                quarantine_or_retain_environmental_source(source, owner, environment);
             } else {
                 // An owner can disappear while a multi-tick operation is active.
-                // If location metadata is corrupt too, retain the escrow in the
-                // world field rather than silently dropping it.
-                let deposited = source
-                    .placements
-                    .as_ref()
-                    .and_then(|placements| placements.first())
-                    .is_some_and(|placement| {
-                        environment
-                            .field
-                            .deposit(placement.x, placement.y, source.clone())
-                    });
-                if !deposited && !environment.field.cells.is_empty() {
-                    environment.field.cells[0]
-                        .physical_materials
-                        .push(source.clone());
-                    environment.field.mark_changed_at_index(0);
-                }
+                // Keep the world-space source in the field if exact restoration fails.
+                retain_environmental_escrow_in_field(source, environment);
             }
         }
         return true;
@@ -2096,6 +2092,68 @@ mod decomposition_finalization_tests {
         assert_eq!(simulation.decomposing_bodies.len(), 1);
         assert!(simulation.decomposing_bodies[0].is_finished());
         assert_eq!(simulation.environment.field.total_amount(), before);
+    }
+
+    #[test]
+    fn malformed_environmental_escrow_never_enters_storage_in_world_coordinates() {
+        use crate::physical_material::PhysicalMaterial;
+        use crate::resources::Material;
+        use crate::state::ActiveTransformation;
+        use crate::structure::Placement;
+
+        let mut simulation = Simulation::new(929, 10.0);
+        let mut source = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 700.0,
+                y: 800.0,
+                rotation_radians: 0.25,
+            }],
+            &simulation.environment.catalog,
+        )
+        .expect("test source should realize");
+        source.placements = None;
+        let transformation = ActiveTransformation {
+            id: 811,
+            organism_id: simulation.organisms[0].id.clone(),
+            kind: crate::state::TransformationKind::Combine,
+            material: Material::free_base("", 0.0),
+            bond: None,
+            stored_material: None,
+            stored_bond: None,
+            environmental_source: true,
+            complexity: 1.0,
+            duration_ticks: 1,
+            remaining_ticks: 0,
+            prepared_energy: None,
+            pending_experience: None,
+            decision_context_key: None,
+            prepared_structure: None,
+            prepared_stored_material: None,
+            prepared_usable_energy: None,
+            prepared_stress: None,
+            prepared_ledger: None,
+            prepared_ledger_before: None,
+            prepared_usable_energy_before: None,
+            combine_environmental_source: Some((usize::MAX, source.clone())),
+            combine_environmental_source_index: Some(0),
+        };
+        simulation.organisms[0].active_transformation_id = Some(transformation.id);
+        let storage_before = simulation.organisms[0].stored_material.entries.clone();
+
+        assert!(restore_failed_transformation_material(
+            &transformation,
+            Some(&mut simulation.organisms[0]),
+            &mut simulation.environment,
+        ));
+        assert_eq!(simulation.organisms[0].stored_material.entries, storage_before);
+        assert!(
+            simulation.environment.field.cells[0]
+                .physical_materials
+                .contains(&source),
+            "unrestorable world-space escrow must remain explicitly held by the field"
+        );
+        assert_eq!(simulation.organisms[0].active_transformation_id, None);
     }
 
     #[test]
