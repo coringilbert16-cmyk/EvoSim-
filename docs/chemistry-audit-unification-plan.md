@@ -3863,3 +3863,8 @@ Internal/adjacent budding remains the target: a second genome core begins beside
 - Exact-head CI has not yet appeared for the latest test commit. Prior workflow `40007106124` remains in progress on an earlier head; results from that run cannot validate this later commit.
 
 - CI follow-up: exact-head workflow `40007152572` has now appeared for the PR #205 head that includes the world-tone counter test and chemical BREAK overflow regression. It is currently running focused chemistry accumulation/settlement tests; no pass/fail conclusion is available yet.
+
+## 17.184 Exact-head test correction — 2026-10-23
+
+- The first focused run for the new chemical BREAK regression exposed a test-fixture flaw: adding `0.5` to `f64::MAX` does not overflow because the increment is below the representable spacing at that magnitude. The test was corrected to use `disruption_cost: f64::MAX`, making the cumulative-work addition actually overflow before the transaction can mutate the graph or commit the trial resonance reservoir.
+- The same run showed the new world-tone test's field-by-field reassignment triggered an additional Clippy `field-reassign-with-default` diagnostic. Converted the fixture to a struct initializer to avoid introducing that lint. Existing repository Clippy debt remains separate; rerun against the corrected exact head before drawing conclusions.
