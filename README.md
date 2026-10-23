@@ -57,7 +57,8 @@ The full test suite is currently **not green**. A maintenance change is acceptab
 - [x] Verify COMBINE rollback restores the exact usable-energy and full ledger before-state; legacy serialized transactions retain the delta fallback.
 - [x] Verify environmental BREAK rollback rejects corrupt source indices without mutating environmental inventory.
 - [x] Verify the post-death regression preserves material/energy inventory and prevents reproductive construction progress without activating legacy `DecomposingBody`.
-- [x] Stage finished-body energy settlement and commit it only with a successful atomic physical-material deposit; focused rollback gate passes on PR #205 head `fc2e8d5bd49422bf83757a440a0cd9b241352bc1` (full-suite verification pending).
+- [x] Stage finished-body energy settlement and commit it only with a successful atomic physical-material deposit; focused rollback gate passes on PR #205 head `1318d2f64dbe71dd57271761f40580bfabc6cd20`.
+- [x] Gate late physical-restoration rollback independently; the destination-preservation regression passes on the same head. Full Rust suite and Clippy remain pending.
 - [ ] Establish an ordinary-chemistry path for stored/developing holders after death without a separate decomposition law or loss of exact ownership.
 - [ ] Prove global material/energy conservation and live sunlight/world-tone allocation; do not infer completion from the current focused gates.
 - [ ] Keep PR #196 constructor/Bob work separate from PR #205 chemistry changes.
