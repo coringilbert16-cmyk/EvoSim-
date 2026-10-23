@@ -643,20 +643,24 @@ mod material_identity_tests {
     #[test]
     fn chemical_break_ledger_overflow_preserves_bond_and_resonance() {
         let mut simulation = crate::state::Simulation::new(923, 10.0);
-        assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
         let bond = *simulation.organisms[0]
             .structure
             .bonds
             .first()
             .expect("seed organism should contain a structural bond");
+        assert!(
+            bond.bond_energy.is_finite() && bond.bond_energy > 0.0,
+            "fixture bond must have positive finite stored energy"
+        );
+        let disruption_cost = bond.bond_energy * 0.5;
+        let reaction_energy = disruption_cost * 0.5;
+        assert!(simulation.organisms[0]
+            .resonant_energy
+            .deposit(440.0, disruption_cost));
         let resonance_before = simulation.organisms[0]
             .resonant_energy
             .total_energy()
             .expect("resonance must be finite");
-        assert!(
-            bond.bond_energy > 0.25,
-            "fixture bond must leave a positive energy surplus so the BREAK dissipates heat"
-        );
         // Make the final heat-counter addition overflow while keeping the
         // physical BREAK inputs ordinary and otherwise admissible.
         simulation.energy_ledger.total_heat_dissipated = f64::MAX;
@@ -666,11 +670,11 @@ mod material_identity_tests {
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            reaction_energy: 0.125,
-            disruption_cost: 0.25,
+            reaction_energy,
+            disruption_cost,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
-            accumulated_reaction: 0.125,
+            accumulated_reaction: reaction_energy,
         };
         assert!(
             !resolve(
