@@ -535,6 +535,13 @@ pub(crate) fn try_start_environmental_break(
         return None;
     }
 
+    let removed = environment
+        .field
+        .cells
+        .get(cell_index)?
+        .physical_materials
+        .get(material_index)?
+        .clone();
     environment.field.cells[cell_index]
         .physical_materials
         .remove(material_index);
