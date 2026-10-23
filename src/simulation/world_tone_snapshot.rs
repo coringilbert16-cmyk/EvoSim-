@@ -81,7 +81,7 @@ impl WorldToneOccluderSnapshot {
         // A developing offspring is a separate physical structure even
         // before it is admitted to simulation.organisms. Its committed storage
         // remains physical too and is anchored to the offspring's own origin.
-        for organism in &simulation.organisms {
+        for (organism_index, organism) in simulation.organisms.iter().enumerate() {
             let Some(construction) = &organism.reproductive_construction else {
                 continue;
             };
@@ -155,6 +155,7 @@ impl WorldToneOccluderSnapshot {
                 bodies.push(body_from_owner_relative_material(
                     physical, anchor, catalog,
                 )?);
+                body_resonance_owners.push(None);
             }
         }
 
@@ -195,6 +196,7 @@ impl WorldToneOccluderSnapshot {
                 bodies.push(OrganismBodyGeometry::from_physical_material(
                     physical, catalog,
                 )?);
+                body_resonance_owners.push(None);
             }
         }
 
