@@ -641,6 +641,54 @@ mod material_identity_tests {
     }
 
     #[test]
+    fn chemical_break_ledger_overflow_preserves_bond_and_resonance() {
+        let mut simulation = crate::state::Simulation::new(923, 10.0);
+        assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        let resonance_before = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .expect("resonance must be finite");
+        simulation.energy_ledger.total_work_expended = f64::MAX;
+        let structure_before = simulation.organisms[0].structure.clone();
+        let heat_before = simulation.energy_ledger.total_heat_dissipated;
+        let usable_before = simulation.organisms[0].usable_energy;
+
+        let operation = ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            reaction_energy: 0.25,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "test|rev:0|bond".into(),
+            accumulated_reaction: 0.25,
+        };
+        assert!(
+            !resolve(
+                operation,
+                &mut simulation.organisms[0],
+                &mut simulation.energy_ledger,
+            ),
+            "a cumulative work overflow must reject the BREAK"
+        );
+        assert_eq!(simulation.organisms[0].structure, structure_before);
+        assert_eq!(
+            simulation.organisms[0]
+                .resonant_energy
+                .total_energy()
+                .unwrap(),
+            resonance_before
+        );
+        assert_eq!(simulation.organisms[0].usable_energy, usable_before);
+        assert_eq!(simulation.energy_ledger.total_work_expended, f64::MAX);
+        assert_eq!(simulation.energy_ledger.total_heat_dissipated, heat_before);
+    }
+
+    #[test]
     fn bondless_structure_discards_prior_revision_reaction_accumulation() {
         let mut simulation = crate::state::Simulation::new(924, 10.0);
         let organism = &mut simulation.organisms[0];
