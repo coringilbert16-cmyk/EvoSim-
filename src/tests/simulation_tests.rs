@@ -539,6 +539,109 @@ mod integration_tests {
     }
 
     #[test]
+    fn breached_organism_material_and_energy_holders_reconcile_over_live_ticks() {
+        let mut s = Simulation::new(7203, 10.0);
+        for cell in &mut s.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        s.world_tone = None;
+        s.world_tone_cycle = None;
+
+        assert!(s.organisms[0].store_material(Material::free_base("Carbon", 3.0)));
+        let catalog = s.environment.catalog.clone();
+        assert!(crate::reproduction::begin_reproduction(
+            &mut s.organisms[0],
+            &mut s.rng,
+            &catalog,
+            &mut s.energy_ledger,
+        ));
+
+        // Seed an internal energy transfer into the already-active construction;
+        // the world-scale holder sum must not change.
+        let parent_energy = s.organisms[0].usable_energy;
+        assert!(parent_energy.is_finite() && parent_energy > 0.0);
+        let developing_energy = parent_energy * 0.25;
+        {
+            let parent = &mut s.organisms[0];
+            parent.usable_energy -= developing_energy;
+            let construction = parent
+                .reproductive_construction
+                .as_mut()
+                .expect("reproductive construction is active");
+            construction.developing_energy = developing_energy;
+            assert!(parent.stored_material.physical_count() > 0);
+            assert!(!construction.developing_structure.units.is_empty());
+
+            // This test starts from an already-breached organism. Establish that
+            // topology before the observed ticks, rather than modeling the BREAK
+            // event itself in this lifecycle regression.
+            parent.structure.bonds.clear();
+            parent.structure_revision = parent.structure_revision.wrapping_add(1);
+            parent.cached_cavity_revision = None;
+            parent.cached_cavity = None;
+        }
+        assert_eq!(s.living_population(), 0, "fixture must begin breached");
+        assert!(s.organisms[0].reproductive_construction.is_some());
+        assert!(s.organisms[0].stored_material.physical_count() > 0);
+
+        // Rebase the fixture's structural/resonant starting stores to the state
+        // at the beginning of this post-death observation window. The parent's
+        // usable energy was only transferred to construction, not created.
+        let structural_baseline =
+            Simulation::structural_energy_held(&s.organisms, &s.decomposing_bodies);
+        let resonant_baseline =
+            crate::reproduction::total_resonant_energy_held(&s.organisms);
+        s.energy_ledger.initial_structural_energy_held = structural_baseline;
+        s.energy_ledger.total_structural_energy_held = structural_baseline;
+        s.energy_ledger.initial_resonant_energy_held = resonant_baseline;
+        s.energy_ledger.total_resonant_energy_held = resonant_baseline;
+        s.energy_ledger.total_usable_energy_held =
+            crate::reproduction::total_usable_energy_held(&s.organisms, &s.decomposing_bodies);
+
+        let material_before =
+            integer_material_inventory(&s).expect("initial material inventory is integral");
+        let initial_energy = s.energy_inventory_snapshot();
+        assert!(
+            initial_energy.is_balanced(1e-9),
+            "post-death fixture must start balanced: {:?}",
+            initial_energy.residual()
+        );
+
+        for tick in 1..=3 {
+            s.step();
+
+            assert_eq!(
+                integer_material_inventory(&s).expect("post-death material inventory is integral"),
+                material_before,
+                "ordinary chemistry must conserve constituent ownership through tick {tick}"
+            );
+            assert!(
+                s.energy_inventory_snapshot().is_balanced(1e-9),
+                "post-death world energy must reconcile through tick {tick}: {:?}",
+                s.energy_inventory_snapshot().residual()
+            );
+            let inventory = s.energy_inventory_snapshot();
+            let expected_usable =
+                crate::reproduction::total_usable_energy_held(&s.organisms, &s.decomposing_bodies);
+            let expected_structural =
+                Simulation::structural_energy_held(&s.organisms, &s.decomposing_bodies);
+            assert!(
+                (inventory.current_usable_energy - expected_usable).abs() <= 1e-9,
+                "usable-energy holders must be counted once through tick {tick}"
+            );
+            assert!(
+                (inventory.current_structural_energy - expected_structural).abs() <= 1e-9,
+                "structural-energy holders must be counted once through tick {tick}"
+            );
+            assert!(
+                s.decomposing_bodies.is_empty(),
+                "the test-only legacy decomposition path must remain inactive"
+            );
+        }
+    }
+
+    #[test]
     fn storage_contains_discrete_independent_material_objects() {
         let mut o = Simulation::create_initial_organism();
         assert!(o.store_material(Material::free_base("Carbon", 5.0)));
