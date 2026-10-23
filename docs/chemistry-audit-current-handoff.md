@@ -712,3 +712,10 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Exact-head workflow [40018610844](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40018610844) has passed formatting, source-size/architecture checks, graph merge tests, chemistry accumulation, and the new focused decomposition-finalization rollback gate. The full Rust suite is running; do not call the head fully verified yet.
 - A separate graph regression fixture was corrected in the same head series: it now snapshots a valid replacement subgraph before injecting a dangling destination bond, so the test exercises replacement rejection rather than failing during fixture setup.
 - Next: inspect the exact-head full-suite result and Clippy diagnostics; compare named failures to the frozen baseline. Then continue the remaining phases, prioritizing the post-death ordinary-chemistry integration and world-wide material/energy inventory. Do not conflate this atomic-finalization fix with the larger “no separate decomposition law” requirement. PR #204 remains documentation-only and PR #196 remains out of scope.
+
+
+## Exact-head rollback gates — 2026-10-23
+
+- PR #205 head `1318d2f64dbe71dd57271761f40580bfabc6cd20`, workflow [40019005755](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40019005755), passed the dedicated decomposition-finalization rollback test and the late physical-restoration rollback test. The corrected physical graph merge tests also passed.
+- The full Rust suite is running on this exact head. Strict Clippy and named failure comparison are not yet available; keep the suite status pending.
+- Next work remains ordinary-chemistry participation for post-death holders and the world-wide material/energy inventory. The current change only ensures a failed finished-body release cannot partially settle energy while leaving material behind.
