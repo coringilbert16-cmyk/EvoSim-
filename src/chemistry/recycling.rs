@@ -1,4 +1,3 @@
-use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::state::{EnergyLedger, Environment, Organism};
 
 pub(crate) fn recycle_dead_organism(
@@ -125,14 +124,14 @@ mod tests {
         let storage_before = organism.stored_material.clone();
         let construction_before = organism.reproductive_construction.clone();
         let energy_before = organism.usable_energy;
-        let ledger = EnergyLedger::default();
+        let mut ledger = EnergyLedger::default();
         let ledger_before = ledger;
         let field_before = simulation.environment.field.total_amount();
 
         assert!(recycle_dead_organism(
             &mut simulation.environment,
             &mut organism,
-            &mut ledger.clone(),
+            &mut ledger,
         )
         .is_none());
 
