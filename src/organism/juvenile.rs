@@ -50,7 +50,7 @@ pub(crate) fn confirmed_seed_baseline(
         }
     }
 
-    let mut connections = Vec::with_capacity(16);
+    let mut connections = Vec::with_capacity(12);
     for y in 0..5 {
         for x in 0..5 {
             let Some(a) = grid[y][x] else { continue };
@@ -197,7 +197,7 @@ mod seed_geometry_tests {
         let catalog = crate::resources::default_catalog();
         let blueprint = confirmed_seed_baseline(&catalog).expect("nitrogen seed should be valid");
         assert_eq!(blueprint.elements.len(), 12);
-        assert_eq!(blueprint.connections.len(), 16);
+        assert_eq!(blueprint.connections.len(), 12);
         assert!(blueprint.elements.iter().all(|element| {
             element.material.parts.len() == 1
                 && element.material.parts[0].0 == "Nitrogen"
