@@ -537,15 +537,12 @@ mod tests {
             "Hydrogen",
             crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 0 },
         );
-        let canonical = ChemistryKey::from_live_geometry(
-            "Carbon", "Hydrogen", &interface, 10.5, 5.5,
-        );
-        let reversed = ChemistryKey::from_live_geometry(
-            "Hydrogen", "Carbon", &interface, 5.5, 10.5,
-        );
-        let changed_position = ChemistryKey::from_live_geometry(
-            "Carbon", "Hydrogen", &interface, 10.25, 5.5,
-        );
+        let canonical =
+            ChemistryKey::from_live_geometry("Carbon", "Hydrogen", &interface, 10.5, 5.5);
+        let reversed =
+            ChemistryKey::from_live_geometry("Hydrogen", "Carbon", &interface, 5.5, 10.5);
+        let changed_position =
+            ChemistryKey::from_live_geometry("Carbon", "Hydrogen", &interface, 10.25, 5.5);
         assert_eq!(canonical, reversed);
         assert_ne!(canonical, changed_position);
         assert_ne!(canonical.signature(), changed_position.signature());
