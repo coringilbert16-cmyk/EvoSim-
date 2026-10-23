@@ -1878,7 +1878,7 @@ mod tests {
             assert!((moved.y - original.y).abs() < 1e-9);
             assert_eq!(moved.rotation_radians, original.rotation_radians);
         }
-    } 
+    }
     #[test]
     fn rejected_movement_energy_settlement_does_not_mutate_world_geometry() {
         let simulation = Simulation::new(901, 20.0);
@@ -1920,8 +1920,10 @@ mod tests {
         );
         assert_eq!(organism.occupied_cells, original_position);
         assert_eq!(organism.usable_energy, original_energy);
-        assert_eq!(ledger.total_heat_dissipated, original_ledger.total_heat_dissipated);
+        assert_eq!(
+            ledger.total_heat_dissipated,
+            original_ledger.total_heat_dissipated
+        );
         assert_eq!(active.remaining_steps, 1);
     }
-
 }
