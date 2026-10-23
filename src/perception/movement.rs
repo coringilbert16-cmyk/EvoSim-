@@ -1886,7 +1886,7 @@ mod tests {
         organism.usable_energy = 100.0;
         let mut environment = empty_environment(&simulation);
         let mut ledger = EnergyLedger::default();
-        ledger.total_heat_dissipated = f64::MAX;
+        ledger.total_heat_dissipated = f64::INFINITY;
         let mut spatial_index = MovementSpatialIndex::new(&[], &environment);
         let mut active = crate::state::ActiveMovement {
             direction_x: 1.0,
