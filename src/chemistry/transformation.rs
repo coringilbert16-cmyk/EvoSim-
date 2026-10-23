@@ -1430,6 +1430,61 @@ mod tests {
     }
 
     #[test]
+    fn failed_environmental_break_split_destination_restores_original_source_atomically() {
+        let catalog = crate::resources::default_catalog();
+        let mut organism =
+            environmental_break_test_organism("environmental-break-split-test", Some(732));
+        let (mut environment, cell_index, before, mut source, after) =
+            environmental_break_test_inventory(&catalog);
+        // Preserve a valid original bond record but make one split piece's
+        // destination invalid, so the first staged deposit must also roll back.
+        source.placements.as_mut().unwrap()[1].x = environment.width + 100.0;
+        let original_source = source.clone();
+        let target = source.internal_connections.as_ref().unwrap()[0].clone();
+        environment.field.cells[cell_index].physical_materials =
+            vec![before.clone(), source.clone(), after.clone()];
+        let transformation = ActiveTransformation {
+            id: 732,
+            organism_id: organism.id.clone(),
+            kind: crate::state::TransformationKind::Break,
+            material: crate::resources::Material::free_base("", 0.0),
+            bond: None,
+            stored_material: Some(source),
+            stored_bond: Some(target),
+            environmental_source: true,
+            complexity: 1.0,
+            duration_ticks: 1,
+            remaining_ticks: 0,
+            prepared_energy: Some((organism.usable_energy, 0.0, 0.0)),
+            pending_experience: None,
+            decision_context_key: Some(format!(
+                "environment:cell:{cell_index}:material:1:bond:0"
+            )),
+            prepared_structure: None,
+            prepared_stored_material: None,
+            prepared_usable_energy: None,
+            prepared_stress: None,
+            prepared_ledger: None,
+            combine_environmental_source: None,
+        };
+
+        resolve_transformation(
+            &transformation,
+            &mut organism,
+            &mut environment,
+            &mut EnergyLedger::default(),
+        );
+
+        assert_eq!(
+            environment.field.cells[cell_index].physical_materials,
+            vec![before, original_source, after],
+            "a rejected split-piece destination must restore the unsplit source at its original index"
+        );
+        assert!(organism.stored_material.is_empty());
+        assert_eq!(organism.active_transformation_id, None);
+    }
+
+    #[test]
     fn failed_environmental_break_completion_restores_source_at_original_cell_index() {
         let catalog = crate::resources::default_catalog();
         let mut organism =
