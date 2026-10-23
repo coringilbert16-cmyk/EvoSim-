@@ -171,9 +171,8 @@ pub(crate) fn expel_physical_material(
     if !current.is_realized() {
         return false;
     }
-    let removed = match organism.stored_material.entries.remove(storage_index) {
-        crate::material_storage::StoredMaterial::Physical(instance) => instance,
-    };
+    let crate::material_storage::StoredMaterial::Physical(removed) =
+        organism.stored_material.entries.remove(storage_index);
     if environment.field.deposit_physical_at_index(index, physical) {
         true
     } else {
