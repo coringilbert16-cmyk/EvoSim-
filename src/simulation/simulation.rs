@@ -1344,15 +1344,13 @@ impl Simulation {
                 if let Some(stress) = stress {
                     organism.add_transaction_stress(stress);
                 }
-                if matches!(
-                    status,
-                    crate::reproduction::ConstructionStatus::Ready
-                        | crate::reproduction::ConstructionStatus::Detached
-                        | crate::reproduction::ConstructionStatus::Dead
-                ) {
-                    // Reserve the next ID before finish_reproduction detaches
-                    // the developing graph from the parent. Exhaustion leaves
-                    // the construction intact instead of losing the child on overflow.
+                if status == crate::reproduction::ConstructionStatus::Ready {
+                    // Only a construction that passed the complete readiness
+                    // gate may detach into an offspring. Detached/dead states
+                    // must never be reinterpreted as successful division by
+                    // rechecking geometry alone in finish_reproduction.
+                    // Reserve the next ID before detaching; exhaustion leaves
+                    // the construction attached to the parent.
                     let Some(next_id_after) = checked_next_organism_id(next_organism_id) else {
                         continue;
                     };
