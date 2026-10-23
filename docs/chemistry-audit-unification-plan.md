@@ -4082,3 +4082,10 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - Production change: restore_material now checks every restored constituent against all pre-existing destination constituents with the same geometry penetration predicate. It still stages the destination graph clone and commits only after every geometry and bond check succeeds.
 - Regression restoration_rejects_penetration_into_existing_destination_atomically places two Carbon hexagons at the same origin, requires restoration to reject the overlap, and verifies destination units and bonds remain unchanged.
 - PR #205 head 1094e50160af01165d2c977a6ba5868394cf660a includes the production fix and regression. Exact-head formatting/focused/full-suite/Clippy verification is pending; workflow 40024344294 is running on predecessor 1ea2ea1dc07854c23d8ad255f8a2362d37b4f3f2 and does not verify this change.
+
+
+## 17.207 Capture stored BREAK source index as transaction metadata (2026-10-23)
+
+- **Audit finding:** rollback reconstructed the original storage index from `decision_context_key`. That string is decision metadata and may be stale or corrupted after source reservation. On failure, a malformed key caused the escrowed source to be appended to storage, changing neighbor ordering instead of restoring the prior holder state.
+- **Implementation:** `ActiveTransformation` now has a serde-defaulted `stored_source_index`, captured from the actual storage index when `try_start_transformation` removes the source. `original_stored_source_index` prefers this immutable transaction field and only falls back to parsing the context key for legacy persisted transactions. The malformed-context regression now expects the source to return at index 1, preserving surrounding entries.
+- **Compatibility:** the new field defaults to `None` when loading older serialized transformations; those still use the legacy context-key fallback. All in-repo struct literals initialize the field. Workflow #40024704699 is verifying PR #205 head `c214ab3b65fd80d7d02e1eba7f4266bf5e8a642d`.
