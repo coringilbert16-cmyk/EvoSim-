@@ -3655,3 +3655,11 @@ Internal/adjacent budding remains the target: a second genome core begins beside
 - Added direct field-level regression tests for a valid batch, a late invalid destination, and a late malformed physical object. Failure cases assert both cell contents and revision remain unchanged; the valid case asserts all objects commit and each cell revision is advanced.
 - The first workflow on the stricter whole-constituent change stopped at formatting because the new predicate needed rustfmt's multiline layout. The formatting was corrected and a malformed-object rollback case was added before the next verification run. No Rust test results are claimed for head `4003cd5` yet.
 - Known suite/Clippy debt remains as previously recorded. Next action: inspect exact-head CI, fix only directly attributable errors, then continue the Phase 3 material ownership/failure matrix. Keep whole-world conservation unproven and PR #204 documentation-only.
+
+
+### 17.149 Phase 3 — fail-closed physical realization metadata (2026-10-23)
+
+- Source head `1e6d4871625c836068d5e9bf866c1fdb7198cafd` strengthens `PhysicalMaterial::is_realized`: it now rejects absent/empty placement lists, non-finite position/rotation values, and internal connection part indices outside the placement range. This closes a source-level gap where merely having `Some(placements)` and `Some(internal_connections)` incorrectly classified malformed persisted objects as realized, allowing storage or transfer paths to accept them.
+- Added regressions for non-finite placement coordinates and out-of-range connection indices. This check deliberately does not require one placement per material part because aggregated fluid material may validly have one authoritative shape/placement for a multi-unit quantity; its geometry/quantity rule remains separate.
+- Verification is pending for the combined Phase 3 batch. The previous workflow on intermediate head `4003cd5` stopped at formatting before tests; the reported diff was only rustfmt layout in `material_transfer.rs`, corrected at `a76c65a`. No full-suite result is inferred from that run.
+- Next: verify exact latest head, fix any directly attributable failures, then continue the audited Phase 3 ownership/failure matrix. Do not claim whole-world conservation or a green full suite.
