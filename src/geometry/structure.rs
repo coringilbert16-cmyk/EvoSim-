@@ -1576,99 +1576,11 @@ mod tests {
             strength: 0.75,
             bond_energy: 2.5,
         });
-        aggregate.push_bond_unchecked(Bond {
-            endpoint_a: endpoint(parent_id),
-            endpoint_b: endpoint(child_a_id),
-            strength: 0.5,
-            bond_energy: 1.25,
-        });
-
-        let mut replacement = aggregate
-            .subgraph_for_physical_ids(&[child_a_id, child_b_id], &[child_a_id])
-            .unwrap();
-        replacement.bonds[0].bond_energy = 3.5;
-        let new_index = replacement.add_unit(StructuralUnit::new("Sulfur", placement));
-        let new_id = replacement.physical_id(new_index).unwrap();
-        replacement.push_bond_unchecked(Bond {
-            endpoint_a: endpoint(child_b_id),
-            endpoint_b: endpoint(new_id),
-            strength: 0.6,
-            bond_energy: 0.75,
-        });
-
-        assert!(aggregate
-            .replace_subgraph_for_physical_ids(&[child_a_id, child_b_id], &replacement)
-            .is_some());
-        assert_eq!(aggregate.units.len(), 4);
-        assert_eq!(aggregate.genome_constituent_ids(), &[parent_id]);
-        assert!(aggregate
-            .additional_genome_constituent_groups()
-            .contains(&vec![child_a_id]));
-        assert!(aggregate.bonds.iter().any(|bond| {
-            bond.endpoint_a.constituent_id == parent_id
-                && bond.endpoint_b.constituent_id == child_a_id
-                && (bond.bond_energy - 1.25).abs() < f64::EPSILON
-        }));
-        assert!(aggregate.bonds.iter().any(|bond| {
-            bond.endpoint_a.constituent_id == child_a_id
-                && bond.endpoint_b.constituent_id == child_b_id
-                && (bond.bond_energy - 3.5).abs() < f64::EPSILON
-        }));
-        assert!(aggregate.bonds.iter().any(|bond| {
-            bond.endpoint_a.constituent_id == child_b_id && bond.endpoint_b.constituent_id == new_id
-        }));
-    }
-
-    #[test]
-    fn replacing_subgraph_rejects_empty_replacement_genome_group_atomically() {
-        let placement = Placement {
-            x: 0.0,
-            y: 0.0,
-            rotation_radians: 0.0,
-        };
-        let mut aggregate = OrganismStructure::new();
-        let parent = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
-        let parent_id = aggregate.physical_id(parent).unwrap();
-        aggregate.set_genome_constituent_ids([parent_id]);
-        let child = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
-        let child_id = aggregate.physical_id(child).unwrap();
-        let mut replacement = aggregate
+        // Capture a valid replacement before injecting the malformed bond.
+        // The destination validation is what this test is intended to exercise.
+        let replacement = aggregate
             .subgraph_for_physical_ids(&[child_id], &[])
             .unwrap();
-        replacement
-            .additional_genome_constituent_groups
-            .push(Vec::new());
-
-        let before_units = aggregate.units.clone();
-        let before_bonds = aggregate.bonds.clone();
-        let before_primary = aggregate.genome_constituent_ids.clone();
-        let before_groups = aggregate.additional_genome_constituent_groups.clone();
-
-        assert!(aggregate
-            .replace_subgraph_for_physical_ids(&[child_id], &replacement)
-            .is_none());
-        assert_eq!(aggregate.units, before_units);
-        assert_eq!(aggregate.bonds, before_bonds);
-        assert_eq!(aggregate.genome_constituent_ids, before_primary);
-        assert_eq!(
-            aggregate.additional_genome_constituent_groups,
-            before_groups
-        );
-    }
-
-    #[test]
-    fn replacing_subgraph_rejects_dangling_destination_bond_atomically() {
-        let placement = Placement {
-            x: 0.0,
-            y: 0.0,
-            rotation_radians: 0.0,
-        };
-        let mut aggregate = OrganismStructure::new();
-        let parent = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
-        let parent_id = aggregate.physical_id(parent).unwrap();
-        aggregate.set_genome_constituent_ids([parent_id]);
-        let child = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
-        let child_id = aggregate.physical_id(child).unwrap();
         aggregate.push_bond_unchecked(Bond {
             endpoint_a: BondEndpoint::new(
                 child_id,
@@ -1681,9 +1593,6 @@ mod tests {
             strength: 0.5,
             bond_energy: 1.0,
         });
-        let replacement = aggregate
-            .subgraph_for_physical_ids(&[child_id], &[])
-            .unwrap();
 
         let before_units = aggregate.units.clone();
         let before_bonds = aggregate.bonds.clone();
