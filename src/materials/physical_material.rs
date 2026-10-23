@@ -16,6 +16,14 @@ pub(crate) struct PhysicalMaterialBond {
     pub(crate) endpoint_b: ConnectionEndpoint,
 }
 
+fn connection_endpoint_is_finite(endpoint: ConnectionEndpoint) -> bool {
+    match endpoint {
+        ConnectionEndpoint::Corner { .. } | ConnectionEndpoint::LineEndpoint { .. } => true,
+        ConnectionEndpoint::Boundary { angle_radians } => angle_radians.is_finite(),
+        ConnectionEndpoint::Fluid { x, y } => x.is_finite() && y.is_finite(),
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct PhysicalMaterial {
     pub(crate) material: Material,
@@ -359,7 +367,10 @@ impl PhysicalMaterial {
             })
             || connections.len() != self.material.internal_bonds.len()
             || connections.iter().any(|connection| {
-                connection.part_a >= placements.len() || connection.part_b >= placements.len()
+                connection.part_a >= placements.len()
+                    || connection.part_b >= placements.len()
+                    || !connection_endpoint_is_finite(connection.endpoint_a)
+                    || !connection_endpoint_is_finite(connection.endpoint_b)
             })
             || self
                 .material
@@ -901,6 +912,42 @@ mod tests {
         assert!(
             !physical.is_realized(),
             "fractional persisted rigid constituent must not count as realized geometry"
+        );
+    }
+
+    #[test]
+    fn realized_state_rejects_non_finite_persisted_connection_endpoints() {
+        let catalog = crate::resources::default_catalog();
+        let mut physical = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![crate::resources::InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("valid bonded composite should realize");
+        physical.internal_connections.as_mut().unwrap()[0].endpoint_a =
+            ConnectionEndpoint::Boundary {
+                angle_radians: f64::NAN,
+            };
+        assert!(
+            !physical.is_realized(),
+            "non-finite persisted endpoint metadata must fail closed"
         );
     }
 
