@@ -956,8 +956,10 @@ mod tests {
         // living receiver set is explicit here so this test isolates ownership
         // routing rather than genome viability.
         replace_with_nitrogen_square(&mut simulation.organisms[0], 5.0, 0.0, &catalog);
-        let developing_structure =
-            std::mem::replace(&mut simulation.organisms[0].structure, OrganismStructure::new());
+        let developing_structure = std::mem::replace(
+            &mut simulation.organisms[0].structure,
+            OrganismStructure::new(),
+        );
         let owner_id = simulation.organisms[0].id.clone();
         simulation.organisms[0].reproductive_construction =
             Some(crate::state::ReproductiveConstruction {
@@ -1007,7 +1009,7 @@ mod tests {
             (simulation.energy_ledger.total_external_energy_input
                 - settled
                 - simulation.energy_ledger.total_heat_dissipated
-                - simulation.energy_ledger.total_escaped_energy)
+                - simulation.energy_ledger.total_world_tone_energy_escaped)
                 .abs()
                 <= 1e-7,
             "attached-structure resonance must remain within the source/sink budget"
