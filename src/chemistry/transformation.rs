@@ -1325,7 +1325,8 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let (mut environment, cell_index, before, source, after) =
             environmental_break_test_inventory(&catalog);
-        environment.field.cells[cell_index].physical_materials = vec![before.clone(), after.clone()];
+        environment.field.cells[cell_index].physical_materials =
+            vec![before.clone(), after.clone()];
 
         let mut simulation = crate::state::Simulation::new(931, 10.0);
         let mut organism = simulation.organisms.remove(0);
@@ -1377,7 +1378,10 @@ mod tests {
         );
 
         assert_eq!(organism.usable_energy, before_energy);
-        assert_eq!(organism.stress, 4.75, "failed COMBINE must not apply staged stress");
+        assert_eq!(
+            organism.stress, 4.75,
+            "failed COMBINE must not apply staged stress"
+        );
         assert_eq!(staged_ledger, before_ledger);
         assert_eq!(
             environment.field.cells[cell_index].physical_materials,
