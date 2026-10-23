@@ -204,7 +204,10 @@ mod tests {
     #[test]
     fn expulsion_boundary_uses_authoritative_realized_fluid_shape() {
         let catalog = crate::resources::default_catalog();
-        let water = catalog.iter().find(|resource| resource.name == "Water").unwrap();
+        let water = catalog
+            .iter()
+            .find(|resource| resource.name == "Water")
+            .unwrap();
         let area = match &water.shape.form {
             crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
             _ => panic!("default Water shape should have a measurable area"),
@@ -214,7 +217,8 @@ mod tests {
             std::f64::consts::FRAC_PI_2,
         )
         .unwrap();
-        let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
+        let arc =
+            crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
         let realized_shape = crate::resources::Shape {
             form: crate::resources::Form::Fluid {
                 nominal_area: area,
