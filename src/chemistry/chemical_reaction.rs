@@ -641,7 +641,7 @@ mod material_identity_tests {
     }
 
     #[test]
-    fn chemical_break_ledger_overflow_preserves_bond_and_resonance() {
+    fn rejected_chemical_break_preserves_bond_and_resonance_when_ledger_is_invalid() {
         let mut simulation = crate::state::Simulation::new(923, 10.0);
         let bond = *simulation.organisms[0]
             .structure
@@ -661,9 +661,9 @@ mod material_identity_tests {
             .resonant_energy
             .total_energy()
             .expect("resonance must be finite");
-        // Make the final heat-counter addition overflow while keeping the
-        // physical BREAK inputs ordinary and otherwise admissible.
-        simulation.energy_ledger.total_heat_dissipated = f64::MAX;
+        // A non-finite cumulative sink makes ledger settlement reject after
+        // candidate preparation but before any physical or reservoir commit.
+        simulation.energy_ledger.total_heat_dissipated = f64::NAN;
         let structure_before = simulation.organisms[0].structure.clone();
         let usable_before = simulation.organisms[0].usable_energy;
 
@@ -682,7 +682,7 @@ mod material_identity_tests {
                 &mut simulation.organisms[0],
                 &mut simulation.energy_ledger,
             ),
-            "a cumulative heat-counter overflow must reject the BREAK"
+            "invalid cumulative heat state must reject the BREAK transaction"
         );
         assert_eq!(
             simulation.organisms[0].structure.units,
@@ -700,7 +700,7 @@ mod material_identity_tests {
             resonance_before
         );
         assert_eq!(simulation.organisms[0].usable_energy, usable_before);
-        assert_eq!(simulation.energy_ledger.total_heat_dissipated, f64::MAX);
+        assert!(simulation.energy_ledger.total_heat_dissipated.is_nan());
         assert_eq!(simulation.energy_ledger.total_work_expended, 0.0);
     }
 
