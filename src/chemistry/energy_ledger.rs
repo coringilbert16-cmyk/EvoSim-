@@ -492,6 +492,34 @@ mod tests {
         assert_eq!(ledger.total_heat_dissipated, 7.0);
         assert_eq!(ledger.total_world_tone_energy_escaped, 3.0);
 
+        let mut heat_overflow = EnergyLedger {
+            total_external_energy_input: 11.0,
+            total_heat_dissipated: f64::MAX,
+            total_world_tone_energy_escaped: 13.0,
+            ..EnergyLedger::default()
+        };
+        assert!(
+            !heat_overflow.settle_world_tone_paths(10.0, 4.0, 2.0, 4.0),
+            "heat counter overflow must reject the entire settlement"
+        );
+        assert_eq!(heat_overflow.total_external_energy_input, 11.0);
+        assert_eq!(heat_overflow.total_heat_dissipated, f64::MAX);
+        assert_eq!(heat_overflow.total_world_tone_energy_escaped, 13.0);
+
+        let mut escape_overflow = EnergyLedger {
+            total_external_energy_input: 17.0,
+            total_heat_dissipated: 19.0,
+            total_world_tone_energy_escaped: f64::MAX,
+            ..EnergyLedger::default()
+        };
+        assert!(
+            !escape_overflow.settle_world_tone_paths(10.0, 4.0, 2.0, 4.0),
+            "escape counter overflow must reject the entire settlement"
+        );
+        assert_eq!(escape_overflow.total_external_energy_input, 17.0);
+        assert_eq!(escape_overflow.total_heat_dissipated, 19.0);
+        assert_eq!(escape_overflow.total_world_tone_energy_escaped, f64::MAX);
+
         assert!(
             !ledger.settle_world_tone_paths(f64::INFINITY, 0.0, 0.0, 0.0),
             "non-finite incident energy must reject before any ledger mutation"
