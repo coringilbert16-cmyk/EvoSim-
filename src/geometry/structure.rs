@@ -704,8 +704,7 @@ impl PhysicalConstituentGraph {
         replacement: &Self,
     ) -> Option<()> {
         let old: HashSet<_> = old_ids.iter().copied().collect();
-        let destination_ids: HashSet<_> =
-            self.units.iter().map(|unit| unit.physical_id).collect();
+        let destination_ids: HashSet<_> = self.units.iter().map(|unit| unit.physical_id).collect();
         let replacement_ids: HashSet<_> = replacement
             .units
             .iter()
@@ -729,12 +728,11 @@ impl PhysicalConstituentGraph {
                 !old.contains(id)
                     && (destination_ids.contains(id) || id.0 < self.next_constituent_id)
             })
-            || replacement
-                .units
-                .iter()
-                .any(|unit| !unit.placement.x.is_finite()
+            || replacement.units.iter().any(|unit| {
+                !unit.placement.x.is_finite()
                     || !unit.placement.y.is_finite()
-                    || !unit.placement.rotation_radians.is_finite())
+                    || !unit.placement.rotation_radians.is_finite()
+            })
             || replacement.bonds.iter().any(|bond| {
                 bond.endpoint_a.constituent_id == bond.endpoint_b.constituent_id
                     || !replacement_ids.contains(&bond.endpoint_a.constituent_id)
@@ -826,11 +824,22 @@ impl PhysicalConstituentGraph {
             .max(replacement.next_constituent_id)
             .max(max_id.saturating_add(1))
             .max(1);
-        if staged.units.iter().map(|unit| unit.physical_id).collect::<HashSet<_>>().len()
+        if staged
+            .units
+            .iter()
+            .map(|unit| unit.physical_id)
+            .collect::<HashSet<_>>()
+            .len()
             != staged.units.len()
             || staged.bonds.iter().any(|bond| {
-                !staged.units.iter().any(|unit| unit.physical_id == bond.endpoint_a.constituent_id)
-                    || !staged.units.iter().any(|unit| unit.physical_id == bond.endpoint_b.constituent_id)
+                !staged
+                    .units
+                    .iter()
+                    .any(|unit| unit.physical_id == bond.endpoint_a.constituent_id)
+                    || !staged
+                        .units
+                        .iter()
+                        .any(|unit| unit.physical_id == bond.endpoint_b.constituent_id)
             })
         {
             return None;
@@ -1473,8 +1482,7 @@ mod tests {
                 && (bond.bond_energy - 3.5).abs() < f64::EPSILON
         }));
         assert!(aggregate.bonds.iter().any(|bond| {
-            bond.endpoint_a.constituent_id == child_b_id
-                && bond.endpoint_b.constituent_id == new_id
+            bond.endpoint_a.constituent_id == child_b_id && bond.endpoint_b.constituent_id == new_id
         }));
     }
 
@@ -1518,7 +1526,10 @@ mod tests {
             .is_none());
         assert_eq!(aggregate.units, before_units);
         assert_eq!(aggregate.bonds, before_bonds);
-        assert_eq!(aggregate.additional_genome_constituent_groups, before_groups);
+        assert_eq!(
+            aggregate.additional_genome_constituent_groups,
+            before_groups
+        );
     }
 
     #[test]
