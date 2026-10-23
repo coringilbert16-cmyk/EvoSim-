@@ -3941,3 +3941,10 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - Compared the exact named failure list to baseline workflow [39705628427](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39705628427): all 23 current failures are in the baseline's 28; five baseline failures now pass; there are **zero newly failing test identities** on that comparison. The 23 remaining failures concern existing construction/cavity/contact/movement/reproduction/storage expectations and are not attributed to the Phase 3 transaction work without separate evidence.
 - Strict Clippy failed with repository-wide warning-as-error diagnostics; this is not a passing gate. The later restoration regression is on a newer head and still requires its own exact-head verification.
 - Phase 3 remains open until the new late-restoration test and current-head gates pass, then ownership/rollback coverage and remaining conservation obligations are reconciled. This full-suite run is evidence for its own SHA only, not the current head.
+
+
+## 17.195 Current Phase 3 verification pointer (2026-10-23)
+
+- Current PR #205 source head is `035b976fea2b459e010907caa078e9deba6cad3a`. Workflow [40012342400](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40012342400) passed formatting, source-size policy, COMBINE architecture, and the focused chemistry/graph/owner-anchor/fluid/BREAK/movement/acquisition/post-death/COMBINE/material-transfer gates; it is currently running the full Rust test suite.
+- This head includes `failed_late_physical_restoration_preserves_destination_structure` plus the formatting-only corrections from the previous stopped runs. The full-suite outcome and the named test result are still pending. Do not close Phase 3 or report a green CI until the current run finishes and this test is confirmed.
+- Strict Clippy is expected to remain baseline-red until a fresh diagnostic-identity comparison proves otherwise. Keep the known 23 baseline-shared Rust failures separate from Phase 3 regression status.
