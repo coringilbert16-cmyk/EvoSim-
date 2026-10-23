@@ -940,24 +940,38 @@ pub(crate) fn resolve_transformation(
         return;
     };
     if transformation.prepared_energy.is_none() {
-        restore_failed_stored_break_source(transformation, organism);
+        restore_failed_stored_break_source(transformation, organism, environment);
         return;
     }
     let Some(pieces) = stored.break_internal_bond(target) else {
-        restore_failed_stored_break_source(transformation, organism);
+        restore_failed_stored_break_source(transformation, organism, environment);
         return;
     };
 
     if transformation.environmental_source {
+        // Stage all destinations on a clone. If any piece cannot be deposited,
+        // discard the staged field and return the original environmental source.
+        let mut staged_field = environment.field.clone();
+        let mut all_deposited = true;
         for piece in pieces {
-            if let Some(placement) = piece
+            let Some(placement) = piece
                 .placements
                 .as_ref()
                 .and_then(|placements| placements.first())
-            {
-                let _ = environment.field.deposit(placement.x, placement.y, piece);
+            else {
+                all_deposited = false;
+                break;
+            };
+            if !staged_field.deposit(placement.x, placement.y, piece) {
+                all_deposited = false;
+                break;
             }
         }
+        if !all_deposited {
+            restore_failed_stored_break_source(transformation, organism, environment);
+            return;
+        }
+        environment.field = staged_field;
     } else {
         // Stored source pieces remain in intrinsic coordinates. Stage every
         // piece in a cloned holder so a rejected piece cannot leave a partial
@@ -965,7 +979,7 @@ pub(crate) fn resolve_transformation(
         let mut staged_storage = organism.stored_material.clone();
         for piece in pieces {
             if !staged_storage.store_physical_instance(piece) {
-                restore_failed_stored_break_source(transformation, organism);
+                restore_failed_stored_break_source(transformation, organism, environment);
                 return;
             }
         }
