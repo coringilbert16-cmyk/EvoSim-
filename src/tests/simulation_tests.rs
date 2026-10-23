@@ -871,7 +871,10 @@ mod integration_tests {
         let before_structured = o.stored_material.count_structured();
         let material = structured_carbon_hydrogen();
         assert!(o.store_material(material.clone()));
-        assert_eq!(o.stored_material.count_structured(), before_structured + 1);
+        assert_eq!(
+            o.stored_material.count_structured(),
+            before_structured + 1,
+        );
         assert!(o.stored_material.materials_snapshot().contains(&material));
     }
 
