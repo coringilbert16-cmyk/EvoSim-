@@ -662,11 +662,11 @@ mod material_identity_tests {
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            reaction_energy: 0.25,
-            disruption_cost: 0.5,
+            reaction_energy: 0.125,
+            disruption_cost: 0.25,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
-            accumulated_reaction: 0.25,
+            accumulated_reaction: 0.125,
         };
         assert!(
             !resolve(
