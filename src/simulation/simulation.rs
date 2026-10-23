@@ -29,7 +29,7 @@ fn restore_failed_transformation_material(
     transformation: &crate::state::ActiveTransformation,
     mut organism: Option<&mut Organism>,
     environment: &mut Environment,
-) {
+) -> bool {
     if let Some(owner) = organism.as_deref_mut() {
         if owner.active_transformation_id == Some(transformation.id) {
             owner.active_transformation_id = None;
@@ -63,11 +63,11 @@ fn restore_failed_transformation_material(
                 }
             }
         }
-        return;
+        return true;
     }
 
     let Some(source) = transformation.stored_material.as_ref() else {
-        return;
+        return true;
     };
     if transformation.environmental_source {
         if !crate::transformation::restore_environmental_break_source(transformation, environment) {
@@ -96,22 +96,30 @@ fn restore_failed_transformation_material(
                 }
             }
         }
-        return;
+        return true;
     }
 
     // A stored-material BREAK temporarily removes its source from the
     // organism's storage when the transformation starts. If preparation fails,
-    // return that exact escrow to the same holder position. Intrinsic coordinates
-    // are not world coordinates and must never be used as a fallback deposit.
-    if let Some(organism) = organism {
-        let index = crate::transformation::original_stored_source_index(transformation)
-            .unwrap_or(organism.stored_material.entries.len())
-            .min(organism.stored_material.entries.len());
-        organism.stored_material.entries.insert(
-            index,
-            crate::material_storage::StoredMaterial::Physical(source.clone()),
-        );
+    // return that escrow to its original holder position when metadata is valid.
+    // Intrinsic coordinates are not world coordinates and must never be used
+    // as a fallback deposit.
+    let Some(organism) = organism else {
+        // Keep the active transformation as an explicit escrow if its owner
+        // disappeared. The caller quarantines it instead of discarding material.
+        return false;
+    };
+    let entry = crate::material_storage::StoredMaterial::Physical(source.clone());
+    if let Some(index) = crate::transformation::original_stored_source_index(transformation)
+        .filter(|index| *index <= organism.stored_material.entries.len())
+    {
+        organism.stored_material.entries.insert(index, entry);
+    } else {
+        // Missing/corrupt index metadata cannot support exact positional rollback.
+        // Preserve the escrow at the end rather than silently clamping the index.
+        organism.stored_material.entries.push(entry);
     }
+    true
 }
 
 impl Simulation {
@@ -753,11 +761,16 @@ impl Simulation {
                         continue;
                     }
                 } else {
-                    restore_failed_transformation_material(
+                    if !restore_failed_transformation_material(
                         &transformation,
                         None,
                         &mut self.environment,
-                    );
+                    ) {
+                        // Stored material has no world-space location. Keep the
+                        // transaction and its escrow intact until its owner can
+                        // be resolved instead of silently dropping the material.
+                        still_active.push(transformation);
+                    }
                     continue;
                 }
             }
@@ -1606,6 +1619,7 @@ mod decomposition_finalization_tests {
             &decision,
         )
         .expect("stored BREAK should reserve source");
+        transformation.context_key = Some("stored:999999:bond:0".into());
         let stored = transformation.stored_material.as_mut().unwrap();
         stored.placements = None;
         let malformed = stored.clone();
@@ -1617,7 +1631,8 @@ mod decomposition_finalization_tests {
         );
 
         let mut expected_entries = entries_before;
-        expected_entries[1] = StoredMaterial::Physical(malformed);
+        expected_entries.remove(1);
+        expected_entries.push(StoredMaterial::Physical(malformed));
         assert_eq!(
             simulation.organisms[0].stored_material.entries,
             expected_entries,
