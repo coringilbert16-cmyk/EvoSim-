@@ -4137,3 +4137,10 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - A second audit of the reproduction finalization path found that `Simulation::step` called `finish_reproduction` for `Ready`, `Detached`, and `Dead`. The finalizer independently rechecked geometry/readiness but had no access to the prior status, so a detached or stress-dead construction that still passed geometry-only readiness could be admitted as an offspring.
 - Commit `b50b2a5d245c4ec89483189694c8dd031dbb8308` narrows finalization to `ConstructionStatus::Ready` only. `Detached` and `Dead` no longer run the separate readiness check as a route to offspring creation. This does not yet solve the larger question of how detached/dead developing material becomes an available physical aggregate; that remains part of the canonical ownership migration.
 - Exact-head workflow for `b50b2a5` is pending. Do not treat the in-progress predecessor runs as verification of this change.
+
+
+## Invalid developing-holder preflight — 2026-10-23 21:49 UTC
+
+- Audit of `advance_construction` found that reserve energy was transferred from the parent before validating the persisted developing holder. `validate_stress_state` rejects non-finite stress/threshold state; because the finalization status gate now retains `Dead` constructions, a non-finite developing state could otherwise trigger another reserve transfer on each later tick.
+- Commit `ce167818708549b4ce702ca71ef6b0bfb7e9efd3` validates the developing holder before the reserve-transfer attempt and adds `invalid_developing_holder_does_not_draw_parent_reserve_again`, asserting that a NaN stress state returns `Dead` without changing parent energy, ledger, or storage. Commit `d6319486f5d6f66d920385dae1a8c61fcb20ee32` removes an unnecessary mutable binding in the fixture.
+- Exact-head workflow is pending. This is fail-closed accounting for invalid persisted state, not a substitute for the still-open dead/developing aggregate ownership lifecycle.
