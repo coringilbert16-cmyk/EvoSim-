@@ -1885,8 +1885,10 @@ mod tests {
         let mut organism = simulation.organisms[0].clone();
         organism.usable_energy = 100.0;
         let mut environment = empty_environment(&simulation);
-        let mut ledger = EnergyLedger::default();
-        ledger.total_heat_dissipated = f64::INFINITY;
+        let mut ledger = EnergyLedger {
+            total_heat_dissipated: f64::INFINITY,
+            ..EnergyLedger::default()
+        };
         let mut spatial_index = MovementSpatialIndex::new(&[], &environment);
         let mut active = crate::state::ActiveMovement {
             direction_x: 1.0,
