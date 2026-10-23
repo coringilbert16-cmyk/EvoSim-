@@ -243,6 +243,82 @@ mod tests {
     }
 
     #[test]
+    fn expulsion_preserves_deformed_fluid_shape_through_environment_transfer() {
+        let mut simulation = Simulation::new(929, 10.0);
+        let catalog = simulation.environment.catalog.clone();
+        let water = catalog
+            .iter()
+            .find(|resource| resource.name == "Water")
+            .unwrap();
+        let area = match &water.shape.form {
+            crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+            _ => panic!("default Water shape should have a measurable area"),
+        };
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            area,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .unwrap();
+        let arc =
+            crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
+        let realized_shape = crate::resources::Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: area,
+                boundary: None,
+                arc_boundary: Some(arc),
+                multi_contact_boundary: None,
+            },
+        };
+        let mut physical = PhysicalMaterial::realized(
+            Material::free_base("Water", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .unwrap()
+        .with_single_fluid_shape(realized_shape.clone(), &catalog)
+        .expect("valid conserved-area fluid shape should be retained");
+        physical.owner_relative_origin = Some(Placement {
+            x: 1.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        });
+        simulation.organisms[0]
+            .stored_material
+            .entries
+            .push(StoredMaterial::Physical(physical));
+        let storage_index = simulation.organisms[0].stored_material.entries.len() - 1;
+
+        assert!(expel_physical_material(
+            &mut simulation.organisms[0],
+            &mut simulation.environment,
+            storage_index,
+        ));
+        assert_eq!(
+            simulation.organisms[0].stored_material.entries.len(),
+            storage_index,
+            "successful expulsion must remove exactly the source entry"
+        );
+        let deposited: Vec<_> = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .filter(|material| material.material.parts.first().is_some_and(|part| part.0 == "Water"))
+            .collect();
+        assert_eq!(deposited.len(), 1, "the transferred fluid must remain a single object");
+        assert_eq!(
+            deposited[0].realized_shape_for_part(0, &catalog),
+            Some(realized_shape),
+            "expulsion must not replace the realized fluid boundary with the catalog default"
+        );
+    }
+
+    #[test]
     fn malformed_stored_material_remains_owned_when_expulsion_validation_fails() {
         let mut simulation = Simulation::new(923, 10.0);
         let mut physical = PhysicalMaterial::realized(
