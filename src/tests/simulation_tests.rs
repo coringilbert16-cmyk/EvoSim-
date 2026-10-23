@@ -781,6 +781,24 @@ mod integration_tests {
         .expect("base resource should have a valid physical realization");
         let before = s.organisms[0].stored_material.total_amount();
         s.environment.field.deposit(anchor.x, anchor.y, physical);
+
+        // An in-flight transformation owns a stable view of storage: acquiring
+        // now could shift a stored-BREAK rollback index or be overwritten by a
+        // prepared COMBINE storage snapshot. The physical source must remain in
+        // the field until the transformation completes.
+        s.organisms[0].active_transformation_id = Some(999);
+        Simulation::transfer_contained_environmental_material(
+            &mut s.organisms[0],
+            &mut s.environment,
+        );
+        assert_eq!(s.organisms[0].stored_material.total_amount(), before);
+        assert_eq!(
+            s.environment.field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>(),
+            1,
+            "contained material must remain in the field while a transformation is active"
+        );
+
+        s.organisms[0].active_transformation_id = None;
         let inventory_before =
             integer_material_inventory(&s).expect("pre-transfer inventory is integral");
         Simulation::transfer_contained_environmental_material(
