@@ -1424,7 +1424,7 @@ mod tests {
                 let y = min_y + (max_y - min_y) * iy as f64 / 40.0;
                 let candidate = PhysicalMaterial::realized(
                     Material {
-                        parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                        parts: vec![("Hydrogen".into(), 1.0), ("Hydrogen".into(), 1.0)],
                         internal_bonds: vec![InternalBond {
                             part_a: 0,
                             part_b: 1,
@@ -1437,7 +1437,7 @@ mod tests {
                             rotation_radians: 0.0,
                         },
                         Placement {
-                            x: x + 0.838,
+                            x: x + 1.0,
                             y,
                             rotation_radians: 0.0,
                         },
