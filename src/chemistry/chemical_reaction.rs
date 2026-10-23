@@ -347,11 +347,7 @@ mod material_identity_tests {
         ]);
         let updated = std::collections::BTreeSet::from(["organism|rev:4|bond-a".to_string()]);
 
-        dissipate_unupdated_accumulations(
-            &mut accumulation,
-            "organism|rev:4|",
-            &updated,
-        );
+        dissipate_unupdated_accumulations(&mut accumulation, "organism|rev:4|", &updated);
 
         assert_eq!(accumulation.get("organism|rev:4|bond-a"), Some(&2.0));
         assert!((accumulation["organism|rev:4|bond-b"] - 0.9).abs() < 1e-12);
