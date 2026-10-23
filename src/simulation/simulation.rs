@@ -27,9 +27,15 @@ const BUDDING_AVAILABILITY_FRACTION: f64 = 0.90;
 
 fn restore_failed_transformation_material(
     transformation: &crate::state::ActiveTransformation,
-    organism: Option<&mut Organism>,
+    mut organism: Option<&mut Organism>,
     environment: &mut Environment,
 ) {
+    if let Some(owner) = organism.as_deref_mut() {
+        if owner.active_transformation_id == Some(transformation.id) {
+            owner.active_transformation_id = None;
+        }
+    }
+
     if let Some((cell_index, source)) = transformation.combine_environmental_source.as_ref() {
         if let Some(cell) = environment.field.cells.get_mut(*cell_index) {
             cell.physical_materials.push(source.clone());
