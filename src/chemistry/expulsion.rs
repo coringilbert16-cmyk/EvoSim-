@@ -371,7 +371,7 @@ mod tests {
     }
 
     #[test]
-    fn rejected_destination_restores_expulsion_source_and_neighbor_order() {
+    fn missing_destination_index_preserves_expulsion_source_and_neighbor_order() {
         let mut simulation = Simulation::new(928, 10.0);
         let catalog = simulation.environment.catalog.clone();
         let make = |name: &str, x: f64| {
@@ -437,8 +437,9 @@ mod tests {
         ];
         let original = simulation.organisms[0].stored_material.entries.clone();
         let storage_index = 1;
-        // Keep grid dimensions valid but remove destination cells so the final
-        // deposit rejects after all geometry checks have completed.
+        // Force destination lookup to fail before source removal. This checks
+        // the preflight guarantee; deposit-time rollback is not directly
+        // injectable because deposit_physical_at_index validates synchronously.
         simulation.environment.field.cells.clear();
 
         assert!(!expel_physical_material(
