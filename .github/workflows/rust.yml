@@ -141,6 +141,10 @@ jobs:
         run: |
           cargo test --locked failed_stored_break
           cargo test --locked failed_environmental_break
+      # Late restoration rejection must not partially mutate the destination graph.
+      - name: Run focused late material-restoration rollback test
+        timeout-minutes: 5
+        run: cargo test --locked failed_late_physical_restoration_preserves_destination_structure
       # The canonical 12-piece nitrogen seed is a shared calibration fixture.
       # Verify the seed itself and its forward physical realization independently.
       # Expensive headless multigeneration validation is paused while the seed
