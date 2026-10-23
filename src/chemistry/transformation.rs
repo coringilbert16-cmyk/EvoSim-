@@ -1335,10 +1335,13 @@ mod tests {
         organism.active_transformation_id = Some(733);
 
         let before_ledger = EnergyLedger::default();
-        let mut staged_ledger = before_ledger;
-        staged_ledger.total_work_expended = 2.0;
-        staged_ledger.total_heat_dissipated = 3.0;
-        staged_ledger.total_external_energy_input = 5.0;
+        let ledger_delta = EnergyLedger {
+            total_work_expended: 2.0,
+            total_heat_dissipated: 3.0,
+            total_external_energy_input: 5.0,
+            ..EnergyLedger::default()
+        };
+        let mut staged_ledger = ledger_delta;
 
         let transformation = ActiveTransformation {
             id: 733,
@@ -1359,7 +1362,7 @@ mod tests {
             prepared_stored_material: Some(organism.stored_material.clone()),
             prepared_usable_energy: Some(2.5),
             prepared_stress: Some(0.75),
-            prepared_ledger: Some(staged_ledger),
+            prepared_ledger: Some(ledger_delta),
             prepared_ledger_before: Some(before_ledger),
             prepared_usable_energy_before: Some(before_energy),
             combine_environmental_source: Some((cell_index, source.clone())),
