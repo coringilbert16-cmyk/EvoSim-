@@ -282,14 +282,8 @@ mod tests {
         let first_id = structure.units[0].physical_id;
         let second_id = structure.units[1].physical_id;
         structure.push_bond_unchecked(Bond {
-            endpoint_a: BondEndpoint::new(
-                first_id,
-                ConnectionEndpoint::Corner { point_index: 0 },
-            ),
-            endpoint_b: BondEndpoint::new(
-                second_id,
-                ConnectionEndpoint::Corner { point_index: 3 },
-            ),
+            endpoint_a: BondEndpoint::new(first_id, ConnectionEndpoint::Corner { point_index: 0 }),
+            endpoint_b: BondEndpoint::new(second_id, ConnectionEndpoint::Corner { point_index: 3 }),
             strength: 1.0,
             bond_energy: 10.0,
         });
