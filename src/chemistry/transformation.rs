@@ -1634,9 +1634,7 @@ mod tests {
             .structure
             .units
             .iter()
-            .find(|unit| {
-                unit.placement.x.abs() < 1e-9 && unit.placement.y < -1.5
-            })
+            .find(|unit| unit.placement.x.abs() < 1e-9 && unit.placement.y < -1.5)
             .map(|unit| unit.physical_id)
             .expect("seed has a top-center wall constituent");
         organism
@@ -1648,7 +1646,9 @@ mod tests {
                 && bond.endpoint_b.constituent_id != opening_id
         });
         organism.structure.set_genome_constituent_ids([]);
-        organism.structure.clear_additional_genome_constituent_groups();
+        organism
+            .structure
+            .clear_additional_genome_constituent_groups();
 
         let source = PhysicalMaterial::realized(
             Material {
