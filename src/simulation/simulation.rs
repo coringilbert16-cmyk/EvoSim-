@@ -36,10 +36,34 @@ fn restore_failed_transformation_material(
         }
     }
 
-    if let Some((cell_index, source)) = transformation.combine_environmental_source.as_ref() {
-        if let Some(cell) = environment.field.cells.get_mut(*cell_index) {
-            cell.physical_materials.push(source.clone());
-            environment.field.mark_changed_at_index(*cell_index);
+    if let Some((_, source)) = transformation.combine_environmental_source.as_ref() {
+        if !crate::transformation::restore_combine_environmental_source(
+            transformation,
+            environment,
+        ) {
+            if let Some(owner) = organism.as_deref_mut() {
+                owner.stored_material.entries.push(
+                    crate::material_storage::StoredMaterial::Physical(source.clone()),
+                );
+            } else {
+                // If both the source cell and owner are unavailable, retain the
+                // escrow in the world rather than dropping it.
+                let deposited = source
+                    .placements
+                    .as_ref()
+                    .and_then(|placements| placements.first())
+                    .is_some_and(|placement| {
+                        environment
+                            .field
+                            .deposit(placement.x, placement.y, source.clone())
+                    });
+                if !deposited && !environment.field.cells.is_empty() {
+                    environment.field.cells[0]
+                        .physical_materials
+                        .push(source.clone());
+                    environment.field.mark_changed_at_index(0);
+                }
+            }
         }
         return;
     }
@@ -1657,6 +1681,7 @@ mod decomposition_finalization_tests {
             prepared_stress: None,
             prepared_ledger: None,
             combine_environmental_source: None,
+            combine_environmental_source_index: None,
         };
 
         restore_failed_transformation_material(&transformation, None, &mut environment);
@@ -1779,6 +1804,7 @@ mod decomposition_finalization_tests {
             prepared_stress: None,
             prepared_ledger: None,
             combine_environmental_source: None,
+            combine_environmental_source_index: None,
         };
 
         restore_failed_transformation_material(
