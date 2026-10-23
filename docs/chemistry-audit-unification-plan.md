@@ -3408,3 +3408,12 @@ Consequences:
 
 
 - Workflow [39942765529](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39942765529) reached formatting and failed before focused tests; the diff was confined to two rustfmt line wraps in the new regression test. Corrected in implementation commit `8b68be8187346e47672e61a3aa64a256c7f97841`. The failed run is not evidence of a Rust/test failure; exact-head rerun remains pending.
+
+
+## Failed-preparation escrow recovery — 2026-10-23
+
+- A second focused audit of `Simulation::step` found its preparation-failure recovery still called validated `store_physical_instance` and, if that rejected the escrow, attempted an unchecked world deposit using the source's stored/intrinsic coordinates. That could lose malformed-but-owned material or place it at a false world location.
+- Commit `62151c410b46fe8104d975ca9b7747eade54f317` changes the stored-source recovery branch to return the exact escrow object directly to the organism's storage, even if it is malformed. It deliberately avoids reinterpreting intrinsic coordinates as world coordinates.
+- Added `failed_stored_break_preparation_restores_exact_malformed_escrow` to exercise a real stored-BREAK reservation, corrupt the escrow placements after reservation, and verify failed-preparation recovery preserves exact storage membership and clears the active marker. Test commit: `cb9990708501aeb01fd3bfb884f4f52555b2f479`.
+- Formatting CI on intermediate head `62151c4` caught a rustfmt preference for a multi-line helper signature; corrected at `51cfcbdf0ee5c95069c167b370e315a9e1adfe80`. The newer test commit and final helper formatting have not yet passed exact-head CI; no regression pass is claimed.
+- Environmental-source BREAK still has separate destination failure handling; this work does not claim its atomicity or whole-world conservation.
