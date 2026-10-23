@@ -349,6 +349,7 @@ impl Simulation {
             prepared_stress: None,
             prepared_ledger: None,
             combine_environmental_source: None,
+        combine_environmental_source_index: None,
             combine_environmental_source_index: None,
         };
         *next_id += 1;
