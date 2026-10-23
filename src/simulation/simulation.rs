@@ -37,10 +37,8 @@ fn restore_failed_transformation_material(
     }
 
     if let Some((_, source)) = transformation.combine_environmental_source.as_ref() {
-        if !crate::transformation::restore_combine_environmental_source(
-            transformation,
-            environment,
-        ) {
+        if !crate::transformation::restore_combine_environmental_source(transformation, environment)
+        {
             if let Some(owner) = organism.as_deref_mut() {
                 owner.stored_material.entries.push(
                     crate::material_storage::StoredMaterial::Physical(source.clone()),
