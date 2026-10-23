@@ -124,16 +124,16 @@ jobs:
           cargo test --locked failed_environmental_break
       # The canonical 12-piece nitrogen seed is a shared calibration fixture.
       # Verify the seed itself and its forward physical realization independently.
-      - name: Verify canonical 12N seed and realization
-        timeout-minutes: 5
-        run: |
-          cargo test --locked confirmed_seed_is_the_established_twelve_piece_nitrogen_ring
-          cargo test --locked ancestral_seed_realizes_a_physically_valid_developmental_structure
       # Expensive headless multigeneration validation is paused while the seed
       # topology is being finalized. Keep the normal Rust/Clippy gates active.
       - name: Run Rust tests
         timeout-minutes: 5
         run: cargo test --locked --all-targets
+      - name: Verify canonical 12N seed and realization
+        timeout-minutes: 5
+        run: |
+          cargo test --locked confirmed_seed_is_the_established_twelve_piece_nitrogen_ring
+          cargo test --locked ancestral_seed_realizes_a_physically_valid_developmental_structure
       - name: Run Clippy
         timeout-minutes: 5
         if: always()
