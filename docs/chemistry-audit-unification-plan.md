@@ -4074,3 +4074,11 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - The oracle now counts those authoritative holders. It intentionally excludes prepared COMBINE snapshots because they are staged duplicates of live structure/storage; it counts stored_material and combine_environmental_source on active transformations because those sources have been removed from their previous holder during escrow.
 - Regression failed_stored_break_preparation_restores_escrow_through_live_tick now compares inventory before reservation, while the source is in an active transformation, and after malformed preparation rolls the source back. The fixture clears default storage and breaches the owner so it tests the transaction boundary without unrelated inventory or new biological actions.
 - PR #205 head af3ee7e04816fc5ad66670cf4e76ec63368615d3 includes the latest oracle assertion. Workflow 40024344294 is still running on predecessor 1ea2ea1dc07854c23d8ad255f8a2362d37b4f3f2; exact-head verification is pending. No passing claim yet.
+
+
+## 17.208 Restoration must validate against the existing destination graph (2026-10-23)
+
+- Audit of material_restoration.rs found that the staged validator rejected penetration among constituents of the restored object but never compared a restored constituent with pre-existing destination units. Thus a physically valid stored object could be admitted through an existing destination constituent.
+- Production change: restore_material now checks every restored constituent against all pre-existing destination constituents with the same geometry penetration predicate. It still stages the destination graph clone and commits only after every geometry and bond check succeeds.
+- Regression restoration_rejects_penetration_into_existing_destination_atomically places two Carbon hexagons at the same origin, requires restoration to reject the overlap, and verifies destination units and bonds remain unchanged.
+- PR #205 head 1094e50160af01165d2c977a6ba5868394cf660a includes the production fix and regression. Exact-head formatting/focused/full-suite/Clippy verification is pending; workflow 40024344294 is running on predecessor 1ea2ea1dc07854c23d8ad255f8a2362d37b4f3f2 and does not verify this change.
