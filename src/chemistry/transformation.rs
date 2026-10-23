@@ -877,7 +877,9 @@ pub(crate) fn quarantine_environmental_source_in_storage(
     else {
         return false;
     };
-    organism.stored_material.commit_prepared_physical_batch(prepared);
+    organism
+        .stored_material
+        .commit_prepared_physical_batch(prepared);
     true
 }
 
