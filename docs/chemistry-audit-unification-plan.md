@@ -3516,3 +3516,8 @@ Internal/adjacent budding remains the target: a second genome core begins beside
 
 - The first workflow for environmental BREAK strict-index commit `7247f8adbd3f52e3606eee8f57a2a142435223f4` failed the formatting gate on the new test's `before_invalid_restore` assignment. Formatting-only follow-up commit `893db39e971213e4939e88f15485e2cef48f0b5a` applies the reported wrap.
 - Current PR #205 head: `893db39e971213e4939e88f15485e2cef48f0b5a`. Exact-head workflow [39968293695](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39968293695) is in progress. No verification claim is made for the environmental BREAK strict-index change until this workflow's focused gates and full-suite result are observed.
+## 17.142 Focused COMBINE rollback gate and latest source head — 2026-10-23
+
+- Added a dedicated five-minute CI gate, `cargo test --locked failed_prepared_combine_`, so the exact rollback snapshot tests report before the full suite. This is in commit `4b972f403b56cd72bc8236de2d3854be762e7297`.
+- The environmental BREAK test needed one further rustfmt adjustment after commit `893db39`; that assertion was corrected in commit `03fcee3f8300e21482df2cc41455dd0262da6127`.
+- Current PR #205 head is `03fcee3f8300e21482df2cc41455dd0262da6127`. Exact-head workflow [39968411993](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39968411993) is in progress at the focused physical-graph merge gate. No final verification claim is made yet for the exact COMBINE and environmental BREAK rollback changes.
