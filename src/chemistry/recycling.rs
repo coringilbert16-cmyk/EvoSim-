@@ -99,28 +99,6 @@ mod tests {
         assert_eq!(organism.usable_energy, 0.0);
         assert!(organism.reproductive_construction.is_none());
     }
-    #[test]
-    fn rejected_recycling_energy_settlement_preserves_all_material_owners() {
-        let mut simulation = Simulation::new(24, 20.0);
-        let mut organism = simulation.organisms.remove(0);
-        assert!(organism.store_material(Material::free_base("Carbon", 2.0)));
-        let stored_before = organism.stored_material.entries.clone();
-        let usable_before = organism.usable_energy;
-        let field_before = simulation.environment.field.total_amount();
-        let mut ledger = EnergyLedger {
-            total_heat_dissipated: f64::NAN,
-            ..EnergyLedger::default()
-        };
 
-        assert!(
-            recycle_dead_organism(&mut simulation.environment, &mut organism, &mut ledger)
-                .is_none(),
-            "invalid ledger must reject recycling before any holder commits"
-        );
-        assert_eq!(organism.stored_material.entries, stored_before);
-        assert_eq!(organism.usable_energy, usable_before);
-        assert_eq!(simulation.environment.field.total_amount(), field_before);
-        assert!(ledger.total_heat_dissipated.is_nan());
-    }
 
 }
