@@ -1304,7 +1304,12 @@ impl Simulation {
             if !living_ids.contains(&organism.id) {
                 continue;
             }
-            if organism.reproductive_construction.is_some() {
+            // Construction consumes the same stored-material holder used by
+            // BREAK/COMBINE transactions. Pause it while a transformation owns
+            // an escrow or prepared storage snapshot; resume after resolution.
+            if organism.reproductive_construction.is_some()
+                && organism.active_transformation_id.is_none()
+            {
                 let Some(parent_body) =
                     crate::reproduction::parent_body_geometry(organism, &self.environment.catalog)
                 else {
