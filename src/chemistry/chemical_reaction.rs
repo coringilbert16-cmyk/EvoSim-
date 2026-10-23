@@ -346,6 +346,45 @@ mod material_identity_tests {
     }
 
     #[test]
+    fn chemical_break_reconciles_world_energy_inventory() {
+        let mut simulation = crate::state::Simulation::new(922, 10.0);
+        let before = simulation.energy_inventory_snapshot();
+        assert!(
+            before.is_balanced(1e-9),
+            "initial inventory: {:?}",
+            before.residual()
+        );
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        let operation = ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            reaction_energy: 1_000.0,
+            disruption_cost: 0.0,
+            reaction_frequency_hz: 440.0,
+        };
+        assert!(resolve(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.energy_ledger,
+        ));
+        let after = simulation.energy_inventory_snapshot();
+        assert!(
+            after.is_balanced(1e-9),
+            "chemical BREAK must reconcile the world inventory: residual={:?}",
+            after.residual()
+        );
+        assert!(!simulation.organisms[0]
+            .structure
+            .bonds
+            .iter()
+            .any(|candidate| candidate.has_same_identity(&bond)));
+    }
+
+    #[test]
     fn failed_stale_chemical_break_does_not_consume_retained_resonance() {
         let mut simulation = crate::state::Simulation::new(921, 10.0);
         let bond = *simulation.organisms[0]
