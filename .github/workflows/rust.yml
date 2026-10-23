@@ -37,6 +37,8 @@ jobs:
         run: |
           cargo test --locked unobserved_reaction_progress_dissipates_once_per_tick
           cargo test --locked failed_chemical_settlement_preserves_triggered_reaction_progress
+          cargo test --locked successful_chemical_break_does_not_spend_resonance_when_reaction_covers_barrier
+          cargo test --locked successful_chemical_break_spends_only_resonance_needed_for_reaction_shortfall
           cargo test --locked chemical_break_reconciles_world_energy_inventory
       - name: Run focused physical graph merge tests
         timeout-minutes: 5
