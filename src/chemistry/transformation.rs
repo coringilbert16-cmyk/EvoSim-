@@ -762,7 +762,7 @@ impl Simulation {
             return false;
         };
         let Some(target) = transformation.stored_bond.as_ref() else {
-            restore_failed_stored_break_source(transformation, organism, environment);
+            organism.active_transformation_id = None;
             return false;
         };
         // Stored environmental compounds retain their bond endpoints, but
@@ -772,7 +772,7 @@ impl Simulation {
         // Validate the exact bond before settling the transaction. The physical
         // structure itself is not changed until the following tick.
         if stored.break_internal_bond(target).is_none() {
-            restore_failed_stored_break_source(transformation, organism, environment);
+            organism.active_transformation_id = None;
             return false;
         }
 
@@ -786,7 +786,7 @@ impl Simulation {
             heat_dissipated: 0.0,
         };
         if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
-            restore_failed_stored_break_source(transformation, organism, environment);
+            organism.active_transformation_id = None;
             return false;
         }
 
@@ -1601,6 +1601,13 @@ mod tests {
             &mut ledger,
             None,
         ));
+        // The live tick owns failed-preparation rollback after the prepare
+        // function returns false; exercise that same outer transaction boundary.
+        super::restore_failed_stored_break_source(
+            &transformation,
+            &mut organism,
+            &mut environment,
+        );
         assert_eq!(
             organism.stored_material.entries, entries_before,
             "failed preparation must return the exact source to storage"
