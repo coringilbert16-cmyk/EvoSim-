@@ -412,16 +412,21 @@ impl Simulation {
         ) else {
             return;
         };
-        for physical in environment
-            .field
-            .take_contained_physical_materials_in_regions(
-                &body,
-                &interior_regions,
-                &environment.catalog,
-            )
-        {
-            match organism
-                .stored_material
+        // Acquisition transfers an entire batch between authoritative holders.
+        // Stage both sides so a rejected storage insertion cannot lose a source
+        // after the field has already removed it.
+        let mut staged_field = environment.field.clone();
+        let mut staged_storage = organism.stored_material.clone();
+        let contained = staged_field.take_contained_physical_materials_in_regions(
+            &body,
+            &interior_regions,
+            &environment.catalog,
+        );
+        if contained.is_empty() {
+            return;
+        }
+        for physical in contained {
+            if staged_storage
                 .try_store_physical_instance_at_owner_anchor(
                     physical,
                     Placement {
@@ -429,21 +434,16 @@ impl Simulation {
                         y: anchor.y,
                         rotation_radians: 0.0,
                     },
-                ) {
-                Ok(()) => continue,
-                Err(physical) => {
-                    if let Some(placement) = physical
-                        .placements
-                        .as_ref()
-                        .and_then(|placements| placements.first())
-                    {
-                        let _ = environment
-                            .field
-                            .deposit(placement.x, placement.y, physical);
-                    }
-                }
+                )
+                .is_err()
+            {
+                // Discard both staged holders: the exact original field and
+                // storage remain authoritative until the complete batch succeeds.
+                return;
             }
         }
+        environment.field = staged_field;
+        organism.stored_material = staged_storage;
     }
 
     fn current_needs(
