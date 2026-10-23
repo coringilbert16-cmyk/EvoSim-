@@ -4,14 +4,15 @@ EvoSim is an experimental 2D artificial-life simulation written in Rust. The pro
 
 This README is the current repository guide and implementation-status summary. Older dated handoffs are preserved verbatim in [README_HANDOFF_ARCHIVE_2026-10-22.md](README_HANDOFF_ARCHIVE_2026-10-22.md); treat them as historical evidence, not current instructions when they conflict with this page.
 
-## Current repository state — 2026-10-22
+## Current repository state — 2026-10-23
 
 - **Integration baseline:** PR [#202](https://github.com/coringilbert16-cmyk/EvoSim-/pull/202) is merged to `main` at `8c84978cd003738d94a74eef9114b711689c3804`.
-- **Maintenance work:** [PR #203](https://github.com/coringilbert16-cmyk/EvoSim-/pull/203) is a draft based on that baseline. It contains narrowly scoped lint cleanup and documentation organization. It is not merged.
-- **Known test baseline:** 563 passed, 28 failed, 1 ignored on the exact tested PR #202 source head. Comparison with the prior run found the same 28 failing test identities, with no new or resolved baseline failures. See [run #39697289682](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39697289682).
-- **Strict Clippy:** `cargo clippy --locked --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of` still fails. Exact-head run [#39705150387](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39705150387), at `67bceda1672891e7e390cf242295477bfb5cf3a0`, reports 34 application-target and 15 test-target errors, improved from the earlier 36/16 checkpoint and baseline 59/38. The full suite reports 563 passed, 28 failed, 1 ignored; all 28 failing test identities match the accepted baseline run [#39697289682](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39697289682), with no new or resolved baseline failures. Formatting, source-size, COMBINE architecture, and focused Bob/fluid/chemistry checks pass at this head. Strict Clippy remains an acknowledged follow-up; no blanket lint suppression is intended.
-- **Not yet proven:** whole-world energy conservation across every storage, reaction, and lifecycle path; live sunlight/world-tone energy capture; and complete self-maintaining organism viability. Do not infer these from passing focused tests.
-- **Separate work:** PR [#196](https://github.com/coringilbert16-cmyk/EvoSim-/pull/196) remains out of scope for PR #203. Do not import its constructor/Bob changes as part of maintenance cleanup.
+- **Chemistry plan:** [PR #204](https://github.com/coringilbert16-cmyk/EvoSim-/pull/204) remains a documentation-only draft. Its current handoff records the approved invariants, phase ordering, and exact-head verification evidence.
+- **Chemistry implementation:** [PR #205](https://github.com/coringilbert16-cmyk/EvoSim-/pull/205) remains a draft at `5b88d3585bf6d3669fe2847fc886822d2f53010d`. Recent changes add exact COMBINE energy/ledger before-state rollback, fail-closed environmental BREAK source-index restoration, and a post-death construction-immobility regression.
+- **Latest exact-head verification:** workflow [#39968793805](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39968793805) passed formatting and all focused gates, including the post-death holder inventory, COMBINE snapshot rollback, and stored/environmental BREAK rollback tests. Full suite: **612 passed, 23 failed, 1 ignored** in 250.67 seconds. Comparing named failures against frozen baseline workflow [#39705628427](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39705628427) found no new failure identities; five baseline failures are resolved. The suite remains baseline-red, not green.
+- **Strict Clippy:** remains failing with the existing 34 application-target and 15 test-target diagnostics. Normalized path/diagnostic comparison at the latest exact head found no added or removed diagnostic identities. No unrelated lint cleanup is authorized by this result.
+- **Still unproven:** global material/energy conservation across all live transitions; live sunlight/world-tone energy capture; availability of stored/developing holders for ordinary chemistry after death; canonical aggregate ownership and atomic reproduction/division. Passing focused tests do not prove these.
+- **Separate work:** PR [#196](https://github.com/coringilbert16-cmyk/EvoSim-/pull/196) remains out of scope for the chemistry implementation. Keep constructor/Bob changes separate.
 
 ## Design and implementation invariants
 
@@ -52,11 +53,13 @@ The full test suite is currently **not green**. A maintenance change is acceptab
 
 ## Active maintenance checklist
 
-- [x] Review exact-head CI at `1414744`: formatting, source-size and COMBINE architecture checks pass; focused Bob/fluid/chemical tests pass; full suite remains at the same 28 baseline failures (563 passed, 1 ignored).
-- [x] Complete final exact-head verification for PR #203: all 28 full-suite failure identities match the accepted baseline; formatting and focused checks pass. Strict Clippy improved to 34 application-target and 15 test-target errors but remains a tracked follow-up; investigate dead-code warnings before deleting or suppressing anything.
-- [x] Reconcile full-suite test failures by identity against the known baseline; no new or resolved failing identities.
-- [ ] Improve repository documentation and source ownership without discarding historical evidence.
-- [ ] Keep PR #196 separate until the stabilized baseline is understood and its exact-head behavior is independently reviewed.
+- [x] Verify PR #205 exact-head focused transaction gates and compare full-suite failure identities against the frozen baseline; no new failure identities, five baseline failures resolved.
+- [x] Verify COMBINE rollback restores the exact usable-energy and full ledger before-state; legacy serialized transactions retain the delta fallback.
+- [x] Verify environmental BREAK rollback rejects corrupt source indices without mutating environmental inventory.
+- [x] Verify the post-death regression preserves material/energy inventory and prevents reproductive construction progress without activating legacy `DecomposingBody`.
+- [ ] Establish an ordinary-chemistry path for stored/developing holders after death without a separate decomposition law or loss of exact ownership.
+- [ ] Prove global material/energy conservation and live sunlight/world-tone allocation; do not infer completion from the current focused gates.
+- [ ] Keep PR #196 constructor/Bob work separate from PR #205 chemistry changes.
 
 ## Specification authority
 
