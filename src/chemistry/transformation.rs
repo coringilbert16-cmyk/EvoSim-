@@ -297,6 +297,7 @@ impl Simulation {
         if decision.action != ActionKind::Break || organism.active_transformation_id.is_some() {
             return None;
         }
+        let next_id_after = (*next_id).checked_add(1)?;
         let key = decision.context_key.as_deref()?;
         let rest = key.strip_prefix("stored:")?;
         let (storage_index, bond_part) = rest.split_once(":bond:")?;
@@ -355,7 +356,7 @@ impl Simulation {
             environmental_source_location: None,
             combine_environmental_source_index: None,
         };
-        *next_id += 1;
+        *next_id = next_id_after;
         organism.active_transformation_id = Some(t.id);
         Some(t)
     }
@@ -504,6 +505,7 @@ pub(crate) fn try_start_environmental_break(
     if decision.action != ActionKind::Break || organism.active_transformation_id.is_some() {
         return None;
     }
+    let next_id_after = (*next_id).checked_add(1)?;
     let key = decision.context_key.as_deref()?;
     let (cell_index, material_index, bond_index) = parse_environmental_break_context_key(key)?;
 
@@ -1569,6 +1571,57 @@ mod tests {
         let decoded: ActiveTransformation = serde_json::from_value(legacy_json).unwrap();
         assert_eq!(decoded.stored_source_index, None);
         assert_eq!(decoded.environmental_source_location, None);
+    }
+
+    #[test]
+    fn stored_break_rejects_exhausted_transformation_ids_without_reserving_source() {
+        use crate::physical_material::PhysicalMaterial;
+        use crate::resources::{InternalBond, Material};
+        use crate::structure::Placement;
+
+        let catalog = crate::resources::default_catalog();
+        let mut organism = environmental_break_test_organism("exhausted-break-id", None);
+        let source = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("bonded source should be physically realizable");
+        assert!(organism.stored_material.store_physical_instance(source));
+        let before = organism.stored_material.entries.clone();
+        let decision = ActionCandidate {
+            action: ActionKind::Break,
+            context_key: Some("stored:0:bond:0".into()),
+        };
+        let mut next_id = u64::MAX;
+
+        assert!(Simulation::try_start_transformation(
+            &mut organism,
+            &catalog,
+            &mut next_id,
+            &decision,
+        )
+        .is_none());
+        assert_eq!(organism.stored_material.entries, before);
+        assert_eq!(organism.active_transformation_id, None);
+        assert_eq!(next_id, u64::MAX);
     }
 
     fn environmental_break_test_organism(
