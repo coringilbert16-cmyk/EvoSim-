@@ -217,8 +217,7 @@ mod tests {
             0,
         ));
         assert_eq!(
-            simulation.organisms[0].stored_material.entries,
-            original_entries,
+            simulation.organisms[0].stored_material.entries, original_entries,
             "failed expulsion validation must not remove or rewrite the stored source"
         );
     }
