@@ -128,12 +128,10 @@ mod tests {
         let ledger_before = ledger;
         let field_before = simulation.environment.field.total_amount();
 
-        assert!(recycle_dead_organism(
-            &mut simulation.environment,
-            &mut organism,
-            &mut ledger,
-        )
-        .is_none());
+        assert!(
+            recycle_dead_organism(&mut simulation.environment, &mut organism, &mut ledger,)
+                .is_none()
+        );
 
         assert_eq!(organism.stored_material, storage_before);
         assert_eq!(organism.reproductive_construction, construction_before);
@@ -141,5 +139,4 @@ mod tests {
         assert_eq!(ledger, ledger_before);
         assert_eq!(simulation.environment.field.total_amount(), field_before);
     }
-
 }
