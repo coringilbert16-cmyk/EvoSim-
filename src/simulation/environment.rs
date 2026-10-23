@@ -572,7 +572,10 @@ impl ActiveMaterialField {
     /// Deposit an already realized physical material. This operation transfers
     /// the existing object; it does not create or re-form any of its bonds.
     pub fn deposit_physical_at_index(&mut self, index: usize, material: PhysicalMaterial) -> bool {
-        if !material.is_realized() || material.material.is_empty() || !material.material.is_valid()
+        if index >= self.cells.len()
+            || !material.is_realized()
+            || material.material.is_empty()
+            || !material.material.is_valid()
         {
             return false;
         }
