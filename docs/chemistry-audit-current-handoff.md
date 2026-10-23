@@ -634,3 +634,10 @@ Future reproduction is separate: start adjacent budding at 100% original size, g
 - Movement currently sees/translates the parent graph and separately translates the developing graph. World-tone and structural-energy inventory also enumerate/count developing structure separately. Those paths would double-move/double-count after a graph merge unless migrated together.
 - **Updated owner contract:** attached reproductive structure is ordinary parent-owned physical structure and participates in resonance; do not retain a separate developing-structure graph or special “committed reproductive material” class. Only genuinely stored material stays in storage. This supersedes the earlier transitional separate-graph description in Section 17.31.
 - No runtime source change in this audit. Next: atomically promote the reproduction anchor into the parent graph with ID/core-group remapping, then migrate movement/collision, world-tone enumeration, energy inventory, growth targeting, and core-specific viability as a coordinated slice. See plan Section 17.126.
+
+
+## Implementation checkpoint — 2026-10-22, Section 17.127
+
+- PR #205 commit `294de15f58340c006dc6817da6ad19a5e640efee` makes reproduction readiness use the core-specific viability validator anchored to the developing anchor's stable physical ID, instead of validating whichever cavity the generic whole-graph lookup selects.
+- Exact-head CI for this commit is pending/not yet returned by the workflow lookup. No pass is claimed.
+- This is only the first integration prerequisite. The developing graph is still separate; the next audited change must plan failure-atomic anchor promotion and all coupled movement/collision, world-tone, energy inventory, growth, viability, and revision/cache paths before shared-graph ownership is enabled. Attached reproductive structure counts for resonance; stored material alone does not. See Section 17.127.
