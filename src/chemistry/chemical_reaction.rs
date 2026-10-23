@@ -355,6 +355,8 @@ mod material_identity_tests {
             reaction_energy: 1_000.0,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
+            accumulation_key: "test|rev:0|bond".into(),
+            accumulated_reaction: 2.5,
         };
         let before = simulation.organisms[0]
             .resonant_energy
@@ -375,6 +377,34 @@ mod material_identity_tests {
             .bonds
             .iter()
             .any(|candidate| candidate.has_same_identity(&bond)));
+    }
+
+    #[test]
+    fn failed_chemical_settlement_preserves_triggered_reaction_progress() {
+        let mut simulation = crate::state::Simulation::new(921, 10.0);
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        let operation = ChemicalBreakOperation {
+            // Force a stale-owner rejection before any physical mutation.
+            organism_id: "stale-organism".into(),
+            bond,
+            reaction_energy: 1_000.0,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "test|rev:0|bond".into(),
+            accumulated_reaction: 7.25,
+        };
+        let mut accumulation = std::collections::BTreeMap::new();
+        assert!(!resolve_preserving_accumulation(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.energy_ledger,
+            &mut accumulation,
+        ));
+        assert_eq!(accumulation.get("test|rev:0|bond"), Some(&7.25));
     }
 
     #[test]
