@@ -349,6 +349,7 @@ impl Simulation {
             prepared_stress: None,
             prepared_ledger: None,
             combine_environmental_source: None,
+            combine_environmental_source_index: None,
         };
         *next_id += 1;
         organism.active_transformation_id = Some(t.id);
@@ -724,6 +725,7 @@ impl Simulation {
                 environment.field.mark_changed_at_index(*cell_index);
                 transformation.environmental_source = true;
                 transformation.combine_environmental_source = Some((*cell_index, source.clone()));
+                transformation.combine_environmental_source_index = Some(index);
             }
             transformation.prepared_structure = Some(trial_organism.structure);
             transformation.prepared_stored_material = Some(trial_organism.stored_material);
@@ -874,6 +876,26 @@ fn restore_failed_stored_break_source(
 /// Reverse a staged COMBINE settlement when its physical commit state is
 /// incomplete. Deltas are applied independently because serialized/corrupt
 /// prepared state may have lost one optional field.
+pub(crate) fn restore_combine_environmental_source(
+    transformation: &ActiveTransformation,
+    environment: &mut Environment,
+) -> bool {
+    let Some((cell_index, source)) = transformation.combine_environmental_source.as_ref() else {
+        return false;
+    };
+    let Some(cell) = environment.field.cells.get_mut(*cell_index) else {
+        return false;
+    };
+    let insertion_index = transformation
+        .combine_environmental_source_index
+        .unwrap_or(cell.physical_materials.len())
+        .min(cell.physical_materials.len());
+    cell.physical_materials
+        .insert(insertion_index, source.clone());
+    environment.field.mark_changed_at_index(*cell_index);
+    true
+}
+
 fn rollback_prepared_combine(
     usable_energy: &mut f64,
     ledger: &mut EnergyLedger,
@@ -935,14 +957,13 @@ pub(crate) fn resolve_transformation(
                 transformation.prepared_usable_energy,
                 transformation.prepared_ledger.as_ref(),
             );
-            if let Some((cell_index, source)) = transformation.combine_environmental_source.as_ref()
-            {
-                // Restore to the exact field cell from which the source was
-                // reserved. Re-depositing by coordinates can land in a
-                // different cell after field partitioning changes.
-                if let Some(cell) = environment.field.cells.get_mut(*cell_index) {
-                    cell.physical_materials.push(source.clone());
-                    environment.field.mark_changed_at_index(*cell_index);
+            if !restore_combine_environmental_source(transformation, environment) {
+                // If the field cell metadata is corrupt, preserve the escrow in
+                // an explicit holder rather than silently dropping the source.
+                if let Some((_, source)) = transformation.combine_environmental_source.as_ref() {
+                    organism.stored_material.entries.push(
+                        crate::material_storage::StoredMaterial::Physical(source.clone()),
+                    );
                 }
             }
             organism.active_transformation_id = None;
@@ -1464,6 +1485,7 @@ mod tests {
             prepared_stress: None,
             prepared_ledger: None,
             combine_environmental_source: None,
+            combine_environmental_source_index: None,
         };
 
         resolve_transformation(
@@ -1510,6 +1532,7 @@ mod tests {
             prepared_stress: None,
             prepared_ledger: None,
             combine_environmental_source: None,
+            combine_environmental_source_index: None,
         };
 
         resolve_transformation(
