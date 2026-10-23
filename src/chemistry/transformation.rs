@@ -352,6 +352,7 @@ impl Simulation {
             prepared_usable_energy_before: None,
             combine_environmental_source: None,
             stored_source_index: Some(storage_index),
+            environmental_source_location: None,
             combine_environmental_source_index: None,
         };
         *next_id += 1;
@@ -599,6 +600,7 @@ pub(crate) fn try_start_environmental_break(
         prepared_usable_energy_before: None,
         combine_environmental_source: None,
         stored_source_index: None,
+        environmental_source_location: Some((cell_index, material_index)),
         combine_environmental_source_index: None,
     };
     *next_id += 1;
@@ -815,6 +817,9 @@ pub(crate) fn original_stored_source_index(transformation: &ActiveTransformation
 pub(crate) fn original_environmental_source_location(
     transformation: &ActiveTransformation,
 ) -> Option<(usize, usize)> {
+    if let Some(location) = transformation.environmental_source_location {
+        return Some(location);
+    }
     let key = transformation.decision_context_key.as_deref()?;
     let rest = key.strip_prefix("environment:")?;
     let (cell_material_part, bond_part) = rest.rsplit_once(":bond:")?;
@@ -1373,6 +1378,7 @@ mod tests {
             prepared_usable_energy_before: Some(before_energy),
             combine_environmental_source: Some((cell_index, source.clone())),
             stored_source_index: None,
+            environmental_source_location: None,
             combine_environmental_source_index: Some(1),
         };
 
@@ -1681,6 +1687,7 @@ mod tests {
             prepared_usable_energy_before: None,
             combine_environmental_source: Some((cell_index, source.clone())),
             stored_source_index: None,
+            environmental_source_location: None,
             combine_environmental_source_index: Some(1),
         };
 
@@ -1784,6 +1791,7 @@ mod tests {
             prepared_usable_energy_before: None,
             combine_environmental_source: None,
             stored_source_index: None,
+            environmental_source_location: None,
             combine_environmental_source_index: None,
         };
 
@@ -1824,7 +1832,7 @@ mod tests {
             remaining_ticks: 0,
             prepared_energy: None,
             pending_experience: None,
-            decision_context_key: Some(format!("environment:cell:{cell_index}:material:1:bond:0")),
+            decision_context_key: Some("environment:cell:999:material:999:bond:0".into()),
             prepared_structure: None,
             prepared_stored_material: None,
             prepared_usable_energy: None,
@@ -1834,6 +1842,7 @@ mod tests {
             prepared_usable_energy_before: None,
             combine_environmental_source: None,
             stored_source_index: None,
+            environmental_source_location: Some((cell_index, 1)),
             combine_environmental_source_index: None,
         };
 
@@ -1853,6 +1862,7 @@ mod tests {
         assert_eq!(organism.active_transformation_id, None);
 
         let mut invalid_location = transformation.clone();
+        invalid_location.environmental_source_location = None;
         invalid_location.decision_context_key =
             Some(format!("environment:cell:{cell_index}:material:99:bond:0"));
         let before_invalid_restore = environment.field.cells[cell_index]
