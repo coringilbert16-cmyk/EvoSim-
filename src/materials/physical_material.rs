@@ -365,6 +365,11 @@ impl PhysicalMaterial {
                     || !placement.y.is_finite()
                     || !placement.rotation_radians.is_finite()
             })
+            || self.owner_relative_origin.is_some_and(|origin| {
+                !origin.x.is_finite()
+                    || !origin.y.is_finite()
+                    || !origin.rotation_radians.is_finite()
+            })
             || connections.len() != self.material.internal_bonds.len()
             || connections.iter().any(|connection| {
                 connection.part_a >= placements.len()
@@ -990,6 +995,46 @@ mod tests {
             physical.break_internal_bond(&malformed_target).is_none(),
             "stored BREAK completion must fail closed on malformed persisted topology"
         );
+    }
+
+    #[test]
+    fn realized_state_rejects_non_finite_owner_relative_origin() {
+        let catalog = crate::resources::default_catalog();
+        let valid = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("valid single constituent should realize");
+
+        for origin in [
+            Placement {
+                x: f64::NAN,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 0.0,
+                y: f64::INFINITY,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: f64::NEG_INFINITY,
+            },
+        ] {
+            let mut malformed = valid.clone();
+            malformed.owner_relative_origin = Some(origin);
+            assert!(
+                !malformed.is_realized(),
+                "non-finite owner-relative coordinates must fail closed"
+            );
+        }
     }
 
     #[test]
