@@ -1,3 +1,4 @@
+use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::state::{EnergyLedger, Environment, Organism};
 
 pub(crate) fn recycle_dead_organism(
