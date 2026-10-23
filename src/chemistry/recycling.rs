@@ -116,11 +116,20 @@ mod tests {
             &mut EnergyLedger::default(),
         ));
         organism.usable_energy = 5.0;
-        organism
+        let construction = organism
             .reproductive_construction
             .as_mut()
-            .expect("construction started")
-            .developing_energy = 3.0;
+            .expect("construction started");
+        construction.developing_energy = 3.0;
+        assert!(construction.committed_material.store_physical(
+            Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &simulation.environment.catalog,
+        ));
         organism.occupied_cells[0].x = 1.0e9;
 
         let storage_before = organism.stored_material.clone();
