@@ -3974,3 +3974,10 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - **Regression:** `invalid_finished_body_position_preserves_released_material_ownership` gives a finished body usable energy and a non-finite destination. It asserts that the body and constituent remain, the energy budget stays unchanged, the live ledger is byte-for-byte value-equal, and field material amount is unchanged.
 - **CI:** PR #205 head `fc2e8d5bd49422bf83757a440a0cd9b241352bc1`, workflow [40018610844](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40018610844). Formatting, architecture/source-size checks, physical graph merge, chemistry accumulation, and the new focused decomposition-finalization rollback gate have passed; the full Rust suite is still running. The result is not yet a green exact-head suite.
 - **Scope:** this closes one concrete failed-finalization path only. The larger requirement that post-death material participate in ordinary chemistry rather than a separate decomposition law remains open, as does whole-world conservation. PR #204 remains documentation-only; PR #196 remains out of scope.
+
+
+## 17.199 Exact-head focused rollback gates (2026-10-23)
+
+- PR #205 head `1318d2f64dbe71dd57271761f40580bfabc6cd20`, workflow [40019005755](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40019005755), has now passed both dedicated gates: `invalid_finished_body_position_preserves_released_material_ownership` and `failed_late_physical_restoration_preserves_destination_structure`. The physical graph merge gate also passed, including the corrected dangling-destination-bond fixture.
+- Formatting, source-size/COMBINE architecture checks and preceding focused chemistry, fluid, BREAK, movement, post-death inventory, COMBINE, and material-transfer gates also passed on this head. The full Rust suite is still running; strict Clippy and full-suite/baseline comparison remain pending.
+- The focused passes validate the specific rollback paths; they do not imply Phase 3 completion, ordinary post-death chemistry integration, or global material/energy conservation. Keep those requirements open.
