@@ -982,6 +982,7 @@ mod tests {
                 prepared_stress: None,
                 prepared_ledger: None,
                 combine_environmental_source: None,
+                combine_environmental_source_index: None,
             });
 
         let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
