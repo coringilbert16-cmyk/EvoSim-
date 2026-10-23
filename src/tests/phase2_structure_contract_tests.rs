@@ -125,7 +125,6 @@ fn realized_material_carries_exact_internal_connection_and_restores_without_comb
     );
 }
 
-
 #[test]
 fn failed_late_physical_restoration_preserves_destination_structure() {
     let catalog = line_catalog();
