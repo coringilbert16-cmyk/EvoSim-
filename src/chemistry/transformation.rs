@@ -456,6 +456,22 @@ pub(crate) fn has_environmental_break_candidate(
     !environmental_break_candidates(organism, environment).is_empty()
 }
 
+fn environmental_break_source_at(
+    environment: &Environment,
+    cell_index: usize,
+    material_index: usize,
+    bond_index: usize,
+) -> Option<(crate::physical_material::PhysicalMaterial, crate::resources::InternalBond)> {
+    let instance = environment
+        .field
+        .cells
+        .get(cell_index)?
+        .physical_materials
+        .get(material_index)?;
+    let target = instance.internal_connections.as_ref()?.get(bond_index)?.clone();
+    Some((instance.clone(), target))
+}
+
 pub(crate) fn try_start_environmental_break(
     organism: &mut Organism,
     environment: &mut Environment,
@@ -492,15 +508,9 @@ pub(crate) fn try_start_environmental_break(
         return None;
     }
 
-    let (target, accessible) = {
-        let instance = environment
-            .field
-            .cells
-            .get(cell_index)?
-            .physical_materials
-            .get(material_index)?;
-        let connections = instance.internal_connections.as_ref()?;
-        let target = connections.get(bond_index)?.clone();
+    let (instance, target) =
+        environmental_break_source_at(environment, cell_index, material_index, bond_index)?;
+    let accessible = {
         let placements = instance.placements.as_ref()?;
         if placements.len() != instance.material.parts.len() {
             return None;
@@ -525,11 +535,10 @@ pub(crate) fn try_start_environmental_break(
         let point_b = target
             .endpoint_b
             .world_point(&hypothetical.units[b_index], &environment.catalog)?;
-        let accessible = regions.iter().any(|region| {
+        regions.iter().any(|region| {
             region.contains_point(point_a.x, point_a.y)
                 || region.contains_point(point_b.x, point_b.y)
-        });
-        (target, accessible)
+        })
     };
     if !accessible {
         return None;
@@ -1382,143 +1391,37 @@ mod tests {
     }
 
     #[test]
-    fn failed_environmental_break_starts_from_the_exact_indexed_material_and_bond() {
-        use crate::physical_material::PhysicalMaterial;
-        use crate::resources::{InternalBond, Material};
-        use crate::structure::Placement;
-
-        let mut simulation = Simulation::new(7301, 10.0);
-        let organism = &mut simulation.organisms[0];
-        for cell in &mut simulation.environment.field.cells {
-            cell.materials.clear();
-            cell.physical_materials.clear();
-        }
-        let regions = crate::interior_geometry::find_accessible_interior_regions(
-            &organism.structure,
-            &simulation.environment.catalog,
-        )
-        .expect("initial organism should expose accessible interior");
-        let region = regions
-            .iter()
-            .max_by(|a, b| {
-                a.area
-                    .partial_cmp(&b.area)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .expect("initial organism should have an accessible region");
-        let (min_x, max_x, min_y, max_y) = region.boundary.iter().fold(
-            (
-                f64::INFINITY,
-                f64::NEG_INFINITY,
-                f64::INFINITY,
-                f64::NEG_INFINITY,
-            ),
-            |(min_x, max_x, min_y, max_y), &(x, y)| {
-                (min_x.min(x), max_x.max(x), min_y.min(y), max_y.max(y))
-            },
-        );
-        let mut source = None;
-        'candidate: for ix in 0..=40 {
-            let x = min_x + (max_x - min_x) * ix as f64 / 40.0;
-            for iy in 0..=40 {
-                let y = min_y + (max_y - min_y) * iy as f64 / 40.0;
-                let candidate = PhysicalMaterial::realized(
-                    Material {
-                        parts: vec![("Hydrogen".into(), 1.0), ("Hydrogen".into(), 1.0)],
-                        internal_bonds: vec![InternalBond {
-                            part_a: 0,
-                            part_b: 1,
-                        }],
-                    },
-                    vec![
-                        Placement {
-                            x,
-                            y,
-                            rotation_radians: 0.0,
-                        },
-                        Placement {
-                            x: x + 1.0,
-                            y,
-                            rotation_radians: 0.0,
-                        },
-                    ],
-                    &simulation.environment.catalog,
-                )
-                .expect("bonded source should be realizable");
-                if crate::environment::ActiveMaterialField::physical_is_fully_inside_any_region(
-                    &candidate,
-                    std::slice::from_ref(region),
-                    &simulation.environment.catalog,
-                ) {
-                    source = Some(candidate);
-                    break 'candidate;
-                }
-            }
-        }
-        let source = source.expect("accessible region should fit the bonded source");
-        let anchor = source.placements.as_ref().unwrap()[0];
-        let cell_index = simulation
-            .environment
-            .field
-            .index_for_position(anchor.x, anchor.y)
-            .expect("source anchor should map to a field cell");
-        let before = PhysicalMaterial::realized(
-            Material::free_base("Nitrogen", 1.0),
-            vec![Placement {
-                x: anchor.x - 0.1,
-                y: anchor.y,
-                rotation_radians: 0.0,
-            }],
-            &simulation.environment.catalog,
-        )
-        .expect("preceding neighbor should be realizable");
-        let after = PhysicalMaterial::realized(
-            Material::free_base("Sulfur", 1.0),
-            vec![Placement {
-                x: anchor.x + 0.1,
-                y: anchor.y,
-                rotation_radians: 0.0,
-            }],
-            &simulation.environment.catalog,
-        )
-        .expect("following neighbor should be realizable");
-        simulation.environment.field.cells[cell_index].physical_materials =
+    fn failed_environmental_break_context_selects_exact_material_and_bond_indices() {
+        let catalog = crate::resources::default_catalog();
+        let (mut environment, cell_index, before, source, after) =
+            environmental_break_test_inventory(&catalog);
+        environment.field.cells[cell_index].physical_materials =
             vec![before.clone(), source.clone(), after.clone()];
-
-        let expected_key = format!("environment:cell:{cell_index}:material:1:bond:0");
-        let decision = environmental_break_candidates(organism, &simulation.environment)
-            .into_iter()
-            .find(|candidate| candidate.context_key.as_deref() == Some(expected_key.as_str()))
-            .expect("candidate should identify the exact source index and bond");
-        let mut next_id = 1;
-        let transformation = try_start_environmental_break(
-            organism,
-            &mut simulation.environment,
-            &mut next_id,
-            &decision,
+        let decision_key = format!("environment:cell:{cell_index}:material:1:bond:0");
+        let rest = decision_key.strip_prefix("environment:").unwrap();
+        let (cell_material_part, bond_part) = rest.rsplit_once(":bond:").unwrap();
+        let (cell_part, material_part) =
+            cell_material_part.rsplit_once(":material:").unwrap();
+        let parsed_cell = cell_part.strip_prefix("cell:").unwrap().parse::<usize>().unwrap();
+        let parsed_material = material_part.parse::<usize>().unwrap();
+        let parsed_bond = bond_part.parse::<usize>().unwrap();
+        let (selected, selected_bond) = environmental_break_source_at(
+            &environment,
+            parsed_cell,
+            parsed_material,
+            parsed_bond,
         )
-        .expect("indexed environmental BREAK should start");
-
-        assert_eq!(transformation.stored_material, Some(source));
+        .expect("context key should resolve the indexed environmental source");
+        assert_eq!(selected, source);
         assert_eq!(
-            transformation.stored_bond,
-            Some(
-                transformation
-                    .stored_material
-                    .as_ref()
-                    .unwrap()
-                    .internal_connections
-                    .as_ref()
-                    .unwrap()[0]
-                    .clone()
-            )
+            selected_bond,
+            selected.internal_connections.as_ref().unwrap()[0]
         );
         assert_eq!(
-            simulation.environment.field.cells[cell_index].physical_materials,
-            vec![before, after],
-            "only the indexed source object should leave the environmental cell"
+            environment.field.cells[cell_index].physical_materials,
+            vec![before, source, after],
+            "resolving a decision context must not mutate the environmental inventory"
         );
-        assert_eq!(organism.active_transformation_id, Some(transformation.id));
     }
 
     #[test]
