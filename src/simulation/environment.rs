@@ -588,6 +588,35 @@ impl ActiveMaterialField {
         self.deposit_physical_at_index(index, material)
     }
 
+    /// Atomically deposit multiple realized physical objects without cloning the
+    /// entire field. Validate every destination and object before mutating cells.
+    pub(crate) fn deposit_physical_batch(
+        &mut self,
+        deposits: Vec<(f64, f64, PhysicalMaterial)>,
+    ) -> bool {
+        let mut staged = Vec::with_capacity(deposits.len());
+        for (x, y, material) in deposits {
+            let Some(index) = self.index_for_position(x, y) else {
+                return false;
+            };
+            if !material.is_realized()
+                || material.material.is_empty()
+                || !material.material.is_valid()
+            {
+                return false;
+            }
+            staged.push((index, material));
+        }
+
+        // All fallible checks are complete. Commit directly so a failed later
+        // destination cannot leave earlier split pieces deposited.
+        for (index, material) in staged {
+            self.cells[index].physical_materials.push(material);
+            self.mark_changed_at_index(index);
+        }
+        true
+    }
+
     pub fn total_material(&self) -> Vec<(String, f64)> {
         let mut totals: Vec<(String, f64)> = Vec::new();
         for cell in &self.cells {
