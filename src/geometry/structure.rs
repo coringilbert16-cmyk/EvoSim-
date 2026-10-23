@@ -616,6 +616,86 @@ impl PhysicalConstituentGraph {
         *self = staged;
         Some(remap)
     }
+    /// Extract a graph-local view of selected physical constituents without
+    /// changing their stable IDs. Only bonds wholly inside the selection are
+    /// included; cross-boundary bonds remain owned by the source aggregate.
+    /// The caller supplies the selected core identity to promote to primary
+    /// identity in the view (normally the developing organism's core group).
+    pub(crate) fn subgraph_for_physical_ids(
+        &self,
+        ids: &[PhysicalConstituentId],
+        primary_core_ids: &[PhysicalConstituentId],
+    ) -> Option<Self> {
+        let selected: HashSet<_> = ids.iter().copied().collect();
+        let primary: HashSet<_> = primary_core_ids.iter().copied().collect();
+        if ids.is_empty()
+            || selected.len() != ids.len()
+            || selected.contains(&PhysicalConstituentId(0))
+            || selected
+                .iter()
+                .any(|id| self.unit_index(*id).is_none())
+            || primary.len() != primary_core_ids.len()
+            || primary.iter().any(|id| !selected.contains(id))
+        {
+            return None;
+        }
+
+        let source_primary: HashSet<_> = self.genome_constituent_ids.iter().copied().collect();
+        if !source_primary.is_disjoint(&selected)
+            && (source_primary != primary || !source_primary.is_subset(&selected))
+        {
+            return None;
+        }
+
+        let mut retained_groups = Vec::new();
+        let mut primary_identity_found = primary.is_empty() || source_primary == primary;
+        for group in &self.additional_genome_constituent_groups {
+            let group_ids: HashSet<_> = group.iter().copied().collect();
+            if group_ids.is_disjoint(&selected) {
+                continue;
+            }
+            if !group_ids.is_subset(&selected) {
+                return None;
+            }
+            if group_ids == primary {
+                primary_identity_found = true;
+            } else if !group_ids.is_disjoint(&primary) {
+                return None;
+            } else {
+                retained_groups.push(group.clone());
+            }
+        }
+        if !primary_identity_found {
+            return None;
+        }
+
+        let max_id = selected.iter().map(|id| id.0).max().unwrap_or(0);
+        if self.next_constituent_id <= max_id || self.next_constituent_id == 0 {
+            return None;
+        }
+        let mut graph = Self::new();
+        graph.units = self
+            .units
+            .iter()
+            .filter(|unit| selected.contains(&unit.physical_id))
+            .cloned()
+            .collect();
+        graph.bonds = self
+            .bonds
+            .iter()
+            .filter(|bond| {
+                selected.contains(&bond.endpoint_a.constituent_id)
+                    && selected.contains(&bond.endpoint_b.constituent_id)
+            })
+            .copied()
+            .collect();
+        graph.genome_constituent_ids = primary_core_ids.to_vec();
+        graph.genome_constituent_ids.sort_unstable_by_key(|id| id.0);
+        graph.additional_genome_constituent_groups = retained_groups;
+        graph.next_constituent_id = self.next_constituent_id;
+        Some(graph)
+    }
+
     /// Remove temporary physical constituents and every bond touching them.
     /// Bonds identify constituents by stable physical ID, so remaining units do
     /// not need index remapping.
@@ -1112,6 +1192,83 @@ mod tests {
                 .len(),
             3
         );
+    }
+
+    #[test]
+    fn subgraph_preserves_stable_ids_and_only_internal_bonds() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent_index = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = aggregate.physical_id(parent_index).unwrap();
+        aggregate.set_genome_constituent_ids([parent_id]);
+
+        let child_a = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_b = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let child_a_id = aggregate.physical_id(child_a).unwrap();
+        let child_b_id = aggregate.physical_id(child_b).unwrap();
+        aggregate.add_genome_constituent_group([child_a_id]);
+        let endpoint = |id| {
+            BondEndpoint::new(
+                id,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: 0.0,
+                },
+            )
+        };
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(child_a_id),
+            endpoint_b: endpoint(child_b_id),
+            strength: 0.75,
+            bond_energy: 2.5,
+        });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(parent_id),
+            endpoint_b: endpoint(child_a_id),
+            strength: 0.5,
+            bond_energy: 1.25,
+        });
+
+        let subgraph = aggregate
+            .subgraph_for_physical_ids(&[child_a_id, child_b_id], &[child_a_id])
+            .expect("valid child subset");
+        assert_eq!(subgraph.physical_constituent_ids(), vec![child_a_id, child_b_id]);
+        assert_eq!(subgraph.bonds.len(), 1);
+        assert_eq!(subgraph.bonds[0].bond_energy, 2.5);
+        assert_eq!(subgraph.genome_constituent_ids(), &[child_a_id]);
+        assert!(subgraph.additional_genome_constituent_groups().is_empty());
+
+        let added = subgraph
+            .clone()
+            .add_unit(StructuralUnit::new("Sulfur", placement));
+        let mut extended = subgraph;
+        let added = extended.add_unit(StructuralUnit::new("Sulfur", placement));
+        assert_eq!(extended.physical_id(added), Some(PhysicalConstituentId(4)));
+        assert_eq!(aggregate.units.len(), 3);
+    }
+
+    #[test]
+    fn subgraph_rejects_partial_core_and_invalid_ids() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut graph = OrganismStructure::new();
+        let a = graph.add_unit(StructuralUnit::new("Carbon", placement));
+        let b = graph.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let a_id = graph.physical_id(a).unwrap();
+        let b_id = graph.physical_id(b).unwrap();
+        graph.add_genome_constituent_group([a_id, b_id]);
+
+        assert!(graph.subgraph_for_physical_ids(&[a_id], &[a_id]).is_none());
+        assert!(graph
+            .subgraph_for_physical_ids(&[a_id, PhysicalConstituentId(999)], &[])
+            .is_none());
+        assert!(graph.subgraph_for_physical_ids(&[a_id, a_id], &[]).is_none());
     }
 
     #[test]
