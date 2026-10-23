@@ -983,7 +983,9 @@ mod tests {
         ));
         let mut construction = parent.reproductive_construction.take().unwrap();
         let original_energy = construction.developing_energy;
-        let original_structure = construction.developing_structure.clone();
+        let original_structure = format!("{:?}", construction.developing_structure);
+        let original_stress = construction.developing_stress;
+        let original_debt = construction.developing_maintenance_debt;
         let original_storage = parent.stored_material.clone();
         // This makes the otherwise positive reserve transfer reject its source
         // validation, exercising the fail-closed path deterministically.
@@ -1006,7 +1008,9 @@ mod tests {
         assert_eq!(status, ConstructionStatus::Waiting);
         assert_eq!(parent.usable_energy, f64::INFINITY);
         assert_eq!(construction.developing_energy, original_energy);
-        assert_eq!(construction.developing_structure.units.len(), original_structure.units.len());
+        assert_eq!(format!("{:?}", construction.developing_structure), original_structure);
+        assert_eq!(construction.developing_stress, original_stress);
+        assert_eq!(construction.developing_maintenance_debt, original_debt);
         assert_eq!(parent.stored_material.entries, original_storage.entries);
     }
 
