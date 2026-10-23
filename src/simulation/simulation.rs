@@ -58,21 +58,27 @@ fn restore_failed_transformation_material(
     // organism's storage when the transformation starts. If preparation fails,
     // put that exact source back instead of silently dropping it.
     if let Some(organism) = organism {
-        if organism
+        // The source was already owned by storage before this transformation
+        // began. Recovery must preserve that exact escrow even if validation
+        // now rejects it; intrinsic coordinates are not world coordinates.
+        organism
             .stored_material
-            .store_physical_instance(source.clone())
+            .entries
+            .push(crate::material_storage::StoredMaterial::Physical(
+                source.clone(),
+            ));
+    } else if transformation.environmental_source {
+        // Environmental sources retain world-space placements. If their owner
+        // disappeared, return the source to its original world location.
+        if let Some(placement) = source
+            .placements
+            .as_ref()
+            .and_then(|placements| placements.first())
         {
-            return;
+            let _ = environment
+                .field
+                .deposit(placement.x, placement.y, source.clone());
         }
-    }
-    if let Some(placement) = source
-        .placements
-        .as_ref()
-        .and_then(|placements| placements.first())
-    {
-        let _ = environment
-            .field
-            .deposit(placement.x, placement.y, source.clone());
     }
 }
 
