@@ -4019,3 +4019,9 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - `replace_subgraph_for_physical_ids` preserves a cross-boundary bond only if the replacement still contains its selected endpoint. `remove_units_by_physical_ids` removes every bond touching removed constituents without energy settlement. Therefore the final division slice must enumerate cross-group bonds before mutation and settle each bond-energy release/heat transaction before removing either core group. It must not use the removal helper as an unaccounted shortcut.
 - During growth, keep stable IDs for all pre-existing child constituents so a cross-boundary bond remains attached when replacing the developing subgraph. Any new IDs must be allocated from the aggregate's ID space or remapped before commit; otherwise replacement can reject the candidate or create a dangling endpoint.
 - This constraint is an additional reason to keep aggregate admission/growth and final division as separate slices. No runtime change made.
+
+### 17.202.2 Readiness is not the division decision
+
+- Current `birth_ready_with_reference` couples cavity/viability checks to `budding_scale_reached_with_reference`, which compares the developing graph's linear extent against 80% of the preferred length. That is not the approved division rule.
+- During the final division slice, separate three questions: (1) does the developing core meet its own viability requirements, (2) has the aggregate reached the 160% total-scale threshold, and (3) did organism decision logic select division now? Do not merely replace `0.80` with `1.60`; scale is measured on the shared aggregate, and reaching the threshold makes division available rather than mandatory.
+- No runtime change made.
