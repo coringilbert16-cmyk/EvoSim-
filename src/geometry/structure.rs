@@ -570,31 +570,30 @@ impl PhysicalConstituentGraph {
                     || bond.bond_energy < 0.0
             })
         };
-        if !valid_bonds(&self.bonds, &destination_ids)
-            || !valid_bonds(&source.bonds, &source_ids)
-        {
+        if !valid_bonds(&self.bonds, &destination_ids) || !valid_bonds(&source.bonds, &source_ids) {
             return None;
         }
-        let valid_core_metadata = |primary_ids: &[PhysicalConstituentId],
-                                   groups: &[Vec<PhysicalConstituentId>],
-                                   ids: &HashSet<PhysicalConstituentId>| {
-            let primary: HashSet<_> = primary_ids.iter().copied().collect();
-            if primary.len() != primary_ids.len() || !primary.is_subset(ids) {
-                return false;
-            }
-            let mut assigned = primary;
-            groups.iter().all(|group| {
-                let group_ids: HashSet<_> = group.iter().copied().collect();
-                let valid = !group.is_empty()
-                    && group_ids.len() == group.len()
-                    && group_ids.is_subset(ids)
-                    && assigned.is_disjoint(&group_ids);
-                if valid {
-                    assigned.extend(group_ids);
+        let valid_core_metadata =
+            |primary_ids: &[PhysicalConstituentId],
+             groups: &[Vec<PhysicalConstituentId>],
+             ids: &HashSet<PhysicalConstituentId>| {
+                let primary: HashSet<_> = primary_ids.iter().copied().collect();
+                if primary.len() != primary_ids.len() || !primary.is_subset(ids) {
+                    return false;
                 }
-                valid
-            })
-        };
+                let mut assigned = primary;
+                groups.iter().all(|group| {
+                    let group_ids: HashSet<_> = group.iter().copied().collect();
+                    let valid = !group.is_empty()
+                        && group_ids.len() == group.len()
+                        && group_ids.is_subset(ids)
+                        && assigned.is_disjoint(&group_ids);
+                    if valid {
+                        assigned.extend(group_ids);
+                    }
+                    valid
+                })
+            };
         if !valid_core_metadata(
             &self.genome_constituent_ids,
             &self.additional_genome_constituent_groups,
