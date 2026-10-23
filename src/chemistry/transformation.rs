@@ -759,6 +759,26 @@ impl Simulation {
     }
 }
 
+/// Return an escrowed stored-material BREAK source to its authoritative holder
+/// when completion cannot commit. The active ID guards against restoring the
+/// same escrow twice if a stale completion is delivered.
+fn restore_failed_stored_break_source(
+    transformation: &ActiveTransformation,
+    organism: &mut Organism,
+) {
+    if organism.active_transformation_id != Some(transformation.id) {
+        return;
+    }
+    if !transformation.environmental_source {
+        if let Some(source) = transformation.stored_material.as_ref() {
+            organism.stored_material.entries.push(
+                crate::material_storage::StoredMaterial::Physical(source.clone()),
+            );
+        }
+    }
+    organism.active_transformation_id = None;
+}
+
 /// Reverse a staged COMBINE settlement when its physical commit state is
 /// incomplete. Deltas are applied independently because serialized/corrupt
 /// prepared state may have lost one optional field.
@@ -898,15 +918,15 @@ pub(crate) fn resolve_transformation(
         return;
     };
     let Some(target) = transformation.stored_bond.as_ref() else {
-        organism.active_transformation_id = None;
+        restore_failed_stored_break_source(transformation, organism);
         return;
     };
     if transformation.prepared_energy.is_none() {
-        organism.active_transformation_id = None;
+        restore_failed_stored_break_source(transformation, organism);
         return;
     }
     let Some(pieces) = stored.break_internal_bond(target) else {
-        organism.active_transformation_id = None;
+        restore_failed_stored_break_source(transformation, organism);
         return;
     };
 
@@ -1035,6 +1055,98 @@ mod tests {
         assert!(bond_break_energy_yield(4.0, f64::NAN).is_none());
         assert!(bond_break_energy_yield(4.0, f64::INFINITY).is_none());
         assert!(bond_break_energy_yield(4.0, f64::NEG_INFINITY).is_none());
+    }
+
+    #[test]
+    fn failed_stored_break_completion_restores_escrowed_source() {
+        let catalog = crate::resources::default_catalog();
+        let mut organism = crate::state::Organism {
+            id: "stored-break-failure-test".into(),
+            developmental_origin: crate::state::Position { x: 0.0, y: 0.0 },
+            developmental_orientation_radians: 0.0,
+            occupied_cells: Vec::new(),
+            genome: crate::genome::initial_genome(),
+            harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+            resonant_energy: crate::harmonics::ResonantEnergyReservoir::default(),
+            experience_memory: crate::memory::ExperienceMemory::default(),
+            pending_movement_experience: None,
+            decision_history: crate::decision::DecisionHistory::default(),
+            usable_energy: 100.0,
+            stress: 0.0,
+            maintenance_debt: 0.0,
+            stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
+            stored_material: crate::material_storage::MaterialStorage::default(),
+            structure: crate::structure::OrganismStructure::new(),
+            genome_core_identity_established: false,
+            active_transformation_id: None,
+            active_movement: None,
+            reproductive_construction: None,
+            structure_revision: 0,
+            position_revision: 0,
+            cached_cavity_revision: None,
+            cached_cavity: None,
+            cached_developmental_revision: None,
+            cached_developmental_realization: None,
+            peak_developmental_realization: 0.0,
+            cached_harmonic_key: None,
+            last_movement_attempt: None,
+        };
+        let material = crate::resources::Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![crate::resources::InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
+        let source = crate::physical_material::PhysicalMaterial::realized(
+            material,
+            vec![
+                crate::structure::Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("internally bonded physical material should be realizable");
+        assert!(organism.stored_material.store_physical_instance(source.clone()));
+
+        let decision = crate::decision_runtime::ActionCandidate {
+            action: crate::decision::ActionKind::Break,
+            context_key: Some("stored:0:bond:0".into()),
+        };
+        let mut next_id = 1;
+        let mut transformation =
+            Simulation::try_start_transformation(&mut organism, &catalog, &mut next_id, &decision)
+                .expect("stored internal bond should start BREAK");
+        assert!(organism.stored_material.is_empty());
+        transformation.stored_bond = None;
+
+        let mut environment = crate::state::Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog,
+            field: crate::environment::ActiveMaterialField::new(
+                1000.0,
+                1000.0,
+                crate::environment::DEFAULT_CELL_SIZE,
+            ),
+        };
+        let mut ledger = crate::state::EnergyLedger::default();
+        resolve_transformation(&transformation, &mut organism, &mut environment, &mut ledger);
+
+        assert_eq!(
+            organism.stored_material.entries,
+            vec![crate::material_storage::StoredMaterial::Physical(source)],
+            "failed stored BREAK must return its escrowed source without mutation"
+        );
+        assert_eq!(organism.active_transformation_id, None);
     }
 
     #[test]
