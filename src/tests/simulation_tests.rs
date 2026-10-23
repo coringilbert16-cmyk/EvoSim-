@@ -676,7 +676,10 @@ mod integration_tests {
         let m = structured_carbon_hydrogen();
         assert!(o.store_material(m.clone()));
         assert!(o.stored_material.materials_snapshot().contains(&m));
-        assert_eq!(o.stored_material.count_structured(), before_structured + 1);
+        assert_eq!(
+            o.stored_material.count_structured(),
+            before_structured + 1
+        );
     }
     #[test]
     fn accessible_interior_starts_without_synthetic_water() {
