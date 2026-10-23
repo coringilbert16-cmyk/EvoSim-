@@ -1442,7 +1442,7 @@ mod tests {
         let original_source = source.clone();
         let target = source.internal_connections.as_ref().unwrap()[0].clone();
         environment.field.cells[cell_index].physical_materials =
-            vec![before.clone(), source.clone(), after.clone()];
+            vec![before.clone(), after.clone()];
         let transformation = ActiveTransformation {
             id: 732,
             organism_id: organism.id.clone(),
