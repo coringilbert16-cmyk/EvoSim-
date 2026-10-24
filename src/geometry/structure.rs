@@ -1576,6 +1576,85 @@ mod tests {
     }
 
     #[test]
+    fn subgraph_replacement_preserves_cross_boundary_bonds_and_rejects_dangling_replacements() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent_index = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = aggregate.physical_id(parent_index).unwrap();
+        aggregate.set_genome_constituent_ids([parent_id]);
+
+        let child_core_index = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_body_index = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let child_core_id = aggregate.physical_id(child_core_index).unwrap();
+        let child_body_id = aggregate.physical_id(child_body_index).unwrap();
+        aggregate.add_genome_constituent_group([child_core_id]);
+        let endpoint = |id| {
+            BondEndpoint::new(id, ConnectionEndpoint::Boundary { angle_radians: 0.0 })
+        };
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(parent_id),
+            endpoint_b: endpoint(child_core_id),
+            strength: 0.5,
+            bond_energy: 1.25,
+        });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(child_core_id),
+            endpoint_b: endpoint(child_body_id),
+            strength: 0.75,
+            bond_energy: 2.5,
+        });
+
+        let selected_ids = [child_core_id, child_body_id];
+        let mut replacement = aggregate
+            .subgraph_for_physical_ids(&selected_ids, &[child_core_id])
+            .expect("valid attached subgraph");
+        replacement.units[1].placement.x = 1.0;
+        aggregate
+            .replace_subgraph_for_physical_ids(&selected_ids, &replacement)
+            .expect("replacement retains the crossing-bond endpoint");
+
+        assert_eq!(
+            aggregate.physical_constituent_ids(),
+            vec![parent_id, child_core_id, child_body_id]
+        );
+        assert_eq!(aggregate.bonds.len(), 2);
+        assert!(aggregate.bonds.iter().any(|bond| {
+            bond.endpoint_a.constituent_id == parent_id
+                && bond.endpoint_b.constituent_id == child_core_id
+                && bond.bond_energy == 1.25
+        }));
+        assert!(aggregate.bonds.iter().any(|bond| {
+            bond.endpoint_a.constituent_id == child_core_id
+                && bond.endpoint_b.constituent_id == child_body_id
+                && bond.bond_energy == 2.5
+        }));
+
+        let before_rejection = aggregate.clone();
+        replacement.units.retain(|unit| unit.physical_id != child_core_id);
+        assert!(aggregate
+            .replace_subgraph_for_physical_ids(&selected_ids, &replacement)
+            .is_none());
+        assert_eq!(aggregate.units, before_rejection.units);
+        assert_eq!(aggregate.bonds, before_rejection.bonds);
+        assert_eq!(
+            aggregate.genome_constituent_ids,
+            before_rejection.genome_constituent_ids
+        );
+        assert_eq!(
+            aggregate.additional_genome_constituent_groups,
+            before_rejection.additional_genome_constituent_groups
+        );
+        assert_eq!(
+            aggregate.next_constituent_id,
+            before_rejection.next_constituent_id
+        );
+    }
+
+    #[test]
     fn division_partition_preserves_ids_and_returns_cross_boundary_bond_energy() {
         let placement = Placement {
             x: 0.0,
