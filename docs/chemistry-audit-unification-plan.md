@@ -4756,3 +4756,21 @@ The exact-head workflow is now running as [Actions run 40112967740](https://gith
 - The required canonical 12N seed/realization gate reported failure. This is the already documented baseline failure; preserve the canonical seed requirement and compare the final full-suite identities before judging regressions.
 - The Rust test suite is still running; Clippy has not yet reported a result. Do not call the workflow successful or the graph regression verified until the exact-head run completes and its named results are checked.
 - Audit of the next migration remains unchanged: `ReproductiveConstruction` still owns a separate `developing_structure`, `committed_material`, and `developing_energy`; movement and world-tone still consume those separately. The approved next production change must remove that duplicate ownership across the runtime and accounting consumers atomically, not merely change the state fields.
+
+
+
+### Exact-head formatting correction and ownership audit — 2026-10-24
+
+The workflow for implementation commit `6e7891436ad4891d02a566a31fe106b4b04794e5` did **not** pass formatting. The retrieved log confirms two rustfmt diffs in the new `src/geometry/structure.rs` regression test (the endpoint closure wrapping and a chained `.retain` call); downstream steps shown in that workflow were skipped after the formatting gate. Do not rely on the earlier handoff sentence saying it advanced beyond formatting; that interpretation was incorrect.
+
+Both formatting-only differences were corrected in implementation commit [`3f14c1e`](https://github.com/coringilbert16-cmyk/EvoSim-/commit/3f14c1e47cbe9183cacfb90253ee82e41c0579d6). Its exact-head workflow is [40113515832](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40113515832), which was still running at this update. Formatting, graph-regression, full-suite, and Clippy results for `3f14c1e` remain unverified until that run completes.
+
+A fresh source audit confirms the approved reproduction migration must coordinate these paths:
+- `src/simulation/state.rs`: `ReproductiveConstruction` still persists `developing_structure`, `committed_material`, and separate developing energy/debt alongside metadata.
+- `src/organism/reproduction.rs`: `developing_organism`, `commit_candidate_attachment`, `advance_construction`, and `finish_reproduction` still treat the developing graph as an independently simulated organism; attachment validation alone does not create a shared aggregate bond transaction.
+- `src/simulation/simulation.rs`: the tick passes the parent structure immutably to construction advancement; inventory and structural-energy snapshots separately count construction-held graph/material/energy.
+- `src/simulation/world_tone_snapshot.rs`: construction geometry/material is added as a second world-tone body/receiver path.
+- `src/perception/movement.rs`: parent movement separately translates the construction graph.
+- `src/geometry/structure.rs`: the new replacement regression exercises graph-level endpoint preservation and rollback only; it does not provide the runtime ledger/storage transaction.
+
+Therefore the next production change remains a coordinated ownership migration, not a field deletion or anchor-only adjustment. The atomic final split, ledger settlement, and rollback must be implemented with all consumers migrated before the separate graph/energy ownership is removed. No claim of production migration completion is made here.
