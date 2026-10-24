@@ -346,6 +346,13 @@ impl WorldToneCaptureFrame {
             .incident_energy_for_projected_width(projected_width)?;
         let natural_frequency = crate::harmonics::natural_frequency_hz(properties, baselines);
         let damping = crate::harmonics::damping_ratio(properties, baselines);
+        if !natural_frequency.is_finite()
+            || natural_frequency <= 0.0
+            || !damping.is_finite()
+            || damping < 0.0
+        {
+            return None;
+        }
         let absorption_fraction = crate::harmonics::resonant_absorption_fraction(
             self.sample.frequency_hz,
             natural_frequency,
@@ -1357,6 +1364,16 @@ mod tests {
         assert!(
             (response.absorbed_by_damping + response.unabsorbed - response.incident_energy).abs()
                 < 1e-7
+        );
+        let invalid_properties = ResourceProperties {
+            mass: f64::NAN,
+            ..properties
+        };
+        assert!(
+            frame
+                .surface_response_for_unit(0, 0, invalid_properties, baselines)
+                .is_none(),
+            "invalid material properties must not masquerade as zero-absorption success"
         );
     }
     #[test]
