@@ -1135,17 +1135,20 @@ impl PhysicalConstituentGraph {
         let mut assigned_core_ids = primary.clone();
         let core_metadata_valid = primary.len() == self.genome_constituent_ids.len()
             && primary.is_subset(&all_ids)
-            && self.additional_genome_constituent_groups.iter().all(|group| {
-                let group_ids: HashSet<_> = group.iter().copied().collect();
-                let valid = !group.is_empty()
-                    && group_ids.len() == group.len()
-                    && group_ids.is_subset(&all_ids)
-                    && assigned_core_ids.is_disjoint(&group_ids);
-                if valid {
-                    assigned_core_ids.extend(group_ids);
-                }
-                valid
-            });
+            && self
+                .additional_genome_constituent_groups
+                .iter()
+                .all(|group| {
+                    let group_ids: HashSet<_> = group.iter().copied().collect();
+                    let valid = !group.is_empty()
+                        && group_ids.len() == group.len()
+                        && group_ids.is_subset(&all_ids)
+                        && assigned_core_ids.is_disjoint(&group_ids);
+                    if valid {
+                        assigned_core_ids.extend(group_ids);
+                    }
+                    valid
+                });
         if excluded_ids.is_empty()
             || excluded.len() != excluded_ids.len()
             || excluded.contains(&PhysicalConstituentId(0))
