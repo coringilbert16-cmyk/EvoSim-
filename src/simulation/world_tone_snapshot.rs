@@ -464,8 +464,6 @@ impl WorldToneOccluderSnapshot {
                             stored.is_finite()
                                 && stored >= 0.0
                                 && stored <= response_energy
-                                && (stored - retained_budget).abs()
-                                    <= 1e-9 * retained_budget.max(1.0)
                         })
                     {
                         staged_reservoirs[organism_index] = candidate;
