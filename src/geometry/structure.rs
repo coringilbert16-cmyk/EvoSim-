@@ -1563,7 +1563,10 @@ mod tests {
         assert_eq!(external.physical_constituent_ids(), vec![parent_id]);
         assert!(external.additional_genome_constituent_groups.is_empty());
         assert_eq!(aggregate.units, before_units);
-        assert_eq!(aggregate.additional_genome_constituent_groups, before_groups);
+        assert_eq!(
+            aggregate.additional_genome_constituent_groups,
+            before_groups
+        );
         assert!(aggregate.view_without_physical_ids(&[child_a_id]).is_none());
     }
 
