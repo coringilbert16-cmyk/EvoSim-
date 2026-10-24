@@ -4715,3 +4715,8 @@ Do not submit a partial anchor-only implementation. The current APIs make that u
 ## Graph-level split regression added — 2026-10-24
 
 On implementation branch commit `84c12db2767c900c357a6ff72086c28ff0e14c4d`, added `division_partition_settles_all_crossing_bond_energy_and_preserves_internal_bonds` in `src/geometry/structure.rs`. It exercises two distinct cross-boundary bonds, checks their combined returned energy (`3.25`), verifies the parent-internal bond (`4.0`) and child-internal bond (`2.5`) survive in their respective partitions, confirms stable constituent IDs/core identity, and checks the allocator's next ID is unchanged. This closes a narrow graph-primitive coverage gap, not the full atomic ledger/organism transaction. CI was not yet visible when this handoff note was written; do not count the test as passing until the exact commit's workflow confirms it.
+
+
+### Validation follow-up for graph split test
+
+The first workflow for the test commit (`40111605233`) reported formatting failure, so the test's chained assertions and partition call were reformatted in implementation commit `9e28435bb8cab7bd0f52b34d996f98b73c1af031`. The workflow for that exact latest head is `40111661803` and was still in progress at this note. The earlier failed formatting result belongs to the prior commit and must not be attributed to the formatted head; likewise, do not call the new test passing until the latest workflow completes.
