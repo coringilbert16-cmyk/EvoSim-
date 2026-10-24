@@ -2187,8 +2187,7 @@ mod decomposition_finalization_tests {
             .organisms
             .iter_mut()
             .filter_map(|organism| {
-                Simulation::has_intact_genome_core(organism, catalog)
-                    .then(|| organism.id.clone())
+                Simulation::has_intact_genome_core(organism, catalog).then(|| organism.id.clone())
             })
             .collect::<std::collections::HashSet<_>>();
         let external_before = simulation.energy_ledger.total_external_energy_input;
