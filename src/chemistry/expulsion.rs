@@ -20,9 +20,7 @@ pub(crate) fn expel_physical_material(
         organism,
         environment,
         storage_index,
-        |environment, index, physical| {
-            environment.field.deposit_physical_at_index(index, physical)
-        },
+        |environment, index, physical| environment.field.deposit_physical_at_index(index, physical),
     )
 }
 
@@ -398,7 +396,12 @@ mod tests {
             "a rejected destination commit must restore the exact source and preserve neighbor order"
         );
         assert!(
-            simulation.environment.field.cells.iter().all(|cell| cell.physical_materials.is_empty()),
+            simulation
+                .environment
+                .field
+                .cells
+                .iter()
+                .all(|cell| cell.physical_materials.is_empty()),
             "a rejected destination must not leave a partial field insertion"
         );
     }
