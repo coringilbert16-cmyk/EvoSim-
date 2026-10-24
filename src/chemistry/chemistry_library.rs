@@ -804,19 +804,28 @@ mod tests {
     fn cache_append_rollback_failure_reports_both_errors_and_preserves_recovery_evidence() {
         let root = test_root("rollback-truncation-failure");
         let _ = fs::remove_dir_all(&root);
-        fs::create_dir_all(&root).unwrap();
+        let mut library = ChemistryLibrary::open(&root).unwrap();
+        let original_record = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "rollback-failure"),
+            static_potential: 0.45,
+        };
+        assert!(library.insert(original_record).unwrap());
+
         let data_path = root.join("chemistry.jsonl");
-        let original = b"{\"original\":true}\\n";
-        let appended = b"partial-record";
-        fs::write(&data_path, original).unwrap();
-        let original_len = original.len() as u64;
-        let mut bytes_with_partial = original.to_vec();
-        bytes_with_partial.extend_from_slice(appended);
-        fs::write(&data_path, &bytes_with_partial).unwrap();
+        let manifest_path = root.join("manifest.json");
+        let original_len = fs::metadata(&data_path).unwrap().len();
+        let original_manifest = fs::read(&manifest_path).unwrap();
+        let appended = b"{\"partial-record\":";
+        let mut append_file = OpenOptions::new().append(true).open(&data_path).unwrap();
+        append_file.write_all(appended).unwrap();
+        append_file.sync_data().unwrap();
+        drop(append_file);
+        let damaged_bytes = fs::read(&data_path).unwrap();
+        drop(library);
 
         // A read-only descriptor deterministically makes set_len fail on the
-        // supported Unix CI runner, exercising the distinct rollback-failure
-        // path without pretending the damaged cache was recovered.
+        // supported Linux CI runner. The test verifies fail-closed reopening;
+        // it does not pretend the damaged cache was repaired.
         let mut read_only = File::open(&data_path).unwrap();
         let error = rollback_appended_record(
             &mut read_only,
@@ -830,8 +839,14 @@ mod tests {
         let message = error.to_string();
         assert!(message.contains("injected original append failure"));
         assert!(message.contains("failed to roll back appended data"));
-        assert_eq!(fs::read(&data_path).unwrap(), bytes_with_partial);
+        assert_eq!(fs::read(&data_path).unwrap(), damaged_bytes);
+        assert_eq!(fs::read(&manifest_path).unwrap(), original_manifest);
+        assert!(
+            ChemistryLibrary::open(&root).is_err(),
+            "reopen must reject the damaged persisted row rather than silently accepting a partial append"
+        );
 
+        drop(read_only);
         let _ = fs::remove_dir_all(root);
     }
 
