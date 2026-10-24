@@ -624,6 +624,7 @@ pub(crate) fn begin_reproduction(
         else {
             continue;
         };
+        let developing_member_ids = structure.physical_constituent_ids();
 
         let mut parent_trial = parent.stored_material.clone();
         if parent_trial.take_physical_at(storage_index).is_none() {
@@ -634,6 +635,7 @@ pub(crate) fn begin_reproduction(
         parent.reproductive_construction = Some(ReproductiveConstruction {
             committed_material: child_storage,
             developing_structure: structure,
+            developing_member_ids,
             child_genome: child_genome.clone(),
             developmental_origin: Position {
                 x: placement.x,
@@ -681,6 +683,7 @@ fn commit_candidate_attachment(
     }
     *ledger = candidate_ledger;
     construction.committed_material = child.stored_material;
+    construction.developing_member_ids = child.structure.physical_constituent_ids();
     construction.developing_structure = child.structure;
     construction.needs_space = false;
     construction.developing_energy = child.usable_energy;
@@ -756,6 +759,7 @@ pub(crate) fn advance_construction(
     construction.developing_stress = child.stress;
     construction.developing_maintenance_debt = child.maintenance_debt;
     construction.developing_structure = child.structure.clone();
+    construction.developing_member_ids = construction.developing_structure.physical_constituent_ids();
     if dead {
         return (ConstructionStatus::Dead, None);
     }
@@ -950,6 +954,7 @@ mod tests {
         let mut construction = ReproductiveConstruction {
             committed_material: MaterialStorage::default(),
             developing_structure: OrganismStructure::new(),
+            developing_member_ids: vec![],
             child_genome: initial_genome(),
             developmental_origin: Position { x: 0.0, y: 0.0 },
             developmental_orientation_radians: 0.0,
@@ -1008,6 +1013,7 @@ mod tests {
         let mut construction = ReproductiveConstruction {
             committed_material: MaterialStorage::default(),
             developing_structure: OrganismStructure::new(),
+            developing_member_ids: vec![],
             child_genome: initial_genome(),
             developmental_origin: Position { x: 0.0, y: 0.0 },
             developmental_orientation_radians: 0.0,
@@ -1060,6 +1066,7 @@ mod tests {
         let construction = ReproductiveConstruction {
             committed_material: MaterialStorage::default(),
             developing_structure: OrganismStructure::new(),
+            developing_member_ids: vec![],
             child_genome: genome,
             developmental_origin: origin,
             developmental_orientation_radians: 0.0,
@@ -1254,6 +1261,7 @@ mod tests {
         let mut construction = ReproductiveConstruction {
             committed_material: MaterialStorage::default(),
             developing_structure: original_structure.clone(),
+            developing_member_ids: vec![],
             child_genome: initial_genome(),
             developmental_origin: Position { x: 0.0, y: 0.0 },
             developmental_orientation_radians: 0.0,
