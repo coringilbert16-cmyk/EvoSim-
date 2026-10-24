@@ -1102,6 +1102,16 @@ mod tests {
             .as_ref()
             .expect("reproduction is active");
         assert!(!construction.developing_structure.units.is_empty());
+        assert_eq!(
+            construction.developing_member_ids,
+            construction.developing_structure.physical_constituent_ids(),
+            "construction membership must be tracked by stable physical IDs"
+        );
+        assert_eq!(
+            construction.developing_member_ids.iter().collect::<std::collections::HashSet<_>>().len(),
+            construction.developing_member_ids.len(),
+            "a physical constituent may only belong to the developing member once"
+        );
         assert!(construction.anchor_unit_index < construction.developing_structure.units.len());
         assert_eq!(
             format!("{:?}", parent.structure),
