@@ -564,6 +564,8 @@ impl PhysicalConstituentGraph {
                 bond.endpoint_a.constituent_id == bond.endpoint_b.constituent_id
                     || !ids.contains(&bond.endpoint_a.constituent_id)
                     || !ids.contains(&bond.endpoint_b.constituent_id)
+                    || !endpoint_is_finite(bond.endpoint_a.location)
+                    || !endpoint_is_finite(bond.endpoint_b.location)
                     || !bond.strength.is_finite()
                     || !(0.0..=1.0).contains(&bond.strength)
                     || !bond.bond_energy.is_finite()
@@ -1131,6 +1133,11 @@ impl PhysicalConstituentGraph {
         let excluded: HashSet<_> = excluded_ids.iter().copied().collect();
         let all_ids: HashSet<_> = self.units.iter().map(|unit| unit.physical_id).collect();
         let max_id = all_ids.iter().map(|id| id.0).max().unwrap_or(0);
+        let endpoint_is_finite = |endpoint: ConnectionEndpoint| match endpoint {
+            ConnectionEndpoint::Boundary { angle_radians } => angle_radians.is_finite(),
+            ConnectionEndpoint::Fluid { x, y } => x.is_finite() && y.is_finite(),
+            ConnectionEndpoint::Corner { .. } | ConnectionEndpoint::LineEndpoint { .. } => true,
+        };
         let primary: HashSet<_> = self.genome_constituent_ids.iter().copied().collect();
         let mut assigned_core_ids = primary.clone();
         let core_metadata_valid = primary.len() == self.genome_constituent_ids.len()
