@@ -846,6 +846,79 @@ impl PhysicalConstituentGraph {
     /// aggregate's cross-boundary bonds and the destination's primary genome.
     /// Existing selected IDs may be preserved by the replacement; any new IDs
     /// must be unused in the aggregate. The caller owns geometry/contact checks.
+    /// Replace a selected physical subgraph while assigning aggregate-global IDs
+    /// to any newly developed constituents. Existing selected IDs are preserved;
+    /// IDs allocated by a transient construction graph are never allowed to alias
+    /// unrelated constituents already owned by this aggregate.
+    pub(crate) fn replace_subgraph_remapping_new_ids(
+        &mut self,
+        old_ids: &[PhysicalConstituentId],
+        replacement: &Self,
+    ) -> Option<HashMap<PhysicalConstituentId, PhysicalConstituentId>> {
+        let selected: HashSet<_> = old_ids.iter().copied().collect();
+        if old_ids.is_empty()
+            || selected.len() != old_ids.len()
+            || selected.contains(&PhysicalConstituentId(0))
+            || selected
+                .iter()
+                .any(|id| self.unit_index(*id).is_none())
+        {
+            return None;
+        }
+
+        let mut staged_replacement = replacement.clone();
+        let replacement_ids: HashSet<_> = staged_replacement
+            .units
+            .iter()
+            .map(|unit| unit.physical_id)
+            .collect();
+        if replacement_ids.len() != staged_replacement.units.len()
+            || replacement_ids.contains(&PhysicalConstituentId(0))
+        {
+            return None;
+        }
+
+        let mut next_id = self.next_constituent_id;
+        if next_id == 0 {
+            return None;
+        }
+        let mut remapping = HashMap::new();
+        for unit in &mut staged_replacement.units {
+            let old_id = unit.physical_id;
+            let new_id = if selected.contains(&old_id) {
+                old_id
+            } else {
+                let assigned = PhysicalConstituentId(next_id);
+                next_id = next_id.checked_add(1)?;
+                assigned
+            };
+            remapping.insert(old_id, new_id);
+            unit.physical_id = new_id;
+        }
+        let remap = |id: &mut PhysicalConstituentId| -> Option<()> {
+            *id = *remapping.get(id)?;
+            Some(())
+        };
+        for bond in &mut staged_replacement.bonds {
+            remap(&mut bond.endpoint_a.constituent_id)?;
+            remap(&mut bond.endpoint_b.constituent_id)?;
+        }
+        for id in &mut staged_replacement.genome_constituent_ids {
+            remap(id)?;
+        }
+        for group in &mut staged_replacement.additional_genome_constituent_groups {
+            for id in group {
+                remap(id)?;
+            }
+        }
+        staged_replacement.next_constituent_id = next_id;
+
+        let mut staged_aggregate = self.clone();
+        staged_aggregate.replace_subgraph_for_physical_ids(old_ids, &staged_replacement)?;
+        *self = staged_aggregate;
+        Some(remapping)
+    }
+
     pub(crate) fn replace_subgraph_for_physical_ids(
         &mut self,
         old_ids: &[PhysicalConstituentId],
