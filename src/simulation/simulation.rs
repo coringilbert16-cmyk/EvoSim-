@@ -2182,11 +2182,12 @@ mod decomposition_finalization_tests {
                 })
             })
             .expect("world-tone source must have a sample at tick zero");
+        let catalog = &simulation.environment.catalog;
         let living_ids = simulation
             .organisms
             .iter_mut()
             .filter_map(|organism| {
-                Simulation::has_intact_genome_core(organism, &simulation.environment.catalog)
+                Simulation::has_intact_genome_core(organism, catalog)
                     .then(|| organism.id.clone())
             })
             .collect::<std::collections::HashSet<_>>();
