@@ -1062,9 +1062,9 @@ impl PhysicalConstituentGraph {
         candidate.units.iter().all(|unit| {
             unit.physical_id.0 != 0
                 && seen.insert(unit.physical_id)
-                && self.unit_index(unit.physical_id).is_some_and(|index| {
-                    self.units[index] == *unit
-                })
+                && self
+                    .unit_index(unit.physical_id)
+                    .is_some_and(|index| self.units[index] == *unit)
         })
     }
 
