@@ -202,11 +202,13 @@ jobs:
       # Run this independent gate before the full suite so baseline failures do
       # not suppress the seed verification result.
       - name: Verify canonical 12N seed and realization
+        if: always()
         timeout-minutes: 5
         run: |
           cargo test --locked confirmed_seed_is_the_established_twelve_piece_nitrogen_ring
           cargo test --locked ancestral_seed_realizes_a_physically_valid_developmental_structure
       - name: Run Rust tests
+        if: always()
         timeout-minutes: 5
         run: cargo test --locked --all-targets
       - name: Run Clippy
