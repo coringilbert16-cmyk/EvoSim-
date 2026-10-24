@@ -48,6 +48,7 @@ jobs:
           cargo test --locked chemical_break_reconciles_world_energy_inventory
           cargo test --locked chemical_break_with_resonance_shortfall_reconciles_world_inventory
           cargo test --locked resonance_overload_break_reconciles_world_inventory
+          cargo test --locked world_energy_inventory_reconciles_world_tone_and_structural_break_together
       - name: Run focused physical graph merge tests
         timeout-minutes: 5
         run: |
@@ -105,7 +106,9 @@ jobs:
       # repository's known unrelated baseline failures.
       - name: Verify chemistry cache position-key invalidation
         timeout-minutes: 5
-        run: cargo test --locked live_geometry_key_distinguishes_chemical_positions_and_canonicalizes_them
+        run: |
+          cargo test --locked live_geometry_key_distinguishes_chemical_positions_and_canonicalizes_them
+          cargo test --locked changed_catalog_chemical_position_changes_fingerprint_and_rejects_old_manifest
       - name: Verify invalid chemical positions cannot poison cache identities
         timeout-minutes: 5
         run: cargo test --locked rejects_unrepresentable_chemical_position_keys
@@ -120,6 +123,7 @@ jobs:
         timeout-minutes: 5
         run: |
           cargo test --locked insert_partial_append_failure_rolls_back_original_cache_bytes_and_reopens_cleanly
+          cargo test --locked cache_append_rollback_failure_reports_both_errors_and_preserves_recovery_evidence
           cargo test --locked manifest_failure_rolls_back_appended_record_and_reopens_cleanly
           cargo test --locked failed_insert_keeps_stale_instance_refreshed_to_committed_store
       # Rollback gates for stored and environmental BREAK must be visible
