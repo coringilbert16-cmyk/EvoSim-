@@ -583,6 +583,41 @@ mod tests {
     }
 
     #[test]
+    fn cumulative_world_tone_rounding_is_debited_from_new_heat() {
+        let mut ledger = EnergyLedger {
+            total_external_energy_input: 7223.128207,
+            total_resonant_energy_held: 1501893.525368,
+            total_heat_dissipated: 177.428491,
+            total_world_tone_energy_escaped: 611232.425726,
+            ..EnergyLedger::default()
+        };
+        let before = ledger;
+
+        assert!(ledger.settle_world_tone_paths(
+            80.330104,
+            17.734988,
+            17.793927,
+            44.801189,
+        ));
+
+        let actual_incident =
+            ledger.total_external_energy_input - before.total_external_energy_input;
+        let actual_capture =
+            ledger.total_resonant_energy_held - before.total_resonant_energy_held;
+        let actual_heat = ledger.total_heat_dissipated - before.total_heat_dissipated;
+        let actual_escape =
+            ledger.total_world_tone_energy_escaped - before.total_world_tone_energy_escaped;
+        assert!(
+            actual_incident >= actual_capture + actual_heat + actual_escape,
+            "cumulative f64 counters must not allocate more energy than the represented source"
+        );
+        assert!(
+            actual_heat < 17.793927,
+            "rounding correction must be debited from this frame's heat, not hidden by relaxing conservation"
+        );
+    }
+
+    #[test]
     fn world_tone_cannot_allocate_more_than_incident_energy_within_tolerance() {
         let mut ledger = EnergyLedger::default();
         assert!(
