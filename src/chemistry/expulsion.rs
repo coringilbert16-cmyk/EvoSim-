@@ -1,3 +1,4 @@
+use crate::physical_material::PhysicalMaterial;
 use crate::state::{Environment, Organism};
 use crate::structure::Placement;
 
