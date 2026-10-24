@@ -13,6 +13,10 @@ pub(crate) struct ChemicalBreakOperation {
     pub(crate) reaction_energy: f64,
     pub(crate) disruption_cost: f64,
     pub(crate) reaction_frequency_hz: f64,
+    /// Preserve accumulated progress if settlement fails without changing the
+    /// physical structure (for example, because the event became stale).
+    pub(crate) accumulation_key: String,
+    pub(crate) accumulated_reaction: f64,
 }
 
 fn reaction_key(bond: &Bond, interface_signature: &str) -> String {
@@ -51,6 +55,20 @@ fn material_identity(material: &crate::resources::Material) -> String {
         .join("+")
 }
 
+fn dissipate_unupdated_accumulations(
+    accumulation: &mut std::collections::BTreeMap<String, f64>,
+    current_prefix: &str,
+    updated_keys: &std::collections::BTreeSet<String>,
+) {
+    accumulation.retain(|key, value| {
+        if !key.starts_with(current_prefix) || updated_keys.contains(key) {
+            return true;
+        }
+        *value *= 1.0 - crate::chemistry::CHEMICAL_DISSIPATION;
+        value.is_finite() && *value > 0.0
+    });
+}
+
 pub(crate) fn accumulate(
     organism: &Organism,
     catalog: &[BaseResource],
@@ -58,6 +76,8 @@ pub(crate) fn accumulate(
     chemistry_library: &mut ChemistryLibrary,
 ) -> Vec<ChemicalBreakOperation> {
     if organism.structure.bonds.is_empty() {
+        let organism_prefix = format!("{}|rev:", organism.id);
+        accumulation.retain(|key, _| !key.starts_with(&organism_prefix));
         return Vec::new();
     }
     let current_prefix = format!("{}|rev:{}|", organism.id, organism.structure_revision);
@@ -68,6 +88,7 @@ pub(crate) fn accumulate(
     let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
     let bonds = organism.structure.bonds.clone();
     let mut operations = Vec::new();
+    let mut updated_keys = std::collections::BTreeSet::new();
 
     for bond in bonds {
         let Some(unit_a) = organism
@@ -154,7 +175,13 @@ pub(crate) fn accumulate(
             reaction_key(&bond, &interface.signature)
         );
 
-        let key_record = ChemistryKey::from_live_geometry(&material_a, &material_b, &interface);
+        let key_record = ChemistryKey::from_live_geometry(
+            &material_a,
+            &material_b,
+            &interface,
+            position_a,
+            position_b,
+        );
         let potential = match chemistry_library.get(&key_record) {
             Some(record) => record.static_potential,
             None => {
@@ -193,6 +220,7 @@ pub(crate) fn accumulate(
         };
 
         if next <= 0.0 {
+            updated_keys.insert(key.clone());
             accumulation.remove(&key);
             continue;
         }
@@ -228,6 +256,7 @@ pub(crate) fn accumulate(
         let Some(reaction_energy) = crate::chemistry::normalized_chemistry_to_energy(next) else {
             continue;
         };
+        updated_keys.insert(key.clone());
         if crate::chemistry::activated(reaction_energy, effective_barrier) {
             operations.push(ChemicalBreakOperation {
                 organism_id: organism.id.clone(),
@@ -235,12 +264,18 @@ pub(crate) fn accumulate(
                 reaction_energy,
                 disruption_cost: barrier,
                 reaction_frequency_hz,
+                accumulation_key: key.clone(),
+                accumulated_reaction: next,
             });
             accumulation.remove(&key);
         } else {
             accumulation.insert(key, next);
         }
     }
+    // Reaction progress loses energy every tick even when a previously known
+    // interface cannot be resolved this tick. Otherwise missing geometry or
+    // invalid chemistry data accidentally pauses dissipation indefinitely.
+    dissipate_unupdated_accumulations(accumulation, &current_prefix, &updated_keys);
     operations
 }
 
@@ -255,13 +290,24 @@ pub(crate) fn resolve(
     if organism.resonant_energy.total_energy().is_none() {
         return false;
     }
+    if !operation.reaction_energy.is_finite()
+        || operation.reaction_energy < 0.0
+        || !operation.disruption_cost.is_finite()
+        || operation.disruption_cost < 0.0
+    {
+        return false;
+    }
     let processing_efficiency = organism.genome.processing_efficiency();
+    // Resonance only supplies the shortfall between the accumulated reaction
+    // energy and the physical disruption barrier. Never spend stored resonance
+    // when the reaction itself already covers that barrier.
+    let required_resonance = (operation.disruption_cost - operation.reaction_energy).max(0.0);
     // Work from a trial reservoir. A failed or stale BREAK must not consume
     // retained resonance; only a successfully settled structural transaction
     // commits the frequency-compatible withdrawal.
     let mut trial_reservoir = organism.resonant_energy.clone();
-    let resonant_work = trial_reservoir
-        .withdraw_compatible(operation.reaction_frequency_hz, operation.disruption_cost);
+    let resonant_work =
+        trial_reservoir.withdraw_compatible(operation.reaction_frequency_hz, required_resonance);
     let success = crate::transformation::settle_chemical_break_energy_with_resonance(
         organism,
         operation.bond,
@@ -280,10 +326,44 @@ pub(crate) fn resolve(
     success
 }
 
+/// Resolve a triggered reaction while preserving its accumulated progress
+/// if settlement fails. A later structure revision naturally invalidates the
+/// old key through the normal revision-pruning path.
+pub(crate) fn resolve_preserving_accumulation(
+    operation: ChemicalBreakOperation,
+    organism: &mut Organism,
+    ledger: &mut crate::state::EnergyLedger,
+    accumulation: &mut std::collections::BTreeMap<String, f64>,
+) -> bool {
+    let key = operation.accumulation_key.clone();
+    let accumulated_reaction = operation.accumulated_reaction;
+    let success = resolve(operation, organism, ledger);
+    if !success {
+        accumulation.insert(key, accumulated_reaction);
+    }
+    success
+}
+
 #[cfg(test)]
 mod material_identity_tests {
     use super::*;
     use crate::resources::Material;
+
+    #[test]
+    fn unobserved_reaction_progress_dissipates_once_per_tick() {
+        let mut accumulation = std::collections::BTreeMap::from([
+            ("organism|rev:4|bond-a".to_string(), 2.0),
+            ("organism|rev:4|bond-b".to_string(), 1.0),
+            ("other|rev:4|bond-c".to_string(), 3.0),
+        ]);
+        let updated = std::collections::BTreeSet::from(["organism|rev:4|bond-a".to_string()]);
+
+        dissipate_unupdated_accumulations(&mut accumulation, "organism|rev:4|", &updated);
+
+        assert_eq!(accumulation.get("organism|rev:4|bond-a"), Some(&2.0));
+        assert!((accumulation["organism|rev:4|bond-b"] - 0.9).abs() < 1e-12);
+        assert_eq!(accumulation.get("other|rev:4|bond-c"), Some(&3.0));
+    }
 
     #[test]
     fn one_unit_base_material_keeps_legacy_resource_name() {
@@ -309,7 +389,7 @@ mod material_identity_tests {
         );
     }
     #[test]
-    fn successful_chemical_break_consumes_only_compatible_retained_resonance() {
+    fn successful_chemical_break_does_not_spend_resonance_when_reaction_covers_barrier() {
         let mut simulation = crate::state::Simulation::new(920, 10.0);
         let bond = *simulation.organisms[0]
             .structure
@@ -323,6 +403,8 @@ mod material_identity_tests {
             reaction_energy: 1_000.0,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
+            accumulation_key: "test|rev:0|bond".into(),
+            accumulated_reaction: 2.5,
         };
         let before = simulation.organisms[0]
             .resonant_energy
@@ -337,7 +419,178 @@ mod material_identity_tests {
             .resonant_energy
             .total_energy()
             .unwrap();
-        assert!((before - after - 0.5).abs() < 1e-9);
+        assert!((before - after).abs() < 1e-9);
+        assert!(!simulation.organisms[0]
+            .structure
+            .bonds
+            .iter()
+            .any(|candidate| candidate.has_same_identity(&bond)));
+    }
+
+    #[test]
+    fn successful_chemical_break_spends_only_resonance_needed_for_reaction_shortfall() {
+        let mut simulation = crate::state::Simulation::new(924, 10.0);
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        let operation = ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            reaction_energy: 0.25,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "test|rev:0|bond".into(),
+            accumulated_reaction: 0.25,
+        };
+        let before = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .unwrap();
+        assert!(resolve(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.energy_ledger,
+        ));
+        let after = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .unwrap();
+        assert!((before - after - 0.25).abs() < 1e-9);
+        assert!(!simulation.organisms[0]
+            .structure
+            .bonds
+            .iter()
+            .any(|candidate| candidate.has_same_identity(&bond)));
+    }
+
+    #[test]
+    fn failed_chemical_settlement_preserves_triggered_reaction_progress() {
+        let mut simulation = crate::state::Simulation::new(921, 10.0);
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        let original_bond_count = simulation.organisms[0].structure.bonds.len();
+        let operation = ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            // Insufficient reaction work forces a settlement rejection after
+            // the event is triggered, without changing the physical structure.
+            reaction_energy: 0.1,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "test|rev:0|bond".into(),
+            accumulated_reaction: 7.25,
+        };
+        let mut accumulation = std::collections::BTreeMap::new();
+        assert!(!resolve_preserving_accumulation(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.energy_ledger,
+            &mut accumulation,
+        ));
+        assert_eq!(
+            simulation.organisms[0].structure.bonds.len(),
+            original_bond_count
+        );
+        assert_eq!(accumulation.get("test|rev:0|bond"), Some(&7.25));
+    }
+
+    #[test]
+    fn chemical_break_reconciles_world_energy_inventory() {
+        let mut simulation = crate::state::Simulation::new(922, 10.0);
+        let before = simulation.energy_inventory_snapshot();
+        assert!(
+            before.is_balanced(1e-9),
+            "initial inventory: {:?}",
+            before.residual()
+        );
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        let operation = ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            reaction_energy: 1_000.0,
+            disruption_cost: 0.0,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "test|rev:0|bond".into(),
+            accumulated_reaction: 2.5,
+        };
+        assert!(resolve(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.energy_ledger,
+        ));
+        let after = simulation.energy_inventory_snapshot();
+        assert!(
+            after.is_balanced(1e-9),
+            "chemical BREAK must reconcile the world inventory: residual={:?}",
+            after.residual()
+        );
+        assert!(!simulation.organisms[0]
+            .structure
+            .bonds
+            .iter()
+            .any(|candidate| candidate.has_same_identity(&bond)));
+    }
+
+    #[test]
+    fn chemical_break_with_resonance_shortfall_reconciles_world_inventory() {
+        let mut simulation = crate::state::Simulation::new(925, 10.0);
+        assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        let retained_resonance = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .expect("retained resonance should have finite energy");
+        // The fixture deposit is part of the test's starting state, not a
+        // simulated world-tone input. Set the oracle's tick-zero baseline to
+        // that explicitly seeded reservoir so only the BREAK is measured.
+        simulation.energy_ledger.initial_resonant_energy_held = retained_resonance;
+        simulation.energy_ledger.total_resonant_energy_held = retained_resonance;
+        let before = simulation.energy_inventory_snapshot();
+        assert!(
+            before.is_balanced(1e-9),
+            "initial inventory: {:?}",
+            before.residual()
+        );
+
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        let operation = ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            reaction_energy: 0.25,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "test|rev:0|bond".into(),
+            accumulated_reaction: 0.25,
+        };
+        assert!(resolve(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.energy_ledger,
+        ));
+
+        let after = simulation.energy_inventory_snapshot();
+        assert!(
+            after.is_balanced(1e-9),
+            "resonance-assisted chemical BREAK must reconcile the world inventory: residual={:?}",
+            after.residual()
+        );
+        assert!(
+            (before.current_resonant_energy - after.current_resonant_energy - 0.25).abs() < 1e-9,
+            "only the reaction-energy shortfall should be withdrawn from resonance"
+        );
         assert!(!simulation.organisms[0]
             .structure
             .bonds
@@ -360,6 +613,8 @@ mod material_identity_tests {
             reaction_energy: 1_000.0,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
+            accumulation_key: "test|rev:0|bond".into(),
+            accumulated_reaction: 2.5,
         };
         assert!(simulation.organisms[0]
             .structure
@@ -386,6 +641,122 @@ mod material_identity_tests {
     }
 
     #[test]
+    fn rejected_chemical_break_preserves_bond_and_resonance_when_ledger_is_invalid() {
+        let mut simulation = crate::state::Simulation::new(923, 10.0);
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        assert!(
+            bond.bond_energy.is_finite() && bond.bond_energy > 0.0,
+            "fixture bond must have positive finite stored energy"
+        );
+        let disruption_cost = bond.bond_energy * 0.5;
+        let reaction_energy = disruption_cost * 0.5;
+        assert!(simulation.organisms[0]
+            .resonant_energy
+            .deposit(440.0, disruption_cost));
+        let resonance_before = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .expect("resonance must be finite");
+        // A non-finite cumulative sink makes ledger settlement reject after
+        // candidate preparation but before any physical or reservoir commit.
+        simulation.energy_ledger.total_heat_dissipated = f64::NAN;
+        let structure_before = simulation.organisms[0].structure.clone();
+        let usable_before = simulation.organisms[0].usable_energy;
+
+        let operation = ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            reaction_energy,
+            disruption_cost,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "test|rev:0|bond".into(),
+            accumulated_reaction: reaction_energy,
+        };
+        assert!(
+            !resolve(
+                operation,
+                &mut simulation.organisms[0],
+                &mut simulation.energy_ledger,
+            ),
+            "invalid cumulative heat state must reject the BREAK transaction"
+        );
+        assert_eq!(
+            simulation.organisms[0].structure.units,
+            structure_before.units
+        );
+        assert_eq!(
+            simulation.organisms[0].structure.bonds,
+            structure_before.bonds
+        );
+        assert_eq!(
+            simulation.organisms[0]
+                .resonant_energy
+                .total_energy()
+                .unwrap(),
+            resonance_before
+        );
+        assert_eq!(simulation.organisms[0].usable_energy, usable_before);
+        assert!(simulation.energy_ledger.total_heat_dissipated.is_nan());
+        assert_eq!(simulation.energy_ledger.total_work_expended, 0.0);
+    }
+
+    #[test]
+    fn bondless_structure_discards_prior_revision_reaction_accumulation() {
+        let mut simulation = crate::state::Simulation::new(924, 10.0);
+        let organism = &mut simulation.organisms[0];
+        let stale_key = format!(
+            "{}|rev:{}|stale-reaction",
+            organism.id, organism.structure_revision
+        );
+        let unrelated_key = "other-organism|rev:3|unrelated".to_string();
+        simulation
+            .chemical_reaction_accumulation
+            .insert(stale_key.clone(), 0.75);
+        organism.structure.bonds.clear();
+        organism.mark_structure_changed();
+        let current_revision_key = format!(
+            "{}|rev:{}|stale-current-revision",
+            organism.id, organism.structure_revision
+        );
+        simulation
+            .chemical_reaction_accumulation
+            .insert(current_revision_key.clone(), 0.5);
+        simulation
+            .chemical_reaction_accumulation
+            .insert(unrelated_key.clone(), 0.25);
+        assert!(accumulate(
+            organism,
+            &simulation.environment.catalog,
+            &mut simulation.chemical_reaction_accumulation,
+            &mut simulation.chemistry_library,
+        )
+        .is_empty());
+
+        assert!(
+            !simulation
+                .chemical_reaction_accumulation
+                .contains_key(&stale_key),
+            "old-revision accumulation must be removed even when no bonds remain"
+        );
+        assert!(
+            !simulation
+                .chemical_reaction_accumulation
+                .contains_key(&current_revision_key),
+            "bondless organisms must not retain current-revision reaction entries"
+        );
+        assert_eq!(
+            simulation
+                .chemical_reaction_accumulation
+                .get(&unrelated_key),
+            Some(&0.25)
+        );
+    }
+
+    #[test]
     fn base_contact_key_matches_checked_in_cache_identity() {
         let carbon = Material::free_base("Carbon", 1.0);
         let hydrogen = Material::free_base("Hydrogen", 1.0);
@@ -399,8 +770,13 @@ mod material_identity_tests {
             material_identity(&carbon),
             material_identity(&hydrogen),
             &interface,
+            10.5,
+            5.5,
         );
-        assert_eq!(key.schema_version, 3);
+        assert_eq!(
+            key.schema_version,
+            crate::chemistry_library::CHEMISTRY_LIBRARY_SCHEMA_VERSION
+        );
         assert_eq!(key.material_a, "Carbon");
         assert_eq!(key.material_b, "Hydrogen");
         assert_eq!(key.interface_class, "rigid_point");

@@ -6,18 +6,27 @@ use crate::resources::Material;
 ///
 /// This is deliberately separate from `Material::take`: the latter is a
 /// legacy aggregate operation that can represent fractional material and must
-/// not be used for organism-facing physical transfer. Structured material is
-/// never fractionally extracted here.
+/// not be used for organism-facing physical transfer. Every constituent count
+/// must already be a whole number; a whole aggregate total does not make
+/// fractional per-resource counts physically valid.
 pub(crate) fn take_whole_unstructured(
     material: &mut Material,
     requested: usize,
 ) -> Option<Material> {
-    if requested == 0 || material.has_internal_structure() || material.is_empty() {
+    if requested == 0
+        || !material.is_valid()
+        || material.has_internal_structure()
+        || material.is_empty()
+        || material
+            .parts
+            .iter()
+            .any(|(_, amount)| !amount.is_finite() || *amount <= 0.0 || amount.fract().abs() > 1e-9)
+    {
         return None;
     }
 
     let available = material.total_amount();
-    if !available.is_finite() || available < 1.0 {
+    if !available.is_finite() || available < 1.0 || (available - available.round()).abs() > 1e-9 {
         return None;
     }
 
@@ -94,18 +103,18 @@ mod tests {
 
     #[test]
     fn takes_only_available_whole_units_when_request_exceeds_stock() {
-        let mut material = Material::free_base("Carbon", 3.5);
+        let mut material = Material::free_base("Carbon", 3.0);
         let taken = take_whole_unstructured(&mut material, 5).unwrap();
         assert_eq!(taken.total_amount(), 3.0);
-        assert_eq!(material.total_amount(), 0.5);
+        assert_eq!(material.total_amount(), 0.0);
     }
 
     #[test]
-    fn transfers_whole_units_from_fractional_aggregate() {
+    fn rejects_fractional_aggregate_without_mutating_stock() {
         let mut material = Material::free_base("Carbon", 3.5);
-        let taken = take_whole_unstructured(&mut material, 1).unwrap();
-        assert_eq!(taken.total_amount(), 1.0);
-        assert_eq!(material.total_amount(), 2.5);
+        let original = material.clone();
+        assert!(take_whole_unstructured(&mut material, 1).is_none());
+        assert_eq!(material, original);
     }
 
     #[test]

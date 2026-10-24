@@ -572,7 +572,10 @@ impl ActiveMaterialField {
     /// Deposit an already realized physical material. This operation transfers
     /// the existing object; it does not create or re-form any of its bonds.
     pub fn deposit_physical_at_index(&mut self, index: usize, material: PhysicalMaterial) -> bool {
-        if !material.is_realized() || material.material.is_empty() || !material.material.is_valid()
+        if index >= self.cells.len()
+            || !material.is_realized()
+            || material.material.is_empty()
+            || !material.material.is_valid()
         {
             return false;
         }
@@ -586,6 +589,36 @@ impl ActiveMaterialField {
             return false;
         };
         self.deposit_physical_at_index(index, material)
+    }
+
+    /// Atomically deposit multiple realized physical objects without cloning the
+    /// entire field. Validate every destination and object before mutating cells.
+    pub(crate) fn deposit_physical_batch(
+        &mut self,
+        deposits: Vec<(f64, f64, PhysicalMaterial)>,
+    ) -> bool {
+        let mut staged = Vec::with_capacity(deposits.len());
+        for (x, y, material) in deposits {
+            let Some(index) = self.index_for_position(x, y) else {
+                return false;
+            };
+            if index >= self.cells.len()
+                || !material.is_realized()
+                || material.material.is_empty()
+                || !material.material.is_valid()
+            {
+                return false;
+            }
+            staged.push((index, material));
+        }
+
+        // All fallible checks are complete. Commit directly so a failed later
+        // destination cannot leave earlier split pieces deposited.
+        for (index, material) in staged {
+            self.cells[index].physical_materials.push(material);
+            self.mark_changed_at_index(index);
+        }
+        true
     }
 
     pub fn total_material(&self) -> Vec<(String, f64)> {

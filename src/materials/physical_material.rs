@@ -16,6 +16,14 @@ pub(crate) struct PhysicalMaterialBond {
     pub(crate) endpoint_b: ConnectionEndpoint,
 }
 
+fn connection_endpoint_is_finite(endpoint: ConnectionEndpoint) -> bool {
+    match endpoint {
+        ConnectionEndpoint::Corner { .. } | ConnectionEndpoint::LineEndpoint { .. } => true,
+        ConnectionEndpoint::Boundary { angle_radians } => angle_radians.is_finite(),
+        ConnectionEndpoint::Fluid { x, y } => x.is_finite() && y.is_finite(),
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct PhysicalMaterial {
     pub(crate) material: Material,
@@ -36,7 +44,30 @@ impl PhysicalMaterial {
         placements: Vec<Placement>,
         catalog: &[BaseResource],
     ) -> Option<Self> {
-        if !material.is_valid()
+        Self::realized_inner(material, placements, catalog, false)
+    }
+
+    /// Realize one fluid constituent with its authoritative physical shape.
+    /// This is required for aggregated fluid counts and also preserves a
+    /// single fluid's deformed shape when it enters storage.
+    pub(crate) fn realized_with_single_fluid_shape(
+        material: Material,
+        placement: Placement,
+        shape: crate::resources::Shape,
+        catalog: &[BaseResource],
+    ) -> Option<Self> {
+        let mut instance = Self::realized_inner(material, vec![placement], catalog, true)?;
+        instance = instance.with_single_fluid_shape(shape, catalog)?;
+        Some(instance)
+    }
+
+    fn realized_inner(
+        material: Material,
+        placements: Vec<Placement>,
+        catalog: &[BaseResource],
+        allow_aggregate_fluid: bool,
+    ) -> Option<Self> {
+        if !material.is_valid_for_catalog(catalog)
             || material.parts.is_empty()
             || placements.len() != material.parts.len()
         {
@@ -53,7 +84,16 @@ impl PhysicalMaterial {
         let mut structure = OrganismStructure::new();
         for ((name, amount), placement) in material.parts.iter().zip(placements.iter()) {
             if (*amount - 1.0).abs() > 1e-9 {
-                return None;
+                let resource = catalog.iter().find(|resource| resource.name == *name)?;
+                if material.parts.len() != 1
+                    || material.has_internal_structure()
+                    || resource.physical_state != crate::resources::PhysicalState::Fluid
+                    || !allow_aggregate_fluid
+                    || *amount < 1.0
+                    || (*amount - amount.round()).abs() > 1e-9
+                {
+                    return None;
+                }
             }
             let mut unit =
                 StructuralUnit::from_material(Material::free_base(name.clone(), 1.0), *placement)?;
@@ -110,7 +150,7 @@ impl PhysicalMaterial {
             return None;
         }
         let (name, amount) = self.material.parts.first()?;
-        if (*amount - 1.0).abs() > 1e-9 {
+        if !amount.is_finite() || *amount < 1.0 || (*amount - amount.round()).abs() > 1e-9 {
             return None;
         }
         let resource = catalog.iter().find(|resource| resource.name == *name)?;
@@ -136,7 +176,10 @@ impl PhysicalMaterial {
             } => *nominal_area,
             _ => return None,
         };
-        if (shape_area - default_area).abs() > 1e-9 * default_area.max(1.0) {
+        let expected_area = default_area * *amount;
+        if !expected_area.is_finite()
+            || (shape_area - expected_area).abs() > 1e-9 * expected_area.max(1.0)
+        {
             return None;
         }
         self.realized_shapes = Some(vec![shape]);
@@ -150,10 +193,10 @@ impl PhysicalMaterial {
         part_index: usize,
         catalog: &[BaseResource],
     ) -> Option<crate::resources::Shape> {
-        let (name, amount) = self.material.parts.get(part_index)?;
-        if !amount.is_finite() || *amount <= 0.0 {
+        if !self.material.is_valid_for_catalog(catalog) {
             return None;
         }
+        let (name, amount) = self.material.parts.get(part_index)?;
         let resource = catalog.iter().find(|resource| resource.name == *name)?;
         let shape = match self.realized_shapes.as_ref() {
             Some(shapes) if shapes.len() == self.material.parts.len() => shapes.get(part_index)?,
@@ -163,37 +206,22 @@ impl PhysicalMaterial {
         if !shape.is_valid() {
             return None;
         }
-        if shape != &resource.shape {
-            if resource.physical_state != crate::resources::PhysicalState::Fluid {
-                return None;
-            }
+        if shape != &resource.shape
+            && resource.physical_state != crate::resources::PhysicalState::Fluid
+        {
+            return None;
+        }
+        if resource.physical_state == crate::resources::PhysicalState::Fluid {
             let default_area = match &resource.shape.form {
                 crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
                 crate::resources::Form::Fluid { nominal_area, .. } => *nominal_area,
                 _ => return None,
             };
             let shape_area = match &shape.form {
-                crate::resources::Form::Fluid {
-                    nominal_area,
-                    boundary: Some(_),
-                    ..
-                }
-                | crate::resources::Form::Fluid {
-                    nominal_area,
-                    arc_boundary: Some(_),
-                    ..
-                }
-                | crate::resources::Form::Fluid {
-                    nominal_area,
-                    multi_contact_boundary: Some(_),
-                    ..
-                } => *nominal_area,
+                crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+                crate::resources::Form::Fluid { nominal_area, .. } => *nominal_area,
                 _ => return None,
             };
-            // A realized fluid boundary represents the full material amount,
-            // not just one catalog unit. Keep this invariant aligned with
-            // StructuralUnit::realize_fluid_geometry so merged fluid bodies can
-            // be validated without silently shrinking their conserved area.
             let expected_area = default_area * *amount;
             if !expected_area.is_finite()
                 || (shape_area - expected_area).abs() > 1e-9 * expected_area.max(1.0)
@@ -207,6 +235,12 @@ impl PhysicalMaterial {
     /// Break one pre-existing internal bond and return the resulting physically
     /// disconnected pieces. The bond itself must belong to this stored material.
     pub(crate) fn break_internal_bond(&self, target: &PhysicalMaterialBond) -> Option<Vec<Self>> {
+        // Persisted active transformations can reach completion without passing
+        // through the ordinary source-selection gate. Revalidate the whole
+        // object so malformed bond topology cannot be split into new objects.
+        if !self.is_realized() {
+            return None;
+        }
         let placements = self.placements.as_ref()?;
         let connections = self.internal_connections.as_ref()?;
         if self
@@ -275,6 +309,19 @@ impl PhysicalMaterial {
                     internal_connections.push(Self::remapped_bond(bond, &remap));
                 }
             }
+            // A split component may begin at a different constituent than
+            // the original stored object. Move its owner-relative anchor by
+            // that constituent's source-frame offset, rotated into owner space.
+            // Keep the original owner anchor absent for environmental material.
+            let owner_relative_origin = self.owner_relative_origin.map(|origin| {
+                let first = piece_placements[0];
+                let (sin, cos) = origin.rotation_radians.sin_cos();
+                Placement {
+                    x: origin.x + first.x * cos - first.y * sin,
+                    y: origin.y + first.x * sin + first.y * cos,
+                    rotation_radians: origin.rotation_radians + first.rotation_radians,
+                }
+            });
             pieces.push(Self {
                 material: Material {
                     parts,
@@ -282,7 +329,7 @@ impl PhysicalMaterial {
                 },
                 placements: Some(piece_placements),
                 internal_connections: Some(internal_connections),
-                owner_relative_origin: self.owner_relative_origin,
+                owner_relative_origin,
                 realized_shapes: self.realized_shapes.as_ref().map(|shapes| {
                     members
                         .iter()
@@ -304,12 +351,48 @@ impl PhysicalMaterial {
     }
 
     pub(crate) fn is_realized(&self) -> bool {
-        self.placements.is_some()
-            && self.internal_connections.is_some()
-            && self.realized_shapes.as_ref().map_or(true, |shapes| {
-                shapes.len() == self.material.parts.len()
-                    && shapes.iter().all(crate::resources::Shape::is_valid)
+        let Some(placements) = self.placements.as_ref() else {
+            return false;
+        };
+        let Some(connections) = self.internal_connections.as_ref() else {
+            return false;
+        };
+        if placements.is_empty()
+            || !self.material.is_valid()
+            || placements.len() != self.material.parts.len()
+            || placements.iter().any(|placement| {
+                !placement.x.is_finite()
+                    || !placement.y.is_finite()
+                    || !placement.rotation_radians.is_finite()
             })
+            || self.owner_relative_origin.is_some_and(|origin| {
+                !origin.x.is_finite()
+                    || !origin.y.is_finite()
+                    || !origin.rotation_radians.is_finite()
+            })
+            || connections.len() != self.material.internal_bonds.len()
+            || connections.iter().any(|connection| {
+                connection.part_a >= placements.len()
+                    || connection.part_b >= placements.len()
+                    || !connection_endpoint_is_finite(connection.endpoint_a)
+                    || !connection_endpoint_is_finite(connection.endpoint_b)
+            })
+            || self
+                .material
+                .internal_bonds
+                .iter()
+                .zip(connections)
+                .any(|(bond, connection)| {
+                    !((bond.part_a == connection.part_a && bond.part_b == connection.part_b)
+                        || (bond.part_a == connection.part_b && bond.part_b == connection.part_a))
+                })
+        {
+            return false;
+        }
+        self.realized_shapes.as_ref().map_or(true, |shapes| {
+            shapes.len() == self.material.parts.len()
+                && shapes.iter().all(crate::resources::Shape::is_valid)
+        })
     }
 
     /// Re-express this realization in a deterministic local frame anchored on
@@ -415,6 +498,126 @@ mod tests {
             realized_shapes: Some(vec![underfilled_shape]),
         };
         assert_eq!(underfilled.realized_shape_for_part(0, &catalog), None);
+    }
+
+    #[test]
+    fn aggregate_fluid_requires_and_preserves_an_authoritative_shape() {
+        let catalog = crate::resources::default_catalog();
+        let water = catalog
+            .iter()
+            .find(|resource| resource.name == "Water")
+            .unwrap();
+        let unit_area = match &water.shape.form {
+            crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+            _ => panic!("default Water shape should have a measurable area"),
+        };
+        let merged_area = 2.0 * unit_area;
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            merged_area,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .unwrap();
+        let arc =
+            crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
+        let shape = crate::resources::Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: merged_area,
+                boundary: None,
+                arc_boundary: Some(arc),
+                multi_contact_boundary: None,
+            },
+        };
+        let material = Material::free_base("Water", 2.0);
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+
+        assert!(
+            PhysicalMaterial::realized(material.clone(), vec![placement], &catalog).is_none(),
+            "aggregate fluid cannot be stored with a one-unit default shape"
+        );
+        let physical = PhysicalMaterial::realized_with_single_fluid_shape(
+            material,
+            placement,
+            shape.clone(),
+            &catalog,
+        )
+        .expect("aggregate fluid with conserved-area geometry should be storable");
+        assert_eq!(physical.realized_shape_for_part(0, &catalog), Some(shape));
+    }
+
+    #[test]
+    fn breaking_stored_compound_preserves_rotated_owner_relative_component_offsets() {
+        let catalog = crate::resources::default_catalog();
+        let material = Material {
+            parts: vec![
+                ("Carbon".into(), 1.0),
+                ("Hydrogen".into(), 1.0),
+                ("Carbon".into(), 1.0),
+            ],
+            internal_bonds: vec![
+                InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                },
+                InternalBond {
+                    part_a: 1,
+                    part_b: 2,
+                },
+            ],
+        };
+        let owner_rotation = 0.7_f64;
+        let physical = PhysicalMaterial::realized(
+            material,
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.25,
+                },
+                Placement {
+                    x: 1.676,
+                    y: 0.0,
+                    rotation_radians: 0.5,
+                },
+            ],
+            &catalog,
+        )
+        .expect("stored compound should be realizable");
+        let mut physical = physical;
+        physical.owner_relative_origin = Some(Placement {
+            x: 3.0,
+            y: -2.0,
+            rotation_radians: owner_rotation,
+        });
+        let target = physical.internal_connections.as_ref().unwrap()[0].clone();
+
+        let pieces = physical.break_internal_bond(&target).expect("stored bond");
+        assert_eq!(pieces.len(), 2);
+        let offset = 0.838_f64;
+        let expected = Placement {
+            x: 3.0 + offset * owner_rotation.cos(),
+            y: -2.0 + offset * owner_rotation.sin(),
+            rotation_radians: owner_rotation + 0.25,
+        };
+        let actual = pieces[1]
+            .owner_relative_origin
+            .expect("second component retains its distinct owner-relative anchor");
+        assert!((actual.x - expected.x).abs() <= 1e-12);
+        assert!((actual.y - expected.y).abs() <= 1e-12);
+        assert!((actual.rotation_radians - expected.rotation_radians).abs() <= 1e-12);
+        assert_eq!(
+            pieces[0].owner_relative_origin,
+            physical.owner_relative_origin,
+            "the component anchored at the original first constituent keeps the original owner offset"
+        );
     }
 
     #[test]
@@ -635,5 +838,232 @@ mod tests {
         assert_eq!(structure.units[indices[0]].shape(&catalog), Some(&shape));
         assert_eq!(structure.units[indices[0]].placement.x, 10.0);
         assert_eq!(structure.units[indices[0]].placement.y, 20.0);
+    }
+    #[test]
+    fn realized_state_rejects_non_finite_placement_coordinates() {
+        let catalog = crate::resources::default_catalog();
+        let mut physical = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("test material should realize");
+        physical.placements.as_mut().unwrap()[0].x = f64::NAN;
+        assert!(!physical.is_realized());
+    }
+
+    #[test]
+    fn realized_state_rejects_placement_count_mismatches() {
+        let catalog = crate::resources::default_catalog();
+        let material = Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: Vec::new(),
+        };
+        let valid = PhysicalMaterial::realized(
+            material,
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 1.5,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("valid unbonded composite should realize");
+
+        let mut missing = valid.clone();
+        missing.placements.as_mut().unwrap().pop();
+        assert!(
+            !missing.is_realized(),
+            "a persisted composite missing a constituent placement must fail closed"
+        );
+
+        let mut extra = valid;
+        extra.placements.as_mut().unwrap().push(Placement {
+            x: 3.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        });
+        assert!(
+            !extra.is_realized(),
+            "a persisted composite with an extra placement must fail closed"
+        );
+    }
+
+    #[test]
+    fn realized_state_rejects_invalid_persisted_material_composition() {
+        let catalog = crate::resources::default_catalog();
+        let mut physical = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("valid single constituent should realize");
+        physical.material.parts[0].1 = 1.5;
+        assert!(
+            !physical.is_realized(),
+            "fractional persisted rigid constituent must not count as realized geometry"
+        );
+    }
+
+    #[test]
+    fn realized_state_rejects_non_finite_persisted_connection_endpoints() {
+        let catalog = crate::resources::default_catalog();
+        let mut physical = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![crate::resources::InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("valid bonded composite should realize");
+        physical.internal_connections.as_mut().unwrap()[0].endpoint_a =
+            ConnectionEndpoint::Boundary {
+                angle_radians: f64::NAN,
+            };
+        assert!(
+            !physical.is_realized(),
+            "non-finite persisted endpoint metadata must fail closed"
+        );
+    }
+
+    #[test]
+    fn realized_state_rejects_connections_that_disagree_with_material_bond_topology() {
+        let catalog = crate::resources::default_catalog();
+        let mut physical = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("test composite should realize");
+        let connection = &mut physical.internal_connections.as_mut().unwrap()[0];
+        connection.part_a = 0;
+        connection.part_b = 0;
+        let malformed_target = physical.internal_connections.as_ref().unwrap()[0].clone();
+
+        assert!(
+            !physical.is_realized(),
+            "persisted connection endpoints must agree with declared material topology"
+        );
+        assert!(
+            physical.break_internal_bond(&malformed_target).is_none(),
+            "stored BREAK completion must fail closed on malformed persisted topology"
+        );
+    }
+
+    #[test]
+    fn realized_state_rejects_non_finite_owner_relative_origin() {
+        let catalog = crate::resources::default_catalog();
+        let valid = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("valid single constituent should realize");
+
+        for origin in [
+            Placement {
+                x: f64::NAN,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 0.0,
+                y: f64::INFINITY,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: f64::NEG_INFINITY,
+            },
+        ] {
+            let mut malformed = valid.clone();
+            malformed.owner_relative_origin = Some(origin);
+            assert!(
+                !malformed.is_realized(),
+                "non-finite owner-relative coordinates must fail closed"
+            );
+        }
+    }
+
+    #[test]
+    fn realized_state_rejects_connections_outside_placement_indices() {
+        let catalog = crate::resources::default_catalog();
+        let mut physical = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 1.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("test composite should realize");
+        physical.internal_connections.as_mut().unwrap()[0].part_b = 2;
+        assert!(!physical.is_realized());
     }
 }

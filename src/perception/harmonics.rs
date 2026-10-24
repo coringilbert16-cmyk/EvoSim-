@@ -213,12 +213,28 @@ pub(crate) fn natural_frequency_hz(
     properties: ResourceProperties,
     baselines: ResourceBaselines,
 ) -> f64 {
-    let mass = properties.mass.max(f64::EPSILON);
-    let cohesion = properties.cohesion.max(f64::EPSILON);
-    let baseline_mass = baselines.mass.max(f64::EPSILON);
-    let baseline_cohesion = baselines.cohesion.max(f64::EPSILON);
-    let ratio = (cohesion / mass) / (baseline_cohesion / baseline_mass);
-    WORLD_TONE_HZ * ratio.max(0.0).sqrt()
+    let values = [
+        properties.mass,
+        properties.cohesion,
+        baselines.mass,
+        baselines.cohesion,
+    ];
+    if values
+        .iter()
+        .any(|value| !value.is_finite() || *value <= 0.0)
+    {
+        return f64::NAN;
+    }
+    let ratio = (properties.cohesion / properties.mass) / (baselines.cohesion / baselines.mass);
+    if !ratio.is_finite() || ratio <= 0.0 {
+        return f64::NAN;
+    }
+    let frequency = WORLD_TONE_HZ * ratio.sqrt();
+    if frequency.is_finite() && frequency > 0.0 {
+        frequency
+    } else {
+        f64::NAN
+    }
 }
 
 /// Reactivity supplies the existing dissipative/nonlinear response scale.
@@ -227,8 +243,11 @@ pub(crate) fn natural_frequency_hz(
 /// material's reactivity relative to the catalog baseline. No new
 /// damping-only resource property is introduced.
 pub(crate) fn damping_ratio(properties: ResourceProperties, baselines: ResourceBaselines) -> f64 {
-    let reactivity = properties.reactivity.max(0.0);
-    let baseline = baselines.reactivity.max(0.0);
+    let reactivity = properties.reactivity;
+    let baseline = baselines.reactivity;
+    if !reactivity.is_finite() || reactivity < 0.0 || !baseline.is_finite() || baseline < 0.0 {
+        return f64::NAN;
+    }
     if baseline <= f64::EPSILON {
         return if reactivity <= f64::EPSILON {
             0.0
@@ -236,7 +255,12 @@ pub(crate) fn damping_ratio(properties: ResourceProperties, baselines: ResourceB
             BASELINE_DAMPING_RATIO
         };
     }
-    BASELINE_DAMPING_RATIO * (reactivity / baseline)
+    let damping = BASELINE_DAMPING_RATIO * (reactivity / baseline);
+    if damping.is_finite() && damping >= 0.0 {
+        damping
+    } else {
+        f64::NAN
+    }
 }
 
 /// A compact forced-oscillator response centered on the material's natural
@@ -248,6 +272,8 @@ pub(crate) fn resonance_response(
 ) -> f64 {
     if !drive_frequency_hz.is_finite()
         || !natural_frequency_hz.is_finite()
+        || !damping.is_finite()
+        || damping < 0.0
         || drive_frequency_hz <= 0.0
         || natural_frequency_hz <= 0.0
     {
@@ -384,10 +410,14 @@ pub(crate) fn nonlinear_harmonic_amplitude(
     reactivity: f64,
     harmonic_order: usize,
 ) -> f64 {
-    if harmonic_order < 2 || !fundamental_amplitude.is_finite() {
+    if harmonic_order < 2
+        || !fundamental_amplitude.is_finite()
+        || fundamental_amplitude < 0.0
+        || !reactivity.is_finite()
+        || reactivity < 0.0
+    {
         return 0.0;
     }
-    let reactivity = reactivity.max(0.0);
     let nonlinear = if reactivity <= f64::EPSILON {
         0.0
     } else {
@@ -421,6 +451,18 @@ fn material_response_to_drive(
         || drive_frequency_hz <= 0.0
         || !signal_level.is_finite()
         || signal_level <= 0.0
+        || !properties.mass.is_finite()
+        || properties.mass <= 0.0
+        || !properties.cohesion.is_finite()
+        || properties.cohesion <= 0.0
+        || !properties.reactivity.is_finite()
+        || properties.reactivity < 0.0
+        || !baselines.mass.is_finite()
+        || baselines.mass <= 0.0
+        || !baselines.cohesion.is_finite()
+        || baselines.cohesion <= 0.0
+        || !baselines.reactivity.is_finite()
+        || baselines.reactivity < 0.0
     {
         return ToneSpectrum::empty();
     }
@@ -528,23 +570,46 @@ pub(crate) fn transform_signal_to_energy_budget(
     }
 
     let mut transformed = material_response_spectrum(properties, baselines, incoming)?;
-    let transformed_energy = spectrum_magnitude(&transformed).powi(2);
+    let transformed_energy = spectrum_energy(&transformed)?;
     if !transformed_energy.is_finite() || transformed_energy <= f64::EPSILON {
         return None;
     }
 
-    // Keep the harmonic model's frequency weights, but let only the conserved
-    // remainder determine the outgoing signal's amplitude.
-    let scale = (outgoing_energy_budget / transformed_energy).sqrt();
-    if !scale.is_finite() {
+    // Keep the strongest harmonic components first, then normalize the
+    // remaining spectrum to the conserved remainder. Normalizing before this
+    // filter could lose energy when weak components are removed.
+    transformed.retain_strongest();
+    let retained_energy = spectrum_energy(&transformed)?;
+    if !retained_energy.is_finite() || retained_energy <= f64::EPSILON {
         return None;
     }
+    let scale = (outgoing_energy_budget / retained_energy).sqrt();
+    if !scale.is_finite() || scale <= 0.0 {
+        return None;
+    }
+    // Bias the first scale very slightly downward. If floating-point rounding
+    // still lands above the budget, the correction loop below only scales down.
+    let scale = scale * (1.0 - 2.0 * f64::EPSILON);
     for component in &mut transformed.components {
         component.amplitude *= scale;
     }
-    transformed.retain_strongest();
-    let final_energy = spectrum_magnitude(&transformed).powi(2);
+    let mut final_energy = spectrum_energy(&transformed)?;
+    for _ in 0..4 {
+        if final_energy <= outgoing_energy_budget {
+            break;
+        }
+        let correction =
+            (outgoing_energy_budget / final_energy).sqrt() * (1.0 - 2.0 * f64::EPSILON);
+        if !correction.is_finite() || correction <= 0.0 {
+            return None;
+        }
+        for component in &mut transformed.components {
+            component.amplitude *= correction;
+        }
+        final_energy = spectrum_energy(&transformed)?;
+    }
     if !final_energy.is_finite()
+        || final_energy > outgoing_energy_budget
         || (final_energy - outgoing_energy_budget).abs() > 1e-9 * outgoing_energy_budget.max(1.0)
     {
         return None;
@@ -1321,6 +1386,28 @@ mod tests {
     }
 
     #[test]
+    fn resonance_math_fails_closed_for_invalid_material_properties() {
+        assert!(natural_frequency_hz(properties(f64::NAN, 0.0, 1.0), baselines()).is_nan());
+        assert!(natural_frequency_hz(properties(1.0, 0.0, f64::INFINITY), baselines()).is_nan());
+        assert!(damping_ratio(properties(1.0, f64::NAN, 1.0), baselines()).is_nan());
+        assert!(damping_ratio(
+            properties(1.0, 1.0, 1.0),
+            ResourceBaselines {
+                reactivity: f64::INFINITY,
+                ..baselines()
+            }
+        )
+        .is_nan());
+        assert_eq!(resonance_response(440.0, 440.0, f64::NAN), 0.0);
+        assert_eq!(nonlinear_harmonic_amplitude(1.0, f64::NAN, 2), 0.0);
+        assert!(
+            material_response(properties(1.0, f64::NAN, 1.0), baselines(), 0.0,)
+                .components
+                .is_empty()
+        );
+    }
+
+    #[test]
     fn reactivity_sets_relative_damping_and_nonlinear_content() {
         let baseline = damping_ratio(properties(1.0, 1.0, 1.0), baselines());
         let high = damping_ratio(properties(1.0, 4.0, 1.0), baselines());
@@ -1423,6 +1510,47 @@ mod tests {
             4.1,
         )
         .is_none());
+    }
+
+    #[test]
+    fn transformed_secondary_signal_never_exceeds_budget_after_rounding() {
+        let input = ToneSpectrum {
+            components: vec![
+                ToneComponent {
+                    frequency_hz: 440.0,
+                    amplitude: 1.7,
+                    phase_radians: 0.0,
+                },
+                ToneComponent {
+                    frequency_hz: 660.0,
+                    amplitude: 1.3,
+                    phase_radians: 0.2,
+                },
+                ToneComponent {
+                    frequency_hz: 880.0,
+                    amplitude: 1.4,
+                    phase_radians: -0.1,
+                },
+            ],
+        };
+        for budget in [0.1, 0.3, 0.7, 1.1, 1.7] {
+            let output = transform_signal_to_energy_budget(
+                properties(1.0, 2.0, 1.0),
+                baselines(),
+                &input,
+                budget,
+            )
+            .expect("valid budget should produce a bounded spectrum");
+            let energy = spectrum_energy(&output).expect("transformed spectrum is valid");
+            assert!(
+                energy <= budget,
+                "transformed energy {energy} exceeded requested budget {budget}"
+            );
+            assert!(
+                (budget - energy).abs() <= 1e-9 * budget.max(1.0),
+                "downward rounding correction exceeded tolerance: budget={budget}, energy={energy}"
+            );
+        }
     }
 
     #[test]

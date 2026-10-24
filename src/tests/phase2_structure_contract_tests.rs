@@ -126,6 +126,63 @@ fn realized_material_carries_exact_internal_connection_and_restores_without_comb
 }
 
 #[test]
+fn failed_late_physical_restoration_preserves_destination_structure() {
+    let catalog = line_catalog();
+    let mut instance = PhysicalMaterial::realized(
+        bonded_material(),
+        vec![
+            Placement {
+                x: -1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ],
+        &catalog,
+    )
+    .expect("non-overlapping stored compound should realize");
+    // Corrupt a persisted endpoint after realization. Restoration must stage
+    // both constituents, reject the invalid stored connection, and roll back.
+    instance.internal_connections.as_mut().unwrap()[0].endpoint_a =
+        ConnectionEndpoint::LineEndpoint { point_index: 99 };
+
+    let mut destination = OrganismStructure::new();
+    let mut existing = StructuralUnit::new(
+        "A",
+        Placement {
+            x: 20.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        },
+    );
+    assert!(existing.realize_default_geometry(&catalog));
+    destination.add_unit(existing);
+    let units_before = destination.units.clone();
+    let bonds_before = destination.bonds.clone();
+
+    assert!(
+        restore_material(
+            &mut destination,
+            &instance,
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        )
+        .is_none(),
+        "invalid persisted endpoint must be rejected"
+    );
+    assert_eq!(destination.units, units_before);
+    assert_eq!(destination.bonds, bonds_before);
+}
+
+#[test]
 fn new_structure_bond_is_formed_only_through_combine() {
     let catalog = line_catalog();
     let mut structure = OrganismStructure::new();

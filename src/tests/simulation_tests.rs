@@ -6,6 +6,91 @@ mod integration_tests {
     use crate::state::Simulation;
     use crate::structure::Placement;
 
+    /// Independent material oracle. It walks authoritative holders directly,
+    /// rejects fractional/unknown constituents, and never reads ledger totals.
+    fn integer_material_inventory(
+        simulation: &Simulation,
+    ) -> Result<std::collections::BTreeMap<String, u64>, String> {
+        fn add_material(
+            inventory: &mut std::collections::BTreeMap<String, u64>,
+            material: &Material,
+            catalog: &[crate::resources::BaseResource],
+        ) -> Result<(), String> {
+            for (name, amount) in &material.parts {
+                if !catalog.iter().any(|resource| resource.name == *name) {
+                    return Err(format!("unknown resource identity: {name}"));
+                }
+                if !amount.is_finite()
+                    || *amount <= 0.0
+                    || amount.fract().abs() > 1e-9
+                    || *amount > u64::MAX as f64
+                {
+                    return Err(format!(
+                        "non-integer or invalid amount for {name}: {amount}"
+                    ));
+                }
+                let count = amount.round() as u64;
+                let total = inventory.entry(name.clone()).or_default();
+                *total = total
+                    .checked_add(count)
+                    .ok_or_else(|| format!("constituent count overflow for {name}"))?;
+            }
+            Ok(())
+        }
+
+        let catalog = &simulation.environment.catalog;
+        let mut inventory = std::collections::BTreeMap::new();
+
+        // Environmental aggregate stock and already-realized objects.
+        for cell in &simulation.environment.field.cells {
+            for material in &cell.materials {
+                add_material(&mut inventory, material, catalog)?;
+            }
+            for physical in &cell.physical_materials {
+                add_material(&mut inventory, &physical.material, catalog)?;
+            }
+        }
+
+        // Living or breached organisms retain their physical structure and storage.
+        for organism in &simulation.organisms {
+            for unit in &organism.structure.units {
+                add_material(&mut inventory, &unit.material, catalog)?;
+            }
+            for material in organism.stored_material.iter_materials() {
+                add_material(&mut inventory, material, catalog)?;
+            }
+            if let Some(construction) = &organism.reproductive_construction {
+                for material in construction.committed_material.iter_materials() {
+                    add_material(&mut inventory, material, catalog)?;
+                }
+                for unit in &construction.developing_structure.units {
+                    add_material(&mut inventory, &unit.material, catalog)?;
+                }
+            }
+        }
+
+        // Active transformations own temporarily removed physical sources.
+        // The material field and prepared structures/storage/ledgers are
+        // descriptive or trial copies and must not be counted a second time.
+        for transformation in &simulation.active_transformations {
+            if let Some(physical) = &transformation.stored_material {
+                add_material(&mut inventory, &physical.material, catalog)?;
+            }
+            if let Some((_, physical)) = &transformation.combine_environmental_source {
+                add_material(&mut inventory, &physical.material, catalog)?;
+            }
+        }
+
+        // Legacy decomposition carriers remain material owners if present.
+        for body in &simulation.decomposing_bodies {
+            for unit in &body.structure.units {
+                add_material(&mut inventory, &unit.material, catalog)?;
+            }
+        }
+
+        Ok(inventory)
+    }
+
     fn structured_carbon_hydrogen() -> Material {
         Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
@@ -14,6 +99,372 @@ mod integration_tests {
                 part_b: 1,
             }],
         }
+    }
+
+    #[test]
+    fn integer_material_inventory_conserves_constituents_across_field_to_storage_transfer() {
+        let mut simulation = Simulation::new(7103, 10.0);
+
+        // Isolate the owners relevant to this transfer while retaining the
+        // organism's ordinary physical structure as part of the inventory.
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.organisms[0].stored_material.entries.clear();
+        simulation.environment.field.cells[0]
+            .materials
+            .push(Material::free_base("Carbon", 3.0));
+
+        let before =
+            integer_material_inventory(&simulation).expect("fixture inventory is integral");
+        let taken = crate::material_transfer::take_whole_unstructured(
+            &mut simulation.environment.field.cells[0].materials[0],
+            1,
+        )
+        .expect("one whole carbon constituent should transfer");
+        let placement = Placement {
+            x: 10.0,
+            y: 10.0,
+            rotation_radians: 0.0,
+        };
+        let physical =
+            PhysicalMaterial::realized(taken, vec![placement], &simulation.environment.catalog)
+                .expect("whole carbon should be physically realizable");
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(physical));
+
+        let after = integer_material_inventory(&simulation).expect("result inventory is integral");
+        assert_eq!(
+            after, before,
+            "material ownership transfer changed constituent totals"
+        );
+    }
+
+    #[test]
+    fn integer_material_inventory_conserves_constituents_across_storage_restore() {
+        let mut simulation = Simulation::new(7106, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.organisms[0].stored_material.entries.clear();
+
+        let catalog = simulation.environment.catalog.clone();
+        let physical = PhysicalMaterial::realized(
+            Material::free_base("Hydrogen", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("Hydrogen strip should be physically realizable");
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(physical));
+        let before = integer_material_inventory(&simulation).expect("stored inventory is integral");
+
+        let stored = simulation.organisms[0]
+            .stored_material
+            .take_matching_physical(&Material::free_base("Hydrogen", 1.0))
+            .expect("stored Hydrogen should be removable for restoration");
+        let restored = crate::material_restoration::restore_material(
+            &mut simulation.organisms[0].structure,
+            &stored,
+            Placement {
+                x: 100.0,
+                y: 100.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        )
+        .expect("intact Hydrogen should restore into the physical structure");
+        assert_eq!(restored.len(), 1);
+
+        let after =
+            integer_material_inventory(&simulation).expect("restored inventory is integral");
+        assert_eq!(
+            after, before,
+            "restoring stored physical material must preserve constituent totals"
+        );
+    }
+
+    #[test]
+    fn integer_material_inventory_preserves_state_when_restore_rejects_invalid_connections() {
+        let mut simulation = Simulation::new(7107, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.organisms[0].stored_material.entries.clear();
+
+        let catalog = simulation.environment.catalog.clone();
+        let physical = PhysicalMaterial::realized(
+            structured_carbon_hydrogen(),
+            vec![
+                Placement {
+                    x: 20.0,
+                    y: 20.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 20.838,
+                    y: 20.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("compound should be physically realizable");
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(physical));
+
+        let inventory_before =
+            integer_material_inventory(&simulation).expect("pre-restore inventory is integral");
+        let structure_before = serde_json::to_value(&simulation.organisms[0].structure)
+            .expect("structure snapshot should serialize");
+        let storage_before = simulation.organisms[0].stored_material.clone();
+        let mut malformed = simulation.organisms[0]
+            .stored_material
+            .peek_matching_physical(&structured_carbon_hydrogen())
+            .expect("stored compound should be available for validation");
+        malformed.internal_connections = Some(Vec::new());
+
+        assert!(crate::material_restoration::restore_material(
+            &mut simulation.organisms[0].structure,
+            &malformed,
+            Placement {
+                x: 100.0,
+                y: 100.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        )
+        .is_none());
+
+        assert_eq!(
+            serde_json::to_value(&simulation.organisms[0].structure)
+                .expect("post-rejection structure should serialize"),
+            structure_before
+        );
+        assert_eq!(simulation.organisms[0].stored_material, storage_before);
+        assert_eq!(
+            integer_material_inventory(&simulation).expect("post-rejection inventory is integral"),
+            inventory_before,
+            "rejected physical restoration must not mutate material ownership"
+        );
+    }
+
+    #[test]
+    fn restoration_rejects_connections_that_change_stored_bond_topology_atomically() {
+        let mut simulation = Simulation::new(7108, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.organisms[0].stored_material.entries.clear();
+
+        let catalog = simulation.environment.catalog.clone();
+        let material = Material {
+            parts: vec![
+                ("Carbon".to_string(), 1.0),
+                ("Hydrogen".to_string(), 1.0),
+                ("Sulfur".to_string(), 1.0),
+            ],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
+        let physical = PhysicalMaterial::realized(
+            material.clone(),
+            vec![
+                Placement {
+                    x: 20.0,
+                    y: 20.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 20.838,
+                    y: 20.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 50.0,
+                    y: 50.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("three-part material with one valid internal bond should be realizable");
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(physical));
+
+        let inventory_before =
+            integer_material_inventory(&simulation).expect("pre-restore inventory is integral");
+        let structure_before = serde_json::to_value(&simulation.organisms[0].structure)
+            .expect("structure snapshot should serialize");
+        let storage_before = simulation.organisms[0].stored_material.clone();
+        let mut malformed = simulation.organisms[0]
+            .stored_material
+            .peek_matching_physical(&material)
+            .expect("stored compound should be available for validation");
+        let connection = malformed
+            .internal_connections
+            .as_mut()
+            .and_then(|connections| connections.first_mut())
+            .expect("realized compound should preserve its bond endpoints");
+        // Keep the connection indices valid but redirect the stored bond from
+        // constituents 0-1 to 1-2. Restoration must not trust this altered topology.
+        connection.part_a = 1;
+        connection.part_b = 2;
+
+        assert!(crate::material_restoration::restore_material(
+            &mut simulation.organisms[0].structure,
+            &malformed,
+            Placement {
+                x: 100.0,
+                y: 100.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        )
+        .is_none());
+
+        assert_eq!(
+            serde_json::to_value(&simulation.organisms[0].structure)
+                .expect("post-rejection structure should serialize"),
+            structure_before
+        );
+        assert_eq!(simulation.organisms[0].stored_material, storage_before);
+        assert_eq!(
+            integer_material_inventory(&simulation).expect("post-rejection inventory is integral"),
+            inventory_before,
+            "rejected topology alteration must not mutate material ownership"
+        );
+    }
+
+    #[test]
+    fn restoration_rejects_non_finite_origin_without_mutating_inventory() {
+        let mut simulation = Simulation::new(7109, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.organisms[0].stored_material.entries.clear();
+
+        let catalog = simulation.environment.catalog.clone();
+        let material = Material::free_base("Carbon", 1.0);
+        let physical = PhysicalMaterial::realized(
+            material.clone(),
+            vec![Placement {
+                x: 20.0,
+                y: 20.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("single Carbon should be physically realizable");
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(physical));
+
+        let inventory_before =
+            integer_material_inventory(&simulation).expect("pre-restore inventory is integral");
+        let structure_before = serde_json::to_value(&simulation.organisms[0].structure)
+            .expect("structure snapshot should serialize");
+        let storage_before = simulation.organisms[0].stored_material.clone();
+        let stored = simulation.organisms[0]
+            .stored_material
+            .peek_matching_physical(&material)
+            .expect("stored Carbon should be available for validation");
+
+        assert!(crate::material_restoration::restore_material(
+            &mut simulation.organisms[0].structure,
+            &stored,
+            Placement {
+                x: f64::NAN,
+                y: 100.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        )
+        .is_none());
+
+        assert_eq!(
+            serde_json::to_value(&simulation.organisms[0].structure)
+                .expect("post-rejection structure should serialize"),
+            structure_before
+        );
+        assert_eq!(simulation.organisms[0].stored_material, storage_before);
+        assert_eq!(
+            integer_material_inventory(&simulation).expect("post-rejection inventory is integral"),
+            inventory_before,
+            "rejected non-finite restoration must not mutate material ownership"
+        );
+    }
+
+    #[test]
+    fn integer_material_inventory_conserves_constituents_when_anchor_moves_to_offspring() {
+        let mut simulation = Simulation::new(23, 20.0);
+        assert!(simulation.organisms[0].store_material(Material::free_base("Carbon", 1.0)));
+        let catalog = simulation.environment.catalog.clone();
+        let before =
+            integer_material_inventory(&simulation).expect("initial inventory is integral");
+        let mut ledger = crate::state::EnergyLedger::default();
+
+        let (parent, rng) = (&mut simulation.organisms[0], &mut simulation.rng);
+        assert!(crate::reproduction::begin_reproduction(
+            parent,
+            rng,
+            &catalog,
+            &mut ledger,
+        ));
+
+        let after =
+            integer_material_inventory(&simulation).expect("post-transfer inventory is integral");
+        assert_eq!(
+            after, before,
+            "moving the physical anchor into developing offspring must preserve every constituent"
+        );
+    }
+
+    #[test]
+    fn integer_material_inventory_rejects_unknown_constituents_in_authoritative_holders() {
+        let mut simulation = Simulation::new(7104, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.environment.field.cells[0]
+            .materials
+            .push(Material::free_base("Unobtainium", 1.0));
+
+        let error = integer_material_inventory(&simulation)
+            .expect_err("unknown material identity must fail the independent inventory");
+        assert!(error.contains("unknown resource identity: Unobtainium"));
+    }
+
+    #[test]
+    fn integer_material_inventory_rejects_fractional_constituents_in_authoritative_holders() {
+        let mut simulation = Simulation::new(7105, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.environment.field.cells[0]
+            .materials
+            .push(Material::free_base("Carbon", 1.5));
+
+        let error = integer_material_inventory(&simulation)
+            .expect_err("fractional base constituents must fail the independent inventory");
+        assert!(error.contains("non-integer or invalid amount for Carbon: 1.5"));
     }
 
     #[test]
@@ -88,21 +539,144 @@ mod integration_tests {
     }
 
     #[test]
+    fn breached_organism_material_and_energy_holders_reconcile_over_live_ticks() {
+        let mut s = Simulation::new(7203, 10.0);
+        for cell in &mut s.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        s.world_tone = None;
+        s.world_tone_cycle = None;
+
+        assert!(s.organisms[0].store_material(Material::free_base("Carbon", 3.0)));
+        let catalog = s.environment.catalog.clone();
+        assert!(crate::reproduction::begin_reproduction(
+            &mut s.organisms[0],
+            &mut s.rng,
+            &catalog,
+            &mut s.energy_ledger,
+        ));
+
+        // Seed an internal energy transfer into the already-active construction;
+        // the world-scale holder sum must not change.
+        let parent_energy = s.organisms[0].usable_energy;
+        assert!(parent_energy.is_finite() && parent_energy > 0.0);
+        let developing_energy = parent_energy * 0.25;
+        {
+            let parent = &mut s.organisms[0];
+            parent.usable_energy -= developing_energy;
+            let construction = parent
+                .reproductive_construction
+                .as_mut()
+                .expect("reproductive construction is active");
+            construction.developing_energy = developing_energy;
+            assert!(parent.stored_material.physical_count() > 0);
+            assert!(!construction.developing_structure.units.is_empty());
+
+            // This test starts from an already-breached organism. Establish that
+            // topology before the observed ticks, rather than modeling the BREAK
+            // event itself in this lifecycle regression.
+            parent.structure.bonds.clear();
+            parent.structure_revision = parent.structure_revision.wrapping_add(1);
+            parent.cached_cavity_revision = None;
+            parent.cached_cavity = None;
+        }
+        assert_eq!(s.living_population(), 0, "fixture must begin breached");
+        assert!(s.organisms[0].reproductive_construction.is_some());
+        assert!(s.organisms[0].stored_material.physical_count() > 0);
+
+        // Rebase the fixture's structural/resonant starting stores to the state
+        // at the beginning of this post-death observation window. The parent's
+        // usable energy was only transferred to construction, not created.
+        let structural_baseline =
+            Simulation::structural_energy_held(&s.organisms, &s.decomposing_bodies);
+        let resonant_baseline = crate::reproduction::total_resonant_energy_held(&s.organisms);
+        s.energy_ledger.initial_structural_energy_held = structural_baseline;
+        s.energy_ledger.total_structural_energy_held = structural_baseline;
+        s.energy_ledger.initial_resonant_energy_held = resonant_baseline;
+        s.energy_ledger.total_resonant_energy_held = resonant_baseline;
+        s.energy_ledger.total_usable_energy_held =
+            crate::reproduction::total_usable_energy_held(&s.organisms, &s.decomposing_bodies);
+
+        let material_before =
+            integer_material_inventory(&s).expect("initial material inventory is integral");
+        let construction_before = serde_json::to_value(&s.organisms[0].reproductive_construction)
+            .expect("active reproductive construction should serialize");
+        let initial_energy = s.energy_inventory_snapshot();
+        assert!(
+            initial_energy.is_balanced_without_creation(1e-9),
+            "post-death fixture must start balanced: {:?}",
+            initial_energy.residual()
+        );
+
+        for tick in 1..=3 {
+            s.step();
+
+            assert_eq!(
+                integer_material_inventory(&s).expect("post-death material inventory is integral"),
+                material_before,
+                "ordinary chemistry must conserve constituent ownership through tick {tick}"
+            );
+            assert!(
+                s.energy_inventory_snapshot()
+                    .is_balanced_without_creation(1e-9),
+                "post-death world energy must reconcile through tick {tick}: {:?}",
+                s.energy_inventory_snapshot().residual()
+            );
+            let inventory = s.energy_inventory_snapshot();
+            let expected_usable =
+                crate::reproduction::total_usable_energy_held(&s.organisms, &s.decomposing_bodies);
+            let expected_structural =
+                Simulation::structural_energy_held(&s.organisms, &s.decomposing_bodies);
+            assert!(
+                (inventory.current_usable_energy - expected_usable).abs() <= 1e-9,
+                "usable-energy holders must be counted once through tick {tick}"
+            );
+            assert!(
+                (inventory.current_structural_energy - expected_structural).abs() <= 1e-9,
+                "structural-energy holders must be counted once through tick {tick}"
+            );
+            assert_eq!(
+                serde_json::to_value(&s.organisms[0].reproductive_construction)
+                    .expect("active reproductive construction should serialize"),
+                construction_before,
+                "biological construction must not advance after core breach at tick {tick}"
+            );
+            assert!(
+                s.decomposing_bodies.is_empty(),
+                "the test-only legacy decomposition path must remain inactive"
+            );
+        }
+    }
+
+    #[test]
     fn storage_contains_discrete_independent_material_objects() {
         let mut o = Simulation::create_initial_organism();
+        let before_len = o.stored_material.len();
+        let before_unstructured = o.stored_material.count_unstructured();
+        let before_structured = o.stored_material.count_structured();
+        let before_amount = o.stored_material.total_amount();
+
         assert!(o.store_material(Material::free_base("Carbon", 5.0)));
-        assert_eq!(o.stored_material.len(), 6);
-        assert_eq!(o.stored_material.count_unstructured(), 5);
-        assert_eq!(o.stored_material.count_structured(), 1);
-        assert_eq!(o.stored_material.total_amount(), 8.0);
+
+        // Assert the storage contract relative to the constructor's actual
+        // starting inventory, rather than coupling this test to its seed layout.
+        assert_eq!(o.stored_material.len(), before_len + 1,);
+        assert_eq!(
+            o.stored_material.count_unstructured(),
+            before_unstructured + 5,
+        );
+        assert_eq!(o.stored_material.count_structured(), before_structured,);
+        assert_eq!(o.stored_material.total_amount(), before_amount + 5.0,);
     }
     #[test]
     fn storage_preserves_a_compound_as_one_intact_object() {
         let mut o = Simulation::create_initial_organism();
+        let before_structured = o.stored_material.count_structured();
         let m = structured_carbon_hydrogen();
         assert!(o.store_material(m.clone()));
         assert!(o.stored_material.materials_snapshot().contains(&m));
-        assert_eq!(o.stored_material.count_structured(), 2);
+        assert_eq!(o.stored_material.count_structured(), before_structured + 1,);
     }
     #[test]
     fn accessible_interior_starts_without_synthetic_water() {
@@ -140,6 +714,7 @@ mod integration_tests {
     fn contained_physical_material_becomes_storage_without_an_acquire_action() {
         let mut s = Simulation::new(21, 10.0);
         for cell in &mut s.environment.field.cells {
+            cell.materials.clear();
             cell.physical_materials.clear();
         }
         let organism = s.organisms[0].clone();
@@ -150,7 +725,7 @@ mod integration_tests {
         .expect("initial organism should expose an accessible interior region");
         let region = regions
             .iter()
-            .min_by(|a, b| {
+            .max_by(|a, b| {
                 a.area
                     .partial_cmp(&b.area)
                     .unwrap_or(std::cmp::Ordering::Equal)
@@ -158,7 +733,7 @@ mod integration_tests {
             .expect("initial organism should have an accessible interior region");
         // The topological sample point only proves that the point is inside;
         // it is not guaranteed to contain an entire rigid resource. Find a
-        // placement where the actual Carbon geometry fits, then exercise the
+        // placement where the actual Hydrogen geometry fits, then exercise the
         // production containment path. This keeps the test independent of
         // arbitrary chamber coordinates while still requiring real geometry.
         let (min_x, max_x, min_y, max_y) = region.boundary.iter().fold(
@@ -183,7 +758,7 @@ mod integration_tests {
                     rotation_radians: 0.0,
                 };
                 let physical = PhysicalMaterial::realized(
-                    Material::free_base("Carbon", 1.0),
+                    Material::free_base("Hydrogen", 1.0),
                     vec![candidate],
                     &s.environment.catalog,
                 )
@@ -198,20 +773,51 @@ mod integration_tests {
                 }
             }
         }
-        let anchor = anchor.expect("seed chamber must contain a full Carbon constituent");
+        let anchor = anchor.expect("seed chamber must contain a full Hydrogen constituent");
         let physical = PhysicalMaterial::realized(
-            Material::free_base("Carbon", 1.0),
+            Material::free_base("Hydrogen", 1.0),
             vec![anchor],
             &s.environment.catalog,
         )
         .expect("base resource should have a valid physical realization");
         let before = s.organisms[0].stored_material.total_amount();
         s.environment.field.deposit(anchor.x, anchor.y, physical);
+
+        // An in-flight transformation owns a stable view of storage: acquiring
+        // now could shift a stored-BREAK rollback index or be overwritten by a
+        // prepared COMBINE storage snapshot. The physical source must remain in
+        // the field until the transformation completes.
+        s.organisms[0].active_transformation_id = Some(999);
+        Simulation::transfer_contained_environmental_material(
+            &mut s.organisms[0],
+            &mut s.environment,
+        );
+        assert_eq!(s.organisms[0].stored_material.total_amount(), before);
+        assert_eq!(
+            s.environment
+                .field
+                .cells
+                .iter()
+                .map(|cell| cell.physical_materials.len())
+                .sum::<usize>(),
+            1,
+            "contained material must remain in the field while a transformation is active"
+        );
+
+        s.organisms[0].active_transformation_id = None;
+        let inventory_before =
+            integer_material_inventory(&s).expect("pre-transfer inventory is integral");
         Simulation::transfer_contained_environmental_material(
             &mut s.organisms[0],
             &mut s.environment,
         );
         assert_eq!(s.organisms[0].stored_material.total_amount(), before + 1.0);
+        let inventory_after =
+            integer_material_inventory(&s).expect("post-transfer inventory is integral");
+        assert_eq!(
+            inventory_after, inventory_before,
+            "production containment transfer must preserve constituent totals"
+        );
     }
 
     #[test]
@@ -282,8 +888,11 @@ mod integration_tests {
     #[test]
     fn structural_material_is_not_opened_by_storage() {
         let mut o = Simulation::create_initial_organism();
-        assert!(o.store_material(structured_carbon_hydrogen()));
-        assert_eq!(o.stored_material.count_structured(), 2);
+        let before_structured = o.stored_material.count_structured();
+        let material = structured_carbon_hydrogen();
+        assert!(o.store_material(material.clone()));
+        assert_eq!(o.stored_material.count_structured(), before_structured + 1,);
+        assert!(o.stored_material.materials_snapshot().contains(&material));
     }
 
     fn add_test_break_bond(s: &mut Simulation) {
@@ -431,10 +1040,93 @@ mod integration_tests {
         let mut s = Simulation::new(7, 10.0);
         add_test_break_bond(&mut s);
         s.organisms[0].usable_energy = 100.0;
+        let inventory_before =
+            integer_material_inventory(&s).expect("pre-transformation inventory is integral");
         start_test_break_transformation(&mut s);
         assert!(s.organisms[0].active_transformation_id.is_some());
         assert_eq!(s.organisms[0].stored_material.physical_count(), 0);
+        let inventory_after =
+            integer_material_inventory(&s).expect("active transformation inventory is integral");
+        assert_eq!(
+            inventory_after, inventory_before,
+            "moving stored physical material into an active BREAK transformation must preserve constituents"
+        );
     }
+    #[test]
+    fn energy_inventory_snapshot_recomputes_current_holders_independently_of_ledger_totals() {
+        let mut simulation = Simulation::new(7102, 10.0);
+
+        let expected_usable = simulation
+            .organisms
+            .iter()
+            .map(|organism| {
+                organism.usable_energy
+                    + organism
+                        .reproductive_construction
+                        .as_ref()
+                        .map_or(0.0, |construction| construction.developing_energy)
+            })
+            .sum::<f64>()
+            + simulation
+                .decomposing_bodies
+                .iter()
+                .map(|body| body.energy_budget)
+                .sum::<f64>();
+        let expected_resonant = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.resonant_energy.total_energy().unwrap_or(f64::NAN))
+            .sum::<f64>();
+        let expected_structural = simulation
+            .organisms
+            .iter()
+            .map(|organism| {
+                organism
+                    .structure
+                    .bonds
+                    .iter()
+                    .map(|bond| bond.bond_energy)
+                    .sum::<f64>()
+                    + organism
+                        .reproductive_construction
+                        .as_ref()
+                        .map_or(0.0, |construction| {
+                            construction
+                                .developing_structure
+                                .bonds
+                                .iter()
+                                .map(|bond| bond.bond_energy)
+                                .sum::<f64>()
+                        })
+            })
+            .sum::<f64>()
+            + simulation
+                .decomposing_bodies
+                .iter()
+                .map(|body| {
+                    body.structure
+                        .bonds
+                        .iter()
+                        .map(|bond| bond.bond_energy)
+                        .sum::<f64>()
+                })
+                .sum::<f64>();
+
+        // Poison only cached current totals. The independent inventory must
+        // still describe the live holders, not reproduce these ledger values.
+        simulation.energy_ledger.total_usable_energy_held = -101.0;
+        simulation.energy_ledger.total_resonant_energy_held = -102.0;
+        simulation.energy_ledger.total_structural_energy_held = -103.0;
+
+        let inventory = simulation.energy_inventory_snapshot();
+        assert_eq!(inventory.current_usable_energy, expected_usable);
+        assert_eq!(inventory.current_resonant_energy, expected_resonant);
+        assert_eq!(inventory.current_structural_energy, expected_structural);
+        assert_ne!(inventory.current_usable_energy, -101.0);
+        assert_ne!(inventory.current_resonant_energy, -102.0);
+        assert_ne!(inventory.current_structural_energy, -103.0);
+    }
+
     #[test]
     fn stored_material_break_does_not_credit_unallocated_energy() {
         let mut s = Simulation::new(7, 10.0);
@@ -446,6 +1138,10 @@ mod integration_tests {
         // This test sets a controlled holder balance after construction.
         s.energy_ledger.initial_usable_energy_held = 100.0;
         s.energy_ledger.total_usable_energy_held = 100.0;
+        // This fixture replaces the constructed organism's initial condition;
+        // reset its source counter so the synthetic 100-unit baseline is not
+        // also charged for the constructor's discarded initial reserve.
+        s.energy_ledger.total_external_energy_input = 0.0;
         let candidate = crate::decision_runtime::ActionCandidate {
             action: ActionKind::Break,
             context_key: Some("stored:0:bond:0".into()),
@@ -497,7 +1193,7 @@ mod integration_tests {
             Simulation::structural_energy_held(&s.organisms, &s.decomposing_bodies);
         let inventory = s.energy_inventory_snapshot();
         assert!(
-            inventory.is_balanced(1e-9),
+            inventory.is_balanced_without_creation(1e-9),
             "stored-material BREAK must not create energy: {:?}",
             inventory.residual()
         );

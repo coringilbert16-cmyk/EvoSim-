@@ -17,6 +17,8 @@ pub(crate) enum EnergyReason {
 /// separate from bond-energy release: world tone is not chemical potential.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ExternalEnergySource {
+    /// The explicit one-time energy grant that initializes the simulation's first organism.
+    InitialCondition,
     WorldTone,
 }
 
@@ -78,6 +80,11 @@ pub(crate) struct EnergyAllocation {
 
 impl EnergyAllocation {
     pub(crate) fn balanced(self) -> bool {
+        let residual = self.source_energy
+            - self.usable_delta
+            - self.structural_delta
+            - self.work_expended
+            - self.heat_dissipated;
         self.source_energy.is_finite()
             && self.usable_delta.is_finite()
             && self.structural_delta.is_finite()
@@ -86,13 +93,8 @@ impl EnergyAllocation {
             && self.source_energy >= 0.0
             && self.work_expended >= 0.0
             && self.heat_dissipated >= 0.0
-            && (self.source_energy
-                - self.usable_delta
-                - self.structural_delta
-                - self.work_expended
-                - self.heat_dissipated)
-                .abs()
-                <= EPSILON
+            && residual.is_finite()
+            && (0.0..=EPSILON).contains(&residual)
     }
 }
 
@@ -112,8 +114,12 @@ impl ExternalInputTransaction {
             && self.source_available >= 0.0
             && self.external_input.is_finite()
             && self.external_input >= 0.0
-            && self.external_input <= self.source_available + EPSILON
+            && self.external_input <= self.source_available
             && self.usable_delta >= 0.0
+            && (self.external_input != 0.0
+                || (self.usable_delta == 0.0
+                    && self.work_expended == 0.0
+                    && self.heat_dissipated == 0.0))
             && self.allocation().balanced()
     }
 }
@@ -243,6 +249,17 @@ impl EnergyInventorySnapshot {
                 .residual()
                 .is_some_and(|residual| residual.abs() <= tolerance)
     }
+
+    /// Stronger release-gate oracle: tolerate tiny missing energy from numeric
+    /// rounding, but never accept a positive residual that represents more
+    /// stored/spent energy than the modeled sources supplied.
+    pub(crate) fn is_balanced_without_creation(self, tolerance: f64) -> bool {
+        tolerance.is_finite()
+            && tolerance >= 0.0
+            && self
+                .residual()
+                .is_some_and(|residual| residual <= 0.0 && residual.abs() <= tolerance)
+    }
 }
 
 /// Simulation-wide energy accounting infrastructure.
@@ -284,18 +301,18 @@ impl EnergyLedgerAuthority for EnergyLedger {
         if transaction.source != budget.source
             || !budget.remaining.is_finite()
             || budget.remaining < 0.0
-            || transaction.external_input > budget.remaining + EPSILON
+            || transaction.external_input > budget.remaining
         {
             return false;
         }
         let next_remaining = budget.remaining - transaction.external_input;
-        if !next_remaining.is_finite() || next_remaining < -EPSILON {
+        if !next_remaining.is_finite() || next_remaining < 0.0 {
             return false;
         }
         if !self.settle_external_input(holder, transaction) {
             return false;
         }
-        budget.remaining = next_remaining.max(0.0);
+        budget.remaining = next_remaining;
         true
     }
 
@@ -304,7 +321,12 @@ impl EnergyLedgerAuthority for EnergyLedger {
         holder: &mut f64,
         transaction: ExternalInputTransaction,
     ) -> bool {
-        if !holder.is_finite() || *holder < -EPSILON || !transaction.balanced() {
+        if (transaction.source == ExternalEnergySource::InitialCondition
+            && (self.initial_condition_energy_settled || transaction.external_input <= 0.0))
+            || !holder.is_finite()
+            || *holder < 0.0
+            || !transaction.balanced()
+        {
             return false;
         }
         let next_holder = *holder + transaction.usable_delta;
@@ -320,11 +342,17 @@ impl EnergyLedgerAuthority for EnergyLedger {
         {
             return false;
         }
-        *holder = next_holder.max(0.0);
+        if next_holder < 0.0 {
+            return false;
+        }
+        *holder = next_holder;
         self.total_external_energy_input = next_external;
         self.total_usable_energy_gained = next_gained;
         self.total_work_expended = next_work;
         self.total_heat_dissipated = next_heat;
+        if transaction.source == ExternalEnergySource::InitialCondition {
+            self.initial_condition_energy_settled = true;
+        }
         true
     }
 
@@ -348,29 +376,89 @@ impl EnergyLedgerAuthority for EnergyLedger {
             return false;
         }
         let allocated = resonant_energy_captured + heat_dissipated + escaped_energy;
+        let residual = incident_energy - allocated;
         if !allocated.is_finite()
-            || (incident_energy - allocated).abs() > EPSILON * incident_energy.max(1.0)
+            || !residual.is_finite()
+            || residual < 0.0
+            || residual > EPSILON * incident_energy.max(1.0)
         {
             return false;
         }
         let next_external = self.total_external_energy_input + incident_energy;
-        let next_heat = self.total_heat_dissipated + heat_dissipated;
+        let next_resonant = self.total_resonant_energy_held + resonant_energy_captured;
+        let mut next_heat = self.total_heat_dissipated + heat_dissipated;
         let next_escaped = self.total_world_tone_energy_escaped + escaped_energy;
-        if !next_external.is_finite() || !next_heat.is_finite() || !next_escaped.is_finite() {
+        if !next_external.is_finite()
+            || !next_resonant.is_finite()
+            || !next_heat.is_finite()
+            || !next_escaped.is_finite()
+        {
             return false;
         }
+
+        // Validate the increments that the cumulative f64 counters can
+        // actually represent, not just the ideal per-frame allocations. Adding
+        // a small frame to a large cumulative total can round the source and
+        // sinks in different directions; the aggregate world inventory must
+        // never report more tone energy allocated than actually credited.
+        let actual_incident = next_external - self.total_external_energy_input;
+        let actual_capture = next_resonant - self.total_resonant_energy_held;
+        let actual_escape = next_escaped - self.total_world_tone_energy_escaped;
+        let mut actual_heat = next_heat - self.total_heat_dissipated;
+        let mut cumulative_residual =
+            actual_incident - (actual_capture + actual_heat + actual_escape);
+        if !actual_incident.is_finite()
+            || actual_incident < 0.0
+            || !actual_capture.is_finite()
+            || actual_capture < 0.0
+            || !actual_escape.is_finite()
+            || actual_escape < 0.0
+            || !actual_heat.is_finite()
+            || actual_heat < 0.0
+            || !cumulative_residual.is_finite()
+        {
+            return false;
+        }
+        if cumulative_residual < 0.0 {
+            // The cumulative counters introduced an ulp-scale over-allocation.
+            // Debit only the new frame's heat. If subtraction rounds away, step
+            // down one representable f64; a tiny unallocated remainder is safer
+            // than accepting energy creation.
+            let overrun = -cumulative_residual;
+            if overrun > actual_heat {
+                return false;
+            }
+            let mut corrected_heat = next_heat - overrun;
+            if corrected_heat >= next_heat {
+                if next_heat <= self.total_heat_dissipated {
+                    return false;
+                }
+                corrected_heat = f64::from_bits(next_heat.to_bits() - 1);
+            }
+            if !corrected_heat.is_finite() || corrected_heat < self.total_heat_dissipated {
+                return false;
+            }
+            next_heat = corrected_heat;
+            actual_heat = next_heat - self.total_heat_dissipated;
+            cumulative_residual = actual_incident - (actual_capture + actual_heat + actual_escape);
+            if !actual_heat.is_finite() || actual_heat < 0.0 || cumulative_residual < 0.0 {
+                return false;
+            }
+        }
+
         self.total_external_energy_input = next_external;
+        self.total_resonant_energy_held = next_resonant;
         self.total_heat_dissipated = next_heat;
         self.total_world_tone_energy_escaped = next_escaped;
         true
     }
 
     fn settle_transaction(&mut self, holder: &mut f64, transaction: EnergyTransaction) -> bool {
-        if !holder.is_finite() || *holder < -EPSILON || !transaction.balanced() {
+        if !holder.is_finite() || *holder < 0.0 || !transaction.balanced() {
             return false;
         }
         let next_holder = *holder + transaction.usable_delta;
-        if !next_holder.is_finite() || next_holder < -EPSILON {
+        if !next_holder.is_finite() || next_holder < 0.0 {
             return false;
         }
         let next_released = self.total_potential_energy_released + transaction.potential_released;
@@ -386,7 +474,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         {
             return false;
         }
-        *holder = next_holder.max(0.0);
+        *holder = next_holder;
         self.total_potential_energy_released = next_released;
         self.total_structural_energy_delta = next_structural;
         self.total_usable_energy_gained = next_gained;
@@ -400,18 +488,18 @@ impl EnergyLedgerAuthority for EnergyLedger {
             || amount < 0.0
             || !from.is_finite()
             || !to.is_finite()
-            || *from < -EPSILON
-            || *to < -EPSILON
-            || *from + EPSILON < amount
+            || *from < 0.0
+            || *to < 0.0
+            || *from < amount
         {
             return false;
         }
         let next_from = *from - amount;
         let next_to = *to + amount;
-        if next_from < -EPSILON || !next_to.is_finite() {
+        if next_from < 0.0 || !next_to.is_finite() {
             return false;
         }
-        *from = next_from.max(0.0);
+        *from = next_from;
         *to = next_to;
         true
     }
@@ -420,6 +508,31 @@ impl EnergyLedgerAuthority for EnergyLedger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn strict_world_inventory_oracle_rejects_even_sub_tolerance_energy_creation() {
+        let created = EnergyInventorySnapshot {
+            initial_usable_energy: 0.0,
+            current_usable_energy: 5e-10,
+            initial_resonant_energy: 0.0,
+            current_resonant_energy: 0.0,
+            initial_structural_energy: 0.0,
+            current_structural_energy: 0.0,
+            external_energy_input: 0.0,
+            world_tone_energy_escaped: 0.0,
+            other_energy_released: 0.0,
+            work_expended: 0.0,
+            heat_dissipated: 0.0,
+        };
+        assert!(created.is_balanced(1e-9));
+        assert!(!created.is_balanced_without_creation(1e-9));
+
+        let rounding_loss = EnergyInventorySnapshot {
+            external_energy_input: 5e-10,
+            ..created
+        };
+        assert!(rounding_loss.is_balanced_without_creation(1e-9));
+    }
 
     #[test]
     fn world_inventory_counts_retained_resonance_as_a_distinct_energy_store() {
@@ -445,6 +558,7 @@ mod tests {
         let mut ledger = EnergyLedger::default();
         assert!(ledger.settle_world_tone_paths(10.0, 4.0, 2.0, 4.0));
         assert_eq!(ledger.total_external_energy_input, 10.0);
+        assert_eq!(ledger.total_resonant_energy_held, 4.0);
         assert_eq!(ledger.total_heat_dissipated, 2.0);
         assert_eq!(ledger.total_world_tone_energy_escaped, 4.0);
         assert!(!ledger.settle_world_tone_paths(10.0, 4.0, 2.0, 3.0));
@@ -465,6 +579,131 @@ mod tests {
             heat_dissipated: ledger.total_heat_dissipated,
         };
         assert!(inventory.is_balanced(1e-12));
+    }
+
+    #[test]
+    fn cumulative_world_tone_rounding_is_debited_from_new_heat() {
+        let mut ledger = EnergyLedger {
+            total_external_energy_input: 7223.128207,
+            total_resonant_energy_held: 1501893.525368,
+            total_heat_dissipated: 177.428491,
+            total_world_tone_energy_escaped: 611232.425726,
+            ..EnergyLedger::default()
+        };
+        let before = ledger;
+
+        assert!(ledger.settle_world_tone_paths(80.330104, 17.734988, 17.793927, 44.801189,));
+
+        let actual_incident =
+            ledger.total_external_energy_input - before.total_external_energy_input;
+        let actual_capture = ledger.total_resonant_energy_held - before.total_resonant_energy_held;
+        let actual_heat = ledger.total_heat_dissipated - before.total_heat_dissipated;
+        let actual_escape =
+            ledger.total_world_tone_energy_escaped - before.total_world_tone_energy_escaped;
+        assert!(
+            actual_incident >= actual_capture + actual_heat + actual_escape,
+            "cumulative f64 counters must not allocate more energy than the represented source"
+        );
+        assert!(
+            actual_heat < 17.793927,
+            "rounding correction must be debited from this frame's heat, not hidden by relaxing conservation"
+        );
+    }
+
+    #[test]
+    fn world_tone_cannot_allocate_more_than_incident_energy_within_tolerance() {
+        let mut ledger = EnergyLedger::default();
+        assert!(
+            !ledger.settle_world_tone_paths(1.0, 1.0 + EPSILON * 0.5, 0.0, 0.0),
+            "world-tone allocation must not exceed the incident source"
+        );
+        assert_eq!(ledger.total_external_energy_input, 0.0);
+        assert_eq!(ledger.total_resonant_energy_held, 0.0);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+        assert_eq!(ledger.total_world_tone_energy_escaped, 0.0);
+    }
+
+    #[test]
+    fn zero_incident_world_tone_cannot_create_energy_within_tolerance() {
+        let mut ledger = EnergyLedger::default();
+        assert!(
+            !ledger.settle_world_tone_paths(0.0, 5e-10, 0.0, 0.0),
+            "a zero-energy signal cannot credit a nonzero captured amount just because it is within tolerance"
+        );
+        assert_eq!(ledger.total_external_energy_input, 0.0);
+        assert_eq!(ledger.total_resonant_energy_held, 0.0);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+        assert_eq!(ledger.total_world_tone_energy_escaped, 0.0);
+    }
+
+    #[test]
+    fn world_tone_settlement_rejects_counter_overflow_without_partial_updates() {
+        let mut ledger = EnergyLedger {
+            total_external_energy_input: f64::MAX,
+            total_heat_dissipated: 7.0,
+            total_world_tone_energy_escaped: 3.0,
+            ..EnergyLedger::default()
+        };
+
+        assert!(
+            !ledger.settle_world_tone_paths(f64::MAX, 0.0, 0.0, f64::MAX),
+            "external-input counter overflow must reject the entire settlement"
+        );
+        assert_eq!(ledger.total_external_energy_input, f64::MAX);
+        assert_eq!(ledger.total_heat_dissipated, 7.0);
+        assert_eq!(ledger.total_world_tone_energy_escaped, 3.0);
+
+        let mut heat_overflow = EnergyLedger {
+            total_external_energy_input: 11.0,
+            total_heat_dissipated: f64::MAX,
+            total_world_tone_energy_escaped: 13.0,
+            ..EnergyLedger::default()
+        };
+        assert!(
+            !heat_overflow.settle_world_tone_paths(f64::MAX, 0.0, f64::MAX, 0.0),
+            "heat counter overflow must reject the entire settlement"
+        );
+        assert_eq!(heat_overflow.total_external_energy_input, 11.0);
+        assert_eq!(heat_overflow.total_heat_dissipated, f64::MAX);
+        assert_eq!(heat_overflow.total_world_tone_energy_escaped, 13.0);
+
+        let mut escape_overflow = EnergyLedger {
+            total_external_energy_input: 17.0,
+            total_heat_dissipated: 19.0,
+            total_world_tone_energy_escaped: f64::MAX,
+            ..EnergyLedger::default()
+        };
+        assert!(
+            !escape_overflow.settle_world_tone_paths(f64::MAX, 0.0, 0.0, f64::MAX),
+            "escape counter overflow must reject the entire settlement"
+        );
+        assert_eq!(escape_overflow.total_external_energy_input, 17.0);
+        assert_eq!(escape_overflow.total_heat_dissipated, 19.0);
+        assert_eq!(escape_overflow.total_world_tone_energy_escaped, f64::MAX);
+
+        let mut resonant_overflow = EnergyLedger {
+            total_external_energy_input: 5.0,
+            total_resonant_energy_held: f64::MAX,
+            total_heat_dissipated: 7.0,
+            total_world_tone_energy_escaped: 3.0,
+            ..EnergyLedger::default()
+        };
+        assert!(
+            !resonant_overflow.settle_world_tone_paths(f64::MAX, f64::MAX, 0.0, 0.0),
+            "resonant-holder counter overflow must reject the entire settlement"
+        );
+        assert_eq!(resonant_overflow.total_external_energy_input, 5.0);
+        assert_eq!(resonant_overflow.total_resonant_energy_held, f64::MAX);
+        assert_eq!(resonant_overflow.total_heat_dissipated, 7.0);
+        assert_eq!(resonant_overflow.total_world_tone_energy_escaped, 3.0);
+
+        assert!(
+            !ledger.settle_world_tone_paths(f64::INFINITY, 0.0, 0.0, 0.0),
+            "non-finite incident energy must reject before any ledger mutation"
+        );
+        assert_eq!(ledger.total_external_energy_input, f64::MAX);
+        assert_eq!(ledger.total_heat_dissipated, 7.0);
+        assert_eq!(ledger.total_world_tone_energy_escaped, 3.0);
     }
 
     #[test]
@@ -626,6 +865,35 @@ mod tests {
     }
 
     #[test]
+    fn initial_condition_energy_source_can_only_be_settled_once() {
+        let mut ledger = EnergyLedger::default();
+        let mut holder = 0.0;
+        let initial = ExternalInputTransaction {
+            source: ExternalEnergySource::InitialCondition,
+            source_available: 12.5,
+            external_input: 12.5,
+            usable_delta: 12.5,
+            work_expended: 0.0,
+            heat_dissipated: 0.0,
+        };
+
+        assert!(ledger.settle_external_input(&mut holder, initial));
+        assert_eq!(holder, 12.5);
+        assert_eq!(ledger.total_external_energy_input, 12.5);
+        assert!(ledger.initial_condition_energy_settled);
+
+        assert!(!ledger.settle_external_input(&mut holder, initial));
+        assert_eq!(
+            holder, 12.5,
+            "duplicate initial source must not credit holder"
+        );
+        assert_eq!(
+            ledger.total_external_energy_input, 12.5,
+            "duplicate initial source must not increase source accounting"
+        );
+    }
+
+    #[test]
     fn settling_bond_release_debits_structural_store_without_faking_a_source() {
         let mut ledger = EnergyLedger::default();
         let mut energy = 0.0;
@@ -698,6 +966,67 @@ mod tests {
     }
 
     #[test]
+    fn energy_transaction_cannot_create_energy_within_balance_tolerance() {
+        let mut ledger = EnergyLedger::default();
+        let mut holder = 0.0;
+        let transaction = EnergyTransaction {
+            reason: EnergyReason::Transfer,
+            potential_released: 0.0,
+            usable_delta: EPSILON * 0.5,
+            structural_delta: 0.0,
+            work_expended: 0.0,
+            heat_dissipated: 0.0,
+        };
+
+        assert!(!ledger.settle_transaction(&mut holder, transaction));
+        assert_eq!(holder, 0.0);
+        assert_eq!(ledger.total_potential_energy_released, 0.0);
+        assert_eq!(ledger.total_structural_energy_delta, 0.0);
+        assert_eq!(ledger.total_usable_energy_gained, 0.0);
+    }
+
+    #[test]
+    fn external_input_rejects_negative_holder_even_within_tolerance() {
+        let mut ledger = EnergyLedger::default();
+        let mut holder = -EPSILON * 0.5;
+        let tx = external_input(0.0, 0.0, 0.0, 0.0, 0.0);
+
+        assert!(!ledger.settle_external_input(&mut holder, tx));
+        assert_eq!(holder, -EPSILON * 0.5);
+        assert_eq!(ledger.total_external_energy_input, 0.0);
+        assert_eq!(ledger.total_usable_energy_gained, 0.0);
+    }
+
+    #[test]
+    fn zero_external_input_cannot_credit_holder_within_balance_tolerance() {
+        let mut ledger = EnergyLedger::default();
+        let mut holder = 0.0;
+        let tx = external_input(0.0, 0.0, EPSILON * 0.5, 0.0, 0.0);
+
+        assert!(
+            !ledger.settle_external_input(&mut holder, tx),
+            "zero external input cannot fund a positive usable-energy delta"
+        );
+        assert_eq!(holder, 0.0);
+        assert_eq!(ledger.total_external_energy_input, 0.0);
+        assert_eq!(ledger.total_usable_energy_gained, 0.0);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+    }
+
+    #[test]
+    fn external_input_cannot_overdraw_local_source_allowance_within_tolerance() {
+        let mut ledger = EnergyLedger::default();
+        let mut holder = 0.0;
+        let claim = 5.0 + EPSILON * 0.5;
+        let tx = external_input(5.0, claim, claim, 0.0, 0.0);
+
+        assert!(!ledger.settle_external_input(&mut holder, tx));
+        assert_eq!(holder, 0.0);
+        assert_eq!(ledger.total_external_energy_input, 0.0);
+        assert_eq!(ledger.total_usable_energy_gained, 0.0);
+    }
+
+    #[test]
     fn external_input_cannot_exceed_source_availability() {
         let mut ledger = EnergyLedger::default();
         let mut energy = 1.0;
@@ -740,6 +1069,24 @@ mod tests {
     }
 
     #[test]
+    fn source_budget_rejects_sub_tolerance_overspend_atomically() {
+        let mut ledger = EnergyLedger::default();
+        let mut budget = EnergySourceBudget::new(ExternalEnergySource::WorldTone, 5.0).unwrap();
+        let mut holder = 1.0;
+        let claim = 5.0 + EPSILON * 0.5;
+        let tx = external_input(claim, claim, claim, 0.0, 0.0);
+
+        assert!(
+            !ledger.settle_external_input_from_budget(&mut holder, &mut budget, tx),
+            "source budget must not authorize external input beyond its exact remaining amount"
+        );
+        assert_eq!(holder, 1.0);
+        assert_eq!(budget.remaining, 5.0);
+        assert_eq!(ledger.total_external_energy_input, 0.0);
+        assert_eq!(ledger.total_usable_energy_gained, 0.0);
+    }
+
+    #[test]
     fn source_budget_rejects_claim_above_remaining_budget_atomically() {
         let mut ledger = EnergyLedger::default();
         let mut budget = EnergySourceBudget::new(ExternalEnergySource::WorldTone, 5.0).unwrap();
@@ -768,6 +1115,35 @@ mod tests {
         assert_eq!(ledger.total_usable_energy_gained, 0.0);
         assert_eq!(ledger.total_work_expended, 0.0);
         assert_eq!(ledger.total_heat_dissipated, 0.0);
+    }
+
+    #[test]
+    fn energy_transaction_rejects_negative_holder_even_within_tolerance() {
+        let mut ledger = EnergyLedger::default();
+        let mut holder = -EPSILON * 0.5;
+        let transaction =
+            EnergyTransaction::expenditure(EnergyReason::Transfer, 0.0, 0.0, 0.0).unwrap();
+
+        assert!(!ledger.settle_transaction(&mut holder, transaction));
+        assert_eq!(holder, -EPSILON * 0.5);
+        assert_eq!(ledger.total_potential_energy_released, 0.0);
+        assert_eq!(ledger.total_structural_energy_delta, 0.0);
+        assert_eq!(ledger.total_usable_energy_gained, 0.0);
+    }
+
+    #[test]
+    fn transfer_rejects_sub_tolerance_overdraw_without_creating_energy() {
+        let mut ledger = EnergyLedger::default();
+        let mut from = 1.0;
+        let mut to = 0.0;
+        let total_before = from + to;
+        assert!(
+            !ledger.transfer(&mut from, &mut to, 1.0 + EPSILON * 0.5),
+            "a transfer must not spend more than its source holder contains"
+        );
+        assert_eq!(from + to, total_before);
+        assert_eq!(from, 1.0);
+        assert_eq!(to, 0.0);
     }
 
     #[test]

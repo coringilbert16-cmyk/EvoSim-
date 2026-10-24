@@ -6,7 +6,9 @@
 use crate::combine_runtime::DevelopmentalContext;
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::material_storage::MaterialStorage;
-use crate::organism_viability::{validate_realized_organism, OrganismViabilityRequirements};
+use crate::organism_viability::{
+    validate_realized_organism_for_core, OrganismViabilityRequirements,
+};
 use crate::resources::Material;
 use crate::state::{EnergyLedger, Environment, Organism, Position, ReproductiveConstruction};
 use crate::structure::OrganismStructure;
@@ -64,8 +66,29 @@ fn parent_child_position(
                     rotation_radians: parent_part.rotation_radians,
                 },
             };
-            if crate::material_geometry::placed_forms_overlap(&parent_part_form, &anchor_part, 0.0)
-            {
+            // `placed_forms_overlap` intentionally includes boundary touch,
+            // so it cannot by itself distinguish a valid attachment from
+            // interpenetrating matter. Require actual boundary contact with
+            // the intended parent part and reject penetration against every
+            // realized parent part before using this as the construction anchor.
+            let touches_target = crate::material_geometry::placed_forms_boundary_contact(
+                &parent_part_form,
+                &anchor_part,
+                0.0,
+            );
+            let penetrates_parent = body.parts.iter().any(|part| {
+                let existing = crate::material_geometry::PlacedMaterialPart {
+                    part_index: part.unit_index,
+                    form: part.form.clone(),
+                    placement: crate::structure::Placement {
+                        x: part.x,
+                        y: part.y,
+                        rotation_radians: part.rotation_radians,
+                    },
+                };
+                crate::material_geometry::placed_forms_penetrate(&existing, &anchor_part, 0.0)
+            });
+            if touches_target && !penetrates_parent {
                 return Some(candidate);
             }
         }
@@ -152,6 +175,7 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         active_movement: None,
         reproductive_construction: None,
         structure: construction.developing_structure.clone(),
+        genome_core_identity_established: false,
         structure_revision: 0,
         position_revision: 0,
         cached_cavity_revision: None,
@@ -434,9 +458,17 @@ fn birth_ready_with_reference(
     catalog: &[crate::resources::BaseResource],
     seed_reference: Option<(f64, f64)>,
 ) -> bool {
-    let Ok(cavity) =
-        crate::cavity::analyze_genome_cavity(&construction.developing_structure, catalog)
+    let Some(anchor_id) = construction
+        .developing_structure
+        .physical_id(construction.anchor_unit_index)
     else {
+        return false;
+    };
+    let Ok(cavity) = crate::cavity::analyze_genome_cavity_for_core(
+        &construction.developing_structure,
+        catalog,
+        &[anchor_id],
+    ) else {
         return false;
     };
     let Some(cavity) = cavity else {
@@ -448,10 +480,11 @@ fn birth_ready_with_reference(
     {
         return false;
     }
-    if validate_realized_organism(
+    if validate_realized_organism_for_core(
         &construction.developing_structure,
         catalog,
         OrganismViabilityRequirements::default(),
+        &[anchor_id],
     )
     .is_err()
     {
@@ -488,6 +521,7 @@ fn anchor_structure(
         maintenance_debt: 0.0,
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
         stored_material: anchor_storage,
+        genome_core_identity_established: false,
         active_transformation_id: None,
         active_movement: None,
         reproductive_construction: None,
@@ -542,7 +576,10 @@ pub(crate) fn begin_reproduction(
     catalog: &[crate::resources::BaseResource],
     _ledger: &mut EnergyLedger,
 ) -> bool {
-    if parent.reproductive_construction.is_some() {
+    // Construction consumes a parent-held physical anchor. Do not mutate
+    // that holder while a multi-tick BREAK/COMBINE transaction owns an escrow
+    // index or a prepared storage snapshot for the same organism.
+    if parent.active_transformation_id.is_some() || parent.reproductive_construction.is_some() {
         return false;
     }
     let mut child_genome = parent.genome.clone();
@@ -614,6 +651,50 @@ pub(crate) fn begin_reproduction(
     false
 }
 
+fn commit_candidate_attachment(
+    parent_structure: &OrganismStructure,
+    parent_storage: &mut MaterialStorage,
+    construction: &mut ReproductiveConstruction,
+    environment: &Environment,
+    ledger: &mut EnergyLedger,
+    parent_body: &crate::organism_geometry::OrganismBodyGeometry,
+    child: Organism,
+    candidate_ledger: EnergyLedger,
+    transferred: Option<usize>,
+    before_units: usize,
+    seed_reference: Option<(f64, f64)>,
+) -> ConstructionStatus {
+    // Validate before consuming a parent-owned material entry or publishing
+    // the candidate ledger/graph. A rejected placement must not partially
+    // commit the attachment transaction.
+    if !child_intersects_realized_parent_region(&child.structure, parent_body)
+        || !parent_child_in_contact(parent_structure, &child.structure)
+    {
+        return ConstructionStatus::Detached;
+    }
+
+    let candidate_units = child.structure.units.len();
+    if let Some(parent_index) = transferred {
+        if parent_storage.take_physical_at(parent_index).is_none() {
+            return ConstructionStatus::Waiting;
+        }
+    }
+    *ledger = candidate_ledger;
+    construction.committed_material = child.stored_material;
+    construction.developing_structure = child.structure;
+    construction.needs_space = false;
+    construction.developing_energy = child.usable_energy;
+    construction.developing_stress = child.stress;
+
+    if birth_ready_with_reference(construction, &environment.catalog, seed_reference) {
+        ConstructionStatus::Ready
+    } else if candidate_units > before_units {
+        ConstructionStatus::Progress
+    } else {
+        ConstructionStatus::Waiting
+    }
+}
+
 pub(crate) fn advance_construction(
     parent_structure: &OrganismStructure,
     parent_storage: &mut MaterialStorage,
@@ -625,15 +706,42 @@ pub(crate) fn advance_construction(
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
     seed_reference: Option<(f64, f64)>,
 ) -> (ConstructionStatus, Option<f64>) {
+    // Validate the persisted developing holder before any new parent-funded
+    // reserve transfer. A non-finite construction must not drain its parent on
+    // every subsequent tick while it remains attached for diagnosis.
     let reserve_energy = construction.child_genome.reproductive_energy_allocation;
-    if reserve_energy.is_finite() && reserve_energy > construction.developing_energy {
+    // Validate all persisted scalar accounting state before reserve transfer,
+    // maintenance settlement, or candidate construction can mutate it.
+    // Comparisons against NaN otherwise silently skip the reserve branch and
+    // allow invalid energy/debt to flow into the live construction path.
+    if !construction.developing_stress.is_finite()
+        || !crate::state::INITIAL_STRESS_THRESHOLD.is_finite()
+        || !construction.developing_energy.is_finite()
+        || construction.developing_energy < 0.0
+        || !construction.developing_maintenance_debt.is_finite()
+        || construction.developing_maintenance_debt < 0.0
+        || !reserve_energy.is_finite()
+        || reserve_energy < 0.0
+        || !parent_energy.is_finite()
+        || *parent_energy < 0.0
+    {
+        return (ConstructionStatus::Dead, None);
+    }
+
+    if reserve_energy > construction.developing_energy {
         let transfer =
             (reserve_energy - construction.developing_energy).min(parent_energy.max(0.0));
-        if transfer > 0.0 {
-            let _ = ledger.transfer(parent_energy, &mut construction.developing_energy, transfer);
+        if transfer > 0.0
+            && !ledger.transfer(parent_energy, &mut construction.developing_energy, transfer)
+        {
+            // A rejected reserve transfer must not let construction, maintenance,
+            // or structural chemistry advance without the intended energy move.
+            return (ConstructionStatus::Waiting, None);
         }
     }
 
+    // Rebuild after the reserve transfer so the child snapshot contains the
+    // newly transferred energy rather than overwriting it with a stale balance.
     let mut child = developing_organism(construction);
     child.apply_maintenance(&environment.catalog, ledger);
     let dead = child.validate_stress_state();
@@ -715,31 +823,20 @@ pub(crate) fn advance_construction(
         }
     };
 
-    if let Some(parent_index) = transferred {
-        if parent_storage.take_physical_at(parent_index).is_none() {
-            return (ConstructionStatus::Waiting, None);
-        }
-    }
-    *ledger = candidate_ledger;
-    construction.committed_material = child.stored_material;
-    construction.developing_structure = child.structure;
-    construction.needs_space = false;
-    construction.developing_energy = child.usable_energy;
-    construction.developing_stress = child.stress;
-    if !child_intersects_realized_parent_region(&construction.developing_structure, parent_body) {
-        return (ConstructionStatus::Detached, None);
-    }
-    if !parent_child_in_contact(parent_structure, &construction.developing_structure) {
-        return (ConstructionStatus::Detached, None);
-    }
-    if birth_ready_with_reference(construction, &environment.catalog, seed_reference) {
-        return (ConstructionStatus::Ready, None);
-    }
-    if construction.developing_structure.units.len() > before_units {
-        (ConstructionStatus::Progress, None)
-    } else {
-        (ConstructionStatus::Waiting, None)
-    }
+    let status = commit_candidate_attachment(
+        parent_structure,
+        parent_storage,
+        construction,
+        environment,
+        ledger,
+        parent_body,
+        child,
+        candidate_ledger,
+        transferred,
+        before_units,
+        seed_reference,
+    );
+    (status, None)
 }
 
 pub(crate) fn finish_reproduction(
@@ -751,7 +848,10 @@ pub(crate) fn finish_reproduction(
 ) -> Option<Organism> {
     let construction = parent.reproductive_construction.take()?;
     let ready = birth_ready_with_reference(&construction, catalog, seed_reference);
-    if !ready && construction.developing_structure.units.is_empty() {
+    // Construction may only produce an offspring after the physical genome is
+    // validated and ready. Detached/dead/non-ready states are not a successful
+    // division transaction; retain the parent-owned construction unchanged.
+    if !ready {
         parent.reproductive_construction = Some(construction);
         return None;
     }
@@ -772,6 +872,7 @@ pub(crate) fn finish_reproduction(
         maintenance_debt: construction.developing_maintenance_debt,
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
         stored_material: construction.committed_material,
+        genome_core_identity_established: false,
         active_transformation_id: None,
         active_movement: None,
         reproductive_construction: None,
@@ -794,6 +895,161 @@ mod tests {
     use crate::genome::initial_genome;
     use crate::resources::{default_catalog, Material};
     use crate::state::Simulation;
+    use rand::SeedableRng;
+
+    #[test]
+    fn reproduction_cannot_mutate_storage_while_transformation_is_active() {
+        use rand::RngCore;
+
+        let mut simulation = Simulation::new(941, 10.0);
+        let mut parent = simulation.organisms.remove(0);
+        parent.stored_material.entries.clear();
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
+        parent.active_transformation_id = Some(73);
+
+        let original_entries = parent.stored_material.entries.clone();
+        let original_energy = parent.usable_energy;
+        let original_genome = serde_json::to_value(&parent.genome).unwrap();
+        let mut rng = ChaCha8Rng::seed_from_u64(0xC0FFEE);
+        let mut expected_rng = rng.clone();
+        let mut ledger = EnergyLedger::default();
+        let original_ledger = ledger;
+
+        assert!(!begin_reproduction(
+            &mut parent,
+            &mut rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+
+        assert_eq!(parent.stored_material.entries, original_entries);
+        assert_eq!(parent.usable_energy, original_energy);
+        assert_eq!(
+            serde_json::to_value(&parent.genome).unwrap(),
+            original_genome
+        );
+        assert!(parent.reproductive_construction.is_none());
+        assert_eq!(parent.active_transformation_id, Some(73));
+        assert_eq!(ledger, original_ledger);
+        assert_eq!(rng.next_u64(), expected_rng.next_u64());
+    }
+
+    #[test]
+    fn invalid_developing_holder_does_not_draw_parent_reserve_again() {
+        use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
+        use crate::resources::default_catalog;
+        use crate::state::Environment;
+
+        let catalog = default_catalog();
+        let environment = Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog: catalog.clone(),
+            field: ActiveMaterialField::new(1000.0, 1000.0, DEFAULT_CELL_SIZE),
+        };
+        let mut construction = ReproductiveConstruction {
+            committed_material: MaterialStorage::default(),
+            developing_structure: OrganismStructure::new(),
+            child_genome: initial_genome(),
+            developmental_origin: Position { x: 0.0, y: 0.0 },
+            developmental_orientation_radians: 0.0,
+            developing_stress: f64::NAN,
+            anchor_unit_index: 0,
+            developing_energy: 0.0,
+            developing_maintenance_debt: 0.0,
+            needs_space: false,
+        };
+        let parent_structure = OrganismStructure::new();
+        let mut parent_storage = MaterialStorage::default();
+        let mut ledger = EnergyLedger::default();
+        let ledger_before = ledger;
+        let mut parent_energy = 25.0;
+        let mut rng = ChaCha8Rng::seed_from_u64(1);
+        let body = crate::organism_geometry::OrganismBodyGeometry {
+            parts: Vec::new(),
+            min_x: 0.0,
+            max_x: 0.0,
+            min_y: 0.0,
+            max_y: 0.0,
+        };
+
+        let (status, stress) = advance_construction(
+            &parent_structure,
+            &mut parent_storage,
+            &mut construction,
+            &environment,
+            &mut ledger,
+            &mut parent_energy,
+            &mut rng,
+            &body,
+            None,
+        );
+
+        assert_eq!(status, ConstructionStatus::Dead);
+        assert_eq!(stress, None);
+        assert_eq!(parent_energy, 25.0);
+        assert_eq!(ledger, ledger_before);
+        assert!(parent_storage.is_empty());
+        assert!(construction.developing_stress.is_nan());
+    }
+
+    #[test]
+    fn invalid_developing_energy_does_not_draw_parent_reserve_or_mutate_ledger() {
+        use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
+        use crate::state::Environment;
+
+        let catalog = default_catalog();
+        let environment = Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog: catalog.clone(),
+            field: ActiveMaterialField::new(1000.0, 1000.0, DEFAULT_CELL_SIZE),
+        };
+        let mut construction = ReproductiveConstruction {
+            committed_material: MaterialStorage::default(),
+            developing_structure: OrganismStructure::new(),
+            child_genome: initial_genome(),
+            developmental_origin: Position { x: 0.0, y: 0.0 },
+            developmental_orientation_radians: 0.0,
+            developing_stress: 0.0,
+            anchor_unit_index: 0,
+            developing_energy: f64::NAN,
+            developing_maintenance_debt: 0.0,
+            needs_space: false,
+        };
+        let parent_structure = OrganismStructure::new();
+        let mut parent_storage = MaterialStorage::default();
+        let mut ledger = EnergyLedger::default();
+        let ledger_before = ledger;
+        let mut parent_energy = 25.0;
+        let mut rng = ChaCha8Rng::seed_from_u64(2);
+        let body = crate::organism_geometry::OrganismBodyGeometry {
+            parts: Vec::new(),
+            min_x: 0.0,
+            max_x: 0.0,
+            min_y: 0.0,
+            max_y: 0.0,
+        };
+
+        let status = advance_construction(
+            &parent_structure,
+            &mut parent_storage,
+            &mut construction,
+            &environment,
+            &mut ledger,
+            &mut parent_energy,
+            &mut rng,
+            &body,
+            None,
+        )
+        .0;
+
+        assert_eq!(status, ConstructionStatus::Dead);
+        assert_eq!(parent_energy, 25.0);
+        assert_eq!(ledger, ledger_before);
+        assert!(parent_storage.is_empty());
+        assert!(construction.developing_energy.is_nan());
+    }
 
     #[test]
     fn developmental_scale_requires_eighty_percent_linear_target() {
@@ -849,6 +1105,51 @@ mod tests {
             &construction.developing_structure,
             &body,
         ));
+
+        let anchor_unit = &construction.developing_structure.units[construction.anchor_unit_index];
+        let anchor_part = crate::material_geometry::PlacedMaterialPart {
+            part_index: construction.anchor_unit_index,
+            form: anchor_unit
+                .shape(&simulation.environment.catalog)
+                .expect("anchor has a catalog shape")
+                .form
+                .clone(),
+            placement: anchor_unit.placement,
+        };
+        assert!(
+            body.parts.iter().any(|part| {
+                let parent_part = crate::material_geometry::PlacedMaterialPart {
+                    part_index: part.unit_index,
+                    form: part.form.clone(),
+                    placement: crate::structure::Placement {
+                        x: part.x,
+                        y: part.y,
+                        rotation_radians: part.rotation_radians,
+                    },
+                };
+                crate::material_geometry::placed_forms_boundary_contact(
+                    &parent_part,
+                    &anchor_part,
+                    0.0,
+                )
+            }),
+            "anchor must contact the parent at a physical boundary"
+        );
+        assert!(
+            body.parts.iter().all(|part| {
+                let parent_part = crate::material_geometry::PlacedMaterialPart {
+                    part_index: part.unit_index,
+                    form: part.form.clone(),
+                    placement: crate::structure::Placement {
+                        x: part.x,
+                        y: part.y,
+                        rotation_radians: part.rotation_radians,
+                    },
+                };
+                !crate::material_geometry::placed_forms_penetrate(&parent_part, &anchor_part, 0.0)
+            }),
+            "anchor must not interpenetrate any parent constituent"
+        );
     }
 
     #[test]
@@ -880,6 +1181,158 @@ mod tests {
         );
         assert!(construction.developing_energy > 0.0);
         assert!(parent.usable_energy < before_parent_energy);
+    }
+
+    #[test]
+    fn invalid_parent_energy_fails_closed_without_mutating_construction() {
+        let mut simulation = Simulation::new(912, 20.0);
+        let mut parent = simulation.organisms.remove(0);
+        let mut ledger = EnergyLedger::default();
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
+        assert!(begin_reproduction(
+            &mut parent,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+        let mut construction = parent.reproductive_construction.take().unwrap();
+        let original_energy = construction.developing_energy;
+        let original_structure = format!("{:?}", construction.developing_structure);
+        let original_stress = construction.developing_stress;
+        let original_debt = construction.developing_maintenance_debt;
+        let original_storage = parent.stored_material.clone();
+        // Invalid parent energy must fail closed before any reserve transfer or
+        // construction mutation. The persisted developing state remains attached
+        // so the invalid holder can be diagnosed rather than partially advanced.
+        parent.usable_energy = f64::INFINITY;
+        let environment = simulation.environment.clone();
+        let body = parent_body_geometry(&parent, &environment.catalog).unwrap();
+
+        let (status, _) = advance_construction(
+            &parent.structure,
+            &mut parent.stored_material,
+            &mut construction,
+            &environment,
+            &mut ledger,
+            &mut parent.usable_energy,
+            &mut simulation.rng,
+            &body,
+            None,
+        );
+
+        assert_eq!(status, ConstructionStatus::Dead);
+        assert_eq!(parent.usable_energy, f64::INFINITY);
+        assert_eq!(construction.developing_energy, original_energy);
+        assert_eq!(
+            format!("{:?}", construction.developing_structure),
+            original_structure
+        );
+        assert_eq!(construction.developing_stress, original_stress);
+        assert_eq!(construction.developing_maintenance_debt, original_debt);
+        assert_eq!(parent.stored_material.entries, original_storage.entries);
+    }
+
+    #[test]
+    fn rejected_parent_material_attachment_keeps_source_and_developing_graph_atomic() {
+        use crate::material_storage::StoredMaterial;
+        use crate::physical_material::PhysicalMaterial;
+        use crate::structure::{Placement, StructuralUnit};
+
+        let catalog = default_catalog();
+        let mut original_unit = StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(original_unit.realize_default_geometry(&catalog));
+        let mut original_structure = OrganismStructure::new();
+        original_structure.add_unit(original_unit);
+
+        let mut construction = ReproductiveConstruction {
+            committed_material: MaterialStorage::default(),
+            developing_structure: original_structure.clone(),
+            child_genome: initial_genome(),
+            developmental_origin: Position { x: 0.0, y: 0.0 },
+            developmental_orientation_radians: 0.0,
+            developing_stress: 0.0,
+            anchor_unit_index: 0,
+            developing_energy: 10.0,
+            developing_maintenance_debt: 0.0,
+            needs_space: false,
+        };
+        let source = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 100.0,
+                y: 100.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("parent-held source must be a valid physical constituent");
+        let mut parent_storage = MaterialStorage::default();
+        parent_storage
+            .entries
+            .push(StoredMaterial::Physical(source));
+        let stored_before = parent_storage.entries.clone();
+
+        let mut child = developing_organism(&construction);
+        let mut candidate_unit = StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 2.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(candidate_unit.realize_default_geometry(&catalog));
+        child.structure.add_unit(candidate_unit);
+
+        let parent_structure = OrganismStructure::new();
+        let rejecting_body = crate::organism_geometry::OrganismBodyGeometry {
+            parts: Vec::new(),
+            min_x: 0.0,
+            max_x: 0.0,
+            min_y: 0.0,
+            max_y: 0.0,
+        };
+        let environment = Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog: catalog.clone(),
+            field: crate::environment::ActiveMaterialField::new(
+                1000.0,
+                1000.0,
+                crate::environment::DEFAULT_CELL_SIZE,
+            ),
+        };
+        let mut ledger = EnergyLedger::default();
+        let ledger_before = ledger;
+        let mut candidate_ledger = ledger;
+        candidate_ledger.total_heat_dissipated = 9.0;
+        let units_before = construction.developing_structure.units.clone();
+
+        let status = commit_candidate_attachment(
+            &parent_structure,
+            &mut parent_storage,
+            &mut construction,
+            &environment,
+            &mut ledger,
+            &rejecting_body,
+            child,
+            candidate_ledger,
+            Some(0),
+            units_before.len(),
+            None,
+        );
+
+        assert_eq!(status, ConstructionStatus::Detached);
+        assert_eq!(parent_storage.entries, stored_before);
+        assert_eq!(construction.developing_structure.units, units_before);
+        assert_eq!(ledger, ledger_before);
     }
 
     #[test]
@@ -984,6 +1437,9 @@ mod tests {
         let mut parent = simulation.organisms.remove(0);
         let mut ledger = EnergyLedger::default();
 
+        // Isolate this inventory-exhaustion scenario from the constructor's
+        // evolving seed stock: this test supplies exactly one available object.
+        parent.stored_material.entries.clear();
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
             &mut parent,
@@ -1083,6 +1539,43 @@ mod tests {
         );
         assert!(construction.developing_structure.units.len() > before_units);
         assert!(construction.developing_structure.bonds.len() > before_bonds);
+    }
+
+    #[test]
+    fn non_ready_construction_cannot_create_an_offspring() {
+        let mut simulation = Simulation::new(41, 20.0);
+        let mut parent = simulation.organisms.remove(0);
+        let mut ledger = EnergyLedger::default();
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
+        assert!(begin_reproduction(
+            &mut parent,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+        let original_units = parent
+            .reproductive_construction
+            .as_ref()
+            .unwrap()
+            .developing_structure
+            .units
+            .len();
+        assert!(original_units > 0);
+
+        let child = finish_reproduction(
+            &mut parent,
+            "should-not-exist".to_owned(),
+            &simulation.environment.catalog,
+            &mut ledger,
+            None,
+        );
+
+        assert!(child.is_none());
+        let retained = parent
+            .reproductive_construction
+            .as_ref()
+            .expect("non-ready construction remains parent-owned");
+        assert_eq!(retained.developing_structure.units.len(), original_units);
     }
 
     #[test]

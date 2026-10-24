@@ -83,6 +83,13 @@ pub(crate) struct ActiveTransformation {
     pub(crate) stored_material: Option<crate::physical_material::PhysicalMaterial>,
     #[serde(default)]
     pub(crate) stored_bond: Option<crate::physical_material::PhysicalMaterialBond>,
+    /// Original owner-storage index captured when a stored BREAK reserves its source.
+    /// Kept separately from mutable decision metadata so rollback preserves exact order.
+    #[serde(default)]
+    pub(crate) stored_source_index: Option<usize>,
+    /// Original environmental cell/material indices captured when BREAK reserves a source.
+    #[serde(default)]
+    pub(crate) environmental_source_location: Option<(usize, usize)>,
     /// True when the transformed physical material came directly from the
     /// environment rather than organism storage.
     #[serde(default)]
@@ -109,10 +116,21 @@ pub(crate) struct ActiveTransformation {
     pub(crate) prepared_stress: Option<f64>,
     #[serde(default)]
     pub(crate) prepared_ledger: Option<EnergyLedger>,
+    /// Exact ledger state before staged COMBINE settlement. Absent on legacy persisted transactions.
+    #[serde(default)]
+    pub(crate) prepared_ledger_before: Option<EnergyLedger>,
+    /// Exact usable-energy value before staged COMBINE settlement; absent on legacy persisted transactions.
+    #[serde(default)]
+    pub(crate) prepared_usable_energy_before: Option<f64>,
     /// Environmental material removed when COMBINE begins, held until resolve.
     #[serde(default)]
     pub(crate) combine_environmental_source:
         Option<(usize, crate::physical_material::PhysicalMaterial)>,
+    /// Original index within the environmental cell, for exact COMBINE rollback.
+    /// Optional for compatibility with persisted transformations created before
+    /// indexed environmental-source escrow was recorded.
+    #[serde(default)]
+    pub(crate) combine_environmental_source_index: Option<usize>,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ReproductiveConstruction {
@@ -142,7 +160,7 @@ pub(crate) struct ReproductiveConstruction {
     #[serde(default)]
     pub(crate) needs_space: bool,
 }
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct EnergyLedger {
     /// Explicit non-structural energy sources; stored bond energy release is
     /// represented by the structural-store delta instead.
@@ -153,6 +171,9 @@ pub(crate) struct EnergyLedger {
     /// Energy received from explicit external sources, distinct from bond release.
     #[serde(default)]
     pub(crate) total_external_energy_input: f64,
+    /// Guards the simulation's one-time initial-condition energy grant.
+    #[serde(default)]
+    pub(crate) initial_condition_energy_settled: bool,
     /// Cumulative world-tone energy that was incident on exposed material but
     /// not absorbed. This is throughput telemetry, not stored energy or an
     /// inventory term; the remainder still needs explicit propagation/escape handling.
@@ -221,6 +242,11 @@ pub(crate) struct Organism {
     pub(crate) stress_threshold: f64,
     pub(crate) stored_material: MaterialStorage,
     pub(crate) structure: OrganismStructure,
+    /// Once this organism has established a genome cavity, an empty set of
+    /// surviving boundary IDs means its core is gone, not that another cavity
+    /// in a shared aggregate may silently become its genome.
+    #[serde(default)]
+    pub(crate) genome_core_identity_established: bool,
     pub(crate) active_transformation_id: Option<u64>,
     #[serde(default)]
     pub(crate) reproductive_construction: Option<ReproductiveConstruction>,
@@ -272,12 +298,28 @@ impl Organism {
         catalog: &[BaseResource],
     ) -> Option<&crate::cavity::GenomeCavity> {
         if self.cached_cavity_revision != Some(self.structure_revision) {
-            let cavity = crate::cavity::analyze_genome_cavity(&self.structure, catalog)
-                .ok()
-                .flatten()
-                .filter(|cavity| cavity.qualifies());
-            // Keep the stable IDs synchronized with the currently realized
-            // cavity, but never use them to determine which topology is the genome.
+            let known_core_ids = self.structure.genome_constituent_ids().to_vec();
+            // Existing serialized organisms with core IDs predate the explicit
+            // flag, so infer an established identity from those IDs as well.
+            let identity_established =
+                self.genome_core_identity_established || !known_core_ids.is_empty();
+            let cavity = if !identity_established {
+                crate::cavity::analyze_genome_cavity(&self.structure, catalog)
+            } else if known_core_ids.is_empty() {
+                Ok(None)
+            } else {
+                crate::cavity::analyze_genome_cavity_for_core(
+                    &self.structure,
+                    catalog,
+                    &known_core_ids,
+                )
+            }
+            .ok()
+            .flatten()
+            .filter(|cavity| cavity.qualifies());
+            // Once a physical cavity establishes this organism's core, keep
+            // analyzing that core. A breached core must not silently switch to
+            // another qualifying cavity in the same aggregate.
             let ids = cavity
                 .as_ref()
                 .map(|cavity| {
@@ -287,8 +329,9 @@ impl Organism {
                         .filter_map(|&index| self.structure.physical_id(index))
                         .collect::<Vec<_>>()
                 })
-                .unwrap_or_default();
+                .unwrap_or(known_core_ids);
             self.structure.set_genome_constituent_ids(ids);
+            self.genome_core_identity_established |= cavity.is_some() || identity_established;
             self.cached_cavity = Some(cavity);
             self.cached_cavity_revision = Some(self.structure_revision);
         }
@@ -496,3 +539,36 @@ pub(crate) struct Simulation {
 }
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
 pub(crate) const DESIRABILITY_MAX: f64 = 1.0;
+
+#[cfg(test)]
+mod genome_core_identity_tests {
+    use super::*;
+
+    #[test]
+    fn established_primary_core_does_not_fall_back_to_an_additional_core() {
+        let mut simulation = Simulation::new(31, 20.0);
+        let catalog = simulation.environment.catalog.clone();
+        let organism = &mut simulation.organisms[0];
+        let surviving_id = organism
+            .structure
+            .physical_id(0)
+            .expect("initial organism has a physical constituent");
+
+        organism.structure.clear_genome_constituent_ids();
+        organism
+            .structure
+            .add_genome_constituent_group([surviving_id]);
+        organism.genome_core_identity_established = true;
+        organism.mark_structure_changed();
+
+        assert!(
+            organism.genome_cavity_cached_ref(&catalog).is_none(),
+            "loss of the primary core must not silently select another core"
+        );
+        assert_eq!(
+            organism.structure.additional_genome_constituent_groups(),
+            &[vec![surviving_id]],
+            "cache refresh must not erase the independent additional core"
+        );
+    }
+}

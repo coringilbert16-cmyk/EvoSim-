@@ -3328,6 +3328,20 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     target_body_indices: &[usize],
 ) -> Option<(ParallelExposureWidths, Vec<ParallelRayInteractionPath>)> {
+    parallel_exposure_with_exact_intersections(
+        toward_source,
+        bodies,
+        target_body_indices,
+        bodies.len() <= EXACT_INTERSECTION_BODY_LIMIT,
+    )
+}
+
+fn parallel_exposure_with_exact_intersections(
+    toward_source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+    exact_intersections: bool,
+) -> Option<(ParallelExposureWidths, Vec<ParallelRayInteractionPath>)> {
     use crate::capillary_geometry::FluidBoundaryPiece;
     use crate::resources::Form;
 
@@ -3551,7 +3565,7 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
         let right = segments[*right].lane_start.min(segments[*right].lane_end);
         left.total_cmp(&right)
     });
-    if bodies.len() <= EXACT_INTERSECTION_BODY_LIMIT {
+    if exact_intersections {
         for (position, &left_index) in segment_order.iter().enumerate() {
             let a = segments[left_index];
             let a_max = a.lane_start.max(a.lane_end);
@@ -3930,7 +3944,8 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
 #[cfg(test)]
 mod parallel_mixed_boundary_visibility_tests {
     use super::{
-        parallel_exposure_with_paths_for_targets, parallel_projected_widths_by_body_for_targets,
+        parallel_exposure_with_exact_intersections, parallel_exposure_with_paths_for_targets,
+        parallel_projected_widths_by_body_for_targets, ParallelRayInteractionPath,
     };
     use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
     use crate::resources::Form;
@@ -3987,6 +4002,56 @@ mod parallel_mixed_boundary_visibility_tests {
                 (first_hit_widths[body_index] - direct_width).abs() < 1e-7,
                 "path first-hit width must equal direct exposure for body {body_index}"
             );
+        }
+    }
+
+    #[test]
+    fn fast_lane_sweep_bounds_small_world_visibility_error_to_lane_step() {
+        let bodies = [
+            rectangle(4.0, 0.0, 2.0, 2.0),
+            circle(6.0, 0.35, 0.9),
+            rectangle(8.0, -0.2, 1.5, 1.4),
+        ];
+        let targets = [0, 1, 2];
+        let (exact_widths, exact_paths) =
+            parallel_exposure_with_exact_intersections((1.0, 0.0), &bodies, &targets, true)
+                .expect("exact small-world oracle should produce valid paths");
+        let (fast_widths, fast_paths) =
+            parallel_exposure_with_exact_intersections((1.0, 0.0), &bodies, &targets, false)
+                .expect("fast lane sweep should produce valid paths");
+
+        assert_eq!(exact_widths.len(), fast_widths.len());
+        for (body_index, (exact, fast)) in exact_widths.iter().zip(&fast_widths).enumerate() {
+            let exact_width: f64 = exact.iter().map(|(_, width)| *width).sum();
+            let fast_width: f64 = fast.iter().map(|(_, width)| *width).sum();
+            // The dense-world path intentionally samples at 0.25 lane
+            // intervals. Narrow visibility slivers below that resolution may
+            // move between receivers, but the absolute per-body error must stay
+            // within one lane step; the source-width budget is checked below.
+            assert!(
+                (exact_width - fast_width).abs() <= 0.25,
+                "fast lane sweep exceeds one lane step of projected-exposure error for body {body_index}: exact={exact_width}, fast={fast_width}"
+            );
+        }
+
+        let total_path_width = |paths: &[ParallelRayInteractionPath]| {
+            paths.iter().map(|path| path.projected_width).sum::<f64>()
+        };
+        assert!(
+            (total_path_width(&exact_paths) - total_path_width(&fast_paths)).abs() <= 0.02,
+            "fast lane sweep must conserve approximately the same source-width budget as the exact oracle"
+        );
+        for paths in [&exact_paths, &fast_paths] {
+            assert!(paths.iter().all(|path| !path.hits.is_empty()));
+            assert!(paths.iter().all(|path| {
+                path.hits.iter().all(|(body, unit)| {
+                    *body < bodies.len()
+                        && bodies[*body]
+                            .parts
+                            .iter()
+                            .any(|part| part.unit_index == *unit)
+                })
+            }));
         }
     }
 

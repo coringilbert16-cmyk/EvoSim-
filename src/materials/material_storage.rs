@@ -110,11 +110,85 @@ impl MaterialStorage {
             .is_ok()
     }
 
+    /// Validate and normalize already owner-relative stored objects as one batch.
+    /// Unlike environmental acquisition, preserve each object's owner-relative
+    /// anchor instead of deriving one from its intrinsic placement.
+    pub(crate) fn prepare_physical_batch(
+        instances: Vec<PhysicalMaterial>,
+    ) -> Option<Vec<StoredMaterial>> {
+        let mut prepared = Vec::with_capacity(instances.len());
+        for instance in instances {
+            if !instance.is_realized()
+                || instance.material.parts.is_empty()
+                || !instance.material.is_valid()
+                || !Self::is_discrete(&instance.material)
+            {
+                return None;
+            }
+            let instance = instance.into_intrinsic_frame()?;
+            prepared.push(StoredMaterial::Physical(instance));
+        }
+        Some(prepared)
+    }
+
+    /// Validate and convert a batch of environmental physical objects into
+    /// storage entries without mutating the holder. The caller can then remove
+    /// the source objects and commit these prepared entries as one transfer.
+    pub(crate) fn prepare_physical_batch_at_owner_anchor(
+        instances: Vec<PhysicalMaterial>,
+        anchor: Placement,
+    ) -> Option<Vec<StoredMaterial>> {
+        if !anchor.x.is_finite() || !anchor.y.is_finite() || !anchor.rotation_radians.is_finite() {
+            return None;
+        }
+        let mut prepared = Vec::with_capacity(instances.len());
+        for instance in instances {
+            let origin = instance
+                .placements
+                .as_ref()
+                .and_then(|placements| placements.first())
+                .copied()?;
+            if !instance.is_realized()
+                || instance.material.parts.is_empty()
+                || !instance.material.is_valid()
+                || !Self::is_discrete(&instance.material)
+            {
+                return None;
+            }
+            let owner_relative_origin = Placement {
+                x: origin.x - anchor.x,
+                y: origin.y - anchor.y,
+                rotation_radians: origin.rotation_radians,
+            };
+            if !owner_relative_origin.x.is_finite()
+                || !owner_relative_origin.y.is_finite()
+                || !owner_relative_origin.rotation_radians.is_finite()
+            {
+                return None;
+            }
+            let mut instance = instance.into_intrinsic_frame()?;
+            instance.owner_relative_origin = Some(owner_relative_origin);
+            prepared.push(StoredMaterial::Physical(instance));
+        }
+        Some(prepared)
+    }
+
+    /// Commit entries previously validated by the batch preparation method.
+    /// Reversing before front insertion preserves the old per-item insertion
+    /// ordering while avoiding a clone of the existing inventory.
+    pub(crate) fn commit_prepared_physical_batch(&mut self, mut prepared: Vec<StoredMaterial>) {
+        prepared.reverse();
+        self.entries.splice(0..0, prepared);
+    }
+
     pub(crate) fn try_store_physical_instance_at_owner_anchor(
         &mut self,
         instance: PhysicalMaterial,
         anchor: Placement,
     ) -> Result<(), PhysicalMaterial> {
+        if !anchor.x.is_finite() || !anchor.y.is_finite() || !anchor.rotation_radians.is_finite() {
+            return Err(instance);
+        }
         let Some(origin) = instance
             .placements
             .as_ref()
@@ -130,14 +204,21 @@ impl MaterialStorage {
         {
             return Err(instance);
         }
-        let mut instance = instance
-            .into_intrinsic_frame()
-            .expect("validated physical material must have an intrinsic origin");
-        instance.owner_relative_origin = Some(Placement {
+        let owner_relative_origin = Placement {
             x: origin.x - anchor.x,
             y: origin.y - anchor.y,
             rotation_radians: origin.rotation_radians,
-        });
+        };
+        if !owner_relative_origin.x.is_finite()
+            || !owner_relative_origin.y.is_finite()
+            || !owner_relative_origin.rotation_radians.is_finite()
+        {
+            return Err(instance);
+        }
+        let mut instance = instance
+            .into_intrinsic_frame()
+            .expect("validated physical material must have an intrinsic origin");
+        instance.owner_relative_origin = Some(owner_relative_origin);
         self.entries.insert(0, StoredMaterial::Physical(instance));
         Ok(())
     }
@@ -482,6 +563,124 @@ mod tests {
     }
 
     #[test]
+    fn prepared_physical_batch_preserves_owner_offsets_and_rejects_fractional_members() {
+        use crate::physical_material::PhysicalMaterial;
+
+        let catalog = catalog();
+        let anchor = Placement {
+            x: 20.0,
+            y: 30.0,
+            rotation_radians: 0.0,
+        };
+        let first = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 21.0,
+                y: 32.0,
+                rotation_radians: 0.25,
+            }],
+            &catalog,
+        )
+        .expect("first object should be realized");
+        let second = PhysicalMaterial::realized(
+            Material::free_base("Nitrogen", 1.0),
+            vec![Placement {
+                x: 24.0,
+                y: 35.0,
+                rotation_radians: 0.5,
+            }],
+            &catalog,
+        )
+        .expect("second object should be realized");
+
+        let prepared =
+            MaterialStorage::prepare_physical_batch_at_owner_anchor(vec![first, second], anchor)
+                .expect("valid batch should prepare atomically");
+        let mut storage = MaterialStorage::default();
+        storage.commit_prepared_physical_batch(prepared);
+        assert_eq!(storage.physical_count(), 2);
+        let offsets: Vec<_> = storage
+            .entries
+            .iter()
+            .map(|entry| match entry {
+                StoredMaterial::Physical(instance) => instance.owner_relative_origin.unwrap(),
+            })
+            .collect();
+        assert_eq!(offsets[0].x, 4.0);
+        assert_eq!(offsets[0].y, 5.0);
+        assert_eq!(offsets[1].x, 1.0);
+        assert_eq!(offsets[1].y, 2.0);
+
+        // Persisted/corrupt input can carry a realized-looking fractional
+        // rigid constituent even though the normal constructor rejects it.
+        // Batch preflight must reject this malformed later member atomically.
+        let fractional = PhysicalMaterial {
+            material: Material::free_base("Carbon", 1.5),
+            placements: Some(vec![Placement {
+                x: 1.0,
+                y: 2.0,
+                rotation_radians: 0.0,
+            }]),
+            internal_connections: Some(Vec::new()),
+            owner_relative_origin: None,
+            realized_shapes: None,
+        };
+        let valid = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("test object should be realized");
+        assert!(MaterialStorage::prepare_physical_batch_at_owner_anchor(
+            vec![valid, fractional],
+            anchor
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn owner_anchor_storage_rejects_non_finite_anchor_without_mutating_inventory() {
+        use crate::physical_material::PhysicalMaterial;
+
+        let instance = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 1.0,
+                y: 2.0,
+                rotation_radians: 0.25,
+            }],
+            &catalog(),
+        )
+        .expect("valid physical material should realize");
+        let invalid_anchor = Placement {
+            x: f64::NAN,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        assert!(
+            MaterialStorage::prepare_physical_batch_at_owner_anchor(
+                vec![instance.clone()],
+                invalid_anchor,
+            )
+            .is_none(),
+            "batch acquisition must reject a non-finite owner anchor"
+        );
+
+        let mut storage = MaterialStorage::default();
+        assert!(
+            storage
+                .try_store_physical_instance_at_owner_anchor(instance, invalid_anchor)
+                .is_err(),
+            "single-object acquisition must return the original source on rejection"
+        );
+        assert!(storage.is_empty());
+    }
+
+    #[test]
     fn fractional_material_is_rejected_at_storage_boundary() {
         let mut storage = MaterialStorage::default();
         assert!(!storage.store_physical(
@@ -494,5 +693,36 @@ mod tests {
             &catalog(),
         ));
         assert!(storage.is_empty());
+    }
+
+    #[test]
+    fn stored_split_batch_preflight_preserves_owner_relative_anchors() {
+        use crate::physical_material::PhysicalMaterial;
+
+        let mut source = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 8.0,
+                y: 12.0,
+                rotation_radians: 0.4,
+            }],
+            &catalog(),
+        )
+        .expect("split piece should be realized");
+        source.owner_relative_origin = Some(Placement {
+            x: 3.0,
+            y: -2.0,
+            rotation_radians: 0.7,
+        });
+
+        let prepared = MaterialStorage::prepare_physical_batch(vec![source])
+            .expect("valid stored split should prepare");
+        let StoredMaterial::Physical(piece) = &prepared[0];
+        let placement = piece.placements.as_ref().unwrap()[0];
+        assert!(placement.x.abs() < 1e-12 && placement.y.abs() < 1e-12);
+        let anchor = piece.owner_relative_origin.unwrap();
+        assert_eq!(anchor.x, 3.0);
+        assert_eq!(anchor.y, -2.0);
+        assert_eq!(anchor.rotation_radians, 0.7);
     }
 }

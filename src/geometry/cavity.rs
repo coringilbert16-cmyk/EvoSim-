@@ -1,7 +1,7 @@
 //! Physical genome-cavity qualification from realized rigid geometry.
 
 use crate::resources::{BaseResource, Form};
-use crate::structure::{OrganismStructure, Placement};
+use crate::structure::{OrganismStructure, PhysicalConstituentId, Placement};
 use std::collections::HashSet;
 use std::f64::consts::TAU;
 
@@ -124,10 +124,42 @@ pub fn analyze_genome_cavity(
     // the cavity boundary against later structural evolution.
     let mut best = None;
     for component in structure.connected_components() {
-        let candidate = analyze_genome_cavity_in_indices(structure, catalog, &component)?;
+        let candidate = analyze_genome_cavity_in_indices(structure, catalog, &component, None)?;
+        if candidate
+            .as_ref()
+            .is_some_and(|candidate| cavity_is_better(candidate, best.as_ref(), None))
+        {
+            best = candidate;
+        }
+    }
+    Ok(best)
+}
+
+/// Analyze a qualifying cavity associated with a previously identified physical
+/// genome core. The core IDs identify the cavity being tracked; the actual
+/// boundary and topology are still re-derived from the current geometry.
+pub fn analyze_genome_cavity_for_core(
+    structure: &OrganismStructure,
+    catalog: &[BaseResource],
+    core_ids: &[PhysicalConstituentId],
+) -> Result<Option<GenomeCavity>, String> {
+    let core_indices: HashSet<usize> = core_ids
+        .iter()
+        .filter_map(|id| structure.unit_index(*id))
+        .collect();
+    if core_indices.is_empty() {
+        return Ok(None);
+    }
+
+    let mut best = None;
+    for component in structure.connected_components() {
+        if !component.iter().any(|index| core_indices.contains(index)) {
+            continue;
+        }
+        let candidate =
+            analyze_genome_cavity_in_indices(structure, catalog, &component, Some(&core_indices))?;
         if candidate.as_ref().is_some_and(|candidate| {
-            best.as_ref()
-                .is_none_or(|current: &GenomeCavity| candidate.area > current.area)
+            cavity_is_better(candidate, best.as_ref(), Some(&core_indices))
         }) {
             best = candidate;
         }
@@ -135,10 +167,37 @@ pub fn analyze_genome_cavity(
     Ok(best)
 }
 
+fn cavity_is_better(
+    candidate: &GenomeCavity,
+    current: Option<&GenomeCavity>,
+    required_core_indices: Option<&HashSet<usize>>,
+) -> bool {
+    let Some(current) = current else {
+        return true;
+    };
+    if let Some(core_indices) = required_core_indices {
+        let candidate_overlap = candidate
+            .boundary_units
+            .iter()
+            .filter(|index| core_indices.contains(index))
+            .count();
+        let current_overlap = current
+            .boundary_units
+            .iter()
+            .filter(|index| core_indices.contains(index))
+            .count();
+        if candidate_overlap != current_overlap {
+            return candidate_overlap > current_overlap;
+        }
+    }
+    candidate.area > current.area
+}
+
 fn analyze_genome_cavity_in_indices(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
     candidate_indices: &[usize],
+    required_core_indices: Option<&HashSet<usize>>,
 ) -> Result<Option<GenomeCavity>, String> {
     let minimum_area = minimum_genome_cavity_area(catalog)?;
     let component_set: HashSet<usize> = candidate_indices.iter().copied().collect();
@@ -153,6 +212,12 @@ fn analyze_genome_cavity_in_indices(
                 .boundary_units
                 .iter()
                 .all(|index| component_set.contains(index))
+            || required_core_indices.is_some_and(|core_indices| {
+                !region
+                    .boundary_units
+                    .iter()
+                    .any(|index| core_indices.contains(index))
+            })
         {
             continue;
         }
@@ -197,10 +262,7 @@ fn analyze_genome_cavity_in_indices(
             boundary_segments,
         };
 
-        if best
-            .as_ref()
-            .map_or(true, |current: &GenomeCavity| candidate.area > current.area)
-        {
+        if cavity_is_better(&candidate, best.as_ref(), required_core_indices) {
             best = Some(candidate);
         }
     }
@@ -327,6 +389,45 @@ mod tests {
             .expect("realized structure must contain a sealed qualifying cavity");
         assert!(cavity.qualifies(), "cavity={cavity:?}");
         assert!(!cavity.boundary_units.is_empty());
+    }
+
+    #[test]
+    fn core_specific_cavity_ranking_prefers_more_surviving_core_ids() {
+        let core_ids = HashSet::from([1_usize, 2, 3]);
+        let larger_unrelated_cavity = GenomeCavity {
+            area: 100.0,
+            boundary_units: vec![1],
+            minimum_area: 1.0,
+            boundary_segments: Vec::new(),
+        };
+        let smaller_matching_cavity = GenomeCavity {
+            area: 50.0,
+            boundary_units: vec![1, 2],
+            minimum_area: 1.0,
+            boundary_segments: Vec::new(),
+        };
+        assert!(cavity_is_better(
+            &smaller_matching_cavity,
+            Some(&larger_unrelated_cavity),
+            Some(&core_ids),
+        ));
+        assert!(!cavity_is_better(
+            &larger_unrelated_cavity,
+            Some(&smaller_matching_cavity),
+            Some(&core_ids),
+        ));
+    }
+
+    #[test]
+    fn core_specific_cavity_lookup_does_not_fall_back_for_unknown_core() {
+        let catalog = default_catalog();
+        let structure = OrganismStructure::new();
+        let unknown_core = [PhysicalConstituentId(u64::MAX)];
+        assert!(
+            analyze_genome_cavity_for_core(&structure, &catalog, &unknown_core)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
