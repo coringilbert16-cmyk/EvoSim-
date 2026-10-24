@@ -1514,7 +1514,7 @@ mod tests {
         let parent_id = aggregate.physical_id(parent).unwrap();
         let child_a_id = aggregate.physical_id(child_a).unwrap();
         let child_b_id = aggregate.physical_id(child_b).unwrap();
-        aggregate.add_additional_genome_constituent_group([child_a_id, child_b_id]);
+        aggregate.add_genome_constituent_group([child_a_id, child_b_id]);
         let before_units = aggregate.units.clone();
         let before_groups = aggregate.additional_genome_constituent_groups.clone();
 
