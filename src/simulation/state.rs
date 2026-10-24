@@ -167,6 +167,16 @@ pub(crate) struct ReproductiveConstruction {
     #[serde(default)]
     pub(crate) needs_space: bool,
 }
+
+impl ReproductiveConstruction {
+    /// True when the developing graph is only a transient view of constituents
+    /// already owned by the parent's physical aggregate. Consumers use this
+    /// shared predicate to avoid counting, moving, or emitting the same body twice.
+    pub(crate) fn is_aggregate_owned_by(&self, parent: &OrganismStructure) -> bool {
+        parent.contains_exact_physical_subgraph(&self.developing_structure)
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct EnergyLedger {
     /// Explicit non-structural energy sources; stored bond energy release is
