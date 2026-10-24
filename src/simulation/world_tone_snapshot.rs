@@ -459,12 +459,6 @@ impl WorldToneOccluderSnapshot {
                         .total_energy()
                         .zip(before_energy)
                         .map(|(after, before)| after - before);
-                    #[cfg(test)]
-                    eprintln!(
-                        "tone-debug response={response_energy} damping={damping_heat} retained_budget={retained_budget} deposit_ok={deposit_ok} before={before_energy:?} after={:?} delta={stored_delta:?} components={}",
-                        candidate.total_energy(),
-                        candidate.components.len()
-                    );
                     if deposit_ok
                         && stored_delta.is_some_and(|stored| {
                             stored.is_finite() && stored >= 0.0 && stored <= response_energy
