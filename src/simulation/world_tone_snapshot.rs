@@ -85,7 +85,11 @@ impl WorldToneOccluderSnapshot {
             let Some(construction) = &organism.reproductive_construction else {
                 continue;
             };
-            if !construction.developing_structure.units.is_empty() {
+            if !construction.developing_structure.units.is_empty()
+                && !organism
+                    .structure
+                    .contains_exact_physical_subgraph(&construction.developing_structure)
+            {
                 body_properties.push(structure_material_properties(
                     &construction.developing_structure,
                     catalog,
