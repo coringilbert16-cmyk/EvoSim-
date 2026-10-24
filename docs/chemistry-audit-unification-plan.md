@@ -4746,3 +4746,13 @@ Implementation commit `498ad0beea704fa66e352eff24706245370764fa` adds `subgraph_
 - Exact-head workflow for `498ad0beea704fa66e352eff24706245370764fa` reached the formatting gate and failed there; all later gates were skipped. The log artifact was not yet retrievable through the GitHub API, so the exact rustfmt diff was not confirmed.
 - A focused style-only follow-up at implementation commit `6e7891436ad4891d02a566a31fe106b4b04794e5` simplifies the single-expression endpoint closure in the new regression. This is a targeted correction, not proof that formatting now passes.
 - The exact-head workflow for `6e7891436ad4891d02a566a31fe106b4b04794e5` had not appeared at the time of this note. Continue to treat the regression and all downstream validation as pending until that exact SHA's workflow reports results.
+
+
+### Exact-head follow-up — 2026-10-24, commit `6e7891436ad4891d02a566a31fe106b4b04794e5`
+
+The exact-head workflow is now running as [Actions run 40112967740](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40112967740).
+
+- The workflow advanced beyond formatting into the later focused gates, so the earlier formatting stop is no longer the current blocker.
+- The required canonical 12N seed/realization gate reported failure. This is the already documented baseline failure; preserve the canonical seed requirement and compare the final full-suite identities before judging regressions.
+- The Rust test suite is still running; Clippy has not yet reported a result. Do not call the workflow successful or the graph regression verified until the exact-head run completes and its named results are checked.
+- Audit of the next migration remains unchanged: `ReproductiveConstruction` still owns a separate `developing_structure`, `committed_material`, and `developing_energy`; movement and world-tone still consume those separately. The approved next production change must remove that duplicate ownership across the runtime and accounting consumers atomically, not merely change the state fields.
