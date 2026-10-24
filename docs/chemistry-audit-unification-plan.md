@@ -4720,3 +4720,8 @@ On implementation branch commit `84c12db2767c900c357a6ff72086c28ff0e14c4d`, adde
 ### Validation follow-up for graph split test
 
 The first workflow for the test commit (`40111605233`) reported formatting failure, so the test's chained assertions and partition call were reformatted in implementation commit `9e28435bb8cab7bd0f52b34d996f98b73c1af031`. The workflow for that exact latest head is `40111661803` and was still in progress at this note. The earlier failed formatting result belongs to the prior commit and must not be attributed to the formatted head; likewise, do not call the new test passing until the latest workflow completes.
+
+
+### Latest formatting follow-up — 2026-10-24
+
+After the formatted-head workflow still flagged `Check formatting`, the partition call was adjusted once more to match the repository's existing chained-call style in implementation commit `fd985bdfdf8e7b486b87eb9e24422de6d56fc2a7`. At handoff refresh, GitHub had not yet returned a workflow run associated with this latest SHA. Treat the formatting state and test result as pending; the earlier workflow failures are for earlier SHAs and cannot establish the status of `fd985bdfdf8e7b486b87eb9e24422de6d56fc2a7`.
