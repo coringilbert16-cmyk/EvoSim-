@@ -1063,9 +1063,7 @@ impl PhysicalConstituentGraph {
             unit.physical_id.0 != 0
                 && seen.insert(unit.physical_id)
                 && self.unit_index(unit.physical_id).is_some_and(|index| {
-                    let aggregate_unit = &self.units[index];
-                    aggregate_unit.material == unit.material
-                        && aggregate_unit.placement == unit.placement
+                    self.units[index] == *unit
                 })
         })
     }
