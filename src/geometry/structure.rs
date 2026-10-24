@@ -1606,6 +1606,7 @@ mod tests {
             bond_energy: 1.0,
         });
         let before_units = aggregate.units.clone();
+        let before_bonds = aggregate.bonds.clone();
         let before_groups = aggregate.additional_genome_constituent_groups.clone();
 
         let external = aggregate
@@ -1615,6 +1616,7 @@ mod tests {
         assert!(external.additional_genome_constituent_groups.is_empty());
         assert!(external.bonds.is_empty());
         assert_eq!(aggregate.units, before_units);
+        assert_eq!(aggregate.bonds, before_bonds);
         assert_eq!(
             aggregate.additional_genome_constituent_groups,
             before_groups
