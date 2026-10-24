@@ -286,18 +286,18 @@ impl EnergyLedgerAuthority for EnergyLedger {
         if transaction.source != budget.source
             || !budget.remaining.is_finite()
             || budget.remaining < 0.0
-            || transaction.external_input > budget.remaining + EPSILON
+            || transaction.external_input > budget.remaining
         {
             return false;
         }
         let next_remaining = budget.remaining - transaction.external_input;
-        if !next_remaining.is_finite() || next_remaining < -EPSILON {
+        if !next_remaining.is_finite() || next_remaining < 0.0 {
             return false;
         }
         if !self.settle_external_input(holder, transaction) {
             return false;
         }
-        budget.remaining = next_remaining.max(0.0);
+        budget.remaining = next_remaining;
         true
     }
 
@@ -867,6 +867,24 @@ mod tests {
         assert_eq!(second_holder, 1.0);
         assert_eq!(budget.remaining, 1.0);
         assert_eq!(ledger.total_external_energy_input, 4.0);
+    }
+
+    #[test]
+    fn source_budget_rejects_sub_tolerance_overspend_atomically() {
+        let mut ledger = EnergyLedger::default();
+        let mut budget = EnergySourceBudget::new(ExternalEnergySource::WorldTone, 5.0).unwrap();
+        let mut holder = 1.0;
+        let claim = 5.0 + EPSILON * 0.5;
+        let tx = external_input(claim, claim, claim, 0.0, 0.0);
+
+        assert!(
+            !ledger.settle_external_input_from_budget(&mut holder, &mut budget, tx),
+            "source budget must not authorize external input beyond its exact remaining amount"
+        );
+        assert_eq!(holder, 1.0);
+        assert_eq!(budget.remaining, 5.0);
+        assert_eq!(ledger.total_external_energy_input, 0.0);
+        assert_eq!(ledger.total_usable_energy_gained, 0.0);
     }
 
     #[test]
