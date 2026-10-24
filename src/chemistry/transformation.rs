@@ -1627,36 +1627,13 @@ mod tests {
         use crate::structure::Placement;
 
         let (mut organism, mut environment, _) = resonance_break_test_organism();
-        // Keep the canonical genome cavity intact and add a second, fully
-        // bonded physical structure at a distant offset. Its enclosed region
-        // is ordinary accessible interior, not the protected primary genome.
-        let mut second_structure = organism.structure.clone();
-        for unit in &mut second_structure.units {
-            unit.placement.x += 20.0;
-            unit.placement.y += 20.0;
-        }
-        second_structure.clear_genome_constituent_ids();
-        second_structure.clear_additional_genome_constituent_groups();
-        organism
-            .structure
-            .append_graph_remapping_ids(&second_structure)
-            .expect("second physical structure should merge without ID aliasing");
-
-        let accessible_regions = crate::interior_geometry::find_accessible_interior_regions(
-            &organism.structure,
-            &environment.catalog,
-        )
-        .expect("the two-structure fixture should have valid enclosure geometry");
-        assert!(
-            accessible_regions
-                .iter()
-                .any(|region| region.contains_point(20.0, 20.0)),
-            "the secondary structure must expose its center as accessible interior"
-        );
-
+        // ID exhaustion must be rejected before candidate validation or any
+        // environmental source removal. Use a real bonded source and a
+        // syntactically valid context key without coupling this guard test to
+        // the separate accessible-interior candidate-generation path.
         let source = PhysicalMaterial::realized(
             Material {
-                parts: vec![("Hydrogen".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
                 internal_bonds: vec![InternalBond {
                     part_a: 0,
                     part_b: 1,
@@ -1664,13 +1641,13 @@ mod tests {
             },
             vec![
                 Placement {
-                    x: 19.5,
-                    y: 20.0,
+                    x: 0.0,
+                    y: 0.0,
                     rotation_radians: 0.0,
                 },
                 Placement {
-                    x: 20.5,
-                    y: 20.0,
+                    x: 0.838,
+                    y: 0.0,
                     rotation_radians: 0.0,
                 },
             ],
@@ -1679,78 +1656,17 @@ mod tests {
         .expect("bonded environmental source should be physically realizable");
         let cell_index = environment
             .field
-            .index_for_position(20.0, 20.0)
+            .index_for_position(0.0, 0.0)
             .expect("source origin must be in the field");
-        let body = crate::organism_geometry::OrganismBodyGeometry::from_structure(
-            &organism.structure,
-            &environment.catalog,
-        )
-        .expect("both bonded structures should contribute to organism bounds");
-        assert!(
-            environment
-                .field
-                .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y)
-                .contains(&cell_index),
-            "the source cell must be in the organism's candidate-cell bounds"
-        );
-        let connections = source
-            .internal_connections
-            .as_ref()
-            .expect("bonded source must retain its physical connection");
-        let mut hypothetical = organism.structure.clone();
-        let indices = crate::material_restoration::restore_material(
-            &mut hypothetical,
-            &source,
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-            &environment.catalog,
-        )
-        .expect("the source should restore for endpoint eligibility checks");
-        assert_eq!(
-            source.placements.as_ref().map(Vec::len),
-            Some(source.material.parts.len()),
-            "the environmental source must retain one placement per constituent"
-        );
-        assert!(
-            connections.iter().any(|connection| {
-                let Some(&a_index) = indices.get(connection.part_a) else {
-                    return false;
-                };
-                let Some(&b_index) = indices.get(connection.part_b) else {
-                    return false;
-                };
-                let Some(a) = connection
-                    .endpoint_a
-                    .world_point(&hypothetical.units[a_index], &environment.catalog)
-                else {
-                    return false;
-                };
-                let Some(b) = connection
-                    .endpoint_b
-                    .world_point(&hypothetical.units[b_index], &environment.catalog)
-                else {
-                    return false;
-                };
-                accessible_regions.iter().any(|region| {
-                    region.contains_point(a.x, a.y) || region.contains_point(b.x, b.y)
-                })
-            }),
-            "at least one complete physical bond must have an endpoint inside accessible interior"
-        );
         environment.field.cells[cell_index]
             .physical_materials
             .push(source);
-        let candidate = environmental_break_candidates(&organism, &environment)
-            .into_iter()
-            .next()
-            .expect("fixture must expose an accessible environmental BREAK candidate");
-        assert_eq!(
-            parse_environmental_break_context_key(candidate.context_key.as_deref().unwrap()),
-            Some((cell_index, 0, 0))
-        );
+        let candidate = ActionCandidate {
+            action: ActionKind::Break,
+            context_key: Some(format!(
+                "environment:cell:{cell_index}:material:0:bond:0"
+            )),
+        };
         let materials_before = environment.field.cells[cell_index]
             .physical_materials
             .clone();
