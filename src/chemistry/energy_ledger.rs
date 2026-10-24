@@ -116,6 +116,10 @@ impl ExternalInputTransaction {
             && self.external_input >= 0.0
             && self.external_input <= self.source_available + EPSILON
             && self.usable_delta >= 0.0
+            && (self.external_input != 0.0
+                || (self.usable_delta == 0.0
+                    && self.work_expended == 0.0
+                    && self.heat_dissipated == 0.0))
             && self.allocation().balanced()
     }
 }
@@ -825,6 +829,22 @@ mod tests {
         assert_eq!(ledger.total_work_expended, 0.5);
         assert_eq!(ledger.total_heat_dissipated, 1.0);
         assert_eq!(ledger.total_potential_energy_released, 0.0);
+    }
+
+    #[test]
+    fn zero_external_input_cannot_credit_holder_within_balance_tolerance() {
+        let mut ledger = EnergyLedger::default();
+        let mut holder = 0.0;
+        let tx = external_input(0.0, 0.0, EPSILON * 0.5, 0.0, 0.0);
+
+        assert!(
+            !ledger.settle_external_input(&mut holder, tx),
+            "zero external input cannot fund a positive usable-energy delta"
+        );
+        assert_eq!(holder, 0.0);
+        assert_eq!(ledger.total_external_energy_input, 0.0);
+        assert_eq!(ledger.total_usable_energy_gained, 0.0);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
     }
 
     #[test]
