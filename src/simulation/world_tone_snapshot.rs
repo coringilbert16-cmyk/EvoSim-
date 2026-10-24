@@ -523,6 +523,18 @@ impl WorldToneOccluderSnapshot {
             }
         }
 
+        // Reconcile the aggregate totals from one shared residual after
+        // summing paths. Summing independently rounded per-path remainders can
+        // otherwise make the world total exceed its source by a few ulps.
+        let aggregate_escaped = total_incident - (total_captured + total_heat);
+        if !aggregate_escaped.is_finite()
+            || aggregate_escaped < 0.0
+            || (aggregate_escaped - total_escaped).abs()
+                > 1e-8 * total_incident.max(1.0)
+        {
+            return;
+        }
+        total_escaped = aggregate_escaped;
         if !simulation.energy_ledger.settle_world_tone_paths(
             total_incident,
             total_captured,
