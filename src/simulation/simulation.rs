@@ -2512,10 +2512,11 @@ mod decomposition_finalization_tests {
             .expect("second stored constituent remains");
         construction.committed_material.entries.push(committed);
         let mut ledger = simulation.energy_ledger;
+        let transfer = 0.5_f64.min(organism.usable_energy);
         assert!(ledger.transfer(
             &mut organism.usable_energy,
             &mut construction.developing_energy,
-            0.5_f64.min(organism.usable_energy),
+            transfer,
         ));
         simulation.energy_ledger = ledger;
 
@@ -2572,8 +2573,14 @@ mod decomposition_finalization_tests {
             construction.developing_maintenance_debt,
             construction_before.2
         );
-        assert_eq!(construction.developing_structure.units, construction_before.3.units);
-        assert_eq!(construction.developing_structure.bonds, construction_before.3.bonds);
+        assert_eq!(
+            construction.developing_structure.units,
+            construction_before.3.units
+        );
+        assert_eq!(
+            construction.developing_structure.bonds,
+            construction_before.3.bonds
+        );
         assert_eq!(
             construction.committed_material.entries,
             construction_before.4
@@ -2594,5 +2601,4 @@ mod decomposition_finalization_tests {
             inventory_before.current_structural_energy
         );
     }
-
 }
