@@ -1496,7 +1496,9 @@ mod tests {
             ),
             endpoint_b: BondEndpoint::new(
                 transient_new_id,
-                ConnectionEndpoint::Boundary { angle_radians: std::f64::consts::PI },
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::PI,
+                },
             ),
             strength: 0.5,
             bond_energy: 1.0,
