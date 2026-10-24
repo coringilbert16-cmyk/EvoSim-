@@ -2022,7 +2022,6 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
-    #[test]
     fn active_transformation_suppresses_new_movement_and_material_actions() {
         let simulation = Simulation::new(942, 10.0);
         let mut organism = simulation.organisms[0].clone();
