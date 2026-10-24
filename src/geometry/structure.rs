@@ -1623,6 +1623,68 @@ mod tests {
     }
 
     #[test]
+    fn division_partition_settles_all_crossing_bond_energy_and_preserves_internal_bonds() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent_core_index = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_core_id = aggregate.physical_id(parent_core_index).unwrap();
+        aggregate.set_genome_constituent_ids([parent_core_id]);
+        let parent_body_index = aggregate.add_unit(StructuralUnit::new("Sulfur", placement));
+        let parent_body_id = aggregate.physical_id(parent_body_index).unwrap();
+        let child_core_index = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_core_id = aggregate.physical_id(child_core_index).unwrap();
+        let child_body_index = aggregate.add_unit(StructuralUnit::new("Phosphorus", placement));
+        let child_body_id = aggregate.physical_id(child_body_index).unwrap();
+        aggregate.add_genome_constituent_group([child_core_id]);
+        let endpoint =
+            |id| BondEndpoint::new(id, ConnectionEndpoint::Boundary { angle_radians: 0.0 });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(parent_core_id),
+            endpoint_b: endpoint(parent_body_id),
+            strength: 0.8,
+            bond_energy: 4.0,
+        });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(parent_body_id),
+            endpoint_b: endpoint(child_core_id),
+            strength: 0.5,
+            bond_energy: 1.25,
+        });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(parent_core_id),
+            endpoint_b: endpoint(child_body_id),
+            strength: 0.4,
+            bond_energy: 2.0,
+        });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(child_core_id),
+            endpoint_b: endpoint(child_body_id),
+            strength: 0.7,
+            bond_energy: 2.5,
+        });
+        let next_id_before = aggregate.next_constituent_id;
+
+        let (child, crossing_energy) = aggregate
+            .partition_subgraph_for_division(&[child_core_id, child_body_id], &[child_core_id])
+            .expect("valid aggregate division");
+
+        assert_eq!(crossing_energy, 3.25);
+        assert_eq!(aggregate.physical_constituent_ids(), vec![parent_core_id, parent_body_id]);
+        assert_eq!(aggregate.bonds.len(), 1);
+        assert_eq!(aggregate.bonds[0].bond_energy, 4.0);
+        assert_eq!(aggregate.next_constituent_id, next_id_before);
+        assert_eq!(child.physical_constituent_ids(), vec![child_core_id, child_body_id]);
+        assert_eq!(child.bonds.len(), 1);
+        assert_eq!(child.bonds[0].bond_energy, 2.5);
+        assert_eq!(child.genome_constituent_ids(), &[child_core_id]);
+        assert!(child.additional_genome_constituent_groups().is_empty());
+    }
+
+    #[test]
     fn division_partition_rejects_partial_core_without_mutating_aggregate() {
         let placement = Placement {
             x: 0.0,
