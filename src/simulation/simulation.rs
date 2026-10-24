@@ -2132,6 +2132,77 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn world_energy_inventory_reconciles_world_tone_and_structural_break_together() {
+        let mut simulation = Simulation::new(918, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+
+        let external_before = simulation.energy_ledger.total_external_energy_input;
+        simulation.step();
+        assert!(
+            simulation.energy_ledger.total_external_energy_input > external_before,
+            "the live world-tone source must contribute before the reaction"
+        );
+        let after_capture = simulation.energy_inventory_snapshot();
+        assert!(
+            after_capture.is_balanced(1e-9),
+            "inventory after world-tone capture: {:?}",
+            after_capture.residual()
+        );
+
+        let (organism_id, bond) = {
+            let organism = simulation
+                .organisms
+                .first()
+                .expect("initial organism exists");
+            (
+                organism.id.clone(),
+                *organism
+                    .structure
+                    .bonds
+                    .first()
+                    .expect("initial organism has a realized bond"),
+            )
+        };
+        let organism = simulation
+            .organisms
+            .iter_mut()
+            .find(|organism| organism.id == organism_id)
+            .expect("selected organism remains present");
+        assert!(
+            crate::transformation::settle_chemical_break_energy_with_resonance(
+                organism,
+                bond,
+                1.0e9,
+                0.0,
+                0.0,
+                1.0,
+                &mut simulation.energy_ledger,
+            ),
+            "structural BREAK must settle after world-tone input"
+        );
+
+        let after_break = simulation.energy_inventory_snapshot();
+        assert!(
+            after_break.is_balanced(1e-9),
+            "world-tone input and structural BREAK must reconcile together: {:?}",
+            after_break.residual()
+        );
+        assert!(
+            !simulation
+                .organisms
+                .iter()
+                .find(|organism| organism.id == organism_id)
+                .expect("selected organism remains present")
+                .structure
+                .bonds
+                .contains(&bond),
+            "successful BREAK must remove the selected bond"
+        );
+    }
+
+    #[test]
     fn world_energy_inventory_reconciles_across_ordinary_ticks() {
         let mut simulation = Simulation::new(916, 10.0);
 
