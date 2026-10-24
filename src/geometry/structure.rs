@@ -756,6 +756,87 @@ impl PhysicalConstituentGraph {
         Some(graph)
     }
 
+    /// Partition one complete attached genome aggregate out of this graph.
+    ///
+    /// The selected constituents keep their stable physical IDs in the returned
+    /// child graph. Bonds wholly inside the selection move with the child; bonds
+    /// wholly outside remain with the parent; cross-boundary bonds are removed
+    /// from both graphs and their stored energy is returned for explicit ledger
+    /// settlement by the caller. No graph state changes unless both resulting
+    /// graphs can be constructed and validated.
+    pub(crate) fn partition_subgraph_for_division(
+        &mut self,
+        selected_ids: &[PhysicalConstituentId],
+        child_primary_core_ids: &[PhysicalConstituentId],
+    ) -> Option<(Self, f64)> {
+        let selected: HashSet<_> = selected_ids.iter().copied().collect();
+        let child_primary: HashSet<_> = child_primary_core_ids.iter().copied().collect();
+        let parent_primary: HashSet<_> = self.genome_constituent_ids.iter().copied().collect();
+        if selected_ids.is_empty()
+            || selected.len() != selected_ids.len()
+            || child_primary.len() != child_primary_core_ids.len()
+            || !child_primary.is_subset(&selected)
+            || !parent_primary.is_disjoint(&selected)
+            || child_primary_core_ids.is_empty()
+            || !self
+                .additional_genome_constituent_groups
+                .iter()
+                .any(|group| group.iter().copied().collect::<HashSet<_>>() == child_primary)
+        {
+            return None;
+        }
+
+        // Build the offspring view first. This validates source IDs, bonds,
+        // complete core groups, and the requested child-core identity.
+        let child = self.subgraph_for_physical_ids(selected_ids, child_primary_core_ids)?;
+        let source_ids: HashSet<_> = self.units.iter().map(|unit| unit.physical_id).collect();
+        let crossing_energy = self
+            .bonds
+            .iter()
+            .filter(|bond| {
+                selected.contains(&bond.endpoint_a.constituent_id)
+                    != selected.contains(&bond.endpoint_b.constituent_id)
+            })
+            .map(|bond| bond.bond_energy)
+            .sum::<f64>();
+        if !crossing_energy.is_finite() || crossing_energy < 0.0 {
+            return None;
+        }
+
+        let mut parent = self.clone();
+        parent.units.retain(|unit| !selected.contains(&unit.physical_id));
+        parent.bonds.retain(|bond| {
+            !selected.contains(&bond.endpoint_a.constituent_id)
+                && !selected.contains(&bond.endpoint_b.constituent_id)
+        });
+        parent
+            .additional_genome_constituent_groups
+            .retain(|group| group.iter().all(|id| !selected.contains(id)));
+        if parent.units.is_empty()
+            || parent_primary.is_empty()
+            || !parent_primary.is_subset(&source_ids)
+            || parent
+                .units
+                .iter()
+                .all(|unit| !parent_primary.contains(&unit.physical_id))
+            || parent.bonds.iter().any(|bond| {
+                !parent
+                    .units
+                    .iter()
+                    .any(|unit| unit.physical_id == bond.endpoint_a.constituent_id)
+                    || !parent
+                        .units
+                        .iter()
+                        .any(|unit| unit.physical_id == bond.endpoint_b.constituent_id)
+            })
+        {
+            return None;
+        }
+
+        *self = parent;
+        Some((child, crossing_energy))
+    }
+
     /// Atomically replace one attached subgraph while retaining the
     /// aggregate's cross-boundary bonds and the destination's primary genome.
     /// Existing selected IDs may be preserved by the replacement; any new IDs
@@ -1487,6 +1568,74 @@ mod tests {
         let added = extended.add_unit(StructuralUnit::new("Sulfur", placement));
         assert_eq!(extended.physical_id(added), Some(PhysicalConstituentId(4)));
         assert_eq!(aggregate.units.len(), 3);
+    }
+
+    #[test]
+    fn division_partition_preserves_ids_and_returns_cross_boundary_bond_energy() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent_index = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = aggregate.physical_id(parent_index).unwrap();
+        aggregate.set_genome_constituent_ids([parent_id]);
+        let child_core_index = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_core_id = aggregate.physical_id(child_core_index).unwrap();
+        let child_body_index = aggregate.add_unit(StructuralUnit::new("Sulfur", placement));
+        let child_body_id = aggregate.physical_id(child_body_index).unwrap();
+        aggregate.add_genome_constituent_group([child_core_id]);
+        let endpoint =
+            |id| BondEndpoint::new(id, ConnectionEndpoint::Boundary { angle_radians: 0.0 });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(parent_id),
+            endpoint_b: endpoint(child_core_id),
+            strength: 0.5,
+            bond_energy: 1.25,
+        });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(child_core_id),
+            endpoint_b: endpoint(child_body_id),
+            strength: 0.75,
+            bond_energy: 2.5,
+        });
+
+        let (child, released_energy) = aggregate
+            .partition_subgraph_for_division(&[child_core_id, child_body_id], &[child_core_id])
+            .expect("valid aggregate division");
+        assert_eq!(released_energy, 1.25);
+        assert_eq!(aggregate.physical_constituent_ids(), vec![parent_id]);
+        assert!(aggregate.bonds.is_empty());
+        assert_eq!(child.physical_constituent_ids(), vec![child_core_id, child_body_id]);
+        assert_eq!(child.bonds.len(), 1);
+        assert_eq!(child.bonds[0].bond_energy, 2.5);
+        assert_eq!(child.genome_constituent_ids(), &[child_core_id]);
+        assert!(child.additional_genome_constituent_groups().is_empty());
+    }
+
+    #[test]
+    fn division_partition_rejects_partial_core_without_mutating_aggregate() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent_index = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = aggregate.physical_id(parent_index).unwrap();
+        aggregate.set_genome_constituent_ids([parent_id]);
+        let child_a_index = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_a_id = aggregate.physical_id(child_a_index).unwrap();
+        let child_b_index = aggregate.add_unit(StructuralUnit::new("Sulfur", placement));
+        let child_b_id = aggregate.physical_id(child_b_index).unwrap();
+        aggregate.add_genome_constituent_group([child_a_id, child_b_id]);
+        let before = aggregate.clone();
+
+        assert!(aggregate
+            .partition_subgraph_for_division(&[child_a_id], &[child_a_id])
+            .is_none());
+        assert_eq!(aggregate, before);
     }
 
     #[test]
