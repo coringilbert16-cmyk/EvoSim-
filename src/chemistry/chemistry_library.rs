@@ -41,9 +41,7 @@ fn chemistry_equation_fingerprint_for_catalog(
         .map(|(name, position)| format!("{name}={position}"))
         .collect::<Vec<_>>()
         .join(",");
-    format!(
-        "{CHEMISTRY_EQUATION_FINGERPRINT}|catalog-chemical-positions-v1={catalog_identity}"
-    )
+    format!("{CHEMISTRY_EQUATION_FINGERPRINT}|catalog-chemical-positions-v1={catalog_identity}")
 }
 
 fn current_chemistry_equation_fingerprint() -> String {
