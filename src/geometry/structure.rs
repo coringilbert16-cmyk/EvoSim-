@@ -1050,6 +1050,26 @@ impl PhysicalConstituentGraph {
             .retain(|group| !group.is_empty());
     }
 
+    /// Returns true when every unit in `candidate` is already represented by
+    /// the same stable physical identity, material, and world pose in this graph.
+    /// This lets aggregate owners expose transient subgraph views without making
+    /// movement or world-tone consumers count those constituents twice.
+    pub(crate) fn contains_exact_physical_subgraph(&self, candidate: &Self) -> bool {
+        if candidate.units.is_empty() {
+            return false;
+        }
+        let mut seen = HashSet::new();
+        candidate.units.iter().all(|unit| {
+            unit.physical_id.0 != 0
+                && seen.insert(unit.physical_id)
+                && self.unit_index(unit.physical_id).is_some_and(|index| {
+                    let aggregate_unit = &self.units[index];
+                    aggregate_unit.material == unit.material
+                        && aggregate_unit.placement == unit.placement
+                })
+        })
+    }
+
     pub fn physical_id(&self, unit_index: usize) -> Option<PhysicalConstituentId> {
         self.units.get(unit_index).map(|u| u.physical_id)
     }
