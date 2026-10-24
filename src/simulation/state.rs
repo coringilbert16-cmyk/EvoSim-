@@ -173,7 +173,17 @@ impl ReproductiveConstruction {
     /// already owned by the parent's physical aggregate. Consumers use this
     /// shared predicate to avoid counting, moving, or emitting the same body twice.
     pub(crate) fn is_aggregate_owned_by(&self, parent: &OrganismStructure) -> bool {
-        parent.contains_exact_physical_subgraph(&self.developing_structure)
+        let actual_ids = self.developing_structure.physical_constituent_ids();
+        if actual_ids.len() != self.developing_member_ids.len() {
+            return false;
+        }
+        let actual: std::collections::HashSet<_> = actual_ids.iter().copied().collect();
+        let recorded: std::collections::HashSet<_> =
+            self.developing_member_ids.iter().copied().collect();
+        actual.len() == actual_ids.len()
+            && recorded.len() == self.developing_member_ids.len()
+            && actual == recorded
+            && parent.contains_exact_physical_subgraph(&self.developing_structure)
     }
 }
 
