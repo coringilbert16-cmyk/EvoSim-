@@ -451,6 +451,18 @@ fn material_response_to_drive(
         || drive_frequency_hz <= 0.0
         || !signal_level.is_finite()
         || signal_level <= 0.0
+        || !properties.mass.is_finite()
+        || properties.mass <= 0.0
+        || !properties.cohesion.is_finite()
+        || properties.cohesion <= 0.0
+        || !properties.reactivity.is_finite()
+        || properties.reactivity < 0.0
+        || !baselines.mass.is_finite()
+        || baselines.mass <= 0.0
+        || !baselines.cohesion.is_finite()
+        || baselines.cohesion <= 0.0
+        || !baselines.reactivity.is_finite()
+        || baselines.reactivity < 0.0
     {
         return ToneSpectrum::empty();
     }
@@ -1371,6 +1383,25 @@ mod tests {
         );
         assert!(natural_frequency_hz(properties(0.5, 0.0, 1.0), baselines()) > 440.0);
         assert!(natural_frequency_hz(properties(1.0, 0.0, 0.5), baselines()) < 440.0);
+    }
+
+    #[test]
+    fn resonance_math_fails_closed_for_invalid_material_properties() {
+        assert!(natural_frequency_hz(properties(f64::NAN, 0.0, 1.0), baselines()).is_nan());
+        assert!(natural_frequency_hz(properties(1.0, 0.0, f64::INFINITY), baselines()).is_nan());
+        assert!(damping_ratio(properties(1.0, f64::NAN, 1.0), baselines()).is_nan());
+        assert!(damping_ratio(properties(1.0, 1.0, 1.0), ResourceBaselines {
+            reactivity: f64::INFINITY,
+            ..baselines()
+        }).is_nan());
+        assert_eq!(resonance_response(440.0, 440.0, f64::NAN), 0.0);
+        assert!(material_response(
+            properties(1.0, f64::NAN, 1.0),
+            baselines(),
+            0.0,
+        )
+        .components
+        .is_empty());
     }
 
     #[test]
