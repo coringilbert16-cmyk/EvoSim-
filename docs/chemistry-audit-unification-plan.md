@@ -4710,3 +4710,8 @@ A second source-level pass traced the actual holder consumers on the same implem
 ### Audit stop condition
 
 Do not submit a partial anchor-only implementation. The current APIs make that unsafe: a parent aggregate plus the existing construction graph would duplicate geometry, exposure, structural energy, movement, and/or recycling. The next production change must include the ownership schema, mutation boundary, every listed consumer, and focused rollback/identity tests as one coordinated commit. Run the full workflow on the resulting exact SHA before assessing regressions by named test identity against the frozen baseline.
+
+
+## Graph-level split regression added — 2026-10-24
+
+On implementation branch commit `84c12db2767c900c357a6ff72086c28ff0e14c4d`, added `division_partition_settles_all_crossing_bond_energy_and_preserves_internal_bonds` in `src/geometry/structure.rs`. It exercises two distinct cross-boundary bonds, checks their combined returned energy (`3.25`), verifies the parent-internal bond (`4.0`) and child-internal bond (`2.5`) survive in their respective partitions, confirms stable constituent IDs/core identity, and checks the allocator's next ID is unchanged. This closes a narrow graph-primitive coverage gap, not the full atomic ledger/organism transaction. CI was not yet visible when this handoff note was written; do not count the test as passing until the exact commit's workflow confirms it.
