@@ -577,9 +577,7 @@ pub(crate) fn total_usable_energy_held(
                 .reproductive_construction
                 .as_ref()
                 .filter(|construction| {
-                    !organism
-                        .structure
-                        .contains_exact_physical_subgraph(&construction.developing_structure)
+                    !construction.is_aggregate_owned_by(&organism.structure)
                 })
                 .map_or(0.0, |construction| construction.developing_energy);
             organism.usable_energy + construction_energy
