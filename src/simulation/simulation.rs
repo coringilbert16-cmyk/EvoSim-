@@ -2267,7 +2267,7 @@ mod decomposition_finalization_tests {
             let inventory = simulation.energy_inventory_snapshot();
             assert!(
                 inventory.is_balanced_without_creation(1e-9),
-                "world energy inventory must reconcile after ordinary tick {tick}: residual={:?}",
+                "world energy inventory must reconcile after ordinary tick {tick}: residual={:?}, inventory={inventory:?}",
                 inventory.residual()
             );
         }
