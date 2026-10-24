@@ -1146,12 +1146,7 @@ mod tests {
 
         let root = test_root("catalog-position-fingerprint");
         let _ = fs::remove_dir_all(&root);
-        write_test_store(
-            &root,
-            CHEMISTRY_LIBRARY_SCHEMA_VERSION,
-            &[],
-            0,
-        );
+        write_test_store(&root, CHEMISTRY_LIBRARY_SCHEMA_VERSION, &[], 0);
         let manifest_path = root.join("manifest.json");
         let mut manifest: serde_json::Value =
             serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
