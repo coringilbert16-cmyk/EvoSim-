@@ -4674,3 +4674,39 @@ This map is based on the exact PR #205 source head `df1cdce8f6c0ac6d295a15afc97d
 5. Final split preserves child-internal bonds and IDs, removes only cross-partition bonds, settles their stored energy once, validates both cores before publication, and rolls back on any failure.
 
 **API constraint:** `Simulation` currently passes `&organism.structure` into `advance_construction`; a genuine aggregate commit requires changing that boundary to a staged mutable transaction. Do not work around this with interior mutation, an extra persistent graph, or a geometry-only attachment. The audit did not change production source; the next code commit must contain the coordinated ownership slice and focused tests, followed immediately by CI on its exact head.
+
+
+## Phase 1 implementation audit — current call-site inventory, 2026-10-24
+
+A second source-level pass traced the actual holder consumers on the same implementation branch. This is a dependency audit, not a claim that aggregate ownership is implemented.
+
+### Confirmed duplicate-authority paths to remove together
+
+- `src/organism/reproduction.rs`
+  - `developing_organism` reconstructs a simulated organism from `committed_material`, `developing_structure`, and `developing_energy`.
+  - `begin_reproduction` removes a physical anchor from parent storage and stores its realized structure in the construction holder; it does not add the anchor to the parent graph.
+  - `commit_candidate_attachment` checks overlap/contact, optionally removes transferred storage, and publishes child graph/ledger/energy. It does not form a cross-boundary bond.
+  - `birth_ready_with_reference` and `budding_scale_reached_with_reference` currently validate/measure the separate child graph. These must use a temporary view derived from the aggregate's member IDs.
+  - `total_usable_energy_held` currently adds the separate construction energy to parent usable energy.
+- `src/simulation/simulation.rs`
+  - The tick calls `advance_construction(&organism.structure, ...)`, so the graph is immutable at the mutation boundary.
+  - `structural_energy_held` and the independent inventory snapshot separately sum `construction.developing_structure` bonds. Both must count the aggregate once after migration.
+  - The tick already reserves the next organism ID before calling `finish_reproduction`; preserve this rollback-safe ordering.
+- `src/simulation/world_tone_snapshot.rs`
+  - The snapshot adds the developing structure as a distinct receiver/occluder after handling the parent structure. Aggregate migration must remove this second pass, while preserving exposure of every physical constituent through the parent.
+- `src/perception/movement.rs`
+  - Movement explicitly translates every developing-structure unit in addition to parent structure units. After aggregation this would double-translate those units unless removed in the same change.
+- `src/chemistry/recycling.rs`
+  - The legacy recycler adds developing energy, drains committed construction storage, and then clears construction. It is currently disconnected from normal death processing; do not reconnect it as a shortcut. Breached organisms retain their single aggregate and ordinary chemistry path.
+
+### Safe implementation ordering (do not split across independently shippable commits)
+
+1. Add graph-level transaction tests first for selected-ID subgraph replacement, cross-boundary bond preservation, and final partition energy accounting. Reuse existing stable-ID primitives; don't add a second graph owner.
+2. Introduce one staged aggregate transaction boundary that clones graph/storage/ledger/construction metadata, validates all inputs, and only publishes after real bond formation plus ledger settlement succeed. Anchor admission and source-storage removal are one commit.
+3. Convert construction metadata to stable physical IDs and explicit secondary-core membership. Preserve a compatibility deserializer only if legacy persisted state can be migrated unambiguously; otherwise reject/quarantine malformed legacy construction instead of guessing IDs.
+4. Convert growth, readiness, movement, world-tone, inventory, and death/recycling consumers in the same source change. No intermediate commit may leave both the aggregate and a persistent child graph active.
+5. Make final partition the only operation that emits an offspring structure. Validate both core identities and both complete children before assigning the parent remainder or publishing the child; return cross-partition stored bond energy through the existing ledger transaction exactly once.
+
+### Audit stop condition
+
+Do not submit a partial anchor-only implementation. The current APIs make that unsafe: a parent aggregate plus the existing construction graph would duplicate geometry, exposure, structural energy, movement, and/or recycling. The next production change must include the ownership schema, mutation boundary, every listed consumer, and focused rollback/identity tests as one coordinated commit. Run the full workflow on the resulting exact SHA before assessing regressions by named test identity against the frozen baseline.
