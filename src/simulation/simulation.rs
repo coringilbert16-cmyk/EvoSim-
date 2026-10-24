@@ -522,6 +522,16 @@ impl Simulation {
         environment: &Environment,
         needs: CurrentNeeds,
     ) -> ActionEligibility {
+        // A multi-tick transformation owns a staged physical/energy snapshot.
+        // Do not start movement or another material action against that snapshot.
+        if organism.active_transformation_id.is_some() {
+            return ActionEligibility {
+                can_move: false,
+                can_combine: false,
+                can_break: false,
+                can_expel: false,
+            };
+        }
         let can_combine = crate::combine_runtime::can_combine(organism, environment);
         let can_break_stored = organism.active_transformation_id.is_none()
             && organism.stored_material.entries.iter().any(|entry| {
@@ -892,6 +902,7 @@ impl Simulation {
             for index in 0..organisms.len() {
                 if !living_ids.contains(&organisms[index].id)
                     || completed_organisms.contains(&organisms[index].id)
+                    || organisms[index].active_transformation_id.is_some()
                 {
                     continue;
                 }
@@ -2008,6 +2019,29 @@ mod decomposition_finalization_tests {
             "initial energy source should reconcile: {:?}",
             simulation.energy_inventory_snapshot().residual()
         );
+    }
+
+    #[test]
+    #[test]
+    fn active_transformation_suppresses_new_movement_and_material_actions() {
+        let simulation = Simulation::new(942, 10.0);
+        let mut organism = simulation.organisms[0].clone();
+        organism.active_transformation_id = Some(91);
+
+        let eligibility = Simulation::action_eligibility(
+            &organism,
+            &simulation.environment,
+            CurrentNeeds {
+                survival: 0.0,
+                reproduction: 0.0,
+                development: 0.0,
+            },
+        );
+
+        assert!(!eligibility.can_move);
+        assert!(!eligibility.can_combine);
+        assert!(!eligibility.can_break);
+        assert!(!eligibility.can_expel);
     }
 
     #[test]
