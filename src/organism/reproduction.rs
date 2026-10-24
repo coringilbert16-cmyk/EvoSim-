@@ -480,7 +480,11 @@ fn birth_ready_with_reference(
     let Some(anchor_id) = construction
         .anchor_physical_id
         .filter(|id| construction.developing_structure.unit_index(*id).is_some())
-        .or_else(|| construction.developing_structure.physical_id(construction.anchor_unit_index))
+        .or_else(|| {
+            construction
+                .developing_structure
+                .physical_id(construction.anchor_unit_index)
+        })
     else {
         return false;
     };
@@ -497,10 +501,7 @@ fn birth_ready_with_reference(
     let Some(cavity) = cavity else {
         return false;
     };
-    if !cavity
-        .boundary_units
-        .contains(&anchor_index)
-    {
+    if !cavity.boundary_units.contains(&anchor_index) {
         return false;
     }
     if validate_realized_organism_for_core(
@@ -789,7 +790,8 @@ pub(crate) fn advance_construction(
     construction.developing_stress = child.stress;
     construction.developing_maintenance_debt = child.maintenance_debt;
     construction.developing_structure = child.structure.clone();
-    construction.developing_member_ids = construction.developing_structure.physical_constituent_ids();
+    construction.developing_member_ids =
+        construction.developing_structure.physical_constituent_ids();
     if dead {
         return (ConstructionStatus::Dead, None);
     }
@@ -1166,14 +1168,20 @@ mod tests {
             "construction membership must be tracked by stable physical IDs"
         );
         assert_eq!(
-            construction.developing_member_ids.iter().collect::<std::collections::HashSet<_>>().len(),
+            construction
+                .developing_member_ids
+                .iter()
+                .collect::<std::collections::HashSet<_>>()
+                .len(),
             construction.developing_member_ids.len(),
             "a physical constituent may only belong to the developing member once"
         );
         assert!(construction.anchor_unit_index < construction.developing_structure.units.len());
         assert_eq!(
             construction.anchor_physical_id,
-            construction.developing_structure.physical_id(construction.anchor_unit_index),
+            construction
+                .developing_structure
+                .physical_id(construction.anchor_unit_index),
             "the anchor is tracked by stable physical identity"
         );
         assert_eq!(
