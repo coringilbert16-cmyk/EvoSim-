@@ -859,9 +859,7 @@ impl PhysicalConstituentGraph {
         if old_ids.is_empty()
             || selected.len() != old_ids.len()
             || selected.contains(&PhysicalConstituentId(0))
-            || selected
-                .iter()
-                .any(|id| self.unit_index(*id).is_none())
+            || selected.iter().any(|id| self.unit_index(*id).is_none())
         {
             return None;
         }
