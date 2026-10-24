@@ -1669,15 +1669,24 @@ mod tests {
         let next_id_before = aggregate.next_constituent_id;
 
         let (child, crossing_energy) = aggregate
-            .partition_subgraph_for_division(&[child_core_id, child_body_id], &[child_core_id])
+            .partition_subgraph_for_division(
+                &[child_core_id, child_body_id],
+                &[child_core_id],
+            )
             .expect("valid aggregate division");
 
         assert_eq!(crossing_energy, 3.25);
-        assert_eq!(aggregate.physical_constituent_ids(), vec![parent_core_id, parent_body_id]);
+        assert_eq!(
+            aggregate.physical_constituent_ids(),
+            vec![parent_core_id, parent_body_id]
+        );
         assert_eq!(aggregate.bonds.len(), 1);
         assert_eq!(aggregate.bonds[0].bond_energy, 4.0);
         assert_eq!(aggregate.next_constituent_id, next_id_before);
-        assert_eq!(child.physical_constituent_ids(), vec![child_core_id, child_body_id]);
+        assert_eq!(
+            child.physical_constituent_ids(),
+            vec![child_core_id, child_body_id]
+        );
         assert_eq!(child.bonds.len(), 1);
         assert_eq!(child.bonds[0].bond_energy, 2.5);
         assert_eq!(child.genome_constituent_ids(), &[child_core_id]);
