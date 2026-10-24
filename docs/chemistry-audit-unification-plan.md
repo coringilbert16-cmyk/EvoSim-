@@ -4244,3 +4244,10 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - Predecessor workflow [40092817875](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40092817875) failed to compile the new fingerprint test because `Result::expect_err` requires the successful type `ChemistryLibrary: Debug`. Commit `c59ce82` replaced it with `.err().expect(...)`; this is corrected in the current head. The later source-format follow-up and CI gate changes are included in `451ddba`.
 - Exact-head workflow [40092954099](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40092954099) is in progress. The corrected reproduction test and the fingerprint/rollback/world-tone gates are not yet verified at this head.
 - **Next:** inspect focused gate output first; fix any introduced failures immediately. If they pass, compare the complete test-failure identities and normalized Clippy diagnostics with baseline. Continue Phase 4/5/6+ only with exact-head evidence, keeping global energy/material conservation explicitly open.
+
+## Formatting correction after exact-head CI — latest source head pending (2026-10-24)
+
+- Workflow [40092954099](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40092954099) on predecessor `451ddba296ef97232d705997d7ab33edf868c8a5` failed the formatting gate on one `format!` call in the derived catalog fingerprint. The exact rustfmt-requested single-line layout is applied in commit `5ba99c3811591f9a5b9254fc71cf05bc230f86e0`; no behavior changed in this correction.
+- The same predecessor's strict Clippy step remained baseline-red (31 application-target and 14 test-target diagnostics); its diagnostic identities were not used to claim the current head is verified. Full tests were skipped because formatting failed.
+- **Current source head:** `5ba99c3811591f9a5b9254fc71cf05bc230f86e0`. Exact-head workflow lookup has not returned a run yet. Do not infer any test or formatting pass from predecessor results.
+- **Next:** inspect the exact-head focused gates and full suite; fix any new test failures before moving further. Phase 4/5 remain open.
