@@ -159,6 +159,9 @@ jobs:
       - name: Verify nonliving world-tone energy settlement
         timeout-minutes: 5
         run: cargo test --locked nonliving_surface_receives_world_tone_energy_as_heat_without_living_receivers
+      - name: Verify non-creating world inventory oracle
+        timeout-minutes: 5
+        run: cargo test --locked strict_world_inventory_oracle_rejects_even_sub_tolerance_energy_creation
       - name: Verify source-budget conservation
         timeout-minutes: 5
         run: |
