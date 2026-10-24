@@ -86,9 +86,7 @@ impl WorldToneOccluderSnapshot {
                 continue;
             };
             if !construction.developing_structure.units.is_empty()
-                && !organism
-                    .structure
-                    .contains_exact_physical_subgraph(&construction.developing_structure)
+                && !construction.is_aggregate_owned_by(&organism.structure)
             {
                 body_properties.push(structure_material_properties(
                     &construction.developing_structure,
