@@ -1672,6 +1672,42 @@ mod tests {
     }
 
     #[test]
+    fn shared_aggregate_ownership_predicate_checks_stable_identity_and_pose() {
+        use crate::structure::{Placement, StructuralUnit};
+
+        let catalog = default_catalog();
+        let mut unit = StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 1.0,
+                y: 2.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(unit.realize_default_geometry(&catalog));
+        let mut aggregate = OrganismStructure::new();
+        aggregate.add_unit(unit);
+        let mut construction = ReproductiveConstruction {
+            committed_material: MaterialStorage::default(),
+            developing_structure: aggregate.clone(),
+            developing_member_ids: aggregate.physical_constituent_ids(),
+            child_genome: initial_genome(),
+            developmental_origin: Position { x: 1.0, y: 2.0 },
+            developmental_orientation_radians: 0.0,
+            developing_stress: 0.0,
+            anchor_unit_index: 0,
+            anchor_physical_id: aggregate.physical_id(0),
+            developing_energy: 0.0,
+            developing_maintenance_debt: 0.0,
+            needs_space: false,
+        };
+
+        assert!(construction.is_aggregate_owned_by(&aggregate));
+        construction.developing_structure.units[0].placement.x += 0.25;
+        assert!(!construction.is_aggregate_owned_by(&aggregate));
+    }
+
+    #[test]
     fn anchor_is_not_a_predefined_structural_blueprint() {
         let catalog = default_catalog();
         let genome = initial_genome();
