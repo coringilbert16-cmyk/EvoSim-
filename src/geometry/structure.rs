@@ -1592,9 +1592,7 @@ mod tests {
         let child_core_id = aggregate.physical_id(child_core_index).unwrap();
         let child_body_id = aggregate.physical_id(child_body_index).unwrap();
         aggregate.add_genome_constituent_group([child_core_id]);
-        let endpoint = |id| {
-            BondEndpoint::new(id, ConnectionEndpoint::Boundary { angle_radians: 0.0 })
-        };
+        let endpoint = |id| BondEndpoint::new(id, ConnectionEndpoint::Boundary { angle_radians: 0.0 });
         aggregate.push_bond_unchecked(Bond {
             endpoint_a: endpoint(parent_id),
             endpoint_b: endpoint(child_core_id),
