@@ -1121,6 +1121,43 @@ impl PhysicalConstituentGraph {
             .retain(|group| !group.is_empty());
     }
 
+    /// Build a read-only physical view of the aggregate with one complete
+    /// constituent group omitted. Cross-boundary bonds are omitted from the view;
+    /// the authoritative aggregate remains unchanged.
+    pub(crate) fn view_without_physical_ids(
+        &self,
+        excluded_ids: &[PhysicalConstituentId],
+    ) -> Option<Self> {
+        let excluded: HashSet<_> = excluded_ids.iter().copied().collect();
+        let all_ids: HashSet<_> = self.units.iter().map(|unit| unit.physical_id).collect();
+        if excluded_ids.is_empty()
+            || excluded.len() != excluded_ids.len()
+            || excluded.contains(&PhysicalConstituentId(0))
+            || !excluded.is_subset(&all_ids)
+            || excluded.len() >= self.units.len()
+        {
+            return None;
+        }
+
+        let primary: HashSet<_> = self.genome_constituent_ids.iter().copied().collect();
+        if !primary.is_disjoint(&excluded) {
+            return None;
+        }
+        for group in &self.additional_genome_constituent_groups {
+            let group_ids: HashSet<_> = group.iter().copied().collect();
+            if !group_ids.is_disjoint(&excluded) && !group_ids.is_subset(&excluded) {
+                return None;
+            }
+        }
+
+        let mut view = self.clone();
+        view.remove_units_by_physical_ids(excluded_ids);
+        if view.units.is_empty() {
+            return None;
+        }
+        Some(view)
+    }
+
     /// Returns true when every unit in `candidate` is already represented by
     /// the same stable physical identity, material, and world pose in this graph.
     /// This lets aggregate owners expose transient subgraph views without making
@@ -1447,6 +1484,50 @@ pub fn formation_threshold(a: f64, b: f64, la: f64, lb: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn external_aggregate_view_omits_complete_child_group_without_mutating_owner() {
+        let mut aggregate = OrganismStructure::new();
+        let parent = aggregate.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let child_a = aggregate.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 3.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let child_b = aggregate.add_unit(StructuralUnit::new(
+            "Hydrogen",
+            Placement {
+                x: 4.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let parent_id = aggregate.physical_id(parent).unwrap();
+        let child_a_id = aggregate.physical_id(child_a).unwrap();
+        let child_b_id = aggregate.physical_id(child_b).unwrap();
+        aggregate.add_additional_genome_constituent_group([child_a_id, child_b_id]);
+        let before_units = aggregate.units.clone();
+        let before_groups = aggregate.additional_genome_constituent_groups.clone();
+
+        let external = aggregate
+            .view_without_physical_ids(&[child_a_id, child_b_id])
+            .expect("complete child group can be excluded from an external view");
+        assert_eq!(external.physical_constituent_ids(), vec![parent_id]);
+        assert!(external.additional_genome_constituent_groups.is_empty());
+        assert_eq!(aggregate.units, before_units);
+        assert_eq!(aggregate.additional_genome_constituent_groups, before_groups);
+        assert!(aggregate.view_without_physical_ids(&[child_a_id]).is_none());
+    }
+
     #[test]
     fn aggregate_subgraph_replacement_remaps_new_ids_without_aliasing_siblings() {
         let mut aggregate = OrganismStructure::new();
