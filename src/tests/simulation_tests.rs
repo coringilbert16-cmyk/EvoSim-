@@ -604,7 +604,7 @@ mod integration_tests {
             .expect("active reproductive construction should serialize");
         let initial_energy = s.energy_inventory_snapshot();
         assert!(
-            initial_energy.is_balanced(1e-9),
+            initial_energy.is_balanced_without_creation(1e-9),
             "post-death fixture must start balanced: {:?}",
             initial_energy.residual()
         );
@@ -618,7 +618,7 @@ mod integration_tests {
                 "ordinary chemistry must conserve constituent ownership through tick {tick}"
             );
             assert!(
-                s.energy_inventory_snapshot().is_balanced(1e-9),
+                s.energy_inventory_snapshot().is_balanced_without_creation(1e-9),
                 "post-death world energy must reconcile through tick {tick}: {:?}",
                 s.energy_inventory_snapshot().residual()
             );
@@ -1192,7 +1192,7 @@ mod integration_tests {
             Simulation::structural_energy_held(&s.organisms, &s.decomposing_bodies);
         let inventory = s.energy_inventory_snapshot();
         assert!(
-            inventory.is_balanced(1e-9),
+            inventory.is_balanced_without_creation(1e-9),
             "stored-material BREAK must not create energy: {:?}",
             inventory.residual()
         );
