@@ -1144,7 +1144,7 @@ mod tests {
     }
 
     #[test]
-    fn rejected_parent_reserve_transfer_leaves_construction_unchanged() {
+    fn invalid_parent_energy_fails_closed_without_mutating_construction() {
         let mut simulation = Simulation::new(912, 20.0);
         let mut parent = simulation.organisms.remove(0);
         let mut ledger = EnergyLedger::default();
@@ -1161,8 +1161,9 @@ mod tests {
         let original_stress = construction.developing_stress;
         let original_debt = construction.developing_maintenance_debt;
         let original_storage = parent.stored_material.clone();
-        // This makes the otherwise positive reserve transfer reject its source
-        // validation, exercising the fail-closed path deterministically.
+        // Invalid parent energy must fail closed before any reserve transfer or
+        // construction mutation. The persisted developing state remains attached
+        // so the invalid holder can be diagnosed rather than partially advanced.
         parent.usable_energy = f64::INFINITY;
         let environment = simulation.environment.clone();
         let body = parent_body_geometry(&parent, &environment.catalog).unwrap();
@@ -1179,7 +1180,7 @@ mod tests {
             None,
         );
 
-        assert_eq!(status, ConstructionStatus::Waiting);
+        assert_eq!(status, ConstructionStatus::Dead);
         assert_eq!(parent.usable_energy, f64::INFINITY);
         assert_eq!(construction.developing_energy, original_energy);
         assert_eq!(
