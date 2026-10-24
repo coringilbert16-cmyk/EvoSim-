@@ -801,6 +801,41 @@ mod tests {
     }
 
     #[test]
+    fn cache_append_rollback_failure_reports_both_errors_and_preserves_recovery_evidence() {
+        let root = test_root("rollback-truncation-failure");
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let data_path = root.join("chemistry.jsonl");
+        let original = b"{\"original\":true}\\n";
+        let appended = b"partial-record";
+        fs::write(&data_path, original).unwrap();
+        let original_len = original.len() as u64;
+        let mut bytes_with_partial = original.to_vec();
+        bytes_with_partial.extend_from_slice(appended);
+        fs::write(&data_path, &bytes_with_partial).unwrap();
+
+        // A read-only descriptor deterministically makes set_len fail on the
+        // supported Unix CI runner, exercising the distinct rollback-failure
+        // path without pretending the damaged cache was recovered.
+        let mut read_only = File::open(&data_path).unwrap();
+        let error = rollback_appended_record(
+            &mut read_only,
+            original_len,
+            std::io::Error::new(
+                std::io::ErrorKind::WriteZero,
+                "injected original append failure",
+            ),
+        );
+
+        let message = error.to_string();
+        assert!(message.contains("injected original append failure"));
+        assert!(message.contains("failed to roll back appended data"));
+        assert_eq!(fs::read(&data_path).unwrap(), bytes_with_partial);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn failed_insert_keeps_stale_instance_refreshed_to_committed_store() {
         let root = test_root("stale-refresh-failed-insert");
         let _ = fs::remove_dir_all(&root);
