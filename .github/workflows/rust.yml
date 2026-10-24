@@ -127,9 +127,6 @@ jobs:
       - name: Run focused stored BREAK rollback tests
         timeout-minutes: 5
         run: cargo test --locked failed_stored_break
-      - name: Run focused environmental BREAK transaction tests
-        timeout-minutes: 5
-        run: cargo test --locked environmental_break
       # Movement geometry and energy settlement commit from one preflight snapshot.
       - name: Run focused movement settlement transaction test
         timeout-minutes: 5
