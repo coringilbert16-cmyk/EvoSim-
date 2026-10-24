@@ -414,10 +414,14 @@ pub(crate) fn nonlinear_harmonic_amplitude(
     reactivity: f64,
     harmonic_order: usize,
 ) -> f64 {
-    if harmonic_order < 2 || !fundamental_amplitude.is_finite() {
+    if harmonic_order < 2
+        || !fundamental_amplitude.is_finite()
+        || fundamental_amplitude < 0.0
+        || !reactivity.is_finite()
+        || reactivity < 0.0
+    {
         return 0.0;
     }
-    let reactivity = reactivity.max(0.0);
     let nonlinear = if reactivity <= f64::EPSILON {
         0.0
     } else {
@@ -1395,6 +1399,7 @@ mod tests {
             ..baselines()
         }).is_nan());
         assert_eq!(resonance_response(440.0, 440.0, f64::NAN), 0.0);
+        assert_eq!(nonlinear_harmonic_amplitude(1.0, f64::NAN, 2), 0.0);
         assert!(material_response(
             properties(1.0, f64::NAN, 1.0),
             baselines(),
