@@ -1654,7 +1654,6 @@ mod tests {
             "the secondary structure must expose its center as accessible interior"
         );
 
-
         let source = PhysicalMaterial::realized(
             Material {
                 parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
