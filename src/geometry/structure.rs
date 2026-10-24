@@ -1450,6 +1450,69 @@ pub fn formation_threshold(a: f64, b: f64, la: f64, lb: f64) -> f64 {
 mod tests {
     use super::*;
     #[test]
+    fn aggregate_subgraph_replacement_remaps_new_ids_without_aliasing_siblings() {
+        let mut aggregate = OrganismStructure::new();
+        let selected_index = aggregate.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let sibling_index = aggregate.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 4.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let selected_id = aggregate.physical_id(selected_index).unwrap();
+        let sibling_id = aggregate.physical_id(sibling_index).unwrap();
+
+        let mut replacement = OrganismStructure::new();
+        let replacement_selected = replacement.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let replacement_new = replacement.add_unit(StructuralUnit::new(
+            "Hydrogen",
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        replacement.units[replacement_selected].physical_id = selected_id;
+        let transient_new_id = replacement.physical_id(replacement_new).unwrap();
+        assert_eq!(transient_new_id, sibling_id);
+
+        let remapping = aggregate
+            .replace_subgraph_remapping_new_ids(&[selected_id], &replacement)
+            .expect("valid replacement should commit");
+        let aggregate_new_id = remapping[&transient_new_id];
+
+        assert_ne!(aggregate_new_id, sibling_id);
+        assert_eq!(aggregate.unit_index(sibling_id), Some(0));
+        assert!(aggregate.unit_index(aggregate_new_id).is_some());
+        assert_eq!(aggregate.units.len(), 3);
+        assert_eq!(
+            aggregate
+                .units
+                .iter()
+                .map(|unit| unit.physical_id)
+                .collect::<HashSet<_>>()
+                .len(),
+            aggregate.units.len()
+        );
+    }
+
+    #[test]
     fn only_fluid_resources_can_take_context_fitting_geometry() {
         let catalog = crate::resources::default_catalog();
         let mut water = StructuralUnit::new(
