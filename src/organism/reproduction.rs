@@ -573,11 +573,16 @@ pub(crate) fn total_usable_energy_held(
     let organism_energy: f64 = organisms
         .iter()
         .map(|organism| {
-            organism.usable_energy
-                + organism
-                    .reproductive_construction
-                    .as_ref()
-                    .map_or(0.0, |construction| construction.developing_energy)
+            let construction_energy = organism
+                .reproductive_construction
+                .as_ref()
+                .filter(|construction| {
+                    !organism
+                        .structure
+                        .contains_exact_physical_subgraph(&construction.developing_structure)
+                })
+                .map_or(0.0, |construction| construction.developing_energy);
+            organism.usable_energy + construction_energy
         })
         .sum();
     let decomposition_energy: f64 = decomposing_bodies
