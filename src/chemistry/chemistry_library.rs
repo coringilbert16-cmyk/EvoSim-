@@ -1131,6 +1131,20 @@ mod tests {
     }
 
     #[test]
+    fn checked_in_manifest_fingerprint_matches_default_catalog() {
+        let manifest: ChemistryLibraryManifest = serde_json::from_str(include_str!(
+            "../../chemistry_library/data/manifest.json"
+        ))
+        .expect("checked-in chemistry cache manifest must parse");
+        assert_eq!(manifest.schema_version, CHEMISTRY_LIBRARY_SCHEMA_VERSION);
+        assert_eq!(
+            manifest.equation_fingerprint,
+            current_chemistry_equation_fingerprint(),
+            "checked-in manifest must invalidate whenever canonical catalog chemistry changes"
+        );
+    }
+
+    #[test]
     fn changed_catalog_chemical_position_changes_fingerprint_and_rejects_old_manifest() {
         let mut catalog = crate::resources::default_catalog();
         let original_fingerprint = chemistry_equation_fingerprint_for_catalog(&catalog);
