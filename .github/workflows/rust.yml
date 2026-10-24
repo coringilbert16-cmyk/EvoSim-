@@ -155,9 +155,11 @@ jobs:
         timeout-minutes: 5
         run: cargo test --locked active_transformation_suppresses_new_movement_and_material_actions
       # Keep post-death holder conservation visible independently of the full suite.
-      - name: Run focused post-death holder inventory test
+      - name: Run focused post-death holder inventory tests
         timeout-minutes: 5
-        run: cargo test --locked breached_organism_material_and_energy_holders_reconcile_over_live_ticks
+        run: |
+          cargo test --locked breached_organism_material_and_energy_holders_reconcile_over_live_ticks
+          cargo test --locked breached_organism_retains_storage_and_construction_without_biological_progress
       # Finished-body release must commit energy and material ownership together.
       - name: Verify nonliving world-tone energy settlement
         timeout-minutes: 5
@@ -197,17 +199,16 @@ jobs:
         timeout-minutes: 5
         run: cargo test --locked failed_late_physical_restoration_preserves_destination_structure
       # The canonical 12-piece nitrogen seed is a shared calibration fixture.
-      # Verify the seed itself and its forward physical realization independently.
-      # Expensive headless multigeneration validation is paused while the seed
-      # topology is being finalized. Keep the normal Rust/Clippy gates active.
-      - name: Run Rust tests
-        timeout-minutes: 5
-        run: cargo test --locked --all-targets
+      # Run this independent gate before the full suite so baseline failures do
+      # not suppress the seed verification result.
       - name: Verify canonical 12N seed and realization
         timeout-minutes: 5
         run: |
           cargo test --locked confirmed_seed_is_the_established_twelve_piece_nitrogen_ring
           cargo test --locked ancestral_seed_realizes_a_physically_valid_developmental_structure
+      - name: Run Rust tests
+        timeout-minutes: 5
+        run: cargo test --locked --all-targets
       - name: Run Clippy
         timeout-minutes: 5
         if: always()
