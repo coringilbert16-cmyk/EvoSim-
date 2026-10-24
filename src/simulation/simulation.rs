@@ -2053,11 +2053,12 @@ mod decomposition_finalization_tests {
         }
         assert!(simulation.world_tone.is_some());
 
+        let external_before = simulation.energy_ledger.total_external_energy_input;
         simulation.step();
 
         assert!(
-            simulation.energy_ledger.total_external_energy_input > 0.0,
-            "live world tone should credit absorbed environmental energy"
+            simulation.energy_ledger.total_external_energy_input > external_before,
+            "live world tone should credit new absorbed environmental energy"
         );
         // World-tone capture occurs before ordinary chemistry in this tick.
         // Captured resonance may therefore be spent immediately by a valid
