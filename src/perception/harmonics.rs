@@ -213,12 +213,28 @@ pub(crate) fn natural_frequency_hz(
     properties: ResourceProperties,
     baselines: ResourceBaselines,
 ) -> f64 {
-    let mass = properties.mass.max(f64::EPSILON);
-    let cohesion = properties.cohesion.max(f64::EPSILON);
-    let baseline_mass = baselines.mass.max(f64::EPSILON);
-    let baseline_cohesion = baselines.cohesion.max(f64::EPSILON);
-    let ratio = (cohesion / mass) / (baseline_cohesion / baseline_mass);
-    WORLD_TONE_HZ * ratio.max(0.0).sqrt()
+    let values = [
+        properties.mass,
+        properties.cohesion,
+        baselines.mass,
+        baselines.cohesion,
+    ];
+    if values
+        .iter()
+        .any(|value| !value.is_finite() || *value <= 0.0)
+    {
+        return f64::NAN;
+    }
+    let ratio = (properties.cohesion / properties.mass) / (baselines.cohesion / baselines.mass);
+    if !ratio.is_finite() || ratio <= 0.0 {
+        return f64::NAN;
+    }
+    let frequency = WORLD_TONE_HZ * ratio.sqrt();
+    if frequency.is_finite() && frequency > 0.0 {
+        frequency
+    } else {
+        f64::NAN
+    }
 }
 
 /// Reactivity supplies the existing dissipative/nonlinear response scale.
@@ -227,8 +243,15 @@ pub(crate) fn natural_frequency_hz(
 /// material's reactivity relative to the catalog baseline. No new
 /// damping-only resource property is introduced.
 pub(crate) fn damping_ratio(properties: ResourceProperties, baselines: ResourceBaselines) -> f64 {
-    let reactivity = properties.reactivity.max(0.0);
-    let baseline = baselines.reactivity.max(0.0);
+    let reactivity = properties.reactivity;
+    let baseline = baselines.reactivity;
+    if !reactivity.is_finite()
+        || reactivity < 0.0
+        || !baseline.is_finite()
+        || baseline < 0.0
+    {
+        return f64::NAN;
+    }
     if baseline <= f64::EPSILON {
         return if reactivity <= f64::EPSILON {
             0.0
@@ -236,7 +259,12 @@ pub(crate) fn damping_ratio(properties: ResourceProperties, baselines: ResourceB
             BASELINE_DAMPING_RATIO
         };
     }
-    BASELINE_DAMPING_RATIO * (reactivity / baseline)
+    let damping = BASELINE_DAMPING_RATIO * (reactivity / baseline);
+    if damping.is_finite() && damping >= 0.0 {
+        damping
+    } else {
+        f64::NAN
+    }
 }
 
 /// A compact forced-oscillator response centered on the material's natural
@@ -248,6 +276,8 @@ pub(crate) fn resonance_response(
 ) -> f64 {
     if !drive_frequency_hz.is_finite()
         || !natural_frequency_hz.is_finite()
+        || !damping.is_finite()
+        || damping < 0.0
         || drive_frequency_hz <= 0.0
         || natural_frequency_hz <= 0.0
     {
