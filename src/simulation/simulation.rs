@@ -824,11 +824,6 @@ impl Simulation {
                 &living_ids,
             );
         }
-        #[cfg(test)]
-        eprintln!(
-            "step-debug after-tone tick={} external={}",
-            self.tick, self.energy_ledger.total_external_energy_input
-        );
         for organism in &mut self.organisms {
             let is_living = living_ids.contains(&organism.id);
             if is_living {
@@ -900,11 +895,6 @@ impl Simulation {
                 }
             }
         }
-        #[cfg(test)]
-        eprintln!(
-            "step-debug after-chemistry tick={} external={}",
-            self.tick, self.energy_ledger.total_external_energy_input
-        );
         {
             let (organisms, environment) = (&mut self.organisms, &mut self.environment);
             let mut movement_spatial_index =
@@ -1419,11 +1409,6 @@ impl Simulation {
         );
         self.energy_ledger.total_resonant_energy_held =
             crate::reproduction::total_resonant_energy_held(&self.organisms);
-        #[cfg(test)]
-        eprintln!(
-            "step-debug end tick={} external={}",
-            self.tick, self.energy_ledger.total_external_energy_input
-        );
         self.energy_ledger.total_structural_energy_held =
             Self::structural_energy_held(&self.organisms, &self.decomposing_bodies);
     }
