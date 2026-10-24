@@ -475,9 +475,13 @@ fn birth_ready_with_reference(
         return false;
     }
     let Some(anchor_id) = construction
-        .developing_structure
-        .physical_id(construction.anchor_unit_index)
+        .anchor_physical_id
+        .filter(|id| construction.developing_structure.unit_index(*id).is_some())
+        .or_else(|| construction.developing_structure.physical_id(construction.anchor_unit_index))
     else {
+        return false;
+    };
+    let Some(anchor_index) = construction.developing_structure.unit_index(anchor_id) else {
         return false;
     };
     let Ok(cavity) = crate::cavity::analyze_genome_cavity_for_core(
@@ -492,7 +496,7 @@ fn birth_ready_with_reference(
     };
     if !cavity
         .boundary_units
-        .contains(&construction.anchor_unit_index)
+        .contains(&anchor_index)
     {
         return false;
     }
@@ -640,6 +644,9 @@ pub(crate) fn begin_reproduction(
         else {
             continue;
         };
+        let Some(anchor_physical_id) = structure.physical_id(anchor_unit_index) else {
+            continue;
+        };
         let developing_member_ids = structure.physical_constituent_ids();
 
         let mut parent_trial = parent.stored_material.clone();
@@ -660,6 +667,7 @@ pub(crate) fn begin_reproduction(
             developmental_orientation_radians: 0.0,
             developing_stress: 0.0,
             anchor_unit_index,
+            anchor_physical_id: Some(anchor_physical_id),
             developing_energy: 0.0,
             developing_maintenance_debt: 0.0,
             needs_space: false,
@@ -976,6 +984,7 @@ mod tests {
             developmental_orientation_radians: 0.0,
             developing_stress: f64::NAN,
             anchor_unit_index: 0,
+            anchor_physical_id: None,
             developing_energy: 0.0,
             developing_maintenance_debt: 0.0,
             needs_space: false,
@@ -1035,6 +1044,7 @@ mod tests {
             developmental_orientation_radians: 0.0,
             developing_stress: 0.0,
             anchor_unit_index: 0,
+            anchor_physical_id: None,
             developing_energy: f64::NAN,
             developing_maintenance_debt: 0.0,
             needs_space: false,
@@ -1088,6 +1098,7 @@ mod tests {
             developmental_orientation_radians: 0.0,
             developing_stress: 0.0,
             anchor_unit_index: 0,
+            anchor_physical_id: None,
             developing_energy: 0.0,
             developing_maintenance_debt: 0.0,
             needs_space: false,
@@ -1318,6 +1329,7 @@ mod tests {
             developmental_orientation_radians: 0.0,
             developing_stress: 0.0,
             anchor_unit_index: 0,
+            anchor_physical_id: None,
             developing_energy: 10.0,
             developing_maintenance_debt: 0.0,
             needs_space: false,
