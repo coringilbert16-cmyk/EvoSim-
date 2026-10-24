@@ -576,7 +576,10 @@ pub(crate) fn begin_reproduction(
     catalog: &[crate::resources::BaseResource],
     _ledger: &mut EnergyLedger,
 ) -> bool {
-    if parent.reproductive_construction.is_some() {
+    // Construction consumes a parent-held physical anchor. Do not mutate
+    // that holder while a multi-tick BREAK/COMBINE transaction owns an escrow
+    // index or a prepared storage snapshot for the same organism.
+    if parent.active_transformation_id.is_some() || parent.reproductive_construction.is_some() {
         return false;
     }
     let mut child_genome = parent.genome.clone();
@@ -893,6 +896,40 @@ mod tests {
     use crate::resources::{default_catalog, Material};
     use crate::state::Simulation;
     use rand::SeedableRng;
+
+    #[test]
+    fn reproduction_cannot_mutate_storage_while_transformation_is_active() {
+        use rand::RngCore;
+
+        let mut simulation = Simulation::new(941, 10.0);
+        let mut parent = simulation.organisms.remove(0);
+        parent.stored_material.entries.clear();
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
+        parent.active_transformation_id = Some(73);
+
+        let original_entries = parent.stored_material.entries.clone();
+        let original_energy = parent.usable_energy;
+        let original_genome = serde_json::to_value(&parent.genome).unwrap();
+        let mut rng = ChaCha8Rng::seed_from_u64(0xC0FFEE);
+        let mut expected_rng = rng.clone();
+        let mut ledger = EnergyLedger::default();
+        let original_ledger = ledger;
+
+        assert!(!begin_reproduction(
+            &mut parent,
+            &mut rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+
+        assert_eq!(parent.stored_material.entries, original_entries);
+        assert_eq!(parent.usable_energy, original_energy);
+        assert_eq!(serde_json::to_value(&parent.genome).unwrap(), original_genome);
+        assert!(parent.reproductive_construction.is_none());
+        assert_eq!(parent.active_transformation_id, Some(73));
+        assert_eq!(ledger, original_ledger);
+        assert_eq!(rng.next_u64(), expected_rng.next_u64());
+    }
 
     #[test]
     fn invalid_developing_holder_does_not_draw_parent_reserve_again() {
