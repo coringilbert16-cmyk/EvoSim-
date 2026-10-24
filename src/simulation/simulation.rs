@@ -2047,7 +2047,9 @@ mod decomposition_finalization_tests {
 
     #[test]
     fn live_world_tone_capture_settles_and_reconciles_world_energy() {
-        let mut simulation = Simulation::new(918, 10.0);
+        // Tick zero points the source north; use a compact world so the initial
+        // organism intersects the source lane instead of testing an unexposed body.
+        let mut simulation = Simulation::new(918, 1.0);
         for cell in &mut simulation.environment.field.cells {
             cell.physical_materials.clear();
         }
@@ -2163,7 +2165,9 @@ mod decomposition_finalization_tests {
 
     #[test]
     fn world_energy_inventory_reconciles_world_tone_and_structural_break_together() {
-        let mut simulation = Simulation::new(918, 10.0);
+        // Keep the initial northward source lane over the initial organism so
+        // this gate exercises actual external input before structural BREAK.
+        let mut simulation = Simulation::new(918, 1.0);
         for cell in &mut simulation.environment.field.cells {
             cell.physical_materials.clear();
         }
