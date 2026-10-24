@@ -459,7 +459,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[test]
     fn strict_world_inventory_oracle_rejects_even_sub_tolerance_energy_creation() {
         let created = EnergyInventorySnapshot {
             initial_usable_energy: 0.0,
@@ -484,6 +483,7 @@ mod tests {
         assert!(rounding_loss.is_balanced_without_creation(1e-9));
     }
 
+    #[test]
     fn world_inventory_counts_retained_resonance_as_a_distinct_energy_store() {
         let inventory = EnergyInventorySnapshot {
             initial_usable_energy: 10.0,
