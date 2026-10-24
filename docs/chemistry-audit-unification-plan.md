@@ -4786,3 +4786,16 @@ Workflow [40113515832](https://github.com/coringilbert16-cmyk/EvoSim-/actions/ru
 - The completed step list does not expose a failure reason for the overall workflow yet. Do not infer that the in-progress suite passed or that later steps ran.
 
 This narrows the immediate CI uncertainty: the formatting correction worked, and the new physical graph merge regression gate passed. Continue polling the same exact-head run for final suite/lint diagnostics before comparing named failures. The coordinated aggregate-ownership/division migration remains the production blocker; no partial ownership change was made.
+
+
+
+## Completed exact-head verification — implementation commit 3f14c1e — 2026-10-24
+
+Workflow [40113515832](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40113515832) logs now provide the final results:
+- All focused gates, including the physical graph merge regression and COMBINE settlement rollback tests, passed.
+- The canonical 12-piece nitrogen seed/realization gate failed as expected from the documented baseline.
+- Full Rust suite: **698 passed, 21 failed, 1 ignored** in 286.67s. Comparing named failures with prior exact-head workflow [40111732833](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40111732833), all 21 failure identities are identical: zero new failures and zero resolved failures. The added graph regression accounts for the pass-count increase from 697 to 698.
+- Strict Clippy remains failed with 31 application-target and 14 test-target diagnostics. Normalized diagnostic identities were compared with the prior exact-head run: **zero added and zero removed**. This is unchanged baseline lint debt, not a newly introduced Clippy issue.
+- The workflow is not green because the expected known seed gate, full suite, and Clippy fail. No source behavior changed in this formatting-only commit.
+
+This closes the exact-head validation uncertainty for the graph regression. The next work is no longer CI triage: proceed to the coordinated aggregate-ownership implementation, keeping the 12-piece nitrogen seed requirement unchanged and not treating baseline test/lint debt as new regressions.
