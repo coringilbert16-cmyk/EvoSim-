@@ -618,7 +618,8 @@ mod integration_tests {
                 "ordinary chemistry must conserve constituent ownership through tick {tick}"
             );
             assert!(
-                s.energy_inventory_snapshot().is_balanced_without_creation(1e-9),
+                s.energy_inventory_snapshot()
+                    .is_balanced_without_creation(1e-9),
                 "post-death world energy must reconcile through tick {tick}: {:?}",
                 s.energy_inventory_snapshot().residual()
             );
