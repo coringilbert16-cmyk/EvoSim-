@@ -18,6 +18,38 @@ pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 5;
 /// relabeled or migrated across fingerprints.
 pub const CHEMISTRY_EQUATION_FINGERPRINT: &str = "evosim-chemistry-v1|potential=exp-k-dmax|contact=(1-d/r)^2|Dmax=13|k=1/13|contact_radius=1|max_force=1|energy_distance=contact_radius|energy_scale=max_force*energy_distance|reaction_dissipation=0.1/tick|catalog=resource-chemistry-v2|chemical-position=quantized-key-v2|finite-representable-only";
 
+/// Bind persistent cache compatibility to the canonical resource chemistry
+/// positions as well as the equation implementation. Names are sorted so
+/// catalog declaration order does not change the fingerprint.
+fn chemistry_equation_fingerprint_for_catalog(
+    catalog: &[crate::resources::BaseResource],
+) -> String {
+    let mut positions = catalog
+        .iter()
+        .map(|resource| {
+            let position = resource
+                .properties
+                .chemical_position
+                .map(|value| format!("{:016x}", value.to_bits()))
+                .unwrap_or_else(|| "none".to_string());
+            (resource.name.as_str(), position)
+        })
+        .collect::<Vec<_>>();
+    positions.sort_by(|left, right| left.0.cmp(right.0));
+    let catalog_identity = positions
+        .into_iter()
+        .map(|(name, position)| format!("{name}={position}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "{CHEMISTRY_EQUATION_FINGERPRINT}|catalog-chemical-positions-v1={catalog_identity}"
+    )
+}
+
+fn current_chemistry_equation_fingerprint() -> String {
+    chemistry_equation_fingerprint_for_catalog(&crate::resources::default_catalog())
+}
+
 fn quantize(value: f64) -> i64 {
     (value * 1_000_000_000.0).round() as i64
 }
@@ -255,6 +287,7 @@ impl ChemistryLibrary {
                 }
             }
         }
+        let current_fingerprint = current_chemistry_equation_fingerprint();
         let manifest = if manifest_path.exists() {
             serde_json::from_slice(&fs::read(manifest_path)?)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
@@ -267,7 +300,7 @@ impl ChemistryLibrary {
             }
             ChemistryLibraryManifest {
                 schema_version: CHEMISTRY_LIBRARY_SCHEMA_VERSION,
-                equation_fingerprint: CHEMISTRY_EQUATION_FINGERPRINT.into(),
+                equation_fingerprint: current_fingerprint.clone(),
                 entries: 0,
             }
         };
@@ -280,12 +313,12 @@ impl ChemistryLibrary {
                 ),
             ));
         }
-        if manifest.equation_fingerprint != CHEMISTRY_EQUATION_FINGERPRINT {
+        if manifest.equation_fingerprint != current_fingerprint {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!(
                     "chemistry equation fingerprint mismatch: manifest={}, current={}",
-                    manifest.equation_fingerprint, CHEMISTRY_EQUATION_FINGERPRINT
+                    manifest.equation_fingerprint, current_fingerprint
                 ),
             ));
         }
@@ -1096,6 +1129,38 @@ mod tests {
             .expect("legacy record keys must be rejected");
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
         assert!(error.to_string().contains("invalid chemistry record"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn changed_catalog_chemical_position_changes_fingerprint_and_rejects_old_manifest() {
+        let mut catalog = crate::resources::default_catalog();
+        let original_fingerprint = chemistry_equation_fingerprint_for_catalog(&catalog);
+        let carbon = catalog
+            .iter_mut()
+            .find(|resource| resource.name == "Carbon")
+            .expect("canonical Carbon resource exists");
+        carbon.properties.chemical_position = Some(10.25);
+        let changed_fingerprint = chemistry_equation_fingerprint_for_catalog(&catalog);
+        assert_ne!(original_fingerprint, changed_fingerprint);
+
+        let root = test_root("catalog-position-fingerprint");
+        let _ = fs::remove_dir_all(&root);
+        write_test_store(
+            &root,
+            CHEMISTRY_LIBRARY_SCHEMA_VERSION,
+            &[],
+            0,
+        );
+        let manifest_path = root.join("manifest.json");
+        let mut manifest: serde_json::Value =
+            serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+        manifest["equation_fingerprint"] = serde_json::Value::String(changed_fingerprint);
+        fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+
+        let error = ChemistryLibrary::open(&root)
+            .expect_err("a cache from a changed catalog chemistry position must be rejected");
+        assert!(error.to_string().contains("fingerprint mismatch"));
         let _ = fs::remove_dir_all(root);
     }
 
