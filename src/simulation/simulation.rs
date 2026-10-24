@@ -2167,8 +2167,34 @@ mod decomposition_finalization_tests {
             cell.physical_materials.clear();
         }
 
+        let sample = simulation
+            .world_tone_cycle
+            .as_ref()
+            .and_then(|cycle| cycle.sample(simulation.tick))
+            .or_else(|| {
+                simulation.world_tone.and_then(|config| {
+                    config.sample(
+                        simulation.tick,
+                        simulation.environment.width,
+                        simulation.environment.height,
+                    )
+                })
+            })
+            .expect("world-tone source must have a sample at tick zero");
+        let living_ids = simulation
+            .organisms
+            .iter_mut()
+            .filter_map(|organism| {
+                Simulation::has_intact_genome_core(organism, &simulation.environment.catalog)
+                    .then(|| organism.id.clone())
+            })
+            .collect::<std::collections::HashSet<_>>();
         let external_before = simulation.energy_ledger.total_external_energy_input;
-        simulation.step();
+        crate::world_tone_snapshot::WorldToneOccluderSnapshot::settle_living_organism_inputs(
+            &mut simulation,
+            sample,
+            &living_ids,
+        );
         assert!(
             simulation.energy_ledger.total_external_energy_input > external_before,
             "the live world-tone source must contribute before the reaction"
