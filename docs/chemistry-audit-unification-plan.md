@@ -4490,3 +4490,26 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - The world-tone capture test now checks post-tick inventory conservation without requiring retained resonance to remain in the reservoir, because chemistry may consume it in the same tick. The combined world-tone + structural BREAK test is being narrowed to the intended transaction boundary: obtain the tick-zero source sample, compute the living set, invoke the live `WorldToneOccluderSnapshot::settle_living_organism_inputs` path directly, verify external input increases and inventory balances, then settle the structural BREAK and verify the combined inventory again. This avoids conflating the source/ledger transaction with unrelated same-tick actions while preserving the combined ledger guarantee.
 - Temporary diagnostic prints were removed. The test setup explicitly borrows the catalog separately from the mutable organism list to keep Rust's borrow boundaries clear.
 - **Current source head:** `29cb4e755679b7f45c10b2d747a54d7877192194`. Exact-head CI has not yet been returned. The previous failing run [40095895101](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40095895101) is for `b833937`, before the isolated test setup.
+
+
+## Live PR #205 verification reconciliation — 2026-10-24
+
+### Exact-head result
+
+- Live PR #205 head checked: `749f2cf02b7eb2178af13f43bf95e28fe812277d` (`Reconcile world-tone capture with final reservoir inventory`). Exact-head workflow: [40097806006](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40097806006).
+- Rust tests: **690 passed, 22 failed, 1 ignored**. Frozen baseline workflow [39705628427](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39705628427): **563 passed, 28 failed, 1 ignored**. Test totals differ because additional tests exist on the current head; compare failure identities, not raw totals.
+- Failure-identity comparison: **21 failures are shared with baseline; 7 baseline failure identities no longer fail; 1 current-only failure remains**: `simulation::decomposition_finalization_tests::world_energy_inventory_reconciles_across_ordinary_ticks`. Therefore the current-only failure is a real new verification blocker, not part of the agreed 28-failure baseline.
+- The current-only failure reports a positive residual of `1.8189894035458565e-12` at ordinary tick 3. This is tiny but violates the strict one-sided inventory release gate. Trace the arithmetic/ledger producer and make the inventory calculation internally consistent; **do not weaken the no-creation assertion or simply widen its tolerance**.
+- Clippy still fails under repository-wide `-D warnings`: current run reports 31 errors for the binary and 14 for the test target, versus 34 and 15 in the frozen baseline run. The counts are lower, but a normalized diagnostic-identity comparison is still required before claiming no new Clippy identities.
+
+### Transaction audit — initial findings, implementation not yet changed
+
+- Existing staged candidate construction in `src/organism/reproduction.rs` clones candidate structure/material and the energy ledger while trying attachments. `commit_candidate_attachment` validates geometry/contact before consuming an optional parent-storage entry, then publishes the candidate ledger, committed material, developing structure, and energy/stress fields. This is a useful approach-A foundation.
+- The higher-level `advance_construction` path is not yet proven to be one failure-atomic transaction: it may transfer parent-funded reserve energy before maintenance, structural chemistry, candidate selection, and attachment have all completed. Audit whether a later Waiting/Dead/invalid outcome is meant to retain that transfer; explicitly define the commit boundary and full rollback state before changing behavior.
+- `finish_reproduction` currently takes the parent-owned construction, checks readiness, and restores it if not ready. The simulation call site preflights the offspring ID before detaching the construction. Keep the ID preflight and parent-owned construction invariant in the regression set.
+- Next narrow implementation candidate remains a single parent-owned attachment/construction transaction: stage parent energy, child energy/stress/debt, storage entry, developing structure/material, and ledger; validate; commit once. Failure tests must compare the full before/after state (including RNG if consumed, IDs, storage order, transaction flags, ledger, geometry/revisions, and construction) and separately reconcile material and energy inventories. First finish the audit of current intended reserve-transfer semantics; do not implement speculative rollback that would erase an explicitly intended funding step.
+
+### Scope and status
+
+- PR #204 remains documentation-only. Implementation work belongs on PR #205. PR #196 remains out of scope.
+- Canonical aggregate ownership and parent-funded construction/division migration remain unfinished. Whole-world energy conservation remains unproven. The new ordinary-tick inventory residual is the immediate blocker before expanding the transaction migration.
