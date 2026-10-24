@@ -1173,6 +1173,13 @@ mod tests {
     fn changed_catalog_chemical_position_changes_fingerprint_and_rejects_old_manifest() {
         let mut catalog = crate::resources::default_catalog();
         let original_fingerprint = chemistry_equation_fingerprint_for_catalog(&catalog);
+        let mut reordered_catalog = catalog.clone();
+        reordered_catalog.reverse();
+        assert_eq!(
+            chemistry_equation_fingerprint_for_catalog(&reordered_catalog),
+            original_fingerprint,
+            "catalog declaration order must not invalidate chemistry cache"
+        );
         let carbon = catalog
             .iter_mut()
             .find(|resource| resource.name == "Carbon")
