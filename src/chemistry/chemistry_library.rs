@@ -1157,10 +1157,9 @@ mod tests {
 
     #[test]
     fn checked_in_manifest_fingerprint_matches_default_catalog() {
-        let manifest: ChemistryLibraryManifest = serde_json::from_str(include_str!(
-            "../../chemistry_library/data/manifest.json"
-        ))
-        .expect("checked-in chemistry cache manifest must parse");
+        let manifest: ChemistryLibraryManifest =
+            serde_json::from_str(include_str!("../../chemistry_library/data/manifest.json"))
+                .expect("checked-in chemistry cache manifest must parse");
         assert_eq!(manifest.schema_version, CHEMISTRY_LIBRARY_SCHEMA_VERSION);
         assert_eq!(
             manifest.equation_fingerprint,
