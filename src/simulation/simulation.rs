@@ -2015,7 +2015,9 @@ mod decomposition_finalization_tests {
             initial_usable_energy
         );
         assert!(
-            simulation.energy_inventory_snapshot().is_balanced_without_creation(1e-9),
+            simulation
+                .energy_inventory_snapshot()
+                .is_balanced_without_creation(1e-9),
             "initial energy source should reconcile: {:?}",
             simulation.energy_inventory_snapshot().residual()
         );
