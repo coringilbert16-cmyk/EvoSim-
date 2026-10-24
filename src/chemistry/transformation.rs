@@ -1581,6 +1581,18 @@ mod tests {
 
         let catalog = crate::resources::default_catalog();
         let mut organism = environmental_break_test_organism("exhausted-break-id", None);
+        let accessible_regions = crate::interior_geometry::find_accessible_interior_regions(
+            &organism.structure,
+            &environment.catalog,
+        )
+        .expect("the two-structure fixture should have valid enclosure geometry");
+        assert!(
+            accessible_regions
+                .iter()
+                .any(|region| region.contains_point(20.0, 20.0)),
+            "the secondary structure must expose its center as accessible interior"
+        );
+
         let source = PhysicalMaterial::realized(
             Material {
                 parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
