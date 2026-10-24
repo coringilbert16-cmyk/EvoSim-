@@ -522,6 +522,11 @@ impl WorldToneOccluderSnapshot {
                 || (escaped_budget - escaped_spectrum_energy).abs()
                     > 1e-8 * incident_energy.max(1.0)
             {
+                #[cfg(test)]
+                eprintln!(
+                    "world-tone path allocation mismatch: incident={incident_energy:?}, captured={path_captured:?}, heat={path_heat:?}, escaped_budget={escaped_budget:?}, escaped_spectrum={escaped_spectrum_energy:?}, tolerance={:?}",
+                    1e-8 * incident_energy.max(1.0)
+                );
                 abort_world_tone_frame!(line!());
             }
             // Treat the tiny floating-point discrepancy between the transformed
