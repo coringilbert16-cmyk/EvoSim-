@@ -151,6 +151,11 @@ jobs:
       - name: Verify nonliving world-tone energy settlement
         timeout-minutes: 5
         run: cargo test --locked nonliving_surface_receives_world_tone_energy_as_heat_without_living_receivers
+      - name: Verify source-budget conservation
+        timeout-minutes: 5
+        run: |
+          cargo test --locked source_budget_rejects_claim_above_remaining_budget_atomically
+          cargo test --locked source_budget_rejects_sub_tolerance_overspend_atomically
       - name: Run focused decomposition finalization rollback test
         timeout-minutes: 5
         run: cargo test --locked invalid_finished_body_position_preserves_released_material_ownership
