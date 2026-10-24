@@ -782,6 +782,10 @@ impl PhysicalConstituentGraph {
                 .additional_genome_constituent_groups
                 .iter()
                 .any(|group| group.iter().copied().collect::<HashSet<_>>() == child_primary)
+            || self.additional_genome_constituent_groups.iter().any(|group| {
+                let group_ids: HashSet<_> = group.iter().copied().collect();
+                !group_ids.is_disjoint(&selected) && !group_ids.is_subset(&selected)
+            })
         {
             return None;
         }
@@ -1647,6 +1651,35 @@ mod tests {
             before.additional_genome_constituent_groups
         );
         assert_eq!(aggregate.next_constituent_id, before.next_constituent_id);
+    }
+
+    #[test]
+    fn division_partition_rejects_partial_secondary_core_group_atomically() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent_index = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = aggregate.physical_id(parent_index).unwrap();
+        aggregate.set_genome_constituent_ids([parent_id]);
+        let child_core_index = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_core_id = aggregate.physical_id(child_core_index).unwrap();
+        let child_body_index = aggregate.add_unit(StructuralUnit::new("Sulfur", placement));
+        let child_body_id = aggregate.physical_id(child_body_index).unwrap();
+        let other_core_a_index = aggregate.add_unit(StructuralUnit::new("Hydrogen", placement));
+        let other_core_a_id = aggregate.physical_id(other_core_a_index).unwrap();
+        let other_core_b_index = aggregate.add_unit(StructuralUnit::new("Phosphorus", placement));
+        let other_core_b_id = aggregate.physical_id(other_core_b_index).unwrap();
+        aggregate.add_genome_constituent_group([child_core_id]);
+        aggregate.add_genome_constituent_group([other_core_a_id, other_core_b_id]);
+        let before = aggregate.clone();
+
+        assert!(aggregate
+            .partition_subgraph_for_division(&[child_core_id, child_body_id, other_core_a_id], &[child_core_id])
+            .is_none());
+        assert_eq!(aggregate, before);
     }
 
     #[test]
