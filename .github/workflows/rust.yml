@@ -48,6 +48,7 @@ jobs:
           cargo test --locked chemical_break_reconciles_world_energy_inventory
           cargo test --locked chemical_break_with_resonance_shortfall_reconciles_world_inventory
           cargo test --locked resonance_overload_break_reconciles_world_inventory
+          cargo test --locked resonance_math_fails_closed_for_invalid_material_properties
           cargo test --locked transformed_secondary_signal_never_exceeds_budget_after_rounding
           cargo test --locked live_world_tone_capture_settles_and_reconciles_world_energy
           cargo test --locked world_energy_inventory_reconciles_world_tone_and_structural_break_together
