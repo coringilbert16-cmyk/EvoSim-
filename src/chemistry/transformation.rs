@@ -1681,6 +1681,53 @@ mod tests {
             .field
             .index_for_position(20.0, 20.0)
             .expect("source origin must be in the field");
+        let body = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+            &organism.structure,
+            &environment.catalog,
+        )
+        .expect("both bonded structures should contribute to organism bounds");
+        assert!(
+            environment
+                .field
+                .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y)
+                .contains(&cell_index),
+            "the source cell must be in the organism's candidate-cell bounds"
+        );
+        let connections = source
+            .internal_connections
+            .as_ref()
+            .expect("bonded source must retain its physical connection");
+        let mut hypothetical = organism.structure.clone();
+        let indices = crate::material_restoration::restore_material(
+            &mut hypothetical,
+            &source,
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &environment.catalog,
+        )
+        .expect("the source should restore for endpoint eligibility checks");
+        assert!(
+            connections.iter().any(|connection| {
+                let a = indices.get(connection.part_a).and_then(|index| {
+                    connection
+                        .endpoint_a
+                        .world_point(&hypothetical.units[*index], &environment.catalog)
+                });
+                let b = indices.get(connection.part_b).and_then(|index| {
+                    connection
+                        .endpoint_b
+                        .world_point(&hypothetical.units[*index], &environment.catalog)
+                });
+                accessible_regions.iter().any(|region| {
+                    a.is_some_and(|point| region.contains_point(point.x, point.y))
+                        || b.is_some_and(|point| region.contains_point(point.x, point.y))
+                })
+            }),
+            "at least one actual physical bond endpoint must lie inside accessible interior"
+        );
         environment.field.cells[cell_index]
             .physical_materials
             .push(source);
