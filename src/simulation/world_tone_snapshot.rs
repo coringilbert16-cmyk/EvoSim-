@@ -481,13 +481,21 @@ impl WorldToneOccluderSnapshot {
                 // exactly once, whether it is retained biologically or becomes
                 // heat at a nonliving/dead physical receiver.
                 let outgoing_budget = incoming_energy - response_energy;
-                let Some(outgoing) = crate::harmonics::transform_signal_to_energy_budget(
+                let outgoing = match crate::harmonics::transform_signal_to_energy_budget(
                     properties,
                     baselines,
                     &signal,
                     outgoing_budget.max(0.0),
-                ) else {
-                    return;
+                ) {
+                    Some(outgoing) => outgoing,
+                    // A numerically tiny remainder can be too small to form a
+                    // representable transformed spectrum. Keep the frame
+                    // transactional: account that bounded remainder as escaped
+                    // energy below instead of discarding all staged captures.
+                    None if outgoing_budget <= 1e-8 * incident_energy.max(1.0) => {
+                        crate::harmonics::ToneSpectrum::empty()
+                    }
+                    None => return,
                 };
                 path_captured += captured;
                 path_heat += interaction_heat;
