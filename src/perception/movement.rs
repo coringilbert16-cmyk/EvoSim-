@@ -1006,10 +1006,7 @@ fn translate_reproductive_construction(
         // During aggregate-owned development the parent structure has already
         // been translated above. A transient child view must not translate those
         // same physical constituents a second time.
-        if !organism
-            .structure
-            .contains_exact_physical_subgraph(&construction.developing_structure)
-        {
+        if !construction.is_aggregate_owned_by(&organism.structure) {
             for unit in &mut construction.developing_structure.units {
                 unit.placement.x += dx;
                 unit.placement.y = wrap_y(unit.placement.y + dy, environment_height);
