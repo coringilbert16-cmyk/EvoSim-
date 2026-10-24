@@ -1663,9 +1663,7 @@ mod tests {
             .push(source);
         let candidate = ActionCandidate {
             action: ActionKind::Break,
-            context_key: Some(format!(
-                "environment:cell:{cell_index}:material:0:bond:0"
-            )),
+            context_key: Some(format!("environment:cell:{cell_index}:material:0:bond:0")),
         };
         let materials_before = environment.field.cells[cell_index]
             .physical_materials
