@@ -282,7 +282,7 @@ impl WorldToneOccluderSnapshot {
             () => {{
                 #[cfg(test)]
                 eprintln!("world-tone frame aborted at line {}", line!());
-                abort_world_tone_frame!();
+                return;
             }};
         }
         let receiver_organism_indices: Vec<_> = simulation
