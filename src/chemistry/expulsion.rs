@@ -16,6 +16,28 @@ pub(crate) fn expel_physical_material(
     environment: &mut Environment,
     storage_index: usize,
 ) -> bool {
+    expel_physical_material_with_deposit(
+        organism,
+        environment,
+        storage_index,
+        |environment, index, physical| {
+            environment.field.deposit_physical_at_index(index, physical)
+        },
+    )
+}
+
+/// Execute expulsion with an injectable destination commit boundary. Production
+/// uses the real field insertion; tests can reject that final commit after all
+/// geometry preflight has passed, exercising the source-restoration branch.
+fn expel_physical_material_with_deposit<F>(
+    organism: &mut Organism,
+    environment: &mut Environment,
+    storage_index: usize,
+    deposit: F,
+) -> bool
+where
+    F: FnOnce(&mut Environment, usize, PhysicalMaterial) -> bool,
+{
     let Some(origin) = organism.occupied_cells.first() else {
         return false;
     };
@@ -176,7 +198,7 @@ pub(crate) fn expel_physical_material(
     }
     let crate::material_storage::StoredMaterial::Physical(removed) =
         organism.stored_material.entries.remove(storage_index);
-    if environment.field.deposit_physical_at_index(index, physical) {
+    if deposit(environment, index, physical) {
         true
     } else {
         organism.stored_material.entries.insert(
@@ -189,7 +211,7 @@ pub(crate) fn expel_physical_material(
 
 #[cfg(test)]
 mod tests {
-    use super::expel_physical_material;
+    use super::{expel_physical_material, expel_physical_material_with_deposit};
     use crate::material_storage::StoredMaterial;
     use crate::physical_material::PhysicalMaterial;
     use crate::resources::Material;
@@ -328,6 +350,56 @@ mod tests {
             deposited[0].realized_shape_for_part(0, &catalog),
             Some(realized_shape),
             "expulsion must not replace the realized fluid boundary with the catalog default"
+        );
+    }
+
+    #[test]
+    fn rejected_destination_restores_expulsion_source_and_neighbor_order() {
+        let mut simulation = Simulation::new(927, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        let catalog = simulation.environment.catalog.clone();
+        let make = |name: &str, x: f64| {
+            PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("test material should realize")
+        };
+        let mut source = make("Carbon", 0.0);
+        source.owner_relative_origin = Some(Placement {
+            x: 1.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        });
+        let original = vec![
+            StoredMaterial::Physical(make("Nitrogen", -1.0)),
+            StoredMaterial::Physical(source),
+            StoredMaterial::Physical(make("Phosphorus", 1.0)),
+            StoredMaterial::Physical(make("Sulfur", 2.0)),
+        ];
+        simulation.organisms[0].stored_material.entries = original.clone();
+
+        assert!(!expel_physical_material_with_deposit(
+            &mut simulation.organisms[0],
+            &mut simulation.environment,
+            1,
+            |_, _, _| false,
+        ));
+        assert_eq!(
+            simulation.organisms[0].stored_material.entries,
+            original,
+            "a rejected destination commit must restore the exact source and preserve neighbor order"
+        );
+        assert!(
+            simulation.environment.field.cells.iter().all(|cell| cell.physical_materials.is_empty()),
+            "a rejected destination must not leave a partial field insertion"
         );
     }
 
