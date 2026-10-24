@@ -1130,24 +1130,57 @@ impl PhysicalConstituentGraph {
     ) -> Option<Self> {
         let excluded: HashSet<_> = excluded_ids.iter().copied().collect();
         let all_ids: HashSet<_> = self.units.iter().map(|unit| unit.physical_id).collect();
+        let max_id = all_ids.iter().map(|id| id.0).max().unwrap_or(0);
+        let primary: HashSet<_> = self.genome_constituent_ids.iter().copied().collect();
+        let mut assigned_core_ids = primary.clone();
+        let core_metadata_valid = primary.len() == self.genome_constituent_ids.len()
+            && primary.is_subset(&all_ids)
+            && self.additional_genome_constituent_groups.iter().all(|group| {
+                let group_ids: HashSet<_> = group.iter().copied().collect();
+                let valid = !group.is_empty()
+                    && group_ids.len() == group.len()
+                    && group_ids.is_subset(&all_ids)
+                    && assigned_core_ids.is_disjoint(&group_ids);
+                if valid {
+                    assigned_core_ids.extend(group_ids);
+                }
+                valid
+            });
         if excluded_ids.is_empty()
             || excluded.len() != excluded_ids.len()
             || excluded.contains(&PhysicalConstituentId(0))
             || !excluded.is_subset(&all_ids)
             || excluded.len() >= self.units.len()
+            || all_ids.len() != self.units.len()
+            || all_ids.contains(&PhysicalConstituentId(0))
+            || self.next_constituent_id == 0
+            || self.next_constituent_id <= max_id
+            || !core_metadata_valid
+            || self.units.iter().any(|unit| {
+                !unit.placement.x.is_finite()
+                    || !unit.placement.y.is_finite()
+                    || !unit.placement.rotation_radians.is_finite()
+            })
+            || self.bonds.iter().any(|bond| {
+                bond.endpoint_a.constituent_id == bond.endpoint_b.constituent_id
+                    || !all_ids.contains(&bond.endpoint_a.constituent_id)
+                    || !all_ids.contains(&bond.endpoint_b.constituent_id)
+                    || !bond.strength.is_finite()
+                    || !(0.0..=1.0).contains(&bond.strength)
+                    || !bond.bond_energy.is_finite()
+                    || bond.bond_energy < 0.0
+            })
         {
             return None;
         }
 
-        let primary: HashSet<_> = self.genome_constituent_ids.iter().copied().collect();
-        if !primary.is_disjoint(&excluded) {
+        if !primary.is_disjoint(&excluded)
+            || self.additional_genome_constituent_groups.iter().any(|group| {
+                let group_ids: HashSet<_> = group.iter().copied().collect();
+                !group_ids.is_disjoint(&excluded) && !group_ids.is_subset(&excluded)
+            })
+        {
             return None;
-        }
-        for group in &self.additional_genome_constituent_groups {
-            let group_ids: HashSet<_> = group.iter().copied().collect();
-            if !group_ids.is_disjoint(&excluded) && !group_ids.is_subset(&excluded) {
-                return None;
-            }
         }
 
         let mut view = self.clone();
