@@ -736,6 +736,9 @@ pub(crate) fn advance_construction(
     // Validate the persisted developing holder before any new parent-funded
     // reserve transfer. A non-finite construction must not drain its parent on
     // every subsequent tick while it remains attached for diagnosis.
+    if !developing_membership_is_valid(construction) {
+        return (ConstructionStatus::Dead, None);
+    }
     let reserve_energy = construction.child_genome.reproductive_energy_allocation;
     // Validate all persisted scalar accounting state before reserve transfer,
     // maintenance settlement, or candidate construction can mutate it.
@@ -796,17 +799,17 @@ pub(crate) fn advance_construction(
         return (ConstructionStatus::Detached, None);
     }
 
+    let anchor_index = construction
+        .anchor_physical_id
+        .and_then(|id| construction.developing_structure.unit_index(id))
+        .unwrap_or(construction.anchor_unit_index);
     let genome_qualified = crate::cavity::analyze_genome_cavity(
         &construction.developing_structure,
         &environment.catalog,
     )
     .ok()
     .flatten()
-    .is_some_and(|cavity| {
-        cavity
-            .boundary_units
-            .contains(&construction.anchor_unit_index)
-    });
+    .is_some_and(|cavity| cavity.boundary_units.contains(&anchor_index));
     let context = if genome_qualified {
         developmental_context(
             &construction.child_genome,
