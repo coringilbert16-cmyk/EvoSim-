@@ -151,6 +151,9 @@ jobs:
       - name: Run focused active-transformation reproduction isolation test
         timeout-minutes: 5
         run: cargo test --locked reproduction_cannot_mutate_storage_while_transformation_is_active
+      - name: Run focused active-transformation action isolation test
+        timeout-minutes: 5
+        run: cargo test --locked active_transformation_suppresses_new_movement_and_material_actions
       # Keep post-death holder conservation visible independently of the full suite.
       - name: Run focused post-death holder inventory test
         timeout-minutes: 5
