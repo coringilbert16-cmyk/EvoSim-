@@ -1205,6 +1205,8 @@ impl PhysicalConstituentGraph {
                 bond.endpoint_a.constituent_id == bond.endpoint_b.constituent_id
                     || !all_ids.contains(&bond.endpoint_a.constituent_id)
                     || !all_ids.contains(&bond.endpoint_b.constituent_id)
+                    || !endpoint_is_finite(bond.endpoint_a.location)
+                    || !endpoint_is_finite(bond.endpoint_b.location)
                     || !bond.strength.is_finite()
                     || !(0.0..=1.0).contains(&bond.strength)
                     || !bond.bond_energy.is_finite()
