@@ -4734,3 +4734,8 @@ The workflow for implementation head `fd985bdfdf8e7b486b87eb9e24422de6d56fc2a7` 
 Clippy also failed under `-D warnings` (31 diagnostics for the binary and 14 for the test target in the compiler output), across existing source areas including constructor, capillary geometry, and Bob library. This result has not been identity-compared against the frozen baseline, so do not claim these are all pre-existing or that the branch improves Clippy.
 
 The graph-level test coverage gap still worth closing before the large coordinated migration is the other primitive used by that migration: `replace_subgraph_for_physical_ids` must have a focused regression proving that retained endpoint IDs preserve cross-boundary bonds and that removing a bonded endpoint rejects without mutating the aggregate. After that, the production ownership migration remains one coordinated source change as described above. No production migration has been made in this checkpoint.
+
+
+### Subgraph replacement regression added — 2026-10-24
+
+Implementation commit `498ad0beea704fa66e352eff24706245370764fa` adds `subgraph_replacement_preserves_cross_boundary_bonds_and_rejects_dangling_replacements` to `src/geometry/structure.rs`. It checks that replacing a selected attached subgraph while preserving its physical endpoint IDs retains both the cross-boundary bond and an internal bond, including their stored energies. It then removes the bonded core endpoint from a candidate replacement and verifies rejection leaves units, bonds, core membership, and the constituent-ID allocator unchanged. CI for this exact commit had not yet appeared at handoff refresh; do not count the new test as passing until its exact-head workflow completes.
