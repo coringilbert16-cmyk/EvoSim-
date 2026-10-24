@@ -4,7 +4,7 @@ EvoSim is an experimental 2D artificial-life simulation written in Rust. The pro
 
 This README is the current repository guide and implementation-status summary. Older dated handoffs are preserved verbatim in [README_HANDOFF_ARCHIVE_2026-10-22.md](README_HANDOFF_ARCHIVE_2026-10-22.md); treat them as historical evidence, not current instructions when they conflict with this page.
 
-## Current repository state — 2026-10-22
+## Current repository state — 2026-10-24
 
 - **Integration baseline:** PR [#202](https://github.com/coringilbert16-cmyk/EvoSim-/pull/202) is merged to `main` at `8c84978cd003738d94a74eef9114b711689c3804`.
 - **Maintenance work:** [PR #203](https://github.com/coringilbert16-cmyk/EvoSim-/pull/203) is a draft based on that baseline. It contains narrowly scoped lint cleanup and documentation organization. It is not merged.
@@ -12,6 +12,15 @@ This README is the current repository guide and implementation-status summary. O
 - **Strict Clippy:** `cargo clippy --locked --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of` still fails. Exact-head run [#39705150387](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39705150387), at `67bceda1672891e7e390cf242295477bfb5cf3a0`, reports 34 application-target and 15 test-target errors, improved from the earlier 36/16 checkpoint and baseline 59/38. The full suite reports 563 passed, 28 failed, 1 ignored; all 28 failing test identities match the accepted baseline run [#39697289682](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39697289682), with no new or resolved baseline failures. Formatting, source-size, COMBINE architecture, and focused Bob/fluid/chemistry checks pass at this head. Strict Clippy remains an acknowledged follow-up; no blanket lint suppression is intended.
 - **Not yet proven:** whole-world energy conservation across every storage, reaction, and lifecycle path; live sunlight/world-tone energy capture; and complete self-maintaining organism viability. Do not infer these from passing focused tests.
 - **Separate work:** PR [#196](https://github.com/coringilbert16-cmyk/EvoSim-/pull/196) remains out of scope for PR #203. Do not import its constructor/Bob changes as part of maintenance cleanup.
+
+### Current chemistry-unification implementation checkpoint
+
+- **Implementation PR #205:** [Unify chemistry, material ownership, and energy accounting](https://github.com/coringilbert16-cmyk/EvoSim-/pull/205), branch `chemistry-unification-implementation-2026-10-22`, current source head `3bb39a42bb860aef30e903dd19ee5ce3436a9f04`. Exact-head workflow [40105064204](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40105064204) is still running; formatting and all focused gates through material-restoration rollback passed. The independently run canonical seed realization gate failed, and the full suite is now running despite that failure.
+- **Most recent completed full-suite identity comparison:** source head `fa04de9fe8d15ce358509cc09282f0f3ebffd631`, workflow [40103516613](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40103516613): 692 passed, 21 failed, 1 ignored; all 21 failure identities match frozen baseline [39705628427](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39705628427), zero new identities, seven baseline failures resolved. The former current-only ordinary-tick energy-inventory residual now passes. This is not a green suite.
+- **New Phase 8 holder regression:** `breached_organism_retains_storage_and_construction_without_biological_progress` passes on workflow [40104819765](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40104819765), along with the focused energy-source, world-inventory, and transaction-rollback gates.
+- **Canonical 12N realization:** the 12-piece corner-free nitrogen cavity remains the correct seed; do not restore the obsolete 16-piece ring. The full-organism realization test is still a known baseline failure, now reporting that the realized structure contains no constituents outside the cavity boundary. Do not weaken the viability contract or change the seed geometry to hide this failure. Constructor/Bob redesign remains separate from this chemistry-unification work.
+- **Architecture status:** stable-ID graph append/remap, selected-subgraph extraction, and atomic subgraph replacement primitives already exist and have unit coverage. Runtime still has a separate `developing_structure` and `developing_energy`; canonical aggregate ownership, parent-energy-funded growth, single-counted world-tone/movement geometry, and atomic division remain unfinished. See [PR #204's living plan](https://github.com/coringilbert16-cmyk/EvoSim-/pull/204).
+- **Documentation plan PR #204:** latest known plan update is `53115e85faecfc63352eb944d58089f4a09f8fcb`; it records exact-head evidence, the baseline seed failure, and the CI sequencing fix. Clippy remains failing under repository warnings-as-errors; do not report it green.
 
 ## Design and implementation invariants
 
@@ -52,11 +61,13 @@ The full test suite is currently **not green**. A maintenance change is acceptab
 
 ## Active maintenance checklist
 
-- [x] Review exact-head CI at `1414744`: formatting, source-size and COMBINE architecture checks pass; focused Bob/fluid/chemical tests pass; full suite remains at the same 28 baseline failures (563 passed, 1 ignored).
-- [x] Complete final exact-head verification for PR #203: all 28 full-suite failure identities match the accepted baseline; formatting and focused checks pass. Strict Clippy improved to 34 application-target and 15 test-target errors but remains a tracked follow-up; investigate dead-code warnings before deleting or suppressing anything.
-- [x] Reconcile full-suite test failures by identity against the known baseline; no new or resolved failing identities.
-- [ ] Improve repository documentation and source ownership without discarding historical evidence.
-- [ ] Keep PR #196 separate until the stabilized baseline is understood and its exact-head behavior is independently reviewed.
+- [x] Maintain exact-head CI evidence and compare failure identities against the frozen baseline before attributing regressions.
+- [x] Add independent Phase 5 world-tone source-budget, strict no-creation, and ordinary-tick energy-inventory checks; the former cumulative-rounding residual is resolved on the last completed full-suite head.
+- [x] Add Phase 8 regression proving a breached organism retains its material and energy holders without biological construction progress; focused gate passes.
+- [ ] Complete canonical aggregate ownership migration: stable-ID membership in the parent's single physical graph, parent-held energy for construction, and no duplicate world-tone/movement geometry.
+- [ ] Implement atomic aggregate division only after attachment/growth and cross-boundary bond-energy settlement are coherent; the 160% scale threshold enables but does not force division.
+- [ ] Finish whole-world energy/material reconciliation and the remaining baseline failures. Latest exact-head full-suite run is pending; strict Clippy remains red.
+- [ ] Keep PR #196 constructor/Bob work separate from chemistry-unification changes.
 
 ## Specification authority
 
