@@ -2510,7 +2510,7 @@ mod decomposition_finalization_tests {
             .stored_material
             .take_physical_at(0)
             .expect("second stored constituent remains");
-        construction.committed_material.entries.push(committed);
+        construction.committed_material.entries.push(crate::material_storage::StoredMaterial::Physical(committed));
         let mut ledger = simulation.energy_ledger;
         let transfer = 0.5_f64.min(organism.usable_energy);
         assert!(ledger.transfer(
