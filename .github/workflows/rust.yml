@@ -49,6 +49,7 @@ jobs:
           cargo test --locked chemical_break_with_resonance_shortfall_reconciles_world_inventory
           cargo test --locked resonance_overload_break_reconciles_world_inventory
           cargo test --locked world_energy_inventory_reconciles_world_tone_and_structural_break_together
+          cargo test --locked zero_incident_world_tone_cannot_create_energy_within_tolerance
       - name: Run focused physical graph merge tests
         timeout-minutes: 5
         run: |
