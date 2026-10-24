@@ -782,10 +782,13 @@ impl PhysicalConstituentGraph {
                 .additional_genome_constituent_groups
                 .iter()
                 .any(|group| group.iter().copied().collect::<HashSet<_>>() == child_primary)
-            || self.additional_genome_constituent_groups.iter().any(|group| {
-                let group_ids: HashSet<_> = group.iter().copied().collect();
-                !group_ids.is_disjoint(&selected) && !group_ids.is_subset(&selected)
-            })
+            || self
+                .additional_genome_constituent_groups
+                .iter()
+                .any(|group| {
+                    let group_ids: HashSet<_> = group.iter().copied().collect();
+                    !group_ids.is_disjoint(&selected) && !group_ids.is_subset(&selected)
+                })
         {
             return None;
         }
@@ -1604,10 +1607,7 @@ mod tests {
         });
 
         let (child, released_energy) = aggregate
-            .partition_subgraph_for_division(
-                &[child_core_id, child_body_id],
-                &[child_core_id],
-            )
+            .partition_subgraph_for_division(&[child_core_id, child_body_id], &[child_core_id])
             .expect("valid aggregate division");
         assert_eq!(released_energy, 1.25);
         assert_eq!(aggregate.physical_constituent_ids(), vec![parent_id]);
@@ -1645,7 +1645,10 @@ mod tests {
             .is_none());
         assert_eq!(aggregate.units, before.units);
         assert_eq!(aggregate.bonds, before.bonds);
-        assert_eq!(aggregate.genome_constituent_ids, before.genome_constituent_ids);
+        assert_eq!(
+            aggregate.genome_constituent_ids,
+            before.genome_constituent_ids
+        );
         assert_eq!(
             aggregate.additional_genome_constituent_groups,
             before.additional_genome_constituent_groups
@@ -1677,9 +1680,21 @@ mod tests {
         let before = aggregate.clone();
 
         assert!(aggregate
-            .partition_subgraph_for_division(&[child_core_id, child_body_id, other_core_a_id], &[child_core_id])
+            .partition_subgraph_for_division(
+                &[child_core_id, child_body_id, other_core_a_id],
+                &[child_core_id]
+            )
             .is_none());
-        assert_eq!(aggregate, before);
+        assert_eq!(aggregate.units, before.units);
+        assert_eq!(aggregate.bonds, before.bonds);
+        assert_eq!(
+            aggregate.genome_constituent_ids,
+            before.genome_constituent_ids
+        );
+        assert_eq!(
+            aggregate.additional_genome_constituent_groups,
+            before.additional_genome_constituent_groups
+        );
     }
 
     #[test]
