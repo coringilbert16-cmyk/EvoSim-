@@ -440,8 +440,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
             }
             next_heat = corrected_heat;
             actual_heat = next_heat - self.total_heat_dissipated;
-            cumulative_residual =
-                actual_incident - (actual_capture + actual_heat + actual_escape);
+            cumulative_residual = actual_incident - (actual_capture + actual_heat + actual_escape);
             if !actual_heat.is_finite() || actual_heat < 0.0 || cumulative_residual < 0.0 {
                 return false;
             }
@@ -593,17 +592,11 @@ mod tests {
         };
         let before = ledger;
 
-        assert!(ledger.settle_world_tone_paths(
-            80.330104,
-            17.734988,
-            17.793927,
-            44.801189,
-        ));
+        assert!(ledger.settle_world_tone_paths(80.330104, 17.734988, 17.793927, 44.801189,));
 
         let actual_incident =
             ledger.total_external_energy_input - before.total_external_energy_input;
-        let actual_capture =
-            ledger.total_resonant_energy_held - before.total_resonant_energy_held;
+        let actual_capture = ledger.total_resonant_energy_held - before.total_resonant_energy_held;
         let actual_heat = ledger.total_heat_dissipated - before.total_heat_dissipated;
         let actual_escape =
             ledger.total_world_tone_energy_escaped - before.total_world_tone_energy_escaped;
