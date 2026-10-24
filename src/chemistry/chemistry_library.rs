@@ -1131,6 +1131,31 @@ mod tests {
     }
 
     #[test]
+    fn nonempty_cache_reopens_with_matching_derived_fingerprint() {
+        let root = test_root("nonempty-derived-fingerprint-reopen");
+        let _ = fs::remove_dir_all(&root);
+        let record = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "restart"),
+            static_potential: 0.625,
+        };
+        let key = record.key.clone();
+        {
+            let mut library = ChemistryLibrary::open(&root).unwrap();
+            assert!(library.insert(record.clone()).unwrap());
+            assert_eq!(library.get(&key), Some(&record));
+        }
+
+        let reopened = ChemistryLibrary::open(&root).unwrap();
+        assert_eq!(reopened.get(&key), Some(&record));
+        assert_eq!(
+            reopened.manifest.equation_fingerprint,
+            current_chemistry_equation_fingerprint()
+        );
+        assert_eq!(reopened.manifest.entries, 1);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn checked_in_manifest_fingerprint_matches_default_catalog() {
         let manifest: ChemistryLibraryManifest = serde_json::from_str(include_str!(
             "../../chemistry_library/data/manifest.json"
