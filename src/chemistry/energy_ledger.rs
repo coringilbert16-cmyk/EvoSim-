@@ -386,7 +386,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         }
         let next_external = self.total_external_energy_input + incident_energy;
         let next_resonant = self.total_resonant_energy_held + resonant_energy_captured;
-        let next_heat = self.total_heat_dissipated + heat_dissipated;
+        let mut next_heat = self.total_heat_dissipated + heat_dissipated;
         let next_escaped = self.total_world_tone_energy_escaped + escaped_energy;
         if !next_external.is_finite()
             || !next_resonant.is_finite()
@@ -395,6 +395,58 @@ impl EnergyLedgerAuthority for EnergyLedger {
         {
             return false;
         }
+
+        // Validate the increments that the cumulative f64 counters can
+        // actually represent, not just the ideal per-frame allocations. Adding
+        // a small frame to a large cumulative total can round the source and
+        // sinks in different directions; the aggregate world inventory must
+        // never report more tone energy allocated than actually credited.
+        let actual_incident = next_external - self.total_external_energy_input;
+        let actual_capture = next_resonant - self.total_resonant_energy_held;
+        let actual_escape = next_escaped - self.total_world_tone_energy_escaped;
+        let mut actual_heat = next_heat - self.total_heat_dissipated;
+        let mut cumulative_residual =
+            actual_incident - (actual_capture + actual_heat + actual_escape);
+        if !actual_incident.is_finite()
+            || actual_incident < 0.0
+            || !actual_capture.is_finite()
+            || actual_capture < 0.0
+            || !actual_escape.is_finite()
+            || actual_escape < 0.0
+            || !actual_heat.is_finite()
+            || actual_heat < 0.0
+            || !cumulative_residual.is_finite()
+        {
+            return false;
+        }
+        if cumulative_residual < 0.0 {
+            // The cumulative counters introduced an ulp-scale over-allocation.
+            // Debit only the new frame's heat. If subtraction rounds away, step
+            // down one representable f64; a tiny unallocated remainder is safer
+            // than accepting energy creation.
+            let overrun = -cumulative_residual;
+            if overrun > actual_heat {
+                return false;
+            }
+            let mut corrected_heat = next_heat - overrun;
+            if corrected_heat >= next_heat {
+                if next_heat <= self.total_heat_dissipated {
+                    return false;
+                }
+                corrected_heat = f64::from_bits(next_heat.to_bits() - 1);
+            }
+            if !corrected_heat.is_finite() || corrected_heat < self.total_heat_dissipated {
+                return false;
+            }
+            next_heat = corrected_heat;
+            actual_heat = next_heat - self.total_heat_dissipated;
+            cumulative_residual =
+                actual_incident - (actual_capture + actual_heat + actual_escape);
+            if !actual_heat.is_finite() || actual_heat < 0.0 || cumulative_residual < 0.0 {
+                return false;
+            }
+        }
+
         self.total_external_energy_input = next_external;
         self.total_resonant_energy_held = next_resonant;
         self.total_heat_dissipated = next_heat;
