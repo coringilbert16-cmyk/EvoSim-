@@ -804,7 +804,9 @@ impl PhysicalConstituentGraph {
         }
 
         let mut parent = self.clone();
-        parent.units.retain(|unit| !selected.contains(&unit.physical_id));
+        parent
+            .units
+            .retain(|unit| !selected.contains(&unit.physical_id));
         parent.bonds.retain(|bond| {
             !selected.contains(&bond.endpoint_a.constituent_id)
                 && !selected.contains(&bond.endpoint_b.constituent_id)
@@ -1607,7 +1609,10 @@ mod tests {
         assert_eq!(released_energy, 1.25);
         assert_eq!(aggregate.physical_constituent_ids(), vec![parent_id]);
         assert!(aggregate.bonds.is_empty());
-        assert_eq!(child.physical_constituent_ids(), vec![child_core_id, child_body_id]);
+        assert_eq!(
+            child.physical_constituent_ids(),
+            vec![child_core_id, child_body_id]
+        );
         assert_eq!(child.bonds.len(), 1);
         assert_eq!(child.bonds[0].bond_energy, 2.5);
         assert_eq!(child.genome_constituent_ids(), &[child_core_id]);
@@ -1635,7 +1640,14 @@ mod tests {
         assert!(aggregate
             .partition_subgraph_for_division(&[child_a_id], &[child_a_id])
             .is_none());
-        assert_eq!(aggregate, before);
+        assert_eq!(aggregate.units, before.units);
+        assert_eq!(aggregate.bonds, before.bonds);
+        assert_eq!(aggregate.genome_constituent_ids, before.genome_constituent_ids);
+        assert_eq!(
+            aggregate.additional_genome_constituent_groups,
+            before.additional_genome_constituent_groups
+        );
+        assert_eq!(aggregate.next_constituent_id, before.next_constituent_id);
     }
 
     #[test]
