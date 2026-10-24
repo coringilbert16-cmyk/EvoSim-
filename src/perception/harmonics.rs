@@ -551,8 +551,8 @@ pub(crate) fn transform_signal_to_energy_budget(
         if final_energy <= outgoing_energy_budget {
             break;
         }
-        let correction = (outgoing_energy_budget / final_energy).sqrt()
-            * (1.0 - 2.0 * f64::EPSILON);
+        let correction =
+            (outgoing_energy_budget / final_energy).sqrt() * (1.0 - 2.0 * f64::EPSILON);
         if !correction.is_finite() || correction <= 0.0 {
             return None;
         }
@@ -563,8 +563,7 @@ pub(crate) fn transform_signal_to_energy_budget(
     }
     if !final_energy.is_finite()
         || final_energy > outgoing_energy_budget
-        || (final_energy - outgoing_energy_budget).abs()
-            > 1e-9 * outgoing_energy_budget.max(1.0)
+        || (final_energy - outgoing_energy_budget).abs() > 1e-9 * outgoing_energy_budget.max(1.0)
     {
         return None;
     }
