@@ -108,6 +108,7 @@ jobs:
         timeout-minutes: 5
         run: |
           cargo test --locked live_geometry_key_distinguishes_chemical_positions_and_canonicalizes_them
+          cargo test --locked checked_in_manifest_fingerprint_matches_default_catalog
           cargo test --locked changed_catalog_chemical_position_changes_fingerprint_and_rejects_old_manifest
       - name: Verify invalid chemical positions cannot poison cache identities
         timeout-minutes: 5
