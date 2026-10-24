@@ -1627,29 +1627,20 @@ mod tests {
         use crate::structure::Placement;
 
         let (mut organism, mut environment, _) = resonance_break_test_organism();
-        // Keep the organism's canonical genome cavity intact and add a second,
-        // ordinary enclosed region. Environmental BREAK targets accessible
-        // interiors other than the protected genome cavity.
-        for y in 0..5 {
-            for x in 0..5 {
-                if (x == 0 || x == 4) && (y == 0 || y == 4) {
-                    continue;
-                }
-                if x != 0 && x != 4 && y != 0 && y != 4 {
-                    continue;
-                }
-                let mut unit = crate::structure::StructuralUnit::new(
-                    "Nitrogen",
-                    Placement {
-                        x: 20.0 + x as f64 - 2.0,
-                        y: 20.0 + y as f64 - 2.0,
-                        rotation_radians: 0.0,
-                    },
-                );
-                assert!(unit.realize_default_geometry(&environment.catalog));
-                organism.structure.add_unit(unit);
-            }
+        // Keep the canonical genome cavity intact and add a second, fully
+        // bonded physical structure at a distant offset. Its enclosed region
+        // is ordinary accessible interior, not the protected primary genome.
+        let mut second_structure = organism.structure.clone();
+        for unit in &mut second_structure.units {
+            unit.placement.x += 20.0;
+            unit.placement.y += 20.0;
         }
+        second_structure.clear_genome_constituent_ids();
+        second_structure.clear_additional_genome_constituent_groups();
+        organism
+            .structure
+            .append_graph_remapping_ids(&second_structure)
+            .expect("second physical structure should merge without ID aliasing");
 
         let source = PhysicalMaterial::realized(
             Material {
