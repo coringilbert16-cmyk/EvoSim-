@@ -421,18 +421,18 @@ impl EnergyLedgerAuthority for EnergyLedger {
             || amount < 0.0
             || !from.is_finite()
             || !to.is_finite()
-            || *from < -EPSILON
-            || *to < -EPSILON
-            || *from + EPSILON < amount
+            || *from < 0.0
+            || *to < 0.0
+            || *from < amount
         {
             return false;
         }
         let next_from = *from - amount;
         let next_to = *to + amount;
-        if next_from < -EPSILON || !next_to.is_finite() {
+        if next_from < 0.0 || !next_to.is_finite() {
             return false;
         }
-        *from = next_from.max(0.0);
+        *from = next_from;
         *to = next_to;
         true
     }
@@ -936,6 +936,21 @@ mod tests {
         assert_eq!(ledger.total_usable_energy_gained, 0.0);
         assert_eq!(ledger.total_work_expended, 0.0);
         assert_eq!(ledger.total_heat_dissipated, 0.0);
+    }
+
+    #[test]
+    fn transfer_rejects_sub_tolerance_overdraw_without_creating_energy() {
+        let mut ledger = EnergyLedger::default();
+        let mut from = 1.0;
+        let mut to = 0.0;
+        let total_before = from + to;
+        assert!(
+            !ledger.transfer(&mut from, &mut to, 1.0 + EPSILON * 0.5),
+            "a transfer must not spend more than its source holder contains"
+        );
+        assert_eq!(from + to, total_before);
+        assert_eq!(from, 1.0);
+        assert_eq!(to, 0.0);
     }
 
     #[test]
