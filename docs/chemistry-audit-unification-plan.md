@@ -4266,3 +4266,12 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - CI's dedicated chemistry cache-position gate now checks four distinct properties: live key canonicalization/position identity, nonempty restart with the current fingerprint, checked-in manifest synchronization with the default catalog, and rejection when the catalog chemical position changes.
 - Current PR #205 source head after this slice: `ac7713d20b7d13b015780a6f750367f925f0a47b`. Exact-head workflow has not yet been inspected. This is additive test coverage; Phase 4 stays open until the current-head gates and rollback/recovery behavior pass.
 - **Parallel continuation:** inspect Phase 5 energy-inventory paths for an independent missing-holder or rollback case while CI runs. Do not wait idle, and do not expand into the coordinated aggregate/division migration as a partial patch.
+
+## Phase 5 zero-input world-tone conservation defect closed locally — exact-head CI pending (2026-10-24)
+
+- **Focused audit:** `settle_world_tone_paths` allowed the total allocated output to differ from incident energy by an absolute tolerance of `EPSILON` when incident energy was zero (the comparison scales by `max(incident, 1)`). That meant a nonzero captured/heat/escaped amount as large as the tolerance could be credited without any incident source.
+- **Production fix:** zero incident energy now requires exactly zero total allocation; the existing scaled tolerance remains for nonzero incident energy. This is a narrow source/sink invariant, not a claim that all world energy is conserved.
+- **Regression:** `zero_incident_world_tone_cannot_create_energy_within_tolerance` submits zero incident energy and a small nonzero captured amount, expects rejection, and verifies all four affected ledger totals remain unchanged.
+- CI now runs this test beside the cross-domain world-tone + structural BREAK inventory test.
+- **Current PR #205 source head:** `b4b8ee25c653ca6c7b806c974394861745bbf5c3`. Exact-head workflow is pending/not yet returned. The immediately preceding workflow on `ac7713d` failed formatting only: rustfmt wanted the `include_str!` manifest parse on one line; this was corrected in `96cc347`. The subsequent catalog-order assertion and zero-input conservation fix still require current-head verification.
+- **Next parallel work:** continue Phase 5 audit of ledger transaction boundaries and check exact-head focused gate results when available. Phase 4 cache recovery/restart and full-world conservation remain open.
