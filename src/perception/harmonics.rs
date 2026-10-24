@@ -1445,6 +1445,47 @@ mod tests {
     }
 
     #[test]
+    fn transformed_secondary_signal_never_exceeds_budget_after_rounding() {
+        let input = ToneSpectrum {
+            components: vec![
+                ToneComponent {
+                    frequency_hz: 440.0,
+                    amplitude: 0.7,
+                    phase_radians: 0.0,
+                },
+                ToneComponent {
+                    frequency_hz: 660.0,
+                    amplitude: 0.3,
+                    phase_radians: 0.2,
+                },
+                ToneComponent {
+                    frequency_hz: 880.0,
+                    amplitude: 0.4,
+                    phase_radians: -0.1,
+                },
+            ],
+        };
+        for budget in [0.1, 0.3, 0.7, 1.1, 1.7] {
+            let output = transform_signal_to_energy_budget(
+                properties(1.0, 2.0, 1.0),
+                baselines(),
+                &input,
+                budget,
+            )
+            .expect("valid budget should produce a bounded spectrum");
+            let energy = spectrum_energy(&output).expect("transformed spectrum is valid");
+            assert!(
+                energy <= budget,
+                "transformed energy {energy} exceeded requested budget {budget}"
+            );
+            assert!(
+                (budget - energy).abs() <= 1e-9 * budget.max(1.0),
+                "downward rounding correction exceeded tolerance: budget={budget}, energy={energy}"
+            );
+        }
+    }
+
+    #[test]
     fn material_response_is_compact_and_harmonic() {
         let spectrum = material_response(properties(1.0, 4.0, 1.0), baselines(), 0.25);
         assert!(!spectrum.components.is_empty());
