@@ -1025,7 +1025,7 @@ mod tests {
             root.join("manifest.json"),
             serde_json::to_vec(&ChemistryLibraryManifest {
                 schema_version,
-                equation_fingerprint: CHEMISTRY_EQUATION_FINGERPRINT.into(),
+                equation_fingerprint: current_chemistry_equation_fingerprint(),
                 entries: manifest_entries,
             })
             .unwrap(),
