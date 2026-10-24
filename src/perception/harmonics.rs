@@ -528,7 +528,7 @@ pub(crate) fn transform_signal_to_energy_budget(
     }
 
     let mut transformed = material_response_spectrum(properties, baselines, incoming)?;
-    let transformed_energy = spectrum_magnitude(&transformed).powi(2);
+    let transformed_energy = spectrum_energy(&transformed)?;
     if !transformed_energy.is_finite() || transformed_energy <= f64::EPSILON {
         return None;
     }
@@ -543,9 +543,28 @@ pub(crate) fn transform_signal_to_energy_budget(
         component.amplitude *= scale;
     }
     transformed.retain_strongest();
-    let final_energy = spectrum_magnitude(&transformed).powi(2);
+    let mut final_energy = spectrum_energy(&transformed)?;
+    // Floating-point rescaling can land one ulp above the requested budget.
+    // Correct downward only; an outgoing signal may lose a negligible amount,
+    // but can never carry more energy than the source remainder.
+    for _ in 0..4 {
+        if final_energy <= outgoing_energy_budget {
+            break;
+        }
+        let correction = (outgoing_energy_budget / final_energy).sqrt()
+            * (1.0 - 2.0 * f64::EPSILON);
+        if !correction.is_finite() || correction <= 0.0 {
+            return None;
+        }
+        for component in &mut transformed.components {
+            component.amplitude *= correction;
+        }
+        final_energy = spectrum_energy(&transformed)?;
+    }
     if !final_energy.is_finite()
-        || (final_energy - outgoing_energy_budget).abs() > 1e-9 * outgoing_energy_budget.max(1.0)
+        || final_energy > outgoing_energy_budget
+        || (final_energy - outgoing_energy_budget).abs()
+            > 1e-9 * outgoing_energy_budget.max(1.0)
     {
         return None;
     }
