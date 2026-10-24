@@ -1709,24 +1709,36 @@ mod tests {
             &environment.catalog,
         )
         .expect("the source should restore for endpoint eligibility checks");
+        assert_eq!(
+            source.placements.as_ref().map(Vec::len),
+            Some(source.material.parts.len()),
+            "the environmental source must retain one placement per constituent"
+        );
         assert!(
             connections.iter().any(|connection| {
-                let a = indices.get(connection.part_a).and_then(|index| {
-                    connection
-                        .endpoint_a
-                        .world_point(&hypothetical.units[*index], &environment.catalog)
-                });
-                let b = indices.get(connection.part_b).and_then(|index| {
-                    connection
-                        .endpoint_b
-                        .world_point(&hypothetical.units[*index], &environment.catalog)
-                });
+                let Some(&a_index) = indices.get(connection.part_a) else {
+                    return false;
+                };
+                let Some(&b_index) = indices.get(connection.part_b) else {
+                    return false;
+                };
+                let Some(a) = connection
+                    .endpoint_a
+                    .world_point(&hypothetical.units[a_index], &environment.catalog)
+                else {
+                    return false;
+                };
+                let Some(b) = connection
+                    .endpoint_b
+                    .world_point(&hypothetical.units[b_index], &environment.catalog)
+                else {
+                    return false;
+                };
                 accessible_regions.iter().any(|region| {
-                    a.is_some_and(|point| region.contains_point(point.x, point.y))
-                        || b.is_some_and(|point| region.contains_point(point.x, point.y))
+                    region.contains_point(a.x, a.y) || region.contains_point(b.x, b.y)
                 })
             }),
-            "at least one actual physical bond endpoint must lie inside accessible interior"
+            "at least one complete physical bond must have an endpoint inside accessible interior"
         );
         environment.field.cells[cell_index]
             .physical_materials
