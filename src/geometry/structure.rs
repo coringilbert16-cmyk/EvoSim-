@@ -919,6 +919,34 @@ impl PhysicalConstituentGraph {
         Some(remapping)
     }
 
+    /// Atomically replace an aggregate-owned physical group and return its
+    /// refreshed graph-local view. Newly allocated constituent IDs are remapped
+    /// before extraction, so the returned view and authoritative aggregate agree.
+    pub(crate) fn replace_subgraph_remapping_new_ids_and_extract(
+        &mut self,
+        old_ids: &[PhysicalConstituentId],
+        replacement: &Self,
+    ) -> Option<(
+        HashMap<PhysicalConstituentId, PhysicalConstituentId>,
+        Self,
+    )> {
+        let mut staged = self.clone();
+        let remapping = staged.replace_subgraph_remapping_new_ids(old_ids, replacement)?;
+        let selected_ids: Vec<_> = replacement
+            .physical_constituent_ids()
+            .iter()
+            .map(|id| remapping.get(id).copied())
+            .collect::<Option<_>>()?;
+        let primary_core_ids: Vec<_> = replacement
+            .genome_constituent_ids
+            .iter()
+            .map(|id| remapping.get(id).copied())
+            .collect::<Option<_>>()?;
+        let refreshed_view = staged.subgraph_for_physical_ids(&selected_ids, &primary_core_ids)?;
+        *self = staged;
+        Some((remapping, refreshed_view))
+    }
+
     pub(crate) fn replace_subgraph_for_physical_ids(
         &mut self,
         old_ids: &[PhysicalConstituentId],
