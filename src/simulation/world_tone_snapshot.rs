@@ -346,6 +346,13 @@ impl WorldToneOccluderSnapshot {
             .iter()
             .map(|organism| organism.resonant_energy.clone())
             .collect();
+        let initial_resonant_energy = staged_reservoirs
+            .iter()
+            .map(|reservoir| reservoir.total_energy().unwrap_or(f64::NAN))
+            .sum::<f64>();
+        if !initial_resonant_energy.is_finite() || initial_resonant_energy < 0.0 {
+            return;
+        }
         let catalog = &simulation.environment.catalog;
         let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
         let mut total_incident = 0.0;
@@ -546,6 +553,38 @@ impl WorldToneOccluderSnapshot {
                 return;
             }
         }
+
+        // Per-path reservoir deltas are computed incrementally. Their sum
+        // can differ by a few ulps from the actual final reservoir inventory
+        // after many deposits into the same spectrum. The final staged holder
+        // delta is authoritative: reconcile capture against it and debit the
+        // same rounding difference from heat instead of letting the ledger
+        // disagree with the energy that is physically stored.
+        let staged_resonant_energy = staged_reservoirs
+            .iter()
+            .map(|reservoir| reservoir.total_energy().unwrap_or(f64::NAN))
+            .sum::<f64>();
+        let authoritative_capture = staged_resonant_energy - initial_resonant_energy;
+        let capture_correction = authoritative_capture - total_captured;
+        let capture_tolerance = 1e-8 * total_incident.max(1.0);
+        if !staged_resonant_energy.is_finite()
+            || staged_resonant_energy < 0.0
+            || !authoritative_capture.is_finite()
+            || authoritative_capture < 0.0
+            || !capture_correction.is_finite()
+            || capture_correction.abs() > capture_tolerance
+        {
+            return;
+        }
+        if capture_correction > 0.0 {
+            if total_heat < capture_correction {
+                return;
+            }
+            total_heat -= capture_correction;
+        } else {
+            total_heat += -capture_correction;
+        }
+        total_captured = authoritative_capture;
 
         // Reconcile the aggregate totals from one shared residual after
         // summing paths. Summing independently rounded per-path remainders can
