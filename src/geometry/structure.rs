@@ -1492,9 +1492,7 @@ mod tests {
         replacement.bonds.push(Bond {
             endpoint_a: BondEndpoint::new(
                 selected_id,
-                ConnectionEndpoint::Boundary {
-                    angle_radians: 0.0,
-                },
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
             ),
             endpoint_b: BondEndpoint::new(
                 transient_new_id,
