@@ -1622,6 +1622,12 @@ mod tests {
             before_groups
         );
         assert!(aggregate.view_without_physical_ids(&[child_a_id]).is_none());
+        aggregate.bonds[0].endpoint_a.location = ConnectionEndpoint::Boundary {
+            angle_radians: f64::NAN,
+        };
+        assert!(aggregate
+            .view_without_physical_ids(&[child_a_id, child_b_id])
+            .is_none());
     }
 
     #[test]
