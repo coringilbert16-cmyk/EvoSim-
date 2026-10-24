@@ -249,6 +249,17 @@ impl EnergyInventorySnapshot {
                 .residual()
                 .is_some_and(|residual| residual.abs() <= tolerance)
     }
+
+    /// Stronger release-gate oracle: tolerate tiny missing energy from numeric
+    /// rounding, but never accept a positive residual that represents more
+    /// stored/spent energy than the modeled sources supplied.
+    pub(crate) fn is_balanced_without_creation(self, tolerance: f64) -> bool {
+        tolerance.is_finite()
+            && tolerance >= 0.0
+            && self
+                .residual()
+                .is_some_and(|residual| residual <= 0.0 && residual.abs() <= tolerance)
+    }
 }
 
 /// Simulation-wide energy accounting infrastructure.
@@ -448,6 +459,31 @@ mod tests {
     use super::*;
 
     #[test]
+    #[test]
+    fn strict_world_inventory_oracle_rejects_even_sub_tolerance_energy_creation() {
+        let created = EnergyInventorySnapshot {
+            initial_usable_energy: 0.0,
+            current_usable_energy: 5e-10,
+            initial_resonant_energy: 0.0,
+            current_resonant_energy: 0.0,
+            initial_structural_energy: 0.0,
+            current_structural_energy: 0.0,
+            external_energy_input: 0.0,
+            world_tone_energy_escaped: 0.0,
+            other_energy_released: 0.0,
+            work_expended: 0.0,
+            heat_dissipated: 0.0,
+        };
+        assert!(created.is_balanced(1e-9));
+        assert!(!created.is_balanced_without_creation(1e-9));
+
+        let rounding_loss = EnergyInventorySnapshot {
+            external_energy_input: 5e-10,
+            ..created
+        };
+        assert!(rounding_loss.is_balanced_without_creation(1e-9));
+    }
+
     fn world_inventory_counts_retained_resonance_as_a_distinct_energy_store() {
         let inventory = EnergyInventorySnapshot {
             initial_usable_energy: 10.0,
