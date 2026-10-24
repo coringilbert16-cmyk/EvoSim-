@@ -1529,6 +1529,63 @@ mod tests {
     }
 
     #[test]
+    fn aggregate_subgraph_replacement_rejects_dangling_bonds_atomically() {
+        let mut aggregate = OrganismStructure::new();
+        aggregate.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        aggregate.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 4.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let before_units = aggregate.units.clone();
+        let before_bonds = aggregate.bonds.clone();
+        let before_next_id = aggregate.next_constituent_id;
+
+        let mut replacement = OrganismStructure::new();
+        let selected = replacement.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let selected_id = replacement.physical_id(selected).unwrap();
+        replacement.bonds.push(Bond {
+            endpoint_a: BondEndpoint::new(
+                selected_id,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                PhysicalConstituentId(999),
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::PI,
+                },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+
+        let old_id = aggregate.physical_id(0).unwrap();
+        assert!(aggregate
+            .replace_subgraph_remapping_new_ids(&[old_id], &replacement)
+            .is_none());
+        assert_eq!(aggregate.units, before_units);
+        assert_eq!(aggregate.bonds, before_bonds);
+        assert_eq!(aggregate.next_constituent_id, before_next_id);
+    }
+
+    #[test]
     fn only_fluid_resources_can_take_context_fitting_geometry() {
         let catalog = crate::resources::default_catalog();
         let mut water = StructuralUnit::new(
