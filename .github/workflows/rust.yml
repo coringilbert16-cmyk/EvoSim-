@@ -29,9 +29,9 @@ jobs:
       - name: Check COMBINE architecture
         timeout-minutes: 5
         run: bash scripts/check_combine_architecture.sh
-      - name: Run focused environmental BREAK transaction tests
+      - name: Verify exhausted-ID environmental BREAK guard
         timeout-minutes: 5
-        run: cargo test --locked environmental_break
+        run: cargo test --locked environmental_break_rejects_exhausted_transformation_ids_without_removing_source
       - name: Verify expulsion destination rollback
         timeout-minutes: 5
         run: cargo test --locked rejected_destination_restores_expulsion_source_and_neighbor_order
