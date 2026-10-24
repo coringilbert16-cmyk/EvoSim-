@@ -576,9 +576,7 @@ pub(crate) fn total_usable_energy_held(
             let construction_energy = organism
                 .reproductive_construction
                 .as_ref()
-                .filter(|construction| {
-                    !construction.is_aggregate_owned_by(&organism.structure)
-                })
+                .filter(|construction| !construction.is_aggregate_owned_by(&organism.structure))
                 .map_or(0.0, |construction| construction.developing_energy);
             organism.usable_energy + construction_energy
         })
