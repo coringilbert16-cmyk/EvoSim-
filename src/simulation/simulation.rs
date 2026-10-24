@@ -2004,7 +2004,7 @@ mod decomposition_finalization_tests {
             initial_usable_energy
         );
         assert!(
-            simulation.energy_inventory_snapshot().is_balanced(1e-9),
+            simulation.energy_inventory_snapshot().is_balanced_without_creation(1e-9),
             "initial energy source should reconcile: {:?}",
             simulation.energy_inventory_snapshot().residual()
         );
@@ -2031,7 +2031,7 @@ mod decomposition_finalization_tests {
         // accounted for whether it is retained, converted, or dissipated.
         let inventory = simulation.energy_inventory_snapshot();
         assert!(
-            inventory.is_balanced(1e-9),
+            inventory.is_balanced_without_creation(1e-9),
             "world inventory after live sunlight capture: {:?}",
             inventory.residual()
         );
@@ -2072,7 +2072,7 @@ mod decomposition_finalization_tests {
             inventory.initial_structural_energy,
             inventory.current_structural_energy
         );
-        assert!(inventory.is_balanced(1e-9));
+        assert!(inventory.is_balanced_without_creation(1e-9));
     }
 
     #[test]
@@ -2080,7 +2080,7 @@ mod decomposition_finalization_tests {
         let mut simulation = Simulation::new(917, 10.0);
         let before = simulation.energy_inventory_snapshot();
         assert!(
-            before.is_balanced(1e-9),
+            before.is_balanced_without_creation(1e-9),
             "initial inventory: {:?}",
             before.residual()
         );
@@ -2115,7 +2115,7 @@ mod decomposition_finalization_tests {
 
         let after = simulation.energy_inventory_snapshot();
         assert!(
-            after.is_balanced(1e-9),
+            after.is_balanced_without_creation(1e-9),
             "structural BREAK must reconcile the world inventory: residual={:?}",
             after.residual()
         );
@@ -2140,7 +2140,7 @@ mod decomposition_finalization_tests {
         );
         let after_capture = simulation.energy_inventory_snapshot();
         assert!(
-            after_capture.is_balanced(1e-9),
+            after_capture.is_balanced_without_creation(1e-9),
             "inventory after world-tone capture: {:?}",
             after_capture.residual()
         );
@@ -2179,7 +2179,7 @@ mod decomposition_finalization_tests {
 
         let after_break = simulation.energy_inventory_snapshot();
         assert!(
-            after_break.is_balanced(1e-9),
+            after_break.is_balanced_without_creation(1e-9),
             "world-tone input and structural BREAK must reconcile together: {:?}",
             after_break.residual()
         );
@@ -2204,7 +2204,7 @@ mod decomposition_finalization_tests {
             simulation.step();
             let inventory = simulation.energy_inventory_snapshot();
             assert!(
-                inventory.is_balanced(1e-9),
+                inventory.is_balanced_without_creation(1e-9),
                 "world energy inventory must reconcile after ordinary tick {tick}: residual={:?}",
                 inventory.residual()
             );
@@ -2216,7 +2216,7 @@ mod decomposition_finalization_tests {
         let mut simulation = Simulation::new(915, 10.0);
         let before = simulation.energy_inventory_snapshot();
         assert!(
-            before.is_balanced(1e-9),
+            before.is_balanced_without_creation(1e-9),
             "initial inventory: {:?}",
             before.residual()
         );
@@ -2233,7 +2233,7 @@ mod decomposition_finalization_tests {
 
         let after = simulation.energy_inventory_snapshot();
         assert!(
-            after.is_balanced(1e-9),
+            after.is_balanced_without_creation(1e-9),
             "stress bookkeeping must not create or destroy energy: {:?}",
             after.residual()
         );
