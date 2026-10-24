@@ -1656,7 +1656,7 @@ mod tests {
 
         let source = PhysicalMaterial::realized(
             Material {
-                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                parts: vec![("Hydrogen".into(), 1.0), ("Hydrogen".into(), 1.0)],
                 internal_bonds: vec![InternalBond {
                     part_a: 0,
                     part_b: 1,
@@ -1664,12 +1664,12 @@ mod tests {
             },
             vec![
                 Placement {
-                    x: 20.0,
+                    x: 19.5,
                     y: 20.0,
                     rotation_radians: 0.0,
                 },
                 Placement {
-                    x: 20.838,
+                    x: 20.5,
                     y: 20.0,
                     rotation_radians: 0.0,
                 },
