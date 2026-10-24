@@ -2406,6 +2406,30 @@ mod tests {
         assert_ne!(s.physical_id(a), s.physical_id(b));
     }
     #[test]
+    fn aggregate_recognizes_transient_subgraph_by_stable_identity_material_and_pose() {
+        let pose = Placement {
+            x: 2.0,
+            y: 3.0,
+            rotation_radians: 0.25,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let index = aggregate.add_unit(StructuralUnit::new("Carbon", pose));
+        let id = aggregate.physical_id(index).unwrap();
+
+        let mut view = OrganismStructure::new();
+        let mut unit = StructuralUnit::new("Carbon", pose);
+        unit.physical_id = id;
+        view.units.push(unit);
+        assert!(aggregate.contains_exact_physical_subgraph(&view));
+
+        view.units[0].placement.x += 0.25;
+        assert!(!aggregate.contains_exact_physical_subgraph(&view));
+        view.units[0].placement = pose;
+        view.units[0].material = Material::free_base("Water", 1.0);
+        assert!(!aggregate.contains_exact_physical_subgraph(&view));
+    }
+
+    #[test]
     fn genome_constituent_ids_round_trip_through_serialization() {
         let mut s = OrganismStructure::new();
         let unit = s.add_unit(StructuralUnit::new(
