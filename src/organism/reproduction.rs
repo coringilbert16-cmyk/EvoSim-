@@ -453,11 +453,27 @@ fn budding_scale_reached_with_reference(
         >= 0.80 * preferred
 }
 
+fn developing_membership_is_valid(construction: &ReproductiveConstruction) -> bool {
+    let actual = construction.developing_structure.physical_constituent_ids();
+    if actual.len() != construction.developing_member_ids.len() {
+        return false;
+    }
+    let actual_ids: std::collections::HashSet<_> = actual.iter().copied().collect();
+    let recorded_ids: std::collections::HashSet<_> =
+        construction.developing_member_ids.iter().copied().collect();
+    actual_ids.len() == actual.len()
+        && recorded_ids.len() == construction.developing_member_ids.len()
+        && actual_ids == recorded_ids
+}
+
 fn birth_ready_with_reference(
     construction: &ReproductiveConstruction,
     catalog: &[crate::resources::BaseResource],
     seed_reference: Option<(f64, f64)>,
 ) -> bool {
+    if !developing_membership_is_valid(construction) {
+        return false;
+    }
     let Some(anchor_id) = construction
         .developing_structure
         .physical_id(construction.anchor_unit_index)
@@ -1082,6 +1098,31 @@ mod tests {
             &catalog,
             None
         ));
+    }
+
+    #[test]
+    fn developing_membership_validation_rejects_missing_or_duplicate_ids() {
+        let mut simulation = Simulation::new(7, 20.0);
+        let mut parent = simulation.organisms.remove(0);
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
+        let mut ledger = EnergyLedger::default();
+        assert!(begin_reproduction(
+            &mut parent,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+        let mut construction = parent.reproductive_construction.take().unwrap();
+        assert!(developing_membership_is_valid(&construction));
+
+        construction.developing_member_ids.clear();
+        assert!(!developing_membership_is_valid(&construction));
+
+        construction.developing_member_ids =
+            construction.developing_structure.physical_constituent_ids();
+        let first_id = construction.developing_member_ids[0];
+        construction.developing_member_ids.push(first_id);
+        assert!(!developing_membership_is_valid(&construction));
     }
 
     #[test]
