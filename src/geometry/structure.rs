@@ -1621,6 +1621,76 @@ mod tests {
     }
 
     #[test]
+    fn aggregate_replacement_returns_refreshed_view_with_remapped_bond_ids() {
+        let mut aggregate = OrganismStructure::new();
+        let selected_index = aggregate.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let sibling_index = aggregate.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 4.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let selected_id = aggregate.physical_id(selected_index).unwrap();
+        let sibling_id = aggregate.physical_id(sibling_index).unwrap();
+
+        let mut replacement = OrganismStructure::new();
+        let carbon_index = replacement.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let hydrogen_index = replacement.add_unit(StructuralUnit::new(
+            "Hydrogen",
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let carbon_id = replacement.physical_id(carbon_index).unwrap();
+        let hydrogen_id = replacement.physical_id(hydrogen_index).unwrap();
+        replacement.set_genome_constituent_ids([carbon_id]);
+        replacement.bonds.push(Bond {
+            endpoint_a: BondEndpoint::new(
+                carbon_id,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                hydrogen_id,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::PI,
+                },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+
+        let (remapping, refreshed) = aggregate
+            .replace_subgraph_remapping_new_ids_and_extract(&[selected_id], &replacement)
+            .expect("replacement and refreshed view should commit together");
+        let refreshed_hydrogen = remapping[&hydrogen_id];
+        assert_ne!(refreshed_hydrogen, sibling_id);
+        assert_eq!(refreshed.physical_constituent_ids(), vec![selected_id, refreshed_hydrogen]);
+        assert_eq!(refreshed.genome_constituent_ids, vec![selected_id]);
+        assert_eq!(refreshed.bonds.len(), 1);
+        assert_eq!(refreshed.bonds[0].endpoint_b.constituent_id, refreshed_hydrogen);
+        assert!(aggregate.unit_index(sibling_id).is_some());
+        assert!(aggregate.unit_index(refreshed_hydrogen).is_some());
+    }
+
+    #[test]
     fn aggregate_subgraph_replacement_remaps_new_ids_without_aliasing_siblings() {
         let mut aggregate = OrganismStructure::new();
         let selected_index = aggregate.add_unit(StructuralUnit::new(
