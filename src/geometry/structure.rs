@@ -1554,6 +1554,20 @@ mod tests {
         let child_a_id = aggregate.physical_id(child_a).unwrap();
         let child_b_id = aggregate.physical_id(child_b).unwrap();
         aggregate.add_genome_constituent_group([child_a_id, child_b_id]);
+        aggregate.bonds.push(Bond {
+            endpoint_a: BondEndpoint::new(
+                parent_id,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                child_a_id,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::PI,
+                },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
         let before_units = aggregate.units.clone();
         let before_groups = aggregate.additional_genome_constituent_groups.clone();
 
@@ -1562,6 +1576,7 @@ mod tests {
             .expect("complete child group can be excluded from an external view");
         assert_eq!(external.physical_constituent_ids(), vec![parent_id]);
         assert!(external.additional_genome_constituent_groups.is_empty());
+        assert!(external.bonds.is_empty());
         assert_eq!(aggregate.units, before_units);
         assert_eq!(
             aggregate.additional_genome_constituent_groups,
