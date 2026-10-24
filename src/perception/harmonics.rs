@@ -1518,17 +1518,17 @@ mod tests {
             components: vec![
                 ToneComponent {
                     frequency_hz: 440.0,
-                    amplitude: 0.7,
+                    amplitude: 1.7,
                     phase_radians: 0.0,
                 },
                 ToneComponent {
                     frequency_hz: 660.0,
-                    amplitude: 0.3,
+                    amplitude: 1.3,
                     phase_radians: 0.2,
                 },
                 ToneComponent {
                     frequency_hz: 880.0,
-                    amplitude: 0.4,
+                    amplitude: 1.4,
                     phase_radians: -0.1,
                 },
             ],
