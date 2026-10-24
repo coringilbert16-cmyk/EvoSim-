@@ -789,6 +789,11 @@ impl PhysicalConstituentGraph {
         // Build the offspring view first. This validates source IDs, bonds,
         // complete core groups, and the requested child-core identity.
         let child = self.subgraph_for_physical_ids(selected_ids, child_primary_core_ids)?;
+        // Division creates exactly one new organism. A selected graph that
+        // still contains another genome identity is not a valid offspring.
+        if !child.additional_genome_constituent_groups.is_empty() {
+            return None;
+        }
         let source_ids: HashSet<_> = self.units.iter().map(|unit| unit.physical_id).collect();
         let crossing_energy = self
             .bonds
@@ -814,23 +819,14 @@ impl PhysicalConstituentGraph {
         parent
             .additional_genome_constituent_groups
             .retain(|group| group.iter().all(|id| !selected.contains(id)));
+        let parent_ids = parent.physical_constituent_ids();
         if parent.units.is_empty()
             || parent_primary.is_empty()
             || !parent_primary.is_subset(&source_ids)
+            || !parent_primary.is_subset(&parent_ids.iter().copied().collect())
             || parent
-                .units
-                .iter()
-                .all(|unit| !parent_primary.contains(&unit.physical_id))
-            || parent.bonds.iter().any(|bond| {
-                !parent
-                    .units
-                    .iter()
-                    .any(|unit| unit.physical_id == bond.endpoint_a.constituent_id)
-                    || !parent
-                        .units
-                        .iter()
-                        .any(|unit| unit.physical_id == bond.endpoint_b.constituent_id)
-            })
+                .subgraph_for_physical_ids(&parent_ids, &self.genome_constituent_ids)
+                .is_none()
         {
             return None;
         }
