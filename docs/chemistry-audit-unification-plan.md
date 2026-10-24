@@ -4739,3 +4739,10 @@ The graph-level test coverage gap still worth closing before the large coordinat
 ### Subgraph replacement regression added — 2026-10-24
 
 Implementation commit `498ad0beea704fa66e352eff24706245370764fa` adds `subgraph_replacement_preserves_cross_boundary_bonds_and_rejects_dangling_replacements` to `src/geometry/structure.rs`. It checks that replacing a selected attached subgraph while preserving its physical endpoint IDs retains both the cross-boundary bond and an internal bond, including their stored energies. It then removes the bonded core endpoint from a candidate replacement and verifies rejection leaves units, bonds, core membership, and the constituent-ID allocator unchanged. CI for this exact commit had not yet appeared at handoff refresh; do not count the new test as passing until its exact-head workflow completes.
+
+
+### Formatting follow-up — 2026-10-24
+
+- Exact-head workflow for `498ad0beea704fa66e352eff24706245370764fa` reached the formatting gate and failed there; all later gates were skipped. The log artifact was not yet retrievable through the GitHub API, so the exact rustfmt diff was not confirmed.
+- A focused style-only follow-up at implementation commit `6e7891436ad4891d02a566a31fe106b4b04794e5` simplifies the single-expression endpoint closure in the new regression. This is a targeted correction, not proof that formatting now passes.
+- The exact-head workflow for `6e7891436ad4891d02a566a31fe106b4b04794e5` had not appeared at the time of this note. Continue to treat the regression and all downstream validation as pending until that exact SHA's workflow reports results.
