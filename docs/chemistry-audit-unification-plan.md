@@ -4648,3 +4648,29 @@ Required coordinated migration: (1) atomically admit the anchor into the parent 
 - Compared full-suite failures by named test identity against frozen baseline workflow [39705628427](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39705628427): **21 shared identities, zero new identities, seven baseline failures resolved**. The seed realization failure is a baseline identity with the known changed failure message. Do not weaken seed viability or alter the approved 12-piece nitrogen seed.
 - Strict Clippy still fails; its normalized diagnostic identity comparison has not yet been completed for this exact head. Do not claim Clippy has zero new diagnostics based on counts alone.
 - The next implementation remains the coordinated aggregate-owned attachment slice described above. The exact-head tests establish no new Rust test-failure identities, but they do not validate the new architecture because no production source was changed in this audit.
+
+
+## Phase 1 implementation map — coordinated file migration, 2026-10-24
+
+This map is based on the exact PR #205 source head `df1cdce8f6c0ac6d295a15afc97d3bf84bba01cc`; do not apply the changes against a different head without re-auditing.
+
+| File / boundary | Required change for aggregate-owned construction |
+|---|---|
+| `src/organism/reproduction.rs` | Replace persistent child-graph ownership with stable member-ID/core metadata; begin via staged parent-aggregate attachment and a real COMBINE bond; construct a temporary member subgraph for solver/viability checks; atomically replace the member subgraph after growth; make final split the only point that creates a child graph. Current `commit_candidate_attachment` is only geometric contact plus holder/ledger publication. |
+| `src/simulation/state.rs` | Change `ReproductiveConstruction` schema to stable developing-member IDs, secondary genome-core identity, and progress/stress metadata. Handle serde compatibility explicitly; no persistent graph or separate energy holder in the target schema. |
+| `src/simulation/simulation.rs` | Change the `advance_construction` call boundary so growth can commit to the parent aggregate. Ensure energy/material inventory counts aggregate constituents and bond energy once; retain final offspring ID reservation semantics. |
+| `src/simulation/world_tone_snapshot.rs` | Remove the extra developing-body receiver/occluder. The parent aggregate is already included as the organism body; do not expose developing IDs twice. |
+| `src/perception/movement.rs` | Stop translating a second developing geometry. The aggregate's units move with the parent once; construction origin/metadata follows the same transform. |
+| `src/chemistry/recycling.rs` | Stop transferring a second developing-energy holder or dropping a separate developing graph. A breached organism retains one aggregate and ordinary chemistry continues. |
+| `src/construction/runtime.rs` + `src/chemistry/combine_runtime.rs` | Reuse physical endpoint/contact selection and `form_selected_bond` for the real anchor-to-parent bond. The existing helper stages a candidate structure/ledger/energy; it is not by itself the whole ownership transaction. |
+| `src/geometry/structure.rs` | Reuse stable-ID append/subgraph/replace/partition primitives. Verify cross-boundary bonds survive growth replacement and are removed only by final partition, with bond energy returned for ledger settlement. |
+
+### Required transaction tests before treating Phase 1 as complete
+
+1. Successful anchor admission removes exactly one source storage instance, adds exactly its realized constituents to the parent aggregate, preserves the primary genome core, registers the secondary core/member IDs, creates a real compatible cross-boundary bond, and settles ledger investment/work once.
+2. Inject failure at each staged step (endpoint selection, bond formation, energy settlement, metadata validation, source-storage removal precondition); parent graph, storage, energy holders, ledger, and construction metadata remain byte-for-byte/equality unchanged.
+3. Growth keeps stable IDs unique, preserves anchor and primary-core identity, preserves existing cross-boundary bonds, and changes parent energy only in the same commit.
+4. World-tone snapshot, movement, inventory, death, and recycling each observe/count the developing constituents exactly once.
+5. Final split preserves child-internal bonds and IDs, removes only cross-partition bonds, settles their stored energy once, validates both cores before publication, and rolls back on any failure.
+
+**API constraint:** `Simulation` currently passes `&organism.structure` into `advance_construction`; a genuine aggregate commit requires changing that boundary to a staged mutable transaction. Do not work around this with interior mutation, an extra persistent graph, or a geometry-only attachment. The audit did not change production source; the next code commit must contain the coordinated ownership slice and focused tests, followed immediately by CI on its exact head.
