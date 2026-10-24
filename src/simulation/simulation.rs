@@ -2475,4 +2475,124 @@ mod decomposition_finalization_tests {
         assert!((owner_origin.y - 300.0).abs() < 1e-9);
         assert!((owner_origin.rotation_radians - 0.25).abs() < 1e-9);
     }
+
+    #[test]
+    fn breached_organism_retains_storage_and_construction_without_biological_progress() {
+        use crate::resources::Material;
+
+        let mut simulation = Simulation::new(0xD34D, 10.0);
+        // Remove the external source so this test measures holder continuity,
+        // not a legitimate world-tone input during the tick.
+        simulation.world_tone = None;
+        simulation.world_tone_cycle = None;
+
+        simulation.organisms[0].stored_material.entries.clear();
+        assert!(simulation.organisms[0].store_material(Material::free_base("Carbon", 1.0)));
+        assert!(simulation.organisms[0].store_material(Material::free_base("Hydrogen", 1.0)));
+
+        let mut ledger = simulation.energy_ledger;
+        assert!(crate::reproduction::begin_reproduction(
+            &mut simulation.organisms[0],
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+        simulation.energy_ledger = ledger;
+
+        // Give the construction both committed material and a non-zero energy
+        // holder using real transfers, so the fixture itself creates nothing.
+        let organism = &mut simulation.organisms[0];
+        let construction = organism
+            .reproductive_construction
+            .as_mut()
+            .expect("construction started");
+        let committed = organism
+            .stored_material
+            .take_physical_at(0)
+            .expect("second stored constituent remains");
+        construction.committed_material.entries.push(committed);
+        let mut ledger = simulation.energy_ledger;
+        assert!(ledger.transfer(
+            &mut organism.usable_energy,
+            &mut construction.developing_energy,
+            0.5_f64.min(organism.usable_energy),
+        ));
+        simulation.energy_ledger = ledger;
+
+        let construction = simulation.organisms[0]
+            .reproductive_construction
+            .as_ref()
+            .expect("construction remains parent-owned");
+        assert!(!construction.developing_structure.units.is_empty());
+        assert!(!construction.committed_material.is_empty());
+
+        // Breach the parent's established core before the baseline snapshot.
+        // The physical removal is fixture setup; subsequent ticks must retain
+        // every remaining holder and must not advance biological construction.
+        simulation.organisms[0].structure.units.clear();
+        simulation.organisms[0].structure.bonds.clear();
+        simulation.organisms[0].mark_structure_changed();
+
+        let material_before = rollback_material_inventory(&simulation);
+        let parent_energy_before = simulation.organisms[0].usable_energy;
+        let parent_storage_before = simulation.organisms[0].stored_material.entries.clone();
+        let construction_before = {
+            let construction = simulation.organisms[0]
+                .reproductive_construction
+                .as_ref()
+                .expect("construction remains attached");
+            (
+                construction.developing_energy,
+                construction.developing_stress,
+                construction.developing_maintenance_debt,
+                construction.developing_structure.clone(),
+                construction.committed_material.entries.clone(),
+                construction.needs_space,
+            )
+        };
+        let inventory_before = simulation.energy_inventory_snapshot();
+
+        simulation.step();
+
+        assert_eq!(rollback_material_inventory(&simulation), material_before);
+        assert_eq!(simulation.organisms.len(), 1);
+        assert!(simulation.decomposing_bodies.is_empty());
+        assert_eq!(simulation.organisms[0].usable_energy, parent_energy_before);
+        assert_eq!(
+            simulation.organisms[0].stored_material.entries,
+            parent_storage_before
+        );
+        let construction = simulation.organisms[0]
+            .reproductive_construction
+            .as_ref()
+            .expect("breached holder remains owned by the organism");
+        assert_eq!(construction.developing_energy, construction_before.0);
+        assert_eq!(construction.developing_stress, construction_before.1);
+        assert_eq!(
+            construction.developing_maintenance_debt,
+            construction_before.2
+        );
+        assert_eq!(construction.developing_structure.units, construction_before.3.units);
+        assert_eq!(construction.developing_structure.bonds, construction_before.3.bonds);
+        assert_eq!(
+            construction.committed_material.entries,
+            construction_before.4
+        );
+        assert_eq!(construction.needs_space, construction_before.5);
+
+        let inventory_after = simulation.energy_inventory_snapshot();
+        assert_eq!(
+            inventory_after.current_usable_energy,
+            inventory_before.current_usable_energy
+        );
+        assert_eq!(
+            inventory_after.current_resonant_energy,
+            inventory_before.current_resonant_energy
+        );
+        assert_eq!(
+            inventory_after.current_structural_energy,
+            inventory_before.current_structural_energy
+        );
+    }
+
 }
