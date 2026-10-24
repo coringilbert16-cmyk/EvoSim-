@@ -4725,3 +4725,12 @@ The first workflow for the test commit (`40111605233`) reported formatting failu
 ### Latest formatting follow-up — 2026-10-24
 
 After the formatted-head workflow still flagged `Check formatting`, the partition call was adjusted once more to match the repository's existing chained-call style in implementation commit `fd985bdfdf8e7b486b87eb9e24422de6d56fc2a7`. At handoff refresh, GitHub had not yet returned a workflow run associated with this latest SHA. Treat the formatting state and test result as pending; the earlier workflow failures are for earlier SHAs and cannot establish the status of `fd985bdfdf8e7b486b87eb9e24422de6d56fc2a7`.
+
+
+### Exact-head validation result — 2026-10-24
+
+The workflow for implementation head `fd985bdfdf8e7b486b87eb9e24422de6d56fc2a7` completed as failed (Actions run [40111732833](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40111732833)). The formatting, source-size, architecture, and preceding focused gates passed. The full suite reported **697 passed, 21 failed, 1 ignored** in 243.71 seconds. The 21 failing test identities match the established 21-failure baseline set; no new failing identity appeared in the run. This includes the known canonical 12N seed realization failure; do not weaken the canonical seed requirement. The additional graph partition regression is included in the passing total.
+
+Clippy also failed under `-D warnings` (31 diagnostics for the binary and 14 for the test target in the compiler output), across existing source areas including constructor, capillary geometry, and Bob library. This result has not been identity-compared against the frozen baseline, so do not claim these are all pre-existing or that the branch improves Clippy.
+
+The graph-level test coverage gap still worth closing before the large coordinated migration is the other primitive used by that migration: `replace_subgraph_for_physical_ids` must have a focused regression proving that retained endpoint IDs preserve cross-boundary bonds and that removing a bonded endpoint rejects without mutating the aggregate. After that, the production ownership migration remains one coordinated source change as described above. No production migration has been made in this checkpoint.
