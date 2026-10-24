@@ -3284,6 +3284,98 @@ Consequences:
 
 
 
+### 18.4 Transaction boundaries, canonical ownership, and verification — focused implementation choice
+
+These sources address the specific architecture choice made after comparing implementation patterns against PR #205. They supplement R1–R6 above; they do not override Sections 14 and 17 or authorize implementation on this documentation branch.
+
+**R7 — Martin Fowler, “Unit of Work.”** [Catalog entry](https://martinfowler.com/eaaCatalog/unitOfWork.html).
+
+- **Lesson:** collect the changes belonging to one logical operation, track the affected objects, and commit them together rather than letting individual mutations become independently authoritative.
+- **Apply to:** Sections 2 and 4; A3–A9; the source→holder→sink and failure matrices in Sections 17.84–17.100; canonical parent-owned attachment/construction and division.
+- **Concrete EvoSim use:** treat one physical attachment as a single logical transaction across candidate geometry/bonds, stable core identity, material ownership/storage, parent `usable_energy`, ledger settlement, and cache/revision invalidation. Prepare and validate candidate state first; publish only after every precondition and settlement succeeds. Failure must preserve the complete authoritative pre-operation state.
+- **Limit:** a Unit of Work is an organizing pattern, not an automatic rollback or conservation guarantee. EvoSim must explicitly stage every affected field and test late failure paths.
+
+**R8 — Vaughn Vernon, “Effective Aggregate Design.”** [Article](https://kalele.io/effective-aggregate-design/).
+
+- **Lesson:** define a consistency boundary around the state that must change atomically; avoid multiple competing authoritative representations of the same concept.
+- **Apply to:** Sections 2, 14, 15, 17.31, 17.126–17.129, and the canonical aggregate-ownership / parent-funded construction decisions.
+- **Concrete EvoSim use:** the living parent is the authority for its attached physical graph, stored material, stable genome-core identities, and ordinary usable energy until division. Reproductive construction must not remain a second authoritative graph or separate production-energy wallet once attached. Promote an anchor/attachment into the canonical parent graph as one failure-atomic transaction; keep genuinely unattached material in ordinary storage. Update movement, collision, world-tone receiver enumeration, energy/material inventories, growth targeting, and core-specific viability as one coordinated migration.
+- **Limit:** this is a consistency-boundary heuristic, not a reason to make the entire world one giant aggregate or to duplicate derived state. Keep environmental inventory and world-level ledgers independently auditable.
+
+**R9 — Factorio Friday Facts #416 and #442, fluid simulation rewrite.** [FFF #416](https://www.factorio.com/blog/post/fff-416) · [FFF #442](https://direct.factorio.com/blog/post/fff-442).
+
+- **Lesson:** simplify the underlying ownership/state model and remove redundant hidden buffers before layering on more elaborate mechanisms; model simplification can improve both performance and correctness.
+- **Apply to:** Sections 2 and 14–17, especially duplicate structure/energy holders, construction state, and the inventory oracle.
+- **Concrete EvoSim use:** prefer the canonical aggregate plus staged commit over adding another holder, generic event layer, or persistent duplicate snapshot. Store authoritative state once and derive summaries where practical; count each physical unit and each energy holder exactly once in independent inventory checks.
+- **Limit:** Factorio's fluid semantics are not EvoSim's physical chemistry; use the refactor lesson, not its simulation rules.
+
+**R10 — Bevy ECS, deferred `Commands`.** [API documentation](https://docs.rs/bevy/latest/bevy/ecs/system/struct.Commands.html).
+
+- **Lesson:** deferred commands can separate decision-making from later mutation and make operation ordering explicit.
+- **Apply to:** Sections 4 and 17.35–17.100; transition preparation, escrow, movement, construction, and reaction settlement.
+- **Concrete EvoSim use:** use staged intents/candidate state locally if it clarifies validation-before-commit. Do not introduce a universal command buffer as the first fix: deferring a series of mutations does not itself make the series atomic, restore consumed sources, or balance the ledger.
+- **Limit:** Bevy's ECS scheduling/command semantics differ from EvoSim's current Rust object ownership and do not supply rollback for this architecture.
+
+**R11 — Rust compiler `UndoLog` data structure.** [Documentation](https://doc.rust-lang.org/stable/nightly-rustc/rustc_data_structures/undo_log/index.html).
+
+- **Lesson:** reversible mutation can avoid copying a large state, but only when every relevant mutation records enough information to reverse itself.
+- **Apply to:** performance follow-up for the staged attachment transaction and any measured graph-clone cost.
+- **Concrete EvoSim use:** retain trial-state/clone-based staging as the first candidate because local patterns already exist in COMBINE. Benchmark the affected-graph clone under representative sizes. Consider an undo log only if measured cost is material and a complete mutation inventory proves all touched fields, IDs, ledgers, holders, and cache revisions are reversible.
+- **Limit:** this compiler-internal API is an example, not a stable public dependency or a drop-in transaction library. An incomplete undo log is worse than a bounded clone.
+
+**R12 — Stateful/property-based testing: Proptest state-machine testing and Hypothesis rule-based stateful testing.** [Proptest state machines](https://proptest-rs.github.io/proptest/proptest/state-machine.html) · [proptest-state-machine crate](https://docs.rs/proptest-state-machine/latest/proptest_state_machine/) · [Hypothesis rule-based testing](https://hypothesis.works/articles/rule-based-stateful-testing/).
+
+- **Lesson:** test sequences of operations and invariants across many states, not only isolated happy-path examples.
+- **Apply to:** Sections 5–6 and 17.84–17.100; parent-funded attachment, BREAK/COMBINE, storage transfer, death, and eventual division.
+- **Concrete EvoSim use:** supplement targeted failure-injection tests with bounded generated sequences of attach/move/bond/break/store/release/death operations. After each committed step, reconcile independent material and energy inventories; after each injected rejection, compare the full authoritative snapshot against the pre-operation snapshot. Seed and retain any minimized counterexample as a deterministic regression.
+- **Limit:** property-based tests do not replace the independent oracle, exact-head CI, or an explicit list of required physical invariants. Bound case count and runtime to the project's five-minute command limit.
+
+**R13 — Box2D, “Frequently Asked Questions” (determinism).** [Documentation](https://box2d.org/documentation/md_faq.html).
+
+- **Lesson:** reproducibility at one level does not automatically imply determinism under different ordering, platforms, or rollback/replay conditions; define which determinism guarantee is required.
+- **Apply to:** transaction tests, stable IDs, simulation replay, and any future undo-log or rollback implementation.
+- **Concrete EvoSim use:** test deterministic operation ordering and rollback on the same build separately from cross-platform bitwise determinism. Preserve stable identity remapping and avoid tests that infer correctness only from final aggregate totals when per-holder ownership could be wrong.
+- **Limit:** Box2D's physics engine guarantees and scope differ from EvoSim's; use it to sharpen the test contract, not to claim EvoSim determinism.
+
+**R14 — NASA Glenn, “Verification and Validation.”** [Tutorial](https://www.grc.nasa.gov/www/wind/valid/tutorial/verassess.html).
+
+- **Lesson:** code verification, model validation, and evidence that the model represents the intended system are distinct questions.
+- **Apply to:** Sections 3–6, 17.6 release gates, and every status/handoff claim.
+- **Concrete EvoSim use:** report separately: source-level transaction ordering; focused invariant/failure tests; full-suite identity comparison against the accepted baseline; independent world inventory; exact-small-world sunlight/occlusion comparison; and measured runtime/memory. A passing helper test or a baseline-red full suite is not proof of global conservation or organism viability.
+- **Limit:** the tutorial is a general verification framework, not evidence that EvoSim's model is physically validated.
+
+**R15 — Unreal Engine, Gameplay Ability cost and commit flow.** [Official documentation](https://dev.epicgames.com/documentation/en-us/unreal-engine/using-gameplay-abilities-in-unreal-engine).
+
+- **Lesson:** validate prerequisites and costs before committing a gameplay operation; distinguish cost calculation from successful commitment.
+- **Apply to:** parent-funded construction, energy withdrawal, reaction initiation, and any operation that can fail after resource reservation.
+- **Concrete EvoSim use:** compute required parent `usable_energy`, verify material ownership and physical eligibility, and only debit/publish when the corresponding attachment commits. A rejected action must not leave a partial debit or an orphaned reservation.
+- **Limit:** gameplay ability costs are an analogy for commit discipline, not a thermodynamic model or an accounting proof.
+
+### 18.5 Architecture decision and implementation guardrails
+
+**Decision recorded from the focused source competition:** approach A — extend the existing staged-transaction patterns — is the first implementation candidate. This is a scoped engineering choice based on the current code, not a claim that staged copying is universally optimal.
+
+1. **First slice:** one parent-owned physical attachment/construction transaction. Build candidate state without mutating authoritative holders; validate geometry, contact/bond rules, stable core identity, material ownership, and sufficient ordinary parent `usable_energy`; settle the ledger and commit all related state together.
+2. **Atomicity contract:** on success, graph, storage/material ownership, usable energy, ledger, identity mappings, and cache/revision state agree. On any rejected precondition or injected late failure, all authoritative state matches the pre-operation snapshot. The independent world inventory must show no material duplication/loss and no energy creation.
+3. **Full-state failure tests:** force failure at candidate validation, physical attachment, insufficient energy, source removal/debit, stable-ID remapping, ledger settlement, and final publication. Assert more than total energy: compare holders, graph units/bonds, core IDs, storage, active transaction/escrow, ledger fields, and revision/cache state.
+4. **Coordinated aggregate migration:** do not patch only the energy-split formula or retain a second attached reproductive graph. Include movement/collision, resonance receiver enumeration, independent energy/material inventory, growth targeting, and core-specific viability. At division, partition units, bonds, identities, and remaining usable energy exactly once according to the owner-approved post-split structural-mass rule.
+5. **Performance gate:** measure candidate staging/graph cloning on representative structures before considering an undo log. Do not add event sourcing or a universal command buffer as a substitute for atomic ownership.
+6. **Verification gate:** run focused tests and exact-head CI within the five-minute command limit; compare named failure identities with the frozen baseline. Keep baseline failures distinct from new regressions, and do not claim whole-world conservation until the independent inventory and all required physical transition paths reconcile.
+7. **Scope:** PR #204 remains documentation-only. This decision authorizes no code change on this branch; implementation belongs on PR #205 after one focused pre-change audit. PR #196 remains out of scope.
+
+### 18.6 Updated architecture crosswalk
+
+| EvoSim concern | Sources / lesson | Required concrete evidence |
+|---|---|---|
+| Parent-owned graph, construction and division | R7–R9: one consistency boundary; remove duplicate state | Attachment failure leaves the full parent snapshot unchanged; attached units are counted/moved/illuminated once. |
+| Atomic physical + energy/material commit | R7, R10, R15: prepare, validate, commit; deferred work alone is not atomic | Failure injection at every commit stage; full-state pre/post comparison and independent inventory. |
+| Clone staging versus undo log | R9, R11: simplify first; reversible mutation only if justified | Representative benchmark; complete reversible-field inventory before any undo-log proposal. |
+| Sequence-level invariants | R12: state-machine/property-based tests | Bounded operation sequences, invariant checks after every step, minimized counterexamples retained as regressions. |
+| Reproducibility and stable ownership | R13: state the determinism guarantee precisely | Same-build repeatability/rollback checks separated from cross-platform determinism; stable ID/holder assertions. |
+| Release claims and evidence | R14 plus R1–R6: verification layers are distinct | Separate source audit, focused tests, baseline comparison, global inventory, spatial oracle, and performance results. |
+
+
+
 ## 17.126 Exact-head viability gate and revised canonical-ownership constraint — 2026-10-22
 
 - Exact PR #205 head audited: `17b2e6403703aa1cfb2e58223861103fce4194a3`. Workflow [39867010714](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39867010714) passed formatting, source-size/architecture checks, graph-merge tests, the new core-specific viability test, and all focused Bob/fluid/restoration/BREAK gates. The full suite finished with **595 passed, 27 failed, 1 ignored** in 282.97 seconds; Clippy failed on existing diagnostics. This head has not yet had its 27 failure identities compared against the frozen baseline, so do not claim that comparison is current.
