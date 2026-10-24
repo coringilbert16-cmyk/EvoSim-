@@ -545,6 +545,11 @@ impl PhysicalConstituentGraph {
         let source_ids: HashSet<_> = source.units.iter().map(|unit| unit.physical_id).collect();
         let destination_ids: HashSet<_> = self.units.iter().map(|unit| unit.physical_id).collect();
         let source_max_id = source_ids.iter().map(|id| id.0).max().unwrap_or(0);
+        let endpoint_is_finite = |endpoint: ConnectionEndpoint| match endpoint {
+            ConnectionEndpoint::Boundary { angle_radians } => angle_radians.is_finite(),
+            ConnectionEndpoint::Fluid { x, y } => x.is_finite() && y.is_finite(),
+            ConnectionEndpoint::Corner { .. } | ConnectionEndpoint::LineEndpoint { .. } => true,
+        };
         let destination_max_id = destination_ids.iter().map(|id| id.0).max().unwrap_or(0);
         if source_ids.len() != source.units.len()
             || source_ids.contains(&PhysicalConstituentId(0))
@@ -926,10 +931,7 @@ impl PhysicalConstituentGraph {
         &mut self,
         old_ids: &[PhysicalConstituentId],
         replacement: &Self,
-    ) -> Option<(
-        HashMap<PhysicalConstituentId, PhysicalConstituentId>,
-        Self,
-    )> {
+    ) -> Option<(HashMap<PhysicalConstituentId, PhysicalConstituentId>, Self)> {
         let mut staged = self.clone();
         let remapping = staged.replace_subgraph_remapping_new_ids(old_ids, replacement)?;
         let selected_ids: Vec<_> = replacement
@@ -1682,10 +1684,16 @@ mod tests {
             .expect("replacement and refreshed view should commit together");
         let refreshed_hydrogen = remapping[&hydrogen_id];
         assert_ne!(refreshed_hydrogen, sibling_id);
-        assert_eq!(refreshed.physical_constituent_ids(), vec![selected_id, refreshed_hydrogen]);
+        assert_eq!(
+            refreshed.physical_constituent_ids(),
+            vec![selected_id, refreshed_hydrogen]
+        );
         assert_eq!(refreshed.genome_constituent_ids, vec![selected_id]);
         assert_eq!(refreshed.bonds.len(), 1);
-        assert_eq!(refreshed.bonds[0].endpoint_b.constituent_id, refreshed_hydrogen);
+        assert_eq!(
+            refreshed.bonds[0].endpoint_b.constituent_id,
+            refreshed_hydrogen
+        );
         assert!(aggregate.unit_index(sibling_id).is_some());
         assert!(aggregate.unit_index(refreshed_hydrogen).is_some());
     }
