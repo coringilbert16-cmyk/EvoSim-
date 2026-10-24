@@ -359,6 +359,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         }
         let allocated = resonant_energy_captured + heat_dissipated + escaped_energy;
         if !allocated.is_finite()
+            || (incident_energy == 0.0 && allocated != 0.0)
             || (incident_energy - allocated).abs() > EPSILON * incident_energy.max(1.0)
         {
             return false;
@@ -482,6 +483,19 @@ mod tests {
             heat_dissipated: ledger.total_heat_dissipated,
         };
         assert!(inventory.is_balanced(1e-12));
+    }
+
+    #[test]
+    fn zero_incident_world_tone_cannot_create_energy_within_tolerance() {
+        let mut ledger = EnergyLedger::default();
+        assert!(
+            !ledger.settle_world_tone_paths(0.0, 5e-10, 0.0, 0.0),
+            "a zero-energy signal cannot credit a nonzero captured amount just because it is within tolerance"
+        );
+        assert_eq!(ledger.total_external_energy_input, 0.0);
+        assert_eq!(ledger.total_resonant_energy_held, 0.0);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+        assert_eq!(ledger.total_world_tone_energy_escaped, 0.0);
     }
 
     #[test]
