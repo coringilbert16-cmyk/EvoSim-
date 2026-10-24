@@ -136,6 +136,10 @@ pub(crate) struct ActiveTransformation {
 pub(crate) struct ReproductiveConstruction {
     pub(crate) committed_material: MaterialStorage,
     pub(crate) developing_structure: OrganismStructure,
+    /// Stable physical IDs owned by the developing member within the aggregate migration.
+    /// This metadata is intentionally ID-based; unit indices are not durable across staging.
+    #[serde(default)]
+    pub(crate) developing_member_ids: Vec<crate::structure::PhysicalConstituentId>,
     pub(crate) child_genome: Genome,
     /// Persistent developmental frame for the physically separate offspring.
     #[serde(default)]
