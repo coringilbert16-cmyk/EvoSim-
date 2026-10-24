@@ -1178,10 +1178,13 @@ impl PhysicalConstituentGraph {
         }
 
         if !primary.is_disjoint(&excluded)
-            || self.additional_genome_constituent_groups.iter().any(|group| {
-                let group_ids: HashSet<_> = group.iter().copied().collect();
-                !group_ids.is_disjoint(&excluded) && !group_ids.is_subset(&excluded)
-            })
+            || self
+                .additional_genome_constituent_groups
+                .iter()
+                .any(|group| {
+                    let group_ids: HashSet<_> = group.iter().copied().collect();
+                    !group_ids.is_disjoint(&excluded) && !group_ids.is_subset(&excluded)
+                })
         {
             return None;
         }
