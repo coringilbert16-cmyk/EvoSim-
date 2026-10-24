@@ -464,6 +464,9 @@ fn developing_membership_is_valid(construction: &ReproductiveConstruction) -> bo
     actual_ids.len() == actual.len()
         && recorded_ids.len() == construction.developing_member_ids.len()
         && actual_ids == recorded_ids
+        && construction
+            .anchor_physical_id
+            .is_none_or(|anchor_id| actual_ids.contains(&anchor_id))
 }
 
 fn birth_ready_with_reference(
@@ -1168,6 +1171,11 @@ mod tests {
             "a physical constituent may only belong to the developing member once"
         );
         assert!(construction.anchor_unit_index < construction.developing_structure.units.len());
+        assert_eq!(
+            construction.anchor_physical_id,
+            construction.developing_structure.physical_id(construction.anchor_unit_index),
+            "the anchor is tracked by stable physical identity"
+        );
         assert_eq!(
             format!("{:?}", parent.structure),
             format!("{:?}", parent_structure)
