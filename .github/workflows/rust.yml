@@ -29,6 +29,12 @@ jobs:
       - name: Check COMBINE architecture
         timeout-minutes: 5
         run: bash scripts/check_combine_architecture.sh
+      - name: Verify exhausted-ID environmental BREAK fixture
+        timeout-minutes: 5
+        run: cargo test --locked environmental_break_rejects_exhausted_transformation_ids_without_removing_source
+      - name: Verify expulsion destination rollback
+        timeout-minutes: 5
+        run: cargo test --locked rejected_destination_restores_expulsion_source_and_neighbor_order
       # Keep physical-graph ID remapping and rollback visible apart from the
       # known slow full-suite gate.
       # Keep chemistry accounting validation ahead of unrelated geometry gates.
@@ -124,12 +130,6 @@ jobs:
       - name: Run focused environmental BREAK rollback tests
         timeout-minutes: 5
         run: cargo test --locked failed_environmental_break
-      - name: Verify exhausted-ID environmental BREAK fixture
-        timeout-minutes: 5
-        run: cargo test --locked environmental_break_rejects_exhausted_transformation_ids_without_removing_source
-      - name: Verify expulsion destination rollback
-        timeout-minutes: 5
-        run: cargo test --locked rejected_destination_restores_expulsion_source_and_neighbor_order
       # Movement geometry and energy settlement commit from one preflight snapshot.
       - name: Run focused movement settlement transaction test
         timeout-minutes: 5
