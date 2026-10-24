@@ -924,7 +924,10 @@ mod tests {
 
         assert_eq!(parent.stored_material.entries, original_entries);
         assert_eq!(parent.usable_energy, original_energy);
-        assert_eq!(serde_json::to_value(&parent.genome).unwrap(), original_genome);
+        assert_eq!(
+            serde_json::to_value(&parent.genome).unwrap(),
+            original_genome
+        );
         assert!(parent.reproductive_construction.is_none());
         assert_eq!(parent.active_transformation_id, Some(73));
         assert_eq!(ledger, original_ledger);
