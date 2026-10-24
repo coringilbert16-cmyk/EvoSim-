@@ -1669,10 +1669,7 @@ mod tests {
         let next_id_before = aggregate.next_constituent_id;
 
         let (child, crossing_energy) = aggregate
-            .partition_subgraph_for_division(
-                &[child_core_id, child_body_id],
-                &[child_core_id],
-            )
+            .partition_subgraph_for_division(&[child_core_id, child_body_id], &[child_core_id])
             .expect("valid aggregate division");
 
         assert_eq!(crossing_energy, 3.25);
