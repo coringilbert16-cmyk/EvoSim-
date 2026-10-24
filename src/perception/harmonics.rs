@@ -533,20 +533,25 @@ pub(crate) fn transform_signal_to_energy_budget(
         return None;
     }
 
-    // Keep the harmonic model's frequency weights, but let only the conserved
-    // remainder determine the outgoing signal's amplitude.
-    let scale = (outgoing_energy_budget / transformed_energy).sqrt();
-    if !scale.is_finite() {
+    // Keep the strongest harmonic components first, then normalize the
+    // remaining spectrum to the conserved remainder. Normalizing before this
+    // filter could lose energy when weak components are removed.
+    transformed.retain_strongest();
+    let retained_energy = spectrum_energy(&transformed)?;
+    if !retained_energy.is_finite() || retained_energy <= f64::EPSILON {
         return None;
     }
+    let scale = (outgoing_energy_budget / retained_energy).sqrt();
+    if !scale.is_finite() || scale <= 0.0 {
+        return None;
+    }
+    // Bias the first scale very slightly downward. If floating-point rounding
+    // still lands above the budget, the correction loop below only scales down.
+    let scale = scale * (1.0 - 2.0 * f64::EPSILON);
     for component in &mut transformed.components {
         component.amplitude *= scale;
     }
-    transformed.retain_strongest();
     let mut final_energy = spectrum_energy(&transformed)?;
-    // Floating-point rescaling can land one ulp above the requested budget.
-    // Correct downward only; an outgoing signal may lose a negligible amount,
-    // but can never carry more energy than the source remainder.
     for _ in 0..4 {
         if final_energy <= outgoing_energy_budget {
             break;
