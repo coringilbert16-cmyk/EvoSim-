@@ -1577,9 +1577,7 @@ mod tests {
             ),
             endpoint_b: BondEndpoint::new(
                 transient_new_id,
-                ConnectionEndpoint::Boundary {
-                    angle_radians: std::f64::consts::PI,
-                },
+                ConnectionEndpoint::Boundary { angle_radians: std::f64::consts::PI },
             ),
             strength: 0.5,
             bond_energy: 1.0,
@@ -1649,9 +1647,7 @@ mod tests {
             ),
             endpoint_b: BondEndpoint::new(
                 PhysicalConstituentId(999),
-                ConnectionEndpoint::Boundary {
-                    angle_radians: std::f64::consts::PI,
-                },
+                ConnectionEndpoint::Boundary { angle_radians: std::f64::consts::PI },
             ),
             strength: 0.5,
             bond_energy: 1.0,
@@ -1798,9 +1794,7 @@ mod tests {
             ),
             endpoint_b: BondEndpoint::new(
                 second_id,
-                ConnectionEndpoint::Boundary {
-                    angle_radians: std::f64::consts::PI,
-                },
+                ConnectionEndpoint::Boundary { angle_radians: std::f64::consts::PI },
             ),
             strength: 0.75,
             bond_energy: 2.5,
@@ -2521,9 +2515,7 @@ mod tests {
             endpoint_a: BondEndpoint::new(ida, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
             endpoint_b: BondEndpoint::new(
                 idb,
-                ConnectionEndpoint::Boundary {
-                    angle_radians: std::f64::consts::PI,
-                },
+                ConnectionEndpoint::Boundary { angle_radians: std::f64::consts::PI },
             ),
             strength: 0.5,
             bond_energy: 1.0,
@@ -2540,9 +2532,7 @@ mod tests {
             endpoint_a: BondEndpoint::new(ida, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
             endpoint_b: BondEndpoint::new(
                 idb,
-                ConnectionEndpoint::Boundary {
-                    angle_radians: std::f64::consts::PI,
-                },
+                ConnectionEndpoint::Boundary { angle_radians: std::f64::consts::PI },
             ),
             strength: 0.5,
             bond_energy: 1.0,
