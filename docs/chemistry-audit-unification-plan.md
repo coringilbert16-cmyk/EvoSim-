@@ -4236,3 +4236,11 @@ Follow-up refinement, 2026-10-23: the fixture now derives disruption and reactio
 - Before CI, the test fixture was adjusted to avoid the `Debug` bound imposed by `Result::expect_err` when `ChemistryLibrary` itself does not implement `Debug`; it now extracts the error through `.err().expect(...)`. Rustfmt layout was also normalized.
 - **Verification:** exact-head workflow [40092902641](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40092902641) is queued for `c59ce82`. Workflow [40092817875](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40092817875) is for predecessor `98b542f` and cannot verify the latest source. The corrected parent-energy test and the Phase 4/5 regressions remain unverified on `c59ce82`.
 - **Next:** inspect exact-head formatting and focused cache tests first; if they pass, compare the full suite and normalized Clippy identities against baseline. Continue only after fixing any new failures.
+
+## Phase 4 CI-gate integration — latest source and workflow head (2026-10-24)
+
+- **Current PR #205 head:** `451ddba296ef97232d705997d7ab33edf868c8a5`.
+- CI now runs the new catalog-position fingerprint rejection test, cache rollback-truncation failure test, and combined live world-tone + structural BREAK inventory test as named focused gates, each under the existing five-minute per-command timeout.
+- Predecessor workflow [40092817875](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40092817875) failed to compile the new fingerprint test because `Result::expect_err` requires the successful type `ChemistryLibrary: Debug`. Commit `c59ce82` replaced it with `.err().expect(...)`; this is corrected in the current head. The later source-format follow-up and CI gate changes are included in `451ddba`.
+- Exact-head workflow [40092954099](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40092954099) is in progress. The corrected reproduction test and the fingerprint/rollback/world-tone gates are not yet verified at this head.
+- **Next:** inspect focused gate output first; fix any introduced failures immediately. If they pass, compare the complete test-failure identities and normalized Clippy diagnostics with baseline. Continue Phase 4/5/6+ only with exact-head evidence, keeping global energy/material conservation explicitly open.
