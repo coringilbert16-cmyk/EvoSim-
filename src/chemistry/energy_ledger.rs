@@ -94,8 +94,7 @@ impl EnergyAllocation {
             && self.work_expended >= 0.0
             && self.heat_dissipated >= 0.0
             && residual.is_finite()
-            && residual >= 0.0
-            && residual <= EPSILON
+            && (0.0..=EPSILON).contains(&residual)
     }
 }
 
