@@ -153,6 +153,9 @@ pub(crate) struct ReproductiveConstruction {
     /// must retain this unit as part of its realized cavity boundary.
     #[serde(default)]
     pub(crate) anchor_unit_index: usize,
+    /// Stable identity of the reproductive anchor; index is retained for legacy serialized state.
+    #[serde(default)]
+    pub(crate) anchor_physical_id: Option<crate::structure::PhysicalConstituentId>,
     /// Usable energy held by the physically separate developing offspring.
     /// It is transferred from the parent while construction remains active.
     #[serde(default)]
