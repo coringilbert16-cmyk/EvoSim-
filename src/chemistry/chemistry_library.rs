@@ -1154,7 +1154,8 @@ mod tests {
         fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
 
         let error = ChemistryLibrary::open(&root)
-            .expect_err("a cache from a changed catalog chemistry position must be rejected");
+            .err()
+            .expect("a cache from a changed catalog chemistry position must be rejected");
         assert!(error.to_string().contains("fingerprint mismatch"));
         let _ = fs::remove_dir_all(root);
     }
