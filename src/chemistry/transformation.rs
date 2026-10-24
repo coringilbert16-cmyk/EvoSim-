@@ -1627,28 +1627,29 @@ mod tests {
         use crate::structure::Placement;
 
         let (mut organism, mut environment, _) = resonance_break_test_organism();
-        // Environmental BREAK requires a genuinely accessible interior. Open
-        // the top-center wall of the 12N cavity scaffold for this test only;
-        // the sealed-cavity resonance tests keep the canonical seed unchanged.
-        let opening_id = organism
-            .structure
-            .units
-            .iter()
-            .find(|unit| unit.placement.x.abs() < 1e-9 && unit.placement.y < -1.5)
-            .map(|unit| unit.physical_id)
-            .expect("seed has a top-center wall constituent");
-        organism
-            .structure
-            .units
-            .retain(|unit| unit.physical_id != opening_id);
-        organism.structure.bonds.retain(|bond| {
-            bond.endpoint_a.constituent_id != opening_id
-                && bond.endpoint_b.constituent_id != opening_id
-        });
-        organism.structure.set_genome_constituent_ids([]);
-        organism
-            .structure
-            .clear_additional_genome_constituent_groups();
+        // Keep the organism's canonical genome cavity intact and add a second,
+        // ordinary enclosed region. Environmental BREAK targets accessible
+        // interiors other than the protected genome cavity.
+        for y in 0..5 {
+            for x in 0..5 {
+                if (x == 0 || x == 4) && (y == 0 || y == 4) {
+                    continue;
+                }
+                if x != 0 && x != 4 && y != 0 && y != 4 {
+                    continue;
+                }
+                let mut unit = crate::structure::StructuralUnit::new(
+                    "Nitrogen",
+                    Placement {
+                        x: 20.0 + x as f64 - 2.0,
+                        y: 20.0 + y as f64 - 2.0,
+                        rotation_radians: 0.0,
+                    },
+                );
+                assert!(unit.realize_default_geometry(&environment.catalog));
+                organism.structure.add_unit(unit);
+            }
+        }
 
         let source = PhysicalMaterial::realized(
             Material {
@@ -1660,13 +1661,13 @@ mod tests {
             },
             vec![
                 Placement {
-                    x: 0.0,
-                    y: 0.0,
+                    x: 20.0,
+                    y: 20.0,
                     rotation_radians: 0.0,
                 },
                 Placement {
-                    x: 0.838,
-                    y: 0.0,
+                    x: 20.838,
+                    y: 20.0,
                     rotation_radians: 0.0,
                 },
             ],
@@ -1675,7 +1676,7 @@ mod tests {
         .expect("bonded environmental source should be physically realizable");
         let cell_index = environment
             .field
-            .index_for_position(0.0, 0.0)
+            .index_for_position(20.0, 20.0)
             .expect("source origin must be in the field");
         environment.field.cells[cell_index]
             .physical_materials
