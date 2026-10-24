@@ -80,6 +80,11 @@ pub(crate) struct EnergyAllocation {
 
 impl EnergyAllocation {
     pub(crate) fn balanced(self) -> bool {
+        let residual = self.source_energy
+            - self.usable_delta
+            - self.structural_delta
+            - self.work_expended
+            - self.heat_dissipated;
         self.source_energy.is_finite()
             && self.usable_delta.is_finite()
             && self.structural_delta.is_finite()
@@ -88,13 +93,9 @@ impl EnergyAllocation {
             && self.source_energy >= 0.0
             && self.work_expended >= 0.0
             && self.heat_dissipated >= 0.0
-            && (self.source_energy
-                - self.usable_delta
-                - self.structural_delta
-                - self.work_expended
-                - self.heat_dissipated)
-                .abs()
-                <= EPSILON
+            && residual.is_finite()
+            && residual >= 0.0
+            && residual <= EPSILON
     }
 }
 
@@ -114,7 +115,7 @@ impl ExternalInputTransaction {
             && self.source_available >= 0.0
             && self.external_input.is_finite()
             && self.external_input >= 0.0
-            && self.external_input <= self.source_available + EPSILON
+            && self.external_input <= self.source_available
             && self.usable_delta >= 0.0
             && (self.external_input != 0.0
                 || (self.usable_delta == 0.0
@@ -365,9 +366,11 @@ impl EnergyLedgerAuthority for EnergyLedger {
             return false;
         }
         let allocated = resonant_energy_captured + heat_dissipated + escaped_energy;
+        let residual = incident_energy - allocated;
         if !allocated.is_finite()
-            || (incident_energy == 0.0 && allocated != 0.0)
-            || (incident_energy - allocated).abs() > EPSILON * incident_energy.max(1.0)
+            || !residual.is_finite()
+            || residual < 0.0
+            || residual > EPSILON * incident_energy.max(1.0)
         {
             return false;
         }
@@ -490,6 +493,19 @@ mod tests {
             heat_dissipated: ledger.total_heat_dissipated,
         };
         assert!(inventory.is_balanced(1e-12));
+    }
+
+    #[test]
+    fn world_tone_cannot_allocate_more_than_incident_energy_within_tolerance() {
+        let mut ledger = EnergyLedger::default();
+        assert!(
+            !ledger.settle_world_tone_paths(1.0, 1.0 + EPSILON * 0.5, 0.0, 0.0),
+            "world-tone allocation must not exceed the incident source"
+        );
+        assert_eq!(ledger.total_external_energy_input, 0.0);
+        assert_eq!(ledger.total_resonant_energy_held, 0.0);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+        assert_eq!(ledger.total_world_tone_energy_escaped, 0.0);
     }
 
     #[test]
@@ -835,6 +851,26 @@ mod tests {
     }
 
     #[test]
+    fn energy_transaction_cannot_create_energy_within_balance_tolerance() {
+        let mut ledger = EnergyLedger::default();
+        let mut holder = 0.0;
+        let transaction = EnergyTransaction {
+            reason: EnergyReason::Transfer,
+            potential_released: 0.0,
+            usable_delta: EPSILON * 0.5,
+            structural_delta: 0.0,
+            work_expended: 0.0,
+            heat_dissipated: 0.0,
+        };
+
+        assert!(!ledger.settle_transaction(&mut holder, transaction));
+        assert_eq!(holder, 0.0);
+        assert_eq!(ledger.total_potential_energy_released, 0.0);
+        assert_eq!(ledger.total_structural_energy_delta, 0.0);
+        assert_eq!(ledger.total_usable_energy_gained, 0.0);
+    }
+
+    #[test]
     fn external_input_rejects_negative_holder_even_within_tolerance() {
         let mut ledger = EnergyLedger::default();
         let mut holder = -EPSILON * 0.5;
@@ -860,6 +896,19 @@ mod tests {
         assert_eq!(ledger.total_external_energy_input, 0.0);
         assert_eq!(ledger.total_usable_energy_gained, 0.0);
         assert_eq!(ledger.total_heat_dissipated, 0.0);
+    }
+
+    #[test]
+    fn external_input_cannot_overdraw_local_source_allowance_within_tolerance() {
+        let mut ledger = EnergyLedger::default();
+        let mut holder = 0.0;
+        let claim = 5.0 + EPSILON * 0.5;
+        let tx = external_input(5.0, claim, claim, 0.0, 0.0);
+
+        assert!(!ledger.settle_external_input(&mut holder, tx));
+        assert_eq!(holder, 0.0);
+        assert_eq!(ledger.total_external_energy_input, 0.0);
+        assert_eq!(ledger.total_usable_energy_gained, 0.0);
     }
 
     #[test]
