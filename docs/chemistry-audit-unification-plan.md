@@ -4774,3 +4774,15 @@ A fresh source audit confirms the approved reproduction migration must coordinat
 - `src/geometry/structure.rs`: the new replacement regression exercises graph-level endpoint preservation and rollback only; it does not provide the runtime ledger/storage transaction.
 
 Therefore the next production change remains a coordinated ownership migration, not a field deletion or anchor-only adjustment. The atomic final split, ledger settlement, and rollback must be implemented with all consumers migrated before the separate graph/energy ownership is removed. No claim of production migration completion is made here.
+
+
+
+## CI follow-up — implementation commit 3f14c1e — 2026-10-24
+
+Workflow [40113515832](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40113515832) now confirms:
+- Formatting, source-size, COMBINE architecture, the listed focused chemistry/graph/storage/Bob/world-energy/death/inventory gates through step 33 all completed successfully.
+- The canonical 12-piece nitrogen seed/realization gate failed, matching the documented known baseline failure.
+- The focused COMBINE settlement rollback gate and full Rust test suite were still marked in progress on the latest poll; Clippy had not started. The workflow conclusion is currently failure, so this is not a green exact-head run.
+- The completed step list does not expose a failure reason for the overall workflow yet. Do not infer that the in-progress suite passed or that later steps ran.
+
+This narrows the immediate CI uncertainty: the formatting correction worked, and the new physical graph merge regression gate passed. Continue polling the same exact-head run for final suite/lint diagnostics before comparing named failures. The coordinated aggregate-ownership/division migration remains the production blocker; no partial ownership change was made.
