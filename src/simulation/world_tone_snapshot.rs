@@ -529,8 +529,7 @@ impl WorldToneOccluderSnapshot {
         let aggregate_escaped = total_incident - (total_captured + total_heat);
         if !aggregate_escaped.is_finite()
             || aggregate_escaped < 0.0
-            || (aggregate_escaped - total_escaped).abs()
-                > 1e-8 * total_incident.max(1.0)
+            || (aggregate_escaped - total_escaped).abs() > 1e-8 * total_incident.max(1.0)
         {
             return;
         }
