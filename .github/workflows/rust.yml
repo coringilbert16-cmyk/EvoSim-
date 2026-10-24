@@ -60,6 +60,7 @@ jobs:
           cargo test --locked append_graph_
           cargo test --locked subgraph_
           cargo test --locked replacing_subgraph_
+          cargo test --locked division_partition_
       # Persisted owner-relative geometry is part of physical-material validity.
       - name: Verify finite stored-material owner anchors
         timeout-minutes: 5
