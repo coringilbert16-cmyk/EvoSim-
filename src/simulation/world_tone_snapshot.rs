@@ -278,13 +278,6 @@ impl WorldToneOccluderSnapshot {
         sample: WorldToneSample,
         living_ids: &std::collections::HashSet<String>,
     ) {
-        macro_rules! abort_world_tone_frame {
-            ($line:expr) => {{
-                #[cfg(test)]
-                eprintln!("world-tone frame aborted at line {}", $line);
-                return;
-            }};
-        }
         let receiver_organism_indices: Vec<_> = simulation
             .organisms
             .iter()
@@ -294,7 +287,7 @@ impl WorldToneOccluderSnapshot {
         let Some(snapshot) =
             Self::from_simulation_for_organisms(sample, simulation, &receiver_organism_indices)
         else {
-            abort_world_tone_frame!(line!());
+            return;
         };
 
         // Every lane's first material hit must reproduce the direct geometric
@@ -308,20 +301,20 @@ impl WorldToneOccluderSnapshot {
                     .or_insert(0.0);
                 *width += path.projected_width;
                 if !width.is_finite() {
-                    abort_world_tone_frame!(line!());
+                    return;
                 }
             }
         }
         let body_to_organism = &snapshot.body_resonance_owners;
         if body_to_organism.len() != snapshot.body_properties.len() {
-            abort_world_tone_frame!(line!());
+            return;
         }
         for (body_index, owner) in body_to_organism.iter().enumerate() {
             let Some(organism_index) = *owner else {
                 continue;
             };
             let Some(organism) = simulation.organisms.get(organism_index) else {
-                abort_world_tone_frame!(line!());
+                return;
             };
             if !living_ids.contains(&organism.id) {
                 continue;
@@ -341,7 +334,7 @@ impl WorldToneOccluderSnapshot {
                     || !actual.is_finite()
                     || (expected - actual).abs() > 1e-7 * expected.max(1.0)
                 {
-                    abort_world_tone_frame!(line!());
+                    return;
                 }
             }
         }
@@ -365,12 +358,12 @@ impl WorldToneOccluderSnapshot {
                 || path.projected_width <= 0.0
                 || path.hits.is_empty()
             {
-                abort_world_tone_frame!(line!());
+                return;
             }
             let Some(incident_energy) =
                 sample.incident_energy_for_projected_width(path.projected_width)
             else {
-                abort_world_tone_frame!(line!());
+                return;
             };
             let mut signal = crate::harmonics::ToneSpectrum {
                 components: vec![crate::harmonics::ToneComponent {
@@ -385,11 +378,11 @@ impl WorldToneOccluderSnapshot {
             for &(body_index, unit_index) in &path.hits {
                 let Some(properties) = snapshot.properties_for_body_unit(body_index, unit_index)
                 else {
-                    abort_world_tone_frame!(line!());
+                    return;
                 };
                 let incoming_energy = spectrum_energy(&signal);
                 let Some(incoming_energy) = incoming_energy else {
-                    abort_world_tone_frame!(line!());
+                    return;
                 };
                 if incoming_energy <= f64::EPSILON {
                     signal = crate::harmonics::ToneSpectrum::empty();
@@ -399,14 +392,14 @@ impl WorldToneOccluderSnapshot {
                 let Some(response_spectrum) =
                     crate::harmonics::material_response_spectrum(properties, baselines, &signal)
                 else {
-                    abort_world_tone_frame!(line!());
+                    return;
                 };
                 let response_energy = spectrum_energy(&response_spectrum);
                 let Some(response_energy) = response_energy else {
-                    abort_world_tone_frame!(line!());
+                    return;
                 };
                 if response_energy > incoming_energy + 1e-9 {
-                    abort_world_tone_frame!(line!());
+                    return;
                 }
                 // The material response is energy-limited. Clamp only the tiny
                 // numerical overshoot already accepted above; never let it
@@ -414,7 +407,7 @@ impl WorldToneOccluderSnapshot {
                 let response_energy = response_energy.min(incoming_energy);
                 let damping = crate::harmonics::damping_ratio(properties, baselines);
                 if !damping.is_finite() || damping < 0.0 {
-                    abort_world_tone_frame!(line!());
+                    return;
                 }
                 let damping_heat = response_energy * damping.clamp(0.0, 1.0);
                 let living_organism =
@@ -434,7 +427,7 @@ impl WorldToneOccluderSnapshot {
                     damping_heat,
                     living_organism.is_some(),
                 ) else {
-                    abort_world_tone_frame!(line!());
+                    return;
                 };
                 let mut captured = 0.0;
 
@@ -448,7 +441,7 @@ impl WorldToneOccluderSnapshot {
                             retained_budget,
                         )
                     else {
-                        abort_world_tone_frame!(line!());
+                        return;
                     };
                     let mut candidate = staged_reservoirs[organism_index].clone();
                     let before_energy = candidate.total_energy();
@@ -507,14 +500,14 @@ impl WorldToneOccluderSnapshot {
                 path_captured += captured;
                 path_heat += interaction_heat;
                 if !path_captured.is_finite() || !path_heat.is_finite() {
-                    abort_world_tone_frame!(line!());
+                    return;
                 }
                 signal = outgoing;
             }
 
             let escaped_spectrum_energy = spectrum_energy(&signal);
             let Some(escaped_spectrum_energy) = escaped_spectrum_energy else {
-                abort_world_tone_frame!(line!());
+                return;
             };
             let mut escaped_budget = incident_energy - path_captured - path_heat;
             if escaped_budget < 0.0 {
@@ -529,14 +522,14 @@ impl WorldToneOccluderSnapshot {
                     path_heat -= overrun;
                     escaped_budget = 0.0;
                 } else {
-                    abort_world_tone_frame!(line!());
+                    return;
                 }
             }
             if !escaped_budget.is_finite()
                 || (escaped_budget - escaped_spectrum_energy).abs()
                     > 1e-8 * incident_energy.max(1.0)
             {
-                abort_world_tone_frame!(line!());
+                return;
             }
             // Treat the tiny floating-point discrepancy between the transformed
             // spectrum and the accounted remainder as escaped energy. This
@@ -550,19 +543,32 @@ impl WorldToneOccluderSnapshot {
                 .iter()
                 .all(|value| value.is_finite())
             {
-                abort_world_tone_frame!(line!());
+                return;
             }
         }
 
         // Reconcile the aggregate totals from one shared residual after
         // summing paths. Summing independently rounded per-path remainders can
         // otherwise make the world total exceed its source by a few ulps.
-        let aggregate_escaped = total_incident - (total_captured + total_heat);
+        let mut aggregate_escaped = total_incident - (total_captured + total_heat);
+        if aggregate_escaped < 0.0 {
+            // Summing path totals can introduce another ulp-scale overrun even
+            // after each path has been reconciled. Debit only that bounded
+            // rounding amount from heat; never let aggregate allocation exceed
+            // the source or convert a negative residual into captured energy.
+            let overrun = -aggregate_escaped;
+            let tolerance = 1e-8 * total_incident.max(1.0);
+            if overrun <= tolerance && total_heat >= overrun {
+                total_heat -= overrun;
+                aggregate_escaped = 0.0;
+            } else {
+                return;
+            }
+        }
         if !aggregate_escaped.is_finite()
-            || aggregate_escaped < 0.0
             || (aggregate_escaped - total_escaped).abs() > 1e-8 * total_incident.max(1.0)
         {
-            abort_world_tone_frame!(line!());
+            return;
         }
         total_escaped = aggregate_escaped;
         if !simulation.energy_ledger.settle_world_tone_paths(
@@ -571,7 +577,7 @@ impl WorldToneOccluderSnapshot {
             total_heat,
             total_escaped,
         ) {
-            abort_world_tone_frame!(line!());
+            return;
         }
         for (organism, reservoir) in simulation.organisms.iter_mut().zip(staged_reservoirs) {
             organism.resonant_energy = reservoir;
