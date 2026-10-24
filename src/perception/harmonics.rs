@@ -245,11 +245,7 @@ pub(crate) fn natural_frequency_hz(
 pub(crate) fn damping_ratio(properties: ResourceProperties, baselines: ResourceBaselines) -> f64 {
     let reactivity = properties.reactivity;
     let baseline = baselines.reactivity;
-    if !reactivity.is_finite()
-        || reactivity < 0.0
-        || !baseline.is_finite()
-        || baseline < 0.0
-    {
+    if !reactivity.is_finite() || reactivity < 0.0 || !baseline.is_finite() || baseline < 0.0 {
         return f64::NAN;
     }
     if baseline <= f64::EPSILON {
@@ -1394,19 +1390,21 @@ mod tests {
         assert!(natural_frequency_hz(properties(f64::NAN, 0.0, 1.0), baselines()).is_nan());
         assert!(natural_frequency_hz(properties(1.0, 0.0, f64::INFINITY), baselines()).is_nan());
         assert!(damping_ratio(properties(1.0, f64::NAN, 1.0), baselines()).is_nan());
-        assert!(damping_ratio(properties(1.0, 1.0, 1.0), ResourceBaselines {
-            reactivity: f64::INFINITY,
-            ..baselines()
-        }).is_nan());
+        assert!(damping_ratio(
+            properties(1.0, 1.0, 1.0),
+            ResourceBaselines {
+                reactivity: f64::INFINITY,
+                ..baselines()
+            }
+        )
+        .is_nan());
         assert_eq!(resonance_response(440.0, 440.0, f64::NAN), 0.0);
         assert_eq!(nonlinear_harmonic_amplitude(1.0, f64::NAN, 2), 0.0);
-        assert!(material_response(
-            properties(1.0, f64::NAN, 1.0),
-            baselines(),
-            0.0,
-        )
-        .components
-        .is_empty());
+        assert!(
+            material_response(properties(1.0, f64::NAN, 1.0), baselines(), 0.0,)
+                .components
+                .is_empty()
+        );
     }
 
     #[test]
