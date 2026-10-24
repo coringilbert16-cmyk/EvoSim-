@@ -462,12 +462,18 @@ impl WorldToneOccluderSnapshot {
                     if deposit_ok
                         && stored_delta.is_some_and(|stored| {
                             stored.is_finite()
+                                && stored >= 0.0
+                                && stored <= retained_budget
                                 && (stored - retained_budget).abs()
                                     <= 1e-9 * retained_budget.max(1.0)
                         })
                     {
                         staged_reservoirs[organism_index] = candidate;
-                        captured = retained_budget;
+                        // Count the energy actually retained by the reservoir.
+                        // Any tiny difference from the requested retention
+                        // budget becomes heat instead of unbacked stored energy.
+                        captured = stored_delta.unwrap_or(0.0);
+                        interaction_heat = response_energy - captured;
                     } else {
                         // A bounded reservoir must not silently discard a
                         // spectral component; rejected response energy is heat.
