@@ -1622,54 +1622,25 @@ mod tests {
 
     #[test]
     fn environmental_break_rejects_exhausted_transformation_ids_without_removing_source() {
-        use crate::physical_material::PhysicalMaterial;
-        use crate::resources::{InternalBond, Material};
-        use crate::structure::Placement;
+        use crate::decision::ActionKind;
+        use crate::decision_runtime::ActionCandidate;
 
-        let (mut organism, mut environment, _) = resonance_break_test_organism();
-        // ID exhaustion must be rejected before candidate validation or any
-        // environmental source removal. Use a real bonded source and a
-        // syntactically valid context key without coupling this guard test to
-        // the separate accessible-interior candidate-generation path.
-        let source = PhysicalMaterial::realized(
-            Material {
-                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-                internal_bonds: vec![InternalBond {
-                    part_a: 0,
-                    part_b: 1,
-                }],
-            },
-            vec![
-                Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-                Placement {
-                    x: 0.838,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-            ],
-            &environment.catalog,
-        )
-        .expect("bonded environmental source should be physically realizable");
-        let cell_index = environment
-            .field
-            .index_for_position(0.0, 0.0)
-            .expect("source origin must be in the field");
-        environment.field.cells[cell_index]
-            .physical_materials
-            .push(source);
-        let candidate = ActionCandidate {
-            action: ActionKind::Break,
-            context_key: Some(format!("environment:cell:{cell_index}:material:0:bond:0")),
-        };
+        let catalog = crate::resources::default_catalog();
+        let (mut environment, cell_index, before, source, after) =
+            environmental_break_test_inventory(&catalog);
+        environment.field.cells[cell_index].physical_materials = vec![before, source, after];
         let materials_before = environment.field.cells[cell_index]
             .physical_materials
             .clone();
+        let mut organism = environmental_break_test_organism("exhausted-id", None);
+        let candidate = ActionCandidate {
+            action: ActionKind::Break,
+            context_key: Some(format!("environment:cell:{cell_index}:material:1:bond:0")),
+        };
         let mut next_id = u64::MAX;
 
+        // Exhaustion is checked before any geometry or source mutation; this
+        // guard test deliberately does not depend on candidate discovery.
         let started = try_start_environmental_break(
             &mut organism,
             &mut environment,
