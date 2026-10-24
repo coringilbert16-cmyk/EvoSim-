@@ -4,21 +4,22 @@ EvoSim is an experimental 2D artificial-life simulation written in Rust. The pro
 
 This README is the current repository guide and implementation-status summary. Older dated handoffs are preserved verbatim in [README_HANDOFF_ARCHIVE_2026-10-22.md](README_HANDOFF_ARCHIVE_2026-10-22.md); treat them as historical evidence, not current instructions when they conflict with this page.
 
-## Current repository state — 2026-10-22
+## Current repository state — 2026-10-23
 
 - **Integration baseline:** PR [#202](https://github.com/coringilbert16-cmyk/EvoSim-/pull/202) is merged to `main` at `8c84978cd003738d94a74eef9114b711689c3804`.
-- **Maintenance work:** [PR #203](https://github.com/coringilbert16-cmyk/EvoSim-/pull/203) is a draft based on that baseline. It contains narrowly scoped lint cleanup and documentation organization. It is not merged.
-- **Known test baseline:** 563 passed, 28 failed, 1 ignored on the exact tested PR #202 source head. Comparison with the prior run found the same 28 failing test identities, with no new or resolved baseline failures. See [run #39697289682](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39697289682).
-- **Strict Clippy:** `cargo clippy --locked --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of` still fails. Exact-head run [#39705150387](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39705150387), at `67bceda1672891e7e390cf242295477bfb5cf3a0`, reports 34 application-target and 15 test-target errors, improved from the earlier 36/16 checkpoint and baseline 59/38. The full suite reports 563 passed, 28 failed, 1 ignored; all 28 failing test identities match the accepted baseline run [#39697289682](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39697289682), with no new or resolved baseline failures. Formatting, source-size, COMBINE architecture, and focused Bob/fluid/chemistry checks pass at this head. Strict Clippy remains an acknowledged follow-up; no blanket lint suppression is intended.
-- **Not yet proven:** whole-world energy conservation across every storage, reaction, and lifecycle path; live sunlight/world-tone energy capture; and complete self-maintaining organism viability. Do not infer these from passing focused tests.
-- **Separate work:** PR [#196](https://github.com/coringilbert16-cmyk/EvoSim-/pull/196) remains out of scope for PR #203. Do not import its constructor/Bob changes as part of maintenance cleanup.
+- **Chemistry plan:** [PR #204](https://github.com/coringilbert16-cmyk/EvoSim-/pull/204) remains a documentation-only draft. Its current handoff records the approved invariants, phase ordering, and exact-head verification evidence.
+- **Chemistry implementation:** [PR #205](https://github.com/coringilbert16-cmyk/EvoSim-/pull/205) remains a draft at `a2301bc57646caa5f8367024672b7732bccaccd0`. Recent work fixes the post-death rollback test comparison, adds stale-instance chemistry-cache rollback coverage, rejects invalid chemical-position cache identities, and adds a regression pinning nonliving world-tone energy settlement. Dedicated CI gates cover these regressions.
+- **Current exact-head verification:** PR #205 head `6b7f55029e6c6bdf3f4a3a149f66c6615b3c96d7` includes immutable stored/environmental source-location metadata and rollback regressions; exact-head workflow results are pending. Latest completed full verification is workflow #40021855932 on earlier head `0f9992a80131a6a6b702a25c33e13dbf3571cdf2`: formatting and focused gates passed, full suite 661 passed / 23 failed / 1 ignored in 240.21 seconds, all 23 failures matched baseline #39705628427, five baseline failures resolved, zero new failures. Clippy remained baseline-red with zero new normalized diagnostic identities and four removed identities.
+- **Strict Clippy:** remains failing because of baseline lint debt. Exact-head comparison for workflow #40021855932 against baseline #39705628427 found no new diagnostic identities and four removed identities.
+- **Still unproven:** whole-world material/energy conservation across all holders and live transitions; ordinary chemistry reachability for stored/developing holders after death; canonical aggregate ownership and atomic reproduction/division. Live world-tone capture is implemented, but its global conservation is not yet proven.
+- **Separate work:** PR [#196](https://github.com/coringilbert16-cmyk/EvoSim-/pull/196) remains out of scope for the chemistry implementation. Keep constructor/Bob changes separate.
 
 ## Design and implementation invariants
 
 - **Organisms are more than cavities.** An enclosed genome cavity is a structural milestone, not proof of a viable organism. Long-term goals include cells, niches, populations, and later multicellularity emerging from interaction.
 - **Shared mechanisms first.** Chemistry, energy, movement, stress, and post-death reactions should use consistent underlying mechanisms. “Decomposition” is chemistry after death, not a separate bond-breaking law.
 - **Energy must be accounted for once.** Internal transfers cancel at world scale. Captured external input, usable energy, stored bond energy, work, and heat must reconcile. A spectrum or resonance amplitude is not itself physical energy.
-- **World tone / sunlight:** source output is deterministic and directional; visibility and occlusion matter. Reflected tone means onward propagation with a potentially transformed frequency composition, not literal mirror-ray tracing. Live capture stays disabled until the allocation and conservation path is complete and verified.
+- **World tone / sunlight:** source output is deterministic and directional; visibility and occlusion matter. Reflected tone means onward propagation with a potentially transformed frequency composition, not literal mirror-ray tracing. Live capture is active through the precomputed world-tone frame and energy ledger. Dead physical surfaces remain occluders and convert their material response to heat rather than biological resonance storage; whole-world conservation is still unproven.
 - **Geometry ownership:** a structural unit represents one physical constituent. Composite materials must retain per-constituent placements and bond identity; never invent transforms from a cached composite shape.
 - **Bob is a geometry library worker/viewer.** Prefer stored/reusable library results over repeated runtime geometry discovery. Preserve the corner-free 12-piece nitrogen seed; do not revert to the obsolete 16-piece ring.
 - **Repository safety:** audit before each change, keep changes small, verify the exact PR head, compare test failure identities against the known baseline, and do not delete dead code until its architectural role is understood.
@@ -52,11 +53,15 @@ The full test suite is currently **not green**. A maintenance change is acceptab
 
 ## Active maintenance checklist
 
-- [x] Review exact-head CI at `1414744`: formatting, source-size and COMBINE architecture checks pass; focused Bob/fluid/chemical tests pass; full suite remains at the same 28 baseline failures (563 passed, 1 ignored).
-- [x] Complete final exact-head verification for PR #203: all 28 full-suite failure identities match the accepted baseline; formatting and focused checks pass. Strict Clippy improved to 34 application-target and 15 test-target errors but remains a tracked follow-up; investigate dead-code warnings before deleting or suppressing anything.
-- [x] Reconcile full-suite test failures by identity against the known baseline; no new or resolved failing identities.
-- [ ] Improve repository documentation and source ownership without discarding historical evidence.
-- [ ] Keep PR #196 separate until the stabilized baseline is understood and its exact-head behavior is independently reviewed.
+- [x] Verify earlier PR #205 focused transaction gates and compare full-suite failure identities against the frozen baseline; no new failure identities, five baseline failures resolved. Current-head full-suite comparison is pending.
+- [x] Verify COMBINE rollback restores the exact usable-energy and full ledger before-state; legacy serialized transactions retain the delta fallback.
+- [x] Verify environmental BREAK rollback rejects corrupt source indices without mutating environmental inventory.
+- [x] Verify the post-death regression preserves material/energy inventory and prevents reproductive construction progress without activating legacy `DecomposingBody`.
+- [x] Stage finished-body energy settlement and commit it only with a successful atomic physical-material deposit; focused rollback gate passed on an earlier PR #205 head.
+- [x] Gate late physical-restoration rollback independently; the destination-preservation regression passed on earlier verified heads. Current full Rust suite and Clippy remain pending.
+- [ ] Establish an ordinary-chemistry path for stored/developing holders after death without a separate decomposition law or loss of exact ownership.
+- [ ] Prove whole-world material/energy conservation across all holders, reactions, sunlight capture, and lifecycle transitions; do not infer completion from focused gates.
+- [ ] Keep PR #196 constructor/Bob work separate from PR #205 chemistry changes.
 
 ## Specification authority
 
