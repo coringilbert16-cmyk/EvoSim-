@@ -156,6 +156,7 @@ jobs:
         run: |
           cargo test --locked source_budget_rejects_claim_above_remaining_budget_atomically
           cargo test --locked source_budget_rejects_sub_tolerance_overspend_atomically
+          cargo test --locked zero_external_input_cannot_credit_holder_within_balance_tolerance
       - name: Run focused decomposition finalization rollback test
         timeout-minutes: 5
         run: cargo test --locked invalid_finished_body_position_preserves_released_material_ownership
