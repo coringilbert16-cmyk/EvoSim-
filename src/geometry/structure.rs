@@ -1839,6 +1839,9 @@ mod tests {
         assert!(aggregate
             .replace_subgraph_remapping_new_ids(&[old_id], &replacement)
             .is_none());
+        assert!(aggregate
+            .replace_subgraph_remapping_new_ids_and_extract(&[old_id], &replacement)
+            .is_none());
         assert_eq!(aggregate.units, before_units);
         assert_eq!(aggregate.bonds, before_bonds);
         assert_eq!(aggregate.next_constituent_id, before_next_id);
