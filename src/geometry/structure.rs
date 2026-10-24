@@ -1489,6 +1489,22 @@ mod tests {
         replacement.units[replacement_selected].physical_id = selected_id;
         let transient_new_id = replacement.physical_id(replacement_new).unwrap();
         assert_eq!(transient_new_id, sibling_id);
+        replacement.bonds.push(Bond {
+            endpoint_a: BondEndpoint::new(
+                selected_id,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: 0.0,
+                },
+            ),
+            endpoint_b: BondEndpoint::new(
+                transient_new_id,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::PI,
+                },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
 
         let remapping = aggregate
             .replace_subgraph_remapping_new_ids(&[selected_id], &replacement)
@@ -1498,6 +1514,10 @@ mod tests {
         assert_ne!(aggregate_new_id, sibling_id);
         assert_eq!(aggregate.unit_index(sibling_id), Some(0));
         assert!(aggregate.unit_index(aggregate_new_id).is_some());
+        assert!(aggregate.bonds.iter().any(|bond| {
+            bond.endpoint_a.constituent_id == selected_id
+                && bond.endpoint_b.constituent_id == aggregate_new_id
+        }));
         assert_eq!(aggregate.units.len(), 3);
         assert_eq!(
             aggregate
