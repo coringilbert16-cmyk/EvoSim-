@@ -461,9 +461,7 @@ impl WorldToneOccluderSnapshot {
                         .map(|(after, before)| after - before);
                     if deposit_ok
                         && stored_delta.is_some_and(|stored| {
-                            stored.is_finite()
-                                && stored >= 0.0
-                                && stored <= response_energy
+                            stored.is_finite() && stored >= 0.0 && stored <= response_energy
                         })
                     {
                         staged_reservoirs[organism_index] = candidate;
