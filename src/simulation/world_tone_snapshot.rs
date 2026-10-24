@@ -401,6 +401,10 @@ impl WorldToneOccluderSnapshot {
                 if response_energy > incoming_energy + 1e-9 {
                     return;
                 }
+                // The material response is energy-limited. Clamp only the tiny
+                // numerical overshoot already accepted above; never let it
+                // become a source of additional captured or dissipated energy.
+                let response_energy = response_energy.min(incoming_energy);
                 let damping = crate::harmonics::damping_ratio(properties, baselines);
                 if !damping.is_finite() || damping < 0.0 {
                     return;
@@ -491,16 +495,22 @@ impl WorldToneOccluderSnapshot {
                 signal = outgoing;
             }
 
-            let escaped = spectrum_energy(&signal);
-            let Some(escaped) = escaped else {
+            let escaped_spectrum_energy = spectrum_energy(&signal);
+            let Some(escaped_spectrum_energy) = escaped_spectrum_energy else {
                 return;
             };
-            let allocated = path_captured + path_heat + escaped;
-            if !allocated.is_finite()
-                || (incident_energy - allocated).abs() > 1e-8 * incident_energy.max(1.0)
+            let escaped_budget = incident_energy - path_captured - path_heat;
+            if !escaped_budget.is_finite()
+                || escaped_budget < 0.0
+                || (escaped_budget - escaped_spectrum_energy).abs()
+                    > 1e-8 * incident_energy.max(1.0)
             {
                 return;
             }
+            // Treat the tiny floating-point discrepancy between the transformed
+            // spectrum and the accounted remainder as escaped energy. This
+            // keeps allocation conservative without crediting more than arrived.
+            let escaped = escaped_budget;
             total_incident += incident_energy;
             total_captured += path_captured;
             total_heat += path_heat;
