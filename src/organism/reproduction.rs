@@ -766,7 +766,10 @@ pub(crate) fn begin_reproduction(
         parent.reproductive_construction = Some(ReproductiveConstruction {
             committed_material: child_storage,
             developing_member_ids: mapped_anchor_ids,
-            developing_structure,
+            // The anchor is already part of the parent's physical aggregate.
+            // Keep the persisted graph empty; aggregate-owned working graphs
+            // are derived transiently from stable physical IDs.
+            developing_structure: OrganismStructure::new(),
             child_genome: child_genome.clone(),
             developmental_origin: Position {
                 x: placement.x,
@@ -844,9 +847,11 @@ fn commit_candidate_attachment(
     }
     construction.committed_material = child.stored_material;
     construction.developing_member_ids = child.structure.physical_constituent_ids();
-    // Preserve a current fallback snapshot until detached construction no
-    // longer relies on the legacy graph.
-    construction.developing_structure = child.structure;
+    construction.developing_structure = if aggregate_owned {
+        OrganismStructure::new()
+    } else {
+        child.structure
+    };
     construction.needs_space = false;
     construction.developing_energy = if aggregate_owned {
         0.0
@@ -996,9 +1001,12 @@ pub(crate) fn advance_construction(
     }
     construction.developing_stress = child.stress;
     construction.developing_maintenance_debt = child.maintenance_debt;
-    construction.developing_structure = child.structure.clone();
-    construction.developing_member_ids =
-        construction.developing_structure.physical_constituent_ids();
+    construction.developing_member_ids = child.structure.physical_constituent_ids();
+    construction.developing_structure = if aggregate_owned {
+        OrganismStructure::new()
+    } else {
+        child.structure.clone()
+    };
     if dead {
         return (ConstructionStatus::Dead, None);
     }
