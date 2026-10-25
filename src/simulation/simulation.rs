@@ -2550,8 +2550,8 @@ mod decomposition_finalization_tests {
         ));
         simulation.energy_ledger = ledger;
 
-        // Give the construction both committed material and a non-zero energy
-        // holder using real transfers, so the fixture itself creates nothing.
+        // Give construction a committed physical-material holder using a real
+        // transfer. Aggregate-owned construction energy remains with the parent.
         let organism = &mut simulation.organisms[0];
         let construction = organism
             .reproductive_construction
@@ -2565,27 +2565,29 @@ mod decomposition_finalization_tests {
             .committed_material
             .entries
             .push(crate::material_storage::StoredMaterial::Physical(committed));
-        let mut ledger = simulation.energy_ledger;
-        let transfer = 0.5_f64.min(organism.usable_energy);
-        assert!(ledger.transfer(
-            &mut organism.usable_energy,
-            &mut construction.developing_energy,
-            transfer,
-        ));
-        simulation.energy_ledger = ledger;
-
         let construction = simulation.organisms[0]
             .reproductive_construction
             .as_ref()
             .expect("construction remains parent-owned");
-        assert!(!construction.developing_structure.units.is_empty());
+        assert_eq!(construction.developing_energy, 0.0);
+        assert!(construction.developing_structure.units.is_empty());
         assert!(!construction.committed_material.is_empty());
+        let developing_member_ids = construction.developing_member_ids.clone();
+        assert!(developing_member_ids.iter().all(|id| {
+            simulation.organisms[0].structure.unit_index(*id).is_some()
+        }));
 
-        // Breach the parent's established core before the baseline snapshot.
-        // The physical removal is fixture setup; subsequent ticks must retain
-        // every remaining holder and must not advance biological construction.
-        simulation.organisms[0].structure.units.clear();
-        simulation.organisms[0].structure.bonds.clear();
+        // Breach the parent's established core while retaining the physical
+        // aggregate, including construction members. Parent-owned construction
+        // must not need a duplicate graph to survive the breach.
+        let core_ids = simulation.organisms[0]
+            .structure
+            .genome_constituent_ids()
+            .to_vec();
+        assert!(!core_ids.is_empty());
+        simulation.organisms[0]
+            .structure
+            .remove_units_by_physical_ids(&core_ids);
         simulation.organisms[0].mark_structure_changed();
 
         let material_before = rollback_material_inventory(&simulation);
@@ -2635,6 +2637,10 @@ mod decomposition_finalization_tests {
             construction.developing_structure.bonds,
             construction_before.3.bonds
         );
+        assert!(construction.developing_structure.units.is_empty());
+        assert!(developing_member_ids.iter().all(|id| {
+            simulation.organisms[0].structure.unit_index(*id).is_some()
+        }));
         assert_eq!(
             construction.committed_material.entries,
             construction_before.4
