@@ -1441,8 +1441,9 @@ mod tests {
         assert!(preferred > 0.0);
         assert!(!budding_scale_reached_with_reference(
             &construction,
+            &construction.developing_structure,
             &catalog,
-            None
+            None,
         ));
     }
 
@@ -1459,16 +1460,25 @@ mod tests {
             &mut ledger,
         ));
         let mut construction = parent.reproductive_construction.take().unwrap();
-        assert!(developing_membership_is_valid(&construction, &construction.developing_structure));
+        assert!(developing_membership_is_valid(
+            &construction,
+            &construction.developing_structure,
+        ));
 
         construction.developing_member_ids.clear();
-        assert!(!developing_membership_is_valid(&construction, &construction.developing_structure));
+        assert!(!developing_membership_is_valid(
+            &construction,
+            &construction.developing_structure,
+        ));
 
         construction.developing_member_ids =
             construction.developing_structure.physical_constituent_ids();
         let first_id = construction.developing_member_ids[0];
         construction.developing_member_ids.push(first_id);
-        assert!(!developing_membership_is_valid(&construction, &construction.developing_structure));
+        assert!(!developing_membership_is_valid(
+            &construction,
+            &construction.developing_structure,
+        ));
     }
 
     #[test]
@@ -1968,7 +1978,10 @@ mod tests {
             .reproductive_construction
             .take()
             .expect("reproduction is active");
-        assert!(developing_membership_is_valid(&construction, &construction.developing_structure));
+        assert!(developing_membership_is_valid(
+            &construction,
+            &construction.developing_structure,
+        ));
         assert!(construction.is_aggregate_owned_by(&parent.structure));
         assert_eq!(construction.developing_energy, 0.0);
         let before_units = construction.developing_structure.units.len();
@@ -2011,7 +2024,10 @@ mod tests {
             .reproductive_construction
             .take()
             .expect("reproduction is active");
-        assert!(developing_membership_is_valid(&construction, &construction.developing_structure));
+        assert!(developing_membership_is_valid(
+            &construction,
+            &construction.developing_structure,
+        ));
         assert!(construction.is_aggregate_owned_by(&parent.structure));
         assert_eq!(construction.developing_energy, 0.0);
         let body = parent_body_geometry(&parent, &simulation.environment.catalog).unwrap();
