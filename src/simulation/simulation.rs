@@ -1451,66 +1451,16 @@ impl Simulation {
     pub(crate) fn energy_inventory_snapshot(
         &self,
     ) -> crate::energy_ledger::EnergyInventorySnapshot {
-        let current_usable_energy = self
-            .organisms
-            .iter()
-            .map(|organism| {
-                organism.usable_energy
-                    + crate::reproduction::construction_usable_energy_held(organism)
-            })
-            .sum::<f64>()
-            + self
-                .decomposing_bodies
-                .iter()
-                .map(|body| body.energy_budget)
-                .sum::<f64>();
-
-        let current_resonant_energy = self
-            .organisms
-            .iter()
-            .map(|organism| organism.resonant_energy.total_energy().unwrap_or(f64::NAN))
-            .sum::<f64>();
-
-        let organism_structural_energy = self
-            .organisms
-            .iter()
-            .map(|organism| {
-                let own = organism
-                    .structure
-                    .bonds
-                    .iter()
-                    .map(|bond| bond.bond_energy)
-                    .sum::<f64>();
-                let developing = organism
-                    .reproductive_construction
-                    .as_ref()
-                    .filter(|construction| {
-                        !construction.is_aggregate_owned_by(&organism.structure)
-                            && !construction.has_any_member_in(&organism.structure)
-                    })
-                    .map_or(0.0, |construction| {
-                        construction
-                            .developing_structure
-                            .bonds
-                            .iter()
-                            .map(|bond| bond.bond_energy)
-                            .sum::<f64>()
-                    });
-                own + developing
-            })
-            .sum::<f64>();
-        let current_structural_energy = organism_structural_energy
-            + self
-                .decomposing_bodies
-                .iter()
-                .map(|body| {
-                    body.structure
-                        .bonds
-                        .iter()
-                        .map(|bond| bond.bond_energy)
-                        .sum::<f64>()
-                })
-                .sum::<f64>();
+        let current_usable_energy = crate::reproduction::total_usable_energy_held(
+            &self.organisms,
+            &self.decomposing_bodies,
+        );
+        let current_resonant_energy =
+            crate::reproduction::total_resonant_energy_held(&self.organisms);
+        let current_structural_energy = crate::reproduction::total_structural_energy_held(
+            &self.organisms,
+            &self.decomposing_bodies,
+        );
 
         crate::energy_ledger::EnergyInventorySnapshot {
             initial_usable_energy: self.energy_ledger.initial_usable_energy_held,
