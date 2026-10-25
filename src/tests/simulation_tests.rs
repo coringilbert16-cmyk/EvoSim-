@@ -500,7 +500,7 @@ mod integration_tests {
         let before =
             integer_material_inventory(&simulation).expect("pre-recycling inventory is integral");
         let mut organism = simulation.organisms.remove(0);
-        let body = crate::chemistry::recycling::recycle_dead_organism(
+        let body = crate::recycling::recycle_dead_organism(
             &mut simulation.environment,
             &mut organism,
             &mut simulation.energy_ledger,
