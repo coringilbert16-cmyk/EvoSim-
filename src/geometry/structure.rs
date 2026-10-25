@@ -542,6 +542,7 @@ impl PhysicalConstituentGraph {
         &mut self,
         source: &Self,
     ) -> Option<HashMap<PhysicalConstituentId, PhysicalConstituentId>> {
+        let destination_was_empty = self.units.is_empty();
         let source_ids: HashSet<_> = source.units.iter().map(|unit| unit.physical_id).collect();
         let destination_ids: HashSet<_> = self.units.iter().map(|unit| unit.physical_id).collect();
         let source_max_id = source_ids.iter().map(|id| id.0).max().unwrap_or(0);
@@ -639,9 +640,11 @@ impl PhysicalConstituentGraph {
             .iter()
             .map(|group| remap_group(group))
             .collect::<Option<Vec<_>>>()?;
-        if staged.genome_constituent_ids.is_empty() && !source_primary.is_empty() {
+        if destination_was_empty && staged.genome_constituent_ids.is_empty() && !source_primary.is_empty() {
             staged.set_genome_constituent_ids(source_primary);
         } else if !source_primary.is_empty() {
+            // Appending a new organism into an existing physical aggregate must
+            // not silently promote its core to the aggregate's primary genome.
             staged.add_genome_constituent_group(source_primary);
         }
         for group in source_additional {
@@ -2595,6 +2598,33 @@ mod tests {
             aggregate.additional_genome_constituent_groups,
             before_groups
         );
+    }
+
+    #[test]
+    fn appending_into_nonempty_coreless_aggregate_keeps_source_core_additional() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut destination = OrganismStructure::new();
+        let existing = destination.add_unit(StructuralUnit::new("Carbon", placement));
+        let existing_id = destination.physical_id(existing).unwrap();
+        assert!(destination.genome_constituent_ids().is_empty());
+
+        let mut source = OrganismStructure::new();
+        let core = source.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let core_id = source.physical_id(core).unwrap();
+        source.set_genome_constituent_ids([core_id]);
+
+        let remap = destination.append_graph_remapping_ids(&source).unwrap();
+        let mapped_core = remap[&core_id];
+        assert!(destination.genome_constituent_ids().is_empty());
+        assert!(destination
+            .additional_genome_constituent_groups()
+            .contains(&vec![mapped_core]));
+        assert_eq!(destination.physical_constituent_ids().len(), 2);
+        assert!(destination.unit_index(existing_id).is_some());
     }
 
     #[test]
