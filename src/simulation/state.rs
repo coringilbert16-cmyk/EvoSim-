@@ -217,21 +217,29 @@ impl ReproductiveConstruction {
         true
     }
 
-    /// True when the developing graph is only a transient view of constituents
-    /// already owned by the parent's physical aggregate. Consumers use this
-    /// shared predicate to avoid counting, moving, or emitting the same body twice.
+    /// True when the stable developing-member IDs are owned by the parent's
+    /// physical aggregate. The cached developing graph is deliberately not
+    /// consulted: stale cached poses must not make the same physical units look
+    /// like a second, independently owned body to accounting or world consumers.
     pub(crate) fn is_aggregate_owned_by(&self, parent: &OrganismStructure) -> bool {
-        let actual_ids = self.developing_structure.physical_constituent_ids();
-        if actual_ids.len() != self.developing_member_ids.len() {
+        if self.developing_member_ids.is_empty() {
             return false;
         }
-        let actual: std::collections::HashSet<_> = actual_ids.iter().copied().collect();
-        let recorded: std::collections::HashSet<_> =
-            self.developing_member_ids.iter().copied().collect();
-        actual.len() == actual_ids.len()
-            && recorded.len() == self.developing_member_ids.len()
-            && actual == recorded
-            && parent.contains_exact_physical_subgraph(&self.developing_structure)
+        let mut seen = std::collections::HashSet::new();
+        if self
+            .developing_member_ids
+            .iter()
+            .any(|id| !seen.insert(*id) || parent.unit_index(*id).is_none())
+        {
+            return false;
+        }
+        let Some(anchor_id) = self.anchor_physical_id else {
+            return false;
+        };
+        seen.contains(&anchor_id)
+            && parent
+                .subgraph_for_physical_ids(&self.developing_member_ids, &[anchor_id])
+                .is_some()
     }
 }
 
