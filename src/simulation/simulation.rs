@@ -2580,14 +2580,19 @@ mod decomposition_finalization_tests {
         // Breach the parent's established core while retaining the physical
         // aggregate, including construction members. Parent-owned construction
         // must not need a duplicate graph to survive the breach.
-        let core_ids = simulation.organisms[0]
-            .structure
-            .genome_constituent_ids()
-            .to_vec();
-        assert!(!core_ids.is_empty());
+        let all_ids = simulation.organisms[0].structure.physical_constituent_ids();
+        let non_developing_ids = all_ids
+            .into_iter()
+            .filter(|id| !developing_member_ids.contains(id))
+            .collect::<Vec<_>>();
+        assert!(!non_developing_ids.is_empty());
         simulation.organisms[0]
             .structure
-            .remove_units_by_physical_ids(&core_ids);
+            .remove_units_by_physical_ids(&non_developing_ids);
+        simulation.organisms[0]
+            .structure
+            .clear_genome_constituent_ids();
+        simulation.organisms[0].genome_core_identity_established = true;
         simulation.organisms[0].mark_structure_changed();
 
         let material_before = rollback_material_inventory(&simulation);
