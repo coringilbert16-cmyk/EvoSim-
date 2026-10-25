@@ -1345,8 +1345,8 @@ mod tests {
             needs_space: false,
         };
 
-        let serialized = serde_json::to_value(construction)
-            .expect("reproductive construction should serialize");
+        let serialized =
+            serde_json::to_value(construction).expect("reproductive construction should serialize");
         let graph = serialized
             .get("developing_structure")
             .expect("detached-legacy compatibility graph remains serializable");
