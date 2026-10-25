@@ -227,9 +227,7 @@ pub(crate) fn construction_material_need_pressure(
                 storage, preferred, catalog,
             ),
             Ok(
-                crate::construction_material_selection::ConstructionMaterialDecision::Selected {
-                    ..
-                }
+                crate::construction_material_selection::ConstructionMaterialDecision::Selected { .. }
             )
         )
     };
