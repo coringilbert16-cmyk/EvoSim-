@@ -27,7 +27,7 @@ pub(crate) fn parent_body_geometry(
     parent: &Organism,
     catalog: &[crate::resources::BaseResource],
 ) -> Option<crate::organism_geometry::OrganismBodyGeometry> {
-    crate::organism_geometry::OrganismBodyGeometry::from_structure(&parent.structure, catalog)
+    crate::organism_geometry::OrganismBodyGeometry::from_structure(&mut parent.structure, catalog)
 }
 
 fn parent_child_position(
@@ -46,7 +46,7 @@ fn parent_child_position(
             rotation_radians: parent_part.rotation_radians,
         };
         for candidate in crate::construction_runtime::candidate_placements(
-            &parent.structure,
+            &mut parent.structure,
             anchor_resource,
             anchor_reference,
             &[parent_part.unit_index],
@@ -1291,7 +1291,7 @@ mod tests {
         let environment = simulation.environment.clone();
         let body = parent_body_geometry(&parent, &environment.catalog).unwrap();
         let _ = advance_construction(
-            &parent.structure,
+            &mut parent.structure,
             &mut parent.stored_material,
             &mut construction,
             &environment,
@@ -1331,7 +1331,7 @@ mod tests {
         let body = parent_body_geometry(&parent, &environment.catalog).unwrap();
 
         let (status, _) = advance_construction(
-            &parent.structure,
+            &mut parent.structure,
             &mut parent.stored_material,
             &mut construction,
             &environment,
@@ -1550,7 +1550,7 @@ mod tests {
             unit.placement.y = parent.occupied_cells[0].y;
         }
         assert!(!parent_child_in_contact(
-            &parent.structure,
+            &mut parent.structure,
             &construction.developing_structure,
         ));
     }
@@ -1582,7 +1582,7 @@ mod tests {
         let environment = simulation.environment.clone();
 
         let status = advance_construction(
-            &parent.structure,
+            &mut parent.structure,
             &mut parent.stored_material,
             &mut construction,
             &environment,
@@ -1621,7 +1621,7 @@ mod tests {
         let environment = simulation.environment.clone();
 
         let first_status = advance_construction(
-            &parent.structure,
+            &mut parent.structure,
             &mut parent.stored_material,
             &mut construction,
             &environment,
@@ -1640,7 +1640,7 @@ mod tests {
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
 
         let second_status = advance_construction(
-            &parent.structure,
+            &mut parent.structure,
             &mut parent.stored_material,
             &mut construction,
             &environment,
