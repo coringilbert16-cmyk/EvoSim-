@@ -1328,7 +1328,7 @@ mod tests {
     }
 
     #[test]
-    fn serialized_construction_never_persists_a_second_physical_graph() {
+    fn serialized_aggregate_construction_keeps_its_persisted_graph_empty() {
         let construction = ReproductiveConstruction {
             committed_material: MaterialStorage::default(),
             developing_structure: OrganismStructure::new(),
@@ -1346,10 +1346,11 @@ mod tests {
 
         let serialized = serde_json::to_value(construction)
             .expect("reproductive construction should serialize");
-        assert!(
-            serialized.get("developing_structure").is_none(),
-            "physical structure is reconstructed from parent-owned stable IDs, not persisted twice"
-        );
+        let graph = serialized
+            .get("developing_structure")
+            .expect("detached-legacy compatibility graph remains serializable");
+        assert_eq!(graph.get("units").and_then(serde_json::Value::as_array).map(Vec::len), Some(0));
+        assert_eq!(graph.get("bonds").and_then(serde_json::Value::as_array).map(Vec::len), Some(0));
     }
 
     #[test]
