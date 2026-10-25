@@ -177,7 +177,11 @@ impl ReproductiveConstruction {
             return false;
         }
         let mut seen = std::collections::HashSet::new();
-        if self.developing_member_ids.iter().any(|id| !seen.insert(*id)) {
+        if self
+            .developing_member_ids
+            .iter()
+            .any(|id| !seen.insert(*id))
+        {
             return false;
         }
         let Some(anchor_id) = self.anchor_physical_id else {
@@ -200,8 +204,8 @@ impl ReproductiveConstruction {
         }) {
             return false;
         }
-        let Some(view) = parent
-            .subgraph_for_physical_ids(&self.developing_member_ids, &[anchor_id])
+        let Some(view) =
+            parent.subgraph_for_physical_ids(&self.developing_member_ids, &[anchor_id])
         else {
             return false;
         };
