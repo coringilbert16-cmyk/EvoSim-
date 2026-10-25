@@ -856,7 +856,12 @@ fn commit_candidate_attachment(
     };
     construction.developing_stress = child.stress;
 
-    if birth_ready_with_reference(construction, parent_structure, &environment.catalog, seed_reference) {
+    if birth_ready_with_reference(
+        construction,
+        parent_structure,
+        &environment.catalog,
+        seed_reference,
+    ) {
         ConstructionStatus::Ready
     } else if candidate_units > before_units {
         ConstructionStatus::Progress
