@@ -1084,6 +1084,33 @@ pub(crate) fn finish_reproduction(
             return None;
         };
 
+        // Division is one publication boundary: neither resulting organism may
+        // become visible unless both post-split structures independently satisfy
+        // the full viability contract for their own established genome core.
+        // Validate the staged parent as well as the offspring before settling
+        // boundary-bond energy or mutating the live parent.
+        let parent_core_ids = parent.structure.genome_constituent_ids().to_vec();
+        if parent_core_ids.is_empty()
+            || validate_realized_organism_for_core(
+                &staged_parent_structure,
+                catalog,
+                OrganismViabilityRequirements::default(),
+                &parent_core_ids,
+            )
+            .is_err()
+            || child_core_ids.is_empty()
+            || validate_realized_organism_for_core(
+                &child_structure,
+                catalog,
+                OrganismViabilityRequirements::default(),
+                &child_core_ids,
+            )
+            .is_err()
+        {
+            parent.reproductive_construction = Some(construction);
+            return None;
+        }
+
         // Bonds severed at the division boundary release their stored energy
         // exactly once. The release is a structural debit and usable-energy
         // credit, not a second external chemical source.
