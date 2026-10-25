@@ -850,9 +850,9 @@ fn commit_candidate_attachment(
     }
     construction.committed_material = child.stored_material;
     construction.developing_member_ids = child.structure.physical_constituent_ids();
-    if !aggregate_owned {
-        construction.developing_structure = child.structure;
-    }
+    // Preserve a current fallback snapshot until detached construction no
+    // longer relies on the legacy graph.
+    construction.developing_structure = child.structure;
     construction.needs_space = false;
     construction.developing_energy = if aggregate_owned {
         0.0
@@ -1005,10 +1005,9 @@ pub(crate) fn advance_construction(
     }
     construction.developing_stress = child.stress;
     construction.developing_maintenance_debt = child.maintenance_debt;
-    construction.developing_member_ids = child.structure.physical_constituent_ids();
-    if !aggregate_owned {
-        construction.developing_structure = child.structure.clone();
-    }
+    construction.developing_structure = child.structure.clone();
+    construction.developing_member_ids =
+        construction.developing_structure.physical_constituent_ids();
     if dead {
         return (ConstructionStatus::Dead, None);
     }
