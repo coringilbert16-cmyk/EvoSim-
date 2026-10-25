@@ -230,9 +230,7 @@ pub(crate) fn construction_material_need_pressure(
             crate::construction_material_selection::select_construction_material(
                 storage, preferred, catalog,
             ),
-            Ok(
-                ConstructionMaterialDecision::Selected { .. }
-            )
+            Ok(ConstructionMaterialDecision::Selected { .. })
         )
     };
     if has_preferred_material(&construction.committed_material)
