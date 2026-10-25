@@ -157,8 +157,8 @@ mod integration_tests {
         parent.stored_material.entries.clear();
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
 
-        let before =
-            integer_material_inventory(&simulation).expect("pre-reproduction inventory is integral");
+        let before = integer_material_inventory(&simulation)
+            .expect("pre-reproduction inventory is integral");
         let mut parent = simulation.organisms.remove(0);
         let mut ledger = crate::state::EnergyLedger::default();
         assert!(crate::reproduction::begin_reproduction(
@@ -169,8 +169,8 @@ mod integration_tests {
         ));
         simulation.organisms.push(parent);
 
-        let after =
-            integer_material_inventory(&simulation).expect("post-reproduction inventory is integral");
+        let after = integer_material_inventory(&simulation)
+            .expect("post-reproduction inventory is integral");
         assert_eq!(
             after, before,
             "admitting the anchor into the aggregate must transfer ownership, not create or destroy material"
