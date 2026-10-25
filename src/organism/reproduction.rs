@@ -1065,14 +1065,29 @@ pub(crate) fn finish_reproduction(
             }
         }
 
-        let parent_units = staged_parent_structure.units.len();
-        let child_units = child_structure.units.len();
-        let total_units = parent_units + child_units;
-        if parent_units == 0 || child_units == 0 || total_units == 0 {
+        let structural_mass = |structure: &OrganismStructure| -> Option<f64> {
+            let mass = structure
+                .units
+                .iter()
+                .map(|unit| unit.properties(catalog).map(|properties| properties.mass))
+                .collect::<Option<Vec<_>>>()?
+                .into_iter()
+                .sum::<f64>();
+            (mass.is_finite() && mass > 0.0).then_some(mass)
+        };
+        let (Some(parent_mass), Some(child_mass)) = (
+            structural_mass(&staged_parent_structure),
+            structural_mass(&child_structure),
+        ) else {
+            parent.reproductive_construction = Some(construction);
+            return None;
+        };
+        let total_mass = parent_mass + child_mass;
+        if !total_mass.is_finite() || total_mass <= 0.0 {
             parent.reproductive_construction = Some(construction);
             return None;
         }
-        let child_share = combined_energy * (child_units as f64 / total_units as f64);
+        let child_share = combined_energy * (child_mass / total_mass);
         let parent_share = combined_energy - child_share;
         if !child_share.is_finite()
             || !parent_share.is_finite()
