@@ -216,7 +216,7 @@ mod tests {
             .reproductive_construction
             .as_mut()
             .expect("construction started");
-        construction.developing_energy = 3.0;
+        construction.developing_energy = 0.0;
         assert!(construction.committed_material.store_physical(
             Material::free_base("Carbon", 1.0),
             vec![crate::structure::Placement {
