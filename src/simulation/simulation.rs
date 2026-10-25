@@ -1427,6 +1427,9 @@ impl Simulation {
                     + organism
                         .reproductive_construction
                         .as_ref()
+                        .filter(|construction| {
+                            !construction.is_aggregate_owned_by(&organism.structure)
+                        })
                         .map_or(0.0, |construction| {
                             graph_energy(&construction.developing_structure)
                         })
@@ -1454,6 +1457,9 @@ impl Simulation {
                     + organism
                         .reproductive_construction
                         .as_ref()
+                        .filter(|construction| {
+                            !construction.is_aggregate_owned_by(&organism.structure)
+                        })
                         .map_or(0.0, |construction| construction.developing_energy)
             })
             .sum::<f64>()
@@ -1479,18 +1485,20 @@ impl Simulation {
                     .iter()
                     .map(|bond| bond.bond_energy)
                     .sum::<f64>();
-                let developing =
-                    organism
-                        .reproductive_construction
-                        .as_ref()
-                        .map_or(0.0, |construction| {
-                            construction
-                                .developing_structure
-                                .bonds
-                                .iter()
-                                .map(|bond| bond.bond_energy)
-                                .sum::<f64>()
-                        });
+                let developing = organism
+                    .reproductive_construction
+                    .as_ref()
+                    .filter(|construction| {
+                        !construction.is_aggregate_owned_by(&organism.structure)
+                    })
+                    .map_or(0.0, |construction| {
+                        construction
+                            .developing_structure
+                            .bonds
+                            .iter()
+                            .map(|bond| bond.bond_energy)
+                            .sum::<f64>()
+                    });
                 own + developing
             })
             .sum::<f64>();
