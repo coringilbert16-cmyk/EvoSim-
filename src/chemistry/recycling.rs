@@ -201,7 +201,8 @@ mod tests {
         let original_ledger = ledger;
 
         assert!(
-            recycle_dead_organism(&mut simulation.environment, &mut organism, &mut ledger).is_none()
+            recycle_dead_organism(&mut simulation.environment, &mut organism, &mut ledger)
+                .is_none()
         );
         assert_eq!(organism.structure.units, original_structure.units);
         assert_eq!(organism.structure.bonds, original_structure.bonds);
