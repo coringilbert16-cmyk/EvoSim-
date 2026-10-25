@@ -21,7 +21,10 @@ pub(crate) fn recycle_dead_organism(
     let construction_has_separate_energy_owner = organism
         .reproductive_construction
         .as_ref()
-        .is_some_and(|construction| !construction.is_aggregate_owned_by(&organism.structure));
+        .is_some_and(|construction| {
+            !construction.is_aggregate_owned_by(&organism.structure)
+                && !construction.has_any_member_in(&organism.structure)
+        });
     let developing_energy = organism
         .reproductive_construction
         .as_ref()
