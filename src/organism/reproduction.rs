@@ -1752,7 +1752,7 @@ mod tests {
             unit.placement.y = parent.occupied_cells[0].y;
         }
         assert!(!parent_child_in_contact(
-            &mut parent.structure,
+            &parent.structure,
             &construction.developing_structure,
         ));
     }
