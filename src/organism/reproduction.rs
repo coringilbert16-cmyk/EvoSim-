@@ -683,7 +683,7 @@ pub(crate) fn begin_reproduction(
 }
 
 fn commit_candidate_attachment(
-    parent_structure: &OrganismStructure,
+    parent_structure: &mut OrganismStructure,
     parent_storage: &mut MaterialStorage,
     construction: &mut ReproductiveConstruction,
     environment: &Environment,
@@ -705,10 +705,30 @@ fn commit_candidate_attachment(
     }
 
     let candidate_units = child.structure.units.len();
+    // When construction is already represented inside the parent aggregate,
+    // stage the aggregate replacement before consuming material or publishing
+    // the candidate ledger. The construction graph remains a refreshed view;
+    // the aggregate is authoritative for the physical constituents.
+    let staged_aggregate = if construction.is_aggregate_owned_by(parent_structure) {
+        let mut staged = parent_structure.clone();
+        let old_ids = construction.developing_member_ids.clone();
+        let Some((_, refreshed_view)) =
+            staged.replace_subgraph_remapping_new_ids_and_extract(&old_ids, &child.structure)
+        else {
+            return ConstructionStatus::Waiting;
+        };
+        Some((staged, refreshed_view))
+    } else {
+        None
+    };
     if let Some(parent_index) = transferred {
         if parent_storage.take_physical_at(parent_index).is_none() {
             return ConstructionStatus::Waiting;
         }
+    }
+    if let Some((staged, refreshed_view)) = staged_aggregate {
+        *parent_structure = staged;
+        child.structure = refreshed_view;
     }
     *ledger = candidate_ledger;
     construction.committed_material = child.stored_material;
@@ -728,7 +748,7 @@ fn commit_candidate_attachment(
 }
 
 pub(crate) fn advance_construction(
-    parent_structure: &OrganismStructure,
+    parent_structure: &mut OrganismStructure,
     parent_storage: &mut MaterialStorage,
     construction: &mut ReproductiveConstruction,
     environment: &Environment,
@@ -786,6 +806,19 @@ pub(crate) fn advance_construction(
             environment,
             ledger,
         );
+    }
+    // Maintenance and resonance chemistry may alter the construction graph
+    // (including bonds). If its members are aggregate-owned, commit those
+    // changes transactionally into the parent before publishing the refreshed
+    // construction view or continuing growth.
+    if construction.is_aggregate_owned_by(parent_structure) {
+        let old_ids = construction.developing_member_ids.clone();
+        let Some((_, refreshed_view)) = parent_structure
+            .replace_subgraph_remapping_new_ids_and_extract(&old_ids, &child.structure)
+        else {
+            return (ConstructionStatus::Dead, None);
+        };
+        child.structure = refreshed_view;
     }
     construction.developing_energy = child.usable_energy;
     construction.developing_stress = child.stress;
