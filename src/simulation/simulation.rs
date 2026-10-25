@@ -2612,4 +2612,43 @@ mod decomposition_finalization_tests {
             inventory_before.current_structural_energy
         );
     }
+    #[test]
+    fn aggregate_owned_construction_is_counted_once_in_energy_inventory() {
+        let mut simulation = Simulation::new(953, 20.0);
+        let organism = &mut simulation.organisms[0];
+        organism.usable_energy = 7.0;
+        let aggregate = organism.structure.clone();
+        let member_ids = aggregate.physical_constituent_ids();
+        organism.reproductive_construction =
+            Some(crate::state::ReproductiveConstruction {
+                committed_material: crate::material_storage::MaterialStorage::default(),
+                developing_structure: aggregate,
+                developing_member_ids: member_ids,
+                child_genome: organism.genome.clone(),
+                developmental_origin: organism.developmental_origin.clone(),
+                developmental_orientation_radians: organism.developmental_orientation_radians,
+                developing_stress: 0.0,
+                anchor_unit_index: 0,
+                anchor_physical_id: organism.structure.physical_id(0),
+                developing_energy: 4.0,
+                developing_maintenance_debt: 0.0,
+                needs_space: false,
+            });
+
+        let expected_structural_energy = organism
+            .structure
+            .bonds
+            .iter()
+            .map(|bond| bond.bond_energy)
+            .sum::<f64>();
+        let inventory = simulation.energy_inventory_snapshot();
+
+        assert_eq!(inventory.current_usable_energy, 7.0);
+        assert_eq!(inventory.current_structural_energy, expected_structural_energy);
+        assert_eq!(
+            Simulation::structural_energy_held(&simulation.organisms, &[]),
+            expected_structural_energy
+        );
+    }
+
 }
