@@ -1006,7 +1006,11 @@ fn translate_reproductive_construction(
         // During aggregate-owned development the parent structure has already
         // been translated above. A transient child view must not translate those
         // same physical constituents a second time.
-        if !construction.is_aggregate_owned_by(&organism.structure) {
+        let any_member_owned_by_parent = construction
+            .developing_member_ids
+            .iter()
+            .any(|id| organism.structure.unit_index(*id).is_some());
+        if !construction.is_aggregate_owned_by(&organism.structure) && !any_member_owned_by_parent {
             for unit in &mut construction.developing_structure.units {
                 unit.placement.x += dx;
                 unit.placement.y = wrap_y(unit.placement.y + dy, environment_height);
