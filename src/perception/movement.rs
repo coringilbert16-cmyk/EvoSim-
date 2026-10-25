@@ -1538,6 +1538,34 @@ mod tests {
     }
 
     #[test]
+    fn partial_aggregate_membership_does_not_translate_cached_offspring_graph() {
+        let mut simulation = Simulation::new(7, 20.0);
+        let mut organism = simulation.organisms.remove(0);
+        let mut ledger = crate::state::EnergyLedger::default();
+        assert!(organism.store_material(crate::resources::Material::free_base("Carbon", 1.0)));
+        assert!(crate::reproduction::begin_reproduction(
+            &mut organism,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+
+        let construction = organism.reproductive_construction.as_mut().unwrap();
+        let member_id = construction.developing_member_ids[0];
+        construction.developing_member_ids.push(member_id);
+        assert!(!construction.is_aggregate_owned_by(&organism.structure));
+        let cached_pose = construction.developing_structure.units[0].placement;
+        let origin_before = construction.developmental_origin.clone();
+
+        translate_reproductive_construction(&mut organism, 1.0, -1.0, 1000.0);
+
+        let construction = organism.reproductive_construction.as_ref().unwrap();
+        assert_eq!(construction.developing_structure.units[0].placement, cached_pose);
+        assert!((construction.developmental_origin.x - origin_before.x - 1.0).abs() < 1e-9);
+        assert!((construction.developmental_origin.y - origin_before.y + 1.0).abs() < 1e-9);
+    }
+
+    #[test]
     fn move_translates_anchor_and_structure() {
         let simulation = Simulation::new(7, 20.0);
         let mut environment = empty_environment(&simulation);
