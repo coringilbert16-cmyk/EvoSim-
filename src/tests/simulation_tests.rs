@@ -424,7 +424,9 @@ mod integration_tests {
         let energy_before = simulation.energy_inventory_snapshot();
         let total_energy_before = energy_before.current_usable_energy
             + energy_before.current_structural_energy
-            + energy_before.current_resonant_energy;
+            + energy_before.current_resonant_energy
+            + energy_before.work_expended
+            + energy_before.heat_dissipated;
         let mut ledger = crate::state::EnergyLedger::default();
 
         let (parent, rng) = (&mut simulation.organisms[0], &mut simulation.rng);
@@ -440,14 +442,16 @@ mod integration_tests {
         let energy_after = simulation.energy_inventory_snapshot();
         let total_energy_after = energy_after.current_usable_energy
             + energy_after.current_structural_energy
-            + energy_after.current_resonant_energy;
+            + energy_after.current_resonant_energy
+            + energy_after.work_expended
+            + energy_after.heat_dissipated;
         assert_eq!(
             after, before,
             "moving the physical anchor into developing offspring must preserve every constituent"
         );
         assert!(
             (total_energy_after - total_energy_before).abs() <= 1e-8,
-            "anchor admission must conserve total energy while converting usable energy into structural bond energy: before {total_energy_before}, after {total_energy_after}"
+            "anchor admission must conserve energy across usable, structural, and dissipated/work stores: before {total_energy_before}, after {total_energy_after}"
         );
     }
 
