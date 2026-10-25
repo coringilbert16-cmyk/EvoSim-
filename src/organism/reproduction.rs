@@ -546,12 +546,7 @@ fn birth_ready_with_reference(
     {
         return false;
     }
-    budding_scale_reached_with_reference(
-        construction,
-        &structure,
-        catalog,
-        seed_reference,
-    )
+    budding_scale_reached_with_reference(construction, &structure, catalog, seed_reference)
 }
 
 fn anchor_structure(
@@ -866,12 +861,7 @@ fn commit_candidate_attachment(
     };
     construction.developing_stress = child.stress;
 
-    if birth_ready_with_reference(
-        construction,
-        parent_structure,
-        &environment.catalog,
-        seed_reference,
-    ) {
+    if birth_ready_with_reference(construction, parent_structure, &environment.catalog, seed_reference) {
         ConstructionStatus::Ready
     } else if candidate_units > before_units {
         ConstructionStatus::Progress
@@ -1121,12 +1111,7 @@ pub(crate) fn finish_reproduction(
         parent.reproductive_construction = Some(construction);
         return None;
     }
-    if !birth_ready_with_reference(
-        &construction,
-        &parent.structure,
-        catalog,
-        seed_reference,
-    ) {
+    if !birth_ready_with_reference(&construction, &parent.structure, catalog, seed_reference) {
         parent.reproductive_construction = Some(construction);
         return None;
     }
