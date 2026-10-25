@@ -593,6 +593,7 @@ mod integration_tests {
         s.energy_ledger.total_resonant_energy_held = resonant_baseline;
         s.energy_ledger.total_usable_energy_held =
             crate::reproduction::total_usable_energy_held(&s.organisms, &s.decomposing_bodies);
+        s.energy_ledger.initial_usable_energy_held = s.energy_ledger.total_usable_energy_held;
 
         let material_before =
             integer_material_inventory(&s).expect("initial material inventory is integral");
