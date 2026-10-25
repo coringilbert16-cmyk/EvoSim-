@@ -573,9 +573,10 @@ mod integration_tests {
             assert!(parent.stored_material.physical_count() > 0);
             assert!(construction.developing_structure.units.is_empty());
             assert!(
-                construction.developing_member_ids.iter().all(|id| {
-                    parent.structure.unit_index(*id).is_some()
-                }),
+                construction
+                    .developing_member_ids
+                    .iter()
+                    .all(|id| parent.structure.unit_index(*id).is_some()),
                 "the parent aggregate must remain the physical owner"
             );
 
