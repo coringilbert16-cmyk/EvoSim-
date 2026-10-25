@@ -1477,25 +1477,21 @@ mod tests {
             &mut ledger,
         ));
         let mut construction = parent.reproductive_construction.take().unwrap();
-        assert!(developing_membership_is_valid(
-            &construction,
-            &construction.developing_structure
-        ));
+        let anchor_id = construction.anchor_physical_id.unwrap();
+        let transient_view = parent
+            .structure
+            .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
+            .unwrap();
+        assert!(construction.developing_structure.units.is_empty());
+        assert!(developing_membership_is_valid(&construction, &transient_view));
 
         construction.developing_member_ids.clear();
-        assert!(!developing_membership_is_valid(
-            &construction,
-            &construction.developing_structure
-        ));
+        assert!(!developing_membership_is_valid(&construction, &transient_view));
 
-        construction.developing_member_ids =
-            construction.developing_structure.physical_constituent_ids();
+        construction.developing_member_ids = transient_view.physical_constituent_ids();
         let first_id = construction.developing_member_ids[0];
         construction.developing_member_ids.push(first_id);
-        assert!(!developing_membership_is_valid(
-            &construction,
-            &construction.developing_structure
-        ));
+        assert!(!developing_membership_is_valid(&construction, &transient_view));
     }
 
     #[test]
@@ -1516,11 +1512,11 @@ mod tests {
         let member_id = construction.developing_member_ids[0];
         let aggregate_index = parent.structure.unit_index(member_id).unwrap();
         let aggregate_pose = parent.structure.units[aggregate_index].placement;
-        construction.developing_structure.units[0].placement.x += 100.0;
         assert!(
-            construction.is_aggregate_owned_by(&parent.structure),
-            "cached pose changes must not transfer ownership away from the parent aggregate"
+            construction.developing_structure.units.is_empty(),
+            "aggregate-owned construction must not persist a duplicate physical graph"
         );
+        assert!(construction.is_aggregate_owned_by(&parent.structure));
 
         let transient_view = parent
             .structure
@@ -1531,18 +1527,6 @@ mod tests {
             transient_view.units[view_index].placement, aggregate_pose,
             "the transient view must use the authoritative aggregate pose"
         );
-        let cached_index = construction
-            .developing_structure
-            .unit_index(member_id)
-            .unwrap();
-        assert_eq!(
-            construction.developing_structure.units[cached_index]
-                .placement
-                .x,
-            aggregate_pose.x + 100.0,
-            "the duplicate graph is not refreshed to establish authority"
-        );
-        assert!(construction.is_aggregate_owned_by(&parent.structure));
     }
 
     #[test]
@@ -1563,7 +1547,7 @@ mod tests {
         let member_id = construction.developing_member_ids[0];
         let aggregate_index = parent.structure.unit_index(member_id).unwrap();
         let aggregate_pose = parent.structure.units[aggregate_index].placement;
-        construction.developing_structure.units[0].placement.x += 100.0;
+        assert!(construction.developing_structure.units.is_empty());
 
         assert!(finish_reproduction(
             &mut parent,
@@ -1575,13 +1559,9 @@ mod tests {
         .is_none());
 
         let retained = parent.reproductive_construction.as_ref().unwrap();
-        let cached_index = retained.developing_structure.unit_index(member_id).unwrap();
-        assert_eq!(
-            retained.developing_structure.units[cached_index]
-                .placement
-                .x,
-            aggregate_pose.x + 100.0,
-            "aggregate-owned readiness must not require refreshing the duplicate graph"
+        assert!(
+            retained.developing_structure.units.is_empty(),
+            "aggregate-owned readiness must leave the duplicate graph empty"
         );
         let aggregate_index = parent.structure.unit_index(member_id).unwrap();
         assert_eq!(
@@ -1608,10 +1588,20 @@ mod tests {
             .reproductive_construction
             .as_ref()
             .expect("reproduction is active");
-        assert!(!construction.developing_structure.units.is_empty());
+        assert!(
+            construction.developing_structure.units.is_empty(),
+            "the persisted graph must be empty after admission into the parent aggregate"
+        );
+        let transient_view = parent
+            .structure
+            .subgraph_for_physical_ids(
+                &construction.developing_member_ids,
+                &[construction.anchor_physical_id.unwrap()],
+            )
+            .expect("stable IDs reconstruct the admitted anchor view");
         assert_eq!(
             construction.developing_member_ids,
-            construction.developing_structure.physical_constituent_ids(),
+            transient_view.physical_constituent_ids(),
             "construction membership must be tracked by stable physical IDs"
         );
         assert_eq!(
@@ -1623,12 +1613,13 @@ mod tests {
             construction.developing_member_ids.len(),
             "a physical constituent may only belong to the developing member once"
         );
-        assert!(construction.anchor_unit_index < construction.developing_structure.units.len());
         assert_eq!(
             construction.anchor_physical_id,
-            construction
-                .developing_structure
-                .physical_id(construction.anchor_unit_index),
+            transient_view.physical_id(
+                transient_view
+                    .unit_index(construction.anchor_physical_id.unwrap())
+                    .unwrap()
+            ),
             "the anchor is tracked by stable physical identity"
         );
         assert!(construction.is_aggregate_owned_by(&parent.structure));
@@ -1651,13 +1642,16 @@ mod tests {
         )
         .unwrap();
         assert!(child_remains_within_realized_parent_boundary(
-            &construction.developing_structure,
+            &transient_view,
             &body,
         ));
 
-        let anchor_unit = &construction.developing_structure.units[construction.anchor_unit_index];
+        let anchor_index = transient_view
+            .unit_index(construction.anchor_physical_id.unwrap())
+            .unwrap();
+        let anchor_unit = &transient_view.units[anchor_index];
         let anchor_part = crate::material_geometry::PlacedMaterialPart {
-            part_index: construction.anchor_unit_index,
+            part_index: anchor_index,
             form: anchor_unit
                 .shape(&simulation.environment.catalog)
                 .expect("anchor has a catalog shape")
@@ -1715,7 +1709,7 @@ mod tests {
         ));
         let mut construction = parent.reproductive_construction.take().unwrap();
         let before_parent_energy = parent.usable_energy;
-        construction.developing_structure.units[0].placement.x += 100.0;
+        assert!(construction.developing_structure.units.is_empty());
         let environment = simulation.environment.clone();
         let body = parent_body_geometry(&parent, &environment.catalog).unwrap();
         let _ = advance_construction(
