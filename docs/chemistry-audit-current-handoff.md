@@ -12,8 +12,9 @@ Establish one coherent, deterministic, conservation-auditable chemistry and ener
 
 ## Current evidence
 
-- Frozen regression baseline: `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5`, workflow [39705628427](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39705628427): **563 passed, 28 failed, 1 ignored**.
-- PR #205 merged at `10521705d8f921ceb071b17240f1b7e069f52f1a`. Exact-head suite: **719 passed, 21 failed, 1 ignored**; all 21 unique failure identities are present in the frozen baseline set. This is improvement against baseline, not a green suite or proof of whole-world conservation.
+- **Forward regression baseline reset:** merged `main` at `10521705d8f921ceb071b17240f1b7e069f52f1a` (PR #205), exact-head suite **719 passed, 21 failed, 1 ignored**. All 21 failure identities were compared with the prior baseline and already existed; no new failure identity was introduced. Future work should compare against this commit and its named failure set.
+- **Historical pre-migration baseline:** `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5`, workflow [39705628427](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39705628427): **563 passed, 28 failed, 1 ignored**. Retain for migration history; do not use it as the primary forward baseline after the reset.
+- The reset is not a green-suite claim and does not prove whole-world conservation.
 - Both corrected migration regressions passed on the final tested head: partial aggregate membership in movement and developing-offspring world-tone occlusion.
 - Strict Clippy remains red (33 application-target and 15 test-target diagnostics on the last verified head). Do not claim diagnostic identity parity without a fresh normalized comparison.
 - Whole-world material/energy reconciliation, complete post-death ordinary chemistry, exact-small-world sunlight accuracy, representative large-world performance, and complete lifecycle/division conservation remain unproven.
