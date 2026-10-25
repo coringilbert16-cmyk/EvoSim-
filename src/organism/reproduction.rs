@@ -4,6 +4,7 @@
 //! from one transferred anchor resource, then uses the normal COMBINE/runtime
 //! path with the inherited developmental fields guiding valid opportunities.
 use crate::combine_runtime::DevelopmentalContext;
+use crate::contact::ConnectionCompatibilityCache;
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::material_storage::MaterialStorage;
 use crate::organism_viability::{
@@ -599,11 +600,8 @@ pub(crate) fn begin_reproduction(
     parent: &mut Organism,
     rng: &mut ChaCha8Rng,
     catalog: &[crate::resources::BaseResource],
-    _ledger: &mut EnergyLedger,
+    ledger: &mut EnergyLedger,
 ) -> bool {
-    // Construction consumes a parent-held physical anchor. Do not mutate
-    // that holder while a multi-tick BREAK/COMBINE transaction owns an escrow
-    // index or a prepared storage snapshot for the same organism.
     if parent.active_transformation_id.is_some() || parent.reproductive_construction.is_some() {
         return false;
     }
@@ -616,63 +614,109 @@ pub(crate) fn begin_reproduction(
         return false;
     }
 
-    // No resource type is reserved as a reproductive anchor. The first
-    // offspring core is selected from whatever parent-held material can
-    // actually be instantiated by the physical construction runtime.
-    // Structured logical material remains intact; an already-realized
-    // structured object may be used directly.
-    for (storage_index, entry) in parent
-        .stored_material
-        .entries
-        .clone()
-        .into_iter()
-        .enumerate()
-    {
+    for (storage_index, entry) in parent.stored_material.entries.clone().into_iter().enumerate() {
         let crate::material_storage::StoredMaterial::Physical(instance) = &entry;
         let anchor = instance.material.clone();
         let Some(placement) = parent_child_position(parent, &anchor, catalog) else {
             continue;
         };
-
-        // The anchor becomes part of the developing physical graph immediately.
-        // Give the constructor the exact physical instance selected from the parent;
-        // instantiate_one_unit consumes it through the normal material-restoration
-        // path, so the child does not retain a duplicate inventory copy.
         let mut trial_storage = MaterialStorage::default();
-        trial_storage
-            .entries
-            .push(crate::material_storage::StoredMaterial::Physical(
-                instance.clone(),
-            ));
-        let Some((structure, child_storage, anchor_unit_index)) =
+        trial_storage.entries.push(crate::material_storage::StoredMaterial::Physical(instance.clone()));
+        let Some((mut anchor_graph, child_storage, anchor_unit_index)) =
             anchor_structure(&child_genome, trial_storage, placement, catalog)
         else {
             continue;
         };
-        let Some(anchor_physical_id) = structure.physical_id(anchor_unit_index) else {
+        let Some(anchor_physical_id) = anchor_graph.physical_id(anchor_unit_index) else {
             continue;
         };
-        let developing_member_ids = structure.physical_constituent_ids();
-
-        let mut parent_trial = parent.stored_material.clone();
-        if parent_trial.take_physical_at(storage_index).is_none() {
+        anchor_graph.set_genome_constituent_ids(vec![anchor_physical_id]);
+        let anchor_ids = anchor_graph.physical_constituent_ids();
+        if anchor_ids.is_empty() || !anchor_ids.contains(&anchor_physical_id) {
             continue;
         }
 
-        parent.stored_material = parent_trial;
+        // Stage the merge, physical COMBINE bond, energy/ledger settlement, and
+        // storage removal. The live parent changes only after every step validates.
+        let mut staged_structure = parent.structure.clone();
+        let parent_unit_count = staged_structure.units.len();
+        let Some(remapping) = staged_structure.append_graph_remapping_ids(&anchor_graph) else {
+            continue;
+        };
+        let Some(mapped_anchor_id) = remapping.get(&anchor_physical_id).copied() else {
+            continue;
+        };
+        let Some(mapped_anchor_ids) = anchor_ids.iter()
+            .map(|id| remapping.get(id).copied())
+            .collect::<Option<Vec<_>>>()
+        else {
+            continue;
+        };
+
+        let mut committed: Option<(OrganismStructure, EnergyLedger, f64)> = None;
+        'contacts: for parent_unit in 0..parent_unit_count {
+            for anchor_unit in parent_unit_count..staged_structure.units.len() {
+                let mut cache = ConnectionCompatibilityCache::new();
+                let candidates = crate::contact::connection_pair_candidates_cached(
+                    &staged_structure, parent_unit, anchor_unit, catalog, &mut cache,
+                );
+                for candidate in candidates {
+                    if candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        || !candidate.available_a || !candidate.available_b
+                    {
+                        continue;
+                    }
+                    let Some((_, _, investment, _)) =
+                        crate::combine_runtime::selected_candidate_evaluation(
+                            &staged_structure, parent_unit, anchor_unit, candidate, catalog,
+                        )
+                    else {
+                        continue;
+                    };
+                    let mut bond_trial = staged_structure.clone();
+                    let mut ledger_trial = *ledger;
+                    let mut energy_trial = parent.usable_energy;
+                    let mut bond_cache = ConnectionCompatibilityCache::new();
+                    if crate::combine_runtime::form_selected_bond(
+                        &mut bond_trial, parent_unit, anchor_unit, candidate, investment,
+                        catalog, &mut bond_cache, &mut ledger_trial, &mut energy_trial,
+                    ).is_some() {
+                        committed = Some((bond_trial, ledger_trial, energy_trial));
+                        break 'contacts;
+                    }
+                }
+            }
+        }
+        let Some((mut staged_structure, staged_ledger, staged_energy)) = committed else {
+            continue;
+        };
+        let Some(developing_structure) = staged_structure.subgraph_for_physical_ids(
+            &mapped_anchor_ids, &[mapped_anchor_id],
+        ) else {
+            continue;
+        };
+        let mut parent_trial_storage = parent.stored_material.clone();
+        if parent_trial_storage.take_physical_at(storage_index).is_none() {
+            continue;
+        }
+        let Some(refreshed_anchor_index) = developing_structure.unit_index(mapped_anchor_id) else {
+            continue;
+        };
+
+        *ledger = staged_ledger;
+        parent.usable_energy = staged_energy;
+        parent.structure = staged_structure;
+        parent.stored_material = parent_trial_storage;
         parent.reproductive_construction = Some(ReproductiveConstruction {
             committed_material: child_storage,
-            developing_structure: structure,
-            developing_member_ids,
+            developing_member_ids: mapped_anchor_ids,
+            developing_structure,
             child_genome: child_genome.clone(),
-            developmental_origin: Position {
-                x: placement.x,
-                y: placement.y,
-            },
+            developmental_origin: Position { x: placement.x, y: placement.y },
             developmental_orientation_radians: 0.0,
             developing_stress: 0.0,
-            anchor_unit_index,
-            anchor_physical_id: Some(anchor_physical_id),
+            anchor_unit_index: refreshed_anchor_index,
+            anchor_physical_id: Some(mapped_anchor_id),
             developing_energy: 0.0,
             developing_maintenance_debt: 0.0,
             needs_space: false,
