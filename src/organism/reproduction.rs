@@ -861,7 +861,12 @@ fn commit_candidate_attachment(
     };
     construction.developing_stress = child.stress;
 
-    if birth_ready_with_reference(construction, parent_structure, &environment.catalog, seed_reference) {
+    if birth_ready_with_reference(
+        construction,
+        parent_structure,
+        &environment.catalog,
+        seed_reference,
+    ) {
         ConstructionStatus::Ready
     } else if candidate_units > before_units {
         ConstructionStatus::Progress
@@ -1823,7 +1828,10 @@ mod tests {
             .push(StoredMaterial::Physical(source));
         let stored_before = parent_storage.entries.clone();
 
-        let mut child = developing_organism(&construction, construction.developing_structure.clone());
+        let mut child = developing_organism(
+            &construction,
+            construction.developing_structure.clone(),
+        );
         let mut candidate_unit = StructuralUnit::new(
             "Carbon",
             Placement {
@@ -2065,7 +2073,10 @@ mod tests {
         let before_units = construction.developing_structure.units.len();
         let before_bonds = construction.developing_structure.bonds.len();
 
-        let developing_child = developing_organism(&construction, construction.developing_structure.clone());
+        let developing_child = developing_organism(
+            &construction,
+            construction.developing_structure.clone(),
+        );
         let newly_available_resource = construction_preferred_resource(&developing_child)
             .expect("the developing genome has a preferred construction resource")
             .to_owned();
