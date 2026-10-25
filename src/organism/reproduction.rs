@@ -1029,13 +1029,11 @@ pub(crate) fn advance_construction(
         .anchor_physical_id
         .and_then(|id| child.structure.unit_index(id))
         .unwrap_or(construction.anchor_unit_index);
-    let genome_qualified = crate::cavity::analyze_genome_cavity(
-        &child.structure,
-        &environment.catalog,
-    )
-    .ok()
-    .flatten()
-    .is_some_and(|cavity| cavity.boundary_units.contains(&anchor_index));
+    let genome_qualified =
+        crate::cavity::analyze_genome_cavity(&child.structure, &environment.catalog)
+            .ok()
+            .flatten()
+            .is_some_and(|cavity| cavity.boundary_units.contains(&anchor_index));
     let context = if genome_qualified {
         developmental_context(
             &construction.child_genome,
