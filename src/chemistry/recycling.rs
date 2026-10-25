@@ -192,11 +192,21 @@ mod tests {
         let mut ledger = EnergyLedger::default();
         let original_ledger = ledger;
 
-        assert!(recycle_dead_organism(&mut simulation.environment, &mut organism, &mut ledger).is_none());
+        assert!(
+            recycle_dead_organism(&mut simulation.environment, &mut organism, &mut ledger)
+                .is_none()
+        );
         assert_eq!(organism.usable_energy, 5.0);
         assert_eq!(organism.structure.units, original_structure.units);
         assert_eq!(organism.structure.bonds, original_structure.bonds);
-        assert_eq!(organism.reproductive_construction.as_ref().unwrap().developing_energy, 3.0);
+        assert_eq!(
+            organism
+                .reproductive_construction
+                .as_ref()
+                .unwrap()
+                .developing_energy,
+            3.0
+        );
         assert_eq!(ledger, original_ledger);
     }
 
