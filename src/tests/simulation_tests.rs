@@ -594,6 +594,14 @@ mod integration_tests {
         s.energy_ledger.total_usable_energy_held =
             crate::reproduction::total_usable_energy_held(&s.organisms, &s.decomposing_bodies);
         s.energy_ledger.initial_usable_energy_held = s.energy_ledger.total_usable_energy_held;
+        // This regression observes only the post-death window. Rebase all
+        // cumulative flows as well as holder totals so setup-time anchor
+        // investment is not charged again to the observation window.
+        s.energy_ledger.total_external_energy_input = 0.0;
+        s.energy_ledger.total_world_tone_energy_escaped = 0.0;
+        s.energy_ledger.total_potential_energy_released = 0.0;
+        s.energy_ledger.total_work_expended = 0.0;
+        s.energy_ledger.total_heat_dissipated = 0.0;
 
         let material_before =
             integer_material_inventory(&s).expect("initial material inventory is integral");
