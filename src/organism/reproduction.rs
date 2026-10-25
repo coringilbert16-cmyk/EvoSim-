@@ -1768,7 +1768,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn anchor_is_not_a_predefined_structural_blueprint() {
         let catalog = default_catalog();
