@@ -156,7 +156,10 @@ fn parent_child_in_contact(parent: &OrganismStructure, child: &OrganismStructure
     })
 }
 
-fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
+fn developing_organism(
+    construction: &ReproductiveConstruction,
+    structure: OrganismStructure,
+) -> Organism {
     Organism {
         id: "developing-offspring".into(),
         developmental_origin: construction.developmental_origin.clone(),
@@ -176,7 +179,7 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         active_transformation_id: None,
         active_movement: None,
         reproductive_construction: None,
-        structure: construction.developing_structure.clone(),
+        structure,
         genome_core_identity_established: false,
         structure_revision: 0,
         position_revision: 0,
@@ -932,7 +935,20 @@ pub(crate) fn advance_construction(
 
     // Rebuild after the reserve transfer so the child snapshot contains the
     // newly transferred energy rather than overwriting it with a stale balance.
-    let mut child = developing_organism(construction);
+    let working_structure = if aggregate_owned {
+        let Some(anchor_id) = construction.anchor_physical_id else {
+            return (ConstructionStatus::Dead, None);
+        };
+        let Some(view) = parent_structure
+            .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
+        else {
+            return (ConstructionStatus::Dead, None);
+        };
+        view
+    } else {
+        construction.developing_structure.clone()
+    };
+    let mut child = developing_organism(construction, working_structure);
     if aggregate_owned {
         child.usable_energy = *parent_energy;
     }
@@ -1802,7 +1818,7 @@ mod tests {
             .push(StoredMaterial::Physical(source));
         let stored_before = parent_storage.entries.clone();
 
-        let mut child = developing_organism(&construction);
+        let mut child = developing_organism(&construction, construction.developing_structure.clone());
         let mut candidate_unit = StructuralUnit::new(
             "Carbon",
             Placement {
@@ -2050,7 +2066,7 @@ mod tests {
         let before_units = construction.developing_structure.units.len();
         let before_bonds = construction.developing_structure.bonds.len();
 
-        let developing_child = developing_organism(&construction);
+        let developing_child = developing_organism(&construction, construction.developing_structure.clone());
         let newly_available_resource = construction_preferred_resource(&developing_child)
             .expect("the developing genome has a preferred construction resource")
             .to_owned();
