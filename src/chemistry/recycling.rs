@@ -150,7 +150,6 @@ mod tests {
         assert!(organism.reproductive_construction.is_none());
     }
 
-
     #[test]
     fn failed_dead_recycling_deposit_preserves_all_material_and_energy_owners() {
         let mut simulation = Simulation::new(29, 20.0);
