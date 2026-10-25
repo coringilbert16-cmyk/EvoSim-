@@ -598,11 +598,24 @@ pub(crate) fn total_usable_energy_held(
             let construction_energy = organism
                 .reproductive_construction
                 .as_ref()
-                .filter(|construction| {
-                    !construction.is_aggregate_owned_by(&organism.structure)
-                        && !construction.has_any_member_in(&organism.structure)
-                })
-                .map_or(0.0, |construction| construction.developing_energy);
+                .map_or(0.0, |construction| {
+                    if construction.is_aggregate_owned_by(&organism.structure) {
+                        // Aggregate-owned construction has no independent energy
+                        // holder. A stale nonzero cache is an accounting error,
+                        // not energy that may silently disappear from inventory.
+                        if construction.developing_energy == 0.0 {
+                            0.0
+                        } else {
+                            f64::NAN
+                        }
+                    } else if construction.has_any_member_in(&organism.structure) {
+                        // Partial physical ownership is invalid and cannot be
+                        // reconciled by counting either holder opportunistically.
+                        f64::NAN
+                    } else {
+                        construction.developing_energy
+                    }
+                });
             organism.usable_energy + construction_energy
         })
         .sum();
