@@ -917,15 +917,26 @@ pub(crate) fn advance_construction(
         child.usable_energy = *parent_energy;
     }
     let mut staged_ledger = *ledger;
-    child.apply_maintenance(&environment.catalog, &mut staged_ledger);
-    let dead = child.validate_stress_state();
-    if !dead {
-        let _ = crate::transformation::resolve_resonance_overload_break(
-            &mut child,
-            environment,
-            &mut staged_ledger,
-        );
-    }
+    // An aggregate-owned developing core is not a second living organism.
+    // The parent tick already applies maintenance and structural chemistry to
+    // the complete authoritative aggregate; repeating those operations on a
+    // subgraph would charge energy and process bonds twice. Keep this staged
+    // view for growth/readiness only. The legacy detached path retains its own
+    // maintenance until it is migrated into aggregate ownership.
+    let dead = if aggregate_owned {
+        child.validate_stress_state()
+    } else {
+        child.apply_maintenance(&environment.catalog, &mut staged_ledger);
+        let dead = child.validate_stress_state();
+        if !dead {
+            let _ = crate::transformation::resolve_resonance_overload_break(
+                &mut child,
+                environment,
+                &mut staged_ledger,
+            );
+        }
+        dead
+    };
     // Maintenance and resonance chemistry may alter the construction graph
     // (including bonds). If its members are aggregate-owned, commit those
     // changes transactionally into the parent before publishing the refreshed
@@ -1640,7 +1651,10 @@ mod tests {
         );
         assert!(construction.is_aggregate_owned_by(&parent.structure));
         assert_eq!(construction.developing_energy, 0.0);
-        assert!(parent.usable_energy <= before_parent_energy);
+        assert_eq!(
+            parent.usable_energy, before_parent_energy,
+            "an attached developing view must not settle a second maintenance/chemistry debit"
+        );
         assert_eq!(
             total_usable_energy_held(&[parent.clone()], &[]),
             parent.usable_energy
