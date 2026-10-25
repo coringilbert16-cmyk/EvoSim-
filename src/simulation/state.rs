@@ -169,54 +169,6 @@ pub(crate) struct ReproductiveConstruction {
 }
 
 impl ReproductiveConstruction {
-    /// Refresh the developing graph from stable IDs when those constituents are
-    /// already owned by the parent's aggregate. The aggregate is authoritative:
-    /// stale cached poses/bonds must never make an attached member look detached.
-    pub(crate) fn refresh_aggregate_view(&mut self, parent: &OrganismStructure) -> bool {
-        if self.developing_member_ids.is_empty() {
-            return false;
-        }
-        let mut seen = std::collections::HashSet::new();
-        if self
-            .developing_member_ids
-            .iter()
-            .any(|id| !seen.insert(*id))
-        {
-            return false;
-        }
-        let Some(anchor_id) = self.anchor_physical_id else {
-            return false;
-        };
-        if !seen.contains(&anchor_id)
-            || self
-                .developing_member_ids
-                .iter()
-                .any(|id| parent.unit_index(*id).is_none())
-        {
-            return false;
-        }
-        // Stable IDs are only proof of aggregate ownership when the selected
-        // members are physically joined to the rest of the parent aggregate.
-        if !parent.bonds.iter().any(|bond| {
-            let a = seen.contains(&bond.endpoint_a.constituent_id);
-            let b = seen.contains(&bond.endpoint_b.constituent_id);
-            a != b
-        }) {
-            return false;
-        }
-        let Some(view) =
-            parent.subgraph_for_physical_ids(&self.developing_member_ids, &[anchor_id])
-        else {
-            return false;
-        };
-        let Some(anchor_index) = view.unit_index(anchor_id) else {
-            return false;
-        };
-        self.developing_structure = view;
-        self.anchor_unit_index = anchor_index;
-        true
-    }
-
     /// True when the stable developing-member IDs are owned by the parent's
     /// physical aggregate. The cached developing graph is deliberately not
     /// consulted: stale cached poses must not make the same physical units look
