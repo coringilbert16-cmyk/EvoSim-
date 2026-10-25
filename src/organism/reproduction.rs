@@ -96,6 +96,7 @@ fn parent_child_position(
     }
     None
 }
+
 fn child_intersects_realized_parent_region(
     structure: &OrganismStructure,
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
@@ -567,6 +568,7 @@ fn anchor_structure(
     }
     Some((child.structure, child.stored_material, anchor_unit_index))
 }
+
 pub(crate) fn total_usable_energy_held(
     organisms: &[Organism],
     decomposing_bodies: &[crate::decomposition::DecomposingBody],
