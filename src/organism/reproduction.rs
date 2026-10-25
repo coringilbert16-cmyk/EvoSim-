@@ -1050,7 +1050,19 @@ pub(crate) fn finish_reproduction(
     ledger: &mut EnergyLedger,
     seed_reference: Option<(f64, f64)>,
 ) -> Option<Organism> {
-    let construction = parent.reproductive_construction.take()?;
+    let mut construction = parent.reproductive_construction.take()?;
+    // Division can be called independently of the growth tick. Refresh its
+    // working view here too, so readiness and partitioning cannot consume a
+    // stale cached graph after the authoritative parent aggregate has changed.
+    let ids_present_in_parent = !construction.developing_member_ids.is_empty()
+        && construction
+            .developing_member_ids
+            .iter()
+            .all(|id| parent.structure.unit_index(*id).is_some());
+    if ids_present_in_parent && !construction.refresh_aggregate_view(&parent.structure) {
+        parent.reproductive_construction = Some(construction);
+        return None;
+    }
     if !birth_ready_with_reference(&construction, catalog, seed_reference) {
         parent.reproductive_construction = Some(construction);
         return None;
