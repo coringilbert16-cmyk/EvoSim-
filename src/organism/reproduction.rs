@@ -1483,10 +1483,16 @@ mod tests {
             .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
             .unwrap();
         assert!(construction.developing_structure.units.is_empty());
-        assert!(developing_membership_is_valid(&construction, &transient_view));
+        assert!(developing_membership_is_valid(
+            &construction,
+            &transient_view
+        ));
 
         construction.developing_member_ids.clear();
-        assert!(!developing_membership_is_valid(&construction, &transient_view));
+        assert!(!developing_membership_is_valid(
+            &construction,
+            &transient_view
+        ));
 
         construction.developing_member_ids = transient_view.physical_constituent_ids();
         let first_id = construction.developing_member_ids[0];
@@ -1972,7 +1978,10 @@ mod tests {
             .structure
             .subgraph_for_physical_ids(&member_ids, &[anchor_id])
             .unwrap();
-        assert!(!child_remains_within_realized_parent_boundary(&transient_view, &body));
+        assert!(!child_remains_within_realized_parent_boundary(
+            &transient_view,
+            &body
+        ));
     }
 
     #[test]
@@ -2011,7 +2020,9 @@ mod tests {
             .subgraph_for_physical_ids(&member_ids, &[anchor_id])
             .unwrap();
         assert_eq!(
-            transient_view.units[transient_view.unit_index(anchor_id).unwrap()].placement.x,
+            transient_view.units[transient_view.unit_index(anchor_id).unwrap()]
+                .placement
+                .x,
             outside.x,
             "the transient view must track authoritative aggregate geometry"
         );
