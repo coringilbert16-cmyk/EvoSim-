@@ -508,6 +508,7 @@ impl Simulation {
             development =
                 development.max(crate::reproduction::construction_material_need_pressure(
                     construction,
+                    &organism.stored_material,
                     &environment.catalog,
                 ));
         }
