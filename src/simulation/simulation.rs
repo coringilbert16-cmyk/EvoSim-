@@ -1430,6 +1430,7 @@ impl Simulation {
                         .as_ref()
                         .filter(|construction| {
                             !construction.is_aggregate_owned_by(&organism.structure)
+                                && !construction.has_any_member_in(&organism.structure)
                         })
                         .map_or(0.0, |construction| {
                             graph_energy(&construction.developing_structure)
@@ -1460,6 +1461,7 @@ impl Simulation {
                         .as_ref()
                         .filter(|construction| {
                             !construction.is_aggregate_owned_by(&organism.structure)
+                                && !construction.has_any_member_in(&organism.structure)
                         })
                         .map_or(0.0, |construction| construction.developing_energy)
             })
@@ -1489,7 +1491,10 @@ impl Simulation {
                 let developing = organism
                     .reproductive_construction
                     .as_ref()
-                    .filter(|construction| !construction.is_aggregate_owned_by(&organism.structure))
+                    .filter(|construction| {
+                        !construction.is_aggregate_owned_by(&organism.structure)
+                            && !construction.has_any_member_in(&organism.structure)
+                    })
                     .map_or(0.0, |construction| {
                         construction
                             .developing_structure
@@ -1804,7 +1809,9 @@ mod decomposition_finalization_tests {
                 // parent structure, not a second material owner. Count the
                 // developing graph only for legacy constructions that have
                 // not yet migrated into the parent aggregate.
-                if !construction.is_aggregate_owned_by(&organism.structure) {
+                if !construction.is_aggregate_owned_by(&organism.structure)
+                    && !construction.has_any_member_in(&organism.structure)
+                {
                     for unit in &construction.developing_structure.units {
                         add(&mut totals, &unit.material);
                     }
