@@ -2228,7 +2228,7 @@ mod tests {
         assert!(unit.realize_default_geometry(&catalog));
         let mut aggregate = OrganismStructure::new();
         aggregate.add_unit(unit);
-        let mut construction = ReproductiveConstruction {
+        let construction = ReproductiveConstruction {
             committed_material: MaterialStorage::default(),
             developing_structure: OrganismStructure::new(),
             developing_member_ids: aggregate.physical_constituent_ids(),
