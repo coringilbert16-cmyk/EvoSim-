@@ -1409,16 +1409,18 @@ mod tests {
         let construction = parent.reproductive_construction.as_mut().unwrap();
         assert!(construction.is_aggregate_owned_by(&parent.structure));
         let member_id = construction.developing_member_ids[0];
-        let aggregate_pose = parent.structure.units[parent.structure.unit_index(member_id).unwrap()]
-            .placement;
+        let aggregate_index = parent.structure.unit_index(member_id).unwrap();
+        let aggregate_pose = parent.structure.units[aggregate_index].placement;
         construction.developing_structure.units[0].placement.x += 100.0;
         assert!(!construction.is_aggregate_owned_by(&parent.structure));
 
         assert!(construction.refresh_aggregate_view(&parent.structure));
+        let refreshed_index = construction
+            .developing_structure
+            .unit_index(member_id)
+            .unwrap();
         assert_eq!(
-            construction.developing_structure.units
-                [construction.developing_structure.unit_index(member_id).unwrap()]
-                .placement,
+            construction.developing_structure.units[refreshed_index].placement,
             aggregate_pose,
             "the aggregate pose must replace a stale cached developing pose"
         );
