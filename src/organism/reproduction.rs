@@ -199,6 +199,7 @@ enum NextConstructionResourceStatus {
 
 pub(crate) fn construction_material_need_pressure(
     construction: &ReproductiveConstruction,
+    parent_storage: &MaterialStorage,
     catalog: &[crate::resources::BaseResource],
 ) -> f64 {
     let blueprint = &construction.child_genome.developmental_blueprint;
@@ -216,18 +217,28 @@ pub(crate) fn construction_material_need_pressure(
     let Some(preferred) = preferred else {
         return 1.0;
     };
-    match crate::construction_material_selection::select_construction_material(
-        &construction.committed_material,
-        preferred,
-        catalog,
-    ) {
-        Ok(crate::construction_material_selection::ConstructionMaterialDecision::Need {
-            ..
-        }) => 1.0,
-        Ok(crate::construction_material_selection::ConstructionMaterialDecision::Selected {
-            ..
-        }) => 0.0,
-        Err(_) => 1.0,
+
+    // Aggregate-owned construction draws from the parent's storage; the
+    // committed-material holder is only legacy/child-held inventory. Pressure
+    // should request preferred material only when neither owner can supply it.
+    let has_preferred_material = |storage: &MaterialStorage| {
+        matches!(
+            crate::construction_material_selection::select_construction_material(
+                storage,
+                preferred,
+                catalog,
+            ),
+            Ok(crate::construction_material_selection::ConstructionMaterialDecision::Selected {
+                ..
+            })
+        )
+    };
+    if has_preferred_material(&construction.committed_material)
+        || has_preferred_material(parent_storage)
+    {
+        0.0
+    } else {
+        1.0
     }
 }
 
