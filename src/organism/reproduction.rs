@@ -1498,7 +1498,7 @@ mod tests {
     }
 
     #[test]
-    fn aggregate_owned_growth_refreshes_cached_view_from_stable_ids() {
+    fn aggregate_owned_growth_uses_transient_view_from_stable_ids() {
         let mut simulation = Simulation::new(708, 20.0);
         let mut parent = simulation.organisms.remove(0);
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
@@ -1521,14 +1521,21 @@ mod tests {
             "cached pose changes must not transfer ownership away from the parent aggregate"
         );
 
-        assert!(construction.refresh_aggregate_view(&parent.structure));
-        let refreshed_index = construction
-            .developing_structure
-            .unit_index(member_id)
-            .unwrap();
+        let transient_view = parent
+            .structure
+            .subgraph_for_physical_ids(&construction.developing_member_ids, &[member_id])
+            .expect("stable IDs must produce a transient view");
+        let view_index = transient_view.unit_index(member_id).unwrap();
         assert_eq!(
-            construction.developing_structure.units[refreshed_index].placement, aggregate_pose,
-            "the aggregate pose must replace a stale cached developing pose"
+            transient_view.units[view_index].placement,
+            aggregate_pose,
+            "the transient view must use the authoritative aggregate pose"
+        );
+        let cached_index = construction.developing_structure.unit_index(member_id).unwrap();
+        assert_eq!(
+            construction.developing_structure.units[cached_index].placement.x,
+            aggregate_pose.x + 100.0,
+            "the duplicate graph is not refreshed to establish authority"
         );
         assert!(construction.is_aggregate_owned_by(&parent.structure));
     }
