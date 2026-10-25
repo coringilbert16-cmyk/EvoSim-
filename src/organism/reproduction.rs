@@ -595,11 +595,12 @@ pub(crate) fn total_usable_energy_held(
     let organism_energy: f64 = organisms
         .iter()
         .map(|organism| {
-            let construction_energy = organism
-                .reproductive_construction
-                .as_ref()
-                .map_or(0.0, |construction| {
-                    if construction.is_aggregate_owned_by(&organism.structure) {
+            let construction_energy =
+                organism
+                    .reproductive_construction
+                    .as_ref()
+                    .map_or(0.0, |construction| {
+                        if construction.is_aggregate_owned_by(&organism.structure) {
                         // Aggregate-owned construction has no independent energy
                         // holder. A stale nonzero cache is an accounting error,
                         // not energy that may silently disappear from inventory.
