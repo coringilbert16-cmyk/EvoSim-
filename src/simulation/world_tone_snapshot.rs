@@ -85,10 +85,7 @@ impl WorldToneOccluderSnapshot {
             let Some(construction) = &organism.reproductive_construction else {
                 continue;
             };
-            let any_member_owned_by_parent = construction
-                .developing_member_ids
-                .iter()
-                .any(|id| organism.structure.unit_index(*id).is_some());
+            let any_member_owned_by_parent = construction.has_any_member_in(&organism.structure);
             if !construction.developing_structure.units.is_empty()
                 && !construction.is_aggregate_owned_by(&organism.structure)
                 && !any_member_owned_by_parent
