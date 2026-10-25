@@ -15,6 +15,19 @@ pub(crate) fn recycle_dead_organism(
 ) -> Option<crate::decomposition::DecomposingBody> {
     let position = organism.occupied_cells.first().cloned()?;
     let energy = organism.usable_energy;
+    // Construction membership must be either fully parent-owned or fully
+    // detached. Partial overlap would make recycling drop unowned members or
+    // count physical state twice, so reject it before staging any transfers.
+    if organism
+        .reproductive_construction
+        .as_ref()
+        .is_some_and(|construction| {
+            construction.has_any_member_in(&organism.structure)
+                && !construction.is_aggregate_owned_by(&organism.structure)
+        })
+    {
+        return None;
+    }
     // Once the construction members are part of the parent aggregate, the
     // construction record is only a view: its legacy energy field is not a
     // second physical energy holder and must not be recycled twice.
@@ -165,6 +178,36 @@ mod tests {
         assert_eq!(body.energy_budget, 5.0);
         assert_eq!(organism.usable_energy, 0.0);
         assert!(organism.reproductive_construction.is_none());
+    }
+
+    #[test]
+    fn partial_construction_membership_blocks_recycling_without_losing_state() {
+        let mut simulation = Simulation::new(41, 20.0);
+        let mut organism = simulation.organisms.remove(0);
+        assert!(organism.store_material(Material::free_base("Carbon", 1.0)));
+        let mut ledger = EnergyLedger::default();
+        assert!(crate::reproduction::begin_reproduction(
+            &mut organism,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+        let construction = organism.reproductive_construction.as_mut().unwrap();
+        construction.developing_member_ids.push(construction.developing_member_ids[0]);
+        let original_structure = organism.structure.clone();
+        let original_storage = organism.stored_material.clone();
+        let original_construction = organism.reproductive_construction.clone();
+        let original_ledger = ledger;
+
+        assert!(
+            recycle_dead_organism(&mut simulation.environment, &mut organism, &mut ledger).is_none()
+        );
+        assert_eq!(organism.structure.units, original_structure.units);
+        assert_eq!(organism.structure.bonds, original_structure.bonds);
+        assert_eq!(organism.stored_material, original_storage);
+        assert_eq!(organism.reproductive_construction.as_ref().unwrap().developing_member_ids,
+            original_construction.as_ref().unwrap().developing_member_ids);
+        assert_eq!(ledger, original_ledger);
     }
 
     #[test]
