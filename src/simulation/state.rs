@@ -135,6 +135,8 @@ pub(crate) struct ActiveTransformation {
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ReproductiveConstruction {
     pub(crate) committed_material: MaterialStorage,
+    /// Compatibility snapshot for detached legacy construction. When the member is
+    /// aggregate-owned, stable IDs select a transient view from the parent's graph.
     pub(crate) developing_structure: OrganismStructure,
     /// Stable physical IDs owned by the developing member within the aggregate migration.
     /// This metadata is intentionally ID-based; unit indices are not durable across staging.
@@ -156,8 +158,8 @@ pub(crate) struct ReproductiveConstruction {
     /// Stable identity of the reproductive anchor; index is retained for legacy serialized state.
     #[serde(default)]
     pub(crate) anchor_physical_id: Option<crate::structure::PhysicalConstituentId>,
-    /// Usable energy held by the physically separate developing offspring.
-    /// It is transferred from the parent while construction remains active.
+    /// Usable energy for detached legacy construction. Aggregate-owned growth
+    /// keeps usable energy in the parent organism's holder to avoid double ownership.
     #[serde(default)]
     pub(crate) developing_energy: f64,
     /// Maintenance historically unpaid by the developing offspring.
