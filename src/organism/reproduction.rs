@@ -588,37 +588,36 @@ fn anchor_structure(
     Some((child.structure, child.stored_material, anchor_unit_index))
 }
 
+pub(crate) fn construction_usable_energy_held(organism: &Organism) -> f64 {
+    let Some(construction) = organism.reproductive_construction.as_ref() else {
+        return 0.0;
+    };
+
+    if construction.is_aggregate_owned_by(&organism.structure) {
+        // Aggregate-owned construction has no independent energy holder.
+        // A stale nonzero cache signals ambiguous ownership; do not silently
+        // count or discard it.
+        if construction.developing_energy == 0.0 {
+            0.0
+        } else {
+            f64::NAN
+        }
+    } else if construction.has_any_member_in(&organism.structure) {
+        // Partial physical ownership cannot be reconciled by counting either
+        // holder opportunistically.
+        f64::NAN
+    } else {
+        construction.developing_energy
+    }
+}
+
 pub(crate) fn total_usable_energy_held(
     organisms: &[Organism],
     decomposing_bodies: &[crate::decomposition::DecomposingBody],
 ) -> f64 {
     let organism_energy: f64 = organisms
         .iter()
-        .map(|organism| {
-            let construction_energy =
-                organism
-                    .reproductive_construction
-                    .as_ref()
-                    .map_or(0.0, |construction| {
-                        if construction.is_aggregate_owned_by(&organism.structure) {
-                            // Aggregate-owned construction has no independent energy
-                            // holder. A stale nonzero cache is an accounting error,
-                            // not energy that may silently disappear from inventory.
-                            if construction.developing_energy == 0.0 {
-                                0.0
-                            } else {
-                                f64::NAN
-                            }
-                        } else if construction.has_any_member_in(&organism.structure) {
-                            // Partial physical ownership is invalid and cannot be
-                            // reconciled by counting either holder opportunistically.
-                            f64::NAN
-                        } else {
-                            construction.developing_energy
-                        }
-                    });
-            organism.usable_energy + construction_energy
-        })
+        .map(|organism| organism.usable_energy + construction_usable_energy_held(organism))
         .sum();
     let decomposition_energy: f64 = decomposing_bodies
         .iter()
