@@ -135,8 +135,12 @@ pub(crate) struct ActiveTransformation {
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ReproductiveConstruction {
     pub(crate) committed_material: MaterialStorage,
-    /// Compatibility snapshot for detached legacy construction. When the member is
-    /// aggregate-owned, stable IDs select a transient view from the parent's graph.
+    /// Transient compatibility view for detached legacy construction only.
+    /// Never serialize a second physical graph: aggregate-owned construction is
+    /// reconstructed from stable IDs in the parent's authoritative structure.
+    /// Deserialized legacy detached graphs fail closed rather than reviving a
+    /// second physical authority.
+    #[serde(skip, default)]
     pub(crate) developing_structure: OrganismStructure,
     /// Stable physical IDs owned by the developing member within the aggregate migration.
     /// This metadata is intentionally ID-based; unit indices are not durable across staging.
