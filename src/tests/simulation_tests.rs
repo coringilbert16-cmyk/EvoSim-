@@ -462,6 +462,61 @@ mod integration_tests {
     }
 
     #[test]
+    fn integer_material_inventory_conserves_constituents_through_dead_recycling() {
+        let mut simulation = Simulation::new(23, 20.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        assert!(simulation.organisms[0].store_material(Material::free_base("Carbon", 1.0)));
+        let catalog = simulation.environment.catalog.clone();
+        let (parent, rng, ledger) = (
+            &mut simulation.organisms[0],
+            &mut simulation.rng,
+            &mut simulation.energy_ledger,
+        );
+        assert!(crate::reproduction::begin_reproduction(
+            parent, rng, &catalog, ledger,
+        ));
+
+        let origin = simulation.organisms[0].occupied_cells[0].clone();
+        let committed = PhysicalMaterial::realized(
+            Material::free_base("Hydrogen", 1.0),
+            vec![Placement {
+                x: origin.x,
+                y: origin.y,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("Hydrogen should be physically realizable");
+        assert!(simulation.organisms[0]
+            .reproductive_construction
+            .as_mut()
+            .expect("construction started")
+            .committed_material
+            .store_physical_instance(committed));
+
+        let before =
+            integer_material_inventory(&simulation).expect("pre-recycling inventory is integral");
+        let mut organism = simulation.organisms.remove(0);
+        let body = crate::chemistry::recycling::recycle_dead_organism(
+            &mut simulation.environment,
+            &mut organism,
+            &mut simulation.energy_ledger,
+        )
+        .expect("dead organism should transfer its material holders atomically");
+        simulation.decomposing_bodies.push(body);
+
+        let after =
+            integer_material_inventory(&simulation).expect("post-recycling inventory is integral");
+        assert_eq!(
+            after, before,
+            "recycling must transfer structure and stored material ownership without changing constituent totals"
+        );
+    }
+
+    #[test]
     fn integer_material_inventory_rejects_partial_construction_ownership() {
         let mut simulation = Simulation::new(7111, 10.0);
         assert!(simulation.organisms[0].store_material(Material::free_base("Carbon", 1.0)));
