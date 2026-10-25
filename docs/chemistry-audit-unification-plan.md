@@ -13,7 +13,7 @@
 - **Reproduction sizing:** once the original organism reaches 100% of its initial size, begin constructing the second genome core immediately adjacent to the original. Grow the combined parent-owned organism to 160% total size, then split into two approximately 80%-size children. Do not implement the mass-proportional division-energy formula separately from the validated aggregate division transaction.
 - **Death before division:** core breach ends biological processing but does not transfer developing material to another owner or create a special decomposition body. The breached organism retains the single aggregate and its material/energy holders; ordinary chemistry/recycling can continue against that authoritative ownership.
 
-**Implementation order:** migrate anchor admission and real bonding; migrate construction membership and atomic growth; migrate all aggregate consumers (including world tone, movement, inventories, viability, and death/recycling) so no consumer still treats the old graph as authoritative; then wire the tested graph-partition primitive into final atomic division and test complete rollback. Existing graph primitives are building blocks, not proof that live reproduction or whole-world conservation is solved. Preserve the approved 12-piece nitrogen seed and do not weaken viability to make migration tests pass.
+**Implementation order:** migrate anchor admission and real bonding; migrate construction membership and atomic growth; migrate all aggregate consumers (including world tone, movement, inventories, viability, and death/recycling) so no consumer still treats the old graph as authoritative; then wire the tested graph-partition primitive into final atomic division and test complete rollback. Existing graph primitives are building blocks, not proof that live reproduction or whole-world conservation is solved. Preserve the qualifying-cavity milestone and all viability rules. The current 12-piece nitrogen seed is a replaceable reference fixture selected to guarantee sufficient cavity size, not a mandatory chemistry recipe or viable-organism design. Do not weaken viability to make migration tests pass.
 
 
 **Status:** Read-only audit register A0–A21 populated; owner approved Section 17 and implementation is tracked separately in [PR #205](https://github.com/coringilbert16-cmyk/EvoSim-/pull/205). PR #204 remains documentation-only; no production behavior changes are made on this branch.  
@@ -4799,3 +4799,26 @@ Workflow [40113515832](https://github.com/coringilbert16-cmyk/EvoSim-/actions/ru
 - The workflow is not green because the expected known seed gate, full suite, and Clippy fail. No source behavior changed in this formatting-only commit.
 
 This closes the exact-head validation uncertainty for the graph regression. The next work is no longer CI triage: proceed to the coordinated aggregate-ownership implementation, keeping the 12-piece nitrogen seed requirement unchanged and not treating baseline test/lint debt as new regressions.
+
+
+## Owner clarification and seed-milestone contract audit — 2026-10-25
+
+**This clarification supersedes older plan/handoff wording that treats the 12-piece nitrogen composition itself as an invariant.** The invariant is a physically realized, sealed cavity meeting the minimum cavity-size requirement. The 12N seed was selected as a convenient guaranteed-size reference fixture; it is not a required chemistry recipe, a viable-organism design, or a commitment to preserve that geometry if the chemistry makes another seed more suitable. Cavity qualification, subsequent development, and organism viability are separate milestones. Keep viability rules intact; do not make the cavity fixture pass by relaxing them.
+
+### Exact failure path audited on PR #205 head `95756fe771d4bc64d4cfec0850c950095ce5af2f`
+
+- `src/tests/blueprint_spatial_target_tests.rs::ancestral_seed_realizes_a_physically_valid_developmental_structure` calls `confirmed_seed_baseline`, then `juvenile::realize_initial`, and only afterward asserts that the realized structure contains a qualifying cavity.
+- `src/organism/juvenile.rs::confirmed_seed_baseline` explicitly documents the 12N ring as a calibration fixture and constructs only the twelve cavity-wall pieces; it does not add external developmental structure.
+- `src/organism/juvenile.rs::realize_initial_with_reserve` always calls `validate_realized_organism` with `OrganismViabilityRequirements::default()`.
+- `src/organism/viability.rs` defaults `require_sealed_genome_cavity = true` and `require_extra_structure = true`. It rejects a structure whose unit count is no greater than its cavity boundary count, producing the observed error: `organism has no realized structure outside its genome cavity boundary`.
+
+**Diagnosis:** the failure occurs inside the initial-realization helper's full-viability validation, before the test's cavity assertions. The test is therefore not merely proving whether 12N can realize a cavity; it routes a cavity-only calibration fixture through an initializer that requires a later milestone. This is a concrete contract mismatch between the seed fixture's documented purpose and the helper's default validation, not evidence that the cavity geometry is chemically impossible. It also does not prove that a later growth path is viable.
+
+### Recommended resolution sequence
+
+1. Keep this as a read-only diagnosis until the implementation choice is reviewed. Do not alter PR #196 or change the 12N geometry.
+2. Separate the API/test contracts: provide a cavity-milestone realization/validation path that verifies physical geometry, bonds, and cavity qualification without claiming organism viability; retain the existing full-viability gate for actual initial organisms.
+3. Update cavity-focused tests to use the cavity-level contract. Keep a separate test proving that a cavity-only structure fails full organism viability when extra structure is required.
+4. Only after this contract is explicit, audit the next physical growth transition under real material, energy, collision, bond, and chemistry constraints. Consider alternate seed compositions only if evidence shows the current reference fixture cannot support the desired next milestone.
+
+No production source or test changes were made during this audit. PR #204 remains documentation-only; the implementation work belongs in PR #205 after the contract boundary is agreed. This audit does not claim aggregate ownership or whole-world conservation is complete.
