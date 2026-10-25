@@ -31,7 +31,7 @@ Establish one coherent, deterministic, conservation-auditable chemistry and ener
 
 ## Direction from here
 
-PR #204 is **documentation-only**. Implementation belongs in focused PRs, **one PR per open phase** of §17.2—not another giant PR. Start each phase from a fresh audit of current `main`, then make the smallest cohesive change, with one focused audit before each change. Keep every command/test under five minutes. Run focused gates first and compare named test failures to the frozen baseline. A timeout is incomplete evidence.
+PR #204 is **documentation-only**. Implementation belongs in focused PRs, **one PR per open phase** of §17.2—not another giant PR. Start each phase from a fresh audit of current `main`, then make the smallest cohesive change, with one focused audit before each change. Keep every command/test under five minutes. Run focused gates first and compare named test failures to the reset forward baseline. A timeout is incomplete evidence.
 
 ### Recommended next action
 
