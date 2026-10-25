@@ -191,9 +191,17 @@ impl ReproductiveConstruction {
         {
             return false;
         }
+        // Stable IDs are only proof of aggregate ownership when the selected
+        // members are physically joined to the rest of the parent aggregate.
+        if !parent.bonds.iter().any(|bond| {
+            let a = seen.contains(&bond.endpoint_a.constituent_id);
+            let b = seen.contains(&bond.endpoint_b.constituent_id);
+            a != b
+        }) {
+            return false;
+        }
         let Some(view) =
-            parent.subgraph_for_physical_ids(&self.developing_member_ids, &[anchor_id])
-        else {
+            parent.subgraph_for_physical_ids(&self.developing_member_ids, &[anchor_id]) else {
             return false;
         };
         let Some(anchor_index) = view.unit_index(anchor_id) else {
