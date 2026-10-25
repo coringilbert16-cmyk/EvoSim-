@@ -864,12 +864,11 @@ pub(crate) fn advance_construction(
     // the child has been admitted into the parent's physical aggregate. Rebuild
     // the working view before validation or chemistry so stale cached geometry
     // cannot become a second physical authority.
-    let ids_present_in_parent = !construction.developing_member_ids.is_empty()
-        && construction
-            .developing_member_ids
-            .iter()
-            .all(|id| parent_structure.unit_index(*id).is_some());
-    if ids_present_in_parent && !construction.refresh_aggregate_view(parent_structure) {
+    let any_ids_present_in_parent = construction
+        .developing_member_ids
+        .iter()
+        .any(|id| parent_structure.unit_index(*id).is_some());
+    if any_ids_present_in_parent && !construction.refresh_aggregate_view(parent_structure) {
         return (ConstructionStatus::Dead, None);
     }
 
@@ -1054,12 +1053,11 @@ pub(crate) fn finish_reproduction(
     // Division can be called independently of the growth tick. Refresh its
     // working view here too, so readiness and partitioning cannot consume a
     // stale cached graph after the authoritative parent aggregate has changed.
-    let ids_present_in_parent = !construction.developing_member_ids.is_empty()
-        && construction
-            .developing_member_ids
-            .iter()
-            .all(|id| parent.structure.unit_index(*id).is_some());
-    if ids_present_in_parent && !construction.refresh_aggregate_view(&parent.structure) {
+    let any_ids_present_in_parent = construction
+        .developing_member_ids
+        .iter()
+        .any(|id| parent.structure.unit_index(*id).is_some());
+    if any_ids_present_in_parent && !construction.refresh_aggregate_view(&parent.structure) {
         parent.reproductive_construction = Some(construction);
         return None;
     }
