@@ -15,6 +15,10 @@ pub(crate) fn recycle_dead_organism(
 ) -> Option<crate::decomposition::DecomposingBody> {
     let position = organism.occupied_cells.first().cloned()?;
     let energy = organism.usable_energy;
+    // The decomposing-body model has one energy budget, not a frequency-tagged
+    // resonance reservoir. Validate the retained energy now and transfer it
+    // into that budget during the same atomic death transaction.
+    let resonant_energy = organism.resonant_energy.total_energy()?;
     // Construction membership must be either fully parent-owned or fully
     // detached. Partial overlap would make recycling drop unowned members or
     // count physical state twice, so reject it before staging any transfers.
@@ -86,6 +90,7 @@ pub(crate) fn recycle_dead_organism(
     let mut staged_ledger = *ledger;
     let mut staged_parent_energy = energy;
     let mut staged_developing_energy = developing_energy;
+    let mut staged_resonant_energy = resonant_energy;
     if !staged_ledger.transfer(&mut staged_parent_energy, &mut body.energy_budget, energy) {
         return None;
     }
@@ -99,6 +104,13 @@ pub(crate) fn recycle_dead_organism(
         }
         construction.developing_energy = staged_developing_energy;
     }
+    if !staged_ledger.transfer(
+        &mut staged_resonant_energy,
+        &mut body.energy_budget,
+        resonant_energy,
+    ) {
+        return None;
+    }
 
     // Batch deposit validates every destination and object before mutating the
     // field. After this succeeds, the remaining holder/ledger assignments are
@@ -107,6 +119,7 @@ pub(crate) fn recycle_dead_organism(
         return None;
     }
     organism.usable_energy = staged_parent_energy;
+    organism.resonant_energy = crate::harmonics::ResonantEnergyReservoir::default();
     organism.stored_material = staged_storage;
     organism.reproductive_construction = None;
     *ledger = staged_ledger;
