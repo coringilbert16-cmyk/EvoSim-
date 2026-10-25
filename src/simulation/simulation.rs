@@ -1455,15 +1455,23 @@ impl Simulation {
             .organisms
             .iter()
             .map(|organism| {
-                organism.usable_energy
-                    + organism
-                        .reproductive_construction
-                        .as_ref()
-                        .filter(|construction| {
-                            !construction.is_aggregate_owned_by(&organism.structure)
-                                && !construction.has_any_member_in(&organism.structure)
-                        })
-                        .map_or(0.0, |construction| construction.developing_energy)
+                let construction_energy = organism
+                    .reproductive_construction
+                    .as_ref()
+                    .map_or(0.0, |construction| {
+                        if construction.is_aggregate_owned_by(&organism.structure) {
+                            if construction.developing_energy == 0.0 {
+                                0.0
+                            } else {
+                                f64::NAN
+                            }
+                        } else if construction.has_any_member_in(&organism.structure) {
+                            f64::NAN
+                        } else {
+                            construction.developing_energy
+                        }
+                    });
+                organism.usable_energy + construction_energy
             })
             .sum::<f64>()
             + self
@@ -2684,7 +2692,7 @@ mod decomposition_finalization_tests {
             developing_stress: 0.0,
             anchor_unit_index: 0,
             anchor_physical_id: organism.structure.physical_id(0),
-            developing_energy: 4.0,
+            developing_energy: 0.0,
             developing_maintenance_debt: 0.0,
             needs_space: false,
         });
