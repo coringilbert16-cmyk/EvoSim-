@@ -1857,7 +1857,11 @@ mod tests {
         let before_units = construction.developing_structure.units.len();
         let before_bonds = construction.developing_structure.bonds.len();
 
-        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
+        let developing_child = developing_organism(&construction);
+        let newly_available_resource = construction_preferred_resource(&developing_child)
+            .expect("the developing genome has a preferred construction resource")
+            .to_owned();
+        assert!(parent.store_material(Material::free_base(&newly_available_resource, 1.0)));
 
         let second_status = advance_construction(
             &mut parent.structure,
