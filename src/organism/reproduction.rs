@@ -1439,6 +1439,44 @@ mod tests {
     }
 
     #[test]
+    fn finish_reproduction_refreshes_aggregate_view_before_readiness_check() {
+        let mut simulation = Simulation::new(709, 20.0);
+        let mut parent = simulation.organisms.remove(0);
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
+        let mut ledger = EnergyLedger::default();
+        assert!(begin_reproduction(
+            &mut parent,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+
+        let construction = parent.reproductive_construction.as_mut().unwrap();
+        assert!(construction.is_aggregate_owned_by(&parent.structure));
+        let member_id = construction.developing_member_ids[0];
+        let aggregate_index = parent.structure.unit_index(member_id).unwrap();
+        let aggregate_pose = parent.structure.units[aggregate_index].placement;
+        construction.developing_structure.units[0].placement.x += 100.0;
+
+        assert!(finish_reproduction(
+            &mut parent,
+            "child".to_owned(),
+            &simulation.environment.catalog,
+            &mut ledger,
+            None,
+        )
+        .is_none());
+
+        let retained = parent.reproductive_construction.as_ref().unwrap();
+        let refreshed_index = retained.developing_structure.unit_index(member_id).unwrap();
+        assert_eq!(
+            retained.developing_structure.units[refreshed_index].placement, aggregate_pose,
+            "division readiness must use the authoritative aggregate pose"
+        );
+        assert!(retained.is_aggregate_owned_by(&parent.structure));
+    }
+
+    #[test]
     fn anchor_is_admitted_into_parent_aggregate() {
         let mut simulation = Simulation::new(7, 20.0);
         let mut parent = simulation.organisms.remove(0);
