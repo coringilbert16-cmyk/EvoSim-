@@ -1005,9 +1005,10 @@ pub(crate) fn advance_construction(
     }
     construction.developing_stress = child.stress;
     construction.developing_maintenance_debt = child.maintenance_debt;
-    construction.developing_structure = child.structure.clone();
-    construction.developing_member_ids =
-        construction.developing_structure.physical_constituent_ids();
+    construction.developing_member_ids = child.structure.physical_constituent_ids();
+    if !aggregate_owned {
+        construction.developing_structure = child.structure.clone();
+    }
     if dead {
         return (ConstructionStatus::Dead, None);
     }
