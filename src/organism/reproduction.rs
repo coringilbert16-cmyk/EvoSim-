@@ -1784,6 +1784,9 @@ mod tests {
             .reproductive_construction
             .take()
             .expect("reproduction is active");
+        assert!(developing_membership_is_valid(&construction));
+        assert!(construction.is_aggregate_owned_by(&parent.structure));
+        assert_eq!(construction.developing_energy, 0.0);
         let before_units = construction.developing_structure.units.len();
         let body = parent_body_geometry(&parent, &simulation.environment.catalog).unwrap();
         let environment = simulation.environment.clone();
@@ -1824,6 +1827,9 @@ mod tests {
             .reproductive_construction
             .take()
             .expect("reproduction is active");
+        assert!(developing_membership_is_valid(&construction));
+        assert!(construction.is_aggregate_owned_by(&parent.structure));
+        assert_eq!(construction.developing_energy, 0.0);
         let body = parent_body_geometry(&parent, &simulation.environment.catalog).unwrap();
         let environment = simulation.environment.clone();
 
