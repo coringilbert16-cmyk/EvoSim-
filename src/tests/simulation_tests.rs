@@ -147,6 +147,37 @@ mod integration_tests {
     }
 
     #[test]
+    fn integer_material_inventory_conserves_constituents_when_reproduction_admits_anchor() {
+        let mut simulation = Simulation::new(7110, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        let parent = &mut simulation.organisms[0];
+        parent.stored_material.entries.clear();
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
+
+        let before =
+            integer_material_inventory(&simulation).expect("pre-reproduction inventory is integral");
+        let mut parent = simulation.organisms.remove(0);
+        let mut ledger = crate::state::EnergyLedger::default();
+        assert!(crate::reproduction::begin_reproduction(
+            &mut parent,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+        simulation.organisms.push(parent);
+
+        let after =
+            integer_material_inventory(&simulation).expect("post-reproduction inventory is integral");
+        assert_eq!(
+            after, before,
+            "admitting the anchor into the aggregate must transfer ownership, not create or destroy material"
+        );
+    }
+
+    #[test]
     fn integer_material_inventory_conserves_constituents_across_storage_restore() {
         let mut simulation = Simulation::new(7106, 10.0);
         for cell in &mut simulation.environment.field.cells {
