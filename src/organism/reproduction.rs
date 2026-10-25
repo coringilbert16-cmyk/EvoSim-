@@ -626,6 +626,52 @@ pub(crate) fn total_usable_energy_held(
     organism_energy + decomposition_energy
 }
 
+pub(crate) fn total_structural_energy_held(
+    organisms: &[Organism],
+    decomposing_bodies: &[crate::decomposition::DecomposingBody],
+) -> f64 {
+    let organism_energy = organisms
+        .iter()
+        .map(|organism| {
+            let own_energy = organism
+                .structure
+                .bonds
+                .iter()
+                .map(|bond| bond.bond_energy)
+                .sum::<f64>();
+            let construction_energy = organism
+                .reproductive_construction
+                .as_ref()
+                .map_or(0.0, |construction| {
+                    if construction.is_aggregate_owned_by(&organism.structure) {
+                        0.0
+                    } else if construction.has_any_member_in(&organism.structure) {
+                        f64::NAN
+                    } else {
+                        construction
+                            .developing_structure
+                            .bonds
+                            .iter()
+                            .map(|bond| bond.bond_energy)
+                            .sum::<f64>()
+                    }
+                });
+            own_energy + construction_energy
+        })
+        .sum::<f64>();
+    let decomposition_energy = decomposing_bodies
+        .iter()
+        .map(|body| {
+            body.structure
+                .bonds
+                .iter()
+                .map(|bond| bond.bond_energy)
+                .sum::<f64>()
+        })
+        .sum::<f64>();
+    organism_energy + decomposition_energy
+}
+
 pub(crate) fn total_resonant_energy_held(organisms: &[Organism]) -> f64 {
     organisms
         .iter()
