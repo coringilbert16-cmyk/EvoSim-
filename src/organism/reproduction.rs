@@ -1113,14 +1113,16 @@ pub(crate) fn finish_reproduction(
     seed_reference: Option<(f64, f64)>,
 ) -> Option<Organism> {
     let mut construction = parent.reproductive_construction.take()?;
-    // Division can be called independently of the growth tick. Refresh its
-    // working view here too, so readiness and partitioning cannot consume a
-    // stale cached graph after the authoritative parent aggregate has changed.
+    // Stable IDs establish ownership; readiness and division derive transient
+    // views from the authoritative parent graph instead of refreshing a second
+    // persisted copy. Reject partially admitted membership rather than falling
+    // back to the detached legacy graph.
     let any_ids_present_in_parent = construction
         .developing_member_ids
         .iter()
         .any(|id| parent.structure.unit_index(*id).is_some());
-    if any_ids_present_in_parent && !construction.refresh_aggregate_view(&parent.structure) {
+    let aggregate_owned = construction.is_aggregate_owned_by(&parent.structure);
+    if any_ids_present_in_parent && !aggregate_owned {
         parent.reproductive_construction = Some(construction);
         return None;
     }
@@ -1138,7 +1140,6 @@ pub(crate) fn finish_reproduction(
     // the authoritative parent graph. A transient child view is never promoted
     // to a second owner. Legacy, not-yet-migrated constructions retain their
     // existing behavior until they are admitted into the aggregate.
-    let aggregate_owned = construction.is_aggregate_owned_by(&parent.structure);
     let (child_structure, child_energy, staged_ledger) = if aggregate_owned {
         let mut staged_parent_structure = parent.structure.clone();
         let Some(anchor_id) = construction.anchor_physical_id else {
@@ -1553,7 +1554,7 @@ mod tests {
     }
 
     #[test]
-    fn finish_reproduction_refreshes_aggregate_view_before_readiness_check() {
+    fn finish_reproduction_readiness_ignores_stale_cached_graph() {
         let mut simulation = Simulation::new(709, 20.0);
         let mut parent = simulation.organisms.remove(0);
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
@@ -1582,10 +1583,16 @@ mod tests {
         .is_none());
 
         let retained = parent.reproductive_construction.as_ref().unwrap();
-        let refreshed_index = retained.developing_structure.unit_index(member_id).unwrap();
+        let cached_index = retained.developing_structure.unit_index(member_id).unwrap();
         assert_eq!(
-            retained.developing_structure.units[refreshed_index].placement, aggregate_pose,
-            "division readiness must use the authoritative aggregate pose"
+            retained.developing_structure.units[cached_index].placement.x,
+            aggregate_pose.x + 100.0,
+            "aggregate-owned readiness must not require refreshing the duplicate graph"
+        );
+        assert_eq!(
+            parent.structure.units[parent.structure.unit_index(member_id).unwrap()].placement,
+            aggregate_pose,
+            "the parent aggregate remains the physical authority"
         );
         assert!(retained.is_aggregate_owned_by(&parent.structure));
     }
