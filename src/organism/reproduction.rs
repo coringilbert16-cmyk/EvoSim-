@@ -495,10 +495,9 @@ fn birth_ready_with_reference(
         let Some(anchor_id) = construction.anchor_physical_id else {
             return false;
         };
-        let Some(view) = parent_structure.subgraph_for_physical_ids(
-            &construction.developing_member_ids,
-            &[anchor_id],
-        ) else {
+        let Some(view) = parent_structure
+            .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
+        else {
             return false;
         };
         view
