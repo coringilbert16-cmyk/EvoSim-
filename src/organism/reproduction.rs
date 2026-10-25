@@ -2071,7 +2071,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_aggregate_ownership_predicate_checks_stable_identity_and_pose() {
+    fn shared_aggregate_ownership_predicate_ignores_stale_cached_pose() {
         use crate::structure::{Placement, StructuralUnit};
 
         let catalog = default_catalog();
@@ -2103,7 +2103,17 @@ mod tests {
 
         assert!(construction.is_aggregate_owned_by(&aggregate));
         construction.developing_structure.units[0].placement.x += 0.25;
-        assert!(!construction.is_aggregate_owned_by(&aggregate));
+        assert!(
+            construction.is_aggregate_owned_by(&aggregate),
+            "stale cached geometry must not create a second physical owner"
+        );
+
+        let mut missing_member = aggregate.clone();
+        missing_member.units.clear();
+        assert!(
+            !construction.is_aggregate_owned_by(&missing_member),
+            "stable IDs absent from the authoritative aggregate are not aggregate-owned"
+        );
     }
 
     #[test]
