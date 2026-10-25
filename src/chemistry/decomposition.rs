@@ -34,18 +34,38 @@ impl DecomposingBody {
     pub(crate) fn release_finished_material(
         &mut self,
         catalog: &[crate::resources::BaseResource],
-    ) -> Vec<PhysicalMaterial> {
+    ) -> Option<Vec<PhysicalMaterial>> {
         if !self.is_finished() {
-            return Vec::new();
+            return Some(Vec::new());
         }
         self.structure
             .units
             .iter()
-            .filter_map(|unit| {
-                PhysicalMaterial::realized(unit.material.clone(), vec![unit.placement], catalog)
-            })
+            .map(|unit| realize_released_unit(unit, catalog))
             .collect()
     }
+}
+
+fn realize_released_unit(
+    unit: &crate::structure::StructuralUnit,
+    catalog: &[crate::resources::BaseResource],
+) -> Option<PhysicalMaterial> {
+    if unit.material.parts.len() == 1 {
+        let (name, amount) = unit.material.parts.first()?;
+        let resource = catalog.iter().find(|resource| resource.name == *name)?;
+        if resource.physical_state == crate::resources::PhysicalState::Fluid {
+            let shape = unit.shape(catalog)?.clone();
+            if *amount > 1.0 || matches!(shape.form, crate::resources::Form::Fluid { .. }) {
+                return PhysicalMaterial::realized_with_single_fluid_shape(
+                    unit.material.clone(),
+                    unit.placement,
+                    shape,
+                    catalog,
+                );
+            }
+        }
+    }
+    PhysicalMaterial::realized(unit.material.clone(), vec![unit.placement], catalog)
 }
 
 pub(crate) struct DecompositionStep {
@@ -72,14 +92,8 @@ pub(crate) fn resolve_one_bond_with_ledger(
             trial_structure
                 .units
                 .iter()
-                .filter_map(|unit| {
-                    PhysicalMaterial::realized(
-                        unit.material.clone(),
-                        vec![unit.placement],
-                        &environment.catalog,
-                    )
-                })
-                .collect(),
+                .map(|unit| realize_released_unit(unit, &environment.catalog))
+                .collect::<Option<Vec<_>>>()?,
         )
     } else {
         None
@@ -158,9 +172,164 @@ mod tests {
     }
 
     #[test]
+    fn release_finished_material_preserves_aggregate_fluid_shape() {
+        let catalog = default_catalog();
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut water_unit = StructuralUnit::from_material(
+            crate::resources::Material::free_base("Water", 2.0),
+            placement,
+        )
+        .unwrap();
+        assert!(water_unit.realize_default_geometry(&catalog));
+        let water_resource = catalog
+            .iter()
+            .find(|resource| resource.name == "Water")
+            .unwrap();
+        let unit_area = match &water_resource.shape.form {
+            crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+            _ => panic!("default Water shape should have a measurable area"),
+        };
+        let merged_area = 2.0 * unit_area;
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            merged_area,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .unwrap();
+        let arc =
+            crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
+        let shape = crate::resources::Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: merged_area,
+                boundary: None,
+                arc_boundary: Some(arc),
+                multi_contact_boundary: None,
+            },
+        };
+        assert!(water_unit.realize_fluid_geometry(shape.clone(), &catalog));
+        let mut structure = OrganismStructure::new();
+        structure.add_unit(water_unit);
+        let mut body = DecomposingBody::new(structure, 0.0, Position { x: 0.0, y: 0.0 }).unwrap();
+
+        let released = body
+            .release_finished_material(&catalog)
+            .expect("all finished material should retain a valid physical realization");
+        assert_eq!(released.len(), 1);
+        assert_eq!(
+            released[0].realized_shape_for_part(0, &catalog),
+            Some(shape)
+        );
+    }
+
+    #[test]
     fn zero_bond_structure_is_finished() {
         let structure = minimal_realized_structure();
         let body = DecomposingBody::new(structure, 0.0, Position { x: 0.0, y: 0.0 }).unwrap();
         assert!(body.is_finished());
+    }
+
+    #[test]
+    fn finished_release_rejects_aggregate_fluid_without_exact_geometry() {
+        let catalog = default_catalog();
+        let mut water = StructuralUnit::from_material(
+            crate::resources::Material::free_base("Water", 2.0),
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        )
+        .unwrap();
+        assert!(water.realize_default_geometry(&catalog));
+        let mut structure = OrganismStructure::new();
+        structure.add_unit(water);
+        let mut body = DecomposingBody::new(structure, 0.0, Position { x: 0.0, y: 0.0 }).unwrap();
+
+        assert!(
+            body.release_finished_material(&catalog).is_none(),
+            "invalid aggregate fluid must not be silently dropped during release"
+        );
+    }
+    #[test]
+    fn rejected_decomposition_settlement_preserves_body_and_ledger() {
+        use crate::structure::{Bond, BondEndpoint, ConnectionEndpoint};
+
+        let catalog = default_catalog();
+        let mut structure = OrganismStructure::new();
+        let mut first = StructuralUnit::new(
+            "Carbon".to_string(),
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        let mut second = StructuralUnit::new(
+            "Carbon".to_string(),
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(first.realize_default_geometry(&catalog));
+        assert!(second.realize_default_geometry(&catalog));
+        structure.add_unit(first);
+        structure.add_unit(second);
+        let first_id = structure.units[0].physical_id;
+        let second_id = structure.units[1].physical_id;
+        structure.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(first_id, ConnectionEndpoint::Corner { point_index: 0 }),
+            endpoint_b: BondEndpoint::new(second_id, ConnectionEndpoint::Corner { point_index: 3 }),
+            strength: 1.0,
+            bond_energy: 10.0,
+        });
+
+        let mut body = DecomposingBody::new(structure, 100.0, Position { x: 5.0, y: 7.0 })
+            .expect("decomposing body should be valid");
+        let bonds_before = body.structure.bonds.clone();
+        let units_before = body.structure.units.clone();
+        let energy_before = body.energy_budget;
+        // Force rejection deterministically; adding a small increment to
+        // f64::MAX can round away and is not a reliable overflow fixture.
+        let mut ledger = EnergyLedger {
+            total_heat_dissipated: f64::NAN,
+            ..EnergyLedger::default()
+        };
+        let ledger_before = ledger;
+
+        let environment = Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog,
+            field: crate::environment::ActiveMaterialField::new(
+                1000.0,
+                1000.0,
+                crate::environment::DEFAULT_CELL_SIZE,
+            ),
+        };
+        assert!(
+            resolve_one_bond_with_ledger(&mut body, &environment, &mut ledger).is_none(),
+            "rejected ledger settlement must reject the decomposition step"
+        );
+        assert_eq!(body.structure.bonds, bonds_before);
+        assert_eq!(body.structure.units, units_before);
+        assert_eq!(body.energy_budget, energy_before);
+        assert!(ledger.total_heat_dissipated.is_nan());
+        assert_eq!(
+            ledger.total_structural_energy_delta,
+            ledger_before.total_structural_energy_delta
+        );
+        assert_eq!(
+            ledger.total_work_expended,
+            ledger_before.total_work_expended
+        );
+        assert_eq!(
+            ledger.total_potential_energy_released,
+            ledger_before.total_potential_energy_released
+        );
     }
 }

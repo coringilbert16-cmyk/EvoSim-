@@ -11,129 +11,76 @@ use crate::structure::OrganismStructure;
 
 /// Confirmed original-seed construction baseline.
 ///
-/// This is a construction calibration artifact only. It is not serialized into
-/// the genome and does not prescribe descendant topology or geometry.
+/// This is the established 12-piece, corner-free nitrogen cavity seed. It is a
+/// calibration fixture only; developmental fields do not prescribe descendant
+/// topology or geometry.
 pub(crate) fn confirmed_seed_baseline(
     catalog: &[BaseResource],
 ) -> Result<StructuralBlueprint, String> {
     use crate::resources::Material;
     use crate::structural_blueprint::{BlueprintConnection, BlueprintElement, BlueprintPlacement};
 
-    for material in ["Carbon", "Sulfur", "Oxygen"] {
-        if !catalog.iter().any(|resource| resource.name == material) {
-            return Err(format!("catalog is missing seed {material}"));
+    if !catalog.iter().any(|resource| resource.name == "Nitrogen") {
+        return Err("catalog is missing seed Nitrogen".to_string());
+    }
+
+    // The seed is the 5x5 perimeter with its four non-wall corners omitted:
+    // twelve square Nitrogen pieces make a sealed cavity without synthetic
+    // core material or an unrelated carbon chain.
+    let mut elements = Vec::with_capacity(12);
+    let mut grid = [[None; 5]; 5];
+    for (y, row) in grid.iter_mut().enumerate() {
+        for (x, cell) in row.iter_mut().enumerate() {
+            if (x == 0 || x == 4) && (y == 0 || y == 4) {
+                continue;
+            }
+            if x != 0 && x != 4 && y != 0 && y != 4 {
+                continue;
+            }
+            let index = elements.len();
+            elements.push(BlueprintElement {
+                material: Material::free_base("Nitrogen", 1.0),
+                placement: BlueprintPlacement {
+                    x: x as f64 - 2.0,
+                    y: y as f64 - 2.0,
+                    rotation_radians: 0.0,
+                },
+            });
+            *cell = Some(index);
         }
     }
 
-    // This is the initial construction request, not a prescribed final body
-    // plan. The constructor is given a substantially larger target so that it
-    // has enough physical room to realize a useful cavity and surrounding
-    // structure. The declared poses are spatial preferences; the constructor's
-    // realized physical graph remains authoritative.
-    //
-    // The six-carbon inner loop supplies a physically compatible enclosed region. From one
-    // point on that loop, twenty additional carbon elements extend along a
-    // physically spaced outward chain. Sulfur and oxygen provide heterogeneous
-    // peripheral material without defining an organism role or topology.
-    let ring_sides = 6usize;
-    let chain_steps = 20usize;
-    let carbon_radius = catalog
-        .iter()
-        .find(|resource| resource.name == "Carbon")
-        .and_then(|resource| match resource.shape.form {
-            crate::resources::Form::RegularPolygon { radius, .. } => Some(radius),
-            _ => None,
-        })
-        .ok_or_else(|| "Carbon seed geometry is not a regular polygon".to_string())?;
-    let carbon_edge_center_spacing = (3.0_f64).sqrt() * carbon_radius;
-    let ring_radius =
-        carbon_edge_center_spacing / (2.0 * (std::f64::consts::PI / ring_sides as f64).sin());
-
-    let mut elements = Vec::with_capacity(ring_sides + chain_steps + 6);
-
-    for i in 0..ring_sides {
-        let angle = std::f64::consts::TAU * i as f64 / ring_sides as f64;
-        elements.push(BlueprintElement {
-            material: Material::free_base("Carbon", 1.0),
-            placement: BlueprintPlacement {
-                x: ring_radius * angle.cos(),
-                y: ring_radius * angle.sin(),
-                rotation_radians: angle,
-            },
-        });
+    let mut connections = Vec::with_capacity(12);
+    for (y, row) in grid.iter().enumerate() {
+        for (x, slot) in row.iter().enumerate() {
+            let Some(a) = *slot else { continue };
+            for (nx, ny) in [(x + 1, y), (x, y + 1)] {
+                if let Some(b) = grid
+                    .get(ny)
+                    .and_then(|neighbor_row| neighbor_row.get(nx))
+                    .copied()
+                    .flatten()
+                {
+                    connections.push(BlueprintConnection {
+                        element_a: a,
+                        element_b: b,
+                    });
+                }
+            }
+        }
     }
 
-    // Continue from the first ring element with a physically spaced outward
-    // chain. A tightly wound polar spiral would put successive declared centers
-    // closer than the rigid Carbon geometry allows and encourage greedy growth
-    // to trap itself. These coordinates are preferences; live geometry and bond
-    // transactions still determine the realized poses.
-    let chain_heading = std::f64::consts::FRAC_PI_6;
-    for step in 1..=chain_steps {
-        let distance = carbon_edge_center_spacing * step as f64;
-        elements.push(BlueprintElement {
-            material: Material::free_base("Carbon", 1.0),
-            placement: BlueprintPlacement {
-                x: elements[0].placement.x + distance * chain_heading.cos(),
-                y: elements[0].placement.y + distance * chain_heading.sin(),
-                rotation_radians: 0.0,
-            },
-        });
-    }
-
-    for &i in &[0usize, 1, 3, 4] {
-        let angle = std::f64::consts::TAU * i as f64 / ring_sides as f64;
-        let radius = ring_radius + 3.0;
-        elements.push(BlueprintElement {
-            material: Material::free_base("Sulfur", 1.0),
-            placement: BlueprintPlacement {
-                x: radius * angle.cos(),
-                y: radius * angle.sin(),
-                rotation_radians: angle,
-            },
-        });
-    }
-
-    for &i in &[2usize, 5] {
-        let angle = std::f64::consts::TAU * i as f64 / ring_sides as f64;
-        let radius = ring_radius + 3.0;
-        elements.push(BlueprintElement {
-            material: Material::free_base("Oxygen", 1.0),
-            placement: BlueprintPlacement {
-                x: radius * angle.cos(),
-                y: radius * angle.sin(),
-                rotation_radians: angle,
-            },
-        });
-    }
-
-    let mut connections = Vec::with_capacity(ring_sides + chain_steps + 6);
-    for i in 0..ring_sides {
+    // Side groups meet at the four omitted corners. These diagonal contacts
+    // keep the ring physically connected without adding non-wall constituents.
+    for ((ax, ay), (bx, by)) in [
+        ((1, 0), (0, 1)),
+        ((3, 0), (4, 1)),
+        ((0, 3), (1, 4)),
+        ((4, 3), (3, 4)),
+    ] {
         connections.push(BlueprintConnection {
-            element_a: i,
-            element_b: (i + 1) % ring_sides,
-        });
-    }
-    // The first spiral element is the existing ring anchor (element 0).
-    for step in 1..=chain_steps {
-        connections.push(BlueprintConnection {
-            element_a: if step == 1 { 0 } else { ring_sides + step - 2 },
-            element_b: ring_sides + step - 1,
-        });
-    }
-
-    let sulfur_start = ring_sides + chain_steps;
-    for (offset, &i) in [0usize, 1, 3, 4].iter().enumerate() {
-        connections.push(BlueprintConnection {
-            element_a: i,
-            element_b: sulfur_start + offset,
-        });
-    }
-    let oxygen_start = sulfur_start + 4;
-    for (offset, &i) in [2usize, 5].iter().enumerate() {
-        connections.push(BlueprintConnection {
-            element_a: i,
-            element_b: oxygen_start + offset,
+            element_a: grid[ay][ax].expect("corner-adjacent side piece exists"),
+            element_b: grid[by][bx].expect("corner-adjacent side piece exists"),
         });
     }
 
@@ -161,6 +108,37 @@ pub(crate) fn realize_initial(
     realize_initial_with_reserve(blueprint, catalog, JUVENILE_INITIAL_ENERGY_RESERVE)
 }
 
+fn is_canonical_nitrogen_seed(blueprint: &StructuralBlueprint) -> bool {
+    blueprint.elements.len() == 12
+        && blueprint.connections.len() == 12
+        && blueprint.elements.iter().all(|element| {
+            element.material.parts.len() == 1
+                && element.material.parts[0].0 == "Nitrogen"
+                && element.material.parts[0].1 == 1.0
+        })
+        && blueprint.elements.iter().all(|element| {
+            let x = element.placement.x;
+            let y = element.placement.y;
+            (x.abs() == 2.0 && y.abs() < 2.0) || (y.abs() == 2.0 && x.abs() < 2.0)
+        })
+}
+
+fn construct_calibration_structure(
+    blueprint: &StructuralBlueprint,
+    catalog: &[BaseResource],
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Result<OrganismStructure, String> {
+    if is_canonical_nitrogen_seed(blueprint) {
+        crate::initial_organism_constructor::build_nitrogen_ring_seed(catalog, ledger, energy)
+    } else {
+        crate::construction_runtime::construct_blueprint_bond_driven(
+            blueprint, catalog, ledger, energy,
+        )
+        .map(|(structure, _)| structure)
+    }
+}
+
 pub(crate) fn realize_initial_with_reserve(
     blueprint: &StructuralBlueprint,
     catalog: &[BaseResource],
@@ -175,12 +153,7 @@ pub(crate) fn realize_initial_with_reserve(
 
     let mut trial_ledger = EnergyLedger::default();
     let mut trial_energy = TRIAL_ENERGY;
-    crate::construction_runtime::construct_blueprint_bond_driven(
-        blueprint,
-        catalog,
-        &mut trial_ledger,
-        &mut trial_energy,
-    )?;
+    construct_calibration_structure(blueprint, catalog, &mut trial_ledger, &mut trial_energy)?;
     let required_initial_energy = TRIAL_ENERGY - trial_energy;
     if !required_initial_energy.is_finite() || required_initial_energy < 0.0 {
         return Err("juvenile construction produced an invalid energy requirement".into());
@@ -188,12 +161,8 @@ pub(crate) fn realize_initial_with_reserve(
 
     let mut ledger = EnergyLedger::default();
     let mut energy = required_initial_energy + reserve_energy;
-    let (mut structure, _) = crate::construction_runtime::construct_blueprint_bond_driven(
-        blueprint,
-        catalog,
-        &mut ledger,
-        &mut energy,
-    )?;
+    let mut structure =
+        construct_calibration_structure(blueprint, catalog, &mut ledger, &mut energy)?;
     let remaining_energy = energy;
 
     if !remaining_energy.is_finite() || remaining_energy + EPS < reserve_energy {
@@ -248,102 +217,20 @@ mod seed_geometry_tests {
     use super::*;
 
     #[test]
-    fn confirmed_seed_ring_uses_compatible_hexagonal_edge_spacing() {
+    fn confirmed_seed_is_the_established_twelve_piece_nitrogen_ring() {
         let catalog = crate::resources::default_catalog();
-        let blueprint = confirmed_seed_baseline(&catalog).expect("seed baseline should be valid");
-        let ring_sides = 6usize;
-        let carbon_radius = catalog
-            .iter()
-            .find(|resource| resource.name == "Carbon")
-            .and_then(|resource| match resource.shape.form {
-                crate::resources::Form::RegularPolygon { radius, .. } => Some(radius),
-                _ => None,
-            })
-            .expect("Carbon should be a regular polygon");
-        let expected_spacing = 3.0_f64.sqrt() * carbon_radius;
-
-        let chain_start = ring_sides;
-        for step in 1..=20 {
-            let previous = if step == 1 { 0 } else { chain_start + step - 2 };
-            let current = chain_start + step - 1;
-            let a = blueprint.elements[previous].placement;
-            let b = blueprint.elements[current].placement;
-            let distance = (a.x - b.x).hypot(a.y - b.y);
-            assert!(
-                (distance - expected_spacing).abs() < 1e-9,
-                "outward chain step {step} has center spacing {distance}, expected {expected_spacing}"
-            );
-        }
-
-        // The outward chain may share the anchor at element 0, but every other
-        // ring element must remain clear of every chain element. This guards
-        // against replacing the old tight spiral with a differently crossing path.
-        for chain_index in ring_sides..(ring_sides + 20) {
-            let chain = blueprint.elements[chain_index].placement;
-            for ring_index in 1..ring_sides {
-                let ring = blueprint.elements[ring_index].placement;
-                let distance = (chain.x - ring.x).hypot(chain.y - ring.y);
-                assert!(
-                    distance > expected_spacing * 1.3,
-                    "outward chain element {chain_index} approaches ring element {ring_index}: {distance}"
-                );
-            }
-        }
-
-        for index in 0..ring_sides {
-            let next = (index + 1) % ring_sides;
-            let a = blueprint.elements[index].placement;
-            let b = blueprint.elements[next].placement;
-            let distance = (a.x - b.x).hypot(a.y - b.y);
-            assert!(
-                (distance - expected_spacing).abs() < 1e-9,
-                "ring edge {index}-{next} has center spacing {distance}, expected {expected_spacing}"
-            );
-
-            let rotation_delta =
-                (b.rotation_radians - a.rotation_radians).rem_euclid(std::f64::consts::TAU);
-            assert!(
-                (rotation_delta - std::f64::consts::TAU / ring_sides as f64).abs() < 1e-9,
-                "ring rotations should advance by one sixth-turn"
-            );
-
-            assert!(
-                blueprint.connections.iter().any(|connection| {
-                    (connection.element_a == index && connection.element_b == next)
-                        || (connection.element_a == next && connection.element_b == index)
-                }),
-                "ring edge {index}-{next} must be connected"
-            );
-        }
-    }
-
-    #[test]
-    fn oxygen_attachments_follow_the_six_piece_ring_angles() {
-        let catalog = crate::resources::default_catalog();
-        let blueprint = confirmed_seed_baseline(&catalog).expect("seed baseline should be valid");
-        let ring_sides = 6usize;
-        let oxygen_start = ring_sides + 20 + 4;
-
-        for (offset, ring_index) in [2usize, 5].into_iter().enumerate() {
-            let oxygen = blueprint.elements[oxygen_start + offset].placement;
-            let actual_angle = oxygen.y.atan2(oxygen.x);
-            let expected_angle = std::f64::consts::TAU * ring_index as f64 / ring_sides as f64;
-            let angular_error = (actual_angle - expected_angle)
-                .rem_euclid(std::f64::consts::TAU)
-                .min((expected_angle - actual_angle).rem_euclid(std::f64::consts::TAU));
-            assert!(
-                angular_error < 1e-9,
-                "oxygen attachment at ring index {ring_index} has angle {actual_angle}, expected {expected_angle}"
-            );
-            assert!(
-                blueprint.connections.iter().any(|connection| {
-                    (connection.element_a == ring_index
-                        && connection.element_b == oxygen_start + offset)
-                        || (connection.element_b == ring_index
-                            && connection.element_a == oxygen_start + offset)
-                }),
-                "oxygen attachment must connect to ring element {ring_index}"
-            );
-        }
+        let blueprint = confirmed_seed_baseline(&catalog).expect("nitrogen seed should be valid");
+        assert_eq!(blueprint.elements.len(), 12);
+        assert_eq!(blueprint.connections.len(), 12);
+        assert!(blueprint.elements.iter().all(|element| {
+            element.material.parts.len() == 1
+                && element.material.parts[0].0 == "Nitrogen"
+                && element.material.parts[0].1 == 1.0
+        }));
+        assert!(blueprint.elements.iter().all(|element| {
+            let x = element.placement.x;
+            let y = element.placement.y;
+            (x.abs() == 2.0 && y.abs() < 2.0) || (y.abs() == 2.0 && x.abs() < 2.0)
+        }));
     }
 }

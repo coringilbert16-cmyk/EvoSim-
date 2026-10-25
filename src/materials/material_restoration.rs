@@ -10,6 +10,10 @@ use crate::structure::{Bond, BondEndpoint, OrganismStructure, Placement, Structu
 
 const EPSILON: f64 = 1e-9;
 
+fn is_finite_placement(placement: Placement) -> bool {
+    placement.x.is_finite() && placement.y.is_finite() && placement.rotation_radians.is_finite()
+}
+
 fn transform_relative(origin: Placement, relative: Placement) -> Placement {
     let (sin, cos) = origin.rotation_radians.sin_cos();
     Placement {
@@ -24,6 +28,11 @@ fn transform_relative(origin: Placement, relative: Placement) -> Placement {
 /// The stored constituent arrangement and stored internal bond endpoints are
 /// authoritative. If either is absent, restoration fails rather than deriving
 /// a new physical connection from composition and geometry.
+///
+/// This helper also stages candidate graphs, so it validates the restored
+/// material's own geometry and connections but does not impose a destination-wide
+/// overlap policy. Callers must validate new-versus-existing geometry before
+/// committing a candidate into a nonempty structure.
 pub(crate) fn restore_material(
     structure: &mut OrganismStructure,
     instance: &PhysicalMaterial,
@@ -33,13 +42,27 @@ pub(crate) fn restore_material(
     let relative = instance.placements.as_ref()?;
     let connections = instance.internal_connections.as_ref()?;
     let material = &instance.material;
-    if !material.is_valid() || material.parts.is_empty() || relative.len() != material.parts.len() {
+    if !is_finite_placement(origin)
+        || relative
+            .iter()
+            .any(|placement| !is_finite_placement(*placement))
+        || !material.is_valid_for_catalog(catalog)
+        || material.parts.is_empty()
+        || relative.len() != material.parts.len()
+    {
         return None;
     }
     if connections.len() != material.internal_bonds.len()
         || connections.iter().any(|connection| {
             connection.part_a >= material.parts.len() || connection.part_b >= material.parts.len()
         })
+        || connections
+            .iter()
+            .zip(&material.internal_bonds)
+            .any(|(connection, bond)| {
+                !((connection.part_a == bond.part_a && connection.part_b == bond.part_b)
+                    || (connection.part_a == bond.part_b && connection.part_b == bond.part_a))
+            })
     {
         return None;
     }
@@ -49,13 +72,23 @@ pub(crate) fn restore_material(
     for (part_index, ((name, amount), placement)) in
         material.parts.iter().zip(relative.iter()).enumerate()
     {
-        if amount.fract().abs() > EPSILON || (*amount - 1.0).abs() > EPSILON {
+        let resource = catalog.iter().find(|resource| resource.name == *name)?;
+        if (*amount).fract().abs() > EPSILON
+            || *amount < 1.0
+            || ((*amount - 1.0).abs() > EPSILON
+                && (material.parts.len() != 1
+                    || material.has_internal_structure()
+                    || resource.physical_state != crate::resources::PhysicalState::Fluid))
+        {
             return None;
         }
-        let resource = catalog.iter().find(|resource| resource.name == *name)?;
+        let transformed = transform_relative(origin, *placement);
+        if !is_finite_placement(transformed) {
+            return None;
+        }
         let mut unit = StructuralUnit::from_material(
             crate::resources::Material::free_base(name.clone(), *amount),
-            transform_relative(origin, *placement),
+            transformed,
         )?;
         if !unit.realize_default_geometry(catalog) {
             return None;

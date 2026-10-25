@@ -18,6 +18,9 @@ pub(crate) struct WorldToneOccluderSnapshot {
     /// Frame-wide exposure cache; organism indices below map into this frame.
     pub(crate) frame: WorldToneCaptureFrame,
     pub(crate) organism_body_indices: Vec<Option<usize>>,
+    /// Attached primary/developing structure belongs to the owner's resonance.
+    /// Stored, environmental, and legacy nonliving material has no owner.
+    body_resonance_owners: Vec<Option<usize>>,
     /// Material properties keyed by the constituent indices used by geometry.
     pub(crate) body_properties: Vec<Vec<(usize, ResourceProperties)>>,
     /// Number of bodies retained by the conservative receiver-angle broad phase.
@@ -60,6 +63,7 @@ impl WorldToneOccluderSnapshot {
         let mut bodies = Vec::new();
         let mut body_properties = Vec::new();
         let mut organism_body_indices = vec![None; simulation.organisms.len()];
+        let mut body_resonance_owners = Vec::<Option<usize>>::new();
 
         // Every organism remains a physical occluder regardless of whether its
         // genome is still intact. Structure placements are already world-space.
@@ -71,16 +75,21 @@ impl WorldToneOccluderSnapshot {
             organism_body_indices[organism_index] = Some(bodies.len());
             body_properties.push(structure_material_properties(&organism.structure, catalog)?);
             bodies.push(body);
+            body_resonance_owners.push(Some(organism_index));
         }
 
         // A developing offspring is a separate physical structure even
         // before it is admitted to simulation.organisms. Its committed storage
         // remains physical too and is anchored to the offspring's own origin.
-        for organism in &simulation.organisms {
+        for (organism_index, organism) in simulation.organisms.iter().enumerate() {
             let Some(construction) = &organism.reproductive_construction else {
                 continue;
             };
-            if !construction.developing_structure.units.is_empty() {
+            let any_member_owned_by_parent = construction.has_any_member_in(&organism.structure);
+            if !construction.developing_structure.units.is_empty()
+                && !construction.is_aggregate_owned_by(&organism.structure)
+                && !any_member_owned_by_parent
+            {
                 body_properties.push(structure_material_properties(
                     &construction.developing_structure,
                     catalog,
@@ -88,6 +97,7 @@ impl WorldToneOccluderSnapshot {
                 bodies.push(OrganismBodyGeometry::from_all_realized_units(
                     &construction.developing_structure,
                 )?);
+                body_resonance_owners.push(Some(organism_index));
             }
             if !construction.committed_material.entries.is_empty() {
                 let anchor = Placement {
@@ -101,6 +111,7 @@ impl WorldToneOccluderSnapshot {
                     bodies.push(body_from_owner_relative_material(
                         physical, anchor, catalog,
                     )?);
+                    body_resonance_owners.push(None);
                 }
             }
         }
@@ -116,6 +127,7 @@ impl WorldToneOccluderSnapshot {
                 bodies.push(OrganismBodyGeometry::from_physical_material(
                     physical, catalog,
                 )?);
+                body_resonance_owners.push(None);
             }
         }
 
@@ -132,6 +144,7 @@ impl WorldToneOccluderSnapshot {
             bodies.push(OrganismBodyGeometry::from_all_realized_units(
                 &decomposing.structure,
             )?);
+            body_resonance_owners.push(None);
         }
 
         // Stored objects are physically present at owner-relative positions.
@@ -146,6 +159,7 @@ impl WorldToneOccluderSnapshot {
                 bodies.push(body_from_owner_relative_material(
                     physical, anchor, catalog,
                 )?);
+                body_resonance_owners.push(None);
             }
         }
 
@@ -178,6 +192,7 @@ impl WorldToneOccluderSnapshot {
                     owner_anchor(owner)?,
                     catalog,
                 )?);
+                body_resonance_owners.push(None);
             }
             if let Some((cell_index, physical)) = &transformation.combine_environmental_source {
                 let _ = simulation.environment.field.cells.get(*cell_index)?;
@@ -185,6 +200,7 @@ impl WorldToneOccluderSnapshot {
                 bodies.push(OrganismBodyGeometry::from_physical_material(
                     physical, catalog,
                 )?);
+                body_resonance_owners.push(None);
             }
         }
 
@@ -207,6 +223,9 @@ impl WorldToneOccluderSnapshot {
             .into_iter()
             .map(|index| index.and_then(|original| remapped_indices[original]))
             .collect();
+        if body_resonance_owners.len() != relevant_bodies.len() {
+            return None;
+        }
         let receiver_body_indices: Vec<_> = (0..relevant_bodies.len()).collect();
         if receiver_body_indices.is_empty() {
             return None;
@@ -220,6 +239,7 @@ impl WorldToneOccluderSnapshot {
         Some(Self {
             frame,
             organism_body_indices,
+            body_resonance_owners,
             body_properties: relevant_properties,
             occluder_count,
         })
@@ -289,14 +309,21 @@ impl WorldToneOccluderSnapshot {
                 }
             }
         }
-        for (organism_index, organism) in simulation.organisms.iter().enumerate() {
+        let body_to_organism = &snapshot.body_resonance_owners;
+        if body_to_organism.len() != snapshot.body_properties.len() {
+            return;
+        }
+        for (body_index, owner) in body_to_organism.iter().enumerate() {
+            let Some(organism_index) = *owner else {
+                continue;
+            };
+            let Some(organism) = simulation.organisms.get(organism_index) else {
+                return;
+            };
             if !living_ids.contains(&organism.id) {
                 continue;
             }
-            let Some(body_index) = snapshot.body_index_for_organism(organism_index) else {
-                continue;
-            };
-            for unit_index in 0..organism.structure.units.len() {
+            for &(unit_index, _) in &snapshot.body_properties[body_index] {
                 let Some(expected) = snapshot
                     .frame
                     .projected_width_for_unit(body_index, unit_index)
@@ -316,17 +343,6 @@ impl WorldToneOccluderSnapshot {
             }
         }
 
-        let mut body_to_organism = vec![None; snapshot.body_properties.len()];
-        for (organism_index, body_index) in snapshot.organism_body_indices.iter().enumerate() {
-            if let Some(body_index) = body_index {
-                if let Some(slot) = body_to_organism.get_mut(*body_index) {
-                    *slot = Some(organism_index);
-                } else {
-                    return;
-                }
-            }
-        }
-
         // Work against staged reservoirs. Any invalid geometry, spectrum, or
         // ledger allocation aborts this entire source frame without partial credit.
         let mut staged_reservoirs: Vec<_> = simulation
@@ -334,6 +350,13 @@ impl WorldToneOccluderSnapshot {
             .iter()
             .map(|organism| organism.resonant_energy.clone())
             .collect();
+        let initial_resonant_energy = staged_reservoirs
+            .iter()
+            .map(|reservoir| reservoir.total_energy().unwrap_or(f64::NAN))
+            .sum::<f64>();
+        if !initial_resonant_energy.is_finite() || initial_resonant_energy < 0.0 {
+            return;
+        }
         let catalog = &simulation.environment.catalog;
         let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
         let mut total_incident = 0.0;
@@ -389,6 +412,10 @@ impl WorldToneOccluderSnapshot {
                 if response_energy > incoming_energy + 1e-9 {
                     return;
                 }
+                // The material response is energy-limited. Clamp only the tiny
+                // numerical overshoot already accepted above; never let it
+                // become a source of additional captured or dissipated energy.
+                let response_energy = response_energy.min(incoming_energy);
                 let damping = crate::harmonics::damping_ratio(properties, baselines);
                 if !damping.is_finite() || damping < 0.0 {
                     return;
@@ -445,13 +472,15 @@ impl WorldToneOccluderSnapshot {
                         .map(|(after, before)| after - before);
                     if deposit_ok
                         && stored_delta.is_some_and(|stored| {
-                            stored.is_finite()
-                                && (stored - retained_budget).abs()
-                                    <= 1e-9 * retained_budget.max(1.0)
+                            stored.is_finite() && stored >= 0.0 && stored <= response_energy
                         })
                     {
                         staged_reservoirs[organism_index] = candidate;
-                        captured = retained_budget;
+                        // Count the energy actually retained by the reservoir.
+                        // Any tiny difference from the requested retention
+                        // budget becomes heat instead of unbacked stored energy.
+                        captured = stored_delta.unwrap_or(0.0);
+                        interaction_heat = response_energy - captured;
                     } else {
                         // A bounded reservoir must not silently discard a
                         // spectral component; rejected response energy is heat.
@@ -463,13 +492,21 @@ impl WorldToneOccluderSnapshot {
                 // exactly once, whether it is retained biologically or becomes
                 // heat at a nonliving/dead physical receiver.
                 let outgoing_budget = incoming_energy - response_energy;
-                let Some(outgoing) = crate::harmonics::transform_signal_to_energy_budget(
+                let outgoing = match crate::harmonics::transform_signal_to_energy_budget(
                     properties,
                     baselines,
                     &signal,
                     outgoing_budget.max(0.0),
-                ) else {
-                    return;
+                ) {
+                    Some(outgoing) => outgoing,
+                    // A numerically tiny remainder can be too small to form a
+                    // representable transformed spectrum. Keep the frame
+                    // transactional: account that bounded remainder as escaped
+                    // energy below instead of discarding all staged captures.
+                    None if outgoing_budget <= 1e-8 * incident_energy.max(1.0) => {
+                        crate::harmonics::ToneSpectrum::empty()
+                    }
+                    None => return,
                 };
                 path_captured += captured;
                 path_heat += interaction_heat;
@@ -479,16 +516,36 @@ impl WorldToneOccluderSnapshot {
                 signal = outgoing;
             }
 
-            let escaped = spectrum_energy(&signal);
-            let Some(escaped) = escaped else {
+            let escaped_spectrum_energy = spectrum_energy(&signal);
+            let Some(escaped_spectrum_energy) = escaped_spectrum_energy else {
                 return;
             };
-            let allocated = path_captured + path_heat + escaped;
-            if !allocated.is_finite()
-                || (incident_energy - allocated).abs() > 1e-8 * incident_energy.max(1.0)
+            let mut escaped_budget = incident_energy - path_captured - path_heat;
+            if escaped_budget < 0.0 {
+                // Full absorption can overshoot the source by one or two ulps
+                // when captured and heat allocations are summed independently.
+                // Correct only a bounded negative rounding remainder by taking
+                // it back from heat; never credit excess capture or invent an
+                // outgoing signal to make the transaction balance.
+                let overrun = -escaped_budget;
+                let tolerance = 1e-8 * incident_energy.max(1.0);
+                if overrun <= tolerance && path_heat >= overrun {
+                    path_heat -= overrun;
+                    escaped_budget = 0.0;
+                } else {
+                    return;
+                }
+            }
+            if !escaped_budget.is_finite()
+                || (escaped_budget - escaped_spectrum_energy).abs()
+                    > 1e-8 * incident_energy.max(1.0)
             {
                 return;
             }
+            // Treat the tiny floating-point discrepancy between the transformed
+            // spectrum and the accounted remainder as escaped energy. This
+            // keeps allocation conservative without crediting more than arrived.
+            let escaped = escaped_budget;
             total_incident += incident_energy;
             total_captured += path_captured;
             total_heat += path_heat;
@@ -501,6 +558,62 @@ impl WorldToneOccluderSnapshot {
             }
         }
 
+        // Per-path reservoir deltas are computed incrementally. Their sum
+        // can differ by a few ulps from the actual final reservoir inventory
+        // after many deposits into the same spectrum. The final staged holder
+        // delta is authoritative: reconcile capture against it and debit the
+        // same rounding difference from heat instead of letting the ledger
+        // disagree with the energy that is physically stored.
+        let staged_resonant_energy = staged_reservoirs
+            .iter()
+            .map(|reservoir| reservoir.total_energy().unwrap_or(f64::NAN))
+            .sum::<f64>();
+        let authoritative_capture = staged_resonant_energy - initial_resonant_energy;
+        let capture_correction = authoritative_capture - total_captured;
+        let capture_tolerance = 1e-8 * total_incident.max(1.0);
+        if !staged_resonant_energy.is_finite()
+            || staged_resonant_energy < 0.0
+            || !authoritative_capture.is_finite()
+            || authoritative_capture < 0.0
+            || !capture_correction.is_finite()
+            || capture_correction.abs() > capture_tolerance
+        {
+            return;
+        }
+        if capture_correction > 0.0 {
+            if total_heat < capture_correction {
+                return;
+            }
+            total_heat -= capture_correction;
+        } else {
+            total_heat += -capture_correction;
+        }
+        total_captured = authoritative_capture;
+
+        // Reconcile the aggregate totals from one shared residual after
+        // summing paths. Summing independently rounded per-path remainders can
+        // otherwise make the world total exceed its source by a few ulps.
+        let mut aggregate_escaped = total_incident - (total_captured + total_heat);
+        if aggregate_escaped < 0.0 {
+            // Summing path totals can introduce another ulp-scale overrun even
+            // after each path has been reconciled. Debit only that bounded
+            // rounding amount from heat; never let aggregate allocation exceed
+            // the source or convert a negative residual into captured energy.
+            let overrun = -aggregate_escaped;
+            let tolerance = 1e-8 * total_incident.max(1.0);
+            if overrun <= tolerance && total_heat >= overrun {
+                total_heat -= overrun;
+                aggregate_escaped = 0.0;
+            } else {
+                return;
+            }
+        }
+        if !aggregate_escaped.is_finite()
+            || (aggregate_escaped - total_escaped).abs() > 1e-8 * total_incident.max(1.0)
+        {
+            return;
+        }
+        total_escaped = aggregate_escaped;
         if !simulation.energy_ledger.settle_world_tone_paths(
             total_incident,
             total_captured,
@@ -912,12 +1025,17 @@ mod tests {
         simulation.organisms[0].reproductive_construction =
             Some(crate::state::ReproductiveConstruction {
                 committed_material,
+                // This fixture represents the pre-admission child as a
+                // distinct physical body; its local constituent IDs are not
+                // proof that those members are already owned by the parent.
+                developing_member_ids: Vec::new(),
                 developing_structure,
                 child_genome: simulation.organisms[0].genome.clone(),
                 developmental_origin: Position { x: 20.0, y: 0.0 },
                 developmental_orientation_radians: 0.0,
                 developing_stress: 0.0,
                 anchor_unit_index: 0,
+                anchor_physical_id: None,
                 developing_energy: 0.0,
                 developing_maintenance_debt: 0.0,
                 needs_space: false,
@@ -927,6 +1045,135 @@ mod tests {
             .expect("developing physical material must be represented");
         assert_eq!(snapshot.occluder_count, 3);
         assert_eq!(snapshot.body_index_for_organism(0), Some(0));
+        assert_eq!(
+            snapshot.body_resonance_owners,
+            vec![Some(0), Some(0), None],
+            "the attached developing structure belongs to the parent resonance; committed storage remains a separate nonliving receiver"
+        );
+    }
+
+    #[test]
+    fn nonliving_surface_receives_world_tone_energy_as_heat_without_living_receivers() {
+        let mut simulation = Simulation::new(77, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        replace_with_nitrogen_square(&mut simulation.organisms[0], 5.0, 0.0, &catalog);
+
+        let external_before = simulation.energy_ledger.total_external_energy_input;
+        let heat_before = simulation.energy_ledger.total_heat_dissipated;
+        let escaped_before = simulation.energy_ledger.total_world_tone_energy_escaped;
+        let resonant_before =
+            crate::reproduction::total_resonant_energy_held(&simulation.organisms);
+
+        WorldToneOccluderSnapshot::settle_living_organism_inputs(
+            &mut simulation,
+            sample(),
+            &std::collections::HashSet::new(),
+        );
+
+        let external_delta = simulation.energy_ledger.total_external_energy_input - external_before;
+        let heat_delta = simulation.energy_ledger.total_heat_dissipated - heat_before;
+        let escaped_delta =
+            simulation.energy_ledger.total_world_tone_energy_escaped - escaped_before;
+        let resonant_delta = crate::reproduction::total_resonant_energy_held(&simulation.organisms)
+            - resonant_before;
+
+        assert!(
+            external_delta > 0.0,
+            "nonliving physical surfaces still intercept the external world-tone source"
+        );
+        assert!(
+            heat_delta > 0.0,
+            "nonliving material response must be accounted as heat"
+        );
+        assert!(resonant_delta.abs() <= 1e-9);
+        assert!(
+            (external_delta - heat_delta - escaped_delta).abs() <= 1e-7,
+            "the nonliving-only world-tone frame must balance into heat and escaped signal"
+        );
+    }
+
+    #[test]
+    fn attached_developing_structure_can_retain_world_tone_for_its_owner() {
+        let mut simulation = Simulation::new(74, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        simulation.decomposing_bodies.clear();
+        simulation.active_transformations.clear();
+        let catalog = simulation.environment.catalog.clone();
+
+        // Isolate the attached physical construction as the only body. The
+        // living receiver set is explicit here so this test isolates ownership
+        // routing rather than genome viability.
+        replace_with_nitrogen_square(&mut simulation.organisms[0], 5.0, 0.0, &catalog);
+        let developing_structure = std::mem::replace(
+            &mut simulation.organisms[0].structure,
+            OrganismStructure::new(),
+        );
+        let owner_id = simulation.organisms[0].id.clone();
+        simulation.organisms[0].reproductive_construction =
+            Some(crate::state::ReproductiveConstruction {
+                committed_material: crate::material_storage::MaterialStorage::default(),
+                developing_member_ids: developing_structure.physical_constituent_ids(),
+                developing_structure,
+                child_genome: simulation.organisms[0].genome.clone(),
+                developmental_origin: Position { x: 5.0, y: 0.0 },
+                developmental_orientation_radians: 0.0,
+                developing_stress: 0.0,
+                anchor_unit_index: 0,
+                anchor_physical_id: None,
+                developing_energy: 0.0,
+                developing_maintenance_debt: 0.0,
+                needs_space: false,
+            });
+
+        let structural = Simulation::structural_energy_held(
+            &simulation.organisms,
+            &simulation.decomposing_bodies,
+        );
+        let resonant = crate::reproduction::total_resonant_energy_held(&simulation.organisms);
+        simulation.energy_ledger.initial_structural_energy_held = structural;
+        simulation.energy_ledger.total_structural_energy_held = structural;
+        simulation.energy_ledger.initial_resonant_energy_held = resonant;
+        simulation.energy_ledger.total_resonant_energy_held = resonant;
+        simulation.energy_ledger.total_usable_energy_held =
+            crate::reproduction::total_usable_energy_held(
+                &simulation.organisms,
+                &simulation.decomposing_bodies,
+            );
+
+        let external_before = simulation.energy_ledger.total_external_energy_input;
+        let heat_before = simulation.energy_ledger.total_heat_dissipated;
+        let escaped_before = simulation.energy_ledger.total_world_tone_energy_escaped;
+        WorldToneOccluderSnapshot::settle_living_organism_inputs(
+            &mut simulation,
+            sample(),
+            &std::collections::HashSet::from([owner_id]),
+        );
+
+        let retained = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .expect("owner resonance reservoir remains valid");
+        assert!(
+            retained > 0.0,
+            "attached developing material must credit its living owner's resonance reservoir"
+        );
+        let settled =
+            crate::reproduction::total_resonant_energy_held(&simulation.organisms) - resonant;
+        let ledger_resonant_delta = simulation.energy_ledger.total_resonant_energy_held - resonant;
+        assert!(
+            (ledger_resonant_delta - settled).abs() <= 1e-7,
+            "world-tone ledger must track the resonance actually retained by the owner"
+        );
+        assert!(
+            ((simulation.energy_ledger.total_external_energy_input - external_before)
+                - ledger_resonant_delta
+                - (simulation.energy_ledger.total_heat_dissipated - heat_before)
+                - (simulation.energy_ledger.total_world_tone_energy_escaped - escaped_before))
+                .abs()
+                <= 1e-7,
+            "attached-structure resonance must remain within the source/sink budget"
+        );
     }
 
     #[test]
@@ -969,6 +1216,8 @@ mod tests {
                 bond: None,
                 stored_material: Some(stored),
                 stored_bond: None,
+                stored_source_index: None,
+                environmental_source_location: None,
                 environmental_source: false,
                 complexity: 1.0,
                 duration_ticks: 1,
@@ -981,7 +1230,10 @@ mod tests {
                 prepared_usable_energy: None,
                 prepared_stress: None,
                 prepared_ledger: None,
+                prepared_ledger_before: None,
+                prepared_usable_energy_before: None,
                 combine_environmental_source: None,
+                combine_environmental_source_index: None,
             });
 
         let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
@@ -1068,6 +1320,30 @@ mod tests {
             .field
             .deposit_physical(8.0, 0.0, downstream));
 
+        // Rebase the independent inventory oracle on the deliberately
+        // reshaped fixture so the following residual measures only world-tone
+        // source and sink flows, not test setup edits.
+        simulation.energy_ledger.initial_usable_energy_held =
+            crate::reproduction::total_usable_energy_held(
+                &simulation.organisms,
+                &simulation.decomposing_bodies,
+            );
+        simulation.energy_ledger.initial_resonant_energy_held =
+            crate::reproduction::total_resonant_energy_held(&simulation.organisms);
+        simulation.energy_ledger.initial_structural_energy_held =
+            Simulation::structural_energy_held(
+                &simulation.organisms,
+                &simulation.decomposing_bodies,
+            );
+        // Simulation::new may have accumulated setup-time flows. The oracle
+        // below is intentionally scoped to this reshaped fixture, so rebase
+        // every cumulative flow alongside the three held-energy baselines.
+        simulation.energy_ledger.total_external_energy_input = 0.0;
+        simulation.energy_ledger.total_potential_energy_released = 0.0;
+        simulation.energy_ledger.total_work_expended = 0.0;
+        simulation.energy_ledger.total_heat_dissipated = 0.0;
+        simulation.energy_ledger.total_world_tone_energy_escaped = 0.0;
+
         let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
             .expect("both physical receivers should be represented");
         assert!(
@@ -1078,6 +1354,15 @@ mod tests {
             }),
             "at least one source lane must hit the living receiver before the environmental receiver"
         );
+
+        let before_retained: f64 = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.resonant_energy.total_energy().unwrap())
+            .sum();
+        let before_external = simulation.energy_ledger.total_external_energy_input;
+        let before_heat = simulation.energy_ledger.total_heat_dissipated;
+        let before_escaped = simulation.energy_ledger.total_world_tone_energy_escaped;
 
         WorldToneOccluderSnapshot::settle_living_organism_inputs(
             &mut simulation,
@@ -1095,18 +1380,77 @@ mod tests {
             retained > 0.0,
             "the living receiver should retain compatible response energy"
         );
-        assert!(ledger.total_external_energy_input > 0.0);
+        let incident_input = ledger.total_external_energy_input - before_external;
+        let heat_dissipated = ledger.total_heat_dissipated - before_heat;
+        let escaped = ledger.total_world_tone_energy_escaped - before_escaped;
+        let retained_delta = retained - before_retained;
+        assert!(incident_input > 0.0);
         assert!(
-            ledger.total_heat_dissipated > 0.0,
+            heat_dissipated > 0.0,
             "damped living response and the nonliving receiver must settle as heat"
         );
-        let allocated =
-            retained + ledger.total_heat_dissipated + ledger.total_world_tone_energy_escaped;
+        let allocated = retained_delta + heat_dissipated + escaped;
         assert!(
-            (ledger.total_external_energy_input - allocated).abs()
-                <= 1e-7 * ledger.total_external_energy_input.max(1.0),
-            "the incident source energy must be allocated once across retained resonance, heat, and escape"
+            (incident_input - allocated).abs()
+                <= 1e-7 * incident_input.max(1.0),
+            "the newly incident source energy must be allocated once across retained resonance, heat, and escape"
         );
+        let inventory = simulation.energy_inventory_snapshot();
+        assert!(
+            inventory.is_balanced(1e-7),
+            "world-tone source and sink flows must reconcile with the full world inventory: residual={:?}",
+            inventory.residual()
+        );
+    }
+
+    #[test]
+    fn rejected_world_tone_ledger_settlement_does_not_commit_staged_resonance() {
+        let mut simulation = Simulation::new(89, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        for organism in &mut simulation.organisms {
+            organism.structure = OrganismStructure::new();
+            organism.stored_material.entries.clear();
+            organism.reproductive_construction = None;
+        }
+        simulation.decomposing_bodies.clear();
+        simulation.active_transformations.clear();
+
+        let catalog = simulation.environment.catalog.clone();
+        replace_with_nitrogen_square(&mut simulation.organisms[0], 5.0, 0.0, &catalog);
+        let living_id = simulation.organisms[0].id.clone();
+        let before_retained: Vec<f64> = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.resonant_energy.total_energy().unwrap())
+            .collect();
+        let before_external = simulation.energy_ledger.total_external_energy_input;
+        let before_escaped = simulation.energy_ledger.total_world_tone_energy_escaped;
+        simulation.energy_ledger.total_heat_dissipated = f64::NAN;
+
+        WorldToneOccluderSnapshot::settle_living_organism_inputs(
+            &mut simulation,
+            sample(),
+            &std::collections::HashSet::from([living_id]),
+        );
+
+        let after_retained: Vec<f64> = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.resonant_energy.total_energy().unwrap())
+            .collect();
+        assert_eq!(
+            after_retained, before_retained,
+            "staged resonance must not commit if cumulative heat settlement overflows"
+        );
+        assert_eq!(
+            simulation.energy_ledger.total_external_energy_input,
+            before_external
+        );
+        assert_eq!(
+            simulation.energy_ledger.total_world_tone_energy_escaped,
+            before_escaped
+        );
+        assert!(simulation.energy_ledger.total_heat_dissipated.is_nan());
     }
 
     #[test]

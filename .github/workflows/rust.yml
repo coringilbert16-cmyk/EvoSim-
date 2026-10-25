@@ -21,22 +21,71 @@ jobs:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - name: Check formatting
+        timeout-minutes: 5
         run: cargo fmt --all -- --check
       - name: Check source file sizes
+        timeout-minutes: 5
         run: bash scripts/check_large_files.sh
       - name: Check COMBINE architecture
+        timeout-minutes: 5
         run: bash scripts/check_combine_architecture.sh
+      - name: Verify exhausted-ID environmental BREAK guard
+        timeout-minutes: 5
+        run: cargo test --locked environmental_break_rejects_exhausted_transformation_ids_without_removing_source
+      - name: Verify expulsion destination rollback
+        timeout-minutes: 5
+        run: cargo test --locked rejected_destination_restores_expulsion_source_and_neighbor_order
+      # Keep physical-graph ID remapping and rollback visible apart from the
+      # known slow full-suite gate.
+      # Keep chemistry accounting validation ahead of unrelated geometry gates.
+      - name: Run focused chemistry accumulation and settlement tests
+        timeout-minutes: 5
+        run: |
+          cargo test --locked unobserved_reaction_progress_dissipates_once_per_tick
+          cargo test --locked failed_chemical_settlement_preserves_triggered_reaction_progress
+          cargo test --locked successful_chemical_break_does_not_spend_resonance_when_reaction_covers_barrier
+          cargo test --locked successful_chemical_break_spends_only_resonance_needed_for_reaction_shortfall
+          cargo test --locked chemical_break_reconciles_world_energy_inventory
+          cargo test --locked chemical_break_with_resonance_shortfall_reconciles_world_inventory
+          cargo test --locked resonance_overload_break_reconciles_world_inventory
+          cargo test --locked resonance_math_fails_closed_for_invalid_material_properties
+          cargo test --locked surface_response_uses_existing_material_resonance_for_energy_split
+          cargo test --locked transformed_secondary_signal_never_exceeds_budget_after_rounding
+          cargo test --locked live_world_tone_capture_settles_and_reconciles_world_energy
+          cargo test --locked world_energy_inventory_reconciles_world_tone_and_structural_break_together
+          cargo test --locked zero_incident_world_tone_cannot_create_energy_within_tolerance
+      - name: Run focused physical graph merge tests
+        timeout-minutes: 5
+        run: |
+          cargo test --locked append_graph_
+          cargo test --locked subgraph_
+          cargo test --locked replacing_subgraph_
+          cargo test --locked division_partition_
+      # Persisted owner-relative geometry is part of physical-material validity.
+      - name: Verify finite stored-material owner anchors
+        timeout-minutes: 5
+        run: cargo test --locked realized_state_rejects_non_finite_owner_relative_origin
+      - name: Verify owner-anchor storage preflight
+        timeout-minutes: 5
+        run: cargo test --locked owner_anchor_storage_rejects_non_finite_anchor_without_mutating_inventory
+      - name: Run focused core-specific viability test
+        timeout-minutes: 5
+        run: cargo test --locked core_specific_viability_
       # Run the persistence-specific tests independently so their result is visible
       # even while the repository's known unrelated baseline tests are failing.
       - name: Run Bob compact-storage tests
+        timeout-minutes: 5
         run: cargo test --locked compact_family_storage_tests
       - name: Verify empty Bob library open and reopen without generation
+        timeout-minutes: 5
         run: cargo test --locked fresh_empty_library_opens_and_reopens_without_seeding_geometry
       - name: Verify concurrent Bob library initialization
+        timeout-minutes: 5
         run: cargo test --locked concurrent_default_store_initialization_does_not_race_on_temp_files
       # Keep the fluid transaction and three-piece generation gate visible apart
       # from the known constructor-dependent full-suite backlog.
       - name: Run focused Bob fluid transaction and three-piece cap tests
+        timeout-minutes: 5
         run: |
           cargo test --locked multi_contact_fluid_forms_multiple_bonds_to_one_rigid_edge
           cargo test --locked multi_contact_fluid_commits_all_three_rigid_bonds_together
@@ -47,6 +96,7 @@ jobs:
       # Exercise the fluid coalescence lifecycle independently of the broad
       # constructor/lifecycle failures in the full repository suite.
       - name: Run focused fluid coalescence and restoration tests
+        timeout-minutes: 5
         run: |
           cargo test --locked live_combine_coalesces_fluid_pair_atomically
           cargo test --locked coalesced_fluid_boundary_survives_physical_material_roundtrip_and_restore
@@ -60,12 +110,110 @@ jobs:
           cargo test --locked unsupported_fluid_union_rolls_back_structure_and_bond
       # Keep the chemistry BREAK energy gate visible independently of the
       # repository's known unrelated baseline failures.
+      - name: Verify chemistry cache position-key invalidation
+        timeout-minutes: 5
+        run: |
+          cargo test --locked live_geometry_key_distinguishes_chemical_positions_and_canonicalizes_them
+          cargo test --locked nonempty_cache_reopens_with_matching_derived_fingerprint
+          cargo test --locked checked_in_manifest_fingerprint_matches_default_catalog
+          cargo test --locked changed_catalog_chemical_position_changes_fingerprint_and_rejects_old_manifest
+      - name: Verify invalid chemical positions cannot poison cache identities
+        timeout-minutes: 5
+        run: cargo test --locked rejects_unrepresentable_chemical_position_keys
+      - name: Verify pre-position chemistry cache schema rejection
+        timeout-minutes: 5
+        run: cargo test --locked rejects_schema_four_store_after_chemical_position_key_migration
       - name: Run focused chemical BREAK tests
+        timeout-minutes: 5
         run: cargo test --locked chemical_break_
-      # Expensive headless multigeneration validation is paused while the seed
-      # topology is being finalized. Keep the normal Rust/Clippy gates active.
+      # Cache writes must preserve both disk bytes and refreshed in-memory state on failure.
+      - name: Run focused chemistry cache persistence rollback tests
+        timeout-minutes: 5
+        run: |
+          cargo test --locked insert_partial_append_failure_rolls_back_original_cache_bytes_and_reopens_cleanly
+          cargo test --locked cache_append_rollback_failure_reports_both_errors_and_preserves_recovery_evidence
+          cargo test --locked manifest_failure_rolls_back_appended_record_and_reopens_cleanly
+          cargo test --locked failed_insert_keeps_stale_instance_refreshed_to_committed_store
+      # Rollback gates for stored and environmental BREAK must be visible
+      # independently of the slow full suite and its known baseline failures.
+      - name: Run focused stored BREAK rollback tests
+        timeout-minutes: 5
+        run: cargo test --locked failed_stored_break
+      # Movement geometry and energy settlement commit from one preflight snapshot.
+      - name: Run focused movement settlement transaction test
+        timeout-minutes: 5
+        run: cargo test --locked successful_movement_commits_preflight_energy_and_ledger_after_geometry
+      # In-flight transformations must isolate stored-material snapshots from
+      # automatic contained-material acquisition.
+      - name: Run focused active-transformation acquisition isolation test
+        timeout-minutes: 5
+        run: cargo test --locked contained_physical_material_becomes_storage_without_an_acquire_action
+      # Reproduction must not mutate a storage holder reserved by a multi-tick transaction.
+      - name: Run focused active-transformation reproduction isolation test
+        timeout-minutes: 5
+        run: cargo test --locked reproduction_cannot_mutate_storage_while_transformation_is_active
+      - name: Run focused active-transformation action isolation test
+        timeout-minutes: 5
+        run: cargo test --locked active_transformation_suppresses_new_movement_and_material_actions
+      # Keep post-death holder conservation visible independently of the full suite.
+      - name: Run focused post-death holder inventory tests
+        timeout-minutes: 5
+        run: |
+          cargo test --locked breached_organism_material_and_energy_holders_reconcile_over_live_ticks
+          cargo test --locked breached_organism_retains_storage_and_construction_without_biological_progress
+      # Finished-body release must commit energy and material ownership together.
+      - name: Verify nonliving world-tone energy settlement
+        timeout-minutes: 5
+        run: cargo test --locked nonliving_surface_receives_world_tone_energy_as_heat_without_living_receivers
+      - name: Verify non-creating world inventory oracle
+        timeout-minutes: 5
+        run: cargo test --locked strict_world_inventory_oracle_rejects_even_sub_tolerance_energy_creation
+      - name: Verify source-budget conservation
+        timeout-minutes: 5
+        run: |
+          cargo test --locked source_budget_rejects_claim_above_remaining_budget_atomically
+          cargo test --locked source_budget_rejects_sub_tolerance_overspend_atomically
+          cargo test --locked zero_external_input_cannot_credit_holder_within_balance_tolerance
+          cargo test --locked external_input_cannot_overdraw_local_source_allowance_within_tolerance
+          cargo test --locked external_input_rejects_negative_holder_even_within_tolerance
+          cargo test --locked energy_transaction_cannot_create_energy_within_balance_tolerance
+          cargo test --locked energy_transaction_rejects_negative_holder_even_within_tolerance
+          cargo test --locked transfer_rejects_sub_tolerance_overdraw_without_creating_energy
+          cargo test --locked transfer_conserves_holder_sum
+          cargo test --locked world_tone_cannot_allocate_more_than_incident_energy_within_tolerance
+          cargo test --locked zero_incident_world_tone_cannot_create_energy_within_tolerance
+      - name: Run focused decomposition finalization rollback test
+        timeout-minutes: 5
+        run: cargo test --locked invalid_finished_body_position_preserves_released_material_ownership
+      # Snapshot rollback for prepared COMBINE must be visible before the full suite.
+      - name: Run focused COMBINE settlement rollback tests
+        timeout-minutes: 5
+        run: cargo test --locked failed_prepared_combine_
+      # Transaction rollback tests must report independently of the slow full suite.
+      - name: Run focused material-transfer rollback tests
+        timeout-minutes: 5
+        run: |
+          cargo test --locked failed_stored_break
+          cargo test --locked failed_environmental_break
+      # Late restoration rejection must not partially mutate the destination graph.
+      - name: Run focused late material-restoration rollback test
+        timeout-minutes: 5
+        run: cargo test --locked failed_late_physical_restoration_preserves_destination_structure
+      # The canonical 12-piece nitrogen seed is a shared calibration fixture.
+      # Run this independent gate before the full suite so baseline failures do
+      # not suppress the seed verification result.
+      - name: Verify canonical 12N seed and realization
+        if: always()
+        timeout-minutes: 5
+        run: |
+          cargo test --locked confirmed_seed_is_the_established_twelve_piece_nitrogen_ring
+          cargo test --locked ancestral_seed_realizes_a_physically_valid_developmental_structure
       - name: Run Rust tests
+        if: always()
+        # Keep a small margin over the observed ~4-minute full-suite runtime.
+        timeout-minutes: 6
         run: cargo test --locked --all-targets
       - name: Run Clippy
+        timeout-minutes: 5
         if: always()
         run: cargo clippy --locked --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of

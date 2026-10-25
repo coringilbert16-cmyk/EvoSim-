@@ -1,7 +1,8 @@
 //! Persistent chemistry knowledge keyed by canonical physical interfaces.
+use crate::geometry_reference_library::LiveGeometryInterface;
+#[cfg(test)]
 use crate::geometry_reference_library::{
-    GeometryContactFamily, GeometryFluidBoundaryFamily, GeometryRigidContactFamily,
-    GeometryRigidPointContactFamily, GeometryRigidVertexContactFamily, LiveGeometryInterface,
+    GeometryRigidContactFamily, GeometryRigidPointContactFamily,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -10,11 +11,63 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 3;
+pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 5;
+
+/// Increment this fingerprint whenever chemistry equations, constants, or
+/// resource-chemistry semantics change. Existing derived cache rows are never
+/// relabeled or migrated across fingerprints.
+pub const CHEMISTRY_EQUATION_FINGERPRINT: &str = "evosim-chemistry-v1|potential=exp-k-dmax|contact=(1-d/r)^2|Dmax=13|k=1/13|contact_radius=1|max_force=1|energy_distance=contact_radius|energy_scale=max_force*energy_distance|reaction_dissipation=0.1/tick|catalog=resource-chemistry-v2|chemical-position=quantized-key-v2|finite-representable-only";
+
+/// Bind persistent cache compatibility to the canonical resource chemistry
+/// positions as well as the equation implementation. Names are sorted so
+/// catalog declaration order does not change the fingerprint.
+fn chemistry_equation_fingerprint_for_catalog(
+    catalog: &[crate::resources::BaseResource],
+) -> String {
+    let mut positions = catalog
+        .iter()
+        .map(|resource| {
+            let position = resource
+                .properties
+                .chemical_position
+                .map(|value| format!("{:016x}", value.to_bits()))
+                .unwrap_or_else(|| "none".to_string());
+            (resource.name.as_str(), position)
+        })
+        .collect::<Vec<_>>();
+    positions.sort_by(|left, right| left.0.cmp(right.0));
+    let catalog_identity = positions
+        .into_iter()
+        .map(|(name, position)| format!("{name}={position}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("{CHEMISTRY_EQUATION_FINGERPRINT}|catalog-chemical-positions-v1={catalog_identity}")
+}
+
+fn current_chemistry_equation_fingerprint() -> String {
+    chemistry_equation_fingerprint_for_catalog(&crate::resources::default_catalog())
+}
 
 fn quantize(value: f64) -> i64 {
     (value * 1_000_000_000.0).round() as i64
 }
+
+const INVALID_CHEMICAL_POSITION_KEY: i64 = i64::MIN;
+
+fn quantize_chemical_position(value: f64) -> i64 {
+    if !value.is_finite() {
+        return INVALID_CHEMICAL_POSITION_KEY;
+    }
+    let scaled = value * 1_000_000_000.0;
+    // The invalid sentinel is i64::MIN; reject values that would saturate or
+    // collide with that sentinel during the integer conversion.
+    if !scaled.is_finite() || scaled <= i64::MIN as f64 || scaled >= i64::MAX as f64 {
+        INVALID_CHEMICAL_POSITION_KEY
+    } else {
+        scaled.round() as i64
+    }
+}
+
 pub fn quantized_amount(value: f64) -> i64 {
     quantize(value)
 }
@@ -26,6 +79,13 @@ pub struct ChemistryKey {
     pub material_b: String,
     pub interface_class: String,
     pub interface_signature: String,
+    /// Quantized chemical positions used by the static-potential equation.
+    /// They belong in the cache key so a catalog position change cannot reuse
+    /// a potential calculated from the previous chemistry spectrum.
+    #[serde(default)]
+    pub chemical_position_a: Option<i64>,
+    #[serde(default)]
+    pub chemical_position_b: Option<i64>,
 }
 
 impl ChemistryKey {
@@ -46,16 +106,20 @@ impl ChemistryKey {
             material_b,
             interface_class: class.into(),
             interface_signature: interface.into(),
+            chemical_position_a: None,
+            chemical_position_b: None,
         }
     }
     pub fn signature(&self) -> String {
         format!(
-            "v{}|{}|{}|{}|{}",
+            "v{}|{}|{}|{}|{}|chemical_positions={:?},{:?}",
             self.schema_version,
             self.material_a,
             self.material_b,
             self.interface_class,
-            self.interface_signature
+            self.interface_signature,
+            self.chemical_position_a,
+            self.chemical_position_b
         )
     }
 
@@ -63,51 +127,29 @@ impl ChemistryKey {
         a: impl Into<String>,
         b: impl Into<String>,
         interface: &LiveGeometryInterface,
+        chemical_position_a: f64,
+        chemical_position_b: f64,
     ) -> Self {
-        Self::new(a, b, interface.interface_class, interface.signature.clone())
+        let material_a = a.into();
+        let material_b = b.into();
+        // Keep each quantized position attached to its canonical material name.
+        let (position_a, position_b) = if material_a <= material_b {
+            (chemical_position_a, chemical_position_b)
+        } else {
+            (chemical_position_b, chemical_position_a)
+        };
+        let mut key = Self::new(
+            material_a,
+            material_b,
+            interface.interface_class,
+            interface.signature.clone(),
+        );
+        key.chemical_position_a = Some(quantize_chemical_position(position_a));
+        key.chemical_position_b = Some(quantize_chemical_position(position_b));
+        key
     }
 
-    pub fn from_geometry_contact(
-        a: impl Into<String>,
-        b: impl Into<String>,
-        family: &GeometryContactFamily,
-    ) -> Self {
-        Self::new(
-            a,
-            b,
-            "rigid_surface",
-            format!(
-                "v{}|anchor_edge={}|angle={}|radius={}|edge_start={}|edge_end={}|length={}",
-                family.schema_version,
-                family.anchor_edge,
-                quantize(family.contact_angle_radians),
-                quantize(family.curvature_radius),
-                quantize(family.edge_parameter_start),
-                quantize(family.edge_parameter_end),
-                quantize(family.contact_length),
-            ),
-        )
-    }
-
-    pub fn from_geometry_fluid_boundary(
-        a: impl Into<String>,
-        b: impl Into<String>,
-        family: &GeometryFluidBoundaryFamily,
-    ) -> Self {
-        Self::new(a, b, "fluid_boundary", format!(
-            "v{}|anchor_edge={}|area={}|angle={}|radius={}|arc={}|length={}|edge_start={}|edge_end={}",
-            family.schema_version,
-            family.anchor_edge,
-            quantize(family.area),
-            quantize(family.contact_angle_radians),
-            quantize(family.curvature_radius),
-            quantize(family.free_arc_angle_radians),
-            quantize(family.contact_length),
-            quantize(family.edge_parameter_start),
-            quantize(family.edge_parameter_end),
-        ))
-    }
-
+    #[cfg(test)]
     pub fn from_geometry_rigid_contact(
         a: impl Into<String>,
         b: impl Into<String>,
@@ -129,38 +171,27 @@ impl ChemistryKey {
         )
     }
 
+    #[cfg(test)]
     pub fn from_geometry_rigid_point(
         a: impl Into<String>,
         b: impl Into<String>,
         family: &GeometryRigidPointContactFamily,
     ) -> Self {
-        Self::new(a, b, "rigid_point", format!(
-            "v{}|anchor_edge={}|candidate_endpoint={}|start={}|end={}|rotation_start={}|rotation_end={}",
-            family.schema_version,
-            family.anchor_edge,
-            family.candidate_endpoint,
-            quantize(family.anchor_parameter_start),
-            quantize(family.anchor_parameter_end),
-            quantize(family.candidate_rotation_start_radians),
-            quantize(family.candidate_rotation_end_radians),
-        ))
-    }
-
-    pub fn from_geometry_rigid_vertex(
-        a: impl Into<String>,
-        b: impl Into<String>,
-        family: &GeometryRigidVertexContactFamily,
-    ) -> Self {
-        Self::new(a, b, "rigid_vertex", format!(
-            "v{}|anchor_edge={}|candidate_vertex={}|start={}|end={}|rotation_start={}|rotation_end={}",
-            family.schema_version,
-            family.anchor_edge,
-            family.candidate_vertex,
-            quantize(family.anchor_parameter_start),
-            quantize(family.anchor_parameter_end),
-            quantize(family.candidate_rotation_start_radians),
-            quantize(family.candidate_rotation_end_radians),
-        ))
+        Self::new(
+            a,
+            b,
+            "rigid_point",
+            format!(
+                "v{}|anchor_edge={}|candidate_endpoint={}|start={}|end={}|rotation_start={}|rotation_end={}",
+                family.schema_version,
+                family.anchor_edge,
+                family.candidate_endpoint,
+                quantize(family.anchor_parameter_start),
+                quantize(family.anchor_parameter_end),
+                quantize(family.candidate_rotation_start_radians),
+                quantize(family.candidate_rotation_end_radians),
+            ),
+        )
     }
 }
 
@@ -172,13 +203,25 @@ pub struct ChemistryRecord {
 
 impl ChemistryRecord {
     fn is_valid(&self) -> bool {
-        matches!(
-            self.key.schema_version,
-            2 | CHEMISTRY_LIBRARY_SCHEMA_VERSION
-        ) && !self.key.material_a.is_empty()
+        self.key.schema_version == CHEMISTRY_LIBRARY_SCHEMA_VERSION
+            && !self.key.material_a.is_empty()
             && !self.key.material_b.is_empty()
             && !self.key.interface_class.is_empty()
             && !self.key.interface_signature.is_empty()
+            // Live chemistry keys carry both positions; geometry-only library
+            // keys carry neither. A half-populated key is never a valid identity.
+            && (self.key.chemical_position_a.is_some()
+                == self.key.chemical_position_b.is_some())
+            && match (
+                self.key.chemical_position_a,
+                self.key.chemical_position_b,
+            ) {
+                (Some(a), Some(b)) => {
+                    a != INVALID_CHEMICAL_POSITION_KEY && b != INVALID_CHEMICAL_POSITION_KEY
+                }
+                (None, None) => true,
+                _ => false,
+            }
             && self.static_potential.is_finite()
             && self.static_potential >= 0.0
     }
@@ -187,6 +230,7 @@ impl ChemistryRecord {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ChemistryLibraryManifest {
     pub schema_version: u32,
+    pub equation_fingerprint: String,
     pub entries: u64,
 }
 
@@ -241,24 +285,38 @@ impl ChemistryLibrary {
                 }
             }
         }
+        let current_fingerprint = current_chemistry_equation_fingerprint();
         let manifest = if manifest_path.exists() {
             serde_json::from_slice(&fs::read(manifest_path)?)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
         } else {
+            if !entries.is_empty() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "chemistry manifest is missing for a non-empty cache; refusing to infer schema or equation fingerprint",
+                ));
+            }
             ChemistryLibraryManifest {
                 schema_version: CHEMISTRY_LIBRARY_SCHEMA_VERSION,
-                entries: entries.len() as u64,
+                equation_fingerprint: current_fingerprint.clone(),
+                entries: 0,
             }
         };
-        if !matches!(
-            manifest.schema_version,
-            2 | CHEMISTRY_LIBRARY_SCHEMA_VERSION
-        ) {
+        if manifest.schema_version != CHEMISTRY_LIBRARY_SCHEMA_VERSION {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!(
                     "unsupported chemistry library schema version: {}",
                     manifest.schema_version
+                ),
+            ));
+        }
+        if manifest.equation_fingerprint != current_fingerprint {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "chemistry equation fingerprint mismatch: manifest={}, current={}",
+                    manifest.equation_fingerprint, current_fingerprint
                 ),
             ));
         }
@@ -300,23 +358,39 @@ impl ChemistryLibrary {
         self.insert(record)?;
         Ok(self.get(&key).map(|record| record.static_potential))
     }
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.entries.len()
     }
+    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
     pub fn insert(&mut self, record: ChemistryRecord) -> std::io::Result<bool> {
-        self.insert_with_manifest_persistence(record, persist_manifest_atomically)
+        self.insert_with_persistence(record, append_record_and_sync, persist_manifest_atomically)
     }
 
+    #[cfg(test)]
     fn insert_with_manifest_persistence<F>(
         &mut self,
         record: ChemistryRecord,
         persist_manifest: F,
     ) -> std::io::Result<bool>
     where
+        F: FnOnce(&Path, &ChemistryLibraryManifest) -> std::io::Result<()>,
+    {
+        self.insert_with_persistence(record, append_record_and_sync, persist_manifest)
+    }
+
+    fn insert_with_persistence<A, F>(
+        &mut self,
+        record: ChemistryRecord,
+        append_record: A,
+        persist_manifest: F,
+    ) -> std::io::Result<bool>
+    where
+        A: FnOnce(&mut File, &[u8]) -> std::io::Result<()>,
         F: FnOnce(&Path, &ChemistryLibraryManifest) -> std::io::Result<()>,
     {
         if !record.is_valid() {
@@ -344,7 +418,7 @@ impl ChemistryLibrary {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         row.push(b'\n');
 
-        if let Err(write_error) = file.write_all(&row).and_then(|()| file.sync_data()) {
+        if let Err(write_error) = append_record(&mut file, &row) {
             return Err(rollback_appended_record(
                 &mut file,
                 original_len,
@@ -367,6 +441,11 @@ impl ChemistryLibrary {
         self.manifest = next_manifest;
         Ok(true)
     }
+}
+
+fn append_record_and_sync(file: &mut File, row: &[u8]) -> std::io::Result<()> {
+    file.write_all(row)?;
+    file.sync_data()
 }
 
 fn rollback_appended_record(
@@ -449,6 +528,9 @@ pub fn open_default_library() -> std::io::Result<ChemistryLibrary> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::geometry_reference_library::{
+        GeometryRigidContactFamily, GeometryRigidPointContactFamily,
+    };
     #[test]
     fn live_geometry_interface_can_form_chemistry_key() {
         let interface = crate::geometry_reference_library::resolve_live_contact_interface(
@@ -457,9 +539,73 @@ mod tests {
             "Hydrogen",
             crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 0 },
         );
-        let key = ChemistryKey::from_live_geometry("Carbon", "Hydrogen", &interface);
+        let key = ChemistryKey::from_live_geometry("Carbon", "Hydrogen", &interface, 10.5, 5.5);
         assert_eq!(key.interface_class, "rigid_point");
         assert_eq!(key.interface_signature, interface.signature);
+        assert_eq!(key.chemical_position_a, Some(10_500_000_000));
+        assert_eq!(key.chemical_position_b, Some(5_500_000_000));
+    }
+
+    #[test]
+    fn rejects_unrepresentable_chemical_position_keys() {
+        let root = test_root("invalid-position-key");
+        let _ = fs::remove_dir_all(&root);
+        let mut library = ChemistryLibrary::open(&root).unwrap();
+        let interface = crate::geometry_reference_library::resolve_live_contact_interface(
+            "Carbon",
+            crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            "Hydrogen",
+            crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 0 },
+        );
+        for invalid_position in [
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::MAX,
+            f64::MIN,
+        ] {
+            let key = ChemistryKey::from_live_geometry(
+                "Carbon",
+                "Hydrogen",
+                &interface,
+                invalid_position,
+                5.5,
+            );
+            let record = ChemistryRecord {
+                key,
+                static_potential: 0.5,
+            };
+            assert!(
+                !record.is_valid(),
+                "unrepresentable chemical position {invalid_position:?} must not become a cache key"
+            );
+            assert!(
+                !library.insert(record).unwrap(),
+                "unrepresentable chemical position {invalid_position:?} must not persist"
+            );
+        }
+        assert!(library.is_empty());
+        assert!(ChemistryLibrary::open(&root).unwrap().is_empty());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn live_geometry_key_distinguishes_chemical_positions_and_canonicalizes_them() {
+        let interface = crate::geometry_reference_library::resolve_live_contact_interface(
+            "Carbon",
+            crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            "Hydrogen",
+            crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 0 },
+        );
+        let canonical =
+            ChemistryKey::from_live_geometry("Carbon", "Hydrogen", &interface, 10.5, 5.5);
+        let reversed =
+            ChemistryKey::from_live_geometry("Hydrogen", "Carbon", &interface, 5.5, 10.5);
+        let changed_position =
+            ChemistryKey::from_live_geometry("Carbon", "Hydrogen", &interface, 10.25, 5.5);
+        assert_eq!(canonical, reversed);
+        assert_ne!(canonical, changed_position);
+        assert_ne!(canonical.signature(), changed_position.signature());
     }
 
     #[test]
@@ -522,10 +668,10 @@ mod tests {
     }
 
     #[test]
-    fn sulfur_shape_replacement_preserves_existing_chemistry_cache_output() {
-        // The cache is keyed by material pair and interface class/signature,
-        // not by serialized outline. A geometry-only sulfur change must not
-        // silently change this already-established chemistry result.
+    fn pre_unification_sulfur_interaction_cache_record_is_not_reused() {
+        // D6 rejects pre-unification chemistry caches without migration. The
+        // repository cache was reset to the current schema; the old cached
+        // interaction must not be treated as authoritative under schema five.
         let library = ChemistryLibrary::open("chemistry_library/data").unwrap();
         let key = ChemistryKey::new(
             "Hydrogen",
@@ -533,10 +679,10 @@ mod tests {
             "rigid_point",
             "live-v1|Hydrogen:line:0|Sulfur:corner:0",
         );
-        let record = library
-            .get(&key)
-            .expect("the existing Hydrogen–Sulfur corner interaction remains reusable");
-        assert!((record.static_potential - 0.09678938442541647).abs() < 1e-12);
+        assert!(
+            library.get(&key).is_none(),
+            "pre-unification Hydrogen–Sulfur cache output must not be reused"
+        );
     }
 
     #[test]
@@ -618,6 +764,177 @@ mod tests {
         let reopened = ChemistryLibrary::open(&root).unwrap();
         assert!(reopened.is_empty());
         assert_eq!(reopened.manifest.entries, 0);
+        drop(reopened);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn insert_partial_append_failure_rolls_back_original_cache_bytes_and_reopens_cleanly() {
+        let root = test_root("append-failure");
+        let _ = fs::remove_dir_all(&root);
+        let mut library = ChemistryLibrary::open(&root).unwrap();
+        let original = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "append-rollback"),
+            static_potential: 0.45,
+        };
+        assert!(library.insert(original.clone()).unwrap());
+
+        let data_path = root.join("chemistry.jsonl");
+        let manifest_path = root.join("manifest.json");
+        let original_data = fs::read(&data_path).unwrap();
+        let original_manifest = fs::read(&manifest_path).unwrap();
+        let failed_record = ChemistryRecord {
+            key: ChemistryKey::new(
+                "Carbon",
+                "Hydrogen",
+                "rigid_edge",
+                "injected-append-failure",
+            ),
+            static_potential: 0.75,
+        };
+        let failed_key = failed_record.key.clone();
+
+        let error = library
+            .insert_with_persistence(
+                failed_record,
+                |file, row| {
+                    let prefix_len = row.len().min(5);
+                    file.write_all(&row[..prefix_len])?;
+                    file.sync_data()?;
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::WriteZero,
+                        "injected partial chemistry record append failure",
+                    ))
+                },
+                persist_manifest_atomically,
+            )
+            .unwrap_err();
+
+        assert_eq!(error.kind(), std::io::ErrorKind::WriteZero);
+        assert_eq!(fs::read(&data_path).unwrap(), original_data);
+        assert_eq!(fs::read(&manifest_path).unwrap(), original_manifest);
+        assert_eq!(library.len(), 1);
+        assert_eq!(library.manifest.entries, 1);
+        assert!(library.get(&failed_key).is_none());
+
+        let reopened = ChemistryLibrary::open(&root).unwrap();
+        assert_eq!(reopened.len(), 1);
+        assert_eq!(reopened.manifest.entries, 1);
+        assert!(reopened.get(&failed_key).is_none());
+        assert_eq!(
+            reopened
+                .get(&original.key)
+                .map(|record| record.static_potential),
+            Some(0.45)
+        );
+        drop(reopened);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn cache_append_rollback_failure_reports_both_errors_and_preserves_recovery_evidence() {
+        let root = test_root("rollback-truncation-failure");
+        let _ = fs::remove_dir_all(&root);
+        let mut library = ChemistryLibrary::open(&root).unwrap();
+        let original_record = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "rollback-failure"),
+            static_potential: 0.45,
+        };
+        assert!(library.insert(original_record).unwrap());
+
+        let data_path = root.join("chemistry.jsonl");
+        let manifest_path = root.join("manifest.json");
+        let original_len = fs::metadata(&data_path).unwrap().len();
+        let original_manifest = fs::read(&manifest_path).unwrap();
+        let appended = b"{\"partial-record\":";
+        let mut append_file = OpenOptions::new().append(true).open(&data_path).unwrap();
+        append_file.write_all(appended).unwrap();
+        append_file.sync_data().unwrap();
+        drop(append_file);
+        let damaged_bytes = fs::read(&data_path).unwrap();
+        drop(library);
+
+        // A read-only descriptor deterministically makes set_len fail on the
+        // supported Linux CI runner. The test verifies fail-closed reopening;
+        // it does not pretend the damaged cache was repaired.
+        let mut read_only = File::open(&data_path).unwrap();
+        let error = rollback_appended_record(
+            &mut read_only,
+            original_len,
+            std::io::Error::new(
+                std::io::ErrorKind::WriteZero,
+                "injected original append failure",
+            ),
+        );
+
+        let message = error.to_string();
+        assert!(message.contains("injected original append failure"));
+        assert!(message.contains("failed to roll back appended data"));
+        assert_eq!(fs::read(&data_path).unwrap(), damaged_bytes);
+        assert_eq!(fs::read(&manifest_path).unwrap(), original_manifest);
+        assert!(
+            ChemistryLibrary::open(&root).is_err(),
+            "reopen must reject the damaged persisted row rather than silently accepting a partial append"
+        );
+
+        drop(read_only);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn failed_insert_keeps_stale_instance_refreshed_to_committed_store() {
+        let root = test_root("stale-refresh-failed-insert");
+        let _ = fs::remove_dir_all(&root);
+        let mut writer = ChemistryLibrary::open(&root).unwrap();
+        let mut stale = ChemistryLibrary::open(&root).unwrap();
+
+        let committed = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "already-committed"),
+            static_potential: 0.42,
+        };
+        assert!(writer.insert(committed.clone()).unwrap());
+
+        let failed = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "failed-after-refresh"),
+            static_potential: 0.73,
+        };
+        let failed_key = failed.key.clone();
+        let error = stale
+            .insert_with_persistence(
+                failed,
+                |file, row| {
+                    file.write_all(&row[..row.len().min(7)])?;
+                    file.sync_data()?;
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::WriteZero,
+                        "injected append failure after stale-state refresh",
+                    ))
+                },
+                persist_manifest_atomically,
+            )
+            .unwrap_err();
+
+        assert_eq!(error.kind(), std::io::ErrorKind::WriteZero);
+        assert_eq!(stale.len(), 1);
+        assert_eq!(stale.manifest.entries, 1);
+        assert_eq!(
+            stale
+                .get(&committed.key)
+                .map(|record| record.static_potential),
+            Some(0.42)
+        );
+        assert!(stale.get(&failed_key).is_none());
+
+        let reopened = ChemistryLibrary::open(&root).unwrap();
+        assert_eq!(reopened.len(), 1);
+        assert_eq!(reopened.manifest.entries, 1);
+        assert!(reopened.get(&failed_key).is_none());
+        assert_eq!(
+            reopened
+                .get(&committed.key)
+                .map(|record| record.static_potential),
+            Some(0.42)
+        );
         drop(reopened);
         let _ = fs::remove_dir_all(root);
     }
@@ -706,6 +1023,7 @@ mod tests {
             root.join("manifest.json"),
             serde_json::to_vec(&ChemistryLibraryManifest {
                 schema_version,
+                equation_fingerprint: current_chemistry_equation_fingerprint(),
                 entries: manifest_entries,
             })
             .unwrap(),
@@ -721,6 +1039,8 @@ mod tests {
                 material_b: "Hydrogen".into(),
                 interface_class: "rigid_edge".into(),
                 interface_signature: signature.into(),
+                chemical_position_a: None,
+                chemical_position_b: None,
             },
             static_potential: 0.5,
         })
@@ -728,36 +1048,181 @@ mod tests {
     }
 
     #[test]
-    fn loads_current_schema_three_store() {
-        let root = test_root("schema-three");
-        write_test_store(&root, 3, &[test_record_json(3, "edge")], 1);
+    fn loads_current_schema_five_store() {
+        let root = test_root("schema-five");
+        write_test_store(&root, 5, &[test_record_json(5, "edge")], 1);
         let library = ChemistryLibrary::open(&root).unwrap();
         assert_eq!(library.len(), 1);
         let _ = fs::remove_dir_all(root);
     }
 
     #[test]
-    fn reads_legacy_schema_two_store_without_relabeling_keys() {
+    fn rejects_nonempty_cache_without_manifest_without_migration() {
+        let root = test_root("missing-manifest");
+        fs::create_dir_all(&root).unwrap();
+        let data_path = root.join("chemistry.jsonl");
+        let record = test_record_json(5, "edge");
+        fs::write(&data_path, format!("{record}\n")).unwrap();
+        let original_data = fs::read(&data_path).unwrap();
+
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("non-empty cache without a manifest must be rejected");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("manifest is missing"));
+        assert_eq!(fs::read(&data_path).unwrap(), original_data);
+        assert!(!root.join("manifest.json").exists());
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_legacy_schema_two_store_without_migration() {
         let root = test_root("schema-two");
-        write_test_store(&root, 2, &[test_record_json(2, "legacy-edge")], 1);
-        let library = ChemistryLibrary::open(&root).unwrap();
-        assert_eq!(library.len(), 1);
-        assert!(library
-            .get(&ChemistryKey {
-                schema_version: 2,
-                material_a: "Carbon".into(),
-                material_b: "Hydrogen".into(),
-                interface_class: "rigid_edge".into(),
-                interface_signature: "legacy-edge".into(),
-            })
-            .is_some());
+        write_test_store(&root, 2, &[], 0);
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("legacy cache must be rejected");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error
+            .to_string()
+            .contains("unsupported chemistry library schema version"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_schema_four_store_after_chemical_position_key_migration() {
+        let root = test_root("schema-four");
+        write_test_store(&root, 4, &[], 0);
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("schema-four cache must be rejected after the key contract changes");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error
+            .to_string()
+            .contains("unsupported chemistry library schema version"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_legacy_schema_three_store_without_migration() {
+        let root = test_root("schema-three");
+        write_test_store(&root, 3, &[], 0);
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("pre-unification cache must be rejected");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error
+            .to_string()
+            .contains("unsupported chemistry library schema version"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_legacy_record_keys_even_in_current_schema_manifest() {
+        let root = test_root("legacy-record");
+        write_test_store(&root, 5, &[test_record_json(3, "legacy-edge")], 1);
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("legacy record keys must be rejected");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("invalid chemistry record"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn nonempty_cache_reopens_with_matching_derived_fingerprint() {
+        let root = test_root("nonempty-derived-fingerprint-reopen");
+        let _ = fs::remove_dir_all(&root);
+        let record = ChemistryRecord {
+            key: ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "restart"),
+            static_potential: 0.625,
+        };
+        let key = record.key.clone();
+        {
+            let mut library = ChemistryLibrary::open(&root).unwrap();
+            assert!(library.insert(record.clone()).unwrap());
+            assert_eq!(library.get(&key), Some(&record));
+        }
+
+        let reopened = ChemistryLibrary::open(&root).unwrap();
+        assert_eq!(reopened.get(&key), Some(&record));
+        assert_eq!(
+            reopened.manifest.equation_fingerprint,
+            current_chemistry_equation_fingerprint()
+        );
+        assert_eq!(reopened.manifest.entries, 1);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn checked_in_manifest_fingerprint_matches_default_catalog() {
+        let manifest: ChemistryLibraryManifest =
+            serde_json::from_str(include_str!("../../chemistry_library/data/manifest.json"))
+                .expect("checked-in chemistry cache manifest must parse");
+        assert_eq!(manifest.schema_version, CHEMISTRY_LIBRARY_SCHEMA_VERSION);
+        assert_eq!(
+            manifest.equation_fingerprint,
+            current_chemistry_equation_fingerprint(),
+            "checked-in manifest must invalidate whenever canonical catalog chemistry changes"
+        );
+    }
+
+    #[test]
+    fn changed_catalog_chemical_position_changes_fingerprint_and_rejects_old_manifest() {
+        let mut catalog = crate::resources::default_catalog();
+        let original_fingerprint = chemistry_equation_fingerprint_for_catalog(&catalog);
+        let mut reordered_catalog = catalog.clone();
+        reordered_catalog.reverse();
+        assert_eq!(
+            chemistry_equation_fingerprint_for_catalog(&reordered_catalog),
+            original_fingerprint,
+            "catalog declaration order must not invalidate chemistry cache"
+        );
+        let carbon = catalog
+            .iter_mut()
+            .find(|resource| resource.name == "Carbon")
+            .expect("canonical Carbon resource exists");
+        carbon.properties.chemical_position = Some(10.25);
+        let changed_fingerprint = chemistry_equation_fingerprint_for_catalog(&catalog);
+        assert_ne!(original_fingerprint, changed_fingerprint);
+
+        let root = test_root("catalog-position-fingerprint");
+        let _ = fs::remove_dir_all(&root);
+        write_test_store(&root, CHEMISTRY_LIBRARY_SCHEMA_VERSION, &[], 0);
+        let manifest_path = root.join("manifest.json");
+        let mut manifest: serde_json::Value =
+            serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+        manifest["equation_fingerprint"] = serde_json::Value::String(changed_fingerprint);
+        fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("a cache from a changed catalog chemistry position must be rejected");
+        assert!(error.to_string().contains("fingerprint mismatch"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_equation_fingerprint_mismatch() {
+        let root = test_root("fingerprint-mismatch");
+        write_test_store(&root, 5, &[test_record_json(5, "edge")], 1);
+        let manifest_path = root.join("manifest.json");
+        let mut manifest: serde_json::Value =
+            serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+        manifest["equation_fingerprint"] = serde_json::Value::String("old-equations".into());
+        fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("mismatched equation cache must be rejected");
+        assert!(error.to_string().contains("fingerprint mismatch"));
         let _ = fs::remove_dir_all(root);
     }
 
     #[test]
     fn rejects_malformed_final_nonempty_record() {
         let root = test_root("truncated-tail");
-        write_test_store(&root, 3, &["{".into()], 1);
+        write_test_store(&root, 5, &["{".into()], 1);
         let error = ChemistryLibrary::open(&root)
             .err()
             .expect("corrupt store must be rejected");
@@ -768,8 +1233,8 @@ mod tests {
     #[test]
     fn rejects_duplicate_persisted_keys() {
         let root = test_root("duplicate");
-        let row = test_record_json(3, "same-edge");
-        write_test_store(&root, 3, &[row.clone(), row], 1);
+        let row = test_record_json(5, "same-edge");
+        write_test_store(&root, 5, &[row.clone(), row], 1);
         let error = ChemistryLibrary::open(&root)
             .err()
             .expect("corrupt store must be rejected");
@@ -780,7 +1245,7 @@ mod tests {
     #[test]
     fn rejects_manifest_count_mismatch() {
         let root = test_root("count-mismatch");
-        write_test_store(&root, 3, &[test_record_json(3, "edge")], 2);
+        write_test_store(&root, 5, &[test_record_json(5, "edge")], 2);
         let error = ChemistryLibrary::open(&root)
             .err()
             .expect("corrupt store must be rejected");
@@ -789,22 +1254,40 @@ mod tests {
     }
 
     #[test]
+    fn rejects_partial_chemical_position_keys() {
+        let root = test_root("partial-chemical-position");
+        let mut value: serde_json::Value =
+            serde_json::from_str(&test_record_json(5, "edge")).unwrap();
+        value["key"]["chemical_position_a"] = serde_json::Value::from(10_i64);
+        value["key"]["chemical_position_b"] = serde_json::Value::Null;
+        write_test_store(&root, 5, &[serde_json::to_string(&value).unwrap()], 1);
+        let error = ChemistryLibrary::open(&root)
+            .err()
+            .expect("partial chemical position identity must be rejected");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("invalid chemistry record"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn rejects_semantically_invalid_persisted_records() {
         let root = test_root("invalid-record");
         let invalid = serde_json::to_string(&ChemistryRecord {
             key: ChemistryKey {
-                schema_version: 3,
+                schema_version: 5,
                 material_a: "Carbon".into(),
                 material_b: "Hydrogen".into(),
                 interface_class: "rigid_edge".into(),
                 interface_signature: "edge".into(),
+                chemical_position_a: None,
+                chemical_position_b: None,
             },
             static_potential: f64::NAN,
         })
         .unwrap();
         // JSON does not represent NaN, so serialize a parseable record with a negative value.
         let invalid = invalid.replace("null", "-1.0");
-        write_test_store(&root, 3, &[invalid], 1);
+        write_test_store(&root, 5, &[invalid], 1);
         let error = ChemistryLibrary::open(&root)
             .err()
             .expect("corrupt store must be rejected");

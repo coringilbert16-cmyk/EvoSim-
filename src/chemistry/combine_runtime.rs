@@ -1572,7 +1572,7 @@ mod fluid_coalescence_transaction_tests {
             Form::Fluid { nominal_area, .. } => *nominal_area,
             _ => panic!("Water test fixture requires a measurable fluid area"),
         };
-        let radius = (unit_area / PI).sqrt();
+        let radius = (2.0 * unit_area / PI).sqrt();
         let placement_a = Placement {
             x: 0.0,
             y: 0.0,
@@ -1584,9 +1584,9 @@ mod fluid_coalescence_transaction_tests {
             rotation_radians: 0.0,
         };
         let mut upper =
-            StructuralUnit::from_material(Material::free_base("Water", 0.5), placement_a).unwrap();
+            StructuralUnit::from_material(Material::free_base("Water", 1.0), placement_a).unwrap();
         let mut lower =
-            StructuralUnit::from_material(Material::free_base("Water", 0.5), placement_b).unwrap();
+            StructuralUnit::from_material(Material::free_base("Water", 1.0), placement_b).unwrap();
         assert!(upper.realize_fluid_geometry(semicircle_shape(radius, true), &catalog));
         assert!(lower.realize_fluid_geometry(semicircle_shape(radius, false), &catalog));
 
@@ -1668,7 +1668,7 @@ mod fluid_coalescence_transaction_tests {
         assert_eq!(structure.units.len(), 1);
         assert_eq!(structure.physical_id(0), Some(survivor_id));
         assert_eq!(structure.units[0].material.parts[0].0, "Water");
-        assert!((structure.units[0].material.parts[0].1 - 1.0).abs() < 1e-9);
+        assert!((structure.units[0].material.parts[0].1 - 2.0).abs() < 1e-9);
         assert_eq!(structure.genome_constituent_ids(), &[survivor_id]);
         assert!(
             structure.bonds.is_empty(),
@@ -1683,7 +1683,7 @@ mod fluid_coalescence_transaction_tests {
         else {
             panic!("live COMBINE must install the merged exact fluid boundary");
         };
-        assert!((*nominal_area - unit_area).abs() < 1e-9);
+        assert!((*nominal_area - 2.0 * unit_area).abs() < 1e-9);
         assert!(boundary.is_valid());
         assert!(energy.is_finite() && energy >= 0.0);
         let residual = energy - 100.0
@@ -1719,7 +1719,7 @@ mod fluid_coalescence_transaction_tests {
         else {
             panic!("coalesced fluid must retain its exact multi-contact boundary");
         };
-        assert!((nominal_area - unit_area).abs() < 1e-9);
+        assert!((nominal_area - 2.0 * unit_area).abs() < 1e-9);
         assert!(boundary.is_valid());
 
         let origin = Placement {
@@ -1727,13 +1727,12 @@ mod fluid_coalescence_transaction_tests {
             y: 0.0,
             rotation_radians: 0.0,
         };
-        let stored = crate::physical_material::PhysicalMaterial::realized(
-            Material::free_base("Water", 1.0),
-            vec![origin],
+        let stored = crate::physical_material::PhysicalMaterial::realized_with_single_fluid_shape(
+            Material::free_base("Water", 2.0),
+            origin,
+            shape.clone(),
             &catalog,
         )
-        .unwrap()
-        .with_single_fluid_shape(shape.clone(), &catalog)
         .expect("merged shape should be accepted as a realized single-fluid material");
         let encoded = serde_json::to_string(&stored).unwrap();
         let decoded: crate::physical_material::PhysicalMaterial =
@@ -1750,7 +1749,7 @@ mod fluid_coalescence_transaction_tests {
             Some(vec![0])
         );
         assert_eq!(restored.units[0].shape(&catalog), Some(shape));
-        assert_eq!(restored.units[0].material.parts[0].1, 1.0);
+        assert_eq!(restored.units[0].material.parts[0].1, 2.0);
         assert!(restored.units[0].shape(&catalog).unwrap().is_valid());
     }
 
@@ -1769,7 +1768,7 @@ mod fluid_coalescence_transaction_tests {
         assert_eq!(structure.units.len(), 2);
         assert_eq!(structure.units[0].physical_id, survivor_id);
         assert_eq!(structure.units[0].material.parts[0].0, "Water");
-        assert!((structure.units[0].material.parts[0].1 - 1.0).abs() < 1e-9);
+        assert!((structure.units[0].material.parts[0].1 - 2.0).abs() < 1e-9);
         assert_eq!(structure.genome_constituent_ids(), &[survivor_id]);
         assert_eq!(structure.bonds.len(), 1);
         let retained = structure.bonds[0];
@@ -1792,7 +1791,7 @@ mod fluid_coalescence_transaction_tests {
         else {
             panic!("merged water must retain its exact multi-contact boundary");
         };
-        assert!((*nominal_area - unit_area).abs() < 1e-9);
+        assert!((*nominal_area - 2.0 * unit_area).abs() < 1e-9);
         assert!(boundary.is_valid());
         assert_eq!(boundary.pieces.len(), 2);
         assert!(boundary
@@ -1887,7 +1886,7 @@ mod fluid_coalescence_transaction_tests {
     #[test]
     fn fluid_bond_off_shared_interface_rejects_coalescence_atomically() {
         let (mut structure, catalog, unit_area) = build_bonded_pair(0.0, false);
-        let radius = (unit_area / PI).sqrt();
+        let radius = (2.0 * unit_area / PI).sqrt();
         structure.bonds[0].endpoint_a.location = ConnectionEndpoint::Fluid { x: 0.0, y: radius };
         let original_units = structure.units.clone();
         let original_bonds = structure.bonds.clone();
@@ -1908,7 +1907,7 @@ mod fluid_coalescence_transaction_tests {
     #[test]
     fn separated_bond_endpoints_on_shared_segment_reject_coalescence_atomically() {
         let (mut structure, catalog, unit_area) = build_bonded_pair(0.0, false);
-        let radius = (unit_area / PI).sqrt();
+        let radius = (2.0 * unit_area / PI).sqrt();
         structure.bonds[0].endpoint_a.location = ConnectionEndpoint::Fluid {
             x: -0.4 * radius,
             y: 0.0,

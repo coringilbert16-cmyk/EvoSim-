@@ -55,11 +55,88 @@ pub fn validate_realized_organism(
     Ok(())
 }
 
+/// Validate one identified genome inside a graph that may contain other
+/// physical components or genome cores. Geometry and cavity topology are still
+/// derived from the live graph; the supplied IDs only select which core is
+/// being validated.
+pub(crate) fn validate_realized_organism_for_core(
+    structure: &OrganismStructure,
+    catalog: &[BaseResource],
+    requirements: OrganismViabilityRequirements,
+    core_ids: &[crate::structure::PhysicalConstituentId],
+) -> Result<(), String> {
+    let surviving_core_index = core_ids
+        .iter()
+        .find_map(|id| structure.unit_index(*id))
+        .ok_or_else(|| "organism genome core has no surviving physical constituents".to_string())?;
+    let cavity = if requirements.require_sealed_genome_cavity {
+        Some(
+            crate::cavity::analyze_genome_cavity_for_core(structure, catalog, core_ids)?
+                .ok_or_else(|| {
+                    "organism genome cavity is not sealed and sufficiently large".to_string()
+                })?,
+        )
+    } else {
+        crate::cavity::analyze_genome_cavity_for_core(structure, catalog, core_ids)?
+    };
+
+    if requirements.require_extra_structure {
+        let component_seed = cavity
+            .as_ref()
+            .and_then(|value| value.boundary_units.first().copied())
+            .unwrap_or(surviving_core_index);
+        let component = structure.connected_component_containing(component_seed);
+        let boundary_count = cavity
+            .as_ref()
+            .map(|value| value.boundary_units.len())
+            .unwrap_or(0);
+        if component.len() <= boundary_count {
+            return Err(
+                "organism has no realized structure outside its genome cavity boundary".into(),
+            );
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::juvenile::confirmed_seed_baseline;
     use crate::resources::default_catalog;
+
+    #[test]
+    fn core_specific_viability_fails_closed_when_core_identity_is_missing() {
+        let catalog = default_catalog();
+        let mut structure = OrganismStructure::new();
+        let unit = structure.add_unit(crate::structure::StructuralUnit::new(
+            "Carbon",
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let core_id = structure.physical_id(unit).unwrap();
+        let requirements = OrganismViabilityRequirements {
+            require_sealed_genome_cavity: false,
+            require_extra_structure: false,
+        };
+        assert!(validate_realized_organism_for_core(
+            &structure,
+            &catalog,
+            requirements,
+            &[core_id],
+        )
+        .is_ok());
+        assert!(validate_realized_organism_for_core(
+            &structure,
+            &catalog,
+            requirements,
+            &[crate::structure::PhysicalConstituentId(u64::MAX)],
+        )
+        .is_err());
+    }
 
     #[test]
     fn viability_does_not_depend_on_a_predefined_piece_count_or_core() {

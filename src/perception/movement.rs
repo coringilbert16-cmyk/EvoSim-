@@ -313,6 +313,34 @@ impl Simulation {
             return Err(crate::state::MovementFailureReason::InsufficientEnergy);
         }
 
+        let transaction = EnergyTransaction {
+            reason: EnergyReason::Move,
+            potential_released: 0.0,
+            usable_delta: -cost,
+            structural_delta: 0.0,
+            work_expended: 0.0,
+            heat_dissipated: cost,
+        };
+        // Validate the ledger settlement against a cheap scalar snapshot before
+        // mutating world geometry. A malformed/overflowed ledger must not leave
+        // a completed move whose energy debit was rejected.
+        let mut preflight_ledger = *ledger;
+        let mut preflight_energy = usable_energy;
+        if !preflight_ledger.settle_transaction(&mut preflight_energy, transaction) {
+            organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
+                tick,
+                direction_x: Some(active.direction_x),
+                direction_y: Some(active.direction_y),
+                step: Some(active.decision_distance),
+                usable_energy,
+                active_transformation_id: organism.active_transformation_id,
+                result: Err(crate::state::MovementFailureReason::InsufficientEnergy),
+                old_position: old_position.clone(),
+                new_position: old_position.clone(),
+            });
+            return Err(crate::state::MovementFailureReason::InsufficientEnergy);
+        }
+
         let result = Self::try_move_cell_with_reason(
             organism,
             environment,
@@ -340,28 +368,13 @@ impl Simulation {
             return Err(reason);
         }
 
-        let transaction = EnergyTransaction {
-            reason: EnergyReason::Move,
-            potential_released: 0.0,
-            usable_delta: -cost,
-            structural_delta: 0.0,
-            work_expended: 0.0,
-            heat_dissipated: cost,
-        };
-        if !ledger.settle_transaction(&mut organism.usable_energy, transaction) {
-            organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
-                tick,
-                direction_x: Some(active.direction_x),
-                direction_y: Some(active.direction_y),
-                step: Some(active.decision_distance),
-                usable_energy,
-                active_transformation_id: organism.active_transformation_id,
-                result: Err(crate::state::MovementFailureReason::InsufficientEnergy),
-                old_position,
-                new_position,
-            });
-            return Err(crate::state::MovementFailureReason::InsufficientEnergy);
-        }
+        // The world mutation above has no fallible step after its push plan is
+        // applied. Commit the exact preflighted energy/ledger state now rather
+        // than invoking a second fallible settlement after geometry has moved.
+        // If geometry rejects, this snapshot is simply discarded and neither
+        // energy nor ledger has changed.
+        organism.usable_energy = preflight_energy;
+        *ledger = preflight_ledger;
 
         active.remaining_steps = active.remaining_steps.saturating_sub(1);
         active.ticks_until_step = if active.remaining_steps == 0 {
@@ -990,9 +1003,15 @@ fn translate_reproductive_construction(
         construction.developmental_origin.x += dx;
         construction.developmental_origin.y =
             wrap_y(construction.developmental_origin.y + dy, environment_height);
-        for unit in &mut construction.developing_structure.units {
-            unit.placement.x += dx;
-            unit.placement.y = wrap_y(unit.placement.y + dy, environment_height);
+        // During aggregate-owned development the parent structure has already
+        // been translated above. A transient child view must not translate those
+        // same physical constituents a second time.
+        let any_member_owned_by_parent = construction.has_any_member_in(&organism.structure);
+        if !construction.is_aggregate_owned_by(&organism.structure) && !any_member_owned_by_parent {
+            for unit in &mut construction.developing_structure.units {
+                unit.placement.x += dx;
+                unit.placement.y = wrap_y(unit.placement.y + dy, environment_height);
+            }
         }
     }
 }
@@ -1516,6 +1535,58 @@ mod tests {
     }
 
     #[test]
+    fn partial_aggregate_membership_does_not_translate_cached_offspring_graph() {
+        let mut simulation = Simulation::new(7, 20.0);
+        let mut organism = simulation.organisms.remove(0);
+        let mut ledger = crate::state::EnergyLedger::default();
+        assert!(organism.store_material(crate::resources::Material::free_base("Carbon", 1.0)));
+        assert!(crate::reproduction::begin_reproduction(
+            &mut organism,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+
+        // Build a valid partially shared cached view: the first developing
+        // constituent is already present in the parent graph, while duplicate
+        // membership makes the overall child view incomplete.
+        let catalog = simulation.environment.catalog.clone();
+        let mut child_unit = crate::structure::StructuralUnit::from_material(
+            crate::resources::Material::free_base("Nitrogen", 1.0),
+            Placement {
+                x: 20.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        )
+        .unwrap();
+        assert!(child_unit.realize_default_geometry(&catalog));
+        {
+            let construction = organism.reproductive_construction.as_mut().unwrap();
+            construction.developing_structure.add_unit(child_unit);
+            child_unit = construction.developing_structure.units[0].clone();
+        }
+        let parent_unit_index = organism.structure.add_unit(child_unit);
+        let parent_member_id = organism.structure.physical_id(parent_unit_index).unwrap();
+        let construction = organism.reproductive_construction.as_mut().unwrap();
+        construction.developing_structure.units[0].physical_id = parent_member_id;
+        construction.developing_member_ids = vec![parent_member_id, parent_member_id];
+        assert!(!construction.is_aggregate_owned_by(&organism.structure));
+        let cached_pose = construction.developing_structure.units[0].placement;
+        let origin_before = construction.developmental_origin.clone();
+
+        translate_reproductive_construction(&mut organism, 1.0, -1.0, 1000.0);
+
+        let construction = organism.reproductive_construction.as_ref().unwrap();
+        assert_eq!(
+            construction.developing_structure.units[0].placement,
+            cached_pose
+        );
+        assert!((construction.developmental_origin.x - origin_before.x - 1.0).abs() < 1e-9);
+        assert!((construction.developmental_origin.y - origin_before.y + 1.0).abs() < 1e-9);
+    }
+
+    #[test]
     fn move_translates_anchor_and_structure() {
         let simulation = Simulation::new(7, 20.0);
         let mut environment = empty_environment(&simulation);
@@ -1858,5 +1929,103 @@ mod tests {
             assert!((moved.y - original.y).abs() < 1e-9);
             assert_eq!(moved.rotation_radians, original.rotation_radians);
         }
+    }
+    #[test]
+    fn successful_movement_commits_preflight_energy_and_ledger_after_geometry() {
+        let simulation = Simulation::new(902, 20.0);
+        let mut organism = simulation.organisms[0].clone();
+        organism.usable_energy = 100.0;
+        let mut environment = empty_environment(&simulation);
+        let mut ledger = EnergyLedger::default();
+        let mut spatial_index = MovementSpatialIndex::new(&[], &environment);
+        let mut active = crate::state::ActiveMovement {
+            direction_x: 1.0,
+            direction_y: 0.0,
+            remaining_steps: 1,
+            step_interval: 1,
+            ticks_until_step: 0,
+            decision_distance: 1.0,
+            before_energy: organism.usable_energy,
+            before_stress: organism.stress,
+            before_developmental_realization: 0.0,
+        };
+        let original_x = organism.occupied_cells[0].x;
+        let original_energy = organism.usable_energy;
+        let expected_cost = movement_energy_cost_for_distance(
+            organism.structural_mass(&environment.catalog),
+            organism.genome.movement_efficiency(),
+            1.0,
+        );
+
+        let result = Simulation::advance_movement(
+            &mut [],
+            &mut organism,
+            &mut [],
+            &mut spatial_index,
+            &mut environment,
+            &mut ledger,
+            1,
+            &mut active,
+        );
+
+        assert_eq!(result, Ok(MovementProgress::Complete));
+        assert!(
+            organism.occupied_cells[0].x > original_x,
+            "successful movement must commit its geometry"
+        );
+        assert!((organism.usable_energy - (original_energy - expected_cost)).abs() < 1e-9);
+        assert!((ledger.total_heat_dissipated - expected_cost).abs() < 1e-9);
+        assert_eq!(ledger.total_work_expended, 0.0);
+        assert_eq!(active.remaining_steps, 0);
+    }
+
+    #[test]
+    fn rejected_movement_energy_settlement_does_not_mutate_world_geometry() {
+        let simulation = Simulation::new(901, 20.0);
+        let mut organism = simulation.organisms[0].clone();
+        organism.usable_energy = 100.0;
+        let mut environment = empty_environment(&simulation);
+        let mut ledger = EnergyLedger {
+            total_heat_dissipated: f64::INFINITY,
+            ..EnergyLedger::default()
+        };
+        let mut spatial_index = MovementSpatialIndex::new(&[], &environment);
+        let mut active = crate::state::ActiveMovement {
+            direction_x: 1.0,
+            direction_y: 0.0,
+            remaining_steps: 1,
+            step_interval: 1,
+            ticks_until_step: 0,
+            decision_distance: 1.0,
+            before_energy: organism.usable_energy,
+            before_stress: organism.stress,
+            before_developmental_realization: 0.0,
+        };
+        let original_position = organism.occupied_cells.clone();
+        let original_energy = organism.usable_energy;
+        let original_ledger = ledger;
+
+        let result = Simulation::advance_movement(
+            &mut [],
+            &mut organism,
+            &mut [],
+            &mut spatial_index,
+            &mut environment,
+            &mut ledger,
+            1,
+            &mut active,
+        );
+
+        assert_eq!(
+            result,
+            Err(crate::state::MovementFailureReason::InsufficientEnergy)
+        );
+        assert_eq!(organism.occupied_cells, original_position);
+        assert_eq!(organism.usable_energy, original_energy);
+        assert_eq!(
+            ledger.total_heat_dissipated,
+            original_ledger.total_heat_dissipated
+        );
+        assert_eq!(active.remaining_steps, 1);
     }
 }

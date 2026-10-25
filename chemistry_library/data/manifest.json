@@ -1,4 +1,5 @@
 {
-  "schema_version": 3,
-  "entries": 17
+  "schema_version": 5,
+  "equation_fingerprint": "evosim-chemistry-v1|potential=exp-k-dmax|contact=(1-d/r)^2|Dmax=13|k=1/13|contact_radius=1|max_force=1|energy_distance=contact_radius|energy_scale=max_force*energy_distance|reaction_dissipation=0.1/tick|catalog=resource-chemistry-v2|chemical-position=quantized-key-v2|finite-representable-only|catalog-chemical-positions-v1=Carbon=4025000000000000,Hydrogen=4016000000000000,Nitrogen=4021000000000000,Oxygen=3ff8000000000000,Phosphorus=4029000000000000,Sulfur=400c000000000000,Water=401c000000000000",
+  "entries": 0
 }

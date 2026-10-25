@@ -2,8 +2,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 
-#[cfg(test)]
-use crate::energy_ledger::EnergyLedgerAuthority;
+use crate::energy_ledger::{EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction};
 
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
 use crate::decision_runtime::{
@@ -13,6 +12,10 @@ use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::genome::initial_genome;
 use crate::state::{EnergyLedger, Environment, Organism, Position, Simulation};
 use crate::structure::Placement;
+
+fn checked_next_organism_id(current: u64) -> Option<u64> {
+    current.checked_add(1)
+}
 
 fn should_prepare_transformation(
     kind: &crate::state::TransformationKind,
@@ -28,53 +31,72 @@ const BUDDING_AVAILABILITY_FRACTION: f64 = 0.90;
 
 fn restore_failed_transformation_material(
     transformation: &crate::state::ActiveTransformation,
-    organism: Option<&mut Organism>,
+    mut organism: Option<&mut Organism>,
     environment: &mut Environment,
-) {
-    if let Some((cell_index, source)) = transformation.combine_environmental_source.as_ref() {
-        if let Some(cell) = environment.field.cells.get_mut(*cell_index) {
-            cell.physical_materials.push(source.clone());
-            environment.field.mark_changed_at_index(*cell_index);
+) -> bool {
+    if let Some(owner) = organism.as_deref_mut() {
+        if owner.active_transformation_id == Some(transformation.id) {
+            owner.active_transformation_id = None;
         }
-        return;
+    }
+
+    if let Some((_, source)) = transformation.combine_environmental_source.as_ref() {
+        if !crate::transformation::restore_combine_environmental_source(transformation, environment)
+        {
+            if let Some(owner) = organism.as_deref_mut() {
+                crate::transformation::quarantine_or_retain_environmental_source(
+                    source,
+                    owner,
+                    environment,
+                );
+            } else {
+                crate::transformation::retain_environmental_escrow_in_field(source, environment);
+            }
+        }
+        return true;
     }
 
     let Some(source) = transformation.stored_material.as_ref() else {
-        return;
+        return true;
     };
     if transformation.environmental_source {
-        if let Some(placement) = source
-            .placements
-            .as_ref()
-            .and_then(|placements| placements.first())
-        {
-            let _ = environment
-                .field
-                .deposit(placement.x, placement.y, source.clone());
+        if !crate::transformation::restore_environmental_break_source(transformation, environment) {
+            if let Some(owner) = organism.as_deref_mut() {
+                crate::transformation::quarantine_or_retain_environmental_source(
+                    source,
+                    owner,
+                    environment,
+                );
+            } else {
+                // An owner can disappear while a multi-tick operation is active.
+                // Keep the world-space source in the field if exact restoration fails.
+                crate::transformation::retain_environmental_escrow_in_field(source, environment);
+            }
         }
-        return;
+        return true;
     }
 
     // A stored-material BREAK temporarily removes its source from the
     // organism's storage when the transformation starts. If preparation fails,
-    // put that exact source back instead of silently dropping it.
-    if let Some(organism) = organism {
-        if organism
-            .stored_material
-            .store_physical_instance(source.clone())
-        {
-            return;
-        }
-    }
-    if let Some(placement) = source
-        .placements
-        .as_ref()
-        .and_then(|placements| placements.first())
+    // return that escrow to its original holder position when metadata is valid.
+    // Intrinsic coordinates are not world coordinates and must never be used
+    // as a fallback deposit.
+    let Some(organism) = organism else {
+        // Keep the active transformation as an explicit escrow if its owner
+        // disappeared. The caller quarantines it instead of discarding material.
+        return false;
+    };
+    let entry = crate::material_storage::StoredMaterial::Physical(source.clone());
+    if let Some(index) = crate::transformation::original_stored_source_index(transformation)
+        .filter(|index| *index <= organism.stored_material.entries.len())
     {
-        let _ = environment
-            .field
-            .deposit(placement.x, placement.y, source.clone());
+        organism.stored_material.entries.insert(index, entry);
+    } else {
+        // Missing/corrupt index metadata cannot support exact positional rollback.
+        // Preserve the escrow at the end rather than silently clamping the index.
+        organism.stored_material.entries.push(entry);
     }
+    true
 }
 
 impl Simulation {
@@ -117,7 +139,7 @@ impl Simulation {
         let environment = Self::create_environment();
         let seed_scale_reference =
             crate::juvenile::confirmed_seed_scale_reference(&environment.catalog).ok();
-        let organism = Self::create_initial_organism();
+        let mut organism = Self::create_initial_organism();
         let world_tone = crate::world_tone::WorldToneRuntimeConfig::default_for_world(
             environment.width,
             environment.height,
@@ -129,10 +151,26 @@ impl Simulation {
             environment.height,
         )
         .expect("default world tone cycle must be valid");
+        // Treat the starting usable reserve as an explicit, one-time external
+        // source transaction instead of silently declaring it as the baseline.
+        let initial_usable_energy = organism.usable_energy;
+        organism.usable_energy = 0.0;
         let mut energy_ledger = EnergyLedger::default();
+        let initial_input = ExternalInputTransaction {
+            source: ExternalEnergySource::InitialCondition,
+            source_available: initial_usable_energy,
+            external_input: initial_usable_energy,
+            usable_delta: initial_usable_energy,
+            work_expended: 0.0,
+            heat_dissipated: 0.0,
+        };
+        assert!(
+            energy_ledger.settle_external_input(&mut organism.usable_energy, initial_input),
+            "initial usable energy must enter through a balanced source transaction"
+        );
         energy_ledger.total_usable_energy_held =
             crate::reproduction::total_usable_energy_held(std::slice::from_ref(&organism), &[]);
-        energy_ledger.initial_usable_energy_held = energy_ledger.total_usable_energy_held;
+        energy_ledger.initial_usable_energy_held = 0.0;
         energy_ledger.total_resonant_energy_held =
             crate::reproduction::total_resonant_energy_held(std::slice::from_ref(&organism));
         energy_ledger.initial_resonant_energy_held = energy_ledger.total_resonant_energy_held;
@@ -248,6 +286,7 @@ impl Simulation {
             stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
             stored_material,
             structure,
+            genome_core_identity_established: false,
             active_transformation_id: None,
             active_movement: None,
             reproductive_construction: None,
@@ -341,6 +380,16 @@ impl Simulation {
         organism: &mut Organism,
         environment: &mut Environment,
     ) {
+        // A multi-tick transformation may hold an escrowed storage index or a
+        // prepared storage snapshot. Acquiring contained material while it is
+        // in flight can shift a stored-BREAK rollback index or let a prepared
+        // COMBINE snapshot overwrite newly acquired material. Defer acquisition
+        // until the transformation resolves so the transaction's holder view
+        // remains isolated for its full lifetime.
+        if organism.active_transformation_id.is_some() {
+            return;
+        }
+
         let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
             &organism.structure,
             &environment.catalog,
@@ -358,38 +407,60 @@ impl Simulation {
         ) else {
             return;
         };
-        for physical in environment
+        // Gather only the affected physical objects and their exact source
+        // indices. Preflight storage conversion before mutating either holder;
+        // this avoids cloning the entire world field or inventory.
+        let candidate_cells = environment
             .field
-            .take_contained_physical_materials_in_regions(
-                &body,
-                &interior_regions,
-                &environment.catalog,
-            )
-        {
-            match organism
-                .stored_material
-                .try_store_physical_instance_at_owner_anchor(
+            .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
+        let mut source_indices = Vec::new();
+        let mut contained = Vec::new();
+        for cell_index in candidate_cells {
+            let Some(cell) = environment.field.cells.get(cell_index) else {
+                continue;
+            };
+            for (physical_index, physical) in cell.physical_materials.iter().enumerate() {
+                if crate::environment::ActiveMaterialField::physical_is_fully_inside_any_region(
                     physical,
-                    Placement {
-                        x: anchor.x,
-                        y: anchor.y,
-                        rotation_radians: 0.0,
-                    },
+                    &interior_regions,
+                    &environment.catalog,
                 ) {
-                Ok(()) => continue,
-                Err(physical) => {
-                    if let Some(placement) = physical
-                        .placements
-                        .as_ref()
-                        .and_then(|placements| placements.first())
-                    {
-                        let _ = environment
-                            .field
-                            .deposit(placement.x, placement.y, physical);
-                    }
+                    source_indices.push((cell_index, physical_index));
+                    contained.push(physical.clone());
                 }
             }
         }
+        if contained.is_empty() {
+            return;
+        }
+
+        let Some(prepared_entries) =
+            crate::material_storage::MaterialStorage::prepare_physical_batch_at_owner_anchor(
+                contained,
+                Placement {
+                    x: anchor.x,
+                    y: anchor.y,
+                    rotation_radians: 0.0,
+                },
+            )
+        else {
+            // The field remains untouched if any member of the batch cannot be
+            // represented faithfully in storage.
+            return;
+        };
+
+        // Remove from highest index to lowest so each recorded source index
+        // remains valid. No other mutation can interleave within this call.
+        source_indices.sort_unstable_by(|left, right| right.cmp(left));
+        for (cell_index, physical_index) in source_indices {
+            environment.field.cells[cell_index]
+                .physical_materials
+                .remove(physical_index);
+            environment.field.mark_changed_at_index(cell_index);
+        }
+        organism
+            .stored_material
+            .commit_prepared_physical_batch(prepared_entries);
     }
 
     fn current_needs(
@@ -437,6 +508,7 @@ impl Simulation {
             development =
                 development.max(crate::reproduction::construction_material_need_pressure(
                     construction,
+                    &organism.stored_material,
                     &environment.catalog,
                 ));
         }
@@ -451,6 +523,16 @@ impl Simulation {
         environment: &Environment,
         needs: CurrentNeeds,
     ) -> ActionEligibility {
+        // A multi-tick transformation owns a staged physical/energy snapshot.
+        // Do not start movement or another material action against that snapshot.
+        if organism.active_transformation_id.is_some() {
+            return ActionEligibility {
+                can_move: false,
+                can_combine: false,
+                can_break: false,
+                can_expel: false,
+            };
+        }
         let can_combine = crate::combine_runtime::can_combine(organism, environment);
         let can_break_stored = organism.active_transformation_id.is_none()
             && organism.stored_material.entries.iter().any(|entry| {
@@ -571,10 +653,12 @@ impl Simulation {
                 // material until this body's finalization can commit.
                 continue;
             }
+            // Stage energy dissipation without mutating the live holder or
+            // ledger. Material release and energy settlement are one ownership
+            // transition: either both commit, or the body remains unchanged.
+            let mut staged_ledger = self.energy_ledger;
+            let mut staged_energy = remaining;
             if remaining > 0.0 {
-                // A finished body cannot be removed while it still owns usable
-                // energy. Until an authorized receiver/path exists, explicitly
-                // settle the remainder as a sink rather than silently losing it.
                 let sink = crate::energy_ledger::EnergyTransaction {
                     reason: crate::energy_ledger::EnergyReason::Decomposition,
                     potential_released: 0.0,
@@ -583,25 +667,29 @@ impl Simulation {
                     work_expended: 0.0,
                     heat_dissipated: remaining,
                 };
-                if !self
-                    .energy_ledger
-                    .settle_transaction(&mut self.decomposing_bodies[index].energy_budget, sink)
-                {
+                if !staged_ledger.settle_transaction(&mut staged_energy, sink) {
                     continue;
                 }
             }
 
-            // Material release and holder removal happen only after the energy
-            // sink succeeds. Otherwise a retained body would re-release the
-            // same units on a later tick.
             let position = self.decomposing_bodies[index].position.clone();
-            let materials =
-                self.decomposing_bodies[index].release_finished_material(&self.environment.catalog);
-            for material in materials {
-                self.environment
-                    .field
-                    .deposit(position.x, position.y, material);
+            let Some(materials) =
+                self.decomposing_bodies[index].release_finished_material(&self.environment.catalog)
+            else {
+                // Keep the holder and live ledger intact if any constituent
+                // cannot be released with its authoritative material/geometry.
+                continue;
+            };
+            let deposits = materials
+                .into_iter()
+                .map(|material| (position.x, position.y, material))
+                .collect();
+            if !self.environment.field.deposit_physical_batch(deposits) {
+                // A failed destination commits neither material nor energy.
+                continue;
             }
+            self.decomposing_bodies[index].energy_budget = staged_energy;
+            self.energy_ledger = staged_ledger;
             self.decomposing_bodies.remove(index);
         }
     }
@@ -669,11 +757,16 @@ impl Simulation {
                         continue;
                     }
                 } else {
-                    restore_failed_transformation_material(
+                    if !restore_failed_transformation_material(
                         &transformation,
                         None,
                         &mut self.environment,
-                    );
+                    ) {
+                        // Stored material has no world-space location. Keep the
+                        // transaction and its escrow intact until its owner can
+                        // be resolved instead of silently dropping the material.
+                        still_active.push(transformation);
+                    }
                     continue;
                 }
             }
@@ -773,8 +866,12 @@ impl Simulation {
             // physical structure is applied immediately; conflicting events
             // naturally fail once an earlier event has changed that structure.
             for operation in chemical_operations {
-                let _ =
-                    crate::chemical_reaction::resolve(operation, organism, &mut self.energy_ledger);
+                let _ = crate::chemical_reaction::resolve_preserving_accumulation(
+                    operation,
+                    organism,
+                    &mut self.energy_ledger,
+                    &mut self.chemical_reaction_accumulation,
+                );
             }
 
             // Recheck immediately after chemistry: if a reaction breached the
@@ -806,6 +903,7 @@ impl Simulation {
             for index in 0..organisms.len() {
                 if !living_ids.contains(&organisms[index].id)
                     || completed_organisms.contains(&organisms[index].id)
+                    || organisms[index].active_transformation_id.is_some()
                 {
                     continue;
                 }
@@ -1227,7 +1325,12 @@ impl Simulation {
             if !living_ids.contains(&organism.id) {
                 continue;
             }
-            if organism.reproductive_construction.is_some() {
+            // Construction consumes the same stored-material holder used by
+            // BREAK/COMBINE transactions. Pause it while a transformation owns
+            // an escrow or prepared storage snapshot; resume after resolution.
+            if organism.reproductive_construction.is_some()
+                && organism.active_transformation_id.is_none()
+            {
                 let Some(parent_body) =
                     crate::reproduction::parent_body_geometry(organism, &self.environment.catalog)
                 else {
@@ -1239,7 +1342,7 @@ impl Simulation {
                         .as_mut()
                         .expect("reproductive construction exists");
                     crate::reproduction::advance_construction(
-                        &organism.structure,
+                        &mut organism.structure,
                         &mut organism.stored_material,
                         construction,
                         &self.environment,
@@ -1253,12 +1356,16 @@ impl Simulation {
                 if let Some(stress) = stress {
                     organism.add_transaction_stress(stress);
                 }
-                if matches!(
-                    status,
-                    crate::reproduction::ConstructionStatus::Ready
-                        | crate::reproduction::ConstructionStatus::Detached
-                        | crate::reproduction::ConstructionStatus::Dead
-                ) {
+                if status == crate::reproduction::ConstructionStatus::Ready {
+                    // Only a construction that passed the complete readiness
+                    // gate may detach into an offspring. Detached/dead states
+                    // must never be reinterpreted as successful division by
+                    // rechecking geometry alone in finish_reproduction.
+                    // Reserve the next ID before detaching; exhaustion leaves
+                    // the construction attached to the parent.
+                    let Some(next_id_after) = checked_next_organism_id(next_organism_id) else {
+                        continue;
+                    };
                     let child_id = next_organism_id.to_string();
                     if let Some(child) = crate::reproduction::finish_reproduction(
                         organism,
@@ -1267,7 +1374,7 @@ impl Simulation {
                         &mut self.energy_ledger,
                         self.seed_scale_reference,
                     ) {
-                        next_organism_id += 1;
+                        next_organism_id = next_id_after;
                         offspring.push(child);
                     }
                 }
@@ -1321,6 +1428,10 @@ impl Simulation {
                     + organism
                         .reproductive_construction
                         .as_ref()
+                        .filter(|construction| {
+                            !construction.is_aggregate_owned_by(&organism.structure)
+                                && !construction.has_any_member_in(&organism.structure)
+                        })
                         .map_or(0.0, |construction| {
                             graph_energy(&construction.developing_structure)
                         })
@@ -1332,23 +1443,32 @@ impl Simulation {
             .sum();
         organism_energy + decomposition_energy
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "Energy inventory snapshot is currently used by reconciliation tests, not production telemetry"
-        )
-    )]
+    /// Independent test oracle: recompute current stores from their owning state,
+    /// rather than trusting the production ledger's cached aggregate totals.
+    /// Cumulative flows and tick-zero baselines still come from the ledger because
+    /// those are transaction history, not a current-state inventory.
+    #[cfg(test)]
     pub(crate) fn energy_inventory_snapshot(
         &self,
     ) -> crate::energy_ledger::EnergyInventorySnapshot {
+        let current_usable_energy = crate::reproduction::total_usable_energy_held(
+            &self.organisms,
+            &self.decomposing_bodies,
+        );
+        let current_resonant_energy =
+            crate::reproduction::total_resonant_energy_held(&self.organisms);
+        let current_structural_energy = crate::reproduction::total_structural_energy_held(
+            &self.organisms,
+            &self.decomposing_bodies,
+        );
+
         crate::energy_ledger::EnergyInventorySnapshot {
             initial_usable_energy: self.energy_ledger.initial_usable_energy_held,
-            current_usable_energy: self.energy_ledger.total_usable_energy_held,
+            current_usable_energy,
             initial_resonant_energy: self.energy_ledger.initial_resonant_energy_held,
-            current_resonant_energy: self.energy_ledger.total_resonant_energy_held,
+            current_resonant_energy,
             initial_structural_energy: self.energy_ledger.initial_structural_energy_held,
-            current_structural_energy: self.energy_ledger.total_structural_energy_held,
+            current_structural_energy,
             external_energy_input: self.energy_ledger.total_external_energy_input,
             world_tone_energy_escaped: self.energy_ledger.total_world_tone_energy_escaped,
             other_energy_released: self.energy_ledger.total_potential_energy_released,
@@ -1383,6 +1503,202 @@ impl Simulation {
 #[cfg(test)]
 mod decomposition_finalization_tests {
     #[test]
+    fn failed_stored_break_preparation_restores_exact_malformed_escrow() {
+        use crate::decision::ActionKind;
+        use crate::decision_runtime::ActionCandidate;
+        use crate::material_storage::StoredMaterial;
+        use crate::physical_material::PhysicalMaterial;
+        use crate::resources::{InternalBond, Material};
+        use crate::structure::Placement;
+
+        let mut simulation = Simulation::new(923, 10.0);
+        // Isolate this test's source from the default organism inventory so
+        // stored:0:bond:0 unambiguously selects the material created below.
+        simulation.organisms[0].stored_material.entries.clear();
+        let material = Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
+        let source = PhysicalMaterial::realized(
+            material,
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &simulation.environment.catalog,
+        )
+        .expect("test source should realize");
+        let catalog = simulation.environment.catalog.clone();
+        let make_neighbor = |name: &str, x: f64| {
+            PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("single-resource storage neighbor should be realizable")
+        };
+        let neighbor_before = make_neighbor("Nitrogen", -2.0);
+        let neighbor_after_one = make_neighbor("Phosphorus", 2.0);
+        let neighbor_after_two = make_neighbor("Sulfur", 4.0);
+        // Storage inserts at the front, so reverse insertion gives a source at
+        // index one with a distinct physical object on either side.
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(neighbor_after_two.clone()));
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(neighbor_after_one.clone()));
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(source));
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(neighbor_before.clone()));
+        let entries_before = simulation.organisms[0].stored_material.entries.clone();
+
+        let decision = ActionCandidate {
+            action: ActionKind::Break,
+            context_key: Some("stored:1:bond:0".into()),
+        };
+        let mut next_id = 1;
+        let mut transformation = Simulation::try_start_transformation(
+            &mut simulation.organisms[0],
+            &simulation.environment.catalog,
+            &mut next_id,
+            &decision,
+        )
+        .expect("stored BREAK should reserve source");
+        transformation.decision_context_key = Some("stored:999999:bond:0".into());
+        let stored = transformation.stored_material.as_mut().unwrap();
+        stored.placements = None;
+        let malformed = stored.clone();
+
+        restore_failed_transformation_material(
+            &transformation,
+            Some(&mut simulation.organisms[0]),
+            &mut simulation.environment,
+        );
+
+        let mut expected_entries = entries_before;
+        expected_entries[1] = StoredMaterial::Physical(malformed);
+        assert_eq!(
+            simulation.organisms[0].stored_material.entries,
+            expected_entries,
+            "failed preparation must restore malformed escrow at its original index and preserve neighbor order"
+        );
+        assert_eq!(simulation.organisms[0].active_transformation_id, None);
+    }
+
+    #[test]
+    fn failed_environmental_break_preparation_restores_source_at_original_cell_index() {
+        use crate::physical_material::PhysicalMaterial;
+        use crate::resources::{InternalBond, Material};
+        use crate::state::{ActiveTransformation, TransformationKind};
+        use crate::structure::Placement;
+
+        let catalog = crate::resources::default_catalog();
+        let mut environment = Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog: catalog.clone(),
+            field: ActiveMaterialField::new(1000.0, 1000.0, crate::environment::DEFAULT_CELL_SIZE),
+        };
+        let make_single = |name: &str, x: f64| {
+            PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("single-resource environmental neighbor should be realizable")
+        };
+        let before = make_single("Nitrogen", 6.0);
+        let source = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                Placement {
+                    x: 10.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 10.838,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("bonded environmental source should be realizable");
+        let after = make_single("Sulfur", 14.0);
+        let cell_index = environment
+            .field
+            .index_for_position(10.0, 10.0)
+            .expect("test source position must be in the field");
+        environment.field.cells[cell_index].physical_materials =
+            vec![before.clone(), after.clone()];
+        let transformation = ActiveTransformation {
+            id: 732,
+            organism_id: "missing-environmental-break-owner".into(),
+            kind: TransformationKind::Break,
+            material: Material::free_base("", 0.0),
+            bond: None,
+            stored_material: Some(source.clone()),
+            stored_bond: None,
+            environmental_source: true,
+            complexity: 1.0,
+            duration_ticks: 1,
+            remaining_ticks: 1,
+            prepared_energy: None,
+            pending_experience: None,
+            decision_context_key: Some("corrupted-after-reservation".into()),
+            prepared_structure: None,
+            prepared_stored_material: None,
+            prepared_usable_energy: None,
+            prepared_stress: None,
+            prepared_ledger: None,
+            prepared_ledger_before: None,
+            prepared_usable_energy_before: None,
+            combine_environmental_source: None,
+            stored_source_index: None,
+            environmental_source_location: Some((cell_index, 1)),
+            combine_environmental_source_index: None,
+        };
+
+        restore_failed_transformation_material(&transformation, None, &mut environment);
+
+        assert_eq!(
+            environment.field.cells[cell_index].physical_materials,
+            vec![before, source, after],
+            "failed preparation must return environmental escrow to the original cell index"
+        );
+    }
+
+    #[test]
     fn combine_prepares_at_completion_without_changing_break_timing() {
         use crate::state::TransformationKind;
 
@@ -1407,9 +1723,112 @@ mod decomposition_finalization_tests {
     use super::*;
     use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
+    fn rollback_material_inventory(
+        simulation: &Simulation,
+    ) -> std::collections::BTreeMap<String, u64> {
+        fn add(
+            totals: &mut std::collections::BTreeMap<String, u64>,
+            material: &crate::resources::Material,
+        ) {
+            for (name, amount) in &material.parts {
+                assert!(
+                    amount.is_finite() && *amount >= 0.0 && amount.fract().abs() <= 1e-9,
+                    "rollback fixture must contain whole finite constituents"
+                );
+                *totals.entry(name.clone()).or_default() += amount.round() as u64;
+            }
+        }
+
+        let mut totals = std::collections::BTreeMap::new();
+        for organism in &simulation.organisms {
+            for unit in &organism.structure.units {
+                add(&mut totals, &unit.material);
+            }
+            for material in organism.stored_material.iter_materials() {
+                add(&mut totals, material);
+            }
+            if let Some(construction) = organism.reproductive_construction.as_ref() {
+                // Aggregate-owned construction is a stable-ID view into the
+                // parent structure, not a second material owner. Count the
+                // developing graph only for legacy constructions that have
+                // not yet migrated into the parent aggregate.
+                if !construction.is_aggregate_owned_by(&organism.structure)
+                    && !construction.has_any_member_in(&organism.structure)
+                {
+                    for unit in &construction.developing_structure.units {
+                        add(&mut totals, &unit.material);
+                    }
+                }
+                for material in construction.committed_material.iter_materials() {
+                    add(&mut totals, material);
+                }
+            }
+        }
+        // In-flight BREAK/environmental COMBINE sources are authoritative
+        // holders while removed from storage or the world field. Do not count
+        // prepared COMBINE snapshots: they intentionally duplicate live state.
+        for transformation in &simulation.active_transformations {
+            if let Some(source) = transformation.stored_material.as_ref() {
+                add(&mut totals, &source.material);
+            }
+            if let Some((_, source)) = transformation.combine_environmental_source.as_ref() {
+                add(&mut totals, &source.material);
+            }
+        }
+        for body in &simulation.decomposing_bodies {
+            for unit in &body.structure.units {
+                add(&mut totals, &unit.material);
+            }
+        }
+        for cell in &simulation.environment.field.cells {
+            for material in &cell.materials {
+                add(&mut totals, material);
+            }
+            for physical in &cell.physical_materials {
+                add(&mut totals, &physical.material);
+            }
+        }
+        totals
+    }
+
+    #[test]
+    fn rollback_material_inventory_counts_aggregate_owned_construction_once() {
+        let mut simulation = Simulation::new(992, 20.0);
+        let before = rollback_material_inventory(&simulation);
+        let organism = &mut simulation.organisms[0];
+        let developing_structure = organism.structure.clone();
+        let developing_member_ids = developing_structure.physical_constituent_ids();
+        let anchor_physical_id = developing_structure.physical_id(0);
+
+        organism.reproductive_construction = Some(crate::state::ReproductiveConstruction {
+            committed_material: crate::material_storage::MaterialStorage::default(),
+            developing_structure,
+            developing_member_ids,
+            child_genome: organism.genome.clone(),
+            developmental_origin: organism.developmental_origin.clone(),
+            developmental_orientation_radians: organism.developmental_orientation_radians,
+            developing_stress: 0.0,
+            anchor_unit_index: 0,
+            anchor_physical_id,
+            developing_energy: 0.0,
+            developing_maintenance_debt: 0.0,
+            needs_space: false,
+        });
+
+        assert_eq!(
+            rollback_material_inventory(&simulation),
+            before,
+            "the aggregate-owned developing view must not count the same constituents twice"
+        );
+    }
+
     #[test]
     fn failed_stored_break_restores_material_to_organism_storage() {
         let mut simulation = Simulation::new(917, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
         let placement = Placement {
             x: 20.0,
             y: 20.0,
@@ -1426,6 +1845,7 @@ mod decomposition_finalization_tests {
         assert!(simulation.organisms[0]
             .stored_material
             .store_physical_instance(source.clone()));
+        let inventory_before = rollback_material_inventory(&simulation);
         let removed = simulation.organisms[0]
             .stored_material
             .take_physical_at(original_count)
@@ -1451,7 +1871,12 @@ mod decomposition_finalization_tests {
             prepared_usable_energy: None,
             prepared_stress: None,
             prepared_ledger: None,
+            prepared_ledger_before: None,
+            prepared_usable_energy_before: None,
             combine_environmental_source: None,
+            stored_source_index: None,
+            environmental_source_location: None,
+            combine_environmental_source_index: None,
         };
 
         restore_failed_transformation_material(
@@ -1477,6 +1902,141 @@ mod decomposition_finalization_tests {
                 }),
             "failed BREAK source should be restored with its original amount"
         );
+        assert_eq!(
+            rollback_material_inventory(&simulation),
+            inventory_before,
+            "failed stored BREAK rollback must preserve total constituent ownership"
+        );
+    }
+
+    #[test]
+    fn failed_stored_break_preparation_restores_escrow_through_live_tick() {
+        use crate::physical_material::PhysicalMaterial;
+        use crate::resources::{InternalBond, Material};
+        use crate::structure::Placement;
+
+        let mut simulation = Simulation::new(931, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        // Isolate the source index from the default organism inventory.
+        simulation.organisms[0].stored_material.entries.clear();
+        // Model a breached owner: the in-flight transaction must still return
+        // its escrow even though biological decisions will no longer run.
+        simulation.organisms[0].structure = crate::structure::OrganismStructure::new();
+        let catalog = simulation.environment.catalog.clone();
+        let source = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                Placement {
+                    x: 20.0,
+                    y: 20.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 20.838,
+                    y: 20.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("bonded stored source should be physically realizable");
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(source));
+        let inventory_before = rollback_material_inventory(&simulation);
+
+        let decision = crate::decision_runtime::ActionCandidate {
+            action: crate::decision::ActionKind::Break,
+            context_key: Some("stored:0:bond:0".into()),
+        };
+        let mut next_id = 1;
+        let mut transformation = Simulation::try_start_transformation(
+            &mut simulation.organisms[0],
+            &catalog,
+            &mut next_id,
+            &decision,
+        )
+        .expect("stored bond should reserve for BREAK");
+        transformation.stored_bond = None;
+        transformation.decision_context_key = Some("corrupted-after-reservation".into());
+        transformation.duration_ticks = 2;
+        transformation.remaining_ticks = 2;
+        simulation.active_transformations.push(transformation);
+        assert_eq!(
+            rollback_material_inventory(&simulation),
+            inventory_before,
+            "reserved source must remain counted while held by an in-flight transformation"
+        );
+
+        // The first tick reaches preparation, where the persisted target is
+        // malformed. The simulation-level rollback must return the escrow.
+        simulation.step();
+
+        assert!(simulation.active_transformations.is_empty());
+        assert_eq!(simulation.organisms[0].active_transformation_id, None);
+        assert_eq!(
+            rollback_material_inventory(&simulation),
+            inventory_before,
+            "failed live preparation must preserve all constituent ownership"
+        );
+        assert_eq!(simulation.organisms[0].stored_material.physical_count(), 1);
+    }
+
+    #[test]
+    fn organism_id_reservation_rejects_exhaustion_without_wrapping() {
+        assert_eq!(checked_next_organism_id(u64::MAX), None);
+        assert_eq!(checked_next_organism_id(u64::MAX - 1), Some(u64::MAX));
+    }
+
+    #[test]
+    fn initial_usable_energy_enters_through_an_explicit_source_transaction() {
+        let simulation = Simulation::new(916, 10.0);
+        let initial_usable_energy = simulation.organisms[0].usable_energy;
+
+        assert!(initial_usable_energy.is_finite() && initial_usable_energy > 0.0);
+        assert_eq!(simulation.energy_ledger.initial_usable_energy_held, 0.0);
+        assert_eq!(
+            simulation.energy_ledger.total_external_energy_input,
+            initial_usable_energy
+        );
+        assert!(
+            simulation
+                .energy_inventory_snapshot()
+                .is_balanced_without_creation(1e-9),
+            "initial energy source should reconcile: {:?}",
+            simulation.energy_inventory_snapshot().residual()
+        );
+    }
+
+    #[test]
+    fn active_transformation_suppresses_new_movement_and_material_actions() {
+        let simulation = Simulation::new(942, 10.0);
+        let mut organism = simulation.organisms[0].clone();
+        organism.active_transformation_id = Some(91);
+
+        let eligibility = Simulation::action_eligibility(
+            &organism,
+            &simulation.environment,
+            CurrentNeeds {
+                survival: 0.0,
+                reproduction: 0.0,
+                development: 0.0,
+            },
+        );
+
+        assert!(!eligibility.can_move);
+        assert!(!eligibility.can_combine);
+        assert!(!eligibility.can_break);
+        assert!(!eligibility.can_expel);
     }
 
     #[test]
@@ -1487,26 +2047,21 @@ mod decomposition_finalization_tests {
         }
         assert!(simulation.world_tone.is_some());
 
+        let external_before = simulation.energy_ledger.total_external_energy_input;
         simulation.step();
 
         assert!(
-            simulation.energy_ledger.total_external_energy_input > 0.0,
-            "live world tone should credit absorbed environmental energy"
+            simulation.energy_ledger.total_external_energy_input > external_before,
+            "live world tone should credit new absorbed environmental energy"
         );
-        assert!(
-            simulation.energy_ledger.total_resonant_energy_held > 0.0,
-            "captured world-tone energy should persist in the resonant reservoir"
-        );
-        assert!(
-            simulation.organisms[0]
-                .resonant_energy
-                .total_energy()
-                .is_some_and(|energy| energy > 0.0),
-            "organism reservoir should retain source energy across the tick"
-        );
+        // World-tone capture occurs before ordinary chemistry in this tick.
+        // Captured resonance may therefore be spent immediately by a valid
+        // reaction; the post-tick reservoir is not required to stay positive.
+        // The independent inventory below verifies that captured input remains
+        // accounted for whether it is retained, converted, or dissipated.
         let inventory = simulation.energy_inventory_snapshot();
         assert!(
-            inventory.is_balanced(1e-9),
+            inventory.is_balanced_without_creation(1e-9),
             "world inventory after live sunlight capture: {:?}",
             inventory.residual()
         );
@@ -1536,15 +2091,165 @@ mod decomposition_finalization_tests {
         let simulation = Simulation::new(914, 10.0);
         let inventory = simulation.energy_inventory_snapshot();
 
+        // The starting usable reserve is an explicit external input, not a
+        // tick-zero stored baseline. Counting both would double-count it.
+        assert_eq!(inventory.initial_usable_energy, 0.0);
         assert_eq!(
-            inventory.initial_usable_energy,
+            inventory.external_energy_input,
             inventory.current_usable_energy
         );
         assert_eq!(
             inventory.initial_structural_energy,
             inventory.current_structural_energy
         );
-        assert!(inventory.is_balanced(1e-9));
+        assert!(inventory.is_balanced_without_creation(1e-9));
+    }
+
+    #[test]
+    fn world_energy_inventory_reconciles_across_structural_break() {
+        let mut simulation = Simulation::new(917, 10.0);
+        let before = simulation.energy_inventory_snapshot();
+        assert!(
+            before.is_balanced_without_creation(1e-9),
+            "initial inventory: {:?}",
+            before.residual()
+        );
+
+        let organism = simulation
+            .organisms
+            .first()
+            .expect("initial organism exists");
+        let bond = *organism
+            .structure
+            .bonds
+            .first()
+            .expect("initial organism has a realized bond");
+        let organism_id = organism.id.clone();
+
+        let organism = simulation
+            .organisms
+            .iter_mut()
+            .find(|organism| organism.id == organism_id)
+            .expect("selected organism remains present");
+        assert!(
+            crate::transformation::settle_chemical_break_energy_with_resonance(
+                organism,
+                bond,
+                1.0e9,
+                0.0,
+                0.0,
+                1.0,
+                &mut simulation.energy_ledger,
+            )
+        );
+
+        let after = simulation.energy_inventory_snapshot();
+        assert!(
+            after.is_balanced_without_creation(1e-9),
+            "structural BREAK must reconcile the world inventory: residual={:?}",
+            after.residual()
+        );
+        assert!(
+            !simulation.organisms[0].structure.bonds.contains(&bond),
+            "successful BREAK must remove the selected bond"
+        );
+    }
+
+    #[test]
+    fn world_energy_inventory_reconciles_world_tone_and_structural_break_together() {
+        let mut simulation = Simulation::new(918, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+
+        let sample = simulation
+            .world_tone_cycle
+            .as_ref()
+            .and_then(|cycle| cycle.sample(simulation.tick))
+            .or_else(|| {
+                simulation.world_tone.and_then(|config| {
+                    config.sample(
+                        simulation.tick,
+                        simulation.environment.width,
+                        simulation.environment.height,
+                    )
+                })
+            })
+            .expect("world-tone source must have a sample at tick zero");
+        let catalog = &simulation.environment.catalog;
+        let living_ids = simulation
+            .organisms
+            .iter_mut()
+            .filter_map(|organism| {
+                Simulation::has_intact_genome_core(organism, catalog).then(|| organism.id.clone())
+            })
+            .collect::<std::collections::HashSet<_>>();
+        let external_before = simulation.energy_ledger.total_external_energy_input;
+        crate::world_tone_snapshot::WorldToneOccluderSnapshot::settle_living_organism_inputs(
+            &mut simulation,
+            sample,
+            &living_ids,
+        );
+        assert!(
+            simulation.energy_ledger.total_external_energy_input > external_before,
+            "the live world-tone source must contribute before the reaction"
+        );
+        let after_capture = simulation.energy_inventory_snapshot();
+        assert!(
+            after_capture.is_balanced_without_creation(1e-9),
+            "inventory after world-tone capture: {:?}",
+            after_capture.residual()
+        );
+
+        let (organism_id, bond) = {
+            let organism = simulation
+                .organisms
+                .first()
+                .expect("initial organism exists");
+            (
+                organism.id.clone(),
+                *organism
+                    .structure
+                    .bonds
+                    .first()
+                    .expect("initial organism has a realized bond"),
+            )
+        };
+        let organism = simulation
+            .organisms
+            .iter_mut()
+            .find(|organism| organism.id == organism_id)
+            .expect("selected organism remains present");
+        assert!(
+            crate::transformation::settle_chemical_break_energy_with_resonance(
+                organism,
+                bond,
+                1.0e9,
+                0.0,
+                0.0,
+                1.0,
+                &mut simulation.energy_ledger,
+            ),
+            "structural BREAK must settle after world-tone input"
+        );
+
+        let after_break = simulation.energy_inventory_snapshot();
+        assert!(
+            after_break.is_balanced_without_creation(1e-9),
+            "world-tone input and structural BREAK must reconcile together: {:?}",
+            after_break.residual()
+        );
+        assert!(
+            !simulation
+                .organisms
+                .iter()
+                .find(|organism| organism.id == organism_id)
+                .expect("selected organism remains present")
+                .structure
+                .bonds
+                .contains(&bond),
+            "successful BREAK must remove the selected bond"
+        );
     }
 
     #[test]
@@ -1555,8 +2260,8 @@ mod decomposition_finalization_tests {
             simulation.step();
             let inventory = simulation.energy_inventory_snapshot();
             assert!(
-                inventory.is_balanced(1e-9),
-                "world energy inventory must reconcile after ordinary tick {tick}: residual={:?}",
+                inventory.is_balanced_without_creation(1e-9),
+                "world energy inventory must reconcile after ordinary tick {tick}: residual={:?}, inventory={inventory:?}",
                 inventory.residual()
             );
         }
@@ -1567,7 +2272,7 @@ mod decomposition_finalization_tests {
         let mut simulation = Simulation::new(915, 10.0);
         let before = simulation.energy_inventory_snapshot();
         assert!(
-            before.is_balanced(1e-9),
+            before.is_balanced_without_creation(1e-9),
             "initial inventory: {:?}",
             before.residual()
         );
@@ -1584,7 +2289,7 @@ mod decomposition_finalization_tests {
 
         let after = simulation.energy_inventory_snapshot();
         assert!(
-            after.is_balanced(1e-9),
+            after.is_balanced_without_creation(1e-9),
             "stress bookkeeping must not create or destroy energy: {:?}",
             after.residual()
         );
@@ -1622,5 +2327,327 @@ mod decomposition_finalization_tests {
         assert_eq!(simulation.decomposing_bodies.len(), 1);
         assert!(simulation.decomposing_bodies[0].is_finished());
         assert_eq!(simulation.environment.field.total_amount(), before);
+    }
+
+    #[test]
+    fn invalid_finished_body_position_preserves_released_material_ownership() {
+        let mut simulation = Simulation::new(914, 10.0);
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let mut unit = StructuralUnit::new(
+            "Carbon".to_string(),
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(unit.realize_default_geometry(&catalog));
+        structure.add_unit(unit);
+        let body = crate::decomposition::DecomposingBody::new(
+            structure,
+            1.0,
+            Position {
+                x: f64::NAN,
+                y: 500.0,
+            },
+        )
+        .expect("energy is valid even if the malformed position is rejected at deposit");
+        simulation.decomposing_bodies.push(body);
+        let before = simulation.environment.field.total_amount();
+        let before_ledger = simulation.energy_ledger;
+
+        simulation.process_decomposing_bodies();
+
+        assert_eq!(simulation.decomposing_bodies.len(), 1);
+        assert!(simulation.decomposing_bodies[0].is_finished());
+        assert_eq!(simulation.decomposing_bodies[0].structure.units.len(), 1);
+        assert_eq!(simulation.decomposing_bodies[0].energy_budget, 1.0);
+        assert_eq!(simulation.energy_ledger, before_ledger);
+        assert_eq!(simulation.environment.field.total_amount(), before);
+    }
+
+    #[test]
+    fn malformed_environmental_escrow_never_enters_storage_in_world_coordinates() {
+        use crate::physical_material::PhysicalMaterial;
+        use crate::resources::Material;
+        use crate::state::ActiveTransformation;
+        use crate::structure::Placement;
+
+        let mut simulation = Simulation::new(929, 10.0);
+        let mut source = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 700.0,
+                y: 800.0,
+                rotation_radians: 0.25,
+            }],
+            &simulation.environment.catalog,
+        )
+        .expect("test source should realize");
+        source.placements = None;
+        let transformation = ActiveTransformation {
+            id: 811,
+            organism_id: simulation.organisms[0].id.clone(),
+            kind: crate::state::TransformationKind::Combine,
+            material: Material::free_base("", 0.0),
+            bond: None,
+            stored_material: None,
+            stored_bond: None,
+            environmental_source: true,
+            complexity: 1.0,
+            duration_ticks: 1,
+            remaining_ticks: 0,
+            prepared_energy: None,
+            pending_experience: None,
+            decision_context_key: None,
+            prepared_structure: None,
+            prepared_stored_material: None,
+            prepared_usable_energy: None,
+            prepared_stress: None,
+            prepared_ledger: None,
+            prepared_ledger_before: None,
+            prepared_usable_energy_before: None,
+            combine_environmental_source: Some((usize::MAX, source.clone())),
+            stored_source_index: None,
+            environmental_source_location: None,
+            combine_environmental_source_index: Some(0),
+        };
+        simulation.organisms[0].active_transformation_id = Some(transformation.id);
+        let storage_before = simulation.organisms[0].stored_material.entries.clone();
+
+        assert!(restore_failed_transformation_material(
+            &transformation,
+            Some(&mut simulation.organisms[0]),
+            &mut simulation.environment,
+        ));
+        assert_eq!(
+            simulation.organisms[0].stored_material.entries,
+            storage_before
+        );
+        assert!(
+            simulation.environment.field.cells[0]
+                .physical_materials
+                .contains(&source),
+            "unrestorable world-space escrow must remain explicitly held by the field"
+        );
+        assert_eq!(simulation.organisms[0].active_transformation_id, None);
+    }
+
+    #[test]
+    fn environmental_escrow_fallback_converts_world_pose_to_owner_relative_storage() {
+        use crate::physical_material::PhysicalMaterial;
+        use crate::resources::Material;
+        use crate::structure::Placement;
+
+        let mut simulation = Simulation::new(927, 10.0);
+        let source = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 700.0,
+                y: 800.0,
+                rotation_radians: 0.25,
+            }],
+            &simulation.environment.catalog,
+        )
+        .expect("environmental source should be physically realized");
+        let owner = &mut simulation.organisms[0];
+        owner.occupied_cells = vec![Position { x: 500.0, y: 500.0 }];
+        assert!(
+            crate::transformation::quarantine_environmental_source_in_storage(
+                &source,
+                owner,
+                &simulation.environment,
+            )
+        );
+        let crate::material_storage::StoredMaterial::Physical(stored) =
+            &simulation.organisms[0].stored_material.entries[0];
+        let placement = stored.placements.as_ref().unwrap()[0];
+        let owner_origin = stored.owner_relative_origin.unwrap();
+        assert!(placement.x.abs() < 1e-9 && placement.y.abs() < 1e-9);
+        assert!((owner_origin.x - 200.0).abs() < 1e-9);
+        assert!((owner_origin.y - 300.0).abs() < 1e-9);
+        assert!((owner_origin.rotation_radians - 0.25).abs() < 1e-9);
+    }
+
+    #[test]
+    fn breached_organism_retains_storage_and_construction_without_biological_progress() {
+        use crate::resources::Material;
+
+        let mut simulation = Simulation::new(0xD34D, 10.0);
+        // Remove the external source so this test measures holder continuity,
+        // not a legitimate world-tone input during the tick.
+        simulation.world_tone = None;
+        simulation.world_tone_cycle = None;
+
+        simulation.organisms[0].stored_material.entries.clear();
+        assert!(simulation.organisms[0].store_material(Material::free_base("Carbon", 1.0)));
+        assert!(simulation.organisms[0].store_material(Material::free_base("Hydrogen", 1.0)));
+
+        let mut ledger = simulation.energy_ledger;
+        assert!(crate::reproduction::begin_reproduction(
+            &mut simulation.organisms[0],
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+        simulation.energy_ledger = ledger;
+
+        // Give construction a committed physical-material holder using a real
+        // transfer. Aggregate-owned construction energy remains with the parent.
+        let organism = &mut simulation.organisms[0];
+        let construction = organism
+            .reproductive_construction
+            .as_mut()
+            .expect("construction started");
+        let committed = organism
+            .stored_material
+            .take_physical_at(0)
+            .expect("second stored constituent remains");
+        construction
+            .committed_material
+            .entries
+            .push(crate::material_storage::StoredMaterial::Physical(committed));
+        let construction = simulation.organisms[0]
+            .reproductive_construction
+            .as_ref()
+            .expect("construction remains parent-owned");
+        assert_eq!(construction.developing_energy, 0.0);
+        assert!(construction.developing_structure.units.is_empty());
+        assert!(!construction.committed_material.is_empty());
+        let developing_member_ids = construction.developing_member_ids.clone();
+        assert!(developing_member_ids
+            .iter()
+            .all(|id| simulation.organisms[0].structure.unit_index(*id).is_some()));
+
+        // Breach the parent's established core while retaining the physical
+        // aggregate, including construction members. Parent-owned construction
+        // must not need a duplicate graph to survive the breach.
+        let all_ids = simulation.organisms[0].structure.physical_constituent_ids();
+        let non_developing_ids = all_ids
+            .into_iter()
+            .filter(|id| !developing_member_ids.contains(id))
+            .collect::<Vec<_>>();
+        assert!(!non_developing_ids.is_empty());
+        simulation.organisms[0]
+            .structure
+            .remove_units_by_physical_ids(&non_developing_ids);
+        simulation.organisms[0]
+            .structure
+            .clear_genome_constituent_ids();
+        simulation.organisms[0].genome_core_identity_established = true;
+        simulation.organisms[0].mark_structure_changed();
+
+        let material_before = rollback_material_inventory(&simulation);
+        let parent_energy_before = simulation.organisms[0].usable_energy;
+        let parent_storage_before = simulation.organisms[0].stored_material.entries.clone();
+        let construction_before = {
+            let construction = simulation.organisms[0]
+                .reproductive_construction
+                .as_ref()
+                .expect("construction remains attached");
+            (
+                construction.developing_energy,
+                construction.developing_stress,
+                construction.developing_maintenance_debt,
+                construction.developing_structure.clone(),
+                construction.committed_material.entries.clone(),
+                construction.needs_space,
+            )
+        };
+        let inventory_before = simulation.energy_inventory_snapshot();
+
+        simulation.step();
+
+        assert_eq!(rollback_material_inventory(&simulation), material_before);
+        assert_eq!(simulation.organisms.len(), 1);
+        assert!(simulation.decomposing_bodies.is_empty());
+        assert_eq!(simulation.organisms[0].usable_energy, parent_energy_before);
+        assert_eq!(
+            simulation.organisms[0].stored_material.entries,
+            parent_storage_before
+        );
+        let construction = simulation.organisms[0]
+            .reproductive_construction
+            .as_ref()
+            .expect("breached holder remains owned by the organism");
+        assert_eq!(construction.developing_energy, construction_before.0);
+        assert_eq!(construction.developing_stress, construction_before.1);
+        assert_eq!(
+            construction.developing_maintenance_debt,
+            construction_before.2
+        );
+        assert_eq!(
+            construction.developing_structure.units,
+            construction_before.3.units
+        );
+        assert_eq!(
+            construction.developing_structure.bonds,
+            construction_before.3.bonds
+        );
+        assert!(construction.developing_structure.units.is_empty());
+        assert!(developing_member_ids
+            .iter()
+            .all(|id| simulation.organisms[0].structure.unit_index(*id).is_some()));
+        assert_eq!(
+            construction.committed_material.entries,
+            construction_before.4
+        );
+        assert_eq!(construction.needs_space, construction_before.5);
+
+        let inventory_after = simulation.energy_inventory_snapshot();
+        assert_eq!(
+            inventory_after.current_usable_energy,
+            inventory_before.current_usable_energy
+        );
+        assert_eq!(
+            inventory_after.current_resonant_energy,
+            inventory_before.current_resonant_energy
+        );
+        assert_eq!(
+            inventory_after.current_structural_energy,
+            inventory_before.current_structural_energy
+        );
+    }
+
+    #[test]
+    fn aggregate_owned_construction_is_counted_once_in_energy_inventory() {
+        let mut simulation = Simulation::new(953, 20.0);
+        let organism = &mut simulation.organisms[0];
+        organism.usable_energy = 7.0;
+        let aggregate = organism.structure.clone();
+        let member_ids = aggregate.physical_constituent_ids();
+        organism.reproductive_construction = Some(crate::state::ReproductiveConstruction {
+            committed_material: crate::material_storage::MaterialStorage::default(),
+            developing_structure: aggregate,
+            developing_member_ids: member_ids,
+            child_genome: organism.genome.clone(),
+            developmental_origin: organism.developmental_origin.clone(),
+            developmental_orientation_radians: organism.developmental_orientation_radians,
+            developing_stress: 0.0,
+            anchor_unit_index: 0,
+            anchor_physical_id: organism.structure.physical_id(0),
+            developing_energy: 0.0,
+            developing_maintenance_debt: 0.0,
+            needs_space: false,
+        });
+
+        let expected_structural_energy = organism
+            .structure
+            .bonds
+            .iter()
+            .map(|bond| bond.bond_energy)
+            .sum::<f64>();
+        let inventory = simulation.energy_inventory_snapshot();
+
+        assert_eq!(inventory.current_usable_energy, 7.0);
+        assert_eq!(
+            inventory.current_structural_energy,
+            expected_structural_energy
+        );
+        assert_eq!(
+            Simulation::structural_energy_held(&simulation.organisms, &[]),
+            expected_structural_energy
+        );
     }
 }
