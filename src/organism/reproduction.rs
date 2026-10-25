@@ -1706,6 +1706,37 @@ mod tests {
     }
 
     #[test]
+    fn aggregate_owned_construction_energy_is_not_counted_twice() {
+        let mut simulation = Simulation::new(947, 20.0);
+        let mut parent = simulation.organisms.remove(0);
+        parent.usable_energy = 17.0;
+
+        let aggregate = parent.structure.clone();
+        let member_ids = aggregate.physical_constituent_ids();
+        parent.reproductive_construction = Some(ReproductiveConstruction {
+            committed_material: MaterialStorage::default(),
+            developing_structure: aggregate,
+            developing_member_ids: member_ids,
+            child_genome: parent.genome.clone(),
+            developmental_origin: parent.developmental_origin.clone(),
+            developmental_orientation_radians: parent.developmental_orientation_radians,
+            developing_stress: 0.0,
+            anchor_unit_index: 0,
+            anchor_physical_id: parent.structure.physical_id(0),
+            developing_energy: 11.0,
+            developing_maintenance_debt: 0.0,
+            needs_space: false,
+        });
+
+        let held = total_usable_energy_held(&[parent], &[]);
+        assert_eq!(
+            held, 17.0,
+            "an aggregate-owned construction view must not create a second energy owner"
+        );
+    }
+
+
+    #[test]
     fn anchor_is_not_a_predefined_structural_blueprint() {
         let catalog = default_catalog();
         let genome = initial_genome();
