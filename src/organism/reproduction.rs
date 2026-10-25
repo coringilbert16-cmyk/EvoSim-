@@ -850,7 +850,9 @@ fn commit_candidate_attachment(
     }
     construction.committed_material = child.stored_material;
     construction.developing_member_ids = child.structure.physical_constituent_ids();
-    construction.developing_structure = child.structure;
+    if !aggregate_owned {
+        construction.developing_structure = child.structure;
+    }
     construction.needs_space = false;
     construction.developing_energy = if aggregate_owned {
         0.0
