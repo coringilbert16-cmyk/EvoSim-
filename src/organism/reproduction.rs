@@ -1026,21 +1026,16 @@ pub(crate) fn advance_construction(
         return (ConstructionStatus::Ready, None);
     }
 
-    if !parent_child_in_contact(
-        parent_structure,
-        &construction.developing_structure,
-    ) {
+    if !parent_child_in_contact(parent_structure, &child.structure) {
         return (ConstructionStatus::Detached, None);
     }
 
     let anchor_index = construction
         .anchor_physical_id
-        .and_then(|id| construction.developing_structure.unit_index(id))
+        .and_then(|id| child.structure.unit_index(id))
         .unwrap_or(construction.anchor_unit_index);
-    let genome_qualified = crate::cavity::analyze_genome_cavity(
-        &construction.developing_structure,
-        &environment.catalog,
-    )
+    let genome_qualified =
+        crate::cavity::analyze_genome_cavity(&child.structure, &environment.catalog)
     .ok()
     .flatten()
     .is_some_and(|cavity| cavity.boundary_units.contains(&anchor_index));
