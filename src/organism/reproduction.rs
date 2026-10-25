@@ -1475,7 +1475,7 @@ mod tests {
     }
 
     #[test]
-    fn developing_offspring_receives_persistent_energy_from_parent() {
+    fn aggregate_owned_construction_keeps_energy_in_parent_holder() {
         let mut simulation = Simulation::new(11, 20.0);
         let mut parent = simulation.organisms.remove(0);
         let mut ledger = EnergyLedger::default();
@@ -1501,8 +1501,13 @@ mod tests {
             &body,
             None,
         );
-        assert!(construction.developing_energy > 0.0);
-        assert!(parent.usable_energy < before_parent_energy);
+        assert!(construction.is_aggregate_owned_by(&parent.structure));
+        assert_eq!(construction.developing_energy, 0.0);
+        assert!(parent.usable_energy <= before_parent_energy);
+        assert_eq!(
+            total_usable_energy_held(&[parent.clone()], &[]),
+            parent.usable_energy
+        );
     }
 
     #[test]
