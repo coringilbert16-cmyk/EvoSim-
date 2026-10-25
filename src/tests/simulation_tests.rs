@@ -421,10 +421,10 @@ mod integration_tests {
         let catalog = simulation.environment.catalog.clone();
         let before =
             integer_material_inventory(&simulation).expect("initial inventory is integral");
-        let energy_before = crate::reproduction::total_usable_energy_held(
-            &simulation.organisms,
-            &simulation.decomposing_bodies,
-        );
+        let energy_before = simulation.energy_inventory_snapshot();
+        let total_energy_before = energy_before.current_usable_energy
+            + energy_before.current_structural_energy
+            + energy_before.current_resonant_energy;
         let mut ledger = crate::state::EnergyLedger::default();
 
         let (parent, rng) = (&mut simulation.organisms[0], &mut simulation.rng);
@@ -437,17 +437,17 @@ mod integration_tests {
 
         let after =
             integer_material_inventory(&simulation).expect("post-transfer inventory is integral");
-        let energy_after = crate::reproduction::total_usable_energy_held(
-            &simulation.organisms,
-            &simulation.decomposing_bodies,
-        );
+        let energy_after = simulation.energy_inventory_snapshot();
+        let total_energy_after = energy_after.current_usable_energy
+            + energy_after.current_structural_energy
+            + energy_after.current_resonant_energy;
         assert_eq!(
             after, before,
             "moving the physical anchor into developing offspring must preserve every constituent"
         );
-        assert_eq!(
-            energy_after, energy_before,
-            "admitting the anchor must not create a second usable-energy holder"
+        assert!(
+            (total_energy_after - total_energy_before).abs() <= 1e-8,
+            "anchor admission must conserve total energy while converting usable energy into structural bond energy: before {total_energy_before}, after {total_energy_after}"
         );
     }
 
