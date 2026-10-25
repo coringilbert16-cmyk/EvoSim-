@@ -434,14 +434,13 @@ mod integration_tests {
             + energy_before.current_resonant_energy
             + energy_before.work_expended
             + energy_before.heat_dissipated;
-        let mut ledger = crate::state::EnergyLedger::default();
-
-        let (parent, rng) = (&mut simulation.organisms[0], &mut simulation.rng);
+        let (parent, rng, ledger) = (
+            &mut simulation.organisms[0],
+            &mut simulation.rng,
+            &mut simulation.energy_ledger,
+        );
         assert!(crate::reproduction::begin_reproduction(
-            parent,
-            rng,
-            &catalog,
-            &mut ledger,
+            parent, rng, &catalog, ledger,
         ));
 
         let after =
