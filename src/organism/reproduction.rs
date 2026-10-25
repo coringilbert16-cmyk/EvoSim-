@@ -1315,6 +1315,31 @@ mod tests {
     }
 
     #[test]
+    fn serialized_construction_never_persists_a_second_physical_graph() {
+        let construction = ReproductiveConstruction {
+            committed_material: MaterialStorage::default(),
+            developing_structure: OrganismStructure::new(),
+            developing_member_ids: Vec::new(),
+            child_genome: initial_genome(),
+            developmental_origin: Position { x: 0.0, y: 0.0 },
+            developmental_orientation_radians: 0.0,
+            developing_stress: 0.0,
+            anchor_unit_index: 0,
+            anchor_physical_id: None,
+            developing_energy: 0.0,
+            developing_maintenance_debt: 0.0,
+            needs_space: false,
+        };
+
+        let serialized = serde_json::to_value(construction)
+            .expect("reproductive construction should serialize");
+        assert!(
+            serialized.get("developing_structure").is_none(),
+            "physical structure is reconstructed from parent-owned stable IDs, not persisted twice"
+        );
+    }
+
+    #[test]
     fn invalid_developing_holder_does_not_draw_parent_reserve_again() {
         use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
         use crate::resources::default_catalog;
