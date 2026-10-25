@@ -571,7 +571,13 @@ mod integration_tests {
                 .expect("reproductive construction is active");
             assert_eq!(construction.developing_energy, 0.0);
             assert!(parent.stored_material.physical_count() > 0);
-            assert!(!construction.developing_structure.units.is_empty());
+            assert!(construction.developing_structure.units.is_empty());
+            assert!(
+                construction.developing_member_ids.iter().all(|id| {
+                    parent.structure.unit_index(*id).is_some()
+                }),
+                "the parent aggregate must remain the physical owner"
+            );
 
             // This test starts from an already-breached organism. Establish that
             // topology before the observed ticks, rather than modeling the BREAK
