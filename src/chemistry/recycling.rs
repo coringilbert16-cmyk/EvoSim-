@@ -193,7 +193,8 @@ mod tests {
             &mut ledger,
         ));
         let construction = organism.reproductive_construction.as_mut().unwrap();
-        construction.developing_member_ids.push(construction.developing_member_ids[0]);
+        let first_member = construction.developing_member_ids[0];
+        construction.developing_member_ids.push(first_member);
         let original_structure = organism.structure.clone();
         let original_storage = organism.stored_material.clone();
         let original_construction = organism.reproductive_construction.clone();
@@ -205,8 +206,17 @@ mod tests {
         assert_eq!(organism.structure.units, original_structure.units);
         assert_eq!(organism.structure.bonds, original_structure.bonds);
         assert_eq!(organism.stored_material, original_storage);
-        assert_eq!(organism.reproductive_construction.as_ref().unwrap().developing_member_ids,
-            original_construction.as_ref().unwrap().developing_member_ids);
+        assert_eq!(
+            organism
+                .reproductive_construction
+                .as_ref()
+                .unwrap()
+                .developing_member_ids,
+            original_construction
+                .as_ref()
+                .unwrap()
+                .developing_member_ids
+        );
         assert_eq!(ledger, original_ledger);
     }
 
