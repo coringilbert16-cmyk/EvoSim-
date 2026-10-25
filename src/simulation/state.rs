@@ -236,10 +236,11 @@ impl ReproductiveConstruction {
         let Some(anchor_id) = self.anchor_physical_id else {
             return false;
         };
+        // Membership in the authoritative aggregate is sufficient to
+        // establish physical ownership. Requiring a valid subgraph here would
+        // incorrectly classify whole-aggregate and temporarily disconnected
+        // members as separately owned (and can fail for a one-unit aggregate).
         seen.contains(&anchor_id)
-            && parent
-                .subgraph_for_physical_ids(&self.developing_member_ids, &[anchor_id])
-                .is_some()
     }
 }
 
