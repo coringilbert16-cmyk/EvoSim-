@@ -25,6 +25,17 @@ pub(crate) fn recycle_dead_organism(
             !construction.is_aggregate_owned_by(&organism.structure)
                 && !construction.has_any_member_in(&organism.structure)
         });
+    if organism
+        .reproductive_construction
+        .as_ref()
+        .is_some_and(|construction| {
+            !construction_has_separate_energy_owner && construction.developing_energy != 0.0
+        })
+    {
+        // Reject ambiguous legacy energy rather than clearing a second scalar
+        // holder that conflicts with the parent's authoritative energy balance.
+        return None;
+    }
     let developing_energy = organism
         .reproductive_construction
         .as_ref()
@@ -142,7 +153,7 @@ mod tests {
             developing_stress: 0.0,
             anchor_unit_index: 0,
             anchor_physical_id: organism.structure.physical_id(0),
-            developing_energy: 3.0,
+            developing_energy: 0.0,
             developing_maintenance_debt: 0.0,
             needs_space: false,
         });
@@ -154,6 +165,39 @@ mod tests {
         assert_eq!(body.energy_budget, 5.0);
         assert_eq!(organism.usable_energy, 0.0);
         assert!(organism.reproductive_construction.is_none());
+    }
+
+    #[test]
+    fn ambiguous_aggregate_construction_energy_blocks_recycling() {
+        let mut simulation = Simulation::new(37, 20.0);
+        let mut organism = simulation.organisms.remove(0);
+        organism.usable_energy = 5.0;
+        let aggregate = organism.structure.clone();
+        let member_ids = aggregate.physical_constituent_ids();
+        organism.reproductive_construction = Some(crate::state::ReproductiveConstruction {
+            committed_material: crate::material_storage::MaterialStorage::default(),
+            developing_structure: aggregate,
+            developing_member_ids: member_ids,
+            child_genome: organism.genome.clone(),
+            developmental_origin: organism.developmental_origin.clone(),
+            developmental_orientation_radians: organism.developmental_orientation_radians,
+            developing_stress: 0.0,
+            anchor_unit_index: 0,
+            anchor_physical_id: organism.structure.physical_id(0),
+            developing_energy: 3.0,
+            developing_maintenance_debt: 0.0,
+            needs_space: false,
+        });
+        let original_structure = organism.structure.clone();
+        let mut ledger = EnergyLedger::default();
+        let original_ledger = ledger;
+
+        assert!(recycle_dead_organism(&mut simulation.environment, &mut organism, &mut ledger).is_none());
+        assert_eq!(organism.usable_energy, 5.0);
+        assert_eq!(organism.structure.units, original_structure.units);
+        assert_eq!(organism.structure.bonds, original_structure.bonds);
+        assert_eq!(organism.reproductive_construction.as_ref().unwrap().developing_energy, 3.0);
+        assert_eq!(ledger, original_ledger);
     }
 
     #[test]
