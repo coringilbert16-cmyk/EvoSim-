@@ -1420,8 +1420,7 @@ mod tests {
             .unit_index(member_id)
             .unwrap();
         assert_eq!(
-            construction.developing_structure.units[refreshed_index].placement,
-            aggregate_pose,
+            construction.developing_structure.units[refreshed_index].placement, aggregate_pose,
             "the aggregate pose must replace a stale cached developing pose"
         );
         assert!(construction.is_aggregate_owned_by(&parent.structure));
