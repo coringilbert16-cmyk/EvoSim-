@@ -1547,9 +1547,12 @@ mod tests {
             &mut ledger,
         ));
 
+        let parent_member_id = organism.structure.physical_constituent_ids()[0];
         let construction = organism.reproductive_construction.as_mut().unwrap();
-        let member_id = construction.developing_member_ids[0];
-        construction.developing_member_ids.push(member_id);
+        // Deliberately model partial ownership: one parent-owned member ID is
+        // duplicated in the developing-member set, so the cached child view
+        // must not be translated as though it were a second physical body.
+        construction.developing_member_ids = vec![parent_member_id, parent_member_id];
         assert!(!construction.is_aggregate_owned_by(&organism.structure));
         let cached_pose = construction.developing_structure.units[0].placement;
         let origin_before = construction.developmental_origin.clone();
