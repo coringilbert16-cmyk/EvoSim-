@@ -1031,7 +1031,7 @@ mod tests {
             developing_maintenance_debt: 0.0,
             needs_space: false,
         };
-        let parent_structure = OrganismStructure::new();
+        let mut parent_structure = OrganismStructure::new();
         let mut parent_storage = MaterialStorage::default();
         let mut ledger = EnergyLedger::default();
         let ledger_before = ledger;
@@ -1046,7 +1046,7 @@ mod tests {
         };
 
         let (status, stress) = advance_construction(
-            &parent_structure,
+            &mut parent_structure,
             &mut parent_storage,
             &mut construction,
             &environment,
@@ -1091,7 +1091,7 @@ mod tests {
             developing_maintenance_debt: 0.0,
             needs_space: false,
         };
-        let parent_structure = OrganismStructure::new();
+        let mut parent_structure = OrganismStructure::new();
         let mut parent_storage = MaterialStorage::default();
         let mut ledger = EnergyLedger::default();
         let ledger_before = ledger;
@@ -1106,7 +1106,7 @@ mod tests {
         };
 
         let status = advance_construction(
-            &parent_structure,
+            &mut parent_structure,
             &mut parent_storage,
             &mut construction,
             &environment,
@@ -1415,7 +1415,7 @@ mod tests {
         assert!(candidate_unit.realize_default_geometry(&catalog));
         child.structure.add_unit(candidate_unit);
 
-        let parent_structure = OrganismStructure::new();
+        let mut parent_structure = OrganismStructure::new();
         let rejecting_body = crate::organism_geometry::OrganismBodyGeometry {
             parts: Vec::new(),
             min_x: 0.0,
@@ -1440,7 +1440,7 @@ mod tests {
         let units_before = construction.developing_structure.units.clone();
 
         let status = commit_candidate_attachment(
-            &parent_structure,
+            &mut parent_structure,
             &mut parent_storage,
             &mut construction,
             &environment,
