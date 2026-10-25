@@ -890,10 +890,7 @@ pub(crate) fn advance_construction(
     // the child has been admitted into the parent's physical aggregate. Rebuild
     // the working view before validation or chemistry so stale cached geometry
     // cannot become a second physical authority.
-    let any_ids_present_in_parent = construction
-        .developing_member_ids
-        .iter()
-        .any(|id| parent_structure.unit_index(*id).is_some());
+    let any_ids_present_in_parent = construction.has_any_member_in(parent_structure);
     let aggregate_owned = construction.is_aggregate_owned_by(parent_structure);
     if any_ids_present_in_parent && !aggregate_owned {
         return (ConstructionStatus::Dead, None);
@@ -1107,10 +1104,7 @@ pub(crate) fn finish_reproduction(
     // views from the authoritative parent graph instead of refreshing a second
     // persisted copy. Reject partially admitted membership rather than falling
     // back to the detached legacy graph.
-    let any_ids_present_in_parent = construction
-        .developing_member_ids
-        .iter()
-        .any(|id| parent.structure.unit_index(*id).is_some());
+    let any_ids_present_in_parent = construction.has_any_member_in(&parent.structure);
     let aggregate_owned = construction.is_aggregate_owned_by(&parent.structure);
     if any_ids_present_in_parent && !aggregate_owned {
         parent.reproductive_construction = Some(construction);
