@@ -756,6 +756,7 @@ fn commit_candidate_attachment(
     construction: &mut ReproductiveConstruction,
     environment: &Environment,
     ledger: &mut EnergyLedger,
+    parent_energy: &mut f64,
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
     mut child: Organism,
     candidate_ledger: EnergyLedger,
@@ -773,6 +774,10 @@ fn commit_candidate_attachment(
     }
 
     let candidate_units = child.structure.units.len();
+    let aggregate_owned = construction.is_aggregate_owned_by(parent_structure);
+    if aggregate_owned && (!child.usable_energy.is_finite() || child.usable_energy < 0.0) {
+        return ConstructionStatus::Waiting;
+    }
     // When construction is already represented inside the parent aggregate,
     // stage the aggregate replacement before consuming material or publishing
     // the candidate ledger. The construction graph remains a refreshed view;
@@ -799,11 +804,14 @@ fn commit_candidate_attachment(
         child.structure = refreshed_view;
     }
     *ledger = candidate_ledger;
+    if aggregate_owned {
+        *parent_energy = child.usable_energy;
+    }
     construction.committed_material = child.stored_material;
     construction.developing_member_ids = child.structure.physical_constituent_ids();
     construction.developing_structure = child.structure;
     construction.needs_space = false;
-    construction.developing_energy = child.usable_energy;
+    construction.developing_energy = if aggregate_owned { 0.0 } else { child.usable_energy };
     construction.developing_stress = child.stress;
 
     if birth_ready_with_reference(construction, &environment.catalog, seed_reference) {
@@ -851,7 +859,8 @@ pub(crate) fn advance_construction(
         return (ConstructionStatus::Dead, None);
     }
 
-    if reserve_energy > construction.developing_energy {
+    let aggregate_owned = construction.is_aggregate_owned_by(parent_structure);
+    if !aggregate_owned && reserve_energy > construction.developing_energy {
         let transfer =
             (reserve_energy - construction.developing_energy).min(parent_energy.max(0.0));
         if transfer > 0.0
@@ -866,13 +875,17 @@ pub(crate) fn advance_construction(
     // Rebuild after the reserve transfer so the child snapshot contains the
     // newly transferred energy rather than overwriting it with a stale balance.
     let mut child = developing_organism(construction);
-    child.apply_maintenance(&environment.catalog, ledger);
+    if aggregate_owned {
+        child.usable_energy = *parent_energy;
+    }
+    let mut staged_ledger = *ledger;
+    child.apply_maintenance(&environment.catalog, &mut staged_ledger);
     let dead = child.validate_stress_state();
     if !dead {
         let _ = crate::transformation::resolve_resonance_overload_break(
             &mut child,
             environment,
-            ledger,
+            &mut staged_ledger,
         );
     }
     // Maintenance and resonance chemistry may alter the construction graph
@@ -888,7 +901,13 @@ pub(crate) fn advance_construction(
         };
         child.structure = refreshed_view;
     }
-    construction.developing_energy = child.usable_energy;
+    *ledger = staged_ledger;
+    if aggregate_owned {
+        *parent_energy = child.usable_energy;
+        construction.developing_energy = 0.0;
+    } else {
+        construction.developing_energy = child.usable_energy;
+    }
     construction.developing_stress = child.stress;
     construction.developing_maintenance_debt = child.maintenance_debt;
     construction.developing_structure = child.structure.clone();
