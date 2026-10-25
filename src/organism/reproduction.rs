@@ -826,8 +826,8 @@ fn commit_candidate_attachment(
     let staged_aggregate = if construction.is_aggregate_owned_by(parent_structure) {
         let mut staged = parent_structure.clone();
         let old_ids = construction.developing_member_ids.clone();
-        let Some((_, refreshed_view)) =
-            staged.replace_subgraph_remapping_new_ids_and_extract(&old_ids, &child.structure)
+        let Some((_, refreshed_view)) = staged
+            .replace_subgraph_remapping_new_ids_and_extract(&old_ids, &child.structure)
         else {
             return ConstructionStatus::Waiting;
         };
