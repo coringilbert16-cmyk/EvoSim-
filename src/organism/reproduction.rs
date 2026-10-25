@@ -617,9 +617,7 @@ pub(crate) fn total_usable_energy_held(
 ) -> f64 {
     let organism_energy: f64 = organisms
         .iter()
-        .map(|organism| {
-            organism.usable_energy + construction_usable_energy_held(organism)
-        })
+        .map(|organism| organism.usable_energy + construction_usable_energy_held(organism))
         .sum();
     let decomposition_energy: f64 = decomposing_bodies
         .iter()
