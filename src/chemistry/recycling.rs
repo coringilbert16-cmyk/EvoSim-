@@ -93,7 +93,7 @@ mod tests {
     use crate::state::Simulation;
 
     #[test]
-    fn recycling_preserves_parent_and_developing_offspring_energy() {
+    fn aggregate_owned_recycling_does_not_count_a_second_developing_energy_holder() {
         let mut simulation = Simulation::new(23, 20.0);
         let mut organism = simulation.organisms.remove(0);
         assert!(organism.store_material(Material::free_base("Carbon", 1.0)));
@@ -105,16 +105,19 @@ mod tests {
             &mut ledger,
         ));
         organism.usable_energy = 5.0;
-        organism
-            .reproductive_construction
-            .as_mut()
-            .expect("construction started")
-            .developing_energy = 3.0;
+        assert_eq!(
+            organism
+                .reproductive_construction
+                .as_ref()
+                .expect("construction started")
+                .developing_energy,
+            0.0
+        );
 
         let body = recycle_dead_organism(&mut simulation.environment, &mut organism, &mut ledger)
             .expect("organism can be recycled");
 
-        assert_eq!(body.energy_budget, 8.0);
+        assert_eq!(body.energy_budget, 5.0);
         assert_eq!(organism.usable_energy, 0.0);
         assert!(organism.reproductive_construction.is_none());
     }
