@@ -899,17 +899,27 @@ pub(crate) fn advance_construction(
         .developing_member_ids
         .iter()
         .any(|id| parent_structure.unit_index(*id).is_some());
-    if any_ids_present_in_parent && !construction.refresh_aggregate_view(parent_structure) {
+    let aggregate_owned = construction.is_aggregate_owned_by(parent_structure);
+    if any_ids_present_in_parent && !aggregate_owned {
         return (ConstructionStatus::Dead, None);
     }
+    let working_structure = if aggregate_owned {
+        let Some(anchor_id) = construction.anchor_physical_id else {
+            return (ConstructionStatus::Dead, None);
+        };
+        let Some(view) = parent_structure
+            .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
+        else {
+            return (ConstructionStatus::Dead, None);
+        };
+        view
+    } else {
+        construction.developing_structure.clone()
+    };
 
-    // Validate the developing holder before any new parent-funded reserve
-    // transfer. A non-finite construction must not drain its parent on every
-    // subsequent tick while it remains attached for diagnosis.
-    if !developing_membership_is_valid(
-        construction,
-        &construction.developing_structure,
-    ) {
+    // Validate the authoritative transient view before any new parent-funded
+    // reserve transfer. A non-finite construction must not drain its parent.
+    if !developing_membership_is_valid(construction, &working_structure) {
         return (ConstructionStatus::Dead, None);
     }
     let reserve_energy = construction.child_genome.reproductive_energy_allocation;
@@ -931,7 +941,6 @@ pub(crate) fn advance_construction(
         return (ConstructionStatus::Dead, None);
     }
 
-    let aggregate_owned = construction.is_aggregate_owned_by(parent_structure);
     if !aggregate_owned && reserve_energy > construction.developing_energy {
         let transfer =
             (reserve_energy - construction.developing_energy).min(parent_energy.max(0.0));
@@ -946,19 +955,6 @@ pub(crate) fn advance_construction(
 
     // Rebuild after the reserve transfer so the child snapshot contains the
     // newly transferred energy rather than overwriting it with a stale balance.
-    let working_structure = if aggregate_owned {
-        let Some(anchor_id) = construction.anchor_physical_id else {
-            return (ConstructionStatus::Dead, None);
-        };
-        let Some(view) = parent_structure
-            .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
-        else {
-            return (ConstructionStatus::Dead, None);
-        };
-        view
-    } else {
-        construction.developing_structure.clone()
-    };
     let mut child = developing_organism(construction, working_structure);
     if aggregate_owned {
         child.usable_energy = *parent_energy;
