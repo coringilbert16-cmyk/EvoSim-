@@ -1025,7 +1025,10 @@ mod tests {
         simulation.organisms[0].reproductive_construction =
             Some(crate::state::ReproductiveConstruction {
                 committed_material,
-                developing_member_ids: developing_structure.physical_constituent_ids(),
+                // This fixture represents the pre-admission child as a
+                // distinct physical body; its local constituent IDs are not
+                // proof that those members are already owned by the parent.
+                developing_member_ids: Vec::new(),
                 developing_structure,
                 child_genome: simulation.organisms[0].genome.clone(),
                 developmental_origin: Position { x: 20.0, y: 0.0 },
