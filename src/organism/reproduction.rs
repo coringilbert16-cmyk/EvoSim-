@@ -4,6 +4,7 @@
 //! parent's authoritative physical aggregate. Growth and division stage graph
 //! changes transactionally; the view is not a second owner of those constituents.
 use crate::combine_runtime::DevelopmentalContext;
+use crate::construction_material_selection::ConstructionMaterialDecision;
 use crate::contact::ConnectionCompatibilityCache;
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::material_storage::MaterialStorage;
@@ -230,7 +231,7 @@ pub(crate) fn construction_material_need_pressure(
                 storage, preferred, catalog,
             ),
             Ok(
-                crate::construction_material_selection::ConstructionMaterialDecision::Selected { .. }
+                ConstructionMaterialDecision::Selected { .. }
             )
         )
     };
@@ -380,7 +381,7 @@ fn next_construction_resource_status(
             .map(|decision| {
                 matches!(
                     decision,
-                    crate::construction_material_selection::ConstructionMaterialDecision::Selected { .. }
+                    ConstructionMaterialDecision::Selected { .. }
                 )
             })
             .unwrap_or(false)
