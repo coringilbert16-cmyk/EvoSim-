@@ -35,7 +35,14 @@ PR #204 is **documentation-only**. Implementation belongs in focused PRs, **one 
 
 ### Recommended next action
 
-Perform a fresh source audit against merged `main` to select the first still-open phase and its narrow acceptance gate. Prioritize only the confirmed dependency path; do not pick work from stale dated “next” notes. Candidate open gates include transaction rejection/rollback across movement and material transfer, full independent inventory reconciliation, post-death holder chemistry, and the exact-small-world sunlight oracle. The phase choice should be made from the current source, not assumed from this list.
+**Selected first slice: Phase 7 — movement transaction rejection + inventory proof.** On merged `main` `10521705d8f921ceb071b17240f1b7e069f52f1a`, movement preflights ledger settlement before geometry mutation and commits that staged ledger only after the push plan succeeds. The current rejected-settlement test uses no pushed organisms or field objects and checks only a subset of mover/ledger state. Existing tests separately cover successful organism push chains and physical-material reindexing, but not a single full inventory/state assertion across rejection.
+
+Acceptance tests for the first implementation PR:
+1. With an invalid/overflowed ledger and a mover, pushed organism(s), and realized physical field material in the movement path, rejection leaves all geometry, IDs/material, storage, field ordering, revisions, spatial-index results, active-movement counters, usable energy, and ledger counters unchanged.
+2. A blocked push chain after successful ledger preflight discards the preflight and leaves the same full state/inventories unchanged.
+3. A successful push-chain control moves each physical owner exactly once, preserves the independent integer-material inventory, updates spatial-index queries, and reconciles energy with the expected movement heat debit.
+
+Reuse `rejected_movement_energy_settlement_does_not_mutate_world_geometry`, `movement_pushes_another_organism_atomically`, `movement_propagates_an_organism_push_chain_atomically`, `movement_pushes_realized_physical_material_and_reindexes_it`, and `successful_movement_commits_preflight_energy_and_ledger_after_geometry`. Add only the missing cross-domain assertions; do not add a redundant transaction wrapper where no fallible operation exists after the push plan is applied. Keep each command/test under five minutes and compare named failures with the reset forward baseline.
 
 ### Completion rule
 
