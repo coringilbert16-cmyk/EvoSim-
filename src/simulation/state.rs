@@ -140,7 +140,7 @@ pub(crate) struct ReproductiveConstruction {
     /// reconstructed from stable IDs in the parent's authoritative structure.
     /// Deserialized legacy detached graphs fail closed rather than reviving a
     /// second physical authority.
-    #[serde(skip, default)]
+    #[serde(skip, default = "OrganismStructure::new")]
     pub(crate) developing_structure: OrganismStructure,
     /// Stable physical IDs owned by the developing member within the aggregate migration.
     /// This metadata is intentionally ID-based; unit indices are not durable across staging.
