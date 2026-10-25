@@ -895,7 +895,7 @@ pub(crate) fn advance_construction(
     // Validate the developing holder before any new parent-funded reserve
     // transfer. A non-finite construction must not drain its parent on every
     // subsequent tick while it remains attached for diagnosis.
-    if !developing_membership_is_valid(construction) {
+    if !developing_membership_is_valid(construction, &construction.developing_structure) {
         return (ConstructionStatus::Dead, None);
     }
     let reserve_energy = construction.child_genome.reproductive_energy_allocation;
@@ -993,7 +993,12 @@ pub(crate) fn advance_construction(
         return (ConstructionStatus::Dead, None);
     }
 
-    if birth_ready_with_reference(construction, parent_structure, &environment.catalog, seed_reference) {
+    if birth_ready_with_reference(
+        construction,
+        parent_structure,
+        &environment.catalog,
+        seed_reference,
+    ) {
         return (ConstructionStatus::Ready, None);
     }
 
