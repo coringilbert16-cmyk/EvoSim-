@@ -1800,8 +1800,14 @@ mod decomposition_finalization_tests {
                 add(&mut totals, material);
             }
             if let Some(construction) = organism.reproductive_construction.as_ref() {
-                for unit in &construction.developing_structure.units {
-                    add(&mut totals, &unit.material);
+                // Aggregate-owned construction is a stable-ID view into the
+                // parent structure, not a second material owner. Count the
+                // developing graph only for legacy constructions that have
+                // not yet migrated into the parent aggregate.
+                if !construction.is_aggregate_owned_by(&organism.structure) {
+                    for unit in &construction.developing_structure.units {
+                        add(&mut totals, &unit.material);
+                    }
                 }
                 for material in construction.committed_material.iter_materials() {
                     add(&mut totals, material);
