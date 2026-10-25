@@ -1842,6 +1842,37 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn rollback_material_inventory_counts_aggregate_owned_construction_once() {
+        let mut simulation = Simulation::new(992, 20.0);
+        let before = rollback_material_inventory(&simulation);
+        let organism = &mut simulation.organisms[0];
+        let developing_structure = organism.structure.clone();
+        let developing_member_ids = developing_structure.physical_constituent_ids();
+        let anchor_physical_id = developing_structure.physical_id(0);
+
+        organism.reproductive_construction = Some(crate::state::ReproductiveConstruction {
+            committed_material: crate::material_storage::MaterialStorage::default(),
+            developing_structure,
+            developing_member_ids,
+            child_genome: organism.genome.clone(),
+            developmental_origin: organism.developmental_origin.clone(),
+            developmental_orientation_radians: organism.developmental_orientation_radians,
+            developing_stress: 0.0,
+            anchor_unit_index: 0,
+            anchor_physical_id,
+            developing_energy: 0.0,
+            developing_maintenance_debt: 0.0,
+            needs_space: false,
+        });
+
+        assert_eq!(
+            rollback_material_inventory(&simulation),
+            before,
+            "the aggregate-owned developing view must not count the same constituents twice"
+        );
+    }
+
+    #[test]
     fn failed_stored_break_restores_material_to_organism_storage() {
         let mut simulation = Simulation::new(917, 10.0);
         for cell in &mut simulation.environment.field.cells {
