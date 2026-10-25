@@ -1455,24 +1455,8 @@ impl Simulation {
             .organisms
             .iter()
             .map(|organism| {
-                let construction_energy =
-                    organism
-                        .reproductive_construction
-                        .as_ref()
-                        .map_or(0.0, |construction| {
-                            if construction.is_aggregate_owned_by(&organism.structure) {
-                                if construction.developing_energy == 0.0 {
-                                    0.0
-                                } else {
-                                    f64::NAN
-                                }
-                            } else if construction.has_any_member_in(&organism.structure) {
-                                f64::NAN
-                            } else {
-                                construction.developing_energy
-                            }
-                        });
-                organism.usable_energy + construction_energy
+                organism.usable_energy
+                    + crate::reproduction::construction_usable_energy_held(organism)
             })
             .sum::<f64>()
             + self
