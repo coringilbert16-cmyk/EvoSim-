@@ -1497,7 +1497,10 @@ mod tests {
         construction.developing_member_ids = transient_view.physical_constituent_ids();
         let first_id = construction.developing_member_ids[0];
         construction.developing_member_ids.push(first_id);
-        assert!(!developing_membership_is_valid(&construction, &transient_view));
+        assert!(!developing_membership_is_valid(
+            &construction,
+            &transient_view
+        ));
     }
 
     #[test]
@@ -2056,7 +2059,10 @@ mod tests {
             .structure
             .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
             .unwrap();
-        assert!(developing_membership_is_valid(&construction, &transient_view));
+        assert!(developing_membership_is_valid(
+            &construction,
+            &transient_view
+        ));
         assert!(construction.developing_structure.units.is_empty());
         assert!(construction.is_aggregate_owned_by(&parent.structure));
         assert_eq!(construction.developing_energy, 0.0);
@@ -2110,7 +2116,10 @@ mod tests {
             .structure
             .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
             .unwrap();
-        assert!(developing_membership_is_valid(&construction, &transient_view));
+        assert!(developing_membership_is_valid(
+            &construction,
+            &transient_view
+        ));
         assert!(construction.developing_structure.units.is_empty());
         assert!(construction.is_aggregate_owned_by(&parent.structure));
         assert_eq!(construction.developing_energy, 0.0);
