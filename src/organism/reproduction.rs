@@ -1706,6 +1706,7 @@ mod tests {
         ));
         let mut construction = parent.reproductive_construction.take().unwrap();
         let before_parent_energy = parent.usable_energy;
+        construction.developing_structure.units[0].placement.x += 100.0;
         let environment = simulation.environment.clone();
         let body = parent_body_geometry(&parent, &environment.catalog).unwrap();
         let _ = advance_construction(
