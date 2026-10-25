@@ -1907,28 +1907,29 @@ mod tests {
         let body = parent_body_geometry(&parent, &simulation.environment.catalog).unwrap();
         let construction = parent
             .reproductive_construction
-            .as_mut()
+            .as_ref()
             .expect("reproduction is active");
+        assert!(construction.developing_structure.units.is_empty());
+        let member_ids = construction.developing_member_ids.clone();
+        let anchor_id = construction.anchor_physical_id.unwrap();
         let inside_part = body.parts[0].clone();
         let outside_x = body.max_x + 100.0;
-        for (index, unit) in construction
-            .developing_structure
-            .units
-            .iter_mut()
-            .enumerate()
-        {
-            if index == 0 {
-                unit.placement.x = inside_part.x;
-                unit.placement.y = inside_part.y;
-            } else {
-                unit.placement.x = outside_x;
-                unit.placement.y = inside_part.y;
+        for (index, unit) in parent.structure.units.iter_mut().enumerate() {
+            if member_ids.contains(&parent.structure.physical_id(index).unwrap()) {
+                if index == parent.structure.unit_index(anchor_id).unwrap() {
+                    unit.placement.x = inside_part.x;
+                    unit.placement.y = inside_part.y;
+                } else {
+                    unit.placement.x = outside_x;
+                    unit.placement.y = inside_part.y;
+                }
             }
         }
-        let inside = child_remains_within_realized_parent_boundary(
-            &construction.developing_structure,
-            &body,
-        );
+        let transient_view = parent
+            .structure
+            .subgraph_for_physical_ids(&member_ids, &[anchor_id])
+            .unwrap();
+        let inside = child_remains_within_realized_parent_boundary(&transient_view, &body);
         assert!(
             inside,
             "crossing the boundary while contact remains must not detach the child"
@@ -1950,20 +1951,25 @@ mod tests {
         let body = parent_body_geometry(&parent, &simulation.environment.catalog).unwrap();
         let construction = parent
             .reproductive_construction
-            .as_mut()
+            .as_ref()
             .expect("reproduction is active");
-        for unit in &mut construction.developing_structure.units {
-            unit.placement.x = body.max_x + 100.0;
-            unit.placement.y = body.max_y + 100.0;
+        let member_ids = construction.developing_member_ids.clone();
+        let anchor_id = construction.anchor_physical_id.unwrap();
+        for (index, unit) in parent.structure.units.iter_mut().enumerate() {
+            if member_ids.contains(&parent.structure.physical_id(index).unwrap()) {
+                unit.placement.x = body.max_x + 100.0;
+                unit.placement.y = body.max_y + 100.0;
+            }
         }
-        assert!(!child_remains_within_realized_parent_boundary(
-            &construction.developing_structure,
-            &body,
-        ));
+        let transient_view = parent
+            .structure
+            .subgraph_for_physical_ids(&member_ids, &[anchor_id])
+            .unwrap();
+        assert!(!child_remains_within_realized_parent_boundary(&transient_view, &body));
     }
 
     #[test]
-    fn loss_of_parent_contact_is_detachment() {
+    fn aggregate_owned_member_pose_is_read_from_parent_graph() {
         let mut simulation = Simulation::new(29, 20.0);
         let mut parent = simulation.organisms.remove(0);
         let mut ledger = EnergyLedger::default();
@@ -1976,16 +1982,30 @@ mod tests {
         ));
         let construction = parent
             .reproductive_construction
-            .as_mut()
+            .as_ref()
             .expect("reproduction is active");
-        for unit in &mut construction.developing_structure.units {
-            unit.placement.x = parent.occupied_cells[0].x + 2_000.0;
-            unit.placement.y = parent.occupied_cells[0].y;
+        let member_ids = construction.developing_member_ids.clone();
+        let anchor_id = construction.anchor_physical_id.unwrap();
+        let outside = Position {
+            x: parent.occupied_cells[0].x + 2_000.0,
+            y: parent.occupied_cells[0].y,
+        };
+        for (index, unit) in parent.structure.units.iter_mut().enumerate() {
+            if member_ids.contains(&parent.structure.physical_id(index).unwrap()) {
+                unit.placement.x = outside.x;
+                unit.placement.y = outside.y;
+            }
         }
-        assert!(!parent_child_in_contact(
-            &parent.structure,
-            &construction.developing_structure,
-        ));
+        let transient_view = parent
+            .structure
+            .subgraph_for_physical_ids(&member_ids, &[anchor_id])
+            .unwrap();
+        assert_eq!(
+            transient_view.units[transient_view.unit_index(anchor_id).unwrap()].placement.x,
+            outside.x,
+            "the transient view must track authoritative aggregate geometry"
+        );
+        assert!(construction.developing_structure.units.is_empty());
     }
 
     #[test]
@@ -2010,13 +2030,16 @@ mod tests {
             .reproductive_construction
             .take()
             .expect("reproduction is active");
-        assert!(developing_membership_is_valid(
-            &construction,
-            &construction.developing_structure
-        ));
+        let anchor_id = construction.anchor_physical_id.unwrap();
+        let mut transient_view = parent
+            .structure
+            .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
+            .unwrap();
+        assert!(developing_membership_is_valid(&construction, &transient_view));
+        assert!(construction.developing_structure.units.is_empty());
         assert!(construction.is_aggregate_owned_by(&parent.structure));
         assert_eq!(construction.developing_energy, 0.0);
-        let before_units = construction.developing_structure.units.len();
+        let before_units = transient_view.units.len();
         let body = parent_body_geometry(&parent, &simulation.environment.catalog).unwrap();
         let environment = simulation.environment.clone();
 
@@ -2034,7 +2057,12 @@ mod tests {
         .0;
 
         assert_eq!(status, ConstructionStatus::Waiting);
-        assert_eq!(construction.developing_structure.units.len(), before_units);
+        transient_view = parent
+            .structure
+            .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
+            .unwrap();
+        assert_eq!(transient_view.units.len(), before_units);
+        assert!(construction.developing_structure.units.is_empty());
         assert!(parent.stored_material.is_empty());
     }
 
@@ -2056,10 +2084,13 @@ mod tests {
             .reproductive_construction
             .take()
             .expect("reproduction is active");
-        assert!(developing_membership_is_valid(
-            &construction,
-            &construction.developing_structure
-        ));
+        let anchor_id = construction.anchor_physical_id.unwrap();
+        let transient_view = parent
+            .structure
+            .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
+            .unwrap();
+        assert!(developing_membership_is_valid(&construction, &transient_view));
+        assert!(construction.developing_structure.units.is_empty());
         assert!(construction.is_aggregate_owned_by(&parent.structure));
         assert_eq!(construction.developing_energy, 0.0);
         let body = parent_body_geometry(&parent, &simulation.environment.catalog).unwrap();
@@ -2079,11 +2110,14 @@ mod tests {
         .0;
         assert_eq!(first_status, ConstructionStatus::Waiting);
 
-        let before_units = construction.developing_structure.units.len();
-        let before_bonds = construction.developing_structure.bonds.len();
+        let before_view = parent
+            .structure
+            .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
+            .unwrap();
+        let before_units = before_view.units.len();
+        let before_bonds = before_view.bonds.len();
 
-        let developing_child =
-            developing_organism(&construction, construction.developing_structure.clone());
+        let developing_child = developing_organism(&construction, before_view);
         let newly_available_resource = construction_preferred_resource(&developing_child)
             .expect("the developing genome has a preferred construction resource")
             .to_owned();
@@ -2111,8 +2145,13 @@ mod tests {
             ),
             "new physical material must resume construction, got {second_status:?}"
         );
-        assert!(construction.developing_structure.units.len() > before_units);
-        assert!(construction.developing_structure.bonds.len() > before_bonds);
+        let refreshed_view = parent
+            .structure
+            .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
+            .unwrap();
+        assert!(refreshed_view.units.len() > before_units);
+        assert!(refreshed_view.bonds.len() > before_bonds);
+        assert!(construction.developing_structure.units.is_empty());
     }
 
     #[test]
@@ -2131,8 +2170,7 @@ mod tests {
             .reproductive_construction
             .as_ref()
             .unwrap()
-            .developing_structure
-            .units
+            .developing_member_ids
             .len();
         assert!(original_units > 0);
 
@@ -2149,7 +2187,8 @@ mod tests {
             .reproductive_construction
             .as_ref()
             .expect("non-ready construction remains parent-owned");
-        assert_eq!(retained.developing_structure.units.len(), original_units);
+        assert!(retained.developing_structure.units.is_empty());
+        assert_eq!(retained.developing_member_ids.len(), original_units);
     }
 
     #[test]
@@ -2170,7 +2209,7 @@ mod tests {
         aggregate.add_unit(unit);
         let mut construction = ReproductiveConstruction {
             committed_material: MaterialStorage::default(),
-            developing_structure: aggregate.clone(),
+            developing_structure: OrganismStructure::new(),
             developing_member_ids: aggregate.physical_constituent_ids(),
             child_genome: initial_genome(),
             developmental_origin: Position { x: 1.0, y: 2.0 },
@@ -2184,10 +2223,13 @@ mod tests {
         };
 
         assert!(construction.is_aggregate_owned_by(&aggregate));
-        construction.developing_structure.units[0].placement.x += 0.25;
+        assert!(
+            construction.developing_structure.units.is_empty(),
+            "aggregate-owned construction must not persist a duplicate graph"
+        );
         assert!(
             construction.is_aggregate_owned_by(&aggregate),
-            "stale cached geometry must not create a second physical owner"
+            "the ownership predicate is based on stable IDs in the aggregate"
         );
 
         let mut missing_member = aggregate.clone();
@@ -2208,7 +2250,7 @@ mod tests {
         let member_ids = aggregate.physical_constituent_ids();
         parent.reproductive_construction = Some(ReproductiveConstruction {
             committed_material: MaterialStorage::default(),
-            developing_structure: aggregate,
+            developing_structure: OrganismStructure::new(),
             developing_member_ids: member_ids,
             child_genome: parent.genome.clone(),
             developmental_origin: parent.developmental_origin.clone(),
