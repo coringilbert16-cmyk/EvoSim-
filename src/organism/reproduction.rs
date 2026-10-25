@@ -614,14 +614,22 @@ pub(crate) fn begin_reproduction(
         return false;
     }
 
-    for (storage_index, entry) in parent.stored_material.entries.clone().into_iter().enumerate() {
+    for (storage_index, entry) in parent
+        .stored_material
+        .entries
+        .clone()
+        .into_iter()
+        .enumerate()
+    {
         let crate::material_storage::StoredMaterial::Physical(instance) = &entry;
         let anchor = instance.material.clone();
         let Some(placement) = parent_child_position(parent, &anchor, catalog) else {
             continue;
         };
         let mut trial_storage = MaterialStorage::default();
-        trial_storage.entries.push(crate::material_storage::StoredMaterial::Physical(instance.clone()));
+        trial_storage
+            .entries
+            .push(crate::material_storage::StoredMaterial::Physical(instance.clone()));
         let Some((mut anchor_graph, child_storage, anchor_unit_index)) =
             anchor_structure(&child_genome, trial_storage, placement, catalog)
         else {
@@ -646,7 +654,8 @@ pub(crate) fn begin_reproduction(
         let Some(mapped_anchor_id) = remapping.get(&anchor_physical_id).copied() else {
             continue;
         };
-        let Some(mapped_anchor_ids) = anchor_ids.iter()
+        let Some(mapped_anchor_ids) = anchor_ids
+            .iter()
             .map(|id| remapping.get(id).copied())
             .collect::<Option<Vec<_>>>()
         else {
@@ -668,7 +677,11 @@ pub(crate) fn begin_reproduction(
                     }
                     let Some((_, _, investment, _)) =
                         crate::combine_runtime::selected_candidate_evaluation(
-                            &staged_structure, parent_unit, anchor_unit, candidate, catalog,
+                            &staged_structure,
+                            parent_unit,
+                            anchor_unit,
+                            candidate,
+                            catalog,
                         )
                     else {
                         continue;
@@ -678,21 +691,30 @@ pub(crate) fn begin_reproduction(
                     let mut energy_trial = parent.usable_energy;
                     let mut bond_cache = ConnectionCompatibilityCache::new();
                     if crate::combine_runtime::form_selected_bond(
-                        &mut bond_trial, parent_unit, anchor_unit, candidate, investment,
-                        catalog, &mut bond_cache, &mut ledger_trial, &mut energy_trial,
-                    ).is_some() {
+                        &mut bond_trial,
+                        parent_unit,
+                        anchor_unit,
+                        candidate,
+                        investment,
+                        catalog,
+                        &mut bond_cache,
+                        &mut ledger_trial,
+                        &mut energy_trial,
+                    )
+                    .is_some()
+                    {
                         committed = Some((bond_trial, ledger_trial, energy_trial));
                         break 'contacts;
                     }
                 }
             }
         }
-        let Some((mut staged_structure, staged_ledger, staged_energy)) = committed else {
+        let Some((staged_structure, staged_ledger, staged_energy)) = committed else {
             continue;
         };
-        let Some(developing_structure) = staged_structure.subgraph_for_physical_ids(
-            &mapped_anchor_ids, &[mapped_anchor_id],
-        ) else {
+        let Some(developing_structure) = staged_structure
+            .subgraph_for_physical_ids(&mapped_anchor_ids, &[mapped_anchor_id])
+        else {
             continue;
         };
         let mut parent_trial_storage = parent.stored_material.clone();
