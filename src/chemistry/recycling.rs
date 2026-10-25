@@ -120,6 +120,38 @@ mod tests {
     }
 
     #[test]
+    fn aggregate_owned_construction_energy_is_recycled_only_once() {
+        let mut simulation = Simulation::new(31, 20.0);
+        let mut organism = simulation.organisms.remove(0);
+        organism.usable_energy = 5.0;
+        let aggregate = organism.structure.clone();
+        let member_ids = aggregate.physical_constituent_ids();
+        organism.reproductive_construction = Some(crate::state::ReproductiveConstruction {
+            committed_material: crate::material_storage::MaterialStorage::default(),
+            developing_structure: aggregate,
+            developing_member_ids: member_ids,
+            child_genome: organism.genome.clone(),
+            developmental_origin: organism.developmental_origin.clone(),
+            developmental_orientation_radians: organism.developmental_orientation_radians,
+            developing_stress: 0.0,
+            anchor_unit_index: 0,
+            anchor_physical_id: organism.structure.physical_id(0),
+            developing_energy: 3.0,
+            developing_maintenance_debt: 0.0,
+            needs_space: false,
+        });
+        let mut ledger = EnergyLedger::default();
+
+        let body = recycle_dead_organism(&mut simulation.environment, &mut organism, &mut ledger)
+            .expect("aggregate-owned organism can be recycled");
+
+        assert_eq!(body.energy_budget, 5.0);
+        assert_eq!(organism.usable_energy, 0.0);
+        assert!(organism.reproductive_construction.is_none());
+    }
+
+
+    #[test]
     fn failed_dead_recycling_deposit_preserves_all_material_and_energy_owners() {
         let mut simulation = Simulation::new(29, 20.0);
         let mut organism = simulation.organisms.remove(0);
