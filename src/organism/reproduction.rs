@@ -1589,8 +1589,9 @@ mod tests {
             aggregate_pose.x + 100.0,
             "aggregate-owned readiness must not require refreshing the duplicate graph"
         );
+        let aggregate_index = parent.structure.unit_index(member_id).unwrap();
         assert_eq!(
-            parent.structure.units[parent.structure.unit_index(member_id).unwrap()].placement,
+            parent.structure.units[aggregate_index].placement,
             aggregate_pose,
             "the parent aggregate remains the physical authority"
         );
