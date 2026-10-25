@@ -440,10 +440,7 @@ mod integration_tests {
             &mut simulation.energy_ledger,
         );
         assert!(crate::reproduction::begin_reproduction(
-            parent,
-            rng,
-            &catalog,
-            ledger,
+            parent, rng, &catalog, ledger,
         ));
 
         let after =
