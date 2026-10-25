@@ -176,7 +176,7 @@ mod tests {
             &mut organism,
             &mut simulation.energy_ledger,
         )
-        .expect("organism with retained resonance can be recycled");
+            .expect("organism with retained resonance can be recycled");
 
         assert_eq!(body.energy_budget, total_before);
         assert_eq!(body.energy_budget, 8.0);
