@@ -1485,7 +1485,10 @@ mod tests {
         let aggregate_index = parent.structure.unit_index(member_id).unwrap();
         let aggregate_pose = parent.structure.units[aggregate_index].placement;
         construction.developing_structure.units[0].placement.x += 100.0;
-        assert!(!construction.is_aggregate_owned_by(&parent.structure));
+        assert!(
+            construction.is_aggregate_owned_by(&parent.structure),
+            "cached pose changes must not transfer ownership away from the parent aggregate"
+        );
 
         assert!(construction.refresh_aggregate_view(&parent.structure));
         let refreshed_index = construction
