@@ -1550,18 +1550,26 @@ mod tests {
         // Build a valid partially shared cached view: the first developing
         // constituent is already present in the parent graph, while duplicate
         // membership makes the overall child view incomplete.
-        let mut child_unit = organism
-            .reproductive_construction
-            .as_ref()
-            .unwrap()
-            .developing_structure
-            .units[0]
-            .clone();
-        let parent_unit_index = organism.structure.add_unit(child_unit.clone());
+        let catalog = simulation.environment.catalog.clone();
+        let mut child_unit = crate::structure::StructuralUnit::from_material(
+            crate::resources::Material::free_base("Nitrogen", 1.0),
+            Placement {
+                x: 20.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        )
+        .unwrap();
+        assert!(child_unit.realize_default_geometry(&catalog));
+        {
+            let construction = organism.reproductive_construction.as_mut().unwrap();
+            construction.developing_structure.add_unit(child_unit);
+            child_unit = construction.developing_structure.units[0].clone();
+        }
+        let parent_unit_index = organism.structure.add_unit(child_unit);
         let parent_member_id = organism.structure.physical_id(parent_unit_index).unwrap();
-        child_unit.physical_id = parent_member_id;
         let construction = organism.reproductive_construction.as_mut().unwrap();
-        construction.developing_structure.units[0] = child_unit;
+        construction.developing_structure.units[0].physical_id = parent_member_id;
         construction.developing_member_ids = vec![parent_member_id, parent_member_id];
         assert!(!construction.is_aggregate_owned_by(&organism.structure));
         let cached_pose = construction.developing_structure.units[0].placement;
