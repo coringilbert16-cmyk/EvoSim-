@@ -1914,15 +1914,19 @@ mod tests {
         let anchor_id = construction.anchor_physical_id.unwrap();
         let inside_part = body.parts[0].clone();
         let outside_x = body.max_x + 100.0;
-        for (index, unit) in parent.structure.units.iter_mut().enumerate() {
-            if member_ids.contains(&parent.structure.physical_id(index).unwrap()) {
-                if index == parent.structure.unit_index(anchor_id).unwrap() {
-                    unit.placement.x = inside_part.x;
-                    unit.placement.y = inside_part.y;
-                } else {
-                    unit.placement.x = outside_x;
-                    unit.placement.y = inside_part.y;
-                }
+        let anchor_index = parent.structure.unit_index(anchor_id).unwrap();
+        let member_indices = member_ids
+            .iter()
+            .filter_map(|id| parent.structure.unit_index(*id))
+            .collect::<Vec<_>>();
+        for index in member_indices {
+            let unit = &mut parent.structure.units[index];
+            if index == anchor_index {
+                unit.placement.x = inside_part.x;
+                unit.placement.y = inside_part.y;
+            } else {
+                unit.placement.x = outside_x;
+                unit.placement.y = inside_part.y;
             }
         }
         let transient_view = parent
@@ -1955,11 +1959,14 @@ mod tests {
             .expect("reproduction is active");
         let member_ids = construction.developing_member_ids.clone();
         let anchor_id = construction.anchor_physical_id.unwrap();
-        for (index, unit) in parent.structure.units.iter_mut().enumerate() {
-            if member_ids.contains(&parent.structure.physical_id(index).unwrap()) {
-                unit.placement.x = body.max_x + 100.0;
-                unit.placement.y = body.max_y + 100.0;
-            }
+        let member_indices = member_ids
+            .iter()
+            .filter_map(|id| parent.structure.unit_index(*id))
+            .collect::<Vec<_>>();
+        for index in member_indices {
+            let unit = &mut parent.structure.units[index];
+            unit.placement.x = body.max_x + 100.0;
+            unit.placement.y = body.max_y + 100.0;
         }
         let transient_view = parent
             .structure
@@ -1990,11 +1997,14 @@ mod tests {
             x: parent.occupied_cells[0].x + 2_000.0,
             y: parent.occupied_cells[0].y,
         };
-        for (index, unit) in parent.structure.units.iter_mut().enumerate() {
-            if member_ids.contains(&parent.structure.physical_id(index).unwrap()) {
-                unit.placement.x = outside.x;
-                unit.placement.y = outside.y;
-            }
+        let member_indices = member_ids
+            .iter()
+            .filter_map(|id| parent.structure.unit_index(*id))
+            .collect::<Vec<_>>();
+        for index in member_indices {
+            let unit = &mut parent.structure.units[index];
+            unit.placement.x = outside.x;
+            unit.placement.y = outside.y;
         }
         let transient_view = parent
             .structure
