@@ -640,7 +640,10 @@ impl PhysicalConstituentGraph {
             .iter()
             .map(|group| remap_group(group))
             .collect::<Option<Vec<_>>>()?;
-        if destination_was_empty && staged.genome_constituent_ids.is_empty() && !source_primary.is_empty() {
+        if destination_was_empty
+            && staged.genome_constituent_ids.is_empty()
+            && !source_primary.is_empty()
+        {
             staged.set_genome_constituent_ids(source_primary);
         } else if !source_primary.is_empty() {
             // Appending a new organism into an existing physical aggregate must
