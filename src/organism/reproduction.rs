@@ -461,7 +461,10 @@ fn budding_scale_reached_with_reference(
     if preferred <= 0.0 || !preferred.is_finite() {
         return false;
     }
-    developmental_linear_extent(structure, &construction.developmental_origin) + 1e-9
+    developmental_linear_extent(
+        structure,
+        &construction.developmental_origin,
+    ) + 1e-9
         >= 0.80 * preferred
 }
 
@@ -543,7 +546,12 @@ fn birth_ready_with_reference(
     {
         return false;
     }
-    budding_scale_reached_with_reference(construction, &structure, catalog, seed_reference)
+    budding_scale_reached_with_reference(
+        construction,
+        &structure,
+        catalog,
+        seed_reference,
+    )
 }
 
 fn anchor_structure(
@@ -898,7 +906,10 @@ pub(crate) fn advance_construction(
     // Validate the developing holder before any new parent-funded reserve
     // transfer. A non-finite construction must not drain its parent on every
     // subsequent tick while it remains attached for diagnosis.
-    if !developing_membership_is_valid(construction, &construction.developing_structure) {
+    if !developing_membership_is_valid(
+        construction,
+        &construction.developing_structure,
+    ) {
         return (ConstructionStatus::Dead, None);
     }
     let reserve_energy = construction.child_genome.reproductive_energy_allocation;
@@ -1018,7 +1029,10 @@ pub(crate) fn advance_construction(
         return (ConstructionStatus::Ready, None);
     }
 
-    if !parent_child_in_contact(parent_structure, &construction.developing_structure) {
+    if !parent_child_in_contact(
+        parent_structure,
+        &construction.developing_structure,
+    ) {
         return (ConstructionStatus::Detached, None);
     }
 
@@ -1818,7 +1832,10 @@ mod tests {
             .push(StoredMaterial::Physical(source));
         let stored_before = parent_storage.entries.clone();
 
-        let mut child = developing_organism(&construction, construction.developing_structure.clone());
+        let mut child = developing_organism(
+            &construction,
+            construction.developing_structure.clone(),
+        );
         let mut candidate_unit = StructuralUnit::new(
             "Carbon",
             Placement {
@@ -2066,7 +2083,10 @@ mod tests {
         let before_units = construction.developing_structure.units.len();
         let before_bonds = construction.developing_structure.bonds.len();
 
-        let developing_child = developing_organism(&construction, construction.developing_structure.clone());
+        let developing_child = developing_organism(
+            &construction,
+            construction.developing_structure.clone(),
+        );
         let newly_available_resource = construction_preferred_resource(&developing_child)
             .expect("the developing genome has a preferred construction resource")
             .to_owned();
