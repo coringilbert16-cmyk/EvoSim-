@@ -210,9 +210,8 @@ jobs:
           cargo test --locked ancestral_seed_realizes_a_physically_valid_developmental_structure
       - name: Run Rust tests
         if: always()
-        # The complete all-targets suite now exceeds five minutes; allow it to
-        # finish so CI reports the full regression set instead of truncating it.
-        timeout-minutes: 10
+        # Keep a small margin over the observed ~4-minute full-suite runtime.
+        timeout-minutes: 6
         run: cargo test --locked --all-targets
       - name: Run Clippy
         timeout-minutes: 5
