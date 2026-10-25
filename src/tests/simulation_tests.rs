@@ -557,19 +557,15 @@ mod integration_tests {
             &mut s.energy_ledger,
         ));
 
-        // Seed an internal energy transfer into the already-active construction;
-        // the world-scale holder sum must not change.
-        let parent_energy = s.organisms[0].usable_energy;
-        assert!(parent_energy.is_finite() && parent_energy > 0.0);
-        let developing_energy = parent_energy * 0.25;
+        // Aggregate-owned construction shares the parent's authoritative
+        // usable-energy holder. Do not create a second developing-energy balance.
         {
             let parent = &mut s.organisms[0];
-            parent.usable_energy -= developing_energy;
             let construction = parent
                 .reproductive_construction
                 .as_mut()
                 .expect("reproductive construction is active");
-            construction.developing_energy = developing_energy;
+            assert_eq!(construction.developing_energy, 0.0);
             assert!(parent.stored_material.physical_count() > 0);
             assert!(!construction.developing_structure.units.is_empty());
 
