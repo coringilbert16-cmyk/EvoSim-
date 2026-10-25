@@ -1394,6 +1394,38 @@ mod tests {
     }
 
     #[test]
+    fn aggregate_owned_growth_refreshes_cached_view_from_stable_ids() {
+        let mut simulation = Simulation::new(708, 20.0);
+        let mut parent = simulation.organisms.remove(0);
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
+        let mut ledger = EnergyLedger::default();
+        assert!(begin_reproduction(
+            &mut parent,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+
+        let construction = parent.reproductive_construction.as_mut().unwrap();
+        assert!(construction.is_aggregate_owned_by(&parent.structure));
+        let member_id = construction.developing_member_ids[0];
+        let aggregate_pose = parent.structure.units[parent.structure.unit_index(member_id).unwrap()]
+            .placement;
+        construction.developing_structure.units[0].placement.x += 100.0;
+        assert!(!construction.is_aggregate_owned_by(&parent.structure));
+
+        assert!(construction.refresh_aggregate_view(&parent.structure));
+        assert_eq!(
+            construction.developing_structure.units
+                [construction.developing_structure.unit_index(member_id).unwrap()]
+                .placement,
+            aggregate_pose,
+            "the aggregate pose must replace a stale cached developing pose"
+        );
+        assert!(construction.is_aggregate_owned_by(&parent.structure));
+    }
+
+    #[test]
     fn anchor_is_admitted_into_parent_aggregate() {
         let mut simulation = Simulation::new(7, 20.0);
         let mut parent = simulation.organisms.remove(0);
