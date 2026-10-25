@@ -1034,12 +1034,9 @@ pub(crate) fn finish_reproduction(
     let aggregate_owned = construction.is_aggregate_owned_by(&parent.structure);
     let (child_structure, child_energy, staged_ledger) = if aggregate_owned {
         let mut staged_parent_structure = parent.structure.clone();
-        let child_core_ids = construction.developing_structure.genome_constituent_ids.clone();
-        let Some((child_structure, crossing_bond_energy)) =
-            staged_parent_structure.partition_subgraph_for_division(
-                &construction.developing_member_ids,
-                &child_core_ids,
-            )
+        let child_core_ids = construction.developing_structure.genome_constituent_ids().to_vec();
+        let Some((child_structure, crossing_bond_energy)) = staged_parent_structure
+            .partition_subgraph_for_division(&construction.developing_member_ids, &child_core_ids)
         else {
             parent.reproductive_construction = Some(construction);
             return None;
