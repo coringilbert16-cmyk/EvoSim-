@@ -631,7 +631,9 @@ pub(crate) fn begin_reproduction(
         let mut trial_storage = MaterialStorage::default();
         trial_storage
             .entries
-            .push(crate::material_storage::StoredMaterial::Physical(instance.clone()));
+            .push(crate::material_storage::StoredMaterial::Physical(
+                instance.clone(),
+            ));
         let Some((mut anchor_graph, child_storage, anchor_unit_index)) =
             anchor_structure(&child_genome, trial_storage, placement, catalog)
         else {
@@ -669,11 +671,16 @@ pub(crate) fn begin_reproduction(
             for anchor_unit in parent_unit_count..staged_structure.units.len() {
                 let mut cache = ConnectionCompatibilityCache::new();
                 let candidates = crate::contact::connection_pair_candidates_cached(
-                    &staged_structure, parent_unit, anchor_unit, catalog, &mut cache,
+                    &staged_structure,
+                    parent_unit,
+                    anchor_unit,
+                    catalog,
+                    &mut cache,
                 );
                 for candidate in candidates {
                     if candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                        || !candidate.available_a || !candidate.available_b
+                        || !candidate.available_a
+                        || !candidate.available_b
                     {
                         continue;
                     }
@@ -714,13 +721,16 @@ pub(crate) fn begin_reproduction(
         let Some((staged_structure, staged_ledger, staged_energy)) = committed else {
             continue;
         };
-        let Some(developing_structure) = staged_structure
-            .subgraph_for_physical_ids(&mapped_anchor_ids, &[mapped_anchor_id])
+        let Some(developing_structure) =
+            staged_structure.subgraph_for_physical_ids(&mapped_anchor_ids, &[mapped_anchor_id])
         else {
             continue;
         };
         let mut parent_trial_storage = parent.stored_material.clone();
-        if parent_trial_storage.take_physical_at(storage_index).is_none() {
+        if parent_trial_storage
+            .take_physical_at(storage_index)
+            .is_none()
+        {
             continue;
         }
         let Some(refreshed_anchor_index) = developing_structure.unit_index(mapped_anchor_id) else {
@@ -736,7 +746,10 @@ pub(crate) fn begin_reproduction(
             developing_member_ids: mapped_anchor_ids,
             developing_structure,
             child_genome: child_genome.clone(),
-            developmental_origin: Position { x: placement.x, y: placement.y },
+            developmental_origin: Position {
+                x: placement.x,
+                y: placement.y,
+            },
             developmental_orientation_radians: 0.0,
             developing_stress: 0.0,
             anchor_unit_index: refreshed_anchor_index,
@@ -811,7 +824,11 @@ fn commit_candidate_attachment(
     construction.developing_member_ids = child.structure.physical_constituent_ids();
     construction.developing_structure = child.structure;
     construction.needs_space = false;
-    construction.developing_energy = if aggregate_owned { 0.0 } else { child.usable_energy };
+    construction.developing_energy = if aggregate_owned {
+        0.0
+    } else {
+        child.usable_energy
+    };
     construction.developing_stress = child.stress;
 
     if birth_ready_with_reference(construction, &environment.catalog, seed_reference) {
@@ -1310,8 +1327,12 @@ mod tests {
         assert!(parent.structure.units.len() > parent_structure.units.len());
         assert!(
             parent.structure.bonds.iter().any(|bond| {
-                let a = construction.developing_member_ids.contains(&bond.endpoint_a.constituent_id);
-                let b = construction.developing_member_ids.contains(&bond.endpoint_b.constituent_id);
+                let a = construction
+                    .developing_member_ids
+                    .contains(&bond.endpoint_a.constituent_id);
+                let b = construction
+                    .developing_member_ids
+                    .contains(&bond.endpoint_b.constituent_id);
                 a != b
             }),
             "anchor admission must create a real bond to the parent aggregate"
