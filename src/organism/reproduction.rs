@@ -1532,6 +1532,7 @@ mod tests {
             ),
         };
         let mut ledger = EnergyLedger::default();
+        let mut parent_energy = 20.0;
         let ledger_before = ledger;
         let mut candidate_ledger = ledger;
         candidate_ledger.total_heat_dissipated = 9.0;
