@@ -171,6 +171,14 @@ pub(crate) struct ReproductiveConstruction {
 }
 
 impl ReproductiveConstruction {
+    /// True when at least one developing-member ID is present in the parent's
+    /// aggregate. Partial overlap is invalid ownership, not a detached graph.
+    pub(crate) fn has_any_member_in(&self, parent: &OrganismStructure) -> bool {
+        self.developing_member_ids
+            .iter()
+            .any(|id| parent.unit_index(*id).is_some())
+    }
+
     /// True when the stable developing-member IDs are owned by the parent's
     /// physical aggregate. The cached developing graph is deliberately not
     /// consulted: stale cached poses must not make the same physical units look
