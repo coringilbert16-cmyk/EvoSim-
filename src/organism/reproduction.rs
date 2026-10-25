@@ -1349,8 +1349,8 @@ mod tests {
         let graph = serialized
             .get("developing_structure")
             .expect("detached-legacy compatibility graph remains serializable");
-        assert_eq!(graph.get("units").and_then(serde_json::Value::as_array).map(Vec::len), Some(0));
-        assert_eq!(graph.get("bonds").and_then(serde_json::Value::as_array).map(Vec::len), Some(0));
+        assert_eq!(graph["units"].as_array().unwrap().len(), 0);
+        assert_eq!(graph["bonds"].as_array().unwrap().len(), 0);
     }
 
     #[test]
