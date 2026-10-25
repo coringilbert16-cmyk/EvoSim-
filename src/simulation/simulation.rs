@@ -2574,9 +2574,9 @@ mod decomposition_finalization_tests {
         assert!(!construction.committed_material.is_empty());
         let developing_member_ids = construction.developing_member_ids.clone();
         assert!(
-            developing_member_ids
-                .iter()
-                .all(|id| simulation.organisms[0].structure.unit_index(*id).is_some())
+            developing_member_ids.iter().all(|id| {
+                simulation.organisms[0].structure.unit_index(*id).is_some()
+            })
         );
 
         // Breach the parent's established core while retaining the physical
@@ -2641,9 +2641,9 @@ mod decomposition_finalization_tests {
         );
         assert!(construction.developing_structure.units.is_empty());
         assert!(
-            developing_member_ids
-                .iter()
-                .all(|id| simulation.organisms[0].structure.unit_index(*id).is_some())
+            developing_member_ids.iter().all(|id| {
+                simulation.organisms[0].structure.unit_index(*id).is_some()
+            })
         );
         assert_eq!(
             construction.committed_material.entries,
