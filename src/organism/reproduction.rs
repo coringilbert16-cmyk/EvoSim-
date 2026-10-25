@@ -1,8 +1,8 @@
 //! Physical reproduction lifecycle.
 //!
-//! Reproduction owns a separate developing physical graph. The child begins
-//! from one transferred anchor resource, then uses the normal COMBINE/runtime
-//! path with the inherited developmental fields guiding valid opportunities.
+//! Reproduction keeps the developing member as a stable-ID view into the
+//! parent's authoritative physical aggregate. Growth and division stage graph
+//! changes transactionally; the view is not a second owner of those constituents.
 use crate::combine_runtime::DevelopmentalContext;
 use crate::contact::ConnectionCompatibilityCache;
 use crate::energy_ledger::EnergyLedgerAuthority;
@@ -1245,7 +1245,7 @@ mod tests {
     }
 
     #[test]
-    fn anchor_starts_a_separate_physical_child_graph() {
+    fn anchor_is_admitted_into_parent_aggregate() {
         let mut simulation = Simulation::new(7, 20.0);
         let mut parent = simulation.organisms.remove(0);
         let parent_structure = parent.structure.clone();
@@ -1284,11 +1284,21 @@ mod tests {
                 .physical_id(construction.anchor_unit_index),
             "the anchor is tracked by stable physical identity"
         );
-        assert_eq!(
-            format!("{:?}", parent.structure),
-            format!("{:?}", parent_structure)
+        assert!(construction.is_aggregate_owned_by(&parent.structure));
+        assert!(parent.structure.units.len() > parent_structure.units.len());
+        assert!(
+            parent.structure.bonds.iter().any(|bond| {
+                let a = construction.developing_member_ids.contains(&bond.endpoint_a.constituent_id);
+                let b = construction.developing_member_ids.contains(&bond.endpoint_b.constituent_id);
+                a != b
+            }),
+            "anchor admission must create a real bond to the parent aggregate"
         );
-        let body = parent_body_geometry(&parent, &simulation.environment.catalog).unwrap();
+        let body = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+            &parent_structure,
+            &simulation.environment.catalog,
+        )
+        .unwrap();
         assert!(child_remains_within_realized_parent_boundary(
             &construction.developing_structure,
             &body,
