@@ -200,8 +200,9 @@ impl ReproductiveConstruction {
         }) {
             return false;
         }
-        let Some(view) =
-            parent.subgraph_for_physical_ids(&self.developing_member_ids, &[anchor_id]) else {
+        let Some(view) = parent
+            .subgraph_for_physical_ids(&self.developing_member_ids, &[anchor_id])
+        else {
             return false;
         };
         let Some(anchor_index) = view.unit_index(anchor_id) else {
