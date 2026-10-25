@@ -576,7 +576,7 @@ mod integration_tests {
                 construction
                     .developing_member_ids
                     .iter()
-                    .all(|id| parent.structure.unit_index(*id).is_some()),
+                    .all(|id| { parent.structure.unit_index(*id).is_some() }),
                 "the parent aggregate must remain the physical owner"
             );
 
