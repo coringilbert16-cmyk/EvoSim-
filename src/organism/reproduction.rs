@@ -743,8 +743,8 @@ pub(crate) fn begin_reproduction(
         let Some((staged_structure, staged_ledger, staged_energy)) = committed else {
             continue;
         };
-        let Some(developing_structure) = staged_structure
-            .subgraph_for_physical_ids(&mapped_anchor_ids, &[mapped_anchor_id])
+        let Some(developing_structure) =
+            staged_structure.subgraph_for_physical_ids(&mapped_anchor_ids, &[mapped_anchor_id])
         else {
             continue;
         };
@@ -820,8 +820,8 @@ fn commit_candidate_attachment(
     let staged_aggregate = if construction.is_aggregate_owned_by(parent_structure) {
         let mut staged = parent_structure.clone();
         let old_ids = construction.developing_member_ids.clone();
-        let Some((_, refreshed_view)) = staged
-            .replace_subgraph_remapping_new_ids_and_extract(&old_ids, &child.structure)
+        let Some((_, refreshed_view)) =
+            staged.replace_subgraph_remapping_new_ids_and_extract(&old_ids, &child.structure)
         else {
             return ConstructionStatus::Waiting;
         };
@@ -1569,7 +1569,9 @@ mod tests {
         let retained = parent.reproductive_construction.as_ref().unwrap();
         let cached_index = retained.developing_structure.unit_index(member_id).unwrap();
         assert_eq!(
-            retained.developing_structure.units[cached_index].placement.x,
+            retained.developing_structure.units[cached_index]
+                .placement
+                .x,
             aggregate_pose.x + 100.0,
             "aggregate-owned readiness must not require refreshing the duplicate graph"
         );
