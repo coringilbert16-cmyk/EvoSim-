@@ -1018,20 +1018,81 @@ pub(crate) fn finish_reproduction(
     parent: &mut Organism,
     child_id: String,
     catalog: &[crate::resources::BaseResource],
-    _ledger: &mut EnergyLedger,
+    ledger: &mut EnergyLedger,
     seed_reference: Option<(f64, f64)>,
 ) -> Option<Organism> {
     let construction = parent.reproductive_construction.take()?;
-    let ready = birth_ready_with_reference(&construction, catalog, seed_reference);
-    // Construction may only produce an offspring after the physical genome is
-    // validated and ready. Detached/dead/non-ready states are not a successful
-    // division transaction; retain the parent-owned construction unchanged.
-    if !ready {
+    if !birth_ready_with_reference(&construction, catalog, seed_reference) {
         parent.reproductive_construction = Some(construction);
         return None;
     }
+
+    // Aggregate-owned construction can divide only by atomically partitioning
+    // the authoritative parent graph. A transient child view is never promoted
+    // to a second owner. Legacy, not-yet-migrated constructions retain their
+    // existing behavior until they are admitted into the aggregate.
+    let aggregate_owned = construction.is_aggregate_owned_by(&parent.structure);
+    let (child_structure, child_energy, parent_energy, mut staged_ledger) = if aggregate_owned {
+        let mut staged_parent_structure = parent.structure.clone();
+        let child_core_ids = construction.developing_structure.genome_constituent_ids.clone();
+        let Some((child_structure, crossing_bond_energy)) = staged_parent_structure
+            .partition_subgraph_for_division(
+                &construction.developing_member_ids,
+                &child_core_ids,
+            )
+        else {
+            parent.reproductive_construction = Some(construction);
+            return None;
+        };
+
+        // Bonds severed at the division boundary release their stored energy
+        // exactly once. The release is a structural debit and usable-energy
+        // credit, not a second external chemical source.
+        let mut staged_ledger = *ledger;
+        let mut combined_energy = parent.usable_energy;
+        if crossing_bond_energy > 0.0 {
+            let transaction = crate::energy_ledger::EnergyTransaction {
+                reason: crate::energy_ledger::EnergyReason::Break,
+                potential_released: 0.0,
+                usable_delta: crossing_bond_energy,
+                structural_delta: -crossing_bond_energy,
+                work_expended: 0.0,
+                heat_dissipated: 0.0,
+            };
+            if !staged_ledger.settle_transaction(&mut combined_energy, transaction) {
+                parent.reproductive_construction = Some(construction);
+                return None;
+            }
+        }
+
+        let parent_units = staged_parent_structure.units.len();
+        let child_units = child_structure.units.len();
+        let total_units = parent_units + child_units;
+        if parent_units == 0 || child_units == 0 || total_units == 0 {
+            parent.reproductive_construction = Some(construction);
+            return None;
+        }
+        let child_share = combined_energy * (child_units as f64 / total_units as f64);
+        let parent_share = combined_energy - child_share;
+        if !child_share.is_finite() || !parent_share.is_finite() || child_share < 0.0 || parent_share < 0.0 {
+            parent.reproductive_construction = Some(construction);
+            return None;
+        }
+        parent.structure = staged_parent_structure;
+        parent.mark_structure_changed();
+        parent.usable_energy = parent_share;
+        (child_structure, child_share, parent_share, staged_ledger)
+    } else {
+        (
+            construction.developing_structure.clone(),
+            construction.developing_energy,
+            parent.usable_energy,
+            *ledger,
+        )
+    };
+
     let child_position = construction.developmental_origin.clone();
-    Some(Organism {
+    let child = Organism {
         id: child_id,
         developmental_origin: child_position.clone(),
         developmental_orientation_radians: construction.developmental_orientation_radians,
@@ -1042,7 +1103,7 @@ pub(crate) fn finish_reproduction(
         experience_memory: crate::memory::ExperienceMemory::default(),
         pending_movement_experience: None,
         decision_history: crate::decision::DecisionHistory::default(),
-        usable_energy: construction.developing_energy,
+        usable_energy: child_energy,
         stress: construction.developing_stress,
         maintenance_debt: construction.developing_maintenance_debt,
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
@@ -1051,7 +1112,7 @@ pub(crate) fn finish_reproduction(
         active_transformation_id: None,
         active_movement: None,
         reproductive_construction: None,
-        structure: construction.developing_structure,
+        structure: child_structure,
         structure_revision: 0,
         position_revision: 0,
         cached_cavity_revision: None,
@@ -1061,7 +1122,10 @@ pub(crate) fn finish_reproduction(
         peak_developmental_realization: 0.0,
         cached_harmonic_key: None,
         last_movement_attempt: None,
-    })
+    };
+    *ledger = staged_ledger;
+    let _ = parent_energy;
+    Some(child)
 }
 
 #[cfg(test)]
