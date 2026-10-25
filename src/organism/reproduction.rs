@@ -1032,11 +1032,11 @@ pub(crate) fn finish_reproduction(
     // to a second owner. Legacy, not-yet-migrated constructions retain their
     // existing behavior until they are admitted into the aggregate.
     let aggregate_owned = construction.is_aggregate_owned_by(&parent.structure);
-    let (child_structure, child_energy, parent_energy, mut staged_ledger) = if aggregate_owned {
+    let (child_structure, child_energy, staged_ledger) = if aggregate_owned {
         let mut staged_parent_structure = parent.structure.clone();
         let child_core_ids = construction.developing_structure.genome_constituent_ids.clone();
-        let Some((child_structure, crossing_bond_energy)) = staged_parent_structure
-            .partition_subgraph_for_division(
+        let Some((child_structure, crossing_bond_energy)) =
+            staged_parent_structure.partition_subgraph_for_division(
                 &construction.developing_member_ids,
                 &child_core_ids,
             )
@@ -1074,19 +1074,22 @@ pub(crate) fn finish_reproduction(
         }
         let child_share = combined_energy * (child_units as f64 / total_units as f64);
         let parent_share = combined_energy - child_share;
-        if !child_share.is_finite() || !parent_share.is_finite() || child_share < 0.0 || parent_share < 0.0 {
+        if !child_share.is_finite()
+            || !parent_share.is_finite()
+            || child_share < 0.0
+            || parent_share < 0.0
+        {
             parent.reproductive_construction = Some(construction);
             return None;
         }
         parent.structure = staged_parent_structure;
         parent.mark_structure_changed();
         parent.usable_energy = parent_share;
-        (child_structure, child_share, parent_share, staged_ledger)
+        (child_structure, child_share, staged_ledger)
     } else {
         (
             construction.developing_structure.clone(),
             construction.developing_energy,
-            parent.usable_energy,
             *ledger,
         )
     };
@@ -1124,7 +1127,6 @@ pub(crate) fn finish_reproduction(
         last_movement_attempt: None,
     };
     *ledger = staged_ledger;
-    let _ = parent_energy;
     Some(child)
 }
 
