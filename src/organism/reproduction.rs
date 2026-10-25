@@ -955,6 +955,7 @@ pub(crate) fn advance_construction(
 
     // Rebuild after the reserve transfer so the child snapshot contains the
     // newly transferred energy rather than overwriting it with a stale balance.
+    let original_working_structure = working_structure.clone();
     let mut child = developing_organism(construction, working_structure);
     if aggregate_owned {
         child.usable_energy = *parent_energy;
@@ -985,8 +986,8 @@ pub(crate) fn advance_construction(
     // changes transactionally into the parent before publishing the refreshed
     // construction view or continuing growth.
     if construction.is_aggregate_owned_by(parent_structure)
-        && (child.structure.units != construction.developing_structure.units
-            || child.structure.bonds != construction.developing_structure.bonds)
+        && (child.structure.units != original_working_structure.units
+            || child.structure.bonds != original_working_structure.bonds)
     {
         // Maintenance commonly changes only scalar energy/debt state. Do not
         // replace an unchanged aggregate subgraph: replacement validates core
