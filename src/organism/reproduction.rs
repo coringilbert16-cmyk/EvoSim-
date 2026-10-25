@@ -228,7 +228,9 @@ pub(crate) fn construction_material_need_pressure(
     let has_preferred_material = |storage: &MaterialStorage| {
         matches!(
             crate::construction_material_selection::select_construction_material(
-                storage, preferred, catalog,
+                storage,
+                preferred,
+                catalog,
             ),
             Ok(ConstructionMaterialDecision::Selected { .. })
         )
