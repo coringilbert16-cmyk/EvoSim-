@@ -462,10 +462,7 @@ fn budding_scale_reached_with_reference(
     if preferred <= 0.0 || !preferred.is_finite() {
         return false;
     }
-    developmental_linear_extent(
-        structure,
-        &construction.developmental_origin,
-    ) + 1e-9
+    developmental_linear_extent(structure, &construction.developmental_origin) + 1e-9
         >= 0.80 * preferred
 }
 
