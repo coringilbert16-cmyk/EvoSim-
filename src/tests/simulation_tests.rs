@@ -147,37 +147,6 @@ mod integration_tests {
     }
 
     #[test]
-    fn integer_material_inventory_conserves_constituents_when_reproduction_admits_anchor() {
-        let mut simulation = Simulation::new(7110, 10.0);
-        for cell in &mut simulation.environment.field.cells {
-            cell.materials.clear();
-            cell.physical_materials.clear();
-        }
-        let parent = &mut simulation.organisms[0];
-        parent.stored_material.entries.clear();
-        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
-
-        let before = integer_material_inventory(&simulation)
-            .expect("pre-reproduction inventory is integral");
-        let mut parent = simulation.organisms.remove(0);
-        let mut ledger = crate::state::EnergyLedger::default();
-        assert!(crate::reproduction::begin_reproduction(
-            &mut parent,
-            &mut simulation.rng,
-            &simulation.environment.catalog,
-            &mut ledger,
-        ));
-        simulation.organisms.push(parent);
-
-        let after = integer_material_inventory(&simulation)
-            .expect("post-reproduction inventory is integral");
-        assert_eq!(
-            after, before,
-            "admitting the anchor into the aggregate must transfer ownership, not create or destroy material"
-        );
-    }
-
-    #[test]
     fn integer_material_inventory_conserves_constituents_across_storage_restore() {
         let mut simulation = Simulation::new(7106, 10.0);
         for cell in &mut simulation.environment.field.cells {
@@ -452,6 +421,10 @@ mod integration_tests {
         let catalog = simulation.environment.catalog.clone();
         let before =
             integer_material_inventory(&simulation).expect("initial inventory is integral");
+        let energy_before = crate::reproduction::total_usable_energy_held(
+            &simulation.organisms,
+            &simulation.decomposing_bodies,
+        );
         let mut ledger = crate::state::EnergyLedger::default();
 
         let (parent, rng) = (&mut simulation.organisms[0], &mut simulation.rng);
@@ -464,9 +437,17 @@ mod integration_tests {
 
         let after =
             integer_material_inventory(&simulation).expect("post-transfer inventory is integral");
+        let energy_after = crate::reproduction::total_usable_energy_held(
+            &simulation.organisms,
+            &simulation.decomposing_bodies,
+        );
         assert_eq!(
             after, before,
             "moving the physical anchor into developing offspring must preserve every constituent"
+        );
+        assert_eq!(
+            energy_after, energy_before,
+            "admitting the anchor must not create a second usable-energy holder"
         );
     }
 
