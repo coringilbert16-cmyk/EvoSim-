@@ -2309,7 +2309,7 @@ mod tests {
     }
 
     #[test]
-    fn aggregate_owned_construction_energy_is_not_counted_twice() {
+    fn aggregate_owned_construction_with_stale_energy_invalidates_inventory() {
         let mut simulation = Simulation::new(947, 20.0);
         let mut parent = simulation.organisms.remove(0);
         parent.usable_energy = 17.0;
@@ -2332,9 +2332,9 @@ mod tests {
         });
 
         let held = total_usable_energy_held(&[parent], &[]);
-        assert_eq!(
-            held, 17.0,
-            "an aggregate-owned construction view must not create a second energy owner"
+        assert!(
+            held.is_nan(),
+            "a stale second energy balance must invalidate inventory instead of being silently ignored"
         );
     }
 
