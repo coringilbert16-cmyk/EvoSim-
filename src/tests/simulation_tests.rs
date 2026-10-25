@@ -60,12 +60,19 @@ mod integration_tests {
                 add_material(&mut inventory, material, catalog)?;
             }
             if let Some(construction) = &organism.reproductive_construction {
+                let aggregate_owned = construction.is_aggregate_owned_by(&organism.structure);
+                if construction.has_any_member_in(&organism.structure) && !aggregate_owned {
+                    return Err(
+                        "construction has partial physical ownership in its parent aggregate"
+                            .to_owned(),
+                    );
+                }
                 for material in construction.committed_material.iter_materials() {
                     add_material(&mut inventory, material, catalog)?;
                 }
                 // Aggregate-owned construction is a stable-ID view into
                 // the parent's structure, not a second physical-material owner.
-                if !construction.is_aggregate_owned_by(&organism.structure) {
+                if !aggregate_owned {
                     for unit in &construction.developing_structure.units {
                         add_material(&mut inventory, &unit.material, catalog)?;
                     }
