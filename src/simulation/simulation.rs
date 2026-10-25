@@ -2573,9 +2573,11 @@ mod decomposition_finalization_tests {
         assert!(construction.developing_structure.units.is_empty());
         assert!(!construction.committed_material.is_empty());
         let developing_member_ids = construction.developing_member_ids.clone();
-        assert!(developing_member_ids.iter().all(|id| {
-            simulation.organisms[0].structure.unit_index(*id).is_some()
-        }));
+        assert!(
+            developing_member_ids
+                .iter()
+                .all(|id| simulation.organisms[0].structure.unit_index(*id).is_some())
+        );
 
         // Breach the parent's established core while retaining the physical
         // aggregate, including construction members. Parent-owned construction
@@ -2638,9 +2640,11 @@ mod decomposition_finalization_tests {
             construction_before.3.bonds
         );
         assert!(construction.developing_structure.units.is_empty());
-        assert!(developing_member_ids.iter().all(|id| {
-            simulation.organisms[0].structure.unit_index(*id).is_some()
-        }));
+        assert!(
+            developing_member_ids
+                .iter()
+                .all(|id| simulation.organisms[0].structure.unit_index(*id).is_some())
+        );
         assert_eq!(
             construction.committed_material.entries,
             construction_before.4
@@ -2661,6 +2665,7 @@ mod decomposition_finalization_tests {
             inventory_before.current_structural_energy
         );
     }
+
     #[test]
     fn aggregate_owned_construction_is_counted_once_in_energy_inventory() {
         let mut simulation = Simulation::new(953, 20.0);
