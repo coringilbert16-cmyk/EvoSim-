@@ -646,19 +646,19 @@ pub(crate) fn total_structural_energy_held(
                     .reproductive_construction
                     .as_ref()
                     .map_or(0.0, |construction| {
-                    if construction.is_aggregate_owned_by(&organism.structure) {
-                        0.0
-                    } else if construction.has_any_member_in(&organism.structure) {
-                        f64::NAN
-                    } else {
-                        construction
-                            .developing_structure
-                            .bonds
-                            .iter()
-                            .map(|bond| bond.bond_energy)
-                            .sum::<f64>()
-                    }
-                });
+                        if construction.is_aggregate_owned_by(&organism.structure) {
+                            0.0
+                        } else if construction.has_any_member_in(&organism.structure) {
+                            f64::NAN
+                        } else {
+                            construction
+                                .developing_structure
+                                .bonds
+                                .iter()
+                                .map(|bond| bond.bond_energy)
+                                .sum::<f64>()
+                        }
+                    });
             own_energy + construction_energy
         })
         .sum::<f64>();
