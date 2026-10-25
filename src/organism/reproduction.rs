@@ -910,7 +910,8 @@ pub(crate) fn advance_construction(
     // changes transactionally into the parent before publishing the refreshed
     // construction view or continuing growth.
     if construction.is_aggregate_owned_by(parent_structure)
-        && child.structure != construction.developing_structure
+        && (child.structure.units != construction.developing_structure.units
+            || child.structure.bonds != construction.developing_structure.bonds)
     {
         // Maintenance commonly changes only scalar energy/debt state. Do not
         // replace an unchanged aggregate subgraph: replacement validates core
