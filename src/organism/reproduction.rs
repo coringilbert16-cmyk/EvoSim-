@@ -27,7 +27,7 @@ pub(crate) fn parent_body_geometry(
     parent: &Organism,
     catalog: &[crate::resources::BaseResource],
 ) -> Option<crate::organism_geometry::OrganismBodyGeometry> {
-    crate::organism_geometry::OrganismBodyGeometry::from_structure(&mut parent.structure, catalog)
+    crate::organism_geometry::OrganismBodyGeometry::from_structure(&parent.structure, catalog)
 }
 
 fn parent_child_position(
@@ -46,7 +46,7 @@ fn parent_child_position(
             rotation_radians: parent_part.rotation_radians,
         };
         for candidate in crate::construction_runtime::candidate_placements(
-            &mut parent.structure,
+            &parent.structure,
             anchor_resource,
             anchor_reference,
             &[parent_part.unit_index],
@@ -689,7 +689,7 @@ fn commit_candidate_attachment(
     environment: &Environment,
     ledger: &mut EnergyLedger,
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
-    child: Organism,
+    mut child: Organism,
     candidate_ledger: EnergyLedger,
     transferred: Option<usize>,
     before_units: usize,
