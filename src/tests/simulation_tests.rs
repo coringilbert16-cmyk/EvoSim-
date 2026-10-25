@@ -463,6 +463,30 @@ mod integration_tests {
     }
 
     #[test]
+    fn integer_material_inventory_rejects_partial_construction_ownership() {
+        let mut simulation = Simulation::new(7111, 10.0);
+        assert!(simulation.organisms[0].store_material(Material::free_base("Carbon", 1.0)));
+        let catalog = simulation.environment.catalog.clone();
+        let (parent, rng) = (&mut simulation.organisms[0], &mut simulation.rng);
+        assert!(crate::reproduction::begin_reproduction(
+            parent,
+            rng,
+            &catalog,
+            &mut crate::state::EnergyLedger::default(),
+        ));
+        let construction = simulation.organisms[0]
+            .reproductive_construction
+            .as_mut()
+            .expect("construction started");
+        let member_id = construction.developing_member_ids[0];
+        construction.developing_member_ids.push(member_id);
+
+        let error = integer_material_inventory(&simulation)
+            .expect_err("partial physical ownership must not be counted as two holders");
+        assert!(error.contains("partial physical ownership"));
+    }
+
+    #[test]
     fn integer_material_inventory_rejects_unknown_constituents_in_authoritative_holders() {
         let mut simulation = Simulation::new(7104, 10.0);
         for cell in &mut simulation.environment.field.cells {
