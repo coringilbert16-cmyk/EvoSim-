@@ -135,12 +135,10 @@ pub(crate) struct ActiveTransformation {
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ReproductiveConstruction {
     pub(crate) committed_material: MaterialStorage,
-    /// Transient compatibility view for detached legacy construction only.
-    /// Never serialize a second physical graph: aggregate-owned construction is
-    /// reconstructed from stable IDs in the parent's authoritative structure.
-    /// Deserialized legacy detached graphs fail closed rather than reviving a
-    /// second physical authority.
-    #[serde(skip, default = "OrganismStructure::new")]
+    /// Physical graph for detached legacy construction. Aggregate-owned
+    /// construction keeps this graph empty and reconstructs transient views from
+    /// stable IDs in the parent's authoritative structure, so serialization does
+    /// not duplicate aggregate-owned physical state.
     pub(crate) developing_structure: OrganismStructure,
     /// Stable physical IDs owned by the developing member within the aggregate migration.
     /// This metadata is intentionally ID-based; unit indices are not durable across staging.
