@@ -749,8 +749,8 @@ pub(crate) fn begin_reproduction(
         let Some((staged_structure, staged_ledger, staged_energy)) = committed else {
             continue;
         };
-        let Some(developing_structure) =
-            staged_structure.subgraph_for_physical_ids(&mapped_anchor_ids, &[mapped_anchor_id])
+        let Some(developing_structure) = staged_structure
+            .subgraph_for_physical_ids(&mapped_anchor_ids, &[mapped_anchor_id])
         else {
             continue;
         };
