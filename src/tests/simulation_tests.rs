@@ -63,8 +63,12 @@ mod integration_tests {
                 for material in construction.committed_material.iter_materials() {
                     add_material(&mut inventory, material, catalog)?;
                 }
-                for unit in &construction.developing_structure.units {
-                    add_material(&mut inventory, &unit.material, catalog)?;
+                // Aggregate-owned construction is a stable-ID view into
+                // the parent's structure, not a second physical-material owner.
+                if !construction.is_aggregate_owned_by(&organism.structure) {
+                    for unit in &construction.developing_structure.units {
+                        add_material(&mut inventory, &unit.material, catalog)?;
+                    }
                 }
             }
         }
