@@ -15,9 +15,17 @@ pub(crate) fn recycle_dead_organism(
 ) -> Option<crate::decomposition::DecomposingBody> {
     let position = organism.occupied_cells.first().cloned()?;
     let energy = organism.usable_energy;
+    // Once the construction members are part of the parent aggregate, the
+    // construction record is only a view: its legacy energy field is not a
+    // second physical energy holder and must not be recycled twice.
+    let construction_has_separate_energy_owner = organism
+        .reproductive_construction
+        .as_ref()
+        .is_some_and(|construction| !construction.is_aggregate_owned_by(&organism.structure));
     let developing_energy = organism
         .reproductive_construction
         .as_ref()
+        .filter(|_| construction_has_separate_energy_owner)
         .map_or(0.0, |construction| construction.developing_energy);
     let total_energy = energy + developing_energy;
     if !energy.is_finite()
