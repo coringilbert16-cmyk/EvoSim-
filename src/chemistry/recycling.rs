@@ -169,7 +169,10 @@ mod tests {
         organism.usable_energy = 5.0;
         assert!(organism.resonant_energy.deposit(440.0, 3.0));
         let total_before = organism.usable_energy
-            + organism.resonant_energy.total_energy().expect("valid reservoir");
+            + organism
+                .resonant_energy
+                .total_energy()
+                .expect("valid reservoir");
 
         let body = recycle_dead_organism(
             &mut simulation.environment,
