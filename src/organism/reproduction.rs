@@ -443,6 +443,7 @@ fn developmental_linear_extent(structure: &OrganismStructure, origin: &Position)
 
 fn budding_scale_reached_with_reference(
     construction: &ReproductiveConstruction,
+    structure: &OrganismStructure,
     catalog: &[crate::resources::BaseResource],
     seed_reference: Option<(f64, f64)>,
 ) -> bool {
@@ -457,15 +458,15 @@ fn budding_scale_reached_with_reference(
     if preferred <= 0.0 || !preferred.is_finite() {
         return false;
     }
-    developmental_linear_extent(
-        &construction.developing_structure,
-        &construction.developmental_origin,
-    ) + 1e-9
+    developmental_linear_extent(structure, &construction.developmental_origin) + 1e-9
         >= 0.80 * preferred
 }
 
-fn developing_membership_is_valid(construction: &ReproductiveConstruction) -> bool {
-    let actual = construction.developing_structure.physical_constituent_ids();
+fn developing_membership_is_valid(
+    construction: &ReproductiveConstruction,
+    structure: &OrganismStructure,
+) -> bool {
+    let actual = structure.physical_constituent_ids();
     if actual.len() != construction.developing_member_ids.len() {
         return false;
     }
@@ -482,28 +483,43 @@ fn developing_membership_is_valid(construction: &ReproductiveConstruction) -> bo
 
 fn birth_ready_with_reference(
     construction: &ReproductiveConstruction,
+    parent_structure: &OrganismStructure,
     catalog: &[crate::resources::BaseResource],
     seed_reference: Option<(f64, f64)>,
 ) -> bool {
-    if !developing_membership_is_valid(construction) {
+    // Readiness is evaluated against a transient view of the authoritative
+    // aggregate whenever the offspring's members are already parent-owned.
+    // The persisted graph is only the compatibility path for detached legacy
+    // constructions and is never the source of truth for attached members.
+    let structure = if construction.is_aggregate_owned_by(parent_structure) {
+        let Some(anchor_id) = construction.anchor_physical_id else {
+            return false;
+        };
+        let Some(view) = parent_structure.subgraph_for_physical_ids(
+            &construction.developing_member_ids,
+            &[anchor_id],
+        ) else {
+            return false;
+        };
+        view
+    } else {
+        construction.developing_structure.clone()
+    };
+    if !developing_membership_is_valid(construction, &structure) {
         return false;
     }
     let Some(anchor_id) = construction
         .anchor_physical_id
-        .filter(|id| construction.developing_structure.unit_index(*id).is_some())
-        .or_else(|| {
-            construction
-                .developing_structure
-                .physical_id(construction.anchor_unit_index)
-        })
+        .filter(|id| structure.unit_index(*id).is_some())
+        .or_else(|| structure.physical_id(construction.anchor_unit_index))
     else {
         return false;
     };
-    let Some(anchor_index) = construction.developing_structure.unit_index(anchor_id) else {
+    let Some(anchor_index) = structure.unit_index(anchor_id) else {
         return false;
     };
     let Ok(cavity) = crate::cavity::analyze_genome_cavity_for_core(
-        &construction.developing_structure,
+        &structure,
         catalog,
         &[anchor_id],
     ) else {
@@ -516,7 +532,7 @@ fn birth_ready_with_reference(
         return false;
     }
     if validate_realized_organism_for_core(
-        &construction.developing_structure,
+        &structure,
         catalog,
         OrganismViabilityRequirements::default(),
         &[anchor_id],
@@ -525,7 +541,7 @@ fn birth_ready_with_reference(
     {
         return false;
     }
-    budding_scale_reached_with_reference(construction, catalog, seed_reference)
+    budding_scale_reached_with_reference(construction, &structure, catalog, seed_reference)
 }
 
 fn anchor_structure(
@@ -840,7 +856,7 @@ fn commit_candidate_attachment(
     };
     construction.developing_stress = child.stress;
 
-    if birth_ready_with_reference(construction, &environment.catalog, seed_reference) {
+    if birth_ready_with_reference(construction, parent_structure, &environment.catalog, seed_reference) {
         ConstructionStatus::Ready
     } else if candidate_units > before_units {
         ConstructionStatus::Progress
@@ -973,7 +989,7 @@ pub(crate) fn advance_construction(
         return (ConstructionStatus::Dead, None);
     }
 
-    if birth_ready_with_reference(construction, &environment.catalog, seed_reference) {
+    if birth_ready_with_reference(construction, parent_structure, &environment.catalog, seed_reference) {
         return (ConstructionStatus::Ready, None);
     }
 
@@ -1072,7 +1088,7 @@ pub(crate) fn finish_reproduction(
         parent.reproductive_construction = Some(construction);
         return None;
     }
-    if !birth_ready_with_reference(&construction, catalog, seed_reference) {
+    if !birth_ready_with_reference(&construction, &parent.structure, catalog, seed_reference) {
         parent.reproductive_construction = Some(construction);
         return None;
     }
