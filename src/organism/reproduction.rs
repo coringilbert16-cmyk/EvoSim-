@@ -909,7 +909,13 @@ pub(crate) fn advance_construction(
     // (including bonds). If its members are aggregate-owned, commit those
     // changes transactionally into the parent before publishing the refreshed
     // construction view or continuing growth.
-    if construction.is_aggregate_owned_by(parent_structure) {
+    if construction.is_aggregate_owned_by(parent_structure)
+        && child.structure != construction.developing_structure
+    {
+        // Maintenance commonly changes only scalar energy/debt state. Do not
+        // replace an unchanged aggregate subgraph: replacement validates core
+        // group boundaries and can reject a no-op view even though no geometry
+        // or bond update needs committing.
         let old_ids = construction.developing_member_ids.clone();
         let Some((_, refreshed_view)) = parent_structure
             .replace_subgraph_remapping_new_ids_and_extract(&old_ids, &child.structure)
