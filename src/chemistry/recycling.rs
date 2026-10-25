@@ -163,6 +163,28 @@ mod tests {
     }
 
     #[test]
+    fn retained_resonance_transfers_into_decomposition_energy_once() {
+        let mut simulation = Simulation::new(32, 20.0);
+        let mut organism = simulation.organisms.remove(0);
+        organism.usable_energy = 5.0;
+        assert!(organism.resonant_energy.deposit(440.0, 3.0));
+        let total_before = organism.usable_energy
+            + organism.resonant_energy.total_energy().expect("valid reservoir");
+
+        let body = recycle_dead_organism(
+            &mut simulation.environment,
+            &mut organism,
+            &mut simulation.energy_ledger,
+        )
+        .expect("organism with retained resonance can be recycled");
+
+        assert_eq!(body.energy_budget, total_before);
+        assert_eq!(body.energy_budget, 8.0);
+        assert_eq!(organism.usable_energy, 0.0);
+        assert_eq!(organism.resonant_energy.total_energy(), Some(0.0));
+    }
+
+    #[test]
     fn aggregate_owned_construction_energy_is_recycled_only_once() {
         let mut simulation = Simulation::new(31, 20.0);
         let mut organism = simulation.organisms.remove(0);
