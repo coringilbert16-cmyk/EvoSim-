@@ -860,9 +860,22 @@ pub(crate) fn advance_construction(
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
     seed_reference: Option<(f64, f64)>,
 ) -> (ConstructionStatus, Option<f64>) {
-    // Validate the persisted developing holder before any new parent-funded
-    // reserve transfer. A non-finite construction must not drain its parent on
-    // every subsequent tick while it remains attached for diagnosis.
+    // Stable IDs, not the cached developing graph, determine membership once
+    // the child has been admitted into the parent's physical aggregate. Rebuild
+    // the working view before validation or chemistry so stale cached geometry
+    // cannot become a second physical authority.
+    let ids_present_in_parent = !construction.developing_member_ids.is_empty()
+        && construction
+            .developing_member_ids
+            .iter()
+            .all(|id| parent_structure.unit_index(*id).is_some());
+    if ids_present_in_parent && !construction.refresh_aggregate_view(parent_structure) {
+        return (ConstructionStatus::Dead, None);
+    }
+
+    // Validate the developing holder before any new parent-funded reserve
+    // transfer. A non-finite construction must not drain its parent on every
+    // subsequent tick while it remains attached for diagnosis.
     if !developing_membership_is_valid(construction) {
         return (ConstructionStatus::Dead, None);
     }
