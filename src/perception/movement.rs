@@ -1557,7 +1557,10 @@ mod tests {
         translate_reproductive_construction(&mut organism, 1.0, -1.0, 1000.0);
 
         let construction = organism.reproductive_construction.as_ref().unwrap();
-        assert_eq!(construction.developing_structure.units[0].placement, cached_pose);
+        assert_eq!(
+            construction.developing_structure.units[0].placement,
+            cached_pose
+        );
         assert!((construction.developmental_origin.x - origin_before.x - 1.0).abs() < 1e-9);
         assert!((construction.developmental_origin.y - origin_before.y + 1.0).abs() < 1e-9);
     }
