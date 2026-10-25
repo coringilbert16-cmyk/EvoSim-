@@ -1488,9 +1488,7 @@ impl Simulation {
                 let developing = organism
                     .reproductive_construction
                     .as_ref()
-                    .filter(|construction| {
-                        !construction.is_aggregate_owned_by(&organism.structure)
-                    })
+                    .filter(|construction| !construction.is_aggregate_owned_by(&organism.structure))
                     .map_or(0.0, |construction| {
                         construction
                             .developing_structure
@@ -2643,11 +2641,13 @@ mod decomposition_finalization_tests {
         let inventory = simulation.energy_inventory_snapshot();
 
         assert_eq!(inventory.current_usable_energy, 7.0);
-        assert_eq!(inventory.current_structural_energy, expected_structural_energy);
+        assert_eq!(
+            inventory.current_structural_energy,
+            expected_structural_energy
+        );
         assert_eq!(
             Simulation::structural_energy_held(&simulation.organisms, &[]),
             expected_structural_energy
         );
     }
-
 }
