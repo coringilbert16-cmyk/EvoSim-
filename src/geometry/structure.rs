@@ -2604,7 +2604,7 @@ mod tests {
     }
 
     #[test]
-    fn appending_into_nonempty_coreless_aggregate_keeps_source_core_additional() {
+    fn append_graph_into_nonempty_coreless_aggregate_keeps_source_core_additional() {
         let placement = Placement {
             x: 0.0,
             y: 0.0,
