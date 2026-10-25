@@ -821,8 +821,8 @@ fn commit_candidate_attachment(
     }
     // When construction is already represented inside the parent aggregate,
     // stage the aggregate replacement before consuming material or publishing
-    // the candidate ledger. The construction graph remains a refreshed view;
-    // the aggregate is authoritative for the physical constituents.
+    // the candidate ledger. Keep only stable IDs as the aggregate-owned view;
+    // the cached graph is retained solely for detached legacy construction.
     let staged_aggregate = if construction.is_aggregate_owned_by(parent_structure) {
         let mut staged = parent_structure.clone();
         let old_ids = construction.developing_member_ids.clone();
