@@ -85,19 +85,12 @@ impl WorldToneOccluderSnapshot {
             let Some(construction) = &organism.reproductive_construction else {
                 continue;
             };
-            let any_member_owned_by_parent = construction.has_any_member_in(&organism.structure);
-            if !construction.developing_structure.units.is_empty()
-                && !construction.is_aggregate_owned_by(&organism.structure)
-                && !any_member_owned_by_parent
-            {
-                body_properties.push(structure_material_properties(
-                    &construction.developing_structure,
-                    catalog,
-                )?);
-                bodies.push(OrganismBodyGeometry::from_all_realized_units(
-                    &construction.developing_structure,
-                )?);
-                body_resonance_owners.push(Some(organism_index));
+            // A construction record is valid only as a stable-ID view into
+            // the parent's authoritative aggregate. A detached legacy graph
+            // would otherwise be rendered as a second physical body/resonance
+            // owner, so reject the snapshot rather than double-count it.
+            if !construction.is_aggregate_owned_by(&organism.structure) {
+                return None;
             }
             if !construction.committed_material.entries.is_empty() {
                 let anchor = Placement {
