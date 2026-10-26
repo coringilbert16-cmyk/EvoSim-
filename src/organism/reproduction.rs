@@ -961,8 +961,8 @@ pub(crate) fn advance_construction(
     let reproductive_energy_allocation = construction.child_genome.reproductive_energy_allocation;
     // Validate persisted accounting and genome parameters before candidate
     // construction can mutate geometry, storage, energy, or the ledger.
-    // Comparisons against NaN otherwise silently skip the reserve branch and
-    // allow invalid energy/debt to flow into the live construction path.
+    // Comparisons against NaN otherwise silently skip validation and allow
+    // invalid energy/debt to flow into the live construction path.
     if !construction.developing_stress.is_finite()
         || !crate::state::INITIAL_STRESS_THRESHOLD.is_finite()
         || !construction.developing_energy.is_finite()
