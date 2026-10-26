@@ -2166,11 +2166,33 @@ mod tests {
         parent.mark_structure_changed();
         let mut ledger = EnergyLedger::default();
 
-        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
+        // Choose an initial physical anchor that the real attachment solver
+        // can bond to this open-space parent. The regression is about waiting
+        // and resuming after that anchor is committed, not about assuming
+        // Carbon (or any preferred resource) fits this geometry.
+        let initial_resource = catalog
+            .iter()
+            .find_map(|resource| {
+                let mut trial_parent = parent.clone();
+                if !trial_parent.store_material(Material::free_base(&resource.name, 1.0)) {
+                    return None;
+                }
+                let mut trial_rng = simulation.rng.clone();
+                let mut trial_ledger = ledger;
+                begin_reproduction(
+                    &mut trial_parent,
+                    &mut trial_rng,
+                    &catalog,
+                    &mut trial_ledger,
+                )
+                .then(|| resource.name.clone())
+            })
+            .expect("at least one resource must provide a physically attachable anchor");
+        assert!(parent.store_material(Material::free_base(&initial_resource, 1.0)));
         assert!(begin_reproduction(
             &mut parent,
             &mut simulation.rng,
-            &simulation.environment.catalog,
+            &catalog,
             &mut ledger,
         ));
 
