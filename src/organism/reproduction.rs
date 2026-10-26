@@ -1655,8 +1655,8 @@ mod tests {
         let aggregate_pose = parent.structure.units[aggregate_index].placement;
         assert!(construction.developing_structure.units.is_empty());
 
-        // A failed division attempt must preserve every authoritative holder,
-        // not merely restore the construction metadata after taking it.
+        // A rejected finalization attempt must preserve every authoritative
+        // holder, not merely restore construction metadata after taking it.
         let structure_before = parent.structure.clone();
         let stored_material_before = parent.stored_material.clone();
         let usable_energy_before = parent.usable_energy;
