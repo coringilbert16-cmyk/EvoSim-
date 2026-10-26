@@ -24,7 +24,7 @@ Finish the ownership migration so an organism’s physical aggregate has one aut
 
 ## Current implementation and verification
 
-- Added regression assertions to `finish_reproduction_readiness_ignores_stale_cached_graph`: a rejected aggregate-owned division attempt must preserve parent units, bonds, genome-core identity, stored material, usable energy, the energy ledger, developing-member IDs, and committed construction material.
+- Added regression assertions to `finish_reproduction_readiness_ignores_stale_cached_graph`: a rejected aggregate-owned finalization attempt must preserve parent units, bonds, genome-core identity, stored material, usable energy, the energy ledger, developing-member IDs, and committed construction material.
 - Refactored `finish_reproduction` to hold the staged parent graph/energy until the child object is assembled, then publish the parent graph, parent energy, and staged ledger at one commit point. Every explicit rejection before that point restores the construction without publishing staged division state.
 - Construction's reserved physical material remains anchored to its developmental origin; it is not blindly moved into parent storage because that would change owner-relative placement. Rejected attempts preserve it, while successful attachment/division transfers it through the transaction path.
 - Added a dedicated bounded CI step for that regression.
