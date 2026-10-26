@@ -588,6 +588,9 @@ impl ActiveMaterialField {
             .position(|existing| !existing.has_internal_structure());
         if let Some(existing_index) = existing_index {
             let existing = &self.cells[index].materials[existing_index];
+            if existing.is_empty() || !existing.is_valid_for_catalog(catalog) {
+                return false;
+            }
             let mut parts = existing.parts.clone();
             parts.extend(material.parts);
             let merged_parts = merge_parts(&parts);

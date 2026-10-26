@@ -340,6 +340,24 @@ fn logical_deposit_rejects_invalid_index_without_mutating_field() {
 }
 
 #[test]
+fn logical_deposit_does_not_absorb_invalid_existing_stock() {
+    let catalog = crate::resources::default_catalog();
+    let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
+    field.cells[0]
+        .materials
+        .push(make_raw("Carbon", 1e-10));
+    let before_cells = field.cells.clone();
+    let before_revision = field.revision;
+
+    assert!(
+        !field.deposit_at_index(0, make_raw("Carbon", 1.0), &catalog),
+        "a valid deposit must not normalize corrupt fractional stock into a valid total"
+    );
+    assert_eq!(field.cells, before_cells);
+    assert_eq!(field.revision, before_revision);
+}
+
+#[test]
 fn logical_deposit_rejects_unrepresentable_merged_inventory_atomically() {
     let catalog = crate::resources::default_catalog();
     let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
