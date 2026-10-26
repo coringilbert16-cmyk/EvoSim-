@@ -2266,9 +2266,34 @@ mod tests {
         let before_bonds = before_view.bonds.len();
 
         let developing_child = developing_organism(&construction, before_view);
-        let newly_available_resource = construction_preferred_resource(&developing_child)
+        let preferred_resource = construction_preferred_resource(&developing_child)
             .expect("the developing genome has a preferred construction resource")
             .to_owned();
+
+        // Chemical preference alone does not guarantee a physical bond can be
+        // formed at the current geometry. Preflight candidate resources and
+        // supply one that the real attachment solver can use, so this regression
+        // tests resumption rather than assuming every preferred shape fits.
+        let mut fitting_resource = None;
+        for resource in &environment.catalog {
+            let mut trial_parent = parent.clone();
+            if !trial_parent.store_material(Material::free_base(&resource.name, 1.0)) {
+                continue;
+            }
+            if try_child_construction(
+                &developing_child,
+                &trial_parent.stored_material,
+                &environment,
+                &ledger,
+                None,
+            )
+            .is_some()
+            {
+                fitting_resource = Some(resource.name.clone());
+                break;
+            }
+        }
+        let newly_available_resource = fitting_resource.unwrap_or(preferred_resource);
         assert!(parent.store_material(Material::free_base(&newly_available_resource, 1.0)));
 
         let second_status = advance_construction(
