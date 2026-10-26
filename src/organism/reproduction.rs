@@ -980,7 +980,7 @@ pub(crate) fn advance_construction(
     if !construction.developing_stress.is_finite()
         || !crate::state::INITIAL_STRESS_THRESHOLD.is_finite()
         || !construction.developing_energy.is_finite()
-        || construction.developing_energy < 0.0
+        || construction.developing_energy != 0.0
         || !construction.developing_maintenance_debt.is_finite()
         || construction.developing_maintenance_debt < 0.0
         || !reserve_energy.is_finite()
