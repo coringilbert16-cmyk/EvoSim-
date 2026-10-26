@@ -27,3 +27,10 @@ Ensure chemistry reactions change authoritative physical material and bonds exac
 - Keep each command and test run within five minutes; a timeout is incomplete evidence.
 - Keep this PR limited to its primary invariant. Do not fold in unrelated cleanup.
 - PR #204 is the roadmap/handoff; PR #196 constructor/Bob work is out of scope.
+
+
+## Cross-PR boundary and dependency clarification (2026-10-26)
+
+This phase owns **atomic physical realization and settlement of a selected reaction**: validate live contacts/endpoints, stage all material/bond changes, settle energy, then commit once or roll back completely. It does not own the world-wide candidate scheduler, reaction-progress lifetime, or environment-first UI/logging; those are separate planning scopes.
+
+**Required shared-rule invariant:** the same reaction policy and settlement path must be usable for environmental material and organism/cell-held material. Do not create a special environmental reaction law. Depend on PR #207 material ownership, PR #208 energy accounting, the cache-version boundary, and the shared chemistry runtime/scheduler. Cached results never override live geometry or settlement.
