@@ -3342,6 +3342,9 @@ fn parallel_exposure_with_exact_intersections(
     target_body_indices: &[usize],
     exact_intersections: bool,
 ) -> Option<(ParallelExposureWidths, Vec<ParallelRayInteractionPath>)> {
+    let profile = std::env::var_os("EVOSIM_PROFILE_WORLD_TONE").is_some() && bodies.len() > 1000;
+    let profile_started = std::time::Instant::now();
+    let mut profile_mark = profile_started;
     use crate::capillary_geometry::FluidBoundaryPiece;
     use crate::resources::Form;
 
@@ -3541,6 +3544,10 @@ fn parallel_exposure_with_exact_intersections(
         }
     }
 
+    if profile {
+        eprintln!("WORLD_TONE_PROFILE bodies={} parts={} segments={} arcs={} stage=body_projection elapsed={:.3}s", bodies.len(), bodies.iter().map(|body| body.parts.len()).sum::<usize>(), segments.len(), arcs.len(), profile_mark.elapsed().as_secs_f64());
+        profile_mark = std::time::Instant::now();
+    }
     let mut arc_lane_ranges = Vec::with_capacity(arcs.len());
     for arc in &arcs {
         let range = frame.circle_critical_lanes(arc.center, arc.radius)?;
@@ -3750,6 +3757,10 @@ fn parallel_exposure_with_exact_intersections(
         curved_lanes.clear();
     }
 
+    if profile {
+        eprintln!("WORLD_TONE_PROFILE stage=lane_events exact_intersections={} elapsed={:.3}s", exact_intersections, profile_mark.elapsed().as_secs_f64());
+        profile_mark = std::time::Instant::now();
+    }
     let partition = ParallelLanePartition::from_boundary_events(straight_lanes, curved_lanes)?;
     // The lane partition is sorted. Sweep surface extents alongside it so each
     // lane tests only boundaries whose projected ranges can actually intersect
@@ -3765,6 +3776,7 @@ fn parallel_exposure_with_exact_intersections(
             .total_cmp(&arc_lane_ranges[*right].0)
     });
     let intervals = partition.intervals();
+    let interval_count = intervals.len();
     let mut interaction_paths = Vec::new();
     for (lo, hi, lane) in intervals {
         while segment_cursor < segment_order.len() {
@@ -3931,6 +3943,9 @@ fn parallel_exposure_with_exact_intersections(
         *width += hi - lo;
     }
 
+    if profile {
+        eprintln!("WORLD_TONE_PROFILE stage=lane_sweep intervals={} paths={} elapsed={:.3}s total={:.3}s", interval_count, interaction_paths.len(), profile_mark.elapsed().as_secs_f64(), profile_started.elapsed().as_secs_f64());
+    }
     if widths
         .iter()
         .flatten()
