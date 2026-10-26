@@ -601,13 +601,12 @@ mod tests {
         )
         .expect("second object should be realized");
 
-        let prepared =
-            MaterialStorage::prepare_physical_batch_at_owner_anchor(
-                vec![first, second],
-                anchor,
-                &catalog,
-            )
-                .expect("valid batch should prepare atomically");
+        let prepared = MaterialStorage::prepare_physical_batch_at_owner_anchor(
+            vec![first, second],
+            anchor,
+            &catalog,
+        )
+        .expect("valid batch should prepare atomically");
         let mut storage = MaterialStorage::default();
         storage.commit_prepared_physical_batch(prepared);
         assert_eq!(storage.physical_count(), 2);
