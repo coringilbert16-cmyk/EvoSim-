@@ -2336,6 +2336,14 @@ mod tests {
             &simulation.environment.catalog,
             &mut ledger,
         ));
+        let original_structure = parent.structure.clone();
+        let original_storage = parent.stored_material.entries.clone();
+        let original_energy = parent.usable_energy;
+        let original_ledger = ledger;
+        let original_construction = serde_json::to_value(
+            parent.reproductive_construction.as_ref().unwrap(),
+        )
+        .unwrap();
         let original_units = parent
             .reproductive_construction
             .as_ref()
@@ -2353,6 +2361,20 @@ mod tests {
         );
 
         assert!(child.is_none());
+        assert_eq!(parent.structure.units, original_structure.units);
+        assert_eq!(parent.structure.bonds, original_structure.bonds);
+        assert_eq!(
+            parent.structure.physical_constituent_ids(),
+            original_structure.physical_constituent_ids()
+        );
+        assert_eq!(parent.stored_material.entries, original_storage);
+        assert_eq!(parent.usable_energy, original_energy);
+        assert_eq!(ledger, original_ledger);
+        assert_eq!(
+            serde_json::to_value(parent.reproductive_construction.as_ref().unwrap()).unwrap(),
+            original_construction,
+            "rejected division must preserve the full reproductive construction"
+        );
         let retained = parent
             .reproductive_construction
             .as_ref()
@@ -2437,6 +2459,188 @@ mod tests {
         assert!(
             held.is_nan(),
             "a stale second energy balance must invalidate inventory instead of being silently ignored"
+        );
+    }
+
+ 
+    #[test]
+    fn aggregate_division_transfers_every_unit_once_and_reconciles_boundary_energy() {
+        use crate::structure::{
+            Bond, BondEndpoint, ConnectionEndpoint, Placement, StructuralUnit,
+        };
+        use std::collections::HashSet;
+        use std::f64::consts::PI;
+
+        fn add_bond(
+            structure: &mut OrganismStructure,
+            a: crate::structure::PhysicalConstituentId,
+            angle_a: f64,
+            b: crate::structure::PhysicalConstituentId,
+            angle_b: f64,
+            bond_energy: f64,
+        ) {
+            structure.bonds.push(Bond {
+                endpoint_a: BondEndpoint::new(
+                    a,
+                    ConnectionEndpoint::Boundary {
+                        angle_radians: angle_a,
+                    },
+                ),
+                endpoint_b: BondEndpoint::new(
+                    b,
+                    ConnectionEndpoint::Boundary {
+                        angle_radians: angle_b,
+                    },
+                ),
+                strength: 0.1,
+                bond_energy,
+            });
+        }
+
+        fn cavity_with_attached_carbon(
+            catalog: &[crate::resources::BaseResource],
+            origin_x: f64,
+        ) -> (OrganismStructure, crate::structure::PhysicalConstituentId,
+              crate::structure::PhysicalConstituentId) {
+            let blueprint = crate::juvenile::confirmed_seed_baseline(catalog).unwrap();
+            let mut structure = blueprint.realize(catalog).unwrap();
+            for unit in &mut structure.units {
+                unit.placement.x += origin_x;
+            }
+            let anchor_index = structure
+                .units
+                .iter()
+                .position(|unit| (unit.placement.x - origin_x).abs() < 1e-9
+                    && (unit.placement.y + 2.0).abs() < 1e-9)
+                .expect("top-center cavity boundary unit exists");
+            let anchor_id = structure.physical_id(anchor_index).unwrap();
+            structure.set_genome_constituent_ids([anchor_id]);
+
+            let top_index = anchor_index;
+            let carbon_index = structure.add_unit(StructuralUnit::new(
+                "Carbon",
+                Placement {
+                    x: origin_x,
+                    y: -3.366_025_403_784_438_6,
+                    rotation_radians: 0.0,
+                },
+            ));
+            let carbon_id = structure.physical_id(carbon_index).unwrap();
+            let top_id = structure.physical_id(top_index).unwrap();
+            add_bond(&mut structure, top_id, -PI / 2.0, carbon_id, PI / 2.0, 0.0);
+            (structure, anchor_id, carbon_id)
+        }
+
+        let mut simulation = Simulation::new(212, 20.0);
+        let catalog = simulation.environment.catalog.clone();
+        let mut parent = simulation.organisms.remove(0);
+        let (mut parent_graph, parent_core_id, parent_carbon_id) =
+            cavity_with_attached_carbon(&catalog, 0.0);
+        let (child_graph, child_core_id, child_carbon_id) =
+            cavity_with_attached_carbon(&catalog, 5.0);
+        let child_original_ids = child_graph.physical_constituent_ids();
+        let remapping = parent_graph
+            .append_graph_remapping_ids(&child_graph)
+            .expect("second cavity joins as a distinct genome core");
+        let child_core_id = *remapping.get(&child_core_id).unwrap();
+        let child_carbon_id = *remapping.get(&child_carbon_id).unwrap();
+        let child_member_ids = child_original_ids
+            .iter()
+            .map(|id| *remapping.get(id).expect("every child unit is remapped"))
+            .collect::<Vec<_>>();
+
+        let bridge_y = -3.366_025_403_784_438_6;
+        let mut bridge_ids = Vec::new();
+        for x in [1.5, 2.5, 3.5] {
+            let index = parent_graph.add_unit(StructuralUnit::new(
+                "Nitrogen",
+                Placement {
+                    x,
+                    y: bridge_y,
+                    rotation_radians: 0.0,
+                },
+            ));
+            bridge_ids.push(parent_graph.physical_id(index).unwrap());
+        }
+        add_bond(&mut parent_graph, parent_carbon_id, 0.0, bridge_ids[0], PI, 0.0);
+        add_bond(&mut parent_graph, bridge_ids[0], 0.0, bridge_ids[1], PI, 0.0);
+        add_bond(&mut parent_graph, bridge_ids[1], 0.0, bridge_ids[2], PI, 0.0);
+        const CROSSING_BOND_ENERGY: f64 = 0.4;
+        add_bond(
+            &mut parent_graph,
+            bridge_ids[2],
+            0.0,
+            child_carbon_id,
+            PI,
+            CROSSING_BOND_ENERGY,
+        );
+
+        parent.structure = parent_graph;
+        let child_genome = initial_genome();
+        let scale_reference = (child_genome.preferred_mass(), 1.0);
+        let anchor_unit_index = parent.structure.unit_index(child_core_id).unwrap();
+        parent.reproductive_construction = Some(ReproductiveConstruction {
+            committed_material: MaterialStorage::default(),
+            developing_structure: OrganismStructure::new(),
+            developing_member_ids: child_member_ids,
+            child_genome,
+            developmental_origin: Position { x: 5.0, y: 0.0 },
+            developmental_orientation_radians: 0.0,
+            developing_stress: 0.0,
+            anchor_unit_index,
+            anchor_physical_id: Some(child_core_id),
+            developing_energy: 0.0,
+            developing_maintenance_debt: 0.0,
+            needs_space: false,
+        });
+
+        let before_ids = parent.structure.physical_constituent_ids();
+        let before_id_set: HashSet<_> = before_ids.iter().copied().collect();
+        assert_eq!(before_ids.len(), before_id_set.len());
+        let before_energy = parent.usable_energy;
+        let mut ledger = EnergyLedger::default();
+        let original_ledger = ledger;
+
+        let child = finish_reproduction(
+            &mut parent,
+            "synthetic-split-child".to_owned(),
+            &catalog,
+            &mut ledger,
+            Some(scale_reference),
+        )
+        .expect("the staged parent and child both satisfy viability and should split");
+
+        let parent_ids = parent.structure.physical_constituent_ids();
+        let child_ids = child.structure.physical_constituent_ids();
+        let parent_set: HashSet<_> = parent_ids.iter().copied().collect();
+        let child_set: HashSet<_> = child_ids.iter().copied().collect();
+        assert_eq!(parent_set.len(), parent_ids.len(), "parent IDs must be unique");
+        assert_eq!(child_set.len(), child_ids.len(), "child IDs must be unique");
+        assert!(parent_set.is_disjoint(&child_set), "a physical unit has one owner");
+        assert_eq!(
+            parent_set.union(&child_set).copied().collect::<HashSet<_>>(),
+            before_id_set,
+            "division must neither lose nor create physical units"
+        );
+        assert_eq!(parent.reproductive_construction, None);
+        assert!(
+            (parent.usable_energy + child.usable_energy
+                - (before_energy + CROSSING_BOND_ENERGY))
+                .abs()
+                < 1e-9,
+            "usable energy must include exactly the energy released by the severed bond"
+        );
+        assert_ne!(
+            ledger, original_ledger,
+            "the severed bond must be settled in the authoritative ledger"
+        );
+        assert!(
+            parent_ids.contains(&parent_core_id),
+            "the parent retains its original genome core"
+        );
+        assert!(
+            child_ids.contains(&child_core_id),
+            "the child retains its own genome core"
         );
     }
 
