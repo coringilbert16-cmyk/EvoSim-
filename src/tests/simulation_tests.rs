@@ -203,7 +203,7 @@ mod integration_tests {
 
         let stored = simulation.organisms[0]
             .stored_material
-            .take_matching_physical(&Material::free_base("Hydrogen", 1.0))
+            .take_matching_physical(&Material::free_base("Hydrogen", 1.0), &catalog)
             .expect("stored Hydrogen should be removable for restoration");
         let restored = crate::material_restoration::restore_material(
             &mut simulation.organisms[0].structure,
