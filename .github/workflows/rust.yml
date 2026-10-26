@@ -166,6 +166,14 @@ jobs:
       - name: Verify rejected aggregate reproduction preserves ownership state
         timeout-minutes: 5
         run: cargo test --locked finish_reproduction_readiness_ignores_stale_cached_graph
+      # Construction attachment must not consume source material before its graph commit.
+      - name: Verify rejected construction attachment preserves source state
+        timeout-minutes: 5
+        run: cargo test --locked rejected_parent_material_attachment_keeps_source_and_developing_graph_atomic
+      # A physically compatible resource arriving after a wait must resume aggregate-owned growth.
+      - name: Verify construction resumes when compatible material arrives
+        timeout-minutes: 5
+        run: cargo test --locked waiting_construction_resumes_from_same_graph_when_material_arrives
       - name: Run focused active-transformation action isolation test
         timeout-minutes: 5
         run: cargo test --locked active_transformation_suppresses_new_movement_and_material_actions
