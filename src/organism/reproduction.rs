@@ -958,7 +958,6 @@ pub(crate) fn advance_construction(
     if !construction.is_aggregate_owned_by(parent_structure) {
         return (ConstructionStatus::Dead, None);
     }
-    let aggregate_owned = true;
     let Some(anchor_id) = construction.anchor_physical_id else {
         return (ConstructionStatus::Dead, None);
     };
@@ -992,18 +991,6 @@ pub(crate) fn advance_construction(
         return (ConstructionStatus::Dead, None);
     }
 
-    if !aggregate_owned && reserve_energy > construction.developing_energy {
-        let transfer =
-            (reserve_energy - construction.developing_energy).min(parent_energy.max(0.0));
-        if transfer > 0.0
-            && !ledger.transfer(parent_energy, &mut construction.developing_energy, transfer)
-        {
-            // A rejected reserve transfer must not let construction, maintenance,
-            // or structural chemistry advance without the intended energy move.
-            return (ConstructionStatus::Waiting, None);
-        }
-    }
-
     // Rebuild after the reserve transfer so the child snapshot contains the
     // newly transferred energy rather than overwriting it with a stale balance.
     let original_working_structure = working_structure.clone();
@@ -1014,13 +1001,10 @@ pub(crate) fn advance_construction(
     // applies maintenance and structural chemistry to the authoritative graph;
     // this transient view is only for growth and readiness.
     let dead = child.validate_stress_state();
-    // Maintenance and resonance chemistry may alter the construction graph
-    // (including bonds). If its members are aggregate-owned, commit those
-    // changes transactionally into the parent before publishing the refreshed
-    // construction view or continuing growth.
-    if construction.is_aggregate_owned_by(parent_structure)
-        && (child.structure.units != original_working_structure.units
-            || child.structure.bonds != original_working_structure.bonds)
+    // Commit any changed graph transactionally into the parent before
+    // publishing refreshed member IDs or continuing growth.
+    if child.structure.units != original_working_structure.units
+        || child.structure.bonds != original_working_structure.bonds
     {
         // Maintenance commonly changes only scalar energy/debt state. Do not
         // replace an unchanged aggregate subgraph: replacement validates core
@@ -1035,20 +1019,12 @@ pub(crate) fn advance_construction(
         child.structure = refreshed_view;
     }
     *ledger = staged_ledger;
-    if aggregate_owned {
-        *parent_energy = child.usable_energy;
-        construction.developing_energy = 0.0;
-    } else {
-        construction.developing_energy = child.usable_energy;
-    }
+    *parent_energy = child.usable_energy;
+    construction.developing_energy = 0.0;
     construction.developing_stress = child.stress;
     construction.developing_maintenance_debt = child.maintenance_debt;
     construction.developing_member_ids = child.structure.physical_constituent_ids();
-    construction.developing_structure = if aggregate_owned {
-        OrganismStructure::new()
-    } else {
-        child.structure.clone()
-    };
+    construction.developing_structure = OrganismStructure::new();
     if dead {
         return (ConstructionStatus::Dead, None);
     }
@@ -1256,7 +1232,7 @@ pub(crate) fn finish_reproduction(
             child_structure,
             child_share,
             staged_ledger,
-            Some((staged_parent_structure, parent_share)),
+            (staged_parent_structure, parent_share),
         )
     };
 
@@ -1295,11 +1271,10 @@ pub(crate) fn finish_reproduction(
     // Publish the parent graph, parent energy, and ledger only after the
     // complete child object has been assembled. The live construction stays
     // installed during staging, so every rejection naturally preserves it.
-    if let Some((staged_parent_structure, parent_energy)) = staged_parent_commit {
-        parent.structure = staged_parent_structure;
-        parent.mark_structure_changed();
-        parent.usable_energy = parent_energy;
-    }
+    let (staged_parent_structure, parent_energy) = staged_parent_commit;
+    parent.structure = staged_parent_structure;
+    parent.mark_structure_changed();
+    parent.usable_energy = parent_energy;
     *ledger = staged_ledger;
     parent.reproductive_construction = None;
     Some(child)
