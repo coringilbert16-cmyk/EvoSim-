@@ -343,9 +343,7 @@ fn logical_deposit_rejects_invalid_index_without_mutating_field() {
 fn logical_deposit_does_not_absorb_invalid_existing_stock() {
     let catalog = crate::resources::default_catalog();
     let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
-    field.cells[0]
-        .materials
-        .push(make_raw("Carbon", 1e-10));
+    field.cells[0].materials.push(make_raw("Carbon", 1e-10));
     let before_cells = field.cells.clone();
     let before_revision = field.revision;
 

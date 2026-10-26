@@ -1461,7 +1461,9 @@ mod tests {
             &catalog,
         )
         .expect("test compound should be realizable");
-        assert!(organism.stored_material.store_physical_instance(source, &catalog));
+        assert!(organism
+            .stored_material
+            .store_physical_instance(source, &catalog));
         let crate::material_storage::StoredMaterial::Physical(instance) =
             &mut organism.stored_material.entries[0];
         instance.material.parts[0].0 = "Uncatalogued".to_owned();
@@ -1514,7 +1516,9 @@ mod tests {
             &catalog,
         )
         .expect("test compound should be realizable");
-        assert!(organism.stored_material.store_physical_instance(source, &catalog));
+        assert!(organism
+            .stored_material
+            .store_physical_instance(source, &catalog));
         let crate::material_storage::StoredMaterial::Physical(instance) =
             &mut organism.stored_material.entries[0];
         instance.material.parts[0].1 = 1.5;

@@ -167,9 +167,8 @@ mod integration_tests {
             y: 10.0,
             rotation_radians: 0.0,
         };
-        let physical =
-            PhysicalMaterial::realized(taken, vec![placement], &catalog)
-                .expect("whole carbon should be physically realizable");
+        let physical = PhysicalMaterial::realized(taken, vec![placement], &catalog)
+            .expect("whole carbon should be physically realizable");
         assert!(simulation.organisms[0]
             .stored_material
             .store_physical_instance(physical, &catalog));

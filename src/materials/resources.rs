@@ -573,7 +573,10 @@ mod material_contract_tests {
         let remaining = carbon.clone();
         assert!(carbon.take(0.5).is_none());
         assert!(carbon.take(1e-10).is_none());
-        assert_eq!(carbon, remaining, "sub-unit requests must not mutate material");
+        assert_eq!(
+            carbon, remaining,
+            "sub-unit requests must not mutate material"
+        );
     }
 }
 

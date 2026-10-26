@@ -214,7 +214,10 @@ mod tests {
             &catalog,
         );
 
-        assert!(contained.is_empty(), "invalid material must not leave its source holder");
+        assert!(
+            contained.is_empty(),
+            "invalid material must not leave its source holder"
+        );
         assert_eq!(
             field
                 .cells
@@ -229,5 +232,4 @@ mod tests {
             .iter()
             .any(|cell| cell.physical_materials.contains(&physical)));
     }
-
 }
