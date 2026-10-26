@@ -63,3 +63,9 @@ These are verified code-level safeguards, not a claim that all ownership/rollbac
 The follow-up audit found that storage insertion and environmental deposits validated catalog identity, but several source-removal paths trusted a previously stored object without revalidating it. The COMBINE source take, stored BREAK reservation, and indexed physical-storage take now validate the material against the authoritative catalog and reject invalid whole-count state before removing the source. Regression tests assert that an unknown resource identity is rejected without changing the storage owner; stored BREAK also preserves the transformation ID and active-operation state on rejection.
 
 The remaining work is to finish verification of the complete branch, reconcile exact test failures against the post-#212 baseline, and close any additional verified transfer or rollback gaps. These changes improve transaction safety but do not yet establish that PR #207 is complete or merge-ready.
+
+## Fifth implementation pass — per-resource overflow within composites (2026-10-26)
+
+The ownership audit found a gap between the independent inventory oracle and the shared material validator: the oracle checked overflow while aggregating repeated occurrences of the same resource, but Material::is_valid only bounded each constituent entry independently. A composite could therefore contain multiple individually representable Carbon counts whose combined per-resource count exceeded the oracle's u64 range and still pass some storage/deposit checks.
+
+The shared validator now accumulates each resource's constituent counts with checked integer addition. Repeated resource identities remain valid when their aggregate fits; overflow is rejected before the material can pass catalog-bound validation. Regression coverage exercises both cases. The post-change workflow still needs to execute against this new head before this pass is considered verified.
