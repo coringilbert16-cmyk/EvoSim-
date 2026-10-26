@@ -25,10 +25,10 @@ Finish the ownership migration so an organism’s physical aggregate has one aut
 ## Current implementation and verification
 
 - Added regression assertions to `finish_reproduction_readiness_ignores_stale_cached_graph`: a rejected aggregate-owned finalization attempt must preserve parent units, bonds, genome-core identity, stored material, usable energy, the energy ledger, developing-member IDs, and committed construction material.
-- Refactored `finish_reproduction` to hold the staged parent graph/energy until the child object is assembled, then publish the parent graph, parent energy, and staged ledger at one commit point. Every explicit rejection before that point restores the construction without publishing staged division state.
+- Refactored `finish_reproduction` to hold the staged parent graph/energy until the child object is assembled, then publish the parent graph, parent energy, and staged ledger at one commit point. The live construction now remains installed during staging and is cleared only after publication; rejected attempts preserve it by default instead of relying on manual restoration in each rejection branch.
 - Construction's reserved physical material remains anchored to its developmental origin; it is not blindly moved into parent storage because that would change owner-relative placement. Rejected attempts preserve it, while successful attachment/division transfers it through the transaction path.
 - Added a dedicated bounded CI step for that regression.
-- On the current head, the focused rejected-reproduction rollback test passes. The full suite is running; the canonical 12N realization check fails and must be compared by named failure identity with the PR #205 baseline. Current-head Clippy is still pending.
+- The focused rejected-reproduction rollback test passed on the preceding head. The division commit-point hardening is newly committed and awaits a workflow on the updated head. The prior full suite was still running; the canonical 12N realization check failed and must be compared by named failure identity with the PR #205 baseline. Current-head Clippy is not yet verified.
 - Source audit confirms the aggregate-owned path derives transient views from stable IDs and stages division through `partition_subgraph_for_division`. Legacy detached-graph compatibility remains in production accounting/consumer paths and is still a migration gap to assess rather than silently treating the migration as complete.
 
 ## Guardrails
