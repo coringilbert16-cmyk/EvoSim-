@@ -1052,7 +1052,6 @@ mod tests {
         environment
     }
 
-
     // Independent inventory oracle for movement tests. It counts material
     // from physical owners, not energy-ledger totals or geometry caches.
     fn movement_material_inventory(
@@ -1065,7 +1064,10 @@ mod tests {
         ) {
             for (name, amount) in &material.parts {
                 assert!(amount.is_finite() && *amount > 0.0);
-                assert!((amount.fract()).abs() <= 1e-9, "fractional material: {name}={amount}");
+                assert!(
+                    (amount.fract()).abs() <= 1e-9,
+                    "fractional material: {name}={amount}"
+                );
                 *inventory.entry(name.clone()).or_default() += amount.round() as u64;
             }
         }
@@ -1101,7 +1103,8 @@ mod tests {
     }
 
     fn organism_state_without_movement_diagnostic(organism: &Organism) -> serde_json::Value {
-        let mut state = serde_json::to_value(organism).expect("organism snapshot should serialize");
+        let mut state =
+            serde_json::to_value(organism).expect("organism snapshot should serialize");
         if let Some(object) = state.as_object_mut() {
             // A rejected attempt is allowed to record its diagnostic; all
             // physical, ownership, energy, storage, and lifecycle state is not.
@@ -2037,7 +2040,6 @@ mod tests {
         assert_eq!(active.remaining_steps, 0);
     }
 
-
     #[test]
     fn rejected_movement_energy_settlement_does_not_mutate_world_geometry() {
         let simulation = Simulation::new(901, 20.0);
@@ -2091,8 +2093,8 @@ mod tests {
         let original_organism = organism_state_without_movement_diagnostic(&organism);
         let original_blocker = organism_state_without_movement_diagnostic(&before[0]);
         let original_field_revision = environment.field.revision;
-        let original_field_cells =
-            serde_json::to_value(&environment.field.cells).expect("field snapshot should serialize");
+        let original_field_cells = serde_json::to_value(&environment.field.cells)
+            .expect("field snapshot should serialize");
         let original_index_cells = spatial_index.cells.clone();
         let original_index_membership = spatial_index.membership.clone();
         let original_inventory =
@@ -2127,7 +2129,8 @@ mod tests {
         assert_eq!(ledger, original_ledger);
         assert_eq!(environment.field.revision, original_field_revision);
         assert_eq!(
-            serde_json::to_value(&environment.field.cells).expect("field snapshot should serialize"),
+            serde_json::to_value(&environment.field.cells)
+                .expect("field snapshot should serialize"),
             original_field_cells
         );
         assert_eq!(spatial_index.cells, original_index_cells);
@@ -2139,7 +2142,6 @@ mod tests {
         assert_eq!(active.remaining_steps, 1);
         assert_eq!(active.ticks_until_step, 0);
     }
-
 
     #[test]
     fn blocked_push_chain_discards_preflight_without_mutating_world_or_inventory() {
@@ -2235,7 +2237,6 @@ mod tests {
         assert_eq!(active.remaining_steps, 1);
         assert_eq!(active.ticks_until_step, 0);
     }
-
 
     #[test]
     fn successful_push_chain_commits_each_owner_once_and_reconciles_energy() {
@@ -2359,7 +2360,13 @@ mod tests {
             .cells
             .iter()
             .flat_map(|cell| cell.physical_materials.iter())
-            .find(|physical| physical.material.parts.iter().any(|(name, amount)| name == "Carbon" && *amount == 1.0))
+            .find(|physical| {
+                physical
+                    .material
+                    .parts
+                    .iter()
+                    .any(|(name, amount)| name == "Carbon" && *amount == 1.0)
+            })
             .expect("pushed Carbon must remain represented in the field");
         assert!(
             (moved_physical.placements.as_ref().unwrap()[0].x - 11.5).abs() < 1e-9,
