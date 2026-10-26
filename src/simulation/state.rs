@@ -134,6 +134,9 @@ pub(crate) struct ActiveTransformation {
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ReproductiveConstruction {
+    /// Material reserved for construction. New aggregate-owned construction
+    /// draws from the parent's inventory; legacy reserved stock remains here
+    /// until a successful attachment or division transfers it transactionally.
     pub(crate) committed_material: MaterialStorage,
     /// Physical graph for detached legacy construction. Aggregate-owned
     /// construction keeps this graph empty and reconstructs transient views from
@@ -145,7 +148,7 @@ pub(crate) struct ReproductiveConstruction {
     #[serde(default)]
     pub(crate) developing_member_ids: Vec<crate::structure::PhysicalConstituentId>,
     pub(crate) child_genome: Genome,
-    /// Persistent developmental frame for the physically separate offspring.
+    /// Persistent developmental frame for the offspring while it grows within the parent aggregate.
     #[serde(default)]
     pub(crate) developmental_origin: Position,
     #[serde(default)]
