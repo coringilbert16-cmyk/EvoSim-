@@ -1447,11 +1447,20 @@ mod tests {
         let source = crate::physical_material::PhysicalMaterial::realized(
             material,
             vec![
-                crate::structure::Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                crate::structure::Placement { x: 0.838, y: 0.0, rotation_radians: 0.0 },
+                crate::structure::Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
             ],
             &catalog,
-        ).expect("test compound should be realizable");
+        )
+        .expect("test compound should be realizable");
         assert!(organism.stored_material.store_physical_instance(source, &catalog));
         let crate::material_storage::StoredMaterial::Physical(instance) =
             &mut organism.stored_material.entries[0];
@@ -1463,12 +1472,16 @@ mod tests {
             context_key: Some("stored:0:bond:0".into()),
         };
 
-        assert!(Simulation::try_start_transformation(
-            organism, &catalog, &mut next_id, &decision,
-        ).is_none());
+        assert!(
+            Simulation::try_start_transformation(organism, &catalog, &mut next_id, &decision,)
+                .is_none()
+        );
         assert_eq!(organism.stored_material.entries, entries_before);
         assert_eq!(organism.active_transformation_id, None);
-        assert_eq!(next_id, 1, "rejected reservation must not consume a transformation ID");
+        assert_eq!(
+            next_id, 1,
+            "rejected reservation must not consume a transformation ID"
+        );
     }
 
     #[test]
@@ -1487,11 +1500,20 @@ mod tests {
         let source = crate::physical_material::PhysicalMaterial::realized(
             material,
             vec![
-                crate::structure::Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                crate::structure::Placement { x: 0.838, y: 0.0, rotation_radians: 0.0 },
+                crate::structure::Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
             ],
             &catalog,
-        ).expect("test compound should be realizable");
+        )
+        .expect("test compound should be realizable");
         assert!(organism.stored_material.store_physical_instance(source, &catalog));
         let crate::material_storage::StoredMaterial::Physical(instance) =
             &mut organism.stored_material.entries[0];
@@ -1503,12 +1525,16 @@ mod tests {
             context_key: Some("stored:0:bond:0".into()),
         };
 
-        assert!(Simulation::try_start_transformation(
-            organism, &catalog, &mut next_id, &decision,
-        ).is_none());
+        assert!(
+            Simulation::try_start_transformation(organism, &catalog, &mut next_id, &decision,)
+                .is_none()
+        );
         assert_eq!(organism.stored_material.entries, entries_before);
         assert_eq!(organism.active_transformation_id, None);
-        assert_eq!(next_id, 1, "rejected reservation must not consume a transformation ID");
+        assert_eq!(
+            next_id, 1,
+            "rejected reservation must not consume a transformation ID"
+        );
     }
 
     #[test]

@@ -459,7 +459,11 @@ mod tests {
         let catalog = simulation.environment.catalog.clone();
         let mut physical = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
-            vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            ],
             &catalog,
         )
         .expect("test material should realize");
