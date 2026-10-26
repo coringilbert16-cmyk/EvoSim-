@@ -2618,9 +2618,30 @@ mod tests {
             ));
             bridge_ids.push(parent_graph.physical_id(index).unwrap());
         }
-        add_bond(&mut parent_graph, parent_carbon_id, 0.0, bridge_ids[0], PI, 0.0);
-        add_bond(&mut parent_graph, bridge_ids[0], 0.0, bridge_ids[1], PI, 0.0);
-        add_bond(&mut parent_graph, bridge_ids[1], 0.0, bridge_ids[2], PI, 0.0);
+        add_bond(
+            &mut parent_graph,
+            parent_carbon_id,
+            0.0,
+            bridge_ids[0],
+            PI,
+            0.0,
+        );
+        add_bond(
+            &mut parent_graph,
+            bridge_ids[0],
+            0.0,
+            bridge_ids[1],
+            PI,
+            0.0,
+        );
+        add_bond(
+            &mut parent_graph,
+            bridge_ids[1],
+            0.0,
+            bridge_ids[2],
+            PI,
+            0.0,
+        );
         const CROSSING_BOND_ENERGY: f64 = 0.4;
         add_bond(
             &mut parent_graph,
@@ -2672,18 +2693,27 @@ mod tests {
         let child_ids = child.structure.physical_constituent_ids();
         let parent_set: HashSet<_> = parent_ids.iter().copied().collect();
         let child_set: HashSet<_> = child_ids.iter().copied().collect();
-        assert_eq!(parent_set.len(), parent_ids.len(), "parent IDs must be unique");
-        assert_eq!(child_set.len(), child_ids.len(), "child IDs must be unique");
-        assert!(parent_set.is_disjoint(&child_set), "a physical unit has one owner");
         assert_eq!(
-            parent_set.union(&child_set).copied().collect::<HashSet<_>>(),
+            parent_set.len(),
+            parent_ids.len(),
+            "parent IDs must be unique"
+        );
+        assert_eq!(child_set.len(), child_ids.len(), "child IDs must be unique");
+        assert!(
+            parent_set.is_disjoint(&child_set),
+            "a physical unit has one owner"
+        );
+        assert_eq!(
+            parent_set
+                .union(&child_set)
+                .copied()
+                .collect::<HashSet<_>>(),
             before_id_set,
             "division must neither lose nor create physical units"
         );
         assert!(parent.reproductive_construction.is_none());
         assert!(
-            (parent.usable_energy + child.usable_energy
-                - (before_energy + CROSSING_BOND_ENERGY))
+            (parent.usable_energy + child.usable_energy - (before_energy + CROSSING_BOND_ENERGY))
                 .abs()
                 < 1e-9,
             "usable energy must include exactly the energy released by the severed bond"
@@ -2699,9 +2729,7 @@ mod tests {
         let after_structural_energy =
             structural_energy(&parent.structure) + structural_energy(&child.structure);
         assert!(
-            (after_structural_energy
-                - (before_structural_energy - CROSSING_BOND_ENERGY))
-                .abs()
+            (after_structural_energy - (before_structural_energy - CROSSING_BOND_ENERGY)).abs()
                 < 1e-9,
             "only crossing-bond energy may leave structural storage"
         );
