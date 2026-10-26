@@ -1161,7 +1161,7 @@ pub(crate) fn finish_reproduction(
     ledger: &mut EnergyLedger,
     seed_reference: Option<(f64, f64)>,
 ) -> Option<Organism> {
-    let construction = parent.reproductive_construction.take()?;
+    let construction = parent.reproductive_construction.as_ref()?.clone();
     // Stable IDs establish ownership; readiness and division derive transient
     // views from the authoritative parent graph instead of refreshing a second
     // persisted copy. Reject partially admitted membership rather than falling
@@ -1169,11 +1169,9 @@ pub(crate) fn finish_reproduction(
     let any_ids_present_in_parent = construction.has_any_member_in(&parent.structure);
     let aggregate_owned = construction.is_aggregate_owned_by(&parent.structure);
     if any_ids_present_in_parent && !aggregate_owned {
-        parent.reproductive_construction = Some(construction);
         return None;
     }
     if !birth_ready_with_reference(&construction, &parent.structure, catalog, seed_reference) {
-        parent.reproductive_construction = Some(construction);
         return None;
     }
 
@@ -1184,21 +1182,18 @@ pub(crate) fn finish_reproduction(
     let (child_structure, child_energy, staged_ledger, staged_parent_commit) = if aggregate_owned {
         let mut staged_parent_structure = parent.structure.clone();
         let Some(anchor_id) = construction.anchor_physical_id else {
-            parent.reproductive_construction = Some(construction);
             return None;
         };
         let Some(developing_view) = parent
             .structure
             .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
         else {
-            parent.reproductive_construction = Some(construction);
             return None;
         };
         let child_core_ids = developing_view.genome_constituent_ids().to_vec();
         let Some((child_structure, crossing_bond_energy)) = staged_parent_structure
             .partition_subgraph_for_division(&construction.developing_member_ids, &child_core_ids)
         else {
-            parent.reproductive_construction = Some(construction);
             return None;
         };
 
@@ -1225,7 +1220,6 @@ pub(crate) fn finish_reproduction(
             )
             .is_err()
         {
-            parent.reproductive_construction = Some(construction);
             return None;
         }
 
@@ -1244,7 +1238,6 @@ pub(crate) fn finish_reproduction(
                 heat_dissipated: 0.0,
             };
             if !staged_ledger.settle_transaction(&mut combined_energy, transaction) {
-                parent.reproductive_construction = Some(construction);
                 return None;
             }
         }
@@ -1263,12 +1256,10 @@ pub(crate) fn finish_reproduction(
             structural_mass(&staged_parent_structure),
             structural_mass(&child_structure),
         ) else {
-            parent.reproductive_construction = Some(construction);
             return None;
         };
         let total_mass = parent_mass + child_mass;
         if !total_mass.is_finite() || total_mass <= 0.0 {
-            parent.reproductive_construction = Some(construction);
             return None;
         }
         let child_share = combined_energy * (child_mass / total_mass);
@@ -1278,7 +1269,6 @@ pub(crate) fn finish_reproduction(
             || child_share < 0.0
             || parent_share < 0.0
         {
-            parent.reproductive_construction = Some(construction);
             return None;
         }
         (
@@ -1329,8 +1319,9 @@ pub(crate) fn finish_reproduction(
         last_movement_attempt: None,
     };
     // Publish the parent graph, parent energy, and ledger only after the
-    // complete child object has been assembled. Every rejection above leaves
-    // the original parent and ledger untouched.
+    // complete child object has been assembled. The live construction stays
+    // installed during staging, so every rejection naturally preserves it.
+    parent.reproductive_construction = None;
     if let Some((staged_parent_structure, parent_energy)) = staged_parent_commit {
         parent.structure = staged_parent_structure;
         parent.mark_structure_changed();
