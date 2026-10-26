@@ -44,3 +44,10 @@ The post-#212 audit found that the independent test oracle in `src/tests/simulat
 The first confirmed mutation-path defect is in `ActiveMaterialField::deposit`: its logical-material branch returned success even when `deposit_at_index` silently rejected an empty or invalid payload. The indexed deposit also lacked a bounds check and could panic for an invalid index. The first implementation slices make deposit APIs require the authoritative catalog, reject unknown/ambiguous identities for both logical stock and realized physical objects, report rejection truthfully, and preserve state on invalid payloads or indices. Focused regressions cover these rejection paths.
 
 Remaining audit focus: confirm every transfer/escrow owner is covered by independent per-resource inventory tests, audit consumption and aggregation paths for silent loss or identity drift, and compare exact failure identities against the post-#212 baseline. This first slice does not claim the whole PR acceptance gate is complete.
+
+
+## Second implementation pass — removal-boundary audit (2026-10-26)
+
+The follow-up audit found that storage insertion and environmental deposits validated catalog identity, but several source-removal paths trusted a previously stored object without revalidating it. The COMBINE source take, stored BREAK reservation, and indexed physical-storage take now validate the material against the authoritative catalog and reject invalid whole-count state before removing the source. Regression tests assert that an unknown resource identity is rejected without changing the storage owner; stored BREAK also preserves the transformation ID and active-operation state on rejection.
+
+The remaining work is to finish verification of the complete branch, reconcile exact test failures against the post-#212 baseline, and close any additional verified transfer or rollback gaps. These changes improve transaction safety but do not yet establish that PR #207 is complete or merge-ready.
