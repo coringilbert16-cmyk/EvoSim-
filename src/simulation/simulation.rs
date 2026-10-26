@@ -1428,7 +1428,9 @@ impl Simulation {
                     + organism
                         .reproductive_construction
                         .as_ref()
-                        .filter(|construction| !construction.is_aggregate_owned_by(&organism.structure))
+                        .filter(|construction| {
+                            !construction.is_aggregate_owned_by(&organism.structure)
+                        })
                         .map_or(0.0, |_| f64::NAN)
             })
             .sum();
