@@ -1846,7 +1846,7 @@ mod decomposition_finalization_tests {
         let inventory_before = rollback_material_inventory(&simulation);
         let removed = simulation.organisms[0]
             .stored_material
-            .take_physical_at(original_count)
+            .take_physical_at(original_count, &simulation.environment.catalog)
             .expect("test source should be removable from storage");
         let expected_placements = removed.placements.clone();
         let transformation = crate::state::ActiveTransformation {
@@ -2500,7 +2500,7 @@ mod decomposition_finalization_tests {
             .expect("construction started");
         let committed = organism
             .stored_material
-            .take_physical_at(0)
+            .take_physical_at(0, &simulation.environment.catalog)
             .expect("second stored constituent remains");
         construction
             .committed_material
