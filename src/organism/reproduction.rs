@@ -2141,27 +2141,17 @@ mod tests {
 
     #[test]
     fn waiting_construction_resumes_from_same_graph_when_material_arrives() {
-        use crate::structure::{Placement, StructuralUnit};
-
         let mut simulation = Simulation::new(31, 20.0);
         let mut parent = simulation.organisms.remove(0);
         let catalog = simulation.environment.catalog.clone();
-        // Keep the anchor in open space so the regression tests wait/resume
-        // semantics rather than an unrelated seed-placement dead end.
-        parent.structure = OrganismStructure::new();
-        let parent_unit_index = parent.structure.add_unit(StructuralUnit::new(
-            "Nitrogen",
-            Placement {
-                x: 10.0,
-                y: 10.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        assert!(parent.structure.units[parent_unit_index].realize_default_geometry(&catalog));
+        // Keep the constructor-realized parent aggregate in open space. A
+        // single isolated nitrogen unit has no attachable anchor under the
+        // physical contact solver, so preserve the aggregate geometry while
+        // clearing only genome-core identity to isolate wait/resume semantics.
         parent.structure.clear_genome_constituent_ids();
         parent.genome_core_identity_established = false;
-        parent.developmental_origin = Position { x: 10.0, y: 10.0 };
-        parent.occupied_cells = vec![Position { x: 10.0, y: 10.0 }];
+        parent.developmental_origin = Position { x: 500.0, y: 500.0 };
+        parent.occupied_cells = vec![Position { x: 500.0, y: 500.0 }];
         parent.stored_material.entries.clear();
         parent.mark_structure_changed();
         let mut ledger = EnergyLedger::default();
