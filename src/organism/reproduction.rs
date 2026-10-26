@@ -917,7 +917,7 @@ fn commit_candidate_attachment(
     let readiness_structure = if aggregate_owned {
         &staged_parent_structure
     } else {
-        parent_structure
+        &*parent_structure
     };
     let status = if birth_ready_with_reference(
         &staged_construction,
