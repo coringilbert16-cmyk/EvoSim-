@@ -1081,7 +1081,10 @@ mod integration_tests {
 
         let deficit = demand * 0.75;
         assert!((organism.maintenance_debt - deficit).abs() < 1e-12);
-        assert_eq!(organism.stress, 0.0, "unpaid maintenance does not feed stress while disabled");
+        assert_eq!(
+            organism.stress, 0.0,
+            "unpaid maintenance does not feed stress while disabled"
+        );
         assert_eq!(organism.usable_energy, 0.0);
         assert!(organism.stress < organism.stress_threshold);
     }
@@ -1126,7 +1129,10 @@ mod integration_tests {
 
         assert!((organism.maintenance_debt - debt).abs() < 1e-12);
         assert!((organism.usable_energy - 1.0).abs() < 1e-12);
-        assert_eq!(organism.stress, 0.0, "maintenance recovery does not feed stress while disabled");
+        assert_eq!(
+            organism.stress, 0.0,
+            "maintenance recovery does not feed stress while disabled"
+        );
     }
 
     #[test]
