@@ -1428,13 +1428,8 @@ impl Simulation {
                     + organism
                         .reproductive_construction
                         .as_ref()
-                        .filter(|construction| {
-                            !construction.is_aggregate_owned_by(&organism.structure)
-                                && !construction.has_any_member_in(&organism.structure)
-                        })
-                        .map_or(0.0, |construction| {
-                            graph_energy(&construction.developing_structure)
-                        })
+                        .filter(|construction| !construction.is_aggregate_owned_by(&organism.structure))
+                        .map_or(0.0, |_| f64::NAN)
             })
             .sum();
         let decomposition_energy: f64 = decomposing_bodies
