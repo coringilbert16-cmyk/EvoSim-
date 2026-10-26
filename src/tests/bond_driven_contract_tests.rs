@@ -222,8 +222,12 @@ mod tests {
             &structure, 0, 1, &catalog, &mut cache,
         )
         .into_iter()
-        .next()
-        .expect("candidate contact should exist");
+        .find(|candidate| {
+            candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                && candidate.available_a
+                && candidate.available_b
+        })
+        .expect("live candidate contact should exist");
         let (_, _, investment, _) =
             crate::combine_runtime::selected_candidate_evaluation(
                 &structure, 0, 1, candidate, &catalog,
@@ -233,7 +237,24 @@ mod tests {
         // Keep the endpoints physically within COMBINE tolerance, but change
         // their separation after candidate selection. The old candidate would
         // understate formation work if its cached distance were trusted.
-        structure.units[1].placement.x += 0.01;
+        let original_a = candidate
+            .endpoint_a
+            .world_point(&structure.units[0], &catalog)
+            .expect("endpoint A remains valid");
+        let original_b = candidate
+            .endpoint_b
+            .world_point(&structure.units[1], &catalog)
+            .expect("endpoint B remains valid");
+        let original_distance =
+            (original_a.x - original_b.x).hypot(original_a.y - original_b.y);
+        if original_distance > 0.02 {
+            structure.units[1].placement.x +=
+                (original_a.x - original_b.x) / original_distance * 0.01;
+            structure.units[1].placement.y +=
+                (original_a.y - original_b.y) / original_distance * 0.01;
+        } else {
+            structure.units[1].placement.x += 0.01;
+        }
         let point_a = candidate
             .endpoint_a
             .world_point(&structure.units[0], &catalog)
