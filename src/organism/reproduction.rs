@@ -602,12 +602,10 @@ pub(crate) fn construction_usable_energy_held(organism: &Organism) -> f64 {
         } else {
             f64::NAN
         }
-    } else if construction.has_any_member_in(&organism.structure) {
-        // Partial physical ownership cannot be reconciled by counting either
-        // holder opportunistically.
-        f64::NAN
     } else {
-        construction.developing_energy
+        // Detached construction has no valid owner under the aggregate model.
+        // Fail closed rather than counting its legacy energy as a second holder.
+        f64::NAN
     }
 }
 
@@ -646,15 +644,11 @@ pub(crate) fn total_structural_energy_held(
                     .map_or(0.0, |construction| {
                         if construction.is_aggregate_owned_by(&organism.structure) {
                             0.0
-                        } else if construction.has_any_member_in(&organism.structure) {
-                            f64::NAN
                         } else {
-                            construction
-                                .developing_structure
-                                .bonds
-                                .iter()
-                                .map(|bond| bond.bond_energy)
-                                .sum::<f64>()
+                            // Detached construction is no longer a valid physical
+                            // owner; mark inventory as unreconciled instead of
+                            // counting its duplicate graph as independent material.
+                            f64::NAN
                         }
                     });
             own_energy + construction_energy
