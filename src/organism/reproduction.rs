@@ -2251,6 +2251,9 @@ mod tests {
                 resource_name: resource.name.clone(),
                 center_preference: 1.0,
                 radial_falloff: 1.0,
+                center_x: 0.0,
+                center_y: 0.0,
+                additional_influences: Vec::new(),
             }];
             if try_child_construction(
                 &trial_child,
@@ -2274,6 +2277,9 @@ mod tests {
                 resource_name: newly_available_resource.clone(),
                 center_preference: 1.0,
                 radial_falloff: 1.0,
+                center_x: 0.0,
+                center_y: 0.0,
+                additional_influences: Vec::new(),
             }];
         assert!(parent.store_material(Material::free_base(&newly_available_resource, 1.0)));
 
