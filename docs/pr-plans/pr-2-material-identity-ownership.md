@@ -11,7 +11,7 @@ Enforce canonical resource identity, indivisible integer quantities, and indepen
 - [x] Audit remaining material representations and mutation paths against current main.
 - [x] Confirm the shared `Material` validator rejects fractional per-resource quantities, unknown names, and duplicate catalog identities.
 - [x] Extend the independent inventory oracle to reject ambiguous catalog identities.
-- [x] Fix logical field deposits falsely reporting success when the payload is invalid/empty or the index is out of bounds.
+- [x] Make logical and physical field deposits validate catalog identity, report rejection truthfully, and preserve state on invalid payloads or indices.
 - [ ] Extend independent per-resource inventory and transaction rollback coverage for remaining owner paths.
 
 ## Acceptance criteria
@@ -41,6 +41,6 @@ This phase owns **material identity and ownership**, not reaction scheduling or 
 
 The post-#212 audit found that the independent test oracle in `src/tests/simulation_tests.rs` already walks environmental aggregates, realized environmental objects, organism structure/storage, aggregate-owned construction reservations, active transformation escrow, and decomposition carriers by resource name. It rejects unknown names and non-integer counts without reading the energy/material production ledger.
 
-The first confirmed mutation-path defect is in `ActiveMaterialField::deposit`: its logical-material branch returned success even when `deposit_at_index` silently rejected an empty or invalid payload. The indexed deposit also lacked a bounds check and could panic for an invalid index. The first implementation slice makes the deposit result truthful and side-effect-free on rejection, with focused regression tests.
+The first confirmed mutation-path defect is in `ActiveMaterialField::deposit`: its logical-material branch returned success even when `deposit_at_index` silently rejected an empty or invalid payload. The indexed deposit also lacked a bounds check and could panic for an invalid index. The first implementation slices make deposit APIs require the authoritative catalog, reject unknown/ambiguous identities for both logical stock and realized physical objects, report rejection truthfully, and preserve state on invalid payloads or indices. Focused regressions cover these rejection paths.
 
-Remaining audit focus: ensure environmental deposit entry points validate resource identity against the authoritative catalog, confirm every transfer/escrow owner is covered by independent per-resource inventory tests, and compare exact failure identities against the post-#212 baseline. This first slice does not claim the whole PR acceptance gate is complete.
+Remaining audit focus: confirm every transfer/escrow owner is covered by independent per-resource inventory tests, audit consumption and aggregation paths for silent loss or identity drift, and compare exact failure identities against the post-#212 baseline. This first slice does not claim the whole PR acceptance gate is complete.

@@ -309,3 +309,35 @@ fn logical_deposit_rejects_invalid_index_without_mutating_field() {
     assert_eq!(field.cells, before_cells);
     assert_eq!(field.revision, before_revision);
 }
+
+
+#[test]
+fn physical_deposits_reject_unknown_resource_identity_without_mutation() {
+    use crate::physical_material::PhysicalMaterial;
+    use crate::structure::Placement;
+
+    let catalog = crate::resources::default_catalog();
+    let mut physical = PhysicalMaterial::realized(
+        make_raw("Carbon", 1.0),
+        vec![Placement {
+            x: 12.5,
+            y: 12.5,
+            rotation_radians: 0.0,
+        }],
+        &catalog,
+    )
+    .expect("carbon should be physically realizable");
+    physical.material.parts[0].0 = "UnknownResource".to_owned();
+
+    let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
+    let before_cells = field.cells.clone();
+    let before_revision = field.revision;
+
+    assert!(!field.deposit_physical_at_index(0, physical.clone(), &catalog));
+    assert!(!field.deposit_physical_batch(
+        vec![(12.5, 12.5, physical)],
+        &catalog,
+    ));
+    assert_eq!(field.cells, before_cells);
+    assert_eq!(field.revision, before_revision);
+}
