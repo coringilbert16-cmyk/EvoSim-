@@ -8,7 +8,7 @@ use crate::construction_material_selection::ConstructionMaterialDecision;
 use crate::contact::ConnectionCompatibilityCache;
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::material_storage::MaterialStorage;
-use crate::organism::developmental_blueprint::MaterialPreferenceField;
+use crate::developmental_blueprint::MaterialPreferenceField;
 use crate::organism_viability::{
     validate_realized_organism_for_core, OrganismViabilityRequirements,
 };
