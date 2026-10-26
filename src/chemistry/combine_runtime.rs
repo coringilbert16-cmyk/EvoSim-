@@ -423,7 +423,7 @@ pub(crate) fn instantiate_one_unit(
         },
         catalog,
     )?;
-    organism.stored_material.take_matching_physical(&material)?;
+    organism.stored_material.take_matching_physical(&material, catalog)?;
     organism.structure = trial;
     indices.first().copied()
 }
@@ -578,7 +578,7 @@ pub(crate) fn try_combine_stored_unit(
                 {
                     continue;
                 }
-                organism.stored_material.take_matching_physical(&raw)?;
+                organism.stored_material.take_matching_physical(&raw, &environment.catalog)?;
                 organism.structure = hypothetical;
                 organism.usable_energy = candidate_energy;
                 *ledger = candidate_ledger;
