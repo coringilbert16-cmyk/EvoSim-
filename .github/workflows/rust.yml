@@ -4,7 +4,7 @@ name: Rust
 
 on:
   push:
-    branches: [main, 'plan/pr7-aggregate-ownership-division']
+    branches: [main]
   pull_request:
     # Also validate stacked fix branches against their parent fix branch.
     branches: [main, integration/unified-source-and-catalogue, 'fix/**']
