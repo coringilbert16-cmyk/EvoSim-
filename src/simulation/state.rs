@@ -138,10 +138,10 @@ pub(crate) struct ReproductiveConstruction {
     /// developmental origin. Rejected attempts preserve this holder; successful
     /// attachment or division transfers it as part of the ownership transaction.
     pub(crate) committed_material: MaterialStorage,
-    /// Physical graph for detached legacy construction. Aggregate-owned
-    /// construction keeps this graph empty and reconstructs transient views from
-    /// stable IDs in the parent's authoritative structure, so serialization does
-    /// not duplicate aggregate-owned physical state.
+    /// Deprecated serialized compatibility field for pre-migration construction.
+    /// It is never authoritative and must not be advanced or transferred as a
+    /// second physical owner. Aggregate-owned construction keeps it empty and
+    /// reconstructs transient views from stable IDs in the parent's structure.
     pub(crate) developing_structure: OrganismStructure,
     /// Stable physical IDs owned by the developing member within the aggregate migration.
     /// This metadata is intentionally ID-based; unit indices are not durable across staging.
@@ -163,8 +163,9 @@ pub(crate) struct ReproductiveConstruction {
     /// Stable identity of the reproductive anchor; index is retained for legacy serialized state.
     #[serde(default)]
     pub(crate) anchor_physical_id: Option<crate::structure::PhysicalConstituentId>,
-    /// Usable energy for detached legacy construction. Aggregate-owned growth
-    /// keeps usable energy in the parent organism's holder to avoid double ownership.
+    /// Deprecated serialized compatibility field for pre-migration construction.
+    /// Aggregate-owned growth requires this to remain zero and rejects nonzero
+    /// values so a legacy cache cannot become a second usable-energy holder.
     #[serde(default)]
     pub(crate) developing_energy: f64,
     /// Maintenance historically unpaid by the developing offspring.
