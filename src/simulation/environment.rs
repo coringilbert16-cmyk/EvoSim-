@@ -279,6 +279,12 @@ impl ActiveMaterialField {
         regions: &[crate::interior_geometry::EnclosedRegion],
         catalog: &[crate::resources::BaseResource],
     ) -> bool {
+        if !physical.is_realized()
+            || physical.material.is_empty()
+            || !physical.material.is_valid_for_catalog(catalog)
+        {
+            return false;
+        }
         let Some(placements) = physical.placements.as_ref() else {
             return false;
         };
