@@ -2001,8 +2001,9 @@ mod decomposition_finalization_tests {
     fn initial_usable_energy_enters_through_an_explicit_source_transaction() {
         let simulation = Simulation::new(916, 10.0);
         let initial_usable_energy = simulation.organisms[0].usable_energy;
-        let declared_initial_allocation =
-            simulation.organisms[0].genome.reproductive_energy_allocation;
+        let declared_initial_allocation = simulation.organisms[0]
+            .genome
+            .reproductive_energy_allocation;
 
         assert!(initial_usable_energy.is_finite() && initial_usable_energy > 0.0);
         assert_eq!(
