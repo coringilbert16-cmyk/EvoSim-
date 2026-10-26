@@ -29,14 +29,21 @@ jobs:
       - name: Check COMBINE architecture
         timeout-minutes: 5
         run: bash scripts/check_combine_architecture.sh
-      - name: Verify aggregate division acceptance and rollback
+      - name: Verify cavity seed is not a viable organism
         timeout-minutes: 5
-        run: |
-          cargo test --locked cavity_seed_is_not_yet_a_viable_organism
-          cargo test --locked aggregate_division_transfers_every_unit_once_and_reconciles_boundary_energy
-          cargo test --locked detached_legacy_construction_cannot_divide_or_claim_inventory_ownership
-          cargo test --locked failed_begin_reproduction_preserves_rng_and_parent_state
-          cargo test --locked non_ready_construction_cannot_create_an_offspring
+        run: cargo test --locked cavity_seed_is_not_yet_a_viable_organism
+      - name: Verify aggregate division conservation and core identity
+        timeout-minutes: 5
+        run: cargo test --locked aggregate_division_transfers_every_unit_once_and_reconciles_boundary_energy
+      - name: Verify detached construction cannot divide
+        timeout-minutes: 5
+        run: cargo test --locked detached_legacy_construction_cannot_divide_or_claim_inventory_ownership
+      - name: Verify failed construction start preserves RNG and state
+        timeout-minutes: 5
+        run: cargo test --locked failed_begin_reproduction_preserves_rng_and_parent_state
+      - name: Verify non-ready construction cannot divide
+        timeout-minutes: 5
+        run: cargo test --locked non_ready_construction_cannot_create_an_offspring
       # Movement transaction rollback/inventory gates; keep each command independently bounded.
       - name: Verify invalid-ledger movement rejection is side-effect free
         timeout-minutes: 5
