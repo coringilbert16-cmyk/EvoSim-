@@ -1131,7 +1131,10 @@ pub(crate) fn finish_reproduction(
             .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])?;
         let child_core_ids = developing_view.genome_constituent_ids().to_vec();
         let (child_structure, crossing_bond_energy) = staged_parent_structure
-            .partition_subgraph_for_division(&construction.developing_member_ids, &child_core_ids)?;
+            .partition_subgraph_for_division(
+                &construction.developing_member_ids,
+                &child_core_ids,
+            )?;
 
         // Division is one publication boundary: neither resulting organism may
         // become visible unless both post-split structures independently satisfy
