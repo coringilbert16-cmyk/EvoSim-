@@ -127,9 +127,10 @@ impl ExternalInputTransaction {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct EnergyTransaction {
     pub(crate) reason: EnergyReason,
-    /// Non-structural energy source explicitly released by this event.
-    /// Energy already stored in a bond is represented by a negative
-    /// structural_delta when that bond is removed, not by this field.
+    /// Legacy compatibility field. Must remain exactly zero: this transaction
+    /// has no named non-structural source owner to debit. Energy stored in a
+    /// realized bond is represented by a negative structural_delta when removed.
+    /// External input must use ExternalInputTransaction instead.
     pub(crate) potential_released: f64,
     pub(crate) usable_delta: f64,
     pub(crate) structural_delta: f64,
@@ -177,7 +178,10 @@ impl EnergyTransaction {
     }
 
     pub(crate) fn balanced(self) -> bool {
-        self.allocation().balanced()
+        // A generic transaction has no named non-structural source owner to
+        // debit. Bond energy must be represented by structural_delta; any
+        // genuinely external input must use ExternalInputTransaction.
+        self.potential_released == 0.0 && self.allocation().balanced()
     }
 }
 
@@ -198,7 +202,8 @@ pub(crate) struct EnergyInventorySnapshot {
     pub(crate) external_energy_input: f64,
     /// Energy carried out of the modeled world by a continuing signal.
     pub(crate) world_tone_energy_escaped: f64,
-    /// Explicit non-structural sources only; never count bond breakdown here.
+    /// Reserved compatibility slot. Must be zero until an explicitly owned
+    /// non-structural source type exists; bond breakdown is structural_delta.
     pub(crate) other_energy_released: f64,
     pub(crate) work_expended: f64,
     pub(crate) heat_dissipated: f64,
@@ -222,9 +227,10 @@ impl EnergyInventorySnapshot {
             self.work_expended,
             self.heat_dissipated,
         ];
-        if values
-            .iter()
-            .any(|value| !value.is_finite() || *value < 0.0)
+        if self.other_energy_released != 0.0
+            || values
+                .iter()
+                .any(|value| !value.is_finite() || *value < 0.0)
         {
             return None;
         }
@@ -745,6 +751,25 @@ mod tests {
     }
 
     #[test]
+    fn world_inventory_rejects_unowned_non_structural_release() {
+        let snapshot = EnergyInventorySnapshot {
+            initial_usable_energy: 0.0,
+            current_usable_energy: 1.0,
+            initial_resonant_energy: 0.0,
+            current_resonant_energy: 0.0,
+            initial_structural_energy: 0.0,
+            current_structural_energy: 0.0,
+            external_energy_input: 0.0,
+            world_tone_energy_escaped: 0.0,
+            other_energy_released: 1.0,
+            work_expended: 0.0,
+            heat_dissipated: 0.0,
+        };
+        assert_eq!(snapshot.residual(), None);
+        assert!(!snapshot.is_balanced(1.0));
+    }
+
+    #[test]
     fn world_inventory_rejects_unbalanced_or_non_finite_snapshots() {
         let mut inventory = EnergyInventorySnapshot {
             initial_usable_energy: 10.0,
@@ -797,8 +822,8 @@ mod tests {
         ] {
             let tx = EnergyTransaction {
                 reason,
-                potential_released: 5.0,
-                usable_delta: 2.0,
+                potential_released: 0.0,
+                usable_delta: -3.0,
                 structural_delta: 2.0,
                 work_expended: 0.0,
                 heat_dissipated: 1.0,
@@ -847,7 +872,7 @@ mod tests {
     }
 
     #[test]
-    fn settlement_uses_transaction_potential_directly() {
+    fn unowned_non_structural_release_is_rejected_atomically() {
         let tx = EnergyTransaction {
             reason: EnergyReason::Combine,
             potential_released: 12.0,
@@ -858,10 +883,10 @@ mod tests {
         };
         let mut ledger = EnergyLedger::default();
         let mut energy = 10.0;
-        assert!(ledger.settle_transaction(&mut energy, tx));
-        assert_eq!(energy, 14.0);
-        assert_eq!(ledger.total_potential_energy_released, 12.0);
-        assert_eq!(ledger.total_work_expended, 2.0);
+        assert!(!ledger.settle_transaction(&mut energy, tx));
+        assert_eq!(energy, 10.0);
+        assert_eq!(ledger.total_potential_energy_released, 0.0);
+        assert_eq!(ledger.total_work_expended, 0.0);
     }
 
     #[test]

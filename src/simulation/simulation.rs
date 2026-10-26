@@ -267,8 +267,10 @@ impl Simulation {
             ));
         }
 
-        let construction_cost = (1.0e12 - construction.energy).max(0.0);
-        let initial_energy = construction_cost + genome.reproductive_energy_allocation;
+        // The constructor's large energy allowance is a computation budget for
+        // realizing the initial geometry, not a physical source of organism energy.
+        // Only the genome's explicit initial allocation enters the live world.
+        let initial_energy = genome.reproductive_energy_allocation;
 
         Organism {
             id: "1".into(),
@@ -1999,8 +2001,15 @@ mod decomposition_finalization_tests {
     fn initial_usable_energy_enters_through_an_explicit_source_transaction() {
         let simulation = Simulation::new(916, 10.0);
         let initial_usable_energy = simulation.organisms[0].usable_energy;
+        let declared_initial_allocation = simulation.organisms[0]
+            .genome
+            .reproductive_energy_allocation;
 
         assert!(initial_usable_energy.is_finite() && initial_usable_energy > 0.0);
+        assert_eq!(
+            initial_usable_energy, declared_initial_allocation,
+            "constructor computation allowance must not become physical organism energy"
+        );
         assert_eq!(simulation.energy_ledger.initial_usable_energy_held, 0.0);
         assert_eq!(
             simulation.energy_ledger.total_external_energy_input,
@@ -2263,6 +2272,42 @@ mod decomposition_finalization_tests {
                 inventory.residual()
             );
         }
+    }
+
+    #[test]
+    fn world_inventory_rejects_unowned_non_structural_release_in_simulation() {
+        let mut simulation = Simulation::new(914, 10.0);
+        let inventory_before = simulation.energy_inventory_snapshot();
+        let ledger_before = simulation.energy_ledger;
+        let usable_before = simulation.organisms[0].usable_energy;
+        let structure_before = simulation.organisms[0].structure.clone();
+
+        // The arithmetic balances, but this transaction has no named physical
+        // source holder to debit. Rejection must leave both energy and structure
+        // unchanged, not merely leave the ledger counters untouched.
+        let transaction = crate::energy_ledger::EnergyTransaction {
+            reason: crate::energy_ledger::EnergyReason::Transfer,
+            potential_released: 1.0,
+            usable_delta: 0.0,
+            structural_delta: 0.0,
+            work_expended: 0.0,
+            heat_dissipated: 1.0,
+        };
+        assert!(!simulation
+            .energy_ledger
+            .settle_transaction(&mut simulation.organisms[0].usable_energy, transaction,));
+
+        assert_eq!(simulation.organisms[0].usable_energy, usable_before);
+        assert_eq!(
+            simulation.organisms[0].structure.units,
+            structure_before.units
+        );
+        assert_eq!(
+            simulation.organisms[0].structure.bonds,
+            structure_before.bonds
+        );
+        assert_eq!(simulation.energy_ledger, ledger_before);
+        assert_eq!(simulation.energy_inventory_snapshot(), inventory_before);
     }
 
     #[test]
