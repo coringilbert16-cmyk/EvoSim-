@@ -2235,4 +2235,129 @@ mod tests {
         assert_eq!(active.ticks_until_step, 0);
     }
 
+
+    #[test]
+    fn successful_push_chain_commits_each_owner_once_and_reconciles_energy() {
+        let simulation = Simulation::new(904, 20.0);
+        let mut environment = empty_environment(&simulation);
+        let mut organism = simulation.organisms[0].clone();
+        let mut blocker = simulation.organisms[0].clone();
+        blocker.id = "successful-push-blocker".to_string();
+
+        // Compact, deterministic contact fixture: one movement step should
+        // push the blocker and the realized Carbon object by exactly one unit.
+        let y = environment.height * 0.5;
+        organism.occupied_cells[0].x = 9.5;
+        organism.occupied_cells[0].y = y;
+        for unit in &mut organism.structure.units {
+            unit.placement.x = 10.0;
+            unit.placement.y = y;
+        }
+        blocker.occupied_cells[0].x = 10.5;
+        blocker.occupied_cells[0].y = y;
+        for unit in &mut blocker.structure.units {
+            unit.placement.x = 10.5;
+            unit.placement.y = y;
+        }
+
+        let physical_placement = Placement {
+            x: 10.5,
+            y,
+            rotation_radians: 0.0,
+        };
+        let physical = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![physical_placement],
+            &environment.catalog,
+        )
+        .expect("field Carbon should have a valid physical realization");
+        let field_index = environment
+            .field
+            .index_for_position(physical_placement.x, physical_placement.y)
+            .expect("field Carbon must be in bounds");
+        assert!(environment.field.deposit_physical_at_index(field_index, physical));
+
+        let mut before = vec![blocker];
+        let mut spatial_index = MovementSpatialIndex::new(&before, &environment);
+        let mut ledger = EnergyLedger::default();
+        let mut active = crate::state::ActiveMovement {
+            direction_x: 1.0,
+            direction_y: 0.0,
+            remaining_steps: 1,
+            step_interval: 1,
+            ticks_until_step: 0,
+            decision_distance: 1.0,
+            before_energy: organism.usable_energy,
+            before_stress: organism.stress,
+            before_developmental_realization: 0.0,
+        };
+
+        let moving_unit_x_before: Vec<f64> = organism
+            .structure
+            .units
+            .iter()
+            .map(|unit| unit.placement.x)
+            .collect();
+        let blocker_unit_x_before: Vec<f64> = before[0]
+            .structure
+            .units
+            .iter()
+            .map(|unit| unit.placement.x)
+            .collect();
+        let original_energy = organism.usable_energy;
+        let expected_cost = movement_energy_cost_for_distance(
+            organism.structural_mass(&environment.catalog),
+            organism.genome.movement_efficiency(),
+            1.0,
+        );
+        let original_inventory =
+            movement_material_inventory(&[organism.clone(), before[0].clone()], &environment);
+
+        let result = Simulation::advance_movement(
+            &mut before,
+            &mut organism,
+            &mut [],
+            &mut spatial_index,
+            &mut environment,
+            &mut ledger,
+            3,
+            &mut active,
+        );
+
+        assert_eq!(result, Ok(MovementProgress::Complete));
+        for (unit, x_before) in organism.structure.units.iter().zip(moving_unit_x_before) {
+            assert!((unit.placement.x - x_before - 1.0).abs() < 1e-9);
+        }
+        for (unit, x_before) in before[0].structure.units.iter().zip(blocker_unit_x_before) {
+            assert!((unit.placement.x - x_before - 1.0).abs() < 1e-9);
+        }
+        assert!((organism.usable_energy - (original_energy - expected_cost)).abs() < 1e-9);
+        assert!((ledger.total_heat_dissipated - expected_cost).abs() < 1e-9);
+        assert_eq!(ledger.total_work_expended, 0.0);
+        assert_eq!(active.remaining_steps, 0);
+        assert_eq!(environment.field.revision, 2, "deposit plus one committed push");
+        assert_eq!(
+            movement_material_inventory(&[organism.clone(), before[0].clone()], &environment),
+            original_inventory,
+            "successful movement must conserve independent integer-material inventory"
+        );
+
+        let pushed_parts = organism_parts_at(&before[0], &environment, 0.0, 0.0);
+        assert!(
+            spatial_index.candidates(&pushed_parts, &environment).contains(&0),
+            "the pushed organism must be discoverable at its new indexed position"
+        );
+        let moved_physical = environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .find(|physical| physical.material.parts.iter().any(|(name, amount)| name == "Carbon" && *amount == 1.0))
+            .expect("pushed Carbon must remain represented in the field");
+        assert!(
+            (moved_physical.placements.as_ref().unwrap()[0].x - 11.5).abs() < 1e-9,
+            "the realized field owner should move exactly once"
+        );
+    }
+
 }
