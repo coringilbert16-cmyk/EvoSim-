@@ -359,14 +359,24 @@ impl Material {
         // Each part retains its own physical identity, so duplicate resource
         // names are valid in a composite. Their combined inventory still must
         // fit the same integer range used by the independent inventory oracle.
-        let mut per_resource = std::collections::BTreeMap::<&str, u64>::new();
-        for (name, amount) in &self.parts {
-            let count = *amount as u64;
-            let total = per_resource.entry(name.as_str()).or_default();
-            let Some(merged) = total.checked_add(count) else {
-                return false;
-            };
-            *total = merged;
+        // Compositions are small; use an allocation-free scan to keep validation
+        // cheap on frequently checked physical materials.
+        for (index, (name, _)) in self.parts.iter().enumerate() {
+            if self.parts[..index]
+                .iter()
+                .any(|(previous_name, _)| previous_name == name)
+            {
+                continue;
+            }
+            let mut total = 0_u64;
+            for (part_name, amount) in &self.parts {
+                if part_name == name {
+                    let Some(merged) = total.checked_add(*amount as u64) else {
+                        return false;
+                    };
+                    total = merged;
+                }
+            }
         }
 
         for (i, bond) in self.internal_bonds.iter().enumerate() {
