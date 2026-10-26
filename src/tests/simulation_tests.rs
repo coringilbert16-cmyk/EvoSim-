@@ -1064,7 +1064,7 @@ mod integration_tests {
         organism.apply_maintenance(&catalog, &mut ledger);
 
         assert!((organism.usable_energy - 1.0).abs() < 1e-12);
-        assert!((organism.stress - demand).abs() < 1e-12);
+        assert_eq!(organism.stress, 0.0, "stress input is temporarily disabled");
         assert!((ledger.total_heat_dissipated - demand).abs() < 1e-12);
     }
 
@@ -1081,14 +1081,16 @@ mod integration_tests {
 
         let deficit = demand * 0.75;
         assert!((organism.maintenance_debt - deficit).abs() < 1e-12);
-        let paid = demand * 0.25;
-        assert!((organism.stress - (paid + deficit + organism.maintenance_debt)).abs() < 1e-12);
+        assert_eq!(
+            organism.stress, 0.0,
+            "unpaid maintenance does not feed stress while disabled"
+        );
         assert_eq!(organism.usable_energy, 0.0);
         assert!(organism.stress < organism.stress_threshold);
     }
 
     #[test]
-    fn zero_maintenance_energy_accumulates_debt_and_increasing_stress_pressure() {
+    fn zero_maintenance_energy_accumulates_debt_without_stress_input() {
         let mut organism = Simulation::create_initial_organism();
         let catalog = crate::resources::default_catalog();
         let demand = organism.structural_mass(&catalog) * crate::state::MAINTENANCE_ENERGY_PER_MASS;
@@ -1106,8 +1108,8 @@ mod integration_tests {
         assert_eq!(organism.usable_energy, 0.0);
         assert!((first_debt - demand).abs() < 1e-12);
         assert!((organism.maintenance_debt - 2.0 * demand).abs() < 1e-12);
-        assert!(organism.stress > first_stress * crate::state::STRESS_DECAY_PER_TICK);
-        assert!(organism.stress > first_stress);
+        assert_eq!(first_stress, 0.0);
+        assert_eq!(organism.stress, 0.0);
         assert_eq!(ledger.total_heat_dissipated, 0.0);
     }
 
@@ -1121,15 +1123,16 @@ mod integration_tests {
 
         organism.apply_maintenance(&catalog, &mut ledger);
         let debt = organism.maintenance_debt;
-        let deficit = demand;
         organism.stress *= crate::state::STRESS_DECAY_PER_TICK;
         organism.usable_energy = demand + 1.0;
         organism.apply_maintenance(&catalog, &mut ledger);
 
         assert!((organism.maintenance_debt - debt).abs() < 1e-12);
         assert!((organism.usable_energy - 1.0).abs() < 1e-12);
-        let expected_stress = (deficit + debt) * crate::state::STRESS_DECAY_PER_TICK + demand;
-        assert!((organism.stress - expected_stress).abs() < 1e-12);
+        assert_eq!(
+            organism.stress, 0.0,
+            "maintenance recovery does not feed stress while disabled"
+        );
     }
 
     #[test]
@@ -1146,8 +1149,8 @@ mod integration_tests {
         let after_maintenance_stress = organism.stress;
         organism.stress *= crate::state::STRESS_DECAY_PER_TICK;
 
-        assert!(after_maintenance_stress > 0.0);
-        assert!(organism.stress < after_maintenance_stress);
+        assert_eq!(after_maintenance_stress, 0.0);
+        assert_eq!(organism.stress, 0.0);
         assert_eq!(organism.structure.units, initial_units);
         assert_eq!(organism.structure.bonds, initial_bonds);
     }

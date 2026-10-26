@@ -321,6 +321,8 @@ pub(crate) struct Organism {
     pub(crate) last_movement_attempt: Option<MovementAttemptDiagnostic>,
 }
 pub(crate) const STRESS_DECAY_PER_TICK: f64 = 0.98;
+/// Temporary survival-first switch: stress is recorded as zero until stress/death work resumes.
+pub(crate) const STRESS_INPUT_SCALE: f64 = 0.0;
 pub(crate) const INITIAL_STRESS_THRESHOLD: f64 = 100.0;
 pub(crate) const MAINTENANCE_ENERGY_PER_MASS: f64 = 0.001;
 fn default_stress_threshold() -> f64 {
@@ -499,9 +501,14 @@ impl Organism {
             .map(|unit| unit.material.mass(catalog))
             .sum()
     }
+    pub(crate) fn add_stress_input(&mut self, input: f64) {
+        if input.is_finite() {
+            self.stress += input * STRESS_INPUT_SCALE;
+        }
+    }
     pub(crate) fn add_transaction_stress(&mut self, heat: f64) {
         if heat.is_finite() && heat > 0.0 {
-            self.stress += heat
+            self.add_stress_input(heat);
         }
     }
     pub(crate) fn apply_maintenance(
@@ -543,7 +550,7 @@ impl Organism {
             // current maintenance is also going unpaid. Recovering energy
             // stops further starvation damage without retroactively repairing
             // past consequences.
-            self.stress += deficit + self.maintenance_debt;
+            self.add_stress_input(deficit + self.maintenance_debt);
         }
     }
     /// Validate stress bookkeeping without granting stress an independent
