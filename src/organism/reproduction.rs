@@ -173,7 +173,9 @@ fn developing_organism(
         experience_memory: crate::memory::ExperienceMemory::default(),
         pending_movement_experience: None,
         decision_history: crate::decision::DecisionHistory::default(),
-        usable_energy: construction.developing_energy,
+        // The transient view is not an independent energy owner. The
+        // aggregate-owned caller supplies the parent's balance explicitly.
+        usable_energy: 0.0,
         stress: construction.developing_stress,
         maintenance_debt: construction.developing_maintenance_debt,
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
