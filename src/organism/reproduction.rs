@@ -2239,8 +2239,21 @@ mod tests {
             if !trial_parent.store_material(Material::free_base(&resource.name, 1.0)) {
                 continue;
             }
+            // This regression isolates the wait/resume lifecycle, not whether a
+            // randomly mutated genome prefers the one shape that fits this
+            // deliberately reduced geometry. Give each candidate an explicit,
+            // valid preference for the resource being preflighted.
+            let mut trial_child = developing_child.clone();
+            trial_child
+                .genome
+                .developmental_blueprint
+                .material_preferences = vec![crate::organism::developmental_blueprint::MaterialPreferenceField {
+                resource_name: resource.name.clone(),
+                center_preference: 1.0,
+                radial_falloff: 1.0,
+            }];
             if try_child_construction(
-                &developing_child,
+                &trial_child,
                 &trial_parent.stored_material,
                 &environment,
                 &ledger,
@@ -2253,7 +2266,15 @@ mod tests {
             }
         }
         let newly_available_resource = fitting_resource
-            .expect("at least one available resource must have a physically attachable candidate");
+            .expect("at least one resource shape must fit the developing anchor");
+        // Keep the selected preference for the real resume attempt so the
+        // preflight and production path evaluate the same material.
+        construction.child_genome.developmental_blueprint.material_preferences =
+            vec![crate::organism::developmental_blueprint::MaterialPreferenceField {
+                resource_name: newly_available_resource.clone(),
+                center_preference: 1.0,
+                radial_falloff: 1.0,
+            }];
         assert!(parent.store_material(Material::free_base(&newly_available_resource, 1.0)));
 
         let second_status = advance_construction(
