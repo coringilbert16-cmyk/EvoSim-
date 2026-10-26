@@ -428,6 +428,22 @@ mod tests {
     }
 
     #[test]
+    fn indexed_take_rejects_unknown_resource_without_removing_the_entry() {
+        let mut storage = MaterialStorage::default();
+        assert!(storage.store_physical(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            &catalog(),
+        ));
+        let StoredMaterial::Physical(instance) = &mut storage.entries[0];
+        instance.material.parts[0].0 = "Uncatalogued".to_owned();
+        let before = storage.clone();
+
+        assert!(storage.take_physical_at(0, &catalog()).is_none());
+        assert_eq!(storage, before, "rejected indexed take must preserve ownership");
+    }
+
+    #[test]
     fn free_material_is_stored_as_discrete_units() {
         let mut storage = MaterialStorage::default();
         for x in 0..3 {
