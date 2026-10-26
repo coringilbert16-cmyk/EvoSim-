@@ -1064,7 +1064,10 @@ mod tests {
         ) {
             for (name, amount) in &material.parts {
                 assert!(amount.is_finite() && *amount > 0.0);
-                assert!((amount.fract()).abs() <= 1e-9, "fractional material: {name}={amount}");
+                assert!(
+                    (amount.fract()).abs() <= 1e-9,
+                    "fractional material: {name}={amount}"
+                );
                 *inventory.entry(name.clone()).or_default() += amount.round() as u64;
             }
         }
