@@ -2,7 +2,7 @@
 
 ## Status
 
-Implementation and focused verification are consolidated in this PR. The current-head Rust suite has the same ten named failures as accepted baseline `10521705d8f921ceb071b17240f1b7e069f52f1a`; it completed in 278.22 seconds, under the seven-minute ceiling. Clippy still fails on the pre-existing repository warning backlog (34 application-target diagnostics and 14 test-target diagnostics on this run); this PR does not expand into that cleanup.
+Implementation and focused verification are consolidated in this PR. Compared with the accepted baseline run for `10521705d8f921ceb071b17240f1b7e069f52f1a`, the latest completed PR run had no new failing test identities: all 10 current failures were among the baseline's 21 distinct failures, and 11 baseline failures no longer reproduced. The PR suite completed in 278.22 seconds versus 292.69 seconds at baseline, both under the seven-minute ceiling. Clippy still fails on the pre-existing repository warning backlog (34 application-target diagnostics and 14 test-target diagnostics on this run); this PR does not expand into that cleanup.
 
 ## Scope and invariant
 
@@ -42,7 +42,7 @@ Head: `386b04b120137a55433a2e639b55f4aa34297012`
 - Transactions/ownership focused tests: passed.
 - Geometry/persistence focused tests: passed.
 - Organism/seed acceptance focused tests: passed.
-- Full Rust suite: 754 passed, 10 failed, 1 ignored in 278.22 seconds. The ten failing test names match the accepted baseline; no new failure identities observed.
+- Full Rust suite: 754 passed, 10 failed, 1 ignored in 278.22 seconds. All 10 current failing test names are a subset of the baseline's 21 distinct failing test names; no new failure identities were observed, and 11 baseline failures no longer reproduced.
 - Clippy: failed on the existing warning backlog; not treated as a new transactionality regression.
 
 ## Guardrails and dependencies
