@@ -23,7 +23,7 @@ mod integration_tests {
                 if !amount.is_finite()
                     || *amount <= 0.0
                     || amount.fract().abs() > 1e-9
-                    || *amount > u64::MAX as f64
+                    || *amount >= u64::MAX as f64
                 {
                     return Err(format!(
                         "non-integer or invalid amount for {name}: {amount}"
@@ -577,6 +577,18 @@ mod integration_tests {
         let error = integer_material_inventory(&simulation)
             .expect_err("unknown material identity must fail the independent inventory");
         assert!(error.contains("unknown resource identity: Unobtainium"));
+    }
+
+    #[test]
+    fn integer_material_inventory_rejects_unrepresentable_constituent_counts() {
+        let mut simulation = Simulation::new(7110, 10.0);
+        simulation.environment.field.cells[0]
+            .materials
+            .push(Material::free_base("Carbon", u64::MAX as f64));
+
+        let error = integer_material_inventory(&simulation)
+            .expect_err("a float at the rounded u64 boundary must not saturate into inventory");
+        assert!(error.contains("non-integer or invalid amount for Carbon"));
     }
 
     #[test]
