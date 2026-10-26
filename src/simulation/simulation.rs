@@ -267,8 +267,10 @@ impl Simulation {
             ));
         }
 
-        let construction_cost = (1.0e12 - construction.energy).max(0.0);
-        let initial_energy = construction_cost + genome.reproductive_energy_allocation;
+        // The constructor's large energy allowance is a computation budget for
+        // realizing the initial geometry, not a physical source of organism energy.
+        // Only the genome's explicit initial allocation enters the live world.
+        let initial_energy = genome.reproductive_energy_allocation;
 
         Organism {
             id: "1".into(),
@@ -1999,8 +2001,14 @@ mod decomposition_finalization_tests {
     fn initial_usable_energy_enters_through_an_explicit_source_transaction() {
         let simulation = Simulation::new(916, 10.0);
         let initial_usable_energy = simulation.organisms[0].usable_energy;
+        let declared_initial_allocation =
+            simulation.organisms[0].genome.reproductive_energy_allocation;
 
         assert!(initial_usable_energy.is_finite() && initial_usable_energy > 0.0);
+        assert_eq!(
+            initial_usable_energy, declared_initial_allocation,
+            "constructor computation allowance must not become physical organism energy"
+        );
         assert_eq!(simulation.energy_ledger.initial_usable_energy_held, 0.0);
         assert_eq!(
             simulation.energy_ledger.total_external_energy_input,
