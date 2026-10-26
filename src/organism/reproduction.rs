@@ -1145,16 +1145,9 @@ pub(crate) fn finish_reproduction(
         // the full viability contract for their own established genome core.
         // Validate the staged parent as well as the offspring before settling
         // boundary-bond energy or mutating the live parent.
-        // The combined parent aggregate temporarily carries both core-ID
-        // sets. IDs belonging to the developing member must not be validated
-        // as part of the post-split parent.
-        let parent_core_ids = parent
-            .structure
-            .genome_constituent_ids()
-            .iter()
-            .copied()
-            .filter(|id| !construction.developing_member_ids.contains(id))
-            .collect::<Vec<_>>();
+        // The aggregate's primary core remains the parent's identity;
+        // the developing core is stored in an additional genome group.
+        let parent_core_ids = parent.structure.genome_constituent_ids().to_vec();
         if parent_core_ids.is_empty()
             || validate_realized_organism_for_core(
                 &staged_parent_structure,
