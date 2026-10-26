@@ -2146,6 +2146,7 @@ mod tests {
         let simulation = Simulation::new(903, 20.0);
         let mut environment = empty_environment(&simulation);
         let mut organism = simulation.organisms[0].clone();
+        organism.usable_energy = 100.0;
         let mut blocker = simulation.organisms[0].clone();
         blocker.id = "boundary-blocker".to_string();
 
@@ -2241,6 +2242,7 @@ mod tests {
         let simulation = Simulation::new(904, 20.0);
         let mut environment = empty_environment(&simulation);
         let mut organism = simulation.organisms[0].clone();
+        organism.usable_energy = 100.0;
         let mut blocker = simulation.organisms[0].clone();
         blocker.id = "successful-push-blocker".to_string();
 
