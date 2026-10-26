@@ -2006,7 +2006,8 @@ mod decomposition_finalization_tests {
 
         assert!(initial_usable_energy.is_finite() && initial_usable_energy > 0.0);
         assert_eq!(
-            initial_usable_energy, declared_initial_allocation,
+            initial_usable_energy,
+            declared_initial_allocation,
             "constructor computation allowance must not become physical organism energy"
         );
         assert_eq!(simulation.energy_ledger.initial_usable_energy_held, 0.0);
