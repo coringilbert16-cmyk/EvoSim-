@@ -1743,17 +1743,11 @@ mod decomposition_finalization_tests {
                 add(&mut totals, material);
             }
             if let Some(construction) = organism.reproductive_construction.as_ref() {
-                // Aggregate-owned construction is a stable-ID view into the
-                // parent structure, not a second material owner. Count the
-                // developing graph only for legacy constructions that have
-                // not yet migrated into the parent aggregate.
-                if !construction.is_aggregate_owned_by(&organism.structure)
-                    && !construction.has_any_member_in(&organism.structure)
-                {
-                    for unit in &construction.developing_structure.units {
-                        add(&mut totals, &unit.material);
-                    }
-                }
+                assert!(
+                    construction.is_aggregate_owned_by(&organism.structure),
+                    "material inventory cannot reconcile detached construction ownership"
+                );
+                // Stable IDs are metadata, not a second material owner.
                 for material in construction.committed_material.iter_materials() {
                     add(&mut totals, material);
                 }
