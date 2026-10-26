@@ -161,6 +161,13 @@ fn developing_organism(
     construction: &ReproductiveConstruction,
     structure: OrganismStructure,
 ) -> Organism {
+    let stored_material = if construction.is_aggregate_owned_by(&structure) {
+        // Aggregate-owned construction draws exclusively from the parent's
+        // storage. Do not materialize a second inventory on its transient view.
+        MaterialStorage::default()
+    } else {
+        construction.committed_material.clone()
+    };
     Organism {
         id: "developing-offspring".into(),
         developmental_origin: construction.developmental_origin.clone(),
@@ -176,13 +183,7 @@ fn developing_organism(
         stress: construction.developing_stress,
         maintenance_debt: construction.developing_maintenance_debt,
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
-        stored_material: if construction.is_aggregate_owned_by(&structure) {
-            // Aggregate-owned construction draws exclusively from the parent’s
-            // storage. Do not materialize a second inventory on its transient view.
-            MaterialStorage::default()
-        } else {
-            construction.committed_material.clone()
-        },
+        stored_material,
         active_transformation_id: None,
         active_movement: None,
         reproductive_construction: None,
