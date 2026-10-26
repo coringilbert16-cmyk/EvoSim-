@@ -1208,7 +1208,7 @@ mod tests {
             &catalog,
         )
         .unwrap();
-        assert!(field.deposit_physical(boundary.x + 40.0, boundary.y, source,));
+        assert!(field.deposit_physical(boundary.x + 40.0, boundary.y, source, &catalog));
         let coupled = genome_cavity_spectrum(&catalog, &field, &cavity);
 
         let baseline_fundamental = baseline
@@ -1301,7 +1301,7 @@ mod tests {
         )
         .unwrap();
         let mut field = field;
-        assert!(field.deposit_physical(boundary.x + 40.0, boundary.y, source));
+        assert!(field.deposit_physical(boundary.x + 40.0, boundary.y, source, &catalog));
         let received = genome_cavity_spectrum(&catalog, &field, &cavity);
         assert!(!received.components.is_empty());
 
@@ -1341,7 +1341,7 @@ mod tests {
             &catalog,
         )
         .unwrap();
-        assert!(field.deposit_physical(boundary.x + 40.0, boundary.y, source));
+        assert!(field.deposit_physical(boundary.x + 40.0, boundary.y, source, &catalog));
 
         let perceptions = genome_cavity_resonance_perceptions(&catalog, &field, &cavity);
         assert!(!perceptions.is_empty());

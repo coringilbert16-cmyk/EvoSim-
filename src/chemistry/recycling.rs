@@ -87,7 +87,7 @@ pub(crate) fn recycle_dead_organism(
     // Batch deposit validates every destination and object before mutating the
     // field. After this succeeds, the remaining holder/ledger assignments are
     // infallible and commit the same ownership transition.
-    if !environment.field.deposit_physical_batch(deposits) {
+    if !environment.field.deposit_physical_batch(deposits, &environment.catalog) {
         return None;
     }
     organism.usable_energy = staged_parent_energy;

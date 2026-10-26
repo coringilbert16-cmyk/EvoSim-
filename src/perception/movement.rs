@@ -1723,7 +1723,7 @@ mod tests {
             .field
             .index_for_position(placement.x, placement.y)
             .expect("physical material must be in bounds");
-        assert!(environment.field.deposit_physical_at_index(index, physical));
+        assert!(environment.field.deposit_physical_at_index(index, physical, &environment.catalog));
         assert!(Simulation::try_move_cell(
             &mut organism,
             &mut environment,
@@ -1829,7 +1829,7 @@ mod tests {
             .expect("physical material must be in bounds");
         assert!(environment
             .field
-            .deposit_physical_at_index(original_index, physical));
+            .deposit_physical_at_index(original_index, physical, &environment.catalog));
         assert!(Simulation::try_move_cell(
             &mut organism,
             &mut environment,
@@ -1954,7 +1954,7 @@ mod tests {
             .expect("material must be in bounds");
         assert!(environment
             .field
-            .deposit_physical_at_index(original_index, physical));
+            .deposit_physical_at_index(original_index, physical, &environment.catalog));
         assert!(Simulation::try_move_cell(
             &mut organism,
             &mut environment,
@@ -2063,7 +2063,7 @@ mod tests {
             .expect("field Carbon must be in bounds");
         assert!(environment
             .field
-            .deposit_physical_at_index(field_index, physical));
+            .deposit_physical_at_index(field_index, physical, &environment.catalog));
 
         let mut before = vec![blocker];
         let mut spatial_index = MovementSpatialIndex::new(&before, &environment);
@@ -2274,7 +2274,7 @@ mod tests {
             .expect("field Carbon must be in bounds");
         assert!(environment
             .field
-            .deposit_physical_at_index(field_index, physical));
+            .deposit_physical_at_index(field_index, physical, &environment.catalog));
 
         let mut before = vec![blocker];
         let mut spatial_index = MovementSpatialIndex::new(&before, &environment);
