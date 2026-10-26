@@ -2158,8 +2158,8 @@ mod tests {
             },
         ));
         assert!(parent.structure.units[parent_unit_index].realize_default_geometry(&catalog));
-        let parent_core_id = parent.structure.physical_id(parent_unit_index).unwrap();
-        parent.structure.set_genome_constituent_ids([parent_core_id]);
+        parent.structure.clear_genome_constituent_ids();
+        parent.genome_core_identity_established = false;
         parent.developmental_origin = Position { x: 10.0, y: 10.0 };
         parent.occupied_cells = vec![Position { x: 10.0, y: 10.0 }];
         parent.stored_material.entries.clear();
