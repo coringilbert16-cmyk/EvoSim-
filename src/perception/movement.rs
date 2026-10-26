@@ -2190,7 +2190,8 @@ mod tests {
         let original_blocker = organism_state_without_movement_diagnostic(&before[0]);
         let original_field_revision = environment.field.revision;
         let original_field_cells =
-            serde_json::to_value(&environment.field.cells).expect("field snapshot should serialize");
+            serde_json::to_value(&environment.field.cells)
+                .expect("field snapshot should serialize");
         let original_index_cells = spatial_index.cells.clone();
         let original_index_membership = spatial_index.membership.clone();
         let original_inventory =
@@ -2225,7 +2226,8 @@ mod tests {
         assert_eq!(ledger, original_ledger);
         assert_eq!(environment.field.revision, original_field_revision);
         assert_eq!(
-            serde_json::to_value(&environment.field.cells).expect("field snapshot should serialize"),
+            serde_json::to_value(&environment.field.cells)
+                .expect("field snapshot should serialize"),
             original_field_cells
         );
         assert_eq!(spatial_index.cells, original_index_cells);
