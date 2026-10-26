@@ -25,11 +25,11 @@ pub(crate) fn recycle_dead_organism(
     if organism
         .reproductive_construction
         .as_ref()
-        .is_some_and(|construction| {
-            construction.has_any_member_in(&organism.structure)
-                && !construction.is_aggregate_owned_by(&organism.structure)
-        })
+        .is_some_and(|construction| !construction.is_aggregate_owned_by(&organism.structure))
     {
+        // Detached construction is not a valid owner in the aggregate model.
+        // Refuse recycling until ownership can be reconciled; never transfer
+        // a legacy duplicate graph/energy holder as though it were independent.
         return None;
     }
     // Once the construction members are part of the parent aggregate, the
