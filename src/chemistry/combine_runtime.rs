@@ -1720,7 +1720,6 @@ mod fluid_coalescence_transaction_tests {
         assert_eq!(simulation.organisms[0].structure.units.len(), 1);
     }
 
-
     #[test]
     fn live_combine_coalesces_fluid_pair_atomically() {
         let (mut structure, catalog, unit_area) = build_bonded_pair(0.0, false);
