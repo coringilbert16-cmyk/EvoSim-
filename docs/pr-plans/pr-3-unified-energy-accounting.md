@@ -12,14 +12,14 @@ Establish one consistent energy accounting model across initialization, sources,
 - [x] Define accounting contracts and units at each boundary.
 - [x] Remove the constructor-budget-to-organism-energy shortcut.
 - [x] Reject unowned non-structural release and verify rejected settlement leaves the simulation's independent inventory unchanged.
-- [ ] Verify independent world-energy reconciliation across source capture, reaction settlement, and ordinary ticks against the current baseline.
+- [x] Verify independent world-energy reconciliation across source capture, reaction settlement, and ordinary ticks against the current baseline.
 
 ## Acceptance criteria
 
-- [ ] Every energy change has an identified source, transfer, storage change, or sink.
-- [ ] Failed operations do not partially debit or credit energy.
-- [ ] Independent world-energy accounting reconciles within defined tolerances.
-- [ ] Legacy source-budget shortcuts cannot silently create energy; the initial constructor-budget-to-energy conversion is removed and covered by an acceptance assertion.
+- [x] Every energy change has an identified source, transfer, storage change, or sink.
+- [x] Failed operations do not partially debit or credit energy.
+- [x] Independent world-energy accounting reconciles within defined tolerances.
+- [x] Legacy source-budget shortcuts cannot silently create energy; the initial constructor-budget-to-energy conversion is removed and covered by an acceptance assertion.
 
 ## Guardrails
 
@@ -58,3 +58,12 @@ Audited the actual #207 merge commit `4645acaebd34055f6ab1570bc51e0c12953bf3d9`,
 - **Failure behavior:** a rejected operation changes no authoritative holder, source allowance, ledger flow, bond store, or physical structure. Related physical and energy changes publish together or not at all.
 - **Initialization:** the constructor's `1.0e12` allowance may be used only for construction calculations; it must not be converted into organism energy. The declared genome starting allocation is the explicit initial usable-energy grant.
 
+
+
+## Exact-head verification — 2026-10-26
+
+- The #205 historical run on `12d8079230458da68a8dc3755a1d6a9b41347862` reported 27 named Rust test failures. The #208 head run on `b2faaba2de17411fb16013858b6895ecc6b5c717` reported 10 failures, all members of that historical set; 17 historical failures are no longer present and no new failing identity appeared.
+- The full-suite step still exits as timed out: its test output completed after 370.31 seconds, beyond the workflow's six-minute step limit. Treat this as incomplete CI status, not as a clean full-suite pass. Formatting, architecture checks, and all five focused test groups passed, including source capture, reaction settlement, failed-release atomicity, and ordinary-tick independent-inventory reconciliation.
+- Clippy baseline was 34 app-target and 15 test-target diagnostics. The #208 head had 35 app-target and 15 test-target diagnostics. The extra app-target diagnostic was an unused `energy` binding left after removing the constructor-budget energy grant; that binding has now been renamed `_energy` in follow-up commit `764df46face5de41f7d145fd3380e6c7e40400ce`. Current CI must confirm the diagnostic is gone. Other changed-head diagnostics are outside #208's changed source scope (including existing reproduction/viability dead code and an unused reproduction import).
+- Independent inventory reconciliation is exercised by `live_world_tone_capture_settles_and_reconciles_world_energy`, `world_energy_inventory_reconciles_world_tone_and_structural_break_together`, and the ordinary-tick inventory assertion. The source-boundary safeguards and rejected-settlement inventory test also pass in the focused gates.
+- Remaining release gate: verify CI on the follow-up head; confirm the Clippy count returns to the current-main debt level; then decide whether to split/reconfigure the full-suite CI command so the test step can finish within its timeout without violating the five-minute per-command guardrail. Do not merge while the full-suite workflow still reports timeout.
