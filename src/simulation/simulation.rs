@@ -263,6 +263,7 @@ impl Simulation {
                     y: anchor.y,
                     rotation_radians: 0.0,
                 },
+                &catalog,
             ));
         }
 
@@ -442,6 +443,7 @@ impl Simulation {
                     y: anchor.y,
                     rotation_radians: 0.0,
                 },
+                &environment.catalog,
             )
         else {
             // The field remains untouched if any member of the batch cannot be
@@ -1561,16 +1563,16 @@ mod decomposition_finalization_tests {
         // index one with a distinct physical object on either side.
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(neighbor_after_two.clone()));
+            .store_physical_instance(neighbor_after_two.clone(), &simulation.environment.catalog));
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(neighbor_after_one.clone()));
+            .store_physical_instance(neighbor_after_one.clone(), &simulation.environment.catalog));
         assert!(simulation.organisms[0]
             .stored_material
             .store_physical_instance(source));
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(neighbor_before.clone()));
+            .store_physical_instance(neighbor_before.clone(), &simulation.environment.catalog));
         let entries_before = simulation.organisms[0].stored_material.entries.clone();
 
         let decision = ActionCandidate {
@@ -1840,7 +1842,7 @@ mod decomposition_finalization_tests {
         let original_count = simulation.organisms[0].stored_material.physical_count();
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(source.clone()));
+            .store_physical_instance(source.clone(), &simulation.environment.catalog));
         let inventory_before = rollback_material_inventory(&simulation);
         let removed = simulation.organisms[0]
             .stored_material

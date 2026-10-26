@@ -889,6 +889,7 @@ mod tests {
                 y: 0.0,
                 rotation_radians: 0.0,
             },
+            &catalog,
         ));
         let StoredMaterial::Physical(stored) = &storage.entries[0];
 
@@ -1017,6 +1018,7 @@ mod tests {
                 y: 0.0,
                 rotation_radians: 0.0,
             },
+            &catalog,
         ));
         simulation.organisms[0].reproductive_construction =
             Some(crate::state::ReproductiveConstruction {
@@ -1191,6 +1193,7 @@ mod tests {
                 y: 0.0,
                 rotation_radians: 0.0,
             },
+            &catalog,
         ));
         let StoredMaterial::Physical(stored) = storage.entries.into_iter().next().unwrap();
         let owner_id = simulation.organisms[0].id.clone();

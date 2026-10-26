@@ -907,7 +907,7 @@ pub(crate) fn quarantine_or_retain_environmental_source(
 pub(crate) fn quarantine_environmental_source_in_storage(
     source: &crate::physical_material::PhysicalMaterial,
     organism: &mut Organism,
-    _environment: &Environment,
+    environment: &Environment,
 ) -> bool {
     let anchor = organism
         .occupied_cells
@@ -922,6 +922,7 @@ pub(crate) fn quarantine_environmental_source_in_storage(
                 y: anchor.y,
                 rotation_radians: 0.0,
             },
+            &environment.catalog,
         )
     else {
         return false;
@@ -1173,7 +1174,7 @@ pub(crate) fn resolve_transformation(
         // complete split before touching the holder, then commit the prepared
         // entries without cloning unrelated inventory.
         let Some(prepared) =
-            crate::material_storage::MaterialStorage::prepare_physical_batch(pieces)
+            crate::material_storage::MaterialStorage::prepare_physical_batch(pieces, &environment.catalog)
         else {
             restore_failed_stored_break_source(transformation, organism, environment);
             return;
@@ -1503,16 +1504,16 @@ mod tests {
         // intended holder order: before, source, after_one, after_two.
         assert!(organism
             .stored_material
-            .store_physical_instance(after_two.clone()));
+            .store_physical_instance(after_two.clone(), &catalog));
         assert!(organism
             .stored_material
-            .store_physical_instance(after_one.clone()));
+            .store_physical_instance(after_one.clone(), &catalog));
         assert!(organism
             .stored_material
-            .store_physical_instance(source.clone()));
+            .store_physical_instance(source.clone(), &catalog));
         assert!(organism
             .stored_material
-            .store_physical_instance(before.clone()));
+            .store_physical_instance(before.clone(), &catalog));
         let entries_before = organism.stored_material.entries.clone();
 
         let decision = crate::decision_runtime::ActionCandidate {
@@ -1609,7 +1610,7 @@ mod tests {
             &catalog,
         )
         .expect("bonded source should be physically realizable");
-        assert!(organism.stored_material.store_physical_instance(source));
+        assert!(organism.stored_material.store_physical_instance(source, &catalog));
         let before = organism.stored_material.entries.clone();
         let decision = ActionCandidate {
             action: ActionKind::Break,
@@ -2057,7 +2058,7 @@ mod tests {
             &catalog,
         )
         .expect("internally bonded physical material should be realizable");
-        assert!(organism.stored_material.store_physical_instance(physical));
+        assert!(organism.stored_material.store_physical_instance(physical, &catalog));
 
         let decision = crate::decision_runtime::ActionCandidate {
             action: crate::decision::ActionKind::Break,
