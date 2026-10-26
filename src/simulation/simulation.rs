@@ -2301,11 +2301,23 @@ mod decomposition_finalization_tests {
             );
         assert!(!accepted);
 
-        assert_eq!(simulation.organisms[0].usable_energy, usable_before);
-        assert_eq!(simulation.organisms[0].structure.units, structure_before.units);
-        assert_eq!(simulation.organisms[0].structure.bonds, structure_before.bonds);
+        assert_eq!(
+            simulation.organisms[0].usable_energy,
+            usable_before
+        );
+        assert_eq!(
+            simulation.organisms[0].structure.units,
+            structure_before.units
+        );
+        assert_eq!(
+            simulation.organisms[0].structure.bonds,
+            structure_before.bonds
+        );
         assert_eq!(simulation.energy_ledger, ledger_before);
-        assert_eq!(simulation.energy_inventory_snapshot(), inventory_before);
+        assert_eq!(
+            simulation.energy_inventory_snapshot(),
+            inventory_before
+        );
     }
 
     #[test]
