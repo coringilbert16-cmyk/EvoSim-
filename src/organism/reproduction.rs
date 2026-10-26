@@ -828,7 +828,9 @@ pub(crate) fn begin_reproduction(
 
         // Any unconsumed anchor material remains in the parent’s one inventory;
         // the aggregate-owned construction is only a stable-ID view.
-        parent_trial_storage.entries.extend(child_storage.drain_entries());
+        parent_trial_storage
+            .entries
+            .extend(child_storage.drain_entries());
 
         *ledger = staged_ledger;
         parent.usable_energy = staged_energy;
