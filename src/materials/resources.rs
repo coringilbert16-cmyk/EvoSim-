@@ -352,7 +352,7 @@ impl Material {
             .iter()
             .all(|(name, amount)| {
                 !name.is_empty()
-                    && *amount > 0.0
+                    && *amount >= 1.0
                     && *amount < u64::MAX as f64
                     && is_whole_count(*amount)
             })
@@ -532,6 +532,10 @@ mod material_contract_tests {
         let catalog = default_catalog();
         assert!(Material::free_base("Carbon", 2.0).is_valid());
         assert!(!Material::free_base("Carbon", 1.5).is_valid());
+        assert!(
+            !Material::free_base("Carbon", 1e-10).is_valid(),
+            "positive sub-unit quantities are fractional atoms, not whole-count values"
+        );
         assert!(
             !Material::free_base("Carbon", u64::MAX as f64).is_valid(),
             "constituent counts must remain representable by the independent inventory oracle"
