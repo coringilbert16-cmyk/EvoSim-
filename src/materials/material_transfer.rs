@@ -12,9 +12,10 @@ use crate::resources::Material;
 pub(crate) fn take_whole_unstructured(
     material: &mut Material,
     requested: usize,
+    catalog: &[crate::resources::BaseResource],
 ) -> Option<Material> {
     if requested == 0
-        || !material.is_valid()
+        || !material.is_valid_for_catalog(catalog)
         || material.has_internal_structure()
         || material.is_empty()
         || material
@@ -91,34 +92,38 @@ pub(crate) fn take_whole_unstructured(
 #[cfg(test)]
 mod tests {
     use super::take_whole_unstructured;
-    use crate::resources::{InternalBond, Material};
+    use crate::resources::{default_catalog, InternalBond, Material};
 
     #[test]
     fn takes_only_whole_units() {
+        let catalog = default_catalog();
         let mut material = Material::free_base("Carbon", 10.0);
-        let taken = take_whole_unstructured(&mut material, 3).unwrap();
+        let taken = take_whole_unstructured(&mut material, 3, &catalog).unwrap();
         assert_eq!(taken.total_amount(), 3.0);
         assert_eq!(material.total_amount(), 7.0);
     }
 
     #[test]
     fn takes_only_available_whole_units_when_request_exceeds_stock() {
+        let catalog = default_catalog();
         let mut material = Material::free_base("Carbon", 3.0);
-        let taken = take_whole_unstructured(&mut material, 5).unwrap();
+        let taken = take_whole_unstructured(&mut material, 5, &catalog).unwrap();
         assert_eq!(taken.total_amount(), 3.0);
         assert_eq!(material.total_amount(), 0.0);
     }
 
     #[test]
     fn rejects_fractional_aggregate_without_mutating_stock() {
+        let catalog = default_catalog();
         let mut material = Material::free_base("Carbon", 3.5);
         let original = material.clone();
-        assert!(take_whole_unstructured(&mut material, 1).is_none());
+        assert!(take_whole_unstructured(&mut material, 1, &catalog).is_none());
         assert_eq!(material, original);
     }
 
     #[test]
     fn refuses_structured_material() {
+        let catalog = default_catalog();
         let mut material = Material {
             parts: vec![("Carbon".to_string(), 1.0), ("Nitrogen".to_string(), 1.0)],
             internal_bonds: vec![InternalBond {
@@ -126,7 +131,20 @@ mod tests {
                 part_b: 1,
             }],
         };
-        assert!(take_whole_unstructured(&mut material, 1).is_none());
+        assert!(take_whole_unstructured(&mut material, 1, &catalog).is_none());
         assert_eq!(material.total_amount(), 2.0);
+    }
+
+    #[test]
+    fn rejects_unknown_resource_before_mutating_stock() {
+        let catalog = default_catalog();
+        let mut material = Material::free_base("Uncatalogued", 3.0);
+        let original = material.clone();
+
+        assert!(take_whole_unstructured(&mut material, 1, &catalog).is_none());
+        assert_eq!(
+            material, original,
+            "unknown resource identity must be rejected before extraction mutates stock"
+        );
     }
 }

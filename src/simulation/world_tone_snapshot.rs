@@ -807,10 +807,12 @@ mod tests {
             &catalog,
         )
         .expect("hydrogen blocker should be physically realized");
-        assert!(simulation
-            .environment
-            .field
-            .deposit_physical(2.5, 0.0, blocker));
+        assert!(simulation.environment.field.deposit_physical(
+            2.5,
+            0.0,
+            blocker,
+            &simulation.environment.catalog,
+        ));
 
         let obstructed = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
             .expect("physical field objects must join the world snapshot");
@@ -844,10 +846,12 @@ mod tests {
             &catalog,
         )
         .expect("unrelated physical material should be realized");
-        assert!(simulation
-            .environment
-            .field
-            .deposit_physical(5.0, 100.0, unrelated));
+        assert!(simulation.environment.field.deposit_physical(
+            5.0,
+            100.0,
+            unrelated,
+            &simulation.environment.catalog,
+        ));
 
         let filtered = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
             .expect("irrelevant but valid bodies must not invalidate the frame");
@@ -879,6 +883,7 @@ mod tests {
                 y: 0.0,
                 rotation_radians: 0.0,
             },
+            &catalog,
         ));
         let StoredMaterial::Physical(stored) = &storage.entries[0];
 
@@ -959,10 +964,12 @@ mod tests {
             &catalog,
         )
         .expect("composite physical material must carry one realized placement per constituent");
-        assert!(simulation
-            .environment
-            .field
-            .deposit_physical(0.0, 0.0, composite));
+        assert!(simulation.environment.field.deposit_physical(
+            0.0,
+            0.0,
+            composite,
+            &simulation.environment.catalog,
+        ));
 
         let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
             .expect("valid composite physical material should not invalidate the world snapshot");
@@ -1002,6 +1009,7 @@ mod tests {
                 y: 0.0,
                 rotation_radians: 0.0,
             },
+            &catalog,
         ));
         simulation.organisms[0].reproductive_construction =
             Some(crate::state::ReproductiveConstruction {
@@ -1176,6 +1184,7 @@ mod tests {
                 y: 0.0,
                 rotation_radians: 0.0,
             },
+            &catalog,
         ));
         let StoredMaterial::Physical(stored) = storage.entries.into_iter().next().unwrap();
         let owner_id = simulation.organisms[0].id.clone();
@@ -1239,10 +1248,12 @@ mod tests {
             &catalog,
         )
         .expect("environmental receiver should have realized geometry");
-        assert!(simulation
-            .environment
-            .field
-            .deposit_physical(5.0, 0.0, exposed));
+        assert!(simulation.environment.field.deposit_physical(
+            5.0,
+            0.0,
+            exposed,
+            &simulation.environment.catalog,
+        ));
 
         WorldToneOccluderSnapshot::settle_living_organism_inputs(
             &mut simulation,
@@ -1290,10 +1301,12 @@ mod tests {
             &catalog,
         )
         .expect("downstream environmental receiver should have realized geometry");
-        assert!(simulation
-            .environment
-            .field
-            .deposit_physical(8.0, 0.0, downstream));
+        assert!(simulation.environment.field.deposit_physical(
+            8.0,
+            0.0,
+            downstream,
+            &simulation.environment.catalog,
+        ));
 
         // Rebase the independent inventory oracle on the deliberately
         // reshaped fixture so the following residual measures only world-tone

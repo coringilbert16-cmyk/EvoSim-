@@ -88,7 +88,7 @@ pub(crate) fn seed_initial_resource_cloud(
         let Some(index) = field.index_for_position(x, y) else {
             continue;
         };
-        field.deposit_physical_at_index(index, physical);
+        field.deposit_physical_at_index(index, physical, catalog);
     }
 }
 
@@ -144,7 +144,7 @@ pub(crate) fn seed_initial_landscape(
             let Some(index) = field.index_for_position(x, y) else {
                 continue;
             };
-            field.deposit_physical_at_index(index, physical);
+            field.deposit_physical_at_index(index, physical, catalog);
         }
     }
 }

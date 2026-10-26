@@ -263,6 +263,7 @@ impl Simulation {
                     y: anchor.y,
                     rotation_radians: 0.0,
                 },
+                &catalog,
             ));
         }
 
@@ -442,6 +443,7 @@ impl Simulation {
                     y: anchor.y,
                     rotation_radians: 0.0,
                 },
+                &environment.catalog,
             )
         else {
             // The field remains untouched if any member of the batch cannot be
@@ -685,7 +687,11 @@ impl Simulation {
                 .into_iter()
                 .map(|material| (position.x, position.y, material))
                 .collect();
-            if !self.environment.field.deposit_physical_batch(deposits) {
+            if !self
+                .environment
+                .field
+                .deposit_physical_batch(deposits, &self.environment.catalog)
+            {
                 // A failed destination commits neither material nor energy.
                 continue;
             }
@@ -1557,16 +1563,16 @@ mod decomposition_finalization_tests {
         // index one with a distinct physical object on either side.
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(neighbor_after_two.clone()));
+            .store_physical_instance(neighbor_after_two.clone(), &simulation.environment.catalog));
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(neighbor_after_one.clone()));
+            .store_physical_instance(neighbor_after_one.clone(), &simulation.environment.catalog));
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(source));
+            .store_physical_instance(source, &simulation.environment.catalog));
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(neighbor_before.clone()));
+            .store_physical_instance(neighbor_before.clone(), &simulation.environment.catalog));
         let entries_before = simulation.organisms[0].stored_material.entries.clone();
 
         let decision = ActionCandidate {
@@ -1836,11 +1842,11 @@ mod decomposition_finalization_tests {
         let original_count = simulation.organisms[0].stored_material.physical_count();
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(source.clone()));
+            .store_physical_instance(source.clone(), &simulation.environment.catalog));
         let inventory_before = rollback_material_inventory(&simulation);
         let removed = simulation.organisms[0]
             .stored_material
-            .take_physical_at(original_count)
+            .take_physical_at(original_count, &simulation.environment.catalog)
             .expect("test source should be removable from storage");
         let expected_placements = removed.placements.clone();
         let transformation = crate::state::ActiveTransformation {
@@ -1943,7 +1949,7 @@ mod decomposition_finalization_tests {
         .expect("bonded stored source should be physically realizable");
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(source));
+            .store_physical_instance(source, &simulation.environment.catalog));
         let inventory_before = rollback_material_inventory(&simulation);
 
         let decision = crate::decision_runtime::ActionCandidate {
@@ -2494,7 +2500,7 @@ mod decomposition_finalization_tests {
             .expect("construction started");
         let committed = organism
             .stored_material
-            .take_physical_at(0)
+            .take_physical_at(0, &simulation.environment.catalog)
             .expect("second stored constituent remains");
         construction
             .committed_material

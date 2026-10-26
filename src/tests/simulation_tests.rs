@@ -16,14 +16,17 @@ mod integration_tests {
             material: &Material,
             catalog: &[crate::resources::BaseResource],
         ) -> Result<(), String> {
+            if material.parts.is_empty() {
+                return Err("empty material in authoritative holder".to_owned());
+            }
             for (name, amount) in &material.parts {
                 if !catalog.iter().any(|resource| resource.name == *name) {
                     return Err(format!("unknown resource identity: {name}"));
                 }
                 if !amount.is_finite()
-                    || *amount <= 0.0
-                    || amount.fract().abs() > 1e-9
-                    || *amount > u64::MAX as f64
+                    || *amount < 1.0
+                    || amount.fract() != 0.0
+                    || *amount >= u64::MAX as f64
                 {
                     return Err(format!(
                         "non-integer or invalid amount for {name}: {amount}"
@@ -39,6 +42,15 @@ mod integration_tests {
         }
 
         let catalog = &simulation.environment.catalog;
+        let mut canonical_names = std::collections::BTreeSet::new();
+        for resource in catalog {
+            if resource.name.is_empty() || !canonical_names.insert(resource.name.clone()) {
+                return Err(format!(
+                    "ambiguous resource catalog identity: {}",
+                    resource.name
+                ));
+            }
+        }
         let mut inventory = std::collections::BTreeMap::new();
 
         // Environmental aggregate stock and already-realized objects.
@@ -103,6 +115,19 @@ mod integration_tests {
         Ok(inventory)
     }
 
+    #[test]
+    fn independent_material_inventory_rejects_ambiguous_catalog_identity() {
+        let mut simulation = Simulation::new(7102, 10.0);
+        simulation
+            .environment
+            .catalog
+            .push(simulation.environment.catalog[0].clone());
+
+        let error = integer_material_inventory(&simulation)
+            .expect_err("duplicate resource names must not pass the independent inventory oracle");
+        assert!(error.contains("ambiguous resource catalog identity"));
+    }
+
     fn structured_carbon_hydrogen() -> Material {
         Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
@@ -130,9 +155,11 @@ mod integration_tests {
 
         let before =
             integer_material_inventory(&simulation).expect("fixture inventory is integral");
+        let catalog = simulation.environment.catalog.clone();
         let taken = crate::material_transfer::take_whole_unstructured(
             &mut simulation.environment.field.cells[0].materials[0],
             1,
+            &catalog,
         )
         .expect("one whole carbon constituent should transfer");
         let placement = Placement {
@@ -140,12 +167,11 @@ mod integration_tests {
             y: 10.0,
             rotation_radians: 0.0,
         };
-        let physical =
-            PhysicalMaterial::realized(taken, vec![placement], &simulation.environment.catalog)
-                .expect("whole carbon should be physically realizable");
+        let physical = PhysicalMaterial::realized(taken, vec![placement], &catalog)
+            .expect("whole carbon should be physically realizable");
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(physical));
+            .store_physical_instance(physical, &catalog));
 
         let after = integer_material_inventory(&simulation).expect("result inventory is integral");
         assert_eq!(
@@ -176,12 +202,12 @@ mod integration_tests {
         .expect("Hydrogen strip should be physically realizable");
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(physical));
+            .store_physical_instance(physical, &simulation.environment.catalog));
         let before = integer_material_inventory(&simulation).expect("stored inventory is integral");
 
         let stored = simulation.organisms[0]
             .stored_material
-            .take_matching_physical(&Material::free_base("Hydrogen", 1.0))
+            .take_matching_physical(&Material::free_base("Hydrogen", 1.0), &catalog)
             .expect("stored Hydrogen should be removable for restoration");
         let restored = crate::material_restoration::restore_material(
             &mut simulation.organisms[0].structure,
@@ -233,7 +259,7 @@ mod integration_tests {
         .expect("compound should be physically realizable");
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(physical));
+            .store_physical_instance(physical, &simulation.environment.catalog));
 
         let inventory_before =
             integer_material_inventory(&simulation).expect("pre-restore inventory is integral");
@@ -316,7 +342,7 @@ mod integration_tests {
         .expect("three-part material with one valid internal bond should be realizable");
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(physical));
+            .store_physical_instance(physical, &simulation.environment.catalog));
 
         let inventory_before =
             integer_material_inventory(&simulation).expect("pre-restore inventory is integral");
@@ -385,7 +411,7 @@ mod integration_tests {
         .expect("single Carbon should be physically realizable");
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(physical));
+            .store_physical_instance(physical, &simulation.environment.catalog));
 
         let inventory_before =
             integer_material_inventory(&simulation).expect("pre-restore inventory is integral");
@@ -496,7 +522,7 @@ mod integration_tests {
             .as_mut()
             .expect("construction started")
             .committed_material
-            .store_physical_instance(committed));
+            .store_physical_instance(committed, &simulation.environment.catalog));
 
         let before =
             integer_material_inventory(&simulation).expect("pre-recycling inventory is integral");
@@ -542,6 +568,25 @@ mod integration_tests {
     }
 
     #[test]
+    fn integer_material_inventory_rejects_empty_material_in_authoritative_holders() {
+        let mut simulation = Simulation::new(7106, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.environment.field.cells[0]
+            .materials
+            .push(Material {
+                parts: Vec::new(),
+                internal_bonds: Vec::new(),
+            });
+
+        let error = integer_material_inventory(&simulation)
+            .expect_err("empty material records must not masquerade as valid zero inventory");
+        assert!(error.contains("empty material in authoritative holder"));
+    }
+
+    #[test]
     fn integer_material_inventory_rejects_unknown_constituents_in_authoritative_holders() {
         let mut simulation = Simulation::new(7104, 10.0);
         for cell in &mut simulation.environment.field.cells {
@@ -558,6 +603,18 @@ mod integration_tests {
     }
 
     #[test]
+    fn integer_material_inventory_rejects_unrepresentable_constituent_counts() {
+        let mut simulation = Simulation::new(7110, 10.0);
+        simulation.environment.field.cells[0]
+            .materials
+            .push(Material::free_base("Carbon", u64::MAX as f64));
+
+        let error = integer_material_inventory(&simulation)
+            .expect_err("a float at the rounded u64 boundary must not saturate into inventory");
+        assert!(error.contains("non-integer or invalid amount for Carbon"));
+    }
+
+    #[test]
     fn integer_material_inventory_rejects_fractional_constituents_in_authoritative_holders() {
         let mut simulation = Simulation::new(7105, 10.0);
         for cell in &mut simulation.environment.field.cells {
@@ -571,6 +628,16 @@ mod integration_tests {
         let error = integer_material_inventory(&simulation)
             .expect_err("fractional base constituents must fail the independent inventory");
         assert!(error.contains("non-integer or invalid amount for Carbon: 1.5"));
+
+        simulation.environment.field.cells[0].materials[0].parts[0].1 = 1e-10;
+        let error = integer_material_inventory(&simulation)
+            .expect_err("sub-unit quantities must not round down to zero inventory");
+        assert!(error.contains("non-integer or invalid amount for Carbon: 0.0000000001"));
+
+        simulation.environment.field.cells[0].materials[0].parts[0].1 = 1.0000000001;
+        let error = integer_material_inventory(&simulation)
+            .expect_err("near-integer fractional quantities must not be rounded into atoms");
+        assert!(error.contains("non-integer or invalid amount for Carbon"));
     }
 
     #[test]
@@ -899,7 +966,9 @@ mod integration_tests {
         )
         .expect("base resource should have a valid physical realization");
         let before = s.organisms[0].stored_material.total_amount();
-        s.environment.field.deposit(anchor.x, anchor.y, physical);
+        s.environment
+            .field
+            .deposit(anchor.x, anchor.y, physical, &s.environment.catalog);
 
         // An in-flight transformation owns a stable view of storage: acquiring
         // now could shift a stored-BREAK rollback index or be overwritten by a
@@ -981,7 +1050,9 @@ mod integration_tests {
             realization.expect("test composite must straddle the realized body");
         let original = physical.clone();
         let before = s.organisms[0].stored_material.total_amount();
-        s.environment.field.deposit(anchor.x, anchor.y, physical);
+        s.environment
+            .field
+            .deposit(anchor.x, anchor.y, physical, &s.environment.catalog);
         Simulation::transfer_contained_environmental_material(
             &mut s.organisms[0],
             &mut s.environment,
@@ -1035,7 +1106,7 @@ mod integration_tests {
         .expect("stored bonded material should be physically realizable");
         assert!(s.organisms[0]
             .stored_material
-            .store_physical_instance(physical));
+            .store_physical_instance(physical, &s.environment.catalog));
     }
 
     fn start_test_break_transformation(s: &mut Simulation) {

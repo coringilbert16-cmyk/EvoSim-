@@ -309,7 +309,9 @@ fn try_child_construction(
             };
 
             let mut candidate = child.clone();
-            candidate.stored_material.take_physical_at(storage_index)?;
+            candidate
+                .stored_material
+                .take_physical_at(storage_index, &environment.catalog)?;
             candidate.structure = trial_structure;
             candidate.usable_energy = candidate_energy;
             return Some((candidate, candidate_ledger, None));
@@ -807,7 +809,7 @@ pub(crate) fn begin_reproduction(
         };
         let mut parent_trial_storage = parent.stored_material.clone();
         if parent_trial_storage
-            .take_physical_at(storage_index)
+            .take_physical_at(storage_index, catalog)
             .is_none()
         {
             continue;
@@ -888,7 +890,7 @@ fn commit_candidate_attachment(
     let mut staged_parent_storage = parent_storage.clone();
     if let Some(parent_index) = transferred {
         if staged_parent_storage
-            .take_physical_at(parent_index)
+            .take_physical_at(parent_index, &environment.catalog)
             .is_none()
         {
             return ConstructionStatus::Waiting;

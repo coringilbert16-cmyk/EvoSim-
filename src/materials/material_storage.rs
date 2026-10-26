@@ -86,10 +86,14 @@ impl MaterialStorage {
     /// Store an already-realized physical instance without reconstructing its
     /// geometry or internal connection endpoints. The world realization is
     /// rebased only into storage's intrinsic frame.
-    pub(crate) fn store_physical_instance(&mut self, instance: PhysicalMaterial) -> bool {
+    pub(crate) fn store_physical_instance(
+        &mut self,
+        instance: PhysicalMaterial,
+        catalog: &[crate::resources::BaseResource],
+    ) -> bool {
         if !instance.is_realized()
             || instance.material.parts.is_empty()
-            || !instance.material.is_valid()
+            || !instance.material.is_valid_for_catalog(catalog)
             || !Self::is_discrete(&instance.material)
         {
             return false;
@@ -105,8 +109,9 @@ impl MaterialStorage {
         &mut self,
         instance: PhysicalMaterial,
         anchor: Placement,
+        catalog: &[crate::resources::BaseResource],
     ) -> bool {
-        self.try_store_physical_instance_at_owner_anchor(instance, anchor)
+        self.try_store_physical_instance_at_owner_anchor(instance, anchor, catalog)
             .is_ok()
     }
 
@@ -115,12 +120,13 @@ impl MaterialStorage {
     /// anchor instead of deriving one from its intrinsic placement.
     pub(crate) fn prepare_physical_batch(
         instances: Vec<PhysicalMaterial>,
+        catalog: &[crate::resources::BaseResource],
     ) -> Option<Vec<StoredMaterial>> {
         let mut prepared = Vec::with_capacity(instances.len());
         for instance in instances {
             if !instance.is_realized()
                 || instance.material.parts.is_empty()
-                || !instance.material.is_valid()
+                || !instance.material.is_valid_for_catalog(catalog)
                 || !Self::is_discrete(&instance.material)
             {
                 return None;
@@ -137,6 +143,7 @@ impl MaterialStorage {
     pub(crate) fn prepare_physical_batch_at_owner_anchor(
         instances: Vec<PhysicalMaterial>,
         anchor: Placement,
+        catalog: &[crate::resources::BaseResource],
     ) -> Option<Vec<StoredMaterial>> {
         if !anchor.x.is_finite() || !anchor.y.is_finite() || !anchor.rotation_radians.is_finite() {
             return None;
@@ -150,7 +157,7 @@ impl MaterialStorage {
                 .copied()?;
             if !instance.is_realized()
                 || instance.material.parts.is_empty()
-                || !instance.material.is_valid()
+                || !instance.material.is_valid_for_catalog(catalog)
                 || !Self::is_discrete(&instance.material)
             {
                 return None;
@@ -185,6 +192,7 @@ impl MaterialStorage {
         &mut self,
         instance: PhysicalMaterial,
         anchor: Placement,
+        catalog: &[crate::resources::BaseResource],
     ) -> Result<(), PhysicalMaterial> {
         if !anchor.x.is_finite() || !anchor.y.is_finite() || !anchor.rotation_radians.is_finite() {
             return Err(instance);
@@ -199,7 +207,7 @@ impl MaterialStorage {
         };
         if !instance.is_realized()
             || instance.material.parts.is_empty()
-            || !instance.material.is_valid()
+            || !instance.material.is_valid_for_catalog(catalog)
             || !Self::is_discrete(&instance.material)
         {
             return Err(instance);
@@ -232,7 +240,7 @@ impl MaterialStorage {
         let Some(instance) = PhysicalMaterial::realized(material, placements, catalog) else {
             return false;
         };
-        self.store_physical_instance(instance)
+        self.store_physical_instance(instance, catalog)
     }
 
     pub(crate) fn peek_one_unstructured(&self) -> Option<PhysicalMaterial> {
@@ -248,14 +256,19 @@ impl MaterialStorage {
         })
     }
 
-    pub(crate) fn take_first_unstructured(&mut self) -> Option<PhysicalMaterial> {
+    pub(crate) fn take_first_unstructured(
+        &mut self,
+        catalog: &[crate::resources::BaseResource],
+    ) -> Option<PhysicalMaterial> {
         let index = self.entries.iter().position(|entry| {
             let material = entry.material();
             !material.has_internal_structure()
                 && !material.is_empty()
+                && material.is_valid_for_catalog(catalog)
+                && Self::is_discrete(material)
                 && matches!(entry, StoredMaterial::Physical(instance) if instance.is_realized())
         })?;
-        self.take_physical_at(index)
+        self.take_physical_at(index, catalog)
     }
 
     pub(crate) fn peek_matching_physical(&self, target: &Material) -> Option<PhysicalMaterial> {
@@ -269,7 +282,11 @@ impl MaterialStorage {
         })
     }
 
-    pub(crate) fn take_one_unstructured_named(&mut self, name: &str) -> Option<PhysicalMaterial> {
+    pub(crate) fn take_one_unstructured_named(
+        &mut self,
+        name: &str,
+        catalog: &[crate::resources::BaseResource],
+    ) -> Option<PhysicalMaterial> {
         let index = self.entries.iter().position(|entry| {
             let material = entry.material();
             !material.has_internal_structure()
@@ -277,21 +294,42 @@ impl MaterialStorage {
                 && material.parts.len() == 1
                 && material.parts[0].0 == name
                 && (material.parts[0].1 - 1.0).abs() <= MATERIAL_EPSILON
+                && material.is_valid_for_catalog(catalog)
+                && Self::is_discrete(material)
+                && matches!(entry, StoredMaterial::Physical(instance) if instance.is_realized())
         })?;
         Some(self.entries.swap_remove(index).into_physical())
     }
 
-    pub(crate) fn take_matching(&mut self, target: &Material) -> Option<PhysicalMaterial> {
-        let index = self
-            .entries
-            .iter()
-            .position(|entry| entry.material() == target && !entry.material().is_empty())?;
+    pub(crate) fn take_matching(
+        &mut self,
+        target: &Material,
+        catalog: &[crate::resources::BaseResource],
+    ) -> Option<PhysicalMaterial> {
+        if !target.is_valid_for_catalog(catalog) || target.is_empty() {
+            return None;
+        }
+        let index = self.entries.iter().position(|entry| {
+            matches!(entry, StoredMaterial::Physical(instance)
+                if instance.is_realized()
+                    && instance.material.is_valid_for_catalog(catalog)
+                    && Self::is_discrete(&instance.material)
+                    && instance.material == *target
+                    && !instance.material.is_empty())
+        })?;
         Some(self.entries.swap_remove(index).into_physical())
     }
 
-    pub(crate) fn take_physical_at(&mut self, index: usize) -> Option<PhysicalMaterial> {
+    pub(crate) fn take_physical_at(
+        &mut self,
+        index: usize,
+        catalog: &[crate::resources::BaseResource],
+    ) -> Option<PhysicalMaterial> {
         match self.entries.get(index)? {
-            StoredMaterial::Physical(instance) if instance.is_realized() => {}
+            StoredMaterial::Physical(instance)
+                if instance.is_realized()
+                    && instance.material.is_valid_for_catalog(catalog)
+                    && Self::is_discrete(&instance.material) => {}
             _ => return None,
         }
         match self.entries.swap_remove(index) {
@@ -299,31 +337,61 @@ impl MaterialStorage {
         }
     }
 
-    pub(crate) fn take_matching_physical(&mut self, target: &Material) -> Option<PhysicalMaterial> {
+    pub(crate) fn take_matching_physical(
+        &mut self,
+        target: &Material,
+        catalog: &[crate::resources::BaseResource],
+    ) -> Option<PhysicalMaterial> {
+        // Removal is a transfer boundary too: reject legacy/corrupt entries
+        // before mutating the authoritative holder, so downstream validation
+        // cannot turn a failed COMBINE into lost source material.
+        if !target.is_valid_for_catalog(catalog) || target.is_empty() {
+            return None;
+        }
         let index = self.entries.iter().position(|entry| {
             matches!(entry, StoredMaterial::Physical(instance)
-                if instance.material == *target && !instance.material.is_empty())
+                if instance.is_realized()
+                    && instance.material.is_valid_for_catalog(catalog)
+                    && Self::is_discrete(&instance.material)
+                    && instance.material == *target
+                    && !instance.material.is_empty())
         })?;
         match self.entries.swap_remove(index) {
             StoredMaterial::Physical(instance) => Some(instance),
         }
     }
 
-    pub(crate) fn take_unstructured(&mut self, count: usize) -> Option<Vec<PhysicalMaterial>> {
-        if self.count_unstructured() < count {
+    pub(crate) fn take_unstructured(
+        &mut self,
+        count: usize,
+        catalog: &[crate::resources::BaseResource],
+    ) -> Option<Vec<PhysicalMaterial>> {
+        let indices: Vec<usize> = self
+            .entries
+            .iter()
+            .enumerate()
+            .filter_map(|(index, entry)| match entry {
+                StoredMaterial::Physical(instance)
+                    if !instance.material.has_internal_structure()
+                        && !instance.material.is_empty()
+                        && instance.is_realized()
+                        && instance.material.is_valid_for_catalog(catalog)
+                        && Self::is_discrete(&instance.material) =>
+                {
+                    Some(index)
+                }
+                _ => None,
+            })
+            .take(count)
+            .collect();
+        if indices.len() != count {
             return None;
         }
         let mut out = Vec::with_capacity(count);
-        let mut i = 0;
-        while i < self.entries.len() && out.len() < count {
-            if !self.entries[i].material().has_internal_structure()
-                && !self.entries[i].material().is_empty()
-            {
-                out.push(self.entries.swap_remove(i).into_physical());
-            } else {
-                i += 1;
-            }
+        for index in indices.into_iter().rev() {
+            out.push(self.take_physical_at(index, catalog)?);
         }
+        out.reverse();
         Some(out)
     }
 
@@ -380,6 +448,54 @@ mod tests {
         assert!(storage.entries.iter().all(|entry| {
             matches!(entry, StoredMaterial::Physical(instance) if instance.is_realized())
         }));
+    }
+
+    #[test]
+    fn take_matching_rejects_unknown_resource_without_removing_the_entry() {
+        let mut storage = MaterialStorage::default();
+        assert!(storage.store_physical(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog(),
+        ));
+        let StoredMaterial::Physical(instance) = &mut storage.entries[0];
+        instance.material.parts[0].0 = "Uncatalogued".to_owned();
+        let before = storage.clone();
+
+        assert!(storage
+            .take_matching_physical(&Material::free_base("Uncatalogued", 1.0), &catalog())
+            .is_none());
+        assert_eq!(
+            storage, before,
+            "rejected transfer must preserve the source owner"
+        );
+    }
+
+    #[test]
+    fn indexed_take_rejects_unknown_resource_without_removing_the_entry() {
+        let mut storage = MaterialStorage::default();
+        assert!(storage.store_physical(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog(),
+        ));
+        let StoredMaterial::Physical(instance) = &mut storage.entries[0];
+        instance.material.parts[0].0 = "Uncatalogued".to_owned();
+        let before = storage.clone();
+
+        assert!(storage.take_physical_at(0, &catalog()).is_none());
+        assert_eq!(
+            storage, before,
+            "rejected indexed take must preserve ownership"
+        );
     }
 
     #[test]
@@ -459,7 +575,9 @@ mod tests {
             &catalog(),
         ));
         assert_eq!(
-            storage.take_matching(&m).map(|instance| instance.material),
+            storage
+                .take_matching(&m, &catalog())
+                .map(|instance| instance.material),
             Some(m.clone())
         );
         assert!(storage.is_empty());
@@ -483,7 +601,9 @@ mod tests {
         ];
         assert!(storage.store_physical(m.clone(), placements, &catalog()));
         assert_eq!(storage.physical_count(), 1);
-        let restored = storage.take_matching_physical(&m).expect("stored instance");
+        let restored = storage
+            .take_matching_physical(&m, &catalog())
+            .expect("stored instance");
         assert_eq!(restored.material, m);
         let intrinsic = restored.placements.expect("intrinsic realization");
         assert!(intrinsic[0].x.abs() <= 1e-12);
@@ -505,7 +625,9 @@ mod tests {
         }];
         assert!(storage.store_physical(m.clone(), placements, &catalog()));
         assert_eq!(storage.physical_count(), 1);
-        let restored = storage.take_matching_physical(&m).expect("stored instance");
+        let restored = storage
+            .take_matching_physical(&m, &catalog())
+            .expect("stored instance");
         assert_eq!(restored.material, m);
         let intrinsic = restored.placements.expect("intrinsic realization");
         assert!(intrinsic[0].x.abs() <= 1e-12);
@@ -558,7 +680,7 @@ mod tests {
             ],
             &catalog(),
         ));
-        assert!(storage.take_unstructured(1).is_none());
+        assert!(storage.take_unstructured(1, &catalog()).is_none());
         assert_eq!(storage.materials_snapshot(), vec![m]);
     }
 
@@ -593,9 +715,12 @@ mod tests {
         )
         .expect("second object should be realized");
 
-        let prepared =
-            MaterialStorage::prepare_physical_batch_at_owner_anchor(vec![first, second], anchor)
-                .expect("valid batch should prepare atomically");
+        let prepared = MaterialStorage::prepare_physical_batch_at_owner_anchor(
+            vec![first, second],
+            anchor,
+            &catalog,
+        )
+        .expect("valid batch should prepare atomically");
         let mut storage = MaterialStorage::default();
         storage.commit_prepared_physical_batch(prepared);
         assert_eq!(storage.physical_count(), 2);
@@ -637,7 +762,8 @@ mod tests {
         .expect("test object should be realized");
         assert!(MaterialStorage::prepare_physical_batch_at_owner_anchor(
             vec![valid, fractional],
-            anchor
+            anchor,
+            &catalog,
         )
         .is_none());
     }
@@ -665,6 +791,7 @@ mod tests {
             MaterialStorage::prepare_physical_batch_at_owner_anchor(
                 vec![instance.clone()],
                 invalid_anchor,
+                &catalog(),
             )
             .is_none(),
             "batch acquisition must reject a non-finite owner anchor"
@@ -673,11 +800,31 @@ mod tests {
         let mut storage = MaterialStorage::default();
         assert!(
             storage
-                .try_store_physical_instance_at_owner_anchor(instance, invalid_anchor)
+                .try_store_physical_instance_at_owner_anchor(instance, invalid_anchor, &catalog())
                 .is_err(),
             "single-object acquisition must return the original source on rejection"
         );
         assert!(storage.is_empty());
+    }
+
+    #[test]
+    fn unknown_resource_identity_is_rejected_at_storage_boundary() {
+        let catalog = catalog();
+        let mut physical = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("Carbon should be physically realizable");
+        physical.material.parts[0].0 = "Unobtainium".to_owned();
+
+        let mut storage = MaterialStorage::default();
+        assert!(!storage.store_physical_instance(physical, &catalog));
+        assert!(storage.entries.is_empty());
     }
 
     #[test]
@@ -715,7 +862,7 @@ mod tests {
             rotation_radians: 0.7,
         });
 
-        let prepared = MaterialStorage::prepare_physical_batch(vec![source])
+        let prepared = MaterialStorage::prepare_physical_batch(vec![source], &catalog())
             .expect("valid stored split should prepare");
         let StoredMaterial::Physical(piece) = &prepared[0];
         let placement = piece.placements.as_ref().unwrap()[0];

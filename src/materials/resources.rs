@@ -320,7 +320,7 @@ impl InternalBond {
 const MATERIAL_COUNT_EPSILON: f64 = 1e-9;
 
 fn is_whole_count(amount: f64) -> bool {
-    amount.is_finite() && amount >= 0.0 && (amount - amount.round()).abs() <= MATERIAL_COUNT_EPSILON
+    amount.is_finite() && amount >= 0.0 && amount.fract() == 0.0
 }
 
 /// A material is defined by its composition and its internal structure.
@@ -347,13 +347,38 @@ impl Material {
         if self.parts.is_empty() {
             return self.internal_bonds.is_empty();
         }
-        if !self
-            .parts
-            .iter()
-            .all(|(name, amount)| !name.is_empty() && *amount > 0.0 && is_whole_count(*amount))
-        {
+        if !self.parts.iter().all(|(name, amount)| {
+            !name.is_empty()
+                && *amount >= 1.0
+                && *amount < u64::MAX as f64
+                && is_whole_count(*amount)
+        }) {
             return false;
         }
+
+        // Each part retains its own physical identity, so duplicate resource
+        // names are valid in a composite. Their combined inventory still must
+        // fit the same integer range used by the independent inventory oracle.
+        // Compositions are small; use an allocation-free scan to keep validation
+        // cheap on frequently checked physical materials.
+        for (index, (name, _)) in self.parts.iter().enumerate() {
+            if self.parts[..index]
+                .iter()
+                .any(|(previous_name, _)| previous_name == name)
+            {
+                continue;
+            }
+            let mut total = 0_u64;
+            for (part_name, amount) in &self.parts {
+                if part_name == name {
+                    let Some(merged) = total.checked_add(*amount as u64) else {
+                        return false;
+                    };
+                    total = merged;
+                }
+            }
+        }
+
         for (i, bond) in self.internal_bonds.iter().enumerate() {
             if !bond.is_valid_for(self.parts.len()) {
                 return false;
@@ -368,13 +393,24 @@ impl Material {
         true
     }
 
-    /// Validate constituent counts and membership in the authoritative catalog.
+    /// Validate constituent counts and resolve every resource name to exactly
+    /// one entry in the authoritative catalog. Duplicate catalog names are an
+    /// ambiguous identity, not a valid fallback to the first matching entry.
     pub fn is_valid_for_catalog(&self, catalog: &[BaseResource]) -> bool {
         self.is_valid()
-            && self
-                .parts
-                .iter()
-                .all(|(name, _)| catalog.iter().any(|resource| resource.name == *name))
+            && catalog.iter().enumerate().all(|(index, resource)| {
+                !resource.name.is_empty()
+                    && !catalog[..index]
+                        .iter()
+                        .any(|previous| previous.name == resource.name)
+            })
+            && self.parts.iter().all(|(name, _)| {
+                catalog
+                    .iter()
+                    .filter(|resource| resource.name == *name)
+                    .count()
+                    == 1
+            })
     }
 
     pub fn has_internal_structure(&self) -> bool {
@@ -470,7 +506,7 @@ impl Material {
         if self.has_internal_structure()
             || !self.is_valid()
             || !is_whole_count(amount)
-            || amount <= 0.0
+            || amount < 1.0
         {
             return None;
         }
@@ -516,6 +552,50 @@ mod material_contract_tests {
         let catalog = default_catalog();
         assert!(Material::free_base("Carbon", 2.0).is_valid());
         assert!(!Material::free_base("Carbon", 1.5).is_valid());
+        assert!(!Material::free_base("Carbon", 1.0000000001).is_valid());
+        assert!(
+            !Material::free_base("Carbon", 1e-10).is_valid(),
+            "positive sub-unit quantities are fractional atoms, not whole-count values"
+        );
+        assert!(
+            !Material::free_base("Carbon", u64::MAX as f64).is_valid(),
+            "constituent counts must remain representable by the independent inventory oracle"
+        );
+        let largest_representable_count = u64::MAX as f64 - 2048.0;
+        let overflowing_composite = Material {
+            parts: vec![
+                ("Carbon".into(), largest_representable_count),
+                ("Carbon".into(), largest_representable_count),
+            ],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
+        assert!(
+            !overflowing_composite.is_valid_for_catalog(&catalog),
+            "repeated constituents must not overflow the per-resource inventory range"
+        );
+        let repeated_but_representable = Material {
+            parts: vec![("Carbon".into(), 2.0), ("Carbon".into(), 3.0)],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
+        assert!(
+            repeated_but_representable.is_valid_for_catalog(&catalog),
+            "separate physical constituents of the same resource remain valid when their sum fits"
+        );
+        assert!(Material::free_base("Carbon", 1.0).is_valid_for_catalog(&catalog));
+
+        let mut ambiguous_catalog = catalog.clone();
+        ambiguous_catalog.push(catalog[0].clone());
+        assert!(
+            !Material::free_base("Carbon", 1.0).is_valid_for_catalog(&ambiguous_catalog),
+            "duplicate catalog names must not resolve to an arbitrary resource definition"
+        );
+
         let unknown = Material::free_base("UnknownResource", 1.0);
         assert!(!unknown.is_valid_for_catalog(&catalog));
         assert!(unknown.mass(&catalog).is_nan());
@@ -540,7 +620,13 @@ mod material_contract_tests {
             .expect("one whole carbon should be extractable");
         assert_eq!(taken.parts, vec![("Carbon".into(), 1.0)]);
         assert_eq!(carbon.parts, vec![("Carbon".into(), 2.0)]);
+        let remaining = carbon.clone();
         assert!(carbon.take(0.5).is_none());
+        assert!(carbon.take(1e-10).is_none());
+        assert_eq!(
+            carbon, remaining,
+            "sub-unit requests must not mutate material"
+        );
     }
 }
 

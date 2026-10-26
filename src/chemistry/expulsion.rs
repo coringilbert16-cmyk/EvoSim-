@@ -21,7 +21,11 @@ pub(crate) fn expel_physical_material(
         organism,
         environment,
         storage_index,
-        |environment, index, physical| environment.field.deposit_physical_at_index(index, physical),
+        |environment, index, physical| {
+            environment
+                .field
+                .deposit_physical_at_index(index, physical, &environment.catalog)
+        },
     )
 }
 
@@ -75,6 +79,9 @@ where
     else {
         return false;
     };
+    if !stored.is_realized() || !stored.material.is_valid_for_catalog(&environment.catalog) {
+        return false;
+    }
     // Validate and compute the destination from a clone while the original
     // remains authoritative in storage. Removing the source before validation
     // makes every early return a potential material-loss path.
@@ -443,6 +450,49 @@ mod tests {
         assert_eq!(
             simulation.organisms[0].stored_material.entries, original_entries,
             "failed expulsion validation must not remove or rewrite the stored source"
+        );
+    }
+
+    #[test]
+    fn unknown_resource_source_is_rejected_before_expulsion_mutation() {
+        let mut simulation = Simulation::new(929, 10.0);
+        let catalog = simulation.environment.catalog.clone();
+        let mut physical = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("test material should realize");
+        physical.owner_relative_origin = Some(Placement {
+            x: 1.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        });
+        physical.material.parts[0].0 = "Uncatalogued".to_owned();
+        simulation.organisms[0]
+            .stored_material
+            .entries
+            .push(StoredMaterial::Physical(physical));
+        let storage_index = simulation.organisms[0].stored_material.entries.len() - 1;
+        let original_entries = simulation.organisms[0].stored_material.entries.clone();
+        let original_cells = simulation.environment.field.cells.clone();
+
+        assert!(!expel_physical_material(
+            &mut simulation.organisms[0],
+            &mut simulation.environment,
+            storage_index,
+        ));
+        assert_eq!(
+            simulation.organisms[0].stored_material.entries, original_entries,
+            "invalid resource identity must remain in its original owner"
+        );
+        assert_eq!(
+            simulation.environment.field.cells, original_cells,
+            "invalid source must not mutate the destination field"
         );
     }
 
