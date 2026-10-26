@@ -638,7 +638,7 @@ mod tests {
             ],
             &catalog(),
         ));
-        assert!(storage.take_unstructured(1).is_none());
+        assert!(storage.take_unstructured(1, &catalog()).is_none());
         assert_eq!(storage.materials_snapshot(), vec![m]);
     }
 
