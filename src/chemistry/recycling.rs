@@ -19,9 +19,9 @@ pub(crate) fn recycle_dead_organism(
     // resonance reservoir. Validate the retained energy now and transfer it
     // into that budget during the same atomic death transaction.
     let resonant_energy = organism.resonant_energy.total_energy()?;
-    // Construction membership must be either fully parent-owned or fully
-    // detached. Partial overlap would make recycling drop unowned members or
-    // count physical state twice, so reject it before staging any transfers.
+    // Recycling accepts only the authoritative parent-owned aggregate.
+    // Detached or partial construction state cannot be safely transferred, so
+    // reject it before staging any material or energy changes.
     if organism
         .reproductive_construction
         .as_ref()
