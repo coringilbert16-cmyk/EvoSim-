@@ -28,3 +28,10 @@ Make death a transition out of biological activity, not an exception to physical
 - Keep each command and test run within five minutes; a timeout is incomplete evidence.
 - Keep this PR limited to its primary invariant. Do not fold in unrelated cleanup.
 - PR #204 is the roadmap/handoff; PR #196 constructor/Bob work is out of scope.
+
+
+## Cross-PR boundary and dependency clarification (2026-10-26)
+
+This phase owns the **life-to-death lifecycle transition and continued eligibility for ordinary chemistry**, not a second decomposition/recycling engine. Dead-body constituents remain represented exactly once and become candidates for the same ordinary chemistry pathway available to other matter; biological behavior stops.
+
+**Dependency:** authoritative material ownership and energy settlement, plus shared chemistry runtime and transactional reaction realization. Keep biological death triggers distinct from chemistry execution. PR #213's temporary zero-stress setting is separate, temporary survival-first work and is not the final death contract.
