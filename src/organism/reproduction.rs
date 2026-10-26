@@ -2831,8 +2831,18 @@ mod tests {
         let child_genome = initial_genome();
         let scale_reference = (child_genome.preferred_mass(), 1.0);
         let anchor_unit_index = parent.structure.unit_index(child_core_id).unwrap();
+        let mut committed_material = MaterialStorage::default();
+        assert!(committed_material.store_physical(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 5.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        ));
         parent.reproductive_construction = Some(ReproductiveConstruction {
-            committed_material: MaterialStorage::default(),
+            committed_material,
             developing_structure: OrganismStructure::new(),
             developing_member_ids: child_member_ids,
             child_genome,
@@ -2846,6 +2856,13 @@ mod tests {
             needs_space: false,
         });
 
+        let committed_material_count = parent
+            .reproductive_construction
+            .as_ref()
+            .unwrap()
+            .committed_material
+            .physical_count();
+        assert_eq!(committed_material_count, 1);
         let before_ids = parent.structure.physical_constituent_ids();
         let before_id_set: HashSet<_> = before_ids.iter().copied().collect();
         assert_eq!(before_ids.len(), before_id_set.len());
@@ -2887,6 +2904,11 @@ mod tests {
             "division must neither lose nor create physical units"
         );
         assert!(parent.reproductive_construction.is_none());
+        assert_eq!(
+            child.stored_material.physical_count(),
+            committed_material_count,
+            "reserved physical material must transfer to the child exactly once at division"
+        );
         assert!(
             (parent.usable_energy + child.usable_energy - (before_energy + CROSSING_BOND_ENERGY))
                 .abs()
