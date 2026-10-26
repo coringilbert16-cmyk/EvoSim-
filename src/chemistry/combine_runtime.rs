@@ -215,18 +215,19 @@ pub(crate) fn form_selected_bond_diagnostic(
     // A selected candidate is only a proposal. Rebuild it from the live
     // graph before committing so a small geometry change cannot reuse stale
     // distance/facing/load values (and undercharge formation work).
-    let live_candidate = crate::contact::connection_pair_candidates_cached(
+    let live_candidates = crate::contact::connection_pair_candidates_cached(
         structure, unit_a, unit_b, catalog, cache,
-    )
-    .into_iter()
-    .find(|live| {
-        live.endpoint_a == candidate.endpoint_a
-            && live.endpoint_b == candidate.endpoint_b
-            && live.distance <= COMBINE_CONTACT_TOLERANCE
-            && live.available_a
-            && live.available_b
-    })
-    .ok_or("selected contact is no longer eligible")?;
+    );
+    let live_candidate = live_candidates
+        .into_iter()
+        .find(|live| {
+            live.endpoint_a == candidate.endpoint_a
+                && live.endpoint_b == candidate.endpoint_b
+                && live.distance <= COMBINE_CONTACT_TOLERANCE
+                && live.available_a
+                && live.available_b
+        })
+        .ok_or("selected contact is no longer eligible")?;
     if candidate.distance > COMBINE_CONTACT_TOLERANCE
         || !candidate.available_a
         || !candidate.available_b
