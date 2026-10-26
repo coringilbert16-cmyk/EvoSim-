@@ -19,7 +19,6 @@ const SQRT_3: f64 = 1.7320508075688772935;
 #[derive(Clone, Debug)]
 pub(crate) struct ValidConstruction {
     pub structure: crate::structure::OrganismStructure,
-    pub energy: f64,
     pub acquired_resource_placements: Vec<(String, Placement)>,
     pub acquired_resource_shapes: Vec<(String, Shape)>,
     pub fluid_geometry_status: FluidGeometryStatus,
@@ -1048,7 +1047,6 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
 
     Ok(ValidConstruction {
         structure,
-        energy,
         acquired_resource_placements,
         acquired_resource_shapes,
         fluid_geometry_status,
