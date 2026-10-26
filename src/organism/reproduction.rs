@@ -2292,10 +2292,8 @@ mod tests {
         let original_storage = parent.stored_material.entries.clone();
         let original_energy = parent.usable_energy;
         let original_ledger = ledger;
-        let original_construction = serde_json::to_value(
-            parent.reproductive_construction.as_ref().unwrap(),
-        )
-        .unwrap();
+        let original_construction =
+            serde_json::to_value(parent.reproductive_construction.as_ref().unwrap()).unwrap();
         let original_units = parent
             .reproductive_construction
             .as_ref()
