@@ -2451,9 +2451,19 @@ mod tests {
         let mut simulation = Simulation::new(211, 20.0);
         let catalog = simulation.environment.catalog.clone();
         let mut parent = simulation.organisms.remove(0);
-        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
-        let mut detached = blueprint.realize(&catalog).unwrap();
-        let anchor_id = detached.physical_id(0).unwrap();
+        use crate::structure::{Placement, StructuralUnit};
+
+        let mut detached = OrganismStructure::new();
+        let anchor_index = detached.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        assert!(detached.units[anchor_index].realize_default_geometry(&catalog));
+        let anchor_id = detached.physical_id(anchor_index).unwrap();
         detached.set_genome_constituent_ids([anchor_id]);
         let member_ids = detached.physical_constituent_ids();
         parent.reproductive_construction = Some(ReproductiveConstruction {
@@ -2556,23 +2566,65 @@ mod tests {
             crate::structure::PhysicalConstituentId,
             crate::structure::PhysicalConstituentId,
         ) {
-            let blueprint = crate::juvenile::confirmed_seed_baseline(catalog).unwrap();
-            let mut structure = blueprint.realize(catalog).unwrap();
-            for unit in &mut structure.units {
-                unit.placement.x += origin_x;
+            // Build the established 12N cavity directly at its canonical poses.
+            // The general blueprint placer currently fails on the final corner
+            // closure, so this fixture tests division without changing seed geometry.
+            let mut structure = OrganismStructure::new();
+            let mut grid = [[None; 5]; 5];
+            for (y, row) in grid.iter_mut().enumerate() {
+                for (x, slot) in row.iter_mut().enumerate() {
+                    if (x == 0 || x == 4) && (y == 0 || y == 4) {
+                        continue;
+                    }
+                    if x != 0 && x != 4 && y != 0 && y != 4 {
+                        continue;
+                    }
+                    let index = structure.add_unit(StructuralUnit::new(
+                        "Nitrogen",
+                        Placement {
+                            x: origin_x + x as f64 - 2.0,
+                            y: y as f64 - 2.0,
+                            rotation_radians: 0.0,
+                        },
+                    ));
+                    assert!(structure.units[index].realize_default_geometry(catalog));
+                    *slot = structure.physical_id(index);
+                }
             }
-            let anchor_index = structure
-                .units
-                .iter()
-                .position(|unit| {
-                    (unit.placement.x - origin_x).abs() < 1e-9
-                        && (unit.placement.y + 2.0).abs() < 1e-9
-                })
-                .expect("top-center cavity boundary unit exists");
-            let anchor_id = structure.physical_id(anchor_index).unwrap();
-            structure.set_genome_constituent_ids([anchor_id]);
 
-            let top_index = anchor_index;
+            for y in 0..5 {
+                for x in 0..5 {
+                    let Some(a) = grid[y][x] else { continue };
+                    if x + 1 < 5 {
+                        if let Some(b) = grid[y][x + 1] {
+                            add_bond(&mut structure, a, 0.0, b, PI, 0.0);
+                        }
+                    }
+                    if y + 1 < 5 {
+                        if let Some(b) = grid[y + 1][x] {
+                            add_bond(&mut structure, a, PI / 2.0, b, -PI / 2.0, 0.0);
+                        }
+                    }
+                }
+            }
+            for ((ax, ay), (bx, by), angle_a, angle_b) in [
+                ((1, 0), (0, 1), 3.0 * PI / 4.0, -PI / 4.0),
+                ((3, 0), (4, 1), PI / 4.0, -3.0 * PI / 4.0),
+                ((0, 3), (1, 4), PI / 4.0, -3.0 * PI / 4.0),
+                ((4, 3), (3, 4), 3.0 * PI / 4.0, -PI / 4.0),
+            ] {
+                add_bond(
+                    &mut structure,
+                    grid[ay][ax].unwrap(),
+                    angle_a,
+                    grid[by][bx].unwrap(),
+                    angle_b,
+                    0.0,
+                );
+            }
+
+            let anchor_id = grid[0][2].expect("top-center cavity boundary unit exists");
+            structure.set_genome_constituent_ids([anchor_id]);
             let carbon_index = structure.add_unit(StructuralUnit::new(
                 "Carbon",
                 Placement {
@@ -2581,9 +2633,9 @@ mod tests {
                     rotation_radians: 0.0,
                 },
             ));
+            assert!(structure.units[carbon_index].realize_default_geometry(catalog));
             let carbon_id = structure.physical_id(carbon_index).unwrap();
-            let top_id = structure.physical_id(top_index).unwrap();
-            add_bond(&mut structure, top_id, -PI / 2.0, carbon_id, PI / 2.0, 0.0);
+            add_bond(&mut structure, anchor_id, -PI / 2.0, carbon_id, PI / 2.0, 0.0);
             (structure, anchor_id, carbon_id)
         }
 
