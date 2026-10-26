@@ -2275,7 +2275,7 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
-    fn rejected_unowned_energy_release_preserves_world_inventory_atomically() {
+    fn world_inventory_rejects_unowned_non_structural_release_in_simulation() {
         let mut simulation = Simulation::new(914, 10.0);
         let inventory_before = simulation.energy_inventory_snapshot();
         let ledger_before = simulation.energy_ledger;
