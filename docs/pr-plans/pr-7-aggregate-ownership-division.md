@@ -29,6 +29,7 @@ Finish the ownership migration so an organism’s physical aggregate has one aut
 - New aggregate-owned construction keeps anchor leftovers in the parent inventory, and successful attachment returns leftover candidate material there. Legacy reserved material remains in its existing holder if a construction attempt is rejected; it transfers only as part of a successful attachment or division so failure rollback remains side-effect free.
 - Added a dedicated bounded CI step for that regression.
 - A CI formatting gate caught an overlong method chain during the inventory-transfer pass; the chain was wrapped and the corrected head passed formatting.
+- On the current head, the focused rejected-reproduction rollback test passes. The full suite is running; the canonical 12N realization check fails and must be compared by named failure identity with the PR #205 baseline. Current-head Clippy is still pending.
 - Source audit confirms the aggregate-owned path derives transient views from stable IDs and stages division through `partition_subgraph_for_division`. Legacy detached-graph compatibility remains in production accounting/consumer paths and is still a migration gap to assess rather than silently treating the migration as complete.
 
 ## Guardrails
