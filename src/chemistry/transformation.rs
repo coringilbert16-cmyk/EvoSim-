@@ -290,7 +290,7 @@ fn resonance_break_candidate_indices(organism: &Organism, environment: &Environm
 impl Simulation {
     pub(crate) fn try_start_transformation(
         organism: &mut Organism,
-        _catalog: &[crate::resources::BaseResource],
+        catalog: &[crate::resources::BaseResource],
         next_id: &mut u64,
         decision: &ActionCandidate,
     ) -> Option<ActiveTransformation> {
@@ -307,7 +307,11 @@ impl Simulation {
         let removed = organism.stored_material.entries.get(storage_index)?;
         let bond_count = match removed {
             crate::material_storage::StoredMaterial::Physical(instance)
-                if instance.is_realized() =>
+                if instance.is_realized()
+                    && instance.material.is_valid_for_catalog(catalog)
+                    && instance.material.parts.iter().all(|(_, amount)| {
+                        amount.is_finite() && *amount > 0.0 && amount.fract().abs() <= 1e-12
+                    }) =>
             {
                 instance.internal_connections.as_ref()?.len()
             }
@@ -1425,6 +1429,46 @@ mod tests {
         assert!(bond_break_energy_yield(4.0, f64::NAN).is_none());
         assert!(bond_break_energy_yield(4.0, f64::INFINITY).is_none());
         assert!(bond_break_energy_yield(4.0, f64::NEG_INFINITY).is_none());
+    }
+
+    #[test]
+    fn stored_break_rejects_unknown_resource_before_reserving_source() {
+        let mut simulation = Simulation::new(7301, 20.0);
+        let catalog = simulation.environment.catalog.clone();
+        let organism = &mut simulation.organisms[0];
+        organism.stored_material.entries.clear();
+        let material = crate::resources::Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![crate::resources::InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
+        let source = crate::physical_material::PhysicalMaterial::realized(
+            material,
+            vec![
+                crate::structure::Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                crate::structure::Placement { x: 0.838, y: 0.0, rotation_radians: 0.0 },
+            ],
+            &catalog,
+        ).expect("test compound should be realizable");
+        assert!(organism.stored_material.store_physical_instance(source, &catalog));
+        let crate::material_storage::StoredMaterial::Physical(instance) =
+            &mut organism.stored_material.entries[0];
+        instance.material.parts[0].0 = "Uncatalogued".to_owned();
+        let entries_before = organism.stored_material.entries.clone();
+        let mut next_id = 1;
+        let decision = ActionCandidate {
+            action: ActionKind::Break,
+            context_key: Some("stored:0:bond:0".into()),
+        };
+
+        assert!(Simulation::try_start_transformation(
+            organism, &catalog, &mut next_id, &decision,
+        ).is_none());
+        assert_eq!(organism.stored_material.entries, entries_before);
+        assert_eq!(organism.active_transformation_id, None);
+        assert_eq!(next_id, 1, "rejected reservation must not consume a transformation ID");
     }
 
     #[test]
