@@ -2069,7 +2069,9 @@ mod tests {
             .field
             .index_for_position(physical_placement.x, physical_placement.y)
             .expect("field Carbon must be in bounds");
-        assert!(environment.field.deposit_physical_at_index(field_index, physical));
+        assert!(environment
+            .field
+            .deposit_physical_at_index(field_index, physical));
 
         let mut before = vec![blocker];
         let mut spatial_index = MovementSpatialIndex::new(&before, &environment);
@@ -2278,7 +2280,9 @@ mod tests {
             .field
             .index_for_position(physical_placement.x, physical_placement.y)
             .expect("field Carbon must be in bounds");
-        assert!(environment.field.deposit_physical_at_index(field_index, physical));
+        assert!(environment
+            .field
+            .deposit_physical_at_index(field_index, physical));
 
         let mut before = vec![blocker];
         let mut spatial_index = MovementSpatialIndex::new(&before, &environment);
@@ -2352,7 +2356,9 @@ mod tests {
 
         let pushed_parts = organism_parts_at(&before[0], &environment, 0.0, 0.0);
         assert!(
-            spatial_index.candidates(&pushed_parts, &environment).contains(&0),
+            spatial_index
+                .candidates(&pushed_parts, &environment)
+                .contains(&0),
             "the pushed organism must be discoverable at its new indexed position"
         );
         let moved_physical = environment
@@ -2373,5 +2379,4 @@ mod tests {
             "the realized field owner should move exactly once"
         );
     }
-
 }
