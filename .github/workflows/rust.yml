@@ -205,6 +205,15 @@ jobs:
       - name: Verify non-creating world inventory oracle
         timeout-minutes: 5
         run: cargo test --locked strict_world_inventory_oracle_rejects_even_sub_tolerance_energy_creation
+      # Exercise the independent world inventory on live source, reaction, and tick paths
+      # before the full suite, whose historical runtime can exceed the job timeout.
+      - name: Verify cross-system world energy reconciliation
+        timeout-minutes: 5
+        run: |
+          cargo test --locked world_inventory_rejects_unowned_non_structural_release
+          cargo test --locked world_energy_inventory_reconciles_across_ordinary_ticks
+          cargo test --locked world_energy_inventory_reconciles_world_tone_and_structural_break_together
+          cargo test --locked resonance_overload_break_reconciles_world_inventory
       - name: Verify source-budget conservation
         timeout-minutes: 5
         run: |
