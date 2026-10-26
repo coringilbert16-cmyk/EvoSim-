@@ -715,7 +715,7 @@ fn distribute_evenly(
                 internal_bonds: std::mem::take(&mut mat.internal_bonds),
             }
         } else {
-            match take_whole_unstructured(&mut mat, count) {
+            match take_whole_unstructured(&mut mat, count, catalog) {
                 Some(piece) => piece,
                 None => continue,
             }
