@@ -635,7 +635,7 @@ impl ActiveMaterialField {
             if index >= self.cells.len()
                 || !material.is_realized()
                 || material.material.is_empty()
-                || !material.material.is_valid()
+                || !material.material.is_valid_for_catalog(catalog)
             {
                 return false;
             }
