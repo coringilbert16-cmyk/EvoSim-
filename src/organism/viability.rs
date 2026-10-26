@@ -144,11 +144,9 @@ mod tests {
         let blueprint = confirmed_seed_baseline(&catalog).unwrap();
         let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
 
-        assert!(
-            crate::cavity::analyze_genome_cavity(&structure, &catalog)
-                .unwrap()
-                .is_some()
-        );
+        assert!(crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .is_some());
         assert!(
             validate_realized_organism(
                 &structure,
