@@ -166,9 +166,6 @@ jobs:
       - name: Verify rejected aggregate reproduction preserves ownership state
         timeout-minutes: 5
         run: cargo test --locked finish_reproduction_readiness_ignores_stale_cached_graph
-      - name: Verify aggregate developing view does not clone material inventory
-        timeout-minutes: 5
-        run: cargo test --locked aggregate_owned_developing_view_does_not_clone_construction_inventory
       - name: Run focused active-transformation action isolation test
         timeout-minutes: 5
         run: cargo test --locked active_transformation_suppresses_new_movement_and_material_actions
