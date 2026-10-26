@@ -28,7 +28,6 @@ Finish the ownership migration so an organism’s physical aggregate has one aut
 - Refactored `finish_reproduction` to hold the staged parent graph/energy until the child object is assembled, then publish the parent graph, parent energy, and staged ledger at one commit point. Every explicit rejection before that point restores the construction without publishing staged division state.
 - Construction's reserved physical material remains anchored to its developmental origin; it is not blindly moved into parent storage because that would change owner-relative placement. Rejected attempts preserve it, while successful attachment/division transfers it through the transaction path.
 - Added a dedicated bounded CI step for that regression.
-- A CI formatting gate caught an overlong method chain during the inventory-transfer pass; the chain was wrapped and the corrected head passed formatting.
 - On the current head, the focused rejected-reproduction rollback test passes. The full suite is running; the canonical 12N realization check fails and must be compared by named failure identity with the PR #205 baseline. Current-head Clippy is still pending.
 - Source audit confirms the aggregate-owned path derives transient views from stable IDs and stages division through `partition_subgraph_for_division`. Legacy detached-graph compatibility remains in production accounting/consumer paths and is still a migration gap to assess rather than silently treating the migration as complete.
 
