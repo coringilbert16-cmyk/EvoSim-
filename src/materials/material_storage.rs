@@ -459,7 +459,7 @@ mod tests {
                 x: 0.0,
                 y: 0.0,
                 rotation_radians: 0.0,
-            ],
+            }],
             &catalog(),
         ));
         let StoredMaterial::Physical(instance) = &mut storage.entries[0];
@@ -484,7 +484,7 @@ mod tests {
                 x: 0.0,
                 y: 0.0,
                 rotation_radians: 0.0,
-            ],
+            }],
             &catalog(),
         ));
         let StoredMaterial::Physical(instance) = &mut storage.entries[0];
