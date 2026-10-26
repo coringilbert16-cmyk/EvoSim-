@@ -1161,7 +1161,7 @@ pub(crate) fn finish_reproduction(
     ledger: &mut EnergyLedger,
     seed_reference: Option<(f64, f64)>,
 ) -> Option<Organism> {
-    let mut construction = parent.reproductive_construction.take()?;
+    let construction = parent.reproductive_construction.take()?;
     // Stable IDs establish ownership; readiness and division derive transient
     // views from the authoritative parent graph instead of refreshing a second
     // persisted copy. Reject partially admitted membership rather than falling
