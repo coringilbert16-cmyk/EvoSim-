@@ -2656,7 +2656,14 @@ mod tests {
             ));
             assert!(structure.units[carbon_index].realize_default_geometry(catalog));
             let carbon_id = structure.physical_id(carbon_index).unwrap();
-            add_bond(&mut structure, anchor_id, -PI / 2.0, carbon_id, PI / 2.0, 0.0);
+            add_bond(
+                &mut structure,
+                anchor_id,
+                -PI / 2.0,
+                carbon_id,
+                PI / 2.0,
+                0.0,
+            );
             (structure, anchor_id, carbon_id)
         }
 
