@@ -484,22 +484,19 @@ fn birth_ready_with_reference(
     catalog: &[crate::resources::BaseResource],
     seed_reference: Option<(f64, f64)>,
 ) -> bool {
-    // Readiness is evaluated against a transient view of the authoritative
-    // aggregate whenever the offspring's members are already parent-owned.
-    // The persisted graph is only the compatibility path for detached legacy
-    // constructions and is never the source of truth for attached members.
-    let structure = if construction.is_aggregate_owned_by(parent_structure) {
-        let Some(anchor_id) = construction.anchor_physical_id else {
-            return false;
-        };
-        let Some(view) = parent_structure
-            .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
-        else {
-            return false;
-        };
-        view
-    } else {
-        construction.developing_structure.clone()
+    // Readiness has one source of truth: a transient view reconstructed from
+    // stable IDs in the parent's authoritative aggregate. Detached legacy graphs
+    // are not candidates for birth and cannot be promoted by a readiness check.
+    if !construction.is_aggregate_owned_by(parent_structure) {
+        return false;
+    }
+    let Some(anchor_id) = construction.anchor_physical_id else {
+        return false;
+    };
+    let Some(structure) = parent_structure
+        .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
+    else {
+        return false;
     };
     if !developing_membership_is_valid(construction, &structure) {
         return false;
