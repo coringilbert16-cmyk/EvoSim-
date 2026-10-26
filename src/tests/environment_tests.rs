@@ -362,10 +362,7 @@ fn physical_deposits_reject_unknown_resource_identity_without_mutation() {
     let before_revision = field.revision;
 
     assert!(!field.deposit_physical_at_index(0, physical.clone(), &catalog));
-    assert!(!field.deposit_physical_batch(
-        vec![(12.5, 12.5, physical)],
-        &catalog,
-    ));
+    assert!(!field.deposit_physical_batch(vec![(12.5, 12.5, physical)], &catalog,));
     assert_eq!(field.cells, before_cells);
     assert_eq!(field.revision, before_revision);
 }
