@@ -964,6 +964,7 @@ pub(crate) fn advance_construction(
     if !construction.is_aggregate_owned_by(parent_structure) {
         return (ConstructionStatus::Dead, None);
     }
+    let aggregate_owned = true;
     let Some(anchor_id) = construction.anchor_physical_id else {
         return (ConstructionStatus::Dead, None);
     };
