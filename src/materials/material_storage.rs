@@ -279,7 +279,7 @@ impl MaterialStorage {
         })
     }
 
-    pub(crate) fn take_one_unstructured_named(&mut self, name: &str) -> Option<PhysicalMaterial> {
+    pub(crate) fn take_one_unstructured_named(&mut self, name: &str, catalog: &[crate::resources::BaseResource]) -> Option<PhysicalMaterial> {
         let index = self.entries.iter().position(|entry| {
             let material = entry.material();
             !material.has_internal_structure()
@@ -287,15 +287,25 @@ impl MaterialStorage {
                 && material.parts.len() == 1
                 && material.parts[0].0 == name
                 && (material.parts[0].1 - 1.0).abs() <= MATERIAL_EPSILON
+                && material.is_valid_for_catalog(catalog)
+                && Self::is_discrete(material)
+                && matches!(entry, StoredMaterial::Physical(instance) if instance.is_realized())
         })?;
         Some(self.entries.swap_remove(index).into_physical())
     }
 
-    pub(crate) fn take_matching(&mut self, target: &Material) -> Option<PhysicalMaterial> {
-        let index = self
-            .entries
-            .iter()
-            .position(|entry| entry.material() == target && !entry.material().is_empty())?;
+    pub(crate) fn take_matching(&mut self, target: &Material, catalog: &[crate::resources::BaseResource]) -> Option<PhysicalMaterial> {
+        if !target.is_valid_for_catalog(catalog) || target.is_empty() {
+            return None;
+        }
+        let index = self.entries.iter().position(|entry| {
+            matches!(entry, StoredMaterial::Physical(instance)
+                if instance.is_realized()
+                    && instance.material.is_valid_for_catalog(catalog)
+                    && Self::is_discrete(&instance.material)
+                    && instance.material == *target
+                    && !instance.material.is_empty())
+        })?;
         Some(self.entries.swap_remove(index).into_physical())
     }
 
@@ -336,21 +346,30 @@ impl MaterialStorage {
         }
     }
 
-    pub(crate) fn take_unstructured(&mut self, count: usize) -> Option<Vec<PhysicalMaterial>> {
-        if self.count_unstructured() < count {
+    pub(crate) fn take_unstructured(
+        &mut self,
+        count: usize,
+        catalog: &[crate::resources::BaseResource],
+    ) -> Option<Vec<PhysicalMaterial>> {
+        let indices: Vec<usize> = self.entries.iter().enumerate().filter_map(|(index, entry)| {
+            match entry {
+                StoredMaterial::Physical(instance)
+                    if !instance.material.has_internal_structure()
+                        && !instance.material.is_empty()
+                        && instance.is_realized()
+                        && instance.material.is_valid_for_catalog(catalog)
+                        && Self::is_discrete(&instance.material) => Some(index),
+                _ => None,
+            }
+        }).take(count).collect();
+        if indices.len() != count {
             return None;
         }
         let mut out = Vec::with_capacity(count);
-        let mut i = 0;
-        while i < self.entries.len() && out.len() < count {
-            if !self.entries[i].material().has_internal_structure()
-                && !self.entries[i].material().is_empty()
-            {
-                out.push(self.entries.swap_remove(i).into_physical());
-            } else {
-                i += 1;
-            }
+        for index in indices.into_iter().rev() {
+            out.push(self.take_physical_at(index, catalog)?);
         }
+        out.reverse();
         Some(out)
     }
 
@@ -520,7 +539,7 @@ mod tests {
             &catalog(),
         ));
         assert_eq!(
-            storage.take_matching(&m).map(|instance| instance.material),
+            storage.take_matching(&m, &catalog()).map(|instance| instance.material),
             Some(m.clone())
         );
         assert!(storage.is_empty());
