@@ -177,7 +177,10 @@ impl EnergyTransaction {
     }
 
     pub(crate) fn balanced(self) -> bool {
-        self.allocation().balanced()
+        // A generic transaction has no named non-structural source owner to
+        // debit. Bond energy must be represented by structural_delta; any
+        // genuinely external input must use ExternalInputTransaction.
+        self.potential_released == 0.0 && self.allocation().balanced()
     }
 }
 
@@ -797,8 +800,8 @@ mod tests {
         ] {
             let tx = EnergyTransaction {
                 reason,
-                potential_released: 5.0,
-                usable_delta: 2.0,
+                potential_released: 0.0,
+                usable_delta: -3.0,
                 structural_delta: 2.0,
                 work_expended: 0.0,
                 heat_dissipated: 1.0,
@@ -847,7 +850,7 @@ mod tests {
     }
 
     #[test]
-    fn settlement_uses_transaction_potential_directly() {
+    fn unowned_non_structural_release_is_rejected_atomically() {
         let tx = EnergyTransaction {
             reason: EnergyReason::Combine,
             potential_released: 12.0,
@@ -858,10 +861,10 @@ mod tests {
         };
         let mut ledger = EnergyLedger::default();
         let mut energy = 10.0;
-        assert!(ledger.settle_transaction(&mut energy, tx));
-        assert_eq!(energy, 14.0);
-        assert_eq!(ledger.total_potential_energy_released, 12.0);
-        assert_eq!(ledger.total_work_expended, 2.0);
+        assert!(!ledger.settle_transaction(&mut energy, tx));
+        assert_eq!(energy, 10.0);
+        assert_eq!(ledger.total_potential_energy_released, 0.0);
+        assert_eq!(ledger.total_work_expended, 0.0);
     }
 
     #[test]
