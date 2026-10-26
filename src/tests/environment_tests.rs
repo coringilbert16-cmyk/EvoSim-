@@ -61,10 +61,11 @@ fn vertical_neighbors_wrap_from_top_to_bottom() {
 #[test]
 fn deposit_preserves_distinct_structures_and_aggregates_raw_stock() {
     let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-    field.deposit(500.0, 500.0, make_structured(10.0));
-    field.deposit(500.0, 500.0, make_structured(10.0));
-    field.deposit(500.0, 500.0, make_raw("Carbon", 3.0));
-    field.deposit(500.0, 500.0, make_raw("Carbon", 7.0));
+    let catalog = crate::resources::default_catalog();
+    field.deposit(500.0, 500.0, make_structured(10.0), &catalog);
+    field.deposit(500.0, 500.0, make_structured(10.0), &catalog);
+    field.deposit(500.0, 500.0, make_raw("Carbon", 3.0), &catalog);
+    field.deposit(500.0, 500.0, make_raw("Carbon", 7.0), &catalog);
     let cell = &field.cells[field.index_for_position(500.0, 500.0).unwrap()];
     assert_eq!(cell.materials.len(), 3);
     assert_eq!(
@@ -199,7 +200,7 @@ fn physical_batch_deposit_rejects_late_invalid_destination_without_partial_commi
     assert!(!field.deposit_physical_batch(vec![
         (12.5, 12.5, make_carbon(12.5)),
         (100.0, 12.5, make_carbon(37.5)),
-    ]));
+    ], catalog));
 
     assert_eq!(field.cells, before_cells);
     assert_eq!(field.revision, before_revision);
@@ -230,7 +231,7 @@ fn physical_batch_deposit_commits_all_validated_objects() {
     assert!(field.deposit_physical_batch(vec![
         (12.5, 12.5, make_carbon(12.5)),
         (37.5, 12.5, make_carbon(37.5)),
-    ]));
+    ], catalog));
 
     assert_eq!(
         field
@@ -272,7 +273,10 @@ fn physical_batch_deposit_rejects_late_malformed_object_without_partial_commit()
     let before_cells = field.cells.clone();
     let before_revision = field.revision;
 
-    assert!(!field.deposit_physical_batch(vec![(12.5, 12.5, valid), (37.5, 12.5, malformed),]));
+    assert!(!field.deposit_physical_batch(
+        vec![(12.5, 12.5, valid), (37.5, 12.5, malformed)],
+        &crate::resources::default_catalog(),
+    ));
     assert_eq!(field.cells, before_cells);
     assert_eq!(field.revision, before_revision);
 }
@@ -283,7 +287,12 @@ fn logical_deposit_rejects_invalid_payload_without_claiming_success() {
     let before_cells = field.cells.clone();
     let before_revision = field.revision;
 
-    assert!(!field.deposit(12.5, 12.5, make_raw("Carbon", 1.5)));
+    assert!(!field.deposit(
+        12.5,
+        12.5,
+        make_raw("Carbon", 1.5),
+        &crate::resources::default_catalog(),
+    ));
     assert_eq!(field.cells, before_cells);
     assert_eq!(field.revision, before_revision);
 
@@ -294,6 +303,16 @@ fn logical_deposit_rejects_invalid_payload_without_claiming_success() {
             parts: Vec::new(),
             internal_bonds: Vec::new(),
         },
+        &crate::resources::default_catalog(),
+    ));
+    assert_eq!(field.cells, before_cells);
+    assert_eq!(field.revision, before_revision);
+
+    assert!(!field.deposit(
+        12.5,
+        12.5,
+        make_raw("UnknownResource", 1.0),
+        &crate::resources::default_catalog(),
     ));
     assert_eq!(field.cells, before_cells);
     assert_eq!(field.revision, before_revision);
@@ -305,11 +324,14 @@ fn logical_deposit_rejects_invalid_index_without_mutating_field() {
     let before_cells = field.cells.clone();
     let before_revision = field.revision;
 
-    assert!(!field.deposit_at_index(field.cells.len(), make_raw("Carbon", 1.0)));
+    assert!(!field.deposit_at_index(
+        field.cells.len(),
+        make_raw("Carbon", 1.0),
+        &crate::resources::default_catalog(),
+    ));
     assert_eq!(field.cells, before_cells);
     assert_eq!(field.revision, before_revision);
 }
-
 
 #[test]
 fn physical_deposits_reject_unknown_resource_identity_without_mutation() {
