@@ -992,13 +992,6 @@ pub(crate) fn advance_construction(
     if !developing_membership_is_valid(construction, &working_structure) {
         return (ConstructionStatus::Dead, None);
     }
-    if aggregate_owned && !construction.committed_material.is_empty() {
-        // Migrate serialized legacy inventory into the parent's authoritative
-        // storage before advancing the aggregate-owned construction.
-        parent_storage
-            .entries
-            .extend(construction.committed_material.drain_entries());
-    }
     let reserve_energy = construction.child_genome.reproductive_energy_allocation;
     // Validate all persisted scalar accounting state before reserve transfer,
     // maintenance settlement, or candidate construction can mutate it.
@@ -1016,6 +1009,15 @@ pub(crate) fn advance_construction(
         || *parent_energy < 0.0
     {
         return (ConstructionStatus::Dead, None);
+    }
+
+    if aggregate_owned && !construction.committed_material.is_empty() {
+        // Migrate serialized legacy inventory only after validation. Physical
+        // material stays available to the parent, but no longer has a second
+        // construction-specific storage owner.
+        parent_storage
+            .entries
+            .extend(construction.committed_material.drain_entries());
     }
 
     if !aggregate_owned && reserve_energy > construction.developing_energy {
