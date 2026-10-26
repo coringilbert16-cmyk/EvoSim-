@@ -1,6 +1,6 @@
 # Complete Aggregate Ownership and Transactional Construction and Division
 
-> **Planning scaffold only.** This file records the proposed scope and acceptance gate. No implementation changes or tests are included in this setup PR. Do not start implementation until explicitly authorized.
+> **Implementation in progress.** This file tracks the aggregate-ownership migration and its acceptance evidence.
 
 ## Summary
 
@@ -8,7 +8,7 @@ Finish the ownership migration so an organism’s physical aggregate has one aut
 
 ## Outline
 
-- [ ] Audit current main for remaining duplicate ownership and lifecycle gaps.
+- [x] Audit current merged `main` for remaining duplicate ownership and lifecycle gaps.
 - [ ] Verify construction and attachment preserve parent authority.
 - [ ] Make division an explicit, transactional ownership boundary.
 - [ ] Ensure stable constituent IDs and genome-core identity do not create duplicate physical graphs or energy holders.
@@ -21,6 +21,13 @@ Finish the ownership migration so an organism’s physical aggregate has one aut
 - [ ] Successful division produces distinct, internally consistent aggregates.
 - [ ] Material and energy inventories reconcile across the transition.
 - [ ] The 12-piece nitrogen seed remains a cavity fixture, not a viability requirement.
+
+## Current implementation and verification
+
+- Added regression assertions to `finish_reproduction_readiness_ignores_stale_cached_graph`: a rejected aggregate-owned division attempt must preserve parent units, bonds, genome-core identity, stored material, usable energy, the energy ledger, developing-member IDs, and committed construction material.
+- Added a dedicated bounded CI step for that regression.
+- The first CI run exposed a formatting failure in the new assertion block; the assertion was reformatted in the next commit. Verification of the corrected head is still pending.
+- Source audit confirms the aggregate-owned path derives transient views from stable IDs and stages division through `partition_subgraph_for_division`. Legacy detached-graph compatibility remains in production accounting/consumer paths and is still a migration gap to assess rather than silently treating the migration as complete.
 
 ## Guardrails
 
