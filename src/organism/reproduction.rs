@@ -1181,7 +1181,7 @@ pub(crate) fn finish_reproduction(
     // the authoritative parent graph. A transient child view is never promoted
     // to a second owner. Legacy, not-yet-migrated constructions retain their
     // existing behavior until they are admitted into the aggregate.
-    let (child_structure, child_energy, staged_ledger) = if aggregate_owned {
+    let (child_structure, child_energy, staged_ledger, staged_parent_commit) = if aggregate_owned {
         let mut staged_parent_structure = parent.structure.clone();
         let Some(anchor_id) = construction.anchor_physical_id else {
             parent.reproductive_construction = Some(construction);
@@ -1281,15 +1281,18 @@ pub(crate) fn finish_reproduction(
             parent.reproductive_construction = Some(construction);
             return None;
         }
-        parent.structure = staged_parent_structure;
-        parent.mark_structure_changed();
-        parent.usable_energy = parent_share;
-        (child_structure, child_share, staged_ledger)
+        (
+            child_structure,
+            child_share,
+            staged_ledger,
+            Some((staged_parent_structure, parent_share)),
+        )
     } else {
         (
             construction.developing_structure.clone(),
             construction.developing_energy,
             *ledger,
+            None,
         )
     };
 
@@ -1325,6 +1328,14 @@ pub(crate) fn finish_reproduction(
         cached_harmonic_key: None,
         last_movement_attempt: None,
     };
+    // Publish the parent graph, parent energy, and ledger only after the
+    // complete child object has been assembled. Every rejection above leaves
+    // the original parent and ledger untouched.
+    if let Some((staged_parent_structure, parent_energy)) = staged_parent_commit {
+        parent.structure = staged_parent_structure;
+        parent.mark_structure_changed();
+        parent.usable_energy = parent_energy;
+    }
     *ledger = staged_ledger;
     Some(child)
 }
