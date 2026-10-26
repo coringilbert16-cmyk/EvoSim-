@@ -355,6 +355,20 @@ impl Material {
         }) {
             return false;
         }
+
+        // Each part retains its own physical identity, so duplicate resource
+        // names are valid in a composite. Their combined inventory still must
+        // fit the same integer range used by the independent inventory oracle.
+        let mut per_resource = std::collections::BTreeMap::<&str, u64>::new();
+        for (name, amount) in &self.parts {
+            let count = *amount as u64;
+            let total = per_resource.entry(name.as_str()).or_default();
+            let Some(merged) = total.checked_add(count) else {
+                return false;
+            };
+            *total = merged;
+        }
+
         for (i, bond) in self.internal_bonds.iter().enumerate() {
             if !bond.is_valid_for(self.parts.len()) {
                 return false;
@@ -536,6 +550,26 @@ mod material_contract_tests {
         assert!(
             !Material::free_base("Carbon", u64::MAX as f64).is_valid(),
             "constituent counts must remain representable by the independent inventory oracle"
+        );
+        let largest_representable_count = u64::MAX as f64 - 2048.0;
+        let overflowing_composite = Material {
+            parts: vec![
+                ("Carbon".into(), largest_representable_count),
+                ("Carbon".into(), largest_representable_count),
+            ],
+            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+        };
+        assert!(
+            !overflowing_composite.is_valid_for_catalog(&catalog),
+            "repeated constituents must not overflow the per-resource inventory range"
+        );
+        let repeated_but_representable = Material {
+            parts: vec![("Carbon".into(), 2.0), ("Carbon".into(), 3.0)],
+            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+        };
+        assert!(
+            repeated_but_representable.is_valid_for_catalog(&catalog),
+            "separate physical constituents of the same resource remain valid when their sum fits"
         );
         assert!(Material::free_base("Carbon", 1.0).is_valid_for_catalog(&catalog));
 
