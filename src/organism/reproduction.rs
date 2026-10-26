@@ -2144,40 +2144,50 @@ mod tests {
         let mut simulation = Simulation::new(31, 20.0);
         let mut parent = simulation.organisms.remove(0);
         let catalog = simulation.environment.catalog.clone();
-        // Keep the constructor-realized parent aggregate in open space. A
-        // single isolated nitrogen unit has no attachable anchor under the
-        // physical contact solver, so preserve the aggregate geometry while
-        // clearing only genome-core identity to isolate wait/resume semantics.
+        // Use a two-constituent bonded slice of the constructor-realized
+        // parent. A lone nitrogen unit has no attachable anchor, while the full
+        // seed can obstruct growth; a real bonded pair keeps this fixture
+        // physically meaningful without turning it into a seed-placement test.
         parent.structure.clear_genome_constituent_ids();
         parent.genome_core_identity_established = false;
-        parent.developmental_origin = Position { x: 500.0, y: 500.0 };
-        parent.occupied_cells = vec![Position { x: 500.0, y: 500.0 }];
         parent.stored_material.entries.clear();
         parent.mark_structure_changed();
         let mut ledger = EnergyLedger::default();
-
-        // Choose an initial physical anchor that the real attachment solver
-        // can bond to this open-space parent. The regression is about waiting
-        // and resuming after that anchor is committed, not about assuming
-        // Carbon (or any preferred resource) fits this geometry.
-        let initial_resource = catalog
-            .iter()
-            .find_map(|resource| {
+        let mut attachable_anchor = None;
+        'candidate: for bond in &parent.structure.bonds {
+            let ids = [
+                bond.endpoint_a.constituent_id,
+                bond.endpoint_b.constituent_id,
+            ];
+            let Some(pair_structure) = parent.structure.subgraph_for_physical_ids(&ids, &[]) else {
+                continue;
+            };
+            for resource in &catalog {
                 let mut trial_parent = parent.clone();
+                trial_parent.structure = pair_structure.clone();
+                trial_parent.developmental_origin = Position { x: 500.0, y: 500.0 };
+                trial_parent.occupied_cells = vec![Position { x: 500.0, y: 500.0 }];
                 if !trial_parent.store_material(Material::free_base(&resource.name, 1.0)) {
-                    return None;
+                    continue;
                 }
                 let mut trial_rng = simulation.rng.clone();
                 let mut trial_ledger = ledger;
-                begin_reproduction(
+                if begin_reproduction(
                     &mut trial_parent,
                     &mut trial_rng,
                     &catalog,
                     &mut trial_ledger,
-                )
-                .then(|| resource.name.clone())
-            })
-            .expect("at least one resource must provide a physically attachable anchor");
+                ) {
+                    attachable_anchor = Some((pair_structure, resource.name.clone()));
+                    break 'candidate;
+                }
+            }
+        }
+        let (parent_structure, initial_resource) = attachable_anchor
+            .expect("a bonded physical pair must admit at least one construction anchor");
+        parent.structure = parent_structure;
+        parent.developmental_origin = Position { x: 500.0, y: 500.0 };
+        parent.occupied_cells = vec![Position { x: 500.0, y: 500.0 }];
         assert!(parent.store_material(Material::free_base(&initial_resource, 1.0)));
         assert!(begin_reproduction(
             &mut parent,
