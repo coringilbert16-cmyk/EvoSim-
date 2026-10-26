@@ -39,6 +39,15 @@ mod integration_tests {
         }
 
         let catalog = &simulation.environment.catalog;
+        let mut canonical_names = std::collections::BTreeSet::new();
+        for resource in catalog {
+            if resource.name.is_empty() || !canonical_names.insert(resource.name.clone()) {
+                return Err(format!(
+                    "ambiguous resource catalog identity: {}",
+                    resource.name
+                ));
+            }
+        }
         let mut inventory = std::collections::BTreeMap::new();
 
         // Environmental aggregate stock and already-realized objects.
@@ -101,6 +110,19 @@ mod integration_tests {
         }
 
         Ok(inventory)
+    }
+
+    #[test]
+    fn independent_material_inventory_rejects_ambiguous_catalog_identity() {
+        let mut simulation = Simulation::new(7102, 10.0);
+        simulation
+            .environment
+            .catalog
+            .push(simulation.environment.catalog[0].clone());
+
+        let error = integer_material_inventory(&simulation)
+            .expect_err("duplicate resource names must not pass the independent inventory oracle");
+        assert!(error.contains("ambiguous resource catalog identity"));
     }
 
     fn structured_carbon_hydrogen() -> Material {
