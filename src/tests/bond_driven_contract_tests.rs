@@ -228,11 +228,11 @@ mod tests {
                 && candidate.available_b
         })
         .expect("live candidate contact should exist");
+        let evaluation = crate::combine_runtime::selected_candidate_evaluation(
+            &structure, 0, 1, candidate, &catalog,
+        );
         let (_, _, investment, _) =
-            crate::combine_runtime::selected_candidate_evaluation(
-                &structure, 0, 1, candidate, &catalog,
-            )
-            .expect("initial contact should be energetically admissible");
+            evaluation.expect("initial contact should be energetically admissible");
 
         // Keep the endpoints physically within COMBINE tolerance, but change
         // their separation after candidate selection. The old candidate would
