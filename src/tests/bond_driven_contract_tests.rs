@@ -245,7 +245,8 @@ mod tests {
             .endpoint_b
             .world_point(&structure.units[1], &catalog)
             .expect("endpoint B remains valid");
-        let original_distance = (original_a.x - original_b.x).hypot(original_a.y - original_b.y);
+        let original_distance =
+            (original_a.x - original_b.x).hypot(original_a.y - original_b.y);
         if original_distance > 0.02 {
             structure.units[1].placement.x +=
                 (original_a.x - original_b.x) / original_distance * 0.01;
