@@ -297,9 +297,12 @@ impl MaterialStorage {
         Some(self.entries.swap_remove(index).into_physical())
     }
 
-    pub(crate) fn take_physical_at(&mut self, index: usize) -> Option<PhysicalMaterial> {
+    pub(crate) fn take_physical_at(&mut self, index: usize, catalog: &[crate::resources::BaseResource]) -> Option<PhysicalMaterial> {
         match self.entries.get(index)? {
-            StoredMaterial::Physical(instance) if instance.is_realized() => {}
+            StoredMaterial::Physical(instance)
+                if instance.is_realized()
+                    && instance.material.is_valid_for_catalog(catalog)
+                    && Self::is_discrete(&instance.material) => {}
             _ => return None,
         }
         match self.entries.swap_remove(index) {
