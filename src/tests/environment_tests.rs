@@ -277,7 +277,6 @@ fn physical_batch_deposit_rejects_late_malformed_object_without_partial_commit()
     assert_eq!(field.revision, before_revision);
 }
 
-
 #[test]
 fn logical_deposit_rejects_invalid_payload_without_claiming_success() {
     let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
