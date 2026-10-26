@@ -538,23 +538,24 @@ impl ActiveMaterialField {
             return false;
         };
         match material.into() {
-            FieldDeposit::Logical(material) => {
-                self.deposit_at_index(index, material);
-                true
-            }
+            FieldDeposit::Logical(material) => self.deposit_at_index(index, material),
             FieldDeposit::Physical(material) => self.deposit_physical_at_index(index, material),
         }
     }
 
-    pub fn deposit_at_index(&mut self, index: usize, material: Material) {
-        if material.is_empty() || !material.is_valid() {
-            return;
+    /// Deposit logical material only when the destination and payload are valid.
+    ///
+    /// The return value is part of the ownership-transfer contract: callers must
+    /// not relinquish a source unless the destination confirms the deposit.
+    pub fn deposit_at_index(&mut self, index: usize, material: Material) -> bool {
+        if index >= self.cells.len() || material.is_empty() || !material.is_valid() {
+            return false;
         }
         self.mark_cell_changed(index);
         let cell = &mut self.cells[index];
         if material.has_internal_structure() {
             cell.materials.push(material);
-            return;
+            return true;
         }
         if let Some(existing) = cell
             .materials
@@ -567,6 +568,7 @@ impl ActiveMaterialField {
         } else {
             cell.materials.push(material);
         }
+        true
     }
 
     /// Deposit an already realized physical material. This operation transfers

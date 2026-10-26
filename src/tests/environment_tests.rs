@@ -276,3 +276,33 @@ fn physical_batch_deposit_rejects_late_malformed_object_without_partial_commit()
     assert_eq!(field.cells, before_cells);
     assert_eq!(field.revision, before_revision);
 }
+
+
+#[test]
+fn logical_deposit_rejects_invalid_payload_without_claiming_success() {
+    let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
+    let before_cells = field.cells.clone();
+    let before_revision = field.revision;
+
+    assert!(!field.deposit(12.5, 12.5, make_raw("Carbon", 1.5)));
+    assert_eq!(field.cells, before_cells);
+    assert_eq!(field.revision, before_revision);
+
+    assert!(!field.deposit(12.5, 12.5, Material {
+        parts: Vec::new(),
+        internal_bonds: Vec::new(),
+    }));
+    assert_eq!(field.cells, before_cells);
+    assert_eq!(field.revision, before_revision);
+}
+
+#[test]
+fn logical_deposit_rejects_invalid_index_without_mutating_field() {
+    let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
+    let before_cells = field.cells.clone();
+    let before_revision = field.revision;
+
+    assert!(!field.deposit_at_index(field.cells.len(), make_raw("Carbon", 1.0)));
+    assert_eq!(field.cells, before_cells);
+    assert_eq!(field.revision, before_revision);
+}
