@@ -183,4 +183,36 @@ mod tests {
             .iter()
             .all(|cell| cell.physical_materials.is_empty()));
     }
+    #[test]
+    fn invalid_physical_identity_is_not_removed_by_containment() {
+        let catalog = catalog();
+        let mut physical = PhysicalMaterial::realized(
+            compound(),
+            vec![
+                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 },
+            ],
+            &catalog,
+        )
+        .expect("test composite must have a valid physical realization");
+        physical.material.parts[0].0 = "UnknownResource".to_owned();
+
+        let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
+        // Simulate malformed persisted state that bypassed the insertion API.
+        field.cells[0].physical_materials.push(physical.clone());
+        let contained = field.take_contained_physical_materials_in_regions(
+            &large_body(),
+            &[region(2.0)],
+            &catalog,
+        );
+
+        assert!(contained.is_empty(), "invalid material must not leave its source holder");
+        assert_eq!(
+            field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>(),
+            1,
+            "invalid source must remain environmental material"
+        );
+        assert!(field.cells.iter().any(|cell| cell.physical_materials.contains(&physical)));
+    }
+
 }
