@@ -862,9 +862,8 @@ fn commit_candidate_attachment(
     before_units: usize,
     seed_reference: Option<(f64, f64)>,
 ) -> ConstructionStatus {
-    // Validate before consuming a parent-owned material entry or publishing
-    // the candidate ledger/graph. A rejected placement must not partially
-    // commit the attachment transaction.
+    // Prepare every owner update on staged copies. No live holder is changed
+    // until placement, graph replacement, and source-material removal all pass.
     if !child_intersects_realized_parent_region(&child.structure, parent_body)
         || !parent_child_in_contact(parent_structure, &child.structure)
     {
@@ -876,53 +875,53 @@ fn commit_candidate_attachment(
     if aggregate_owned && (!child.usable_energy.is_finite() || child.usable_energy < 0.0) {
         return ConstructionStatus::Waiting;
     }
-    // When construction is already represented inside the parent aggregate,
-    // stage the aggregate replacement before consuming material or publishing
-    // the candidate ledger. Keep only stable IDs as the aggregate-owned view;
-    // the cached graph is retained solely for detached legacy construction.
-    let staged_aggregate = if construction.is_aggregate_owned_by(parent_structure) {
-        let mut staged = parent_structure.clone();
+
+    let mut staged_parent_structure = parent_structure.clone();
+    let mut staged_child_structure = child.structure.clone();
+    if aggregate_owned {
         let old_ids = construction.developing_member_ids.clone();
         let Some((_, refreshed_view)) =
-            staged.replace_subgraph_remapping_new_ids_and_extract(&old_ids, &child.structure)
+            staged_parent_structure.replace_subgraph_remapping_new_ids_and_extract(
+                &old_ids,
+                &child.structure,
+            )
         else {
             return ConstructionStatus::Waiting;
         };
-        Some((staged, refreshed_view))
-    } else {
-        None
-    };
+        staged_child_structure = refreshed_view;
+    }
+
+    let mut staged_parent_storage = parent_storage.clone();
     if let Some(parent_index) = transferred {
-        if parent_storage.take_physical_at(parent_index).is_none() {
+        if staged_parent_storage.take_physical_at(parent_index).is_none() {
             return ConstructionStatus::Waiting;
         }
     }
-    if let Some((staged, refreshed_view)) = staged_aggregate {
-        *parent_structure = staged;
-        child.structure = refreshed_view;
-    }
-    *ledger = candidate_ledger;
-    if aggregate_owned {
-        *parent_energy = child.usable_energy;
-    }
-    construction.committed_material = child.stored_material;
-    construction.developing_member_ids = child.structure.physical_constituent_ids();
-    construction.developing_structure = if aggregate_owned {
+
+    let mut staged_construction = construction.clone();
+    staged_construction.committed_material = child.stored_material;
+    staged_construction.developing_member_ids = staged_child_structure.physical_constituent_ids();
+    staged_construction.developing_structure = if aggregate_owned {
         OrganismStructure::new()
     } else {
-        child.structure
+        staged_child_structure
     };
-    construction.needs_space = false;
-    construction.developing_energy = if aggregate_owned {
+    staged_construction.needs_space = false;
+    staged_construction.developing_energy = if aggregate_owned {
         0.0
     } else {
         child.usable_energy
     };
-    construction.developing_stress = child.stress;
+    staged_construction.developing_stress = child.stress;
 
-    if birth_ready_with_reference(
-        construction,
-        parent_structure,
+    let readiness_structure = if aggregate_owned {
+        &staged_parent_structure
+    } else {
+        parent_structure
+    };
+    let status = if birth_ready_with_reference(
+        &staged_construction,
+        readiness_structure,
         &environment.catalog,
         seed_reference,
     ) {
@@ -931,7 +930,17 @@ fn commit_candidate_attachment(
         ConstructionStatus::Progress
     } else {
         ConstructionStatus::Waiting
+    };
+
+    // Commit point: all fallible checks and inventory operations have completed.
+    if aggregate_owned {
+        *parent_structure = staged_parent_structure;
+        *parent_energy = child.usable_energy;
     }
+    *parent_storage = staged_parent_storage;
+    *ledger = candidate_ledger;
+    *construction = staged_construction;
+    status
 }
 
 pub(crate) fn advance_construction(
