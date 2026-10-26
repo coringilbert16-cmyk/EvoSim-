@@ -568,7 +568,10 @@ mod material_contract_tests {
         );
         let repeated_but_representable = Material {
             parts: vec![("Carbon".into(), 2.0), ("Carbon".into(), 3.0)],
-            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
         };
         assert!(
             repeated_but_representable.is_valid_for_catalog(&catalog),
