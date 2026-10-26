@@ -3342,10 +3342,7 @@ fn parallel_exposure_with_exact_intersections(
     target_body_indices: &[usize],
     exact_intersections: bool,
 ) -> Option<(ParallelExposureWidths, Vec<ParallelRayInteractionPath>)> {
-    let profile = std::thread::current()
-        .name()
-        .is_some_and(|name| name.contains("world_energy_inventory_reconciles_across_ordinary_ticks"))
-        && bodies.len() > 1000;
+    let profile = bodies.len() > 5700;
     let profile_started = std::time::Instant::now();
     let mut profile_mark = profile_started;
     use crate::capillary_geometry::FluidBoundaryPiece;
