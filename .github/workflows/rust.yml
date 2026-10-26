@@ -162,8 +162,8 @@ jobs:
       - name: Run focused active-transformation reproduction isolation test
         timeout-minutes: 5
         run: cargo test --locked reproduction_cannot_mutate_storage_while_transformation_is_active
-      # Failed aggregate-owned division must preserve authoritative structure and inventories.
-      - name: Verify aggregate division failure preserves ownership state
+      # Rejected aggregate-owned reproduction must preserve authoritative structure and inventories.
+      - name: Verify rejected aggregate reproduction preserves ownership state
         timeout-minutes: 5
         run: cargo test --locked finish_reproduction_readiness_ignores_stale_cached_graph
       - name: Run focused active-transformation action isolation test
