@@ -161,13 +161,6 @@ fn developing_organism(
     construction: &ReproductiveConstruction,
     structure: OrganismStructure,
 ) -> Organism {
-    let stored_material = if construction.is_aggregate_owned_by(&structure) {
-        // Aggregate-owned construction draws exclusively from the parent's
-        // storage. Do not materialize a second inventory on its transient view.
-        MaterialStorage::default()
-    } else {
-        construction.committed_material.clone()
-    };
     Organism {
         id: "developing-offspring".into(),
         developmental_origin: construction.developmental_origin.clone(),
@@ -183,7 +176,7 @@ fn developing_organism(
         stress: construction.developing_stress,
         maintenance_debt: construction.developing_maintenance_debt,
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
-        stored_material,
+        stored_material: construction.committed_material.clone(),
         active_transformation_id: None,
         active_movement: None,
         reproductive_construction: None,
@@ -1012,15 +1005,6 @@ pub(crate) fn advance_construction(
         || *parent_energy < 0.0
     {
         return (ConstructionStatus::Dead, None);
-    }
-
-    if aggregate_owned && !construction.committed_material.is_empty() {
-        // Migrate serialized legacy inventory only after validation. Physical
-        // material stays available to the parent, but no longer has a second
-        // construction-specific storage owner.
-        parent_storage
-            .entries
-            .extend(construction.committed_material.drain_entries());
     }
 
     if !aggregate_owned && reserve_energy > construction.developing_energy {
@@ -2417,46 +2401,6 @@ mod tests {
             !construction.is_aggregate_owned_by(&missing_member),
             "stable IDs absent from the authoritative aggregate are not aggregate-owned"
         );
-    }
-
-    #[test]
-    fn aggregate_owned_developing_view_does_not_clone_construction_inventory() {
-        let mut simulation = Simulation::new(946, 20.0);
-        let mut parent = simulation.organisms.remove(0);
-        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
-        let reserved = parent
-            .stored_material
-            .take_physical_at(0)
-            .expect("test material is physically stored");
-        let mut committed_material = MaterialStorage::default();
-        committed_material
-            .entries
-            .push(crate::material_storage::StoredMaterial::Physical(reserved));
-
-        let aggregate = parent.structure.clone();
-        let construction = ReproductiveConstruction {
-            committed_material,
-            developing_structure: OrganismStructure::new(),
-            developing_member_ids: aggregate.physical_constituent_ids(),
-            child_genome: parent.genome.clone(),
-            developmental_origin: parent.developmental_origin.clone(),
-            developmental_orientation_radians: parent.developmental_orientation_radians,
-            developing_stress: 0.0,
-            anchor_unit_index: 0,
-            anchor_physical_id: aggregate.physical_id(0),
-            developing_energy: 0.0,
-            developing_maintenance_debt: 0.0,
-            needs_space: false,
-        };
-
-        let developing = developing_organism(&construction, aggregate.clone());
-        assert!(construction.is_aggregate_owned_by(&aggregate));
-        assert!(
-            developing.stored_material.is_empty(),
-            "aggregate-owned transient views must not clone the construction's material holder"
-        );
-        assert_eq!(developing.structure.units, aggregate.units);
-        assert_eq!(developing.structure.bonds, aggregate.bonds);
     }
 
     #[test]
