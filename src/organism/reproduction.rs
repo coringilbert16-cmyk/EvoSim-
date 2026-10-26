@@ -1125,21 +1125,13 @@ pub(crate) fn finish_reproduction(
     // effects before publishing either resulting organism.
     let (child_structure, child_energy, staged_ledger, staged_parent_commit) = {
         let mut staged_parent_structure = parent.structure.clone();
-        let Some(anchor_id) = construction.anchor_physical_id else {
-            return None;
-        };
-        let Some(developing_view) = parent
+        let anchor_id = construction.anchor_physical_id?;
+        let developing_view = parent
             .structure
-            .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
-        else {
-            return None;
-        };
+            .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])?;
         let child_core_ids = developing_view.genome_constituent_ids().to_vec();
-        let Some((child_structure, crossing_bond_energy)) = staged_parent_structure
-            .partition_subgraph_for_division(&construction.developing_member_ids, &child_core_ids)
-        else {
-            return None;
-        };
+        let (child_structure, crossing_bond_energy) = staged_parent_structure
+            .partition_subgraph_for_division(&construction.developing_member_ids, &child_core_ids)?;
 
         // Division is one publication boundary: neither resulting organism may
         // become visible unless both post-split structures independently satisfy
@@ -2701,7 +2693,7 @@ mod tests {
                 "Carbon",
                 Placement {
                     x: origin_x,
-                    y: -3.366_025_403_784_438_6,
+                    y: -3.366_025_403_784_439,
                     rotation_radians: 0.0,
                 },
             ));
@@ -2736,7 +2728,7 @@ mod tests {
             .map(|id| *remapping.get(id).expect("every child unit is remapped"))
             .collect::<Vec<_>>();
 
-        let bridge_y = -3.366_025_403_784_438_6;
+        let bridge_y = -3.366_025_403_784_439;
         let mut bridge_ids = Vec::new();
         for x in [1.5, 2.5, 3.5] {
             let index = parent_graph.add_unit(StructuralUnit::new(
