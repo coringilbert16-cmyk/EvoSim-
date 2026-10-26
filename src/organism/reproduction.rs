@@ -2244,17 +2244,15 @@ mod tests {
             // deliberately reduced geometry. Give each candidate an explicit,
             // valid preference for the resource being preflighted.
             let mut trial_child = developing_child.clone();
-            trial_child
-                .genome
-                .developmental_blueprint
-                .material_preferences = vec![crate::organism::developmental_blueprint::MaterialPreferenceField {
+            let preference = crate::organism::developmental_blueprint::MaterialPreferenceField {
                 resource_name: resource.name.clone(),
                 center_preference: 1.0,
                 radial_falloff: 1.0,
                 center_x: 0.0,
                 center_y: 0.0,
                 additional_influences: Vec::new(),
-            }];
+            };
+            trial_child.genome.developmental_blueprint.material_preferences = vec![preference];
             if try_child_construction(
                 &trial_child,
                 &trial_parent.stored_material,
@@ -2272,15 +2270,15 @@ mod tests {
             .expect("at least one resource shape must fit the developing anchor");
         // Keep the selected preference for the real resume attempt so the
         // preflight and production path evaluate the same material.
-        construction.child_genome.developmental_blueprint.material_preferences =
-            vec![crate::organism::developmental_blueprint::MaterialPreferenceField {
-                resource_name: newly_available_resource.clone(),
-                center_preference: 1.0,
-                radial_falloff: 1.0,
-                center_x: 0.0,
-                center_y: 0.0,
-                additional_influences: Vec::new(),
-            }];
+        let preference = crate::organism::developmental_blueprint::MaterialPreferenceField {
+            resource_name: newly_available_resource.clone(),
+            center_preference: 1.0,
+            radial_falloff: 1.0,
+            center_x: 0.0,
+            center_y: 0.0,
+            additional_influences: Vec::new(),
+        };
+        construction.child_genome.developmental_blueprint.material_preferences = vec![preference];
         assert!(parent.store_material(Material::free_base(&newly_available_resource, 1.0)));
 
         let second_status = advance_construction(
