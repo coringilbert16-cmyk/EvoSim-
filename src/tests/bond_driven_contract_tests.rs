@@ -269,6 +269,7 @@ mod tests {
 
         let before = structure.clone();
         let mut ledger = EnergyLedger::default();
+        let before_ledger = ledger;
         let mut energy = 1.0e12;
 
         let result = crate::combine_runtime::form_selected_bond(
@@ -286,6 +287,7 @@ mod tests {
         assert!(result.is_none());
         assert_eq!(structure.bonds, before.bonds);
         assert_eq!(structure.units, before.units);
+        assert_eq!(ledger, before_ledger);
         assert_eq!(energy, 1.0e12);
     }
     #[test]
