@@ -2287,6 +2287,11 @@ mod tests {
             .developmental_blueprint
             .material_preferences = vec![preference];
         assert!(parent.store_material(Material::free_base(&newly_available_resource, 1.0)));
+        let source_entries_before = parent.stored_material.entries.len();
+        let aggregate_units_before = parent.structure.units.len();
+        let aggregate_bonds_before = parent.structure.bonds.len();
+        let energy_before_attachment = parent.usable_energy;
+        let ledger_before_attachment = ledger;
 
         let second_status = advance_construction(
             &mut parent.structure,
@@ -2317,6 +2322,48 @@ mod tests {
         assert!(refreshed_view.units.len() > before_units);
         assert!(refreshed_view.bonds.len() > before_bonds);
         assert!(construction.developing_structure.units.is_empty());
+
+        // Acceptance for the successful attachment path: the new physical
+        // object moves from parent storage into the authoritative aggregate
+        // exactly once, with one new unit and its bond. It is not retained as
+        // a second stored copy or persisted in a detached developing graph.
+        assert_eq!(
+            parent.structure.units.len(),
+            aggregate_units_before + 1,
+            "successful attachment must add exactly one physical unit"
+        );
+        assert_eq!(
+            parent.structure.bonds.len(),
+            aggregate_bonds_before + 1,
+            "successful attachment must add exactly one physical bond"
+        );
+        assert_eq!(
+            parent.stored_material.entries.len() + 1,
+            source_entries_before,
+            "the source object must leave storage exactly once"
+        );
+        let aggregate_ids = parent.structure.physical_constituent_ids();
+        let aggregate_id_set: std::collections::HashSet<_> =
+            aggregate_ids.iter().copied().collect();
+        assert_eq!(
+            aggregate_ids.len(),
+            aggregate_id_set.len(),
+            "attachment must preserve unique physical ownership IDs"
+        );
+        assert!(
+            parent.usable_energy.is_finite() && parent.usable_energy >= 0.0,
+            "attachment must leave the parent's single energy holder valid"
+        );
+        assert!(
+            ledger.total_heat_dissipated.is_finite()
+                && ledger.total_external_energy_input.is_finite(),
+            "attachment must leave ledger accounting finite"
+        );
+        assert!(
+            parent.usable_energy <= energy_before_attachment + 1e-9
+                || ledger != ledger_before_attachment,
+            "energy spent on attachment must be reflected in the authoritative ledger"
+        );
     }
 
     #[test]
