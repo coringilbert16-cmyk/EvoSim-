@@ -53,7 +53,7 @@ Environmental logical-stock deposit now stages a merged free-material value and 
 
 ## Fourth implementation pass — expulsion source preflight (2026-10-26)
 
-Physical expulsion now rejects an unrealized source or invalid catalog-bound composition before geometry work and before source removal. A regression verifies an unknown resource identity remains in its original storage owner and leaves environmental cells unchanged. Stored BREAK also has a regression for a fractional persisted source: reservation is rejected without changing storage, activating a transformation, or consuming an ID.
+Physical expulsion now rejects an unrealized source or invalid catalog-bound composition before geometry work and before source removal. A regression verifies an unknown resource identity remains in its original storage owner and leaves environmental cells unchanged. Containment acquisition applies the same catalog-bound validation before taking a physical object out of the environmental field, with a regression for malformed persisted identity. Stored BREAK also has a regression for a fractional persisted source: reservation is rejected without changing storage, activating a transformation, or consuming an ID.
 
 These are verified code-level safeguards, not a claim that all ownership/rollback paths or the full acceptance gate are complete. Remaining work is to finish the owner-path audit, run a clean compilation/test pass, compare failures to the post-#212 baseline, and only then decide whether the PR is ready for review.
 
