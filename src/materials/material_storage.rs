@@ -545,7 +545,7 @@ mod tests {
         }];
         assert!(storage.store_physical(m.clone(), placements, &catalog()));
         assert_eq!(storage.physical_count(), 1);
-        let restored = storage.take_matching_physical(&m).expect("stored instance");
+        let restored = storage.take_matching_physical(&m, &catalog()).expect("stored instance");
         assert_eq!(restored.material, m);
         let intrinsic = restored.placements.expect("intrinsic realization");
         assert!(intrinsic[0].x.abs() <= 1e-12);
