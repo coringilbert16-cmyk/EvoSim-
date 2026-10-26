@@ -533,13 +533,21 @@ impl ActiveMaterialField {
         out
     }
 
-    pub(crate) fn deposit<T: Into<FieldDeposit>>(&mut self, x: f64, y: f64, material: T, catalog: &[crate::resources::BaseResource]) -> bool {
+    pub(crate) fn deposit<T: Into<FieldDeposit>>(
+        &mut self,
+        x: f64,
+        y: f64,
+        material: T,
+        catalog: &[crate::resources::BaseResource],
+    ) -> bool {
         let Some(index) = self.index_for_position(x, y) else {
             return false;
         };
         match material.into() {
             FieldDeposit::Logical(material) => self.deposit_at_index(index, material, catalog),
-            FieldDeposit::Physical(material) => self.deposit_physical_at_index(index, material, catalog),
+            FieldDeposit::Physical(material) => {
+                self.deposit_physical_at_index(index, material, catalog)
+            }
         }
     }
 
@@ -547,8 +555,16 @@ impl ActiveMaterialField {
     ///
     /// The return value is part of the ownership-transfer contract: callers must
     /// not relinquish a source unless the destination confirms the deposit.
-    pub fn deposit_at_index(&mut self, index: usize, material: Material, catalog: &[crate::resources::BaseResource]) -> bool {
-        if index >= self.cells.len() || material.is_empty() || !material.is_valid_for_catalog(catalog) {
+    pub fn deposit_at_index(
+        &mut self,
+        index: usize,
+        material: Material,
+        catalog: &[crate::resources::BaseResource],
+    ) -> bool {
+        if index >= self.cells.len()
+            || material.is_empty()
+            || !material.is_valid_for_catalog(catalog)
+        {
             return false;
         }
         self.mark_cell_changed(index);
@@ -573,7 +589,12 @@ impl ActiveMaterialField {
 
     /// Deposit an already realized physical material. This operation transfers
     /// the existing object; it does not create or re-form any of its bonds.
-    pub fn deposit_physical_at_index(&mut self, index: usize, material: PhysicalMaterial, catalog: &[crate::resources::BaseResource]) -> bool {
+    pub fn deposit_physical_at_index(
+        &mut self,
+        index: usize,
+        material: PhysicalMaterial,
+        catalog: &[crate::resources::BaseResource],
+    ) -> bool {
         if index >= self.cells.len()
             || !material.is_realized()
             || material.material.is_empty()
@@ -586,7 +607,13 @@ impl ActiveMaterialField {
         true
     }
 
-    pub fn deposit_physical(&mut self, x: f64, y: f64, material: PhysicalMaterial, catalog: &[crate::resources::BaseResource]) -> bool {
+    pub fn deposit_physical(
+        &mut self,
+        x: f64,
+        y: f64,
+        material: PhysicalMaterial,
+        catalog: &[crate::resources::BaseResource],
+    ) -> bool {
         let Some(index) = self.index_for_position(x, y) else {
             return false;
         };
@@ -643,7 +670,12 @@ impl ActiveMaterialField {
     }
 }
 
-fn distribute_evenly(field: &mut ActiveMaterialField, mut mat: Material, neighbors: &[usize], catalog: &[crate::resources::BaseResource]) {
+fn distribute_evenly(
+    field: &mut ActiveMaterialField,
+    mut mat: Material,
+    neighbors: &[usize],
+    catalog: &[crate::resources::BaseResource],
+) {
     if neighbors.is_empty() {
         return;
     }

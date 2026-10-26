@@ -877,8 +877,12 @@ pub(crate) fn retain_environmental_escrow_in_field(
         .and_then(|placements| placements.first())
         .is_some_and(|placement| {
             environment
-                .field
-                .deposit(placement.x, placement.y, source.clone(), &environment.catalog)
+                .field.deposit(
+                placement.x,
+                placement.y,
+                source.clone(),
+                &environment.catalog,
+            )
         });
     if !deposited && !environment.field.cells.is_empty() {
         // Last-resort explicit world-field escrow. Never reinterpret a
@@ -1157,7 +1161,10 @@ pub(crate) fn resolve_transformation(
             };
             deposits.push((placement.x, placement.y, piece));
         }
-        if !environment.field.deposit_physical_batch(deposits, &environment.catalog) {
+        if !environment
+            .field
+            .deposit_physical_batch(deposits, &environment.catalog)
+        {
             restore_failed_stored_break_source(transformation, organism, environment);
             return;
         }

@@ -21,7 +21,11 @@ pub(crate) fn expel_physical_material(
         organism,
         environment,
         storage_index,
-        |environment, index, physical| environment.field.deposit_physical_at_index(index, physical, &environment.catalog),
+        |environment, index, physical| {
+            environment
+                .field
+                .deposit_physical_at_index(index, physical, &environment.catalog)
+        },
     )
 }
 

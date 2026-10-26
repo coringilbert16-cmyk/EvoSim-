@@ -685,7 +685,11 @@ impl Simulation {
                 .into_iter()
                 .map(|material| (position.x, position.y, material))
                 .collect();
-            if !self.environment.field.deposit_physical_batch(deposits, &self.environment.catalog) {
+            if !self
+                .environment
+                .field
+                .deposit_physical_batch(deposits, &self.environment.catalog)
+            {
                 // A failed destination commits neither material nor energy.
                 continue;
             }

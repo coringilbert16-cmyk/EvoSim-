@@ -197,10 +197,13 @@ fn physical_batch_deposit_rejects_late_invalid_destination_without_partial_commi
     let before_revision = field.revision;
     let before_cells = field.cells.clone();
 
-    assert!(!field.deposit_physical_batch(vec![
-        (12.5, 12.5, make_carbon(12.5)),
-        (100.0, 12.5, make_carbon(37.5)),
-    ], catalog));
+    assert!(!field.deposit_physical_batch(
+        vec![
+            (12.5, 12.5, make_carbon(12.5)),
+            (100.0, 12.5, make_carbon(37.5)),
+        ],
+        catalog,
+    ));
 
     assert_eq!(field.cells, before_cells);
     assert_eq!(field.revision, before_revision);
@@ -228,10 +231,13 @@ fn physical_batch_deposit_commits_all_validated_objects() {
     };
     let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
 
-    assert!(field.deposit_physical_batch(vec![
-        (12.5, 12.5, make_carbon(12.5)),
-        (37.5, 12.5, make_carbon(37.5)),
-    ], catalog));
+    assert!(field.deposit_physical_batch(
+        vec![
+            (12.5, 12.5, make_carbon(12.5)),
+            (37.5, 12.5, make_carbon(37.5)),
+        ],
+        catalog,
+    ));
 
     assert_eq!(
         field
