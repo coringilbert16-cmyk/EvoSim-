@@ -45,6 +45,18 @@ The first confirmed mutation-path defect is in `ActiveMaterialField::deposit`: i
 
 Remaining audit focus: confirm every transfer/escrow owner is covered by independent per-resource inventory tests, audit consumption and aggregation paths for silent loss or identity drift, and compare exact failure identities against the post-#212 baseline. This first slice does not claim the whole PR acceptance gate is complete.
 
+## Third implementation pass — count and merge boundaries (2026-10-26)
+
+The shared `Material` validator now rejects positive sub-unit quantities and counts at or beyond the independent inventory oracle's `u64` representation boundary. `Material::take` also rejects sub-unit extraction requests before touching its source. The independent inventory oracle independently rejects empty material records and sub-unit constituents rather than rounding them down to zero.
+
+Environmental logical-stock deposit now stages a merged free-material value and validates the combined composition before assigning it to the cell. This closes a conservation hole where two individually valid deposits could overflow the inventory representation when merged. A regression verifies rejected merges preserve both cell contents and the field revision.
+
+## Fourth implementation pass — expulsion source preflight (2026-10-26)
+
+Physical expulsion now rejects an unrealized source or invalid catalog-bound composition before geometry work and before source removal. A regression verifies an unknown resource identity remains in its original storage owner and leaves environmental cells unchanged. Stored BREAK also has a regression for a fractional persisted source: reservation is rejected without changing storage, activating a transformation, or consuming an ID.
+
+These are verified code-level safeguards, not a claim that all ownership/rollback paths or the full acceptance gate are complete. Remaining work is to finish the owner-path audit, run a clean compilation/test pass, compare failures to the post-#212 baseline, and only then decide whether the PR is ready for review.
+
 
 ## Second implementation pass — removal-boundary audit (2026-10-26)
 
