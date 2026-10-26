@@ -1,6 +1,6 @@
 # Unify Energy Accounting Across Sources, Consumers, and Initialization
 
-> **Planning scaffold only.** This file records the proposed scope and acceptance gate. No implementation changes or tests are included in this setup PR. Do not start implementation until explicitly authorized.
+> **Implementation in progress.** The energy-path audit and accounting contract are recorded below. Initial-source and unowned-release safeguards have been implemented; focused verification is in progress.
 
 ## Summary
 
@@ -8,8 +8,8 @@ Establish one consistent energy accounting model across initialization, sources,
 
 ## Outline
 
-- [ ] Audit energy entry points, spending paths, transfers, and sinks.
-- [ ] Define accounting contracts and units at each boundary.
+- [x] Audit energy entry points, spending paths, transfers, and sinks against merged #207.
+- [x] Define accounting contracts and units at each boundary.
 - [ ] Close duplicate or inconsistent energy ownership and settlement paths (initial-source shortcut fix started).
 - [ ] Test rejected settlement, initialization, and cross-system reconciliation.
 
@@ -23,7 +23,7 @@ Establish one consistent energy accounting model across initialization, sources,
 ## Guardrails
 
 - Start with one focused audit of the current merged `main` before implementation.
-- Use PR #205 merge commit `10521705d8f921ceb071b17240f1b7e069f52f1a` as the forward baseline; compare named test failure identities, not only totals.
+- Use current merged `main` at #207 merge commit `4645acaebd34055f6ab1570bc51e0c12953bf3d9` as the forward verification baseline. Retain PR #205 merge commit `10521705d8f921ceb071b17240f1b7e069f52f1a` as historical context; compare named test failure identities, not only totals.
 - Keep each command and test run within five minutes; a timeout is incomplete evidence.
 - Keep this PR limited to its primary invariant. Do not fold in unrelated cleanup.
 - PR #204 is the roadmap/handoff; PR #196 constructor/Bob work is out of scope.
@@ -44,7 +44,7 @@ Audited the actual #207 merge commit `4645acaebd34055f6ab1570bc51e0c12953bf3d9`,
 - Resonant holdings are summed from organism reservoirs. Structural holdings are summed from realized bond energies in organism and decomposition structures.
 - `Simulation::energy_inventory_snapshot` is test-only. It derives current holdings from state and combines them with cumulative source/sink flows from the ledger; those cumulative counters are not a substitute for the independent current-state sums.
 - `EnergyTransaction` uses signed deltas and validates a balance equation, but its generic `potential_released` field does not identify a source owner. Production transaction call sites audited so far use zero for this field; keep non-structural energy creation/release explicitly source-backed rather than relying on this generic allowance.
-- The live initial organism still receives `(1.0e12 - construction.energy).max(0.0) + genome.reproductive_energy_allocation`. The construction allowance is a computation budget, not a physical energy source; its remainder must not become usable energy. The explicit initial-condition source should be the genome's declared starting allocation, while the initial realized structure is part of the tick-zero structural baseline.
+- The live initial organism previously received `(1.0e12 - construction.energy).max(0.0) + genome.reproductive_energy_allocation`. That conversion is now removed: initial usable energy comes only from the genome's declared starting allocation. The constructor's computation allowance is not a physical source; the initial realized structure remains part of the tick-zero structural baseline.
 - `EnergySourceBudget` provides atomic shared-budget settlement but is not used by the active sunlight snapshot. That is not itself a defect: the sun is modeled as intensity per unit of unshadowed projected width, not a single finite global pool. The active path must continue to prove unique exposure/propagation accounting and source allocation exactly once.
 
 ## Accounting contract and units
