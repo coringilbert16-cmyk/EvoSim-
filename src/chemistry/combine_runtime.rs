@@ -212,17 +212,41 @@ pub(crate) fn form_selected_bond_diagnostic(
     if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b {
         return Err("invalid unit indices");
     }
+    // A selected candidate is only a proposal. Rebuild it from the live
+    // graph before committing so a small geometry change cannot reuse stale
+    // distance/facing/load values (and undercharge formation work).
+    let live_candidates = crate::contact::connection_pair_candidates_cached(
+        structure, unit_a, unit_b, catalog, cache,
+    );
+    let live_candidate = live_candidates
+        .into_iter()
+        .find(|live| {
+            live.endpoint_a == candidate.endpoint_a
+                && live.endpoint_b == candidate.endpoint_b
+                && live.distance <= COMBINE_CONTACT_TOLERANCE
+                && live.available_a
+                && live.available_b
+        })
+        .ok_or("selected contact is no longer eligible")?;
     if candidate.distance > COMBINE_CONTACT_TOLERANCE
         || !candidate.available_a
         || !candidate.available_b
+        || !candidate.distance.is_finite()
+        || !candidate.facing.is_finite()
+        || !candidate.load_a.is_finite()
+        || !candidate.load_b.is_finite()
+        || (live_candidate.distance - candidate.distance).abs() > EPSILON
+        || (live_candidate.facing - candidate.facing).abs() > EPSILON
+        || (live_candidate.load_a - candidate.load_a).abs() > EPSILON
+        || (live_candidate.load_b - candidate.load_b).abs() > EPSILON
     {
-        return Err("candidate contact is outside tolerance or an endpoint is unavailable");
+        return Err("selected contact metrics changed before commit");
     }
-    let point_a = candidate
+    let point_a = live_candidate
         .endpoint_a
         .world_point(&structure.units[unit_a], catalog)
         .ok_or("candidate endpoint A has no world point")?;
-    let point_b = candidate
+    let point_b = live_candidate
         .endpoint_b
         .world_point(&structure.units[unit_b], catalog)
         .ok_or("candidate endpoint B has no world point")?;
@@ -234,11 +258,11 @@ pub(crate) fn form_selected_bond_diagnostic(
         BondFormationRequest {
             unit_a,
             unit_b,
-            endpoint_a: candidate.endpoint_a,
-            endpoint_b: candidate.endpoint_b,
+            endpoint_a: live_candidate.endpoint_a,
+            endpoint_b: live_candidate.endpoint_b,
             investment,
         },
-        candidate,
+        live_candidate,
         catalog,
         cache,
         ledger,
@@ -423,7 +447,9 @@ pub(crate) fn instantiate_one_unit(
         },
         catalog,
     )?;
-    organism.stored_material.take_matching_physical(&material)?;
+    organism
+        .stored_material
+        .take_matching_physical(&material, catalog)?;
     organism.structure = trial;
     indices.first().copied()
 }
@@ -578,7 +604,9 @@ pub(crate) fn try_combine_stored_unit(
                 {
                     continue;
                 }
-                organism.stored_material.take_matching_physical(&raw)?;
+                organism
+                    .stored_material
+                    .take_matching_physical(&raw, &environment.catalog)?;
                 organism.structure = hypothetical;
                 organism.usable_energy = candidate_energy;
                 *ledger = candidate_ledger;
@@ -720,7 +748,9 @@ pub(crate) fn try_combine_stored_unit(
             if !coalesce_fluid_pair_after_bond(&mut hypothetical, ua, ub, &environment.catalog) {
                 continue;
             }
-            organism.stored_material.take_matching_physical(&raw)?;
+            organism
+                .stored_material
+                .take_matching_physical(&raw, &environment.catalog)?;
             organism.structure = hypothetical;
             organism.mark_structure_changed();
             organism.usable_energy = candidate_energy;
@@ -1645,6 +1675,51 @@ mod fluid_coalescence_transaction_tests {
         }
         (structure, catalog, unit_area)
     }
+
+    #[test]
+    fn successful_live_combine_reconciles_independent_world_energy_inventory() {
+        let (structure, catalog, _) = build_bonded_pair(0.0, false);
+        let mut structure = structure;
+        structure.bonds.clear();
+
+        let mut simulation = crate::state::Simulation::new(0xC0B1, 10.0);
+        simulation.organisms[0].structure = structure;
+        // The test replaces the constructor's initial structure with a bond-free
+        // fixture. Reset only the corresponding structural-energy baseline so the
+        // independent inventory starts from the fixture's actual state.
+        simulation.energy_ledger.initial_structural_energy_held = 0.0;
+        simulation.energy_ledger.total_structural_energy_held = 0.0;
+
+        let before = simulation.energy_inventory_snapshot();
+        assert!(
+            before.is_balanced_without_creation(1e-9),
+            "fixture must start with a balanced world-energy inventory: {:?}",
+            before.residual()
+        );
+
+        let mut cache = ConnectionCompatibilityCache;
+        let organism = &mut simulation.organisms[0];
+        let attempt = combine_specific_pair(
+            &mut organism.structure,
+            0,
+            1,
+            &catalog,
+            &mut cache,
+            &mut simulation.energy_ledger,
+            &mut organism.usable_energy,
+        )
+        .expect("the touching fluid pair should COMBINE");
+
+        assert!(attempt.work_cost.is_finite() && attempt.work_cost >= 0.0);
+        let after = simulation.energy_inventory_snapshot();
+        assert!(
+            after.is_balanced_without_creation(1e-9),
+            "successful COMBINE must reconcile the independent world-energy inventory: residual={:?}, inventory={after:?}",
+            after.residual()
+        );
+        assert_eq!(simulation.organisms[0].structure.units.len(), 1);
+    }
+
 
     #[test]
     fn live_combine_coalesces_fluid_pair_atomically() {
