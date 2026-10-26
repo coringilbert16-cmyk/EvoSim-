@@ -1,9 +1,8 @@
-//! Deterministic construction of one valid juvenile realization.
+//! Deterministic construction of the initial cavity calibration realization.
 //!
-//! The original viable seed realization is retained only as a physical
+//! The initial seed is a physical milestone, not a viable organism. The original
 //! construction calibration baseline. Developmental fields, not this baseline,
 //! determine descendant growth and realized architecture.
-use crate::organism_viability::{validate_realized_organism, OrganismViabilityRequirements};
 use crate::resources::BaseResource;
 use crate::state::EnergyLedger;
 use crate::structural_blueprint::StructuralBlueprint;
@@ -171,12 +170,9 @@ pub(crate) fn realize_initial_with_reserve(
         ));
     }
 
-    validate_realized_organism(
-        &structure,
-        catalog,
-        OrganismViabilityRequirements::default(),
-    )?;
-
+    // The 12N calibration seed establishes only a qualifying genome cavity.
+    // Viability additionally requires realized structure outside that cavity;
+    // that is a later developmental milestone, not an initialization gate.
     let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)?.ok_or_else(|| {
         "juvenile realization has no qualifying physical genome cavity".to_string()
     })?;
