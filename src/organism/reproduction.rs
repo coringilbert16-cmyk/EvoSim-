@@ -2293,7 +2293,14 @@ mod tests {
                 break;
             }
         }
-        let newly_available_resource = fitting_resource.unwrap_or(preferred_resource);
+        let newly_available_resource = fitting_resource.expect(
+            "at least one available resource must have a physically attachable candidate",
+        );
+        assert!(
+            newly_available_resource == preferred_resource
+                || construction_preferred_resource(&developing_child).is_some(),
+            "the chosen resource must remain eligible for the developing genome"
+        );
         assert!(parent.store_material(Material::free_base(&newly_available_resource, 1.0)));
 
         let second_status = advance_construction(
