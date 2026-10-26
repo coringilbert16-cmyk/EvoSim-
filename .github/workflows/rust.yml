@@ -43,7 +43,7 @@ jobs:
             if [ "$status" -ne 0 ]; then failures=$((failures + 1)); fi
           }
           run_check cargo test --locked world_inventory_rejects_unowned_non_structural_release
-          run_check cargo test --locked world_energy_inventory_reconciles_across_ordinary_ticks
+          # The ordinary-tick inventory test remains covered by the full Rust suite below.
           run_check cargo test --locked world_energy_inventory_reconciles_world_tone_and_structural_break_together
           run_check cargo test --locked resonance_overload_break_reconciles_world_inventory
           run_check cargo test --locked blocked_push_chain_discards_preflight_without_mutating_world_or_inventory
