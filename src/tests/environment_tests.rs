@@ -340,6 +340,27 @@ fn logical_deposit_rejects_invalid_index_without_mutating_field() {
 }
 
 #[test]
+fn logical_deposit_rejects_unrepresentable_merged_inventory_atomically() {
+    let catalog = crate::resources::default_catalog();
+    let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
+    field.cells[0]
+        .materials
+        .push(make_raw("Carbon", (u64::MAX as f64) - 2048.0));
+    let before_cells = field.cells.clone();
+    let before_revision = field.revision;
+
+    assert!(
+        !field.deposit_at_index(0, make_raw("Carbon", 4096.0), &catalog),
+        "merging individually valid stock must reject an unrepresentable combined count"
+    );
+    assert_eq!(field.cells, before_cells, "rejected merge must preserve stock");
+    assert_eq!(
+        field.revision, before_revision,
+        "rejected merge must not invalidate field caches"
+    );
+}
+
+#[test]
 fn physical_deposits_reject_unknown_resource_identity_without_mutation() {
     use crate::physical_material::PhysicalMaterial;
     use crate::structure::Placement;
