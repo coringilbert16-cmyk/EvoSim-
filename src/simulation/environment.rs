@@ -567,23 +567,36 @@ impl ActiveMaterialField {
         {
             return false;
         }
-        self.mark_cell_changed(index);
-        let cell = &mut self.cells[index];
         if material.has_internal_structure() {
-            cell.materials.push(material);
+            self.cells[index].materials.push(material);
+            self.mark_cell_changed(index);
             return true;
         }
-        if let Some(existing) = cell
+
+        // Merging environmental stock is itself a material transaction. Validate
+        // the combined count before mutating the cell so a sum that overflows the
+        // independently representable inventory cannot create invalid stock.
+        let existing_index = self.cells[index]
             .materials
-            .iter_mut()
-            .find(|existing| !existing.has_internal_structure())
-        {
-            let mut parts = std::mem::take(&mut existing.parts);
+            .iter()
+            .position(|existing| !existing.has_internal_structure());
+        if let Some(existing_index) = existing_index {
+            let existing = &self.cells[index].materials[existing_index];
+            let mut parts = existing.parts.clone();
             parts.extend(material.parts);
-            existing.parts = merge_parts(&parts);
+            let merged_parts = merge_parts(&parts);
+            let merged = Material {
+                parts: merged_parts,
+                internal_bonds: Vec::new(),
+            };
+            if !merged.is_valid_for_catalog(catalog) || merged.is_empty() {
+                return false;
+            }
+            self.cells[index].materials[existing_index] = merged;
         } else {
-            cell.materials.push(material);
+            self.cells[index].materials.push(material);
         }
+        self.mark_cell_changed(index);
         true
     }
 
