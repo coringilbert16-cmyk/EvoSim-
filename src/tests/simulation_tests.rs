@@ -61,6 +61,12 @@ mod integration_tests {
             }
             if let Some(construction) = &organism.reproductive_construction {
                 let aggregate_owned = construction.is_aggregate_owned_by(&organism.structure);
+                if construction.has_any_member_in(&organism.structure) && !aggregate_owned {
+                    return Err(
+                        "construction has partial physical ownership in its parent aggregate"
+                            .to_owned(),
+                    );
+                }
                 if !aggregate_owned {
                     return Err(
                         "construction is not owned by the parent's authoritative aggregate"
