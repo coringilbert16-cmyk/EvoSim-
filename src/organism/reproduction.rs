@@ -856,7 +856,7 @@ fn commit_candidate_attachment(
     ledger: &mut EnergyLedger,
     parent_energy: &mut f64,
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
-    mut child: Organism,
+    child: Organism,
     candidate_ledger: EnergyLedger,
     transferred: Option<usize>,
     before_units: usize,
@@ -880,11 +880,8 @@ fn commit_candidate_attachment(
     let mut staged_child_structure = child.structure.clone();
     if aggregate_owned {
         let old_ids = construction.developing_member_ids.clone();
-        let Some((_, refreshed_view)) =
-            staged_parent_structure.replace_subgraph_remapping_new_ids_and_extract(
-                &old_ids,
-                &child.structure,
-            )
+        let Some((_, refreshed_view)) = staged_parent_structure
+            .replace_subgraph_remapping_new_ids_and_extract(&old_ids, &child.structure)
         else {
             return ConstructionStatus::Waiting;
         };
@@ -893,7 +890,10 @@ fn commit_candidate_attachment(
 
     let mut staged_parent_storage = parent_storage.clone();
     if let Some(parent_index) = transferred {
-        if staged_parent_storage.take_physical_at(parent_index).is_none() {
+        if staged_parent_storage
+            .take_physical_at(parent_index)
+            .is_none()
+        {
             return ConstructionStatus::Waiting;
         }
     }
@@ -2289,9 +2289,8 @@ mod tests {
                 break;
             }
         }
-        let newly_available_resource = fitting_resource.expect(
-            "at least one available resource must have a physically attachable candidate",
-        );
+        let newly_available_resource = fitting_resource
+            .expect("at least one available resource must have a physically attachable candidate");
         assert!(parent.store_material(Material::free_base(&newly_available_resource, 1.0)));
 
         let second_status = advance_construction(
