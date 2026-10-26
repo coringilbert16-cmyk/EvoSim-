@@ -2622,7 +2622,7 @@ mod tests {
             before_id_set,
             "division must neither lose nor create physical units"
         );
-        assert_eq!(parent.reproductive_construction, None);
+        assert!(parent.reproductive_construction.is_none());
         assert!(
             (parent.usable_energy + child.usable_energy
                 - (before_energy + CROSSING_BOND_ENERGY))
