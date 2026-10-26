@@ -1321,13 +1321,13 @@ pub(crate) fn finish_reproduction(
     // Publish the parent graph, parent energy, and ledger only after the
     // complete child object has been assembled. The live construction stays
     // installed during staging, so every rejection naturally preserves it.
-    parent.reproductive_construction = None;
     if let Some((staged_parent_structure, parent_energy)) = staged_parent_commit {
         parent.structure = staged_parent_structure;
         parent.mark_structure_changed();
         parent.usable_energy = parent_energy;
     }
     *ledger = staged_ledger;
+    parent.reproductive_construction = None;
     Some(child)
 }
 
