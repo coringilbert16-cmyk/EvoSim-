@@ -2500,8 +2500,11 @@ mod tests {
         fn cavity_with_attached_carbon(
             catalog: &[crate::resources::BaseResource],
             origin_x: f64,
-        ) -> (OrganismStructure, crate::structure::PhysicalConstituentId,
-              crate::structure::PhysicalConstituentId) {
+        ) -> (
+            OrganismStructure,
+            crate::structure::PhysicalConstituentId,
+            crate::structure::PhysicalConstituentId,
+        ) {
             let blueprint = crate::juvenile::confirmed_seed_baseline(catalog).unwrap();
             let mut structure = blueprint.realize(catalog).unwrap();
             for unit in &mut structure.units {
@@ -2510,8 +2513,10 @@ mod tests {
             let anchor_index = structure
                 .units
                 .iter()
-                .position(|unit| (unit.placement.x - origin_x).abs() < 1e-9
-                    && (unit.placement.y + 2.0).abs() < 1e-9)
+                .position(|unit| {
+                    (unit.placement.x - origin_x).abs() < 1e-9
+                        && (unit.placement.y + 2.0).abs() < 1e-9
+                })
                 .expect("top-center cavity boundary unit exists");
             let anchor_id = structure.physical_id(anchor_index).unwrap();
             structure.set_genome_constituent_ids([anchor_id]);
