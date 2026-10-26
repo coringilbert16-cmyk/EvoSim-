@@ -2253,7 +2253,10 @@ mod tests {
                 center_y: 0.0,
                 additional_influences: Vec::new(),
             };
-            trial_child.genome.developmental_blueprint.material_preferences = vec![preference];
+            trial_child
+                .genome
+                .developmental_blueprint
+                .material_preferences = vec![preference];
             if try_child_construction(
                 &trial_child,
                 &trial_parent.stored_material,
@@ -2267,8 +2270,8 @@ mod tests {
                 break;
             }
         }
-        let newly_available_resource = fitting_resource
-            .expect("at least one resource shape must fit the developing anchor");
+        let newly_available_resource =
+            fitting_resource.expect("at least one resource shape must fit the developing anchor");
         // Keep the selected preference for the real resume attempt so the
         // preflight and production path evaluate the same material.
         let preference = MaterialPreferenceField {
@@ -2279,7 +2282,10 @@ mod tests {
             center_y: 0.0,
             additional_influences: Vec::new(),
         };
-        construction.child_genome.developmental_blueprint.material_preferences = vec![preference];
+        construction
+            .child_genome
+            .developmental_blueprint
+            .material_preferences = vec![preference];
         assert!(parent.store_material(Material::free_base(&newly_available_resource, 1.0)));
 
         let second_status = advance_construction(
