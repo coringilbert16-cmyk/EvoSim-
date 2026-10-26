@@ -1052,6 +1052,66 @@ mod tests {
         environment
     }
 
+    // Independent inventory oracle for movement tests. It counts material
+    // from physical owners, not energy-ledger totals or geometry caches.
+    fn movement_material_inventory(
+        organisms: &[Organism],
+        environment: &Environment,
+    ) -> std::collections::BTreeMap<String, u64> {
+        fn add(
+            inventory: &mut std::collections::BTreeMap<String, u64>,
+            material: &crate::resources::Material,
+        ) {
+            for (name, amount) in &material.parts {
+                assert!(amount.is_finite() && *amount > 0.0);
+                assert!(
+                    (amount.fract()).abs() <= 1e-9,
+                    "fractional material: {name}={amount}"
+                );
+                *inventory.entry(name.clone()).or_default() += amount.round() as u64;
+            }
+        }
+
+        let mut inventory = std::collections::BTreeMap::new();
+        for cell in &environment.field.cells {
+            for material in &cell.materials {
+                add(&mut inventory, material);
+            }
+            for physical in &cell.physical_materials {
+                add(&mut inventory, &physical.material);
+            }
+        }
+        for organism in organisms {
+            for unit in &organism.structure.units {
+                add(&mut inventory, &unit.material);
+            }
+            for material in organism.stored_material.iter_materials() {
+                add(&mut inventory, material);
+            }
+            if let Some(construction) = &organism.reproductive_construction {
+                for material in construction.committed_material.iter_materials() {
+                    add(&mut inventory, material);
+                }
+                if !construction.is_aggregate_owned_by(&organism.structure) {
+                    for unit in &construction.developing_structure.units {
+                        add(&mut inventory, &unit.material);
+                    }
+                }
+            }
+        }
+        inventory
+    }
+
+    fn organism_state_without_movement_diagnostic(organism: &Organism) -> serde_json::Value {
+        let mut state = serde_json::to_value(organism).expect("organism snapshot should serialize");
+        if let Some(object) = state.as_object_mut() {
+            // A rejected attempt is allowed to record its diagnostic; all
+            // physical, ownership, energy, storage, and lifecycle state is not.
+            object.remove("last_movement_attempt");
+        }
+        state
+    }
+
     #[test]
     fn impermeable_boundary_blocks_environmental_material() {
         let simulation = Simulation::new(42, 1.0);
@@ -1984,12 +2044,41 @@ mod tests {
         let simulation = Simulation::new(901, 20.0);
         let mut organism = simulation.organisms[0].clone();
         organism.usable_energy = 100.0;
+        let mut blocker = simulation.organisms[0].clone();
+        blocker.id = "movement-rollback-blocker".to_string();
+        let x = organism.structure.units[0].placement.x;
+        let y = organism.structure.units[0].placement.y;
+        for unit in &mut blocker.structure.units {
+            unit.placement.x = x + 6.0;
+            unit.placement.y = y;
+        }
+
         let mut environment = empty_environment(&simulation);
+        let physical_placement = Placement {
+            x: x + 6.0,
+            y,
+            rotation_radians: 0.0,
+        };
+        let physical = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![physical_placement],
+            &environment.catalog,
+        )
+        .expect("field Carbon should have a valid physical realization");
+        let field_index = environment
+            .field
+            .index_for_position(physical_placement.x, physical_placement.y)
+            .expect("field Carbon must be in bounds");
+        assert!(environment
+            .field
+            .deposit_physical_at_index(field_index, physical));
+
+        let mut before = vec![blocker];
+        let mut spatial_index = MovementSpatialIndex::new(&before, &environment);
         let mut ledger = EnergyLedger {
             total_heat_dissipated: f64::INFINITY,
             ..EnergyLedger::default()
         };
-        let mut spatial_index = MovementSpatialIndex::new(&[], &environment);
         let mut active = crate::state::ActiveMovement {
             direction_x: 1.0,
             direction_y: 0.0,
@@ -2001,12 +2090,21 @@ mod tests {
             before_stress: organism.stress,
             before_developmental_realization: 0.0,
         };
-        let original_position = organism.occupied_cells.clone();
+
+        let original_organism = organism_state_without_movement_diagnostic(&organism);
+        let original_blocker = organism_state_without_movement_diagnostic(&before[0]);
+        let original_field_revision = environment.field.revision;
+        let original_field_cells = serde_json::to_value(&environment.field.cells)
+            .expect("field snapshot should serialize");
+        let original_index_cells = spatial_index.cells.clone();
+        let original_index_membership = spatial_index.membership.clone();
+        let original_inventory =
+            movement_material_inventory(&[organism.clone(), before[0].clone()], &environment);
         let original_energy = organism.usable_energy;
         let original_ledger = ledger;
 
         let result = Simulation::advance_movement(
-            &mut [],
+            &mut before,
             &mut organism,
             &mut [],
             &mut spatial_index,
@@ -2020,12 +2118,265 @@ mod tests {
             result,
             Err(crate::state::MovementFailureReason::InsufficientEnergy)
         );
-        assert_eq!(organism.occupied_cells, original_position);
-        assert_eq!(organism.usable_energy, original_energy);
         assert_eq!(
-            ledger.total_heat_dissipated,
-            original_ledger.total_heat_dissipated
+            organism_state_without_movement_diagnostic(&organism),
+            original_organism
+        );
+        assert_eq!(
+            organism_state_without_movement_diagnostic(&before[0]),
+            original_blocker
+        );
+        assert_eq!(organism.usable_energy, original_energy);
+        assert_eq!(ledger, original_ledger);
+        assert_eq!(environment.field.revision, original_field_revision);
+        assert_eq!(
+            serde_json::to_value(&environment.field.cells)
+                .expect("field snapshot should serialize"),
+            original_field_cells
+        );
+        assert_eq!(spatial_index.cells, original_index_cells);
+        assert_eq!(spatial_index.membership, original_index_membership);
+        assert_eq!(
+            movement_material_inventory(&[organism.clone(), before[0].clone()], &environment),
+            original_inventory
         );
         assert_eq!(active.remaining_steps, 1);
+        assert_eq!(active.ticks_until_step, 0);
+    }
+
+    #[test]
+    fn blocked_push_chain_discards_preflight_without_mutating_world_or_inventory() {
+        let simulation = Simulation::new(903, 20.0);
+        let mut environment = empty_environment(&simulation);
+        let mut organism = simulation.organisms[0].clone();
+        organism.usable_energy = 100.0;
+        let mut blocker = simulation.organisms[0].clone();
+        blocker.id = "boundary-blocker".to_string();
+
+        // Deliberately place the attempted destination against the right wall:
+        // the moving structure reaches the blocker, but the blocker cannot be
+        // translated farther right. This exercises rejection after energy
+        // preflight and before any member of the push plan is applied.
+        let width = environment.width;
+        let y = environment.height * 0.5;
+        organism.occupied_cells[0].x = width - 2.0;
+        organism.occupied_cells[0].y = y;
+        for unit in &mut organism.structure.units {
+            unit.placement.x = width - 1.5;
+            unit.placement.y = y;
+        }
+        blocker.occupied_cells[0].x = width - 1.0;
+        blocker.occupied_cells[0].y = y;
+        for unit in &mut blocker.structure.units {
+            unit.placement.x = width - 1.0;
+            unit.placement.y = y;
+        }
+
+        let mut before = vec![blocker];
+        let mut spatial_index = MovementSpatialIndex::new(&before, &environment);
+        let mut ledger = EnergyLedger::default();
+        let mut active = crate::state::ActiveMovement {
+            direction_x: 1.0,
+            direction_y: 0.0,
+            remaining_steps: 1,
+            step_interval: 1,
+            ticks_until_step: 0,
+            decision_distance: 1.0,
+            before_energy: organism.usable_energy,
+            before_stress: organism.stress,
+            before_developmental_realization: 0.0,
+        };
+
+        let original_organism = organism_state_without_movement_diagnostic(&organism);
+        let original_blocker = organism_state_without_movement_diagnostic(&before[0]);
+        let original_field_revision = environment.field.revision;
+        let original_field_cells = serde_json::to_value(&environment.field.cells)
+            .expect("field snapshot should serialize");
+        let original_index_cells = spatial_index.cells.clone();
+        let original_index_membership = spatial_index.membership.clone();
+        let original_inventory =
+            movement_material_inventory(&[organism.clone(), before[0].clone()], &environment);
+        let original_ledger = ledger;
+        let original_energy = organism.usable_energy;
+
+        let result = Simulation::advance_movement(
+            &mut before,
+            &mut organism,
+            &mut [],
+            &mut spatial_index,
+            &mut environment,
+            &mut ledger,
+            2,
+            &mut active,
+        );
+
+        assert_eq!(
+            result,
+            Err(crate::state::MovementFailureReason::BlockedByPushChain)
+        );
+        assert_eq!(
+            organism_state_without_movement_diagnostic(&organism),
+            original_organism
+        );
+        assert_eq!(
+            organism_state_without_movement_diagnostic(&before[0]),
+            original_blocker
+        );
+        assert_eq!(organism.usable_energy, original_energy);
+        assert_eq!(ledger, original_ledger);
+        assert_eq!(environment.field.revision, original_field_revision);
+        assert_eq!(
+            serde_json::to_value(&environment.field.cells)
+                .expect("field snapshot should serialize"),
+            original_field_cells
+        );
+        assert_eq!(spatial_index.cells, original_index_cells);
+        assert_eq!(spatial_index.membership, original_index_membership);
+        assert_eq!(
+            movement_material_inventory(&[organism.clone(), before[0].clone()], &environment),
+            original_inventory
+        );
+        assert_eq!(active.remaining_steps, 1);
+        assert_eq!(active.ticks_until_step, 0);
+    }
+
+    #[test]
+    fn successful_push_chain_commits_each_owner_once_and_reconciles_energy() {
+        let simulation = Simulation::new(904, 20.0);
+        let mut environment = empty_environment(&simulation);
+        let mut organism = simulation.organisms[0].clone();
+        organism.usable_energy = 100.0;
+        let mut blocker = simulation.organisms[0].clone();
+        blocker.id = "successful-push-blocker".to_string();
+
+        // Compact, deterministic contact fixture: one movement step should
+        // push the blocker and the realized Carbon object by exactly one unit.
+        let y = environment.height * 0.5;
+        organism.occupied_cells[0].x = 9.5;
+        organism.occupied_cells[0].y = y;
+        for unit in &mut organism.structure.units {
+            unit.placement.x = 10.0;
+            unit.placement.y = y;
+        }
+        blocker.occupied_cells[0].x = 10.5;
+        blocker.occupied_cells[0].y = y;
+        for unit in &mut blocker.structure.units {
+            unit.placement.x = 10.5;
+            unit.placement.y = y;
+        }
+
+        let physical_placement = Placement {
+            x: 10.5,
+            y,
+            rotation_radians: 0.0,
+        };
+        let physical = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![physical_placement],
+            &environment.catalog,
+        )
+        .expect("field Carbon should have a valid physical realization");
+        let field_index = environment
+            .field
+            .index_for_position(physical_placement.x, physical_placement.y)
+            .expect("field Carbon must be in bounds");
+        assert!(environment
+            .field
+            .deposit_physical_at_index(field_index, physical));
+
+        let mut before = vec![blocker];
+        let mut spatial_index = MovementSpatialIndex::new(&before, &environment);
+        let mut ledger = EnergyLedger::default();
+        let mut active = crate::state::ActiveMovement {
+            direction_x: 1.0,
+            direction_y: 0.0,
+            remaining_steps: 1,
+            step_interval: 1,
+            ticks_until_step: 0,
+            decision_distance: 1.0,
+            before_energy: organism.usable_energy,
+            before_stress: organism.stress,
+            before_developmental_realization: 0.0,
+        };
+
+        let moving_unit_x_before: Vec<f64> = organism
+            .structure
+            .units
+            .iter()
+            .map(|unit| unit.placement.x)
+            .collect();
+        let blocker_unit_x_before: Vec<f64> = before[0]
+            .structure
+            .units
+            .iter()
+            .map(|unit| unit.placement.x)
+            .collect();
+        let original_energy = organism.usable_energy;
+        let field_revision_before_move = environment.field.revision;
+        let expected_cost = movement_energy_cost_for_distance(
+            organism.structural_mass(&environment.catalog),
+            organism.genome.movement_efficiency(),
+            1.0,
+        );
+        let original_inventory =
+            movement_material_inventory(&[organism.clone(), before[0].clone()], &environment);
+
+        let result = Simulation::advance_movement(
+            &mut before,
+            &mut organism,
+            &mut [],
+            &mut spatial_index,
+            &mut environment,
+            &mut ledger,
+            3,
+            &mut active,
+        );
+
+        assert_eq!(result, Ok(MovementProgress::Complete));
+        for (unit, x_before) in organism.structure.units.iter().zip(moving_unit_x_before) {
+            assert!((unit.placement.x - x_before - 1.0).abs() < 1e-9);
+        }
+        for (unit, x_before) in before[0].structure.units.iter().zip(blocker_unit_x_before) {
+            assert!((unit.placement.x - x_before - 1.0).abs() < 1e-9);
+        }
+        assert!((organism.usable_energy - (original_energy - expected_cost)).abs() < 1e-9);
+        assert!((ledger.total_heat_dissipated - expected_cost).abs() < 1e-9);
+        assert_eq!(ledger.total_work_expended, 0.0);
+        assert_eq!(active.remaining_steps, 0);
+        assert_eq!(
+            environment.field.revision,
+            field_revision_before_move.wrapping_add(1),
+            "a committed physical push should revise the field exactly once"
+        );
+        assert_eq!(
+            movement_material_inventory(&[organism.clone(), before[0].clone()], &environment),
+            original_inventory,
+            "successful movement must conserve independent integer-material inventory"
+        );
+
+        let pushed_parts = organism_parts_at(&before[0], &environment, 0.0, 0.0);
+        assert!(
+            spatial_index
+                .candidates(&pushed_parts, &environment)
+                .contains(&0),
+            "the pushed organism must be discoverable at its new indexed position"
+        );
+        let moved_physical = environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .find(|physical| {
+                physical
+                    .material
+                    .parts
+                    .iter()
+                    .any(|(name, amount)| name == "Carbon" && *amount == 1.0)
+            })
+            .expect("pushed Carbon must remain represented in the field");
+        assert!(
+            (moved_physical.placements.as_ref().unwrap()[0].x - 11.5).abs() < 1e-9,
+            "the realized field owner should move exactly once"
+        );
     }
 }
