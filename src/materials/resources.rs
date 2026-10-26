@@ -368,13 +368,20 @@ impl Material {
         true
     }
 
-    /// Validate constituent counts and membership in the authoritative catalog.
+    /// Validate constituent counts and resolve every resource name to exactly
+    /// one entry in the authoritative catalog. Duplicate catalog names are an
+    /// ambiguous identity, not a valid fallback to the first matching entry.
     pub fn is_valid_for_catalog(&self, catalog: &[BaseResource]) -> bool {
         self.is_valid()
-            && self
-                .parts
-                .iter()
-                .all(|(name, _)| catalog.iter().any(|resource| resource.name == *name))
+            && catalog.iter().enumerate().all(|(index, resource)| {
+                !resource.name.is_empty()
+                    && !catalog[..index]
+                        .iter()
+                        .any(|previous| previous.name == resource.name)
+            })
+            && self.parts.iter().all(|(name, _)| {
+                catalog.iter().filter(|resource| resource.name == *name).count() == 1
+            })
     }
 
     pub fn has_internal_structure(&self) -> bool {
@@ -516,6 +523,15 @@ mod material_contract_tests {
         let catalog = default_catalog();
         assert!(Material::free_base("Carbon", 2.0).is_valid());
         assert!(!Material::free_base("Carbon", 1.5).is_valid());
+        assert!(Material::free_base("Carbon", 1.0).is_valid_for_catalog(&catalog));
+
+        let mut ambiguous_catalog = catalog.clone();
+        ambiguous_catalog.push(catalog[0].clone());
+        assert!(
+            !Material::free_base("Carbon", 1.0).is_valid_for_catalog(&ambiguous_catalog),
+            "duplicate catalog names must not resolve to an arbitrary resource definition"
+        );
+
         let unknown = Material::free_base("UnknownResource", 1.0);
         assert!(!unknown.is_valid_for_catalog(&catalog));
         assert!(unknown.mass(&catalog).is_nan());
