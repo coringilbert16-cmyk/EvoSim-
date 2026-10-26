@@ -1637,12 +1637,21 @@ mod tests {
             &mut ledger,
         ));
 
-        let construction = parent.reproductive_construction.as_mut().unwrap();
+        let construction = parent.reproductive_construction.as_ref().unwrap();
         assert!(construction.is_aggregate_owned_by(&parent.structure));
         let member_id = construction.developing_member_ids[0];
         let aggregate_index = parent.structure.unit_index(member_id).unwrap();
         let aggregate_pose = parent.structure.units[aggregate_index].placement;
         assert!(construction.developing_structure.units.is_empty());
+
+        // A failed division attempt must preserve every authoritative holder,
+        // not merely restore the construction metadata after taking it.
+        let structure_before = parent.structure.clone();
+        let stored_material_before = parent.stored_material.clone();
+        let usable_energy_before = parent.usable_energy;
+        let ledger_before = ledger;
+        let member_ids_before = construction.developing_member_ids.clone();
+        let committed_material_before = construction.committed_material.clone();
 
         assert!(finish_reproduction(
             &mut parent,
@@ -1653,7 +1662,16 @@ mod tests {
         )
         .is_none());
 
+        assert_eq!(parent.structure.units, structure_before.units);
+        assert_eq!(parent.structure.bonds, structure_before.bonds);
+        assert_eq!(parent.structure.genome_constituent_ids(), structure_before.genome_constituent_ids());
+        assert_eq!(parent.stored_material, stored_material_before);
+        assert_eq!(parent.usable_energy, usable_energy_before);
+        assert_eq!(ledger, ledger_before);
+
         let retained = parent.reproductive_construction.as_ref().unwrap();
+        assert_eq!(retained.developing_member_ids, member_ids_before);
+        assert_eq!(retained.committed_material, committed_material_before);
         assert!(
             retained.developing_structure.units.is_empty(),
             "aggregate-owned readiness must leave the duplicate graph empty"
