@@ -1653,6 +1653,50 @@ mod fluid_coalescence_transaction_tests {
     }
 
     #[test]
+    fn successful_live_combine_reconciles_independent_world_energy_inventory() {
+        let (structure, catalog, _) = build_bonded_pair(0.0, false);
+        let mut structure = structure;
+        structure.bonds.clear();
+
+        let mut simulation = crate::state::Simulation::new(0xC0B1, 10.0);
+        simulation.organisms[0].structure = structure;
+        // The test replaces the constructor's initial structure with a bond-free
+        // fixture. Reset only the corresponding structural-energy baseline so the
+        // independent inventory starts from the fixture's actual state.
+        simulation.energy_ledger.initial_structural_energy_held = 0.0;
+        simulation.energy_ledger.total_structural_energy_held = 0.0;
+
+        let before = simulation.energy_inventory_snapshot();
+        assert!(
+            before.is_balanced_without_creation(1e-9),
+            "fixture must start with a balanced world-energy inventory: {:?}",
+            before.residual()
+        );
+
+        let mut cache = ConnectionCompatibilityCache;
+        let organism = &mut simulation.organisms[0];
+        let attempt = combine_specific_pair(
+            &mut organism.structure,
+            0,
+            1,
+            &catalog,
+            &mut cache,
+            &mut simulation.energy_ledger,
+            &mut organism.usable_energy,
+        )
+        .expect("the touching fluid pair should COMBINE");
+
+        assert!(attempt.work_cost.is_finite() && attempt.work_cost >= 0.0);
+        let after = simulation.energy_inventory_snapshot();
+        assert!(
+            after.is_balanced_without_creation(1e-9),
+            "successful COMBINE must reconcile the independent world-energy inventory: residual={:?}, inventory={after:?}",
+            after.residual()
+        );
+        assert_eq!(simulation.organisms[0].structure.units.len(), 1);
+    }
+
+    #[test]
     fn live_combine_coalesces_fluid_pair_atomically() {
         let (mut structure, catalog, unit_area) = build_bonded_pair(0.0, false);
         structure.bonds.clear();
