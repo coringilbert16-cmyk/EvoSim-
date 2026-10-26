@@ -876,8 +876,7 @@ pub(crate) fn retain_environmental_escrow_in_field(
         .as_ref()
         .and_then(|placements| placements.first())
         .is_some_and(|placement| {
-            environment
-                .field.deposit(
+            environment.field.deposit(
                 placement.x,
                 placement.y,
                 source.clone(),
@@ -1173,9 +1172,10 @@ pub(crate) fn resolve_transformation(
         // Stored source pieces remain in intrinsic coordinates. Validate the
         // complete split before touching the holder, then commit the prepared
         // entries without cloning unrelated inventory.
-        let Some(prepared) =
-            crate::material_storage::MaterialStorage::prepare_physical_batch(pieces, &environment.catalog)
-        else {
+        let Some(prepared) = crate::material_storage::MaterialStorage::prepare_physical_batch(
+            pieces,
+            &environment.catalog,
+        ) else {
             restore_failed_stored_break_source(transformation, organism, environment);
             return;
         };
@@ -1610,7 +1610,9 @@ mod tests {
             &catalog,
         )
         .expect("bonded source should be physically realizable");
-        assert!(organism.stored_material.store_physical_instance(source, &catalog));
+        assert!(organism
+            .stored_material
+            .store_physical_instance(source, &catalog));
         let before = organism.stored_material.entries.clone();
         let decision = ActionCandidate {
             action: ActionKind::Break,
@@ -2058,7 +2060,9 @@ mod tests {
             &catalog,
         )
         .expect("internally bonded physical material should be realizable");
-        assert!(organism.stored_material.store_physical_instance(physical, &catalog));
+        assert!(organism
+            .stored_material
+            .store_physical_instance(physical, &catalog));
 
         let decision = crate::decision_runtime::ActionCandidate {
             action: crate::decision::ActionKind::Break,

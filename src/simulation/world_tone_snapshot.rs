@@ -807,10 +807,7 @@ mod tests {
             &catalog,
         )
         .expect("hydrogen blocker should be physically realized");
-        assert!(simulation
-            .environment
-            .field
-            .deposit_physical(
+        assert!(simulation.environment.field.deposit_physical(
                 2.5,
                 0.0,
                 blocker,
@@ -849,10 +846,7 @@ mod tests {
             &catalog,
         )
         .expect("unrelated physical material should be realized");
-        assert!(simulation
-            .environment
-            .field
-            .deposit_physical(
+        assert!(simulation.environment.field.deposit_physical(
                 5.0,
                 100.0,
                 unrelated,
@@ -970,10 +964,7 @@ mod tests {
             &catalog,
         )
         .expect("composite physical material must carry one realized placement per constituent");
-        assert!(simulation
-            .environment
-            .field
-            .deposit_physical(
+        assert!(simulation.environment.field.deposit_physical(
                 0.0,
                 0.0,
                 composite,
@@ -1257,10 +1248,7 @@ mod tests {
             &catalog,
         )
         .expect("environmental receiver should have realized geometry");
-        assert!(simulation
-            .environment
-            .field
-            .deposit_physical(
+        assert!(simulation.environment.field.deposit_physical(
                 5.0,
                 0.0,
                 exposed,
@@ -1313,10 +1301,7 @@ mod tests {
             &catalog,
         )
         .expect("downstream environmental receiver should have realized geometry");
-        assert!(simulation
-            .environment
-            .field
-            .deposit_physical(
+        assert!(simulation.environment.field.deposit_physical(
                 8.0,
                 0.0,
                 downstream,
