@@ -16,6 +16,9 @@ mod integration_tests {
             material: &Material,
             catalog: &[crate::resources::BaseResource],
         ) -> Result<(), String> {
+            if material.parts.is_empty() {
+                return Err("empty material in authoritative holder".to_owned());
+            }
             for (name, amount) in &material.parts {
                 if !catalog.iter().any(|resource| resource.name == *name) {
                     return Err(format!("unknown resource identity: {name}"));
@@ -561,6 +564,23 @@ mod integration_tests {
         let error = integer_material_inventory(&simulation)
             .expect_err("partial physical ownership must not be counted as two holders");
         assert!(error.contains("partial physical ownership"));
+    }
+
+    #[test]
+    fn integer_material_inventory_rejects_empty_material_in_authoritative_holders() {
+        let mut simulation = Simulation::new(7106, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.environment.field.cells[0].materials.push(Material {
+            parts: Vec::new(),
+            internal_bonds: Vec::new(),
+        });
+
+        let error = integer_material_inventory(&simulation)
+            .expect_err("empty material records must not masquerade as valid zero inventory");
+        assert!(error.contains("empty material in authoritative holder"));
     }
 
     #[test]
