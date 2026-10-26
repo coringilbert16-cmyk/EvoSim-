@@ -1664,7 +1664,10 @@ mod tests {
 
         assert_eq!(parent.structure.units, structure_before.units);
         assert_eq!(parent.structure.bonds, structure_before.bonds);
-        assert_eq!(parent.structure.genome_constituent_ids(), structure_before.genome_constituent_ids());
+        assert_eq!(
+            parent.structure.genome_constituent_ids(),
+            structure_before.genome_constituent_ids()
+        );
         assert_eq!(parent.stored_material, stored_material_before);
         assert_eq!(parent.usable_energy, usable_energy_before);
         assert_eq!(ledger, ledger_before);
