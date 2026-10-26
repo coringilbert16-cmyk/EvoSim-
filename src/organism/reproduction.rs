@@ -680,8 +680,11 @@ pub(crate) fn begin_reproduction(
     if parent.active_transformation_id.is_some() || parent.reproductive_construction.is_some() {
         return false;
     }
+    // Stage randomness with the candidate genome. A rejected construction
+    // attempt must not perturb the simulation's future deterministic choices.
+    let mut staged_rng = rng.clone();
     let mut child_genome = parent.genome.clone();
-    child_genome.mutate(rng);
+    child_genome.mutate(&mut staged_rng);
     if child_genome.developmental_blueprint.validate().is_err()
         || !child_genome.reproductive_energy_allocation.is_finite()
         || child_genome.reproductive_energy_allocation <= 0.0
@@ -811,6 +814,7 @@ pub(crate) fn begin_reproduction(
         };
 
         *ledger = staged_ledger;
+        *rng = staged_rng;
         parent.usable_energy = staged_energy;
         parent.structure = staged_structure;
         parent.stored_material = parent_trial_storage;
@@ -2244,6 +2248,30 @@ mod tests {
         assert!(refreshed_view.units.len() > before_units);
         assert!(refreshed_view.bonds.len() > before_bonds);
         assert!(construction.developing_structure.units.is_empty());
+    }
+
+    #[test]
+    fn failed_begin_reproduction_preserves_rng_and_parent_state() {
+        use rand::RngCore;
+
+        let mut simulation = Simulation::new(213, 20.0);
+        let mut parent = simulation.organisms.remove(0);
+        parent.stored_material.entries.clear();
+        let parent_before = serde_json::to_value(&parent).unwrap();
+        let mut rng = simulation.rng.clone();
+        let mut expected_rng = rng.clone();
+        let mut ledger = EnergyLedger::default();
+        let ledger_before = ledger;
+
+        assert!(!begin_reproduction(
+            &mut parent,
+            &mut rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+        assert_eq!(rng.next_u64(), expected_rng.next_u64());
+        assert_eq!(serde_json::to_value(&parent).unwrap(), parent_before);
+        assert_eq!(ledger, ledger_before);
     }
 
     #[test]
