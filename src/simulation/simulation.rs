@@ -1569,7 +1569,7 @@ mod decomposition_finalization_tests {
             .store_physical_instance(neighbor_after_one.clone(), &simulation.environment.catalog));
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(source));
+            .store_physical_instance(source, &simulation.environment.catalog));
         assert!(simulation.organisms[0]
             .stored_material
             .store_physical_instance(neighbor_before.clone(), &simulation.environment.catalog));
@@ -1949,7 +1949,7 @@ mod decomposition_finalization_tests {
         .expect("bonded stored source should be physically realizable");
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(source));
+            .store_physical_instance(source, &simulation.environment.catalog));
         let inventory_before = rollback_material_inventory(&simulation);
 
         let decision = crate::decision_runtime::ActionCandidate {
