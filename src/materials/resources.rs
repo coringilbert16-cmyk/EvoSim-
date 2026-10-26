@@ -486,7 +486,7 @@ impl Material {
         if self.has_internal_structure()
             || !self.is_valid()
             || !is_whole_count(amount)
-            || amount <= 0.0
+            || amount < 1.0
         {
             return None;
         }
@@ -573,7 +573,10 @@ mod material_contract_tests {
             .expect("one whole carbon should be extractable");
         assert_eq!(taken.parts, vec![("Carbon".into(), 1.0)]);
         assert_eq!(carbon.parts, vec![("Carbon".into(), 2.0)]);
+        let remaining = carbon.clone();
         assert!(carbon.take(0.5).is_none());
+        assert!(carbon.take(1e-10).is_none());
+        assert_eq!(carbon, remaining, "sub-unit requests must not mutate material");
     }
 }
 
