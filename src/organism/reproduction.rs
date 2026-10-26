@@ -2403,6 +2403,58 @@ mod tests {
     }
 
     #[test]
+    fn detached_legacy_construction_cannot_divide_or_claim_inventory_ownership() {
+        let mut simulation = Simulation::new(211, 20.0);
+        let catalog = simulation.environment.catalog.clone();
+        let mut parent = simulation.organisms.remove(0);
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
+        let mut detached = blueprint.realize(&catalog).unwrap();
+        let anchor_id = detached.physical_id(0).unwrap();
+        detached.set_genome_constituent_ids([anchor_id]);
+        let member_ids = detached.physical_constituent_ids();
+        parent.reproductive_construction = Some(ReproductiveConstruction {
+            committed_material: MaterialStorage::default(),
+            developing_structure: detached,
+            developing_member_ids: member_ids,
+            child_genome: initial_genome(),
+            developmental_origin: Position { x: 12.0, y: 12.0 },
+            developmental_orientation_radians: 0.0,
+            developing_stress: 0.0,
+            anchor_unit_index: 0,
+            anchor_physical_id: Some(anchor_id),
+            developing_energy: 3.0,
+            developing_maintenance_debt: 0.0,
+            needs_space: false,
+        });
+
+        let structure_before = parent.structure.clone();
+        let energy_before = parent.usable_energy;
+        let construction_before =
+            serde_json::to_value(parent.reproductive_construction.as_ref().unwrap()).unwrap();
+        let mut ledger = EnergyLedger::default();
+        let ledger_before = ledger;
+
+        assert!(finish_reproduction(
+            &mut parent,
+            "must-not-be-created".to_owned(),
+            &catalog,
+            &mut ledger,
+            None,
+        )
+        .is_none());
+        assert!(total_usable_energy_held(std::slice::from_ref(&parent), &[]).is_nan());
+        assert_eq!(parent.structure.units, structure_before.units);
+        assert_eq!(parent.structure.bonds, structure_before.bonds);
+        assert_eq!(parent.usable_energy, energy_before);
+        assert_eq!(ledger, ledger_before);
+        assert_eq!(
+            serde_json::to_value(parent.reproductive_construction.as_ref().unwrap()).unwrap(),
+            construction_before,
+            "rejecting a detached legacy owner must preserve its state for explicit recovery"
+        );
+    }
+
+    #[test]
     fn aggregate_division_transfers_every_unit_once_and_reconciles_boundary_energy() {
         use crate::structure::{Bond, BondEndpoint, ConnectionEndpoint, Placement, StructuralUnit};
         use std::collections::HashSet;
