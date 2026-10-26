@@ -29,6 +29,16 @@ jobs:
       - name: Check COMBINE architecture
         timeout-minutes: 5
         run: bash scripts/check_combine_architecture.sh
+      # Movement transaction rollback/inventory gates; keep each command independently bounded.
+      - name: Verify invalid-ledger movement rejection is side-effect free
+        timeout-minutes: 5
+        run: cargo test --locked rejected_movement_energy_settlement_does_not_mutate_world_geometry
+      - name: Verify blocked push-chain rollback after energy preflight
+        timeout-minutes: 5
+        run: cargo test --locked blocked_push_chain_discards_preflight_without_mutating_world_or_inventory
+      - name: Verify successful push-chain ownership and energy reconciliation
+        timeout-minutes: 5
+        run: cargo test --locked successful_push_chain_commits_each_owner_once_and_reconciles_energy
       - name: Verify exhausted-ID environmental BREAK guard
         timeout-minutes: 5
         run: cargo test --locked environmental_break_rejects_exhausted_transformation_ids_without_removing_source
