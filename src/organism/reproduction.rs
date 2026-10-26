@@ -2395,10 +2395,44 @@ mod tests {
             needs_space: false,
         });
 
-        let held = total_usable_energy_held(&[parent], &[]);
+        let held = total_usable_energy_held(std::slice::from_ref(&parent), &[]);
         assert!(
             held.is_nan(),
             "a stale second energy balance must invalidate inventory instead of being silently ignored"
+        );
+
+        let structure_before = parent.structure.clone();
+        let energy_before = parent.usable_energy;
+        let construction_before =
+            serde_json::to_value(parent.reproductive_construction.as_ref().unwrap()).unwrap();
+        let mut construction = parent.reproductive_construction.take().unwrap();
+        let mut ledger = EnergyLedger::default();
+        let ledger_before = ledger;
+        let body = parent_body_geometry(&parent, &simulation.environment.catalog).unwrap();
+        let environment = simulation.environment.clone();
+        let status = advance_construction(
+            &mut parent.structure,
+            &mut parent.stored_material,
+            &mut construction,
+            &environment,
+            &mut ledger,
+            &mut parent.usable_energy,
+            &mut simulation.rng,
+            &body,
+            None,
+        )
+        .0;
+        parent.reproductive_construction = Some(construction);
+
+        assert_eq!(status, ConstructionStatus::Dead);
+        assert_eq!(parent.structure.units, structure_before.units);
+        assert_eq!(parent.structure.bonds, structure_before.bonds);
+        assert_eq!(parent.usable_energy, energy_before);
+        assert_eq!(ledger, ledger_before);
+        assert_eq!(
+            serde_json::to_value(parent.reproductive_construction.as_ref().unwrap()).unwrap(),
+            construction_before,
+            "invalid duplicate energy must not be silently erased by growth"
         );
     }
 
