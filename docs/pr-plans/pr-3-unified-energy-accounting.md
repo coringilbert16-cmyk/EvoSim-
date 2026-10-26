@@ -1,6 +1,6 @@
 # Unify Energy Accounting Across Sources, Consumers, and Initialization
 
-> **Implementation in progress.** The energy-path audit and accounting contract are recorded below. Initial-source and unowned-release safeguards have been implemented; focused verification is in progress.
+> **Implementation in progress.** The energy-path audit and accounting contract are recorded below. Initial-source and unowned-release safeguards are implemented; a simulation-level rejection test now checks that failed settlement preserves the independent world inventory.
 
 ## Summary
 
@@ -10,8 +10,9 @@ Establish one consistent energy accounting model across initialization, sources,
 
 - [x] Audit energy entry points, spending paths, transfers, and sinks against merged #207.
 - [x] Define accounting contracts and units at each boundary.
-- [ ] Close duplicate or inconsistent energy ownership and settlement paths (initial-source shortcut fix started).
-- [ ] Test rejected settlement, initialization, and cross-system reconciliation.
+- [x] Remove the constructor-budget-to-organism-energy shortcut.
+- [x] Reject unowned non-structural release and verify rejected settlement leaves the simulation's independent inventory unchanged.
+- [ ] Verify independent world-energy reconciliation across source capture, reaction settlement, and ordinary ticks against the current baseline.
 
 ## Acceptance criteria
 
