@@ -353,7 +353,10 @@ fn logical_deposit_rejects_unrepresentable_merged_inventory_atomically() {
         !field.deposit_at_index(0, make_raw("Carbon", 4096.0), &catalog),
         "merging individually valid stock must reject an unrepresentable combined count"
     );
-    assert_eq!(field.cells, before_cells, "rejected merge must preserve stock");
+    assert_eq!(
+        field.cells, before_cells,
+        "rejected merge must preserve stock"
+    );
     assert_eq!(
         field.revision, before_revision,
         "rejected merge must not invalidate field caches"

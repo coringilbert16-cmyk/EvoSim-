@@ -189,8 +189,16 @@ mod tests {
         let mut physical = PhysicalMaterial::realized(
             compound(),
             vec![
-                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 },
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 1.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
             ],
             &catalog,
         )
@@ -208,11 +216,18 @@ mod tests {
 
         assert!(contained.is_empty(), "invalid material must not leave its source holder");
         assert_eq!(
-            field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>(),
+            field
+                .cells
+                .iter()
+                .map(|cell| cell.physical_materials.len())
+                .sum::<usize>(),
             1,
             "invalid source must remain environmental material"
         );
-        assert!(field.cells.iter().any(|cell| cell.physical_materials.contains(&physical)));
+        assert!(field
+            .cells
+            .iter()
+            .any(|cell| cell.physical_materials.contains(&physical)));
     }
 
 }

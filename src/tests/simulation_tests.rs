@@ -573,10 +573,12 @@ mod integration_tests {
             cell.materials.clear();
             cell.physical_materials.clear();
         }
-        simulation.environment.field.cells[0].materials.push(Material {
-            parts: Vec::new(),
-            internal_bonds: Vec::new(),
-        });
+        simulation.environment.field.cells[0]
+            .materials
+            .push(Material {
+                parts: Vec::new(),
+                internal_bonds: Vec::new(),
+            });
 
         let error = integer_material_inventory(&simulation)
             .expect_err("empty material records must not masquerade as valid zero inventory");
