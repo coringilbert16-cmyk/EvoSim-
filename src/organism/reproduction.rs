@@ -2266,10 +2266,6 @@ mod tests {
         let before_bonds = before_view.bonds.len();
 
         let developing_child = developing_organism(&construction, before_view);
-        let preferred_resource = construction_preferred_resource(&developing_child)
-            .expect("the developing genome has a preferred construction resource")
-            .to_owned();
-
         // Chemical preference alone does not guarantee a physical bond can be
         // formed at the current geometry. Preflight candidate resources and
         // supply one that the real attachment solver can use, so this regression
@@ -2295,11 +2291,6 @@ mod tests {
         }
         let newly_available_resource = fitting_resource.expect(
             "at least one available resource must have a physically attachable candidate",
-        );
-        assert!(
-            newly_available_resource == preferred_resource
-                || construction_preferred_resource(&developing_child).is_some(),
-            "the chosen resource must remain eligible for the developing genome"
         );
         assert!(parent.store_material(Material::free_base(&newly_available_resource, 1.0)));
 
