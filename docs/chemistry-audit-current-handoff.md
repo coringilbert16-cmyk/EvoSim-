@@ -47,3 +47,28 @@ Reuse `rejected_movement_energy_settlement_does_not_mutate_world_geometry`, `mov
 ### Completion rule
 
 Do not call chemistry “unified” until every authoritative material/energy path reconciles, transaction rejection cannot leave partial state, the sunlight approximation is evidence-gated, and integrated verification reports exact-head results and baseline deltas. Keep historical audit detail in the main plan; this file is the short resume point.
+
+
+## Chemistry planning reconciliation — 2026-10-26
+
+This section reconciles the queued chemistry planning PRs with the approved phase order and the active migration work. It does **not** authorize implementation or supersede the current next-action note above.
+
+### Current priority remains separate
+
+- PR #206 remains the narrow movement rejection/rollback and inventory proof slice called out in the current handoff.
+- PR #212 remains the aggregate-ownership/construction/division migration. Resource/energy inventory work must not create a competing physical graph or energy holder while that migration is in progress.
+- PR #213 is a temporary stress-input setting for survival-first development. It does not settle the final death/stress contract.
+- PR #196 constructor/Bob work remains out of scope.
+
+### Chemistry planning sequence and scope boundaries
+
+1. **PR #207 — resource identity and integer material inventory.** Limit it to canonical resource IDs, integer quantities, transfer/storage accounting, and independent material inventory. Do not redo parent-aggregate ownership, construction membership, or division handled by PR #212.
+2. **PR #211 — cache versioning only.** It has been narrowed from cache-plus-sunlight. Establish equation/schema compatibility before downstream phases rely on cached results.
+3. **PR #208 — unified energy accounting.** Establish the independent world-energy oracle and source/transfer/storage/work/heat settlement contract after ownership state is coherent.
+4. **PR #214 — shared chemistry runtime and scheduler.** This is the missing integration layer: one reaction policy for environmental and cell/organism-held material, local candidate discovery, deterministic activation progress, and bounded work. The current organism-bond accumulator alone does not establish environment-wide chemistry.
+5. **PR #209 — transactional reaction realization.** Own the atomic commit/rollback of a selected reaction; do not duplicate the scheduler from PR #214.
+6. **PR #210 — death and continued chemistry.** Stop biological behavior after death while keeping matter available to the ordinary shared chemistry path; no second decomposition law.
+7. **PR #216 — sunlight/world-tone validation.** Separate from cache work and gate on exact-small-world comparisons, occlusion, source budget, duplicate-claim checks, and performance.
+8. **PR #215 — event inspection and environment-first experiments.** Depends on the real runtime/event contract. Separate environment setup from organism population while preserving the default preset; distinguish candidates from committed reactions; bound logs and benchmark 24,000 ticks.
+
+These are dependency relationships, not a claim that every listed PR must merge in strict numerical order. Re-audit current main and the status of PR #206/#212 before selecting the next implementation slice. Every phase remains planning-only until separately authorized. PR #204 remains documentation-only; README is not changed as a side effect.
