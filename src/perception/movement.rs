@@ -1082,13 +1082,12 @@ mod tests {
                 add(&mut inventory, material);
             }
             if let Some(construction) = &organism.reproductive_construction {
+                assert!(
+                    construction.is_aggregate_owned_by(&organism.structure),
+                    "movement inventory cannot count detached construction as a second owner"
+                );
                 for material in construction.committed_material.iter_materials() {
                     add(&mut inventory, material);
-                }
-                if !construction.is_aggregate_owned_by(&organism.structure) {
-                    for unit in &construction.developing_structure.units {
-                        add(&mut inventory, &unit.material);
-                    }
                 }
             }
         }
