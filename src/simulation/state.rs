@@ -134,9 +134,9 @@ pub(crate) struct ActiveTransformation {
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ReproductiveConstruction {
-    /// Material reserved for construction. New aggregate-owned construction
-    /// draws from the parent's inventory; legacy reserved stock remains here
-    /// until a successful attachment or division transfers it transactionally.
+    /// Physical material reserved for construction, anchored to the offspring's
+    /// developmental origin. Rejected attempts preserve this holder; successful
+    /// attachment or division transfers it as part of the ownership transaction.
     pub(crate) committed_material: MaterialStorage,
     /// Physical graph for detached legacy construction. Aggregate-owned
     /// construction keeps this graph empty and reconstructs transient views from
