@@ -86,10 +86,14 @@ impl MaterialStorage {
     /// Store an already-realized physical instance without reconstructing its
     /// geometry or internal connection endpoints. The world realization is
     /// rebased only into storage's intrinsic frame.
-    pub(crate) fn store_physical_instance(&mut self, instance: PhysicalMaterial) -> bool {
+    pub(crate) fn store_physical_instance(
+        &mut self,
+        instance: PhysicalMaterial,
+        catalog: &[crate::resources::BaseResource],
+    ) -> bool {
         if !instance.is_realized()
             || instance.material.parts.is_empty()
-            || !instance.material.is_valid()
+            || !instance.material.is_valid_for_catalog(catalog)
             || !Self::is_discrete(&instance.material)
         {
             return false;
@@ -105,8 +109,9 @@ impl MaterialStorage {
         &mut self,
         instance: PhysicalMaterial,
         anchor: Placement,
+        catalog: &[crate::resources::BaseResource],
     ) -> bool {
-        self.try_store_physical_instance_at_owner_anchor(instance, anchor)
+        self.try_store_physical_instance_at_owner_anchor(instance, anchor, catalog)
             .is_ok()
     }
 
@@ -115,12 +120,13 @@ impl MaterialStorage {
     /// anchor instead of deriving one from its intrinsic placement.
     pub(crate) fn prepare_physical_batch(
         instances: Vec<PhysicalMaterial>,
+        catalog: &[crate::resources::BaseResource],
     ) -> Option<Vec<StoredMaterial>> {
         let mut prepared = Vec::with_capacity(instances.len());
         for instance in instances {
             if !instance.is_realized()
                 || instance.material.parts.is_empty()
-                || !instance.material.is_valid()
+                || !instance.material.is_valid_for_catalog(catalog)
                 || !Self::is_discrete(&instance.material)
             {
                 return None;
@@ -137,6 +143,7 @@ impl MaterialStorage {
     pub(crate) fn prepare_physical_batch_at_owner_anchor(
         instances: Vec<PhysicalMaterial>,
         anchor: Placement,
+        catalog: &[crate::resources::BaseResource],
     ) -> Option<Vec<StoredMaterial>> {
         if !anchor.x.is_finite() || !anchor.y.is_finite() || !anchor.rotation_radians.is_finite() {
             return None;
@@ -150,7 +157,7 @@ impl MaterialStorage {
                 .copied()?;
             if !instance.is_realized()
                 || instance.material.parts.is_empty()
-                || !instance.material.is_valid()
+                || !instance.material.is_valid_for_catalog(catalog)
                 || !Self::is_discrete(&instance.material)
             {
                 return None;
@@ -185,6 +192,7 @@ impl MaterialStorage {
         &mut self,
         instance: PhysicalMaterial,
         anchor: Placement,
+        catalog: &[crate::resources::BaseResource],
     ) -> Result<(), PhysicalMaterial> {
         if !anchor.x.is_finite() || !anchor.y.is_finite() || !anchor.rotation_radians.is_finite() {
             return Err(instance);
@@ -199,7 +207,7 @@ impl MaterialStorage {
         };
         if !instance.is_realized()
             || instance.material.parts.is_empty()
-            || !instance.material.is_valid()
+            || !instance.material.is_valid_for_catalog(catalog)
             || !Self::is_discrete(&instance.material)
         {
             return Err(instance);
@@ -232,7 +240,7 @@ impl MaterialStorage {
         let Some(instance) = PhysicalMaterial::realized(material, placements, catalog) else {
             return false;
         };
-        self.store_physical_instance(instance)
+        self.store_physical_instance(instance, catalog)
     }
 
     pub(crate) fn peek_one_unstructured(&self) -> Option<PhysicalMaterial> {

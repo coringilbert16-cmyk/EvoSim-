@@ -469,7 +469,7 @@ impl Organism {
             ) else {
                 return false;
             };
-            return self.stored_material.store_physical_instance(instance);
+            return self.stored_material.store_physical_instance(instance, &catalog);
         }
 
         let mut instances = Vec::new();
@@ -493,7 +493,7 @@ impl Organism {
             return false;
         }
         for instance in instances {
-            debug_assert!(self.stored_material.store_physical_instance(instance));
+            debug_assert!(self.stored_material.store_physical_instance(instance, &catalog));
         }
         true
     }
