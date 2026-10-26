@@ -20,19 +20,6 @@ jobs:
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
-      # Temporary diagnostic: capture exact rustfmt changes without altering
-      # the checkout used by the real formatting check.
-      - name: Capture rustfmt diff for diagnosis
-        timeout-minutes: 5
-        run: |
-          cargo fmt --all
-          git diff -- src > /tmp/rustfmt.diff
-          git checkout -- .
-      - uses: actions/upload-artifact@v4
-        with:
-          name: rustfmt-diff
-          path: /tmp/rustfmt.diff
-          if-no-files-found: error
       - name: Check formatting
         timeout-minutes: 5
         run: cargo fmt --all -- --check
