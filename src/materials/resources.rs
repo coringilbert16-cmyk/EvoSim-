@@ -557,7 +557,10 @@ mod material_contract_tests {
                 ("Carbon".into(), largest_representable_count),
                 ("Carbon".into(), largest_representable_count),
             ],
-            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
         };
         assert!(
             !overflowing_composite.is_valid_for_catalog(&catalog),
