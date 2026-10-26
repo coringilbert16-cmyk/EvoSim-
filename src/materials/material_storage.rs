@@ -307,10 +307,24 @@ impl MaterialStorage {
         }
     }
 
-    pub(crate) fn take_matching_physical(&mut self, target: &Material) -> Option<PhysicalMaterial> {
+    pub(crate) fn take_matching_physical(
+        &mut self,
+        target: &Material,
+        catalog: &[crate::resources::BaseResource],
+    ) -> Option<PhysicalMaterial> {
+        // Removal is a transfer boundary too: reject legacy/corrupt entries
+        // before mutating the authoritative holder, so downstream validation
+        // cannot turn a failed COMBINE into lost source material.
+        if !target.is_valid_for_catalog(catalog) || target.is_empty() {
+            return None;
+        }
         let index = self.entries.iter().position(|entry| {
             matches!(entry, StoredMaterial::Physical(instance)
-                if instance.material == *target && !instance.material.is_empty())
+                if instance.is_realized()
+                    && instance.material.is_valid_for_catalog(catalog)
+                    && Self::is_discrete(&instance.material)
+                    && instance.material == *target
+                    && !instance.material.is_empty())
         })?;
         match self.entries.swap_remove(index) {
             StoredMaterial::Physical(instance) => Some(instance),
@@ -388,6 +402,24 @@ mod tests {
         assert!(storage.entries.iter().all(|entry| {
             matches!(entry, StoredMaterial::Physical(instance) if instance.is_realized())
         }));
+    }
+
+    #[test]
+    fn take_matching_rejects_unknown_resource_without_removing_the_entry() {
+        let mut storage = MaterialStorage::default();
+        assert!(storage.store_physical(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            &catalog(),
+        ));
+        let StoredMaterial::Physical(instance) = &mut storage.entries[0];
+        instance.material.parts[0].0 = "Uncatalogued".to_owned();
+        let before = storage.clone();
+
+        assert!(storage
+            .take_matching_physical(&Material::free_base("Uncatalogued", 1.0), &catalog())
+            .is_none());
+        assert_eq!(storage, before, "rejected transfer must preserve the source owner");
     }
 
     #[test]
@@ -491,7 +523,7 @@ mod tests {
         ];
         assert!(storage.store_physical(m.clone(), placements, &catalog()));
         assert_eq!(storage.physical_count(), 1);
-        let restored = storage.take_matching_physical(&m).expect("stored instance");
+        let restored = storage.take_matching_physical(&m, &catalog()).expect("stored instance");
         assert_eq!(restored.material, m);
         let intrinsic = restored.placements.expect("intrinsic realization");
         assert!(intrinsic[0].x.abs() <= 1e-12);
