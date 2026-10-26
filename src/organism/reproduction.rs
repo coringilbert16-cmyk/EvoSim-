@@ -2141,8 +2141,29 @@ mod tests {
 
     #[test]
     fn waiting_construction_resumes_from_same_graph_when_material_arrives() {
+        use crate::structure::{Placement, StructuralUnit};
+
         let mut simulation = Simulation::new(37, 20.0);
         let mut parent = simulation.organisms.remove(0);
+        let catalog = simulation.environment.catalog.clone();
+        // Keep the anchor in open space so the regression tests wait/resume
+        // semantics rather than an unrelated seed-placement dead end.
+        parent.structure = OrganismStructure::new();
+        let parent_unit_index = parent.structure.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        assert!(parent.structure.units[parent_unit_index].realize_default_geometry(&catalog));
+        let parent_core_id = parent.structure.physical_id(parent_unit_index).unwrap();
+        parent.structure.set_genome_constituent_ids([parent_core_id]);
+        parent.developmental_origin = Position { x: 10.0, y: 10.0 };
+        parent.occupied_cells = vec![Position { x: 10.0, y: 10.0 }];
+        parent.stored_material.entries.clear();
+        parent.mark_structure_changed();
         let mut ledger = EnergyLedger::default();
 
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
