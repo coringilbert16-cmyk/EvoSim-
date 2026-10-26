@@ -958,8 +958,7 @@ pub(crate) fn advance_construction(
     if !developing_membership_is_valid(construction, &working_structure) {
         return (ConstructionStatus::Dead, None);
     }
-    let reproductive_energy_allocation =
-        construction.child_genome.reproductive_energy_allocation;
+    let reproductive_energy_allocation = construction.child_genome.reproductive_energy_allocation;
     // Validate persisted accounting and genome parameters before candidate
     // construction can mutate geometry, storage, energy, or the ledger.
     // Comparisons against NaN otherwise silently skip the reserve branch and
