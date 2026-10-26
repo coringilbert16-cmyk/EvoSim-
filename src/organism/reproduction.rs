@@ -958,23 +958,19 @@ pub(crate) fn advance_construction(
     // the child has been admitted into the parent's physical aggregate. Rebuild
     // the working view before validation or chemistry so stale cached geometry
     // cannot become a second physical authority.
-    let any_ids_present_in_parent = construction.has_any_member_in(parent_structure);
-    let aggregate_owned = construction.is_aggregate_owned_by(parent_structure);
-    if any_ids_present_in_parent && !aggregate_owned {
+    // Construction must be represented by stable IDs in the parent's one
+    // authoritative physical aggregate. Detached graph state is legacy data,
+    // not a second valid owner; fail closed instead of advancing it independently.
+    if !construction.is_aggregate_owned_by(parent_structure) {
         return (ConstructionStatus::Dead, None);
     }
-    let working_structure = if aggregate_owned {
-        let Some(anchor_id) = construction.anchor_physical_id else {
-            return (ConstructionStatus::Dead, None);
-        };
-        let Some(view) = parent_structure
-            .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
-        else {
-            return (ConstructionStatus::Dead, None);
-        };
-        view
-    } else {
-        construction.developing_structure.clone()
+    let Some(anchor_id) = construction.anchor_physical_id else {
+        return (ConstructionStatus::Dead, None);
+    };
+    let Some(working_structure) = parent_structure
+        .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
+    else {
+        return (ConstructionStatus::Dead, None);
     };
 
     // Validate the authoritative transient view before any new parent-funded
@@ -1017,30 +1013,12 @@ pub(crate) fn advance_construction(
     // newly transferred energy rather than overwriting it with a stale balance.
     let original_working_structure = working_structure.clone();
     let mut child = developing_organism(construction, working_structure);
-    if aggregate_owned {
-        child.usable_energy = *parent_energy;
-    }
-    let mut staged_ledger = *ledger;
-    // An aggregate-owned developing core is not a second living organism.
-    // The parent tick already applies maintenance and structural chemistry to
-    // the complete authoritative aggregate; repeating those operations on a
-    // subgraph would charge energy and process bonds twice. Keep this staged
-    // view for growth/readiness only. The legacy detached path retains its own
-    // maintenance until it is migrated into aggregate ownership.
-    let dead = if aggregate_owned {
-        child.validate_stress_state()
-    } else {
-        child.apply_maintenance(&environment.catalog, &mut staged_ledger);
-        let dead = child.validate_stress_state();
-        if !dead {
-            let _ = crate::transformation::resolve_resonance_overload_break(
-                &mut child,
-                environment,
-                &mut staged_ledger,
-            );
-        }
-        dead
-    };
+    child.usable_energy = *parent_energy;
+    let staged_ledger = *ledger;
+    // The developing member is not a second organism. The parent tick already
+    // applies maintenance and structural chemistry to the authoritative graph;
+    // this transient view is only for growth and readiness.
+    let dead = child.validate_stress_state();
     // Maintenance and resonance chemistry may alter the construction graph
     // (including bonds). If its members are aggregate-owned, commit those
     // changes transactionally into the parent before publishing the refreshed
@@ -1175,20 +1153,19 @@ pub(crate) fn finish_reproduction(
     // views from the authoritative parent graph instead of refreshing a second
     // persisted copy. Reject partially admitted membership rather than falling
     // back to the detached legacy graph.
-    let any_ids_present_in_parent = construction.has_any_member_in(&parent.structure);
-    let aggregate_owned = construction.is_aggregate_owned_by(&parent.structure);
-    if any_ids_present_in_parent && !aggregate_owned {
+    // Only a complete aggregate-owned construction may divide. Do not promote
+    // a detached compatibility graph into an organism: that would create a
+    // second physical owner outside the transaction boundary.
+    if !construction.is_aggregate_owned_by(&parent.structure) {
         return None;
     }
     if !birth_ready_with_reference(&construction, &parent.structure, catalog, seed_reference) {
         return None;
     }
 
-    // Aggregate-owned construction can divide only by atomically partitioning
-    // the authoritative parent graph. A transient child view is never promoted
-    // to a second owner. Legacy, not-yet-migrated constructions retain their
-    // existing behavior until they are admitted into the aggregate.
-    let (child_structure, child_energy, staged_ledger, staged_parent_commit) = if aggregate_owned {
+    // Partition the authoritative parent graph and stage all energy/ledger
+    // effects before publishing either resulting organism.
+    let (child_structure, child_energy, staged_ledger, staged_parent_commit) = {
         let mut staged_parent_structure = parent.structure.clone();
         let Some(anchor_id) = construction.anchor_physical_id else {
             return None;
@@ -1285,13 +1262,6 @@ pub(crate) fn finish_reproduction(
             child_share,
             staged_ledger,
             Some((staged_parent_structure, parent_share)),
-        )
-    } else {
-        (
-            construction.developing_structure.clone(),
-            construction.developing_energy,
-            *ledger,
-            None,
         )
     };
 
