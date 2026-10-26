@@ -953,14 +953,15 @@ pub(crate) fn advance_construction(
         return (ConstructionStatus::Dead, None);
     };
 
-    // Validate the authoritative transient view before any new parent-funded
-    // reserve transfer. A non-finite construction must not drain its parent.
+    // Validate the authoritative transient view before any construction attempt
+    // can spend energy from the parent's single usable-energy holder.
     if !developing_membership_is_valid(construction, &working_structure) {
         return (ConstructionStatus::Dead, None);
     }
-    let reserve_energy = construction.child_genome.reproductive_energy_allocation;
-    // Validate all persisted scalar accounting state before reserve transfer,
-    // maintenance settlement, or candidate construction can mutate it.
+    let reproductive_energy_allocation =
+        construction.child_genome.reproductive_energy_allocation;
+    // Validate persisted accounting and genome parameters before candidate
+    // construction can mutate geometry, storage, energy, or the ledger.
     // Comparisons against NaN otherwise silently skip the reserve branch and
     // allow invalid energy/debt to flow into the live construction path.
     if !construction.developing_stress.is_finite()
@@ -969,16 +970,16 @@ pub(crate) fn advance_construction(
         || construction.developing_energy != 0.0
         || !construction.developing_maintenance_debt.is_finite()
         || construction.developing_maintenance_debt < 0.0
-        || !reserve_energy.is_finite()
-        || reserve_energy < 0.0
+        || !reproductive_energy_allocation.is_finite()
+        || reproductive_energy_allocation <= 0.0
         || !parent_energy.is_finite()
         || *parent_energy < 0.0
     {
         return (ConstructionStatus::Dead, None);
     }
 
-    // Rebuild after the reserve transfer so the child snapshot contains the
-    // newly transferred energy rather than overwriting it with a stale balance.
+    // Build a transient view from stable IDs. Its usable energy is then set to
+    // the parent's current balance; construction never owns a second reserve.
     let original_working_structure = working_structure.clone();
     let mut child = developing_organism(construction, working_structure);
     child.usable_energy = *parent_energy;
