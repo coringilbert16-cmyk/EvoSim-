@@ -176,7 +176,13 @@ fn developing_organism(
         stress: construction.developing_stress,
         maintenance_debt: construction.developing_maintenance_debt,
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
-        stored_material: construction.committed_material.clone(),
+        stored_material: if construction.is_aggregate_owned_by(&structure) {
+            // Aggregate-owned construction draws exclusively from the parent’s
+            // storage. Do not materialize a second inventory on its transient view.
+            MaterialStorage::default()
+        } else {
+            construction.committed_material.clone()
+        },
         active_transformation_id: None,
         active_movement: None,
         reproductive_construction: None,
@@ -716,7 +722,7 @@ pub(crate) fn begin_reproduction(
             .push(crate::material_storage::StoredMaterial::Physical(
                 instance.clone(),
             ));
-        let Some((mut anchor_graph, child_storage, anchor_unit_index)) =
+        let Some((mut anchor_graph, mut child_storage, anchor_unit_index)) =
             anchor_structure(&child_genome, trial_storage, placement, catalog)
         else {
             continue;
@@ -819,12 +825,16 @@ pub(crate) fn begin_reproduction(
             continue;
         };
 
+        // Any unconsumed anchor material remains in the parent’s one inventory;
+        // the aggregate-owned construction is only a stable-ID view.
+        parent_trial_storage.entries.extend(child_storage.drain_entries());
+
         *ledger = staged_ledger;
         parent.usable_energy = staged_energy;
         parent.structure = staged_structure;
         parent.stored_material = parent_trial_storage;
         parent.reproductive_construction = Some(ReproductiveConstruction {
-            committed_material: child_storage,
+            committed_material: MaterialStorage::default(),
             developing_member_ids: mapped_anchor_ids,
             // The anchor is already part of the parent's physical aggregate.
             // Keep the persisted graph empty; aggregate-owned working graphs
@@ -905,7 +915,16 @@ fn commit_candidate_attachment(
     if aggregate_owned {
         *parent_energy = child.usable_energy;
     }
-    construction.committed_material = child.stored_material;
+    if aggregate_owned {
+        // Any leftover candidate material remains owned by the parent inventory,
+        // not by a second construction-specific storage holder.
+        parent_storage
+            .entries
+            .extend(child.stored_material.drain_entries());
+        construction.committed_material = MaterialStorage::default();
+    } else {
+        construction.committed_material = child.stored_material;
+    }
     construction.developing_member_ids = child.structure.physical_constituent_ids();
     construction.developing_structure = if aggregate_owned {
         OrganismStructure::new()
@@ -972,6 +991,13 @@ pub(crate) fn advance_construction(
     // reserve transfer. A non-finite construction must not drain its parent.
     if !developing_membership_is_valid(construction, &working_structure) {
         return (ConstructionStatus::Dead, None);
+    }
+    if aggregate_owned && !construction.committed_material.is_empty() {
+        // Migrate serialized legacy inventory into the parent's authoritative
+        // storage before advancing the aggregate-owned construction.
+        parent_storage
+            .entries
+            .extend(construction.committed_material.drain_entries());
     }
     let reserve_energy = construction.child_genome.reproductive_energy_allocation;
     // Validate all persisted scalar accounting state before reserve transfer,
