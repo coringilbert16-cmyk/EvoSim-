@@ -67,16 +67,17 @@ mod integration_tests {
                             .to_owned(),
                     );
                 }
+                if !aggregate_owned {
+                    return Err(
+                        "construction is not owned by the parent's authoritative aggregate"
+                            .to_owned(),
+                    );
+                }
                 for material in construction.committed_material.iter_materials() {
                     add_material(&mut inventory, material, catalog)?;
                 }
-                // Aggregate-owned construction is a stable-ID view into
-                // the parent's structure, not a second physical-material owner.
-                if !aggregate_owned {
-                    for unit in &construction.developing_structure.units {
-                        add_material(&mut inventory, &unit.material, catalog)?;
-                    }
-                }
+                // The stable-ID view is metadata only; physical units are
+                // already counted from the parent's authoritative structure.
             }
         }
 

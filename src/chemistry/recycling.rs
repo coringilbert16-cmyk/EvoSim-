@@ -19,50 +19,33 @@ pub(crate) fn recycle_dead_organism(
     // resonance reservoir. Validate the retained energy now and transfer it
     // into that budget during the same atomic death transaction.
     let resonant_energy = organism.resonant_energy.total_energy()?;
-    // Construction membership must be either fully parent-owned or fully
-    // detached. Partial overlap would make recycling drop unowned members or
-    // count physical state twice, so reject it before staging any transfers.
+    // Recycling accepts only the authoritative parent-owned aggregate.
+    // Detached or partial construction state cannot be safely transferred, so
+    // reject it before staging any material or energy changes.
     if organism
         .reproductive_construction
         .as_ref()
-        .is_some_and(|construction| {
-            construction.has_any_member_in(&organism.structure)
-                && !construction.is_aggregate_owned_by(&organism.structure)
-        })
+        .is_some_and(|construction| !construction.is_aggregate_owned_by(&organism.structure))
     {
+        // Detached construction is not a valid owner in the aggregate model.
+        // Refuse recycling until ownership can be reconciled; never transfer
+        // a legacy duplicate graph/energy holder as though it were independent.
         return None;
     }
-    // Once the construction members are part of the parent aggregate, the
-    // construction record is only a view: its legacy energy field is not a
-    // second physical energy holder and must not be recycled twice.
-    let construction_has_separate_energy_owner = organism
-        .reproductive_construction
-        .as_ref()
-        .is_some_and(|construction| {
-            !construction.is_aggregate_owned_by(&organism.structure)
-                && !construction.has_any_member_in(&organism.structure)
-        });
+    // Aggregate-owned construction has no separate energy holder. A nonzero
+    // legacy cache is ambiguous state and must be rejected, not transferred.
     if organism
         .reproductive_construction
         .as_ref()
-        .is_some_and(|construction| {
-            !construction_has_separate_energy_owner && construction.developing_energy != 0.0
-        })
+        .is_some_and(|construction| construction.developing_energy != 0.0)
     {
-        // Reject ambiguous legacy energy rather than clearing a second scalar
-        // holder that conflicts with the parent's authoritative energy balance.
         return None;
     }
-    let developing_energy = organism
-        .reproductive_construction
-        .as_ref()
-        .filter(|_| construction_has_separate_energy_owner)
-        .map_or(0.0, |construction| construction.developing_energy);
-    let total_energy = energy + developing_energy;
+    let total_energy = energy + resonant_energy;
     if !energy.is_finite()
         || energy < 0.0
-        || !developing_energy.is_finite()
-        || developing_energy < 0.0
+        || !resonant_energy.is_finite()
+        || resonant_energy < 0.0
         || !total_energy.is_finite()
     {
         return None;
@@ -89,20 +72,9 @@ pub(crate) fn recycle_dead_organism(
         crate::decomposition::DecomposingBody::new(organism.structure.clone(), 0.0, position)?;
     let mut staged_ledger = *ledger;
     let mut staged_parent_energy = energy;
-    let mut staged_developing_energy = developing_energy;
     let mut staged_resonant_energy = resonant_energy;
     if !staged_ledger.transfer(&mut staged_parent_energy, &mut body.energy_budget, energy) {
         return None;
-    }
-    if let Some(construction) = staged_construction.as_mut() {
-        if !staged_ledger.transfer(
-            &mut staged_developing_energy,
-            &mut body.energy_budget,
-            developing_energy,
-        ) {
-            return None;
-        }
-        construction.developing_energy = staged_developing_energy;
     }
     if !staged_ledger.transfer(
         &mut staged_resonant_energy,

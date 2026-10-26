@@ -139,16 +139,23 @@ mod tests {
     }
 
     #[test]
-    fn viability_does_not_depend_on_a_predefined_piece_count_or_core() {
+    fn cavity_seed_is_not_yet_a_viable_organism() {
         let catalog = default_catalog();
         let blueprint = confirmed_seed_baseline(&catalog).unwrap();
         let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
-        validate_realized_organism(
-            &structure,
-            &catalog,
-            OrganismViabilityRequirements::default(),
-        )
-        .unwrap();
+
+        assert!(crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .is_some());
+        assert!(
+            validate_realized_organism(
+                &structure,
+                &catalog,
+                OrganismViabilityRequirements::default(),
+            )
+            .is_err(),
+            "the cavity seed is a milestone, not a viable organism without extra realized structure"
+        );
     }
 
     #[test]

@@ -78,26 +78,18 @@ impl WorldToneOccluderSnapshot {
             body_resonance_owners.push(Some(organism_index));
         }
 
-        // A developing offspring is a separate physical structure even
-        // before it is admitted to simulation.organisms. Its committed storage
-        // remains physical too and is anchored to the offspring's own origin.
-        for (organism_index, organism) in simulation.organisms.iter().enumerate() {
+        // Developing members are already part of the parent's one physical
+        // aggregate. Only committed physical storage adds separate occluders.
+        for organism in &simulation.organisms {
             let Some(construction) = &organism.reproductive_construction else {
                 continue;
             };
-            let any_member_owned_by_parent = construction.has_any_member_in(&organism.structure);
-            if !construction.developing_structure.units.is_empty()
-                && !construction.is_aggregate_owned_by(&organism.structure)
-                && !any_member_owned_by_parent
-            {
-                body_properties.push(structure_material_properties(
-                    &construction.developing_structure,
-                    catalog,
-                )?);
-                bodies.push(OrganismBodyGeometry::from_all_realized_units(
-                    &construction.developing_structure,
-                )?);
-                body_resonance_owners.push(Some(organism_index));
+            // A construction record is valid only as a stable-ID view into
+            // the parent's authoritative aggregate. A detached legacy graph
+            // would otherwise be rendered as a second physical body/resonance
+            // owner, so reject the snapshot rather than double-count it.
+            if !construction.is_aggregate_owned_by(&organism.structure) {
+                return None;
             }
             if !construction.committed_material.entries.is_empty() {
                 let anchor = Placement {
@@ -984,24 +976,13 @@ mod tests {
     }
 
     #[test]
-    fn developing_offspring_and_its_stored_material_remain_world_occluders() {
+    fn aggregate_owned_developing_member_and_stored_material_remain_world_occluders() {
         let mut simulation = Simulation::new(73, 1.0);
         clear_environment_physical_material(&mut simulation);
         let catalog = simulation.environment.catalog.clone();
-        replace_with_nitrogen_square(&mut simulation.organisms[0], 5.0, 0.0, &catalog);
-
-        let mut developing_structure = OrganismStructure::new();
-        let mut anchor_unit = StructuralUnit::from_material(
-            Material::free_base("Nitrogen", 1.0),
-            Placement {
-                x: 20.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        )
-        .expect("developing anchor should be constructible");
-        assert!(anchor_unit.realize_default_geometry(&catalog));
-        developing_structure.add_unit(anchor_unit);
+        replace_with_nitrogen_square(&mut simulation.organisms[0], 20.0, 0.0, &catalog);
+        let developing_member_ids = simulation.organisms[0].structure.physical_constituent_ids();
+        let anchor_id = developing_member_ids[0];
 
         let stored_physical = PhysicalMaterial::realized(
             Material::free_base("Hydrogen", 1.0),
@@ -1025,17 +1006,14 @@ mod tests {
         simulation.organisms[0].reproductive_construction =
             Some(crate::state::ReproductiveConstruction {
                 committed_material,
-                // This fixture represents the pre-admission child as a
-                // distinct physical body; its local constituent IDs are not
-                // proof that those members are already owned by the parent.
-                developing_member_ids: Vec::new(),
-                developing_structure,
+                developing_member_ids,
+                developing_structure: OrganismStructure::new(),
                 child_genome: simulation.organisms[0].genome.clone(),
                 developmental_origin: Position { x: 20.0, y: 0.0 },
                 developmental_orientation_radians: 0.0,
                 developing_stress: 0.0,
                 anchor_unit_index: 0,
-                anchor_physical_id: None,
+                anchor_physical_id: Some(anchor_id),
                 developing_energy: 0.0,
                 developing_maintenance_debt: 0.0,
                 needs_space: false,
@@ -1043,11 +1021,11 @@ mod tests {
 
         let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
             .expect("developing physical material must be represented");
-        assert_eq!(snapshot.occluder_count, 3);
+        assert_eq!(snapshot.occluder_count, 2);
         assert_eq!(snapshot.body_index_for_organism(0), Some(0));
         assert_eq!(
             snapshot.body_resonance_owners,
-            vec![Some(0), Some(0), None],
+            vec![Some(0), None],
             "the attached developing structure belongs to the parent resonance; committed storage remains a separate nonliving receiver"
         );
     }
@@ -1101,26 +1079,23 @@ mod tests {
         simulation.active_transformations.clear();
         let catalog = simulation.environment.catalog.clone();
 
-        // Isolate the attached physical construction as the only body. The
-        // living receiver set is explicit here so this test isolates ownership
-        // routing rather than genome viability.
+        // The attached member is represented by the parent's authoritative
+        // structure; the construction record stores only its stable IDs.
         replace_with_nitrogen_square(&mut simulation.organisms[0], 5.0, 0.0, &catalog);
-        let developing_structure = std::mem::replace(
-            &mut simulation.organisms[0].structure,
-            OrganismStructure::new(),
-        );
+        let member_ids = simulation.organisms[0].structure.physical_constituent_ids();
+        let anchor_id = member_ids[0];
         let owner_id = simulation.organisms[0].id.clone();
         simulation.organisms[0].reproductive_construction =
             Some(crate::state::ReproductiveConstruction {
                 committed_material: crate::material_storage::MaterialStorage::default(),
-                developing_member_ids: developing_structure.physical_constituent_ids(),
-                developing_structure,
+                developing_member_ids: member_ids,
+                developing_structure: OrganismStructure::new(),
                 child_genome: simulation.organisms[0].genome.clone(),
                 developmental_origin: Position { x: 5.0, y: 0.0 },
                 developmental_orientation_radians: 0.0,
                 developing_stress: 0.0,
                 anchor_unit_index: 0,
-                anchor_physical_id: None,
+                anchor_physical_id: Some(anchor_id),
                 developing_energy: 0.0,
                 developing_maintenance_debt: 0.0,
                 needs_space: false,

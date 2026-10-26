@@ -1003,16 +1003,9 @@ fn translate_reproductive_construction(
         construction.developmental_origin.x += dx;
         construction.developmental_origin.y =
             wrap_y(construction.developmental_origin.y + dy, environment_height);
-        // During aggregate-owned development the parent structure has already
-        // been translated above. A transient child view must not translate those
-        // same physical constituents a second time.
-        let any_member_owned_by_parent = construction.has_any_member_in(&organism.structure);
-        if !construction.is_aggregate_owned_by(&organism.structure) && !any_member_owned_by_parent {
-            for unit in &mut construction.developing_structure.units {
-                unit.placement.x += dx;
-                unit.placement.y = wrap_y(unit.placement.y + dy, environment_height);
-            }
-        }
+        // Construction geometry is never an independent physical owner.
+        // The parent's authoritative aggregate was translated above; detached
+        // cached graphs are invalid legacy state and must not move as a second body.
     }
 }
 
@@ -1089,13 +1082,12 @@ mod tests {
                 add(&mut inventory, material);
             }
             if let Some(construction) = &organism.reproductive_construction {
+                assert!(
+                    construction.is_aggregate_owned_by(&organism.structure),
+                    "movement inventory cannot count detached construction as a second owner"
+                );
                 for material in construction.committed_material.iter_materials() {
                     add(&mut inventory, material);
-                }
-                if !construction.is_aggregate_owned_by(&organism.structure) {
-                    for unit in &construction.developing_structure.units {
-                        add(&mut inventory, &unit.material);
-                    }
                 }
             }
         }
