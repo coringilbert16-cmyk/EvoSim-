@@ -224,8 +224,28 @@ mod tests {
         .into_iter()
         .next()
         .expect("candidate contact should exist");
+        let (_, _, investment, _) =
+            crate::combine_runtime::selected_candidate_evaluation(
+                &structure, 0, 1, candidate, &catalog,
+            )
+            .expect("initial contact should be energetically admissible");
 
-        structure.units[1].placement.x += 10.0;
+        // Keep the endpoints physically within COMBINE tolerance, but change
+        // their separation after candidate selection. The old candidate would
+        // understate formation work if its cached distance were trusted.
+        structure.units[1].placement.x += 0.01;
+        let point_a = candidate
+            .endpoint_a
+            .world_point(&structure.units[0], &catalog)
+            .expect("endpoint A remains valid");
+        let point_b = candidate
+            .endpoint_b
+            .world_point(&structure.units[1], &catalog)
+            .expect("endpoint B remains valid");
+        let live_distance = (point_a.x - point_b.x).hypot(point_a.y - point_b.y);
+        assert!(live_distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE);
+        assert!((live_distance - candidate.distance).abs() > 1e-12);
+
         let before = structure.clone();
         let mut ledger = EnergyLedger::default();
         let mut energy = 1.0e12;
@@ -235,7 +255,7 @@ mod tests {
             0,
             1,
             candidate,
-            1.0,
+            investment,
             &catalog,
             &mut cache,
             &mut ledger,
