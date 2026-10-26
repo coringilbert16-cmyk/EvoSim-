@@ -2462,7 +2462,6 @@ mod tests {
         );
     }
 
- 
     #[test]
     fn aggregate_division_transfers_every_unit_once_and_reconciles_boundary_energy() {
         use crate::structure::{
