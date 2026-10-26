@@ -69,3 +69,19 @@ The remaining work is to finish verification of the complete branch, reconcile e
 The ownership audit found a gap between the independent inventory oracle and the shared material validator: the oracle checked overflow while aggregating repeated occurrences of the same resource, but Material::is_valid only bounded each constituent entry independently. A composite could therefore contain multiple individually representable Carbon counts whose combined per-resource count exceeded the oracle's u64 range and still pass some storage/deposit checks.
 
 The shared validator now accumulates each resource's constituent counts with checked integer addition. Repeated resource identities remain valid when their aggregate fits; overflow is rejected before the material can pass catalog-bound validation. Regression coverage exercises both cases. The post-change workflow still needs to execute against this new head before this pass is considered verified.
+
+
+## Final ownership-path audit and verification update (2026-10-26)
+
+The latest audit reviewed the active ownership boundaries across storage insertion/removal, environmental deposit and containment acquisition, expulsion, stored/environmental BREAK escrow and restoration, COMBINE source restoration, reproduction staging, and dead-material recycling. The paths that remove from a live holder either preflight validation, stage changes on cloned state, or restore the exact source/index if the destination rejects the transfer. Batch physical deposit validates every destination and payload before committing any item. The staged environmental redistribution helper is currently unused; it was not changed as part of this active-path audit.
+
+The independent inventory oracle has explicit conservation checks for field-to-storage transfer, storage-to-structure restoration, offspring transfer, and dead-material recycling, and rejection checks for malformed authoritative holders and partial construction ownership. No additional active transfer-loss defect was confirmed in this pass. The shared material validator's repeated-constituent overflow gap is fixed and has a passing dedicated regression.
+
+Latest workflow evidence on head `1fd1fbbe41b6c3a03b9eddb2f85076ff9cdffdff`:
+
+- Formatting and canonical 12N seed/realization checks passed.
+- The focused per-resource composite-overflow regression passed.
+- Full Rust suite reported 751 passed, 10 failed, 1 ignored. The 10 failure identities match the accepted post-#212 baseline exactly; the workflow subsequently timed out at six minutes, so its overall conclusion remains failed despite the emitted summary.
+- Clippy remains blocked by baseline warnings-as-errors (34 app-target and 14 test-target errors). The logged diagnostic locations are pre-existing code outside the new material-validation/transfer logic.
+
+The remaining decision is procedural: accept the baseline-only full-suite/Clippy failures as existing debt or require a green workflow before merge. Do not expand this PR into geometry, movement, constructor, reaction scheduling, or energy-policy cleanup.
