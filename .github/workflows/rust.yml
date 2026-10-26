@@ -245,6 +245,10 @@ jobs:
         run: |
           cargo test --locked confirmed_seed_is_the_established_twelve_piece_nitrogen_ring
           cargo test --locked ancestral_seed_realizes_a_physically_valid_developmental_structure
+      - name: Verify per-resource inventory overflow within composites
+        if: always()
+        timeout-minutes: 5
+        run: cargo test --locked material_counts_are_whole_and_catalog_bound
       - name: Run Rust tests
         if: always()
         # Keep a small margin over the observed ~4-minute full-suite runtime.
