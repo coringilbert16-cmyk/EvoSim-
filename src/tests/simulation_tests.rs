@@ -167,7 +167,7 @@ mod integration_tests {
                 .expect("whole carbon should be physically realizable");
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(physical));
+            .store_physical_instance(physical, &simulation.environment.catalog));
 
         let after = integer_material_inventory(&simulation).expect("result inventory is integral");
         assert_eq!(
@@ -198,7 +198,7 @@ mod integration_tests {
         .expect("Hydrogen strip should be physically realizable");
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(physical));
+            .store_physical_instance(physical, &simulation.environment.catalog));
         let before = integer_material_inventory(&simulation).expect("stored inventory is integral");
 
         let stored = simulation.organisms[0]
@@ -255,7 +255,7 @@ mod integration_tests {
         .expect("compound should be physically realizable");
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(physical));
+            .store_physical_instance(physical, &simulation.environment.catalog));
 
         let inventory_before =
             integer_material_inventory(&simulation).expect("pre-restore inventory is integral");
@@ -338,7 +338,7 @@ mod integration_tests {
         .expect("three-part material with one valid internal bond should be realizable");
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(physical));
+            .store_physical_instance(physical, &simulation.environment.catalog));
 
         let inventory_before =
             integer_material_inventory(&simulation).expect("pre-restore inventory is integral");
@@ -407,7 +407,7 @@ mod integration_tests {
         .expect("single Carbon should be physically realizable");
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(physical));
+            .store_physical_instance(physical, &simulation.environment.catalog));
 
         let inventory_before =
             integer_material_inventory(&simulation).expect("pre-restore inventory is integral");
@@ -518,7 +518,7 @@ mod integration_tests {
             .as_mut()
             .expect("construction started")
             .committed_material
-            .store_physical_instance(committed));
+            .store_physical_instance(committed, &simulation.environment.catalog));
 
         let before =
             integer_material_inventory(&simulation).expect("pre-recycling inventory is integral");
@@ -1073,7 +1073,7 @@ mod integration_tests {
         .expect("stored bonded material should be physically realizable");
         assert!(s.organisms[0]
             .stored_material
-            .store_physical_instance(physical));
+            .store_physical_instance(physical, &s.environment.catalog));
     }
 
     fn start_test_break_transformation(s: &mut Simulation) {

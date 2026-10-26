@@ -602,7 +602,7 @@ mod tests {
         .expect("second object should be realized");
 
         let prepared =
-            MaterialStorage::prepare_physical_batch_at_owner_anchor(vec![first, second], anchor)
+            MaterialStorage::prepare_physical_batch_at_owner_anchor(vec![first, second], anchor, &catalog())
                 .expect("valid batch should prepare atomically");
         let mut storage = MaterialStorage::default();
         storage.commit_prepared_physical_batch(prepared);
@@ -645,7 +645,8 @@ mod tests {
         .expect("test object should be realized");
         assert!(MaterialStorage::prepare_physical_batch_at_owner_anchor(
             vec![valid, fractional],
-            anchor
+            anchor,
+            &catalog(),
         )
         .is_none());
     }
@@ -673,6 +674,7 @@ mod tests {
             MaterialStorage::prepare_physical_batch_at_owner_anchor(
                 vec![instance.clone()],
                 invalid_anchor,
+                &catalog(),
             )
             .is_none(),
             "batch acquisition must reject a non-finite owner anchor"
@@ -681,11 +683,31 @@ mod tests {
         let mut storage = MaterialStorage::default();
         assert!(
             storage
-                .try_store_physical_instance_at_owner_anchor(instance, invalid_anchor)
+                .try_store_physical_instance_at_owner_anchor(instance, invalid_anchor, &catalog())
                 .is_err(),
             "single-object acquisition must return the original source on rejection"
         );
         assert!(storage.is_empty());
+    }
+
+    #[test]
+    fn unknown_resource_identity_is_rejected_at_storage_boundary() {
+        let catalog = catalog();
+        let mut physical = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("Carbon should be physically realizable");
+        physical.material.parts[0].0 = "Unobtainium".to_owned();
+
+        let mut storage = MaterialStorage::default();
+        assert!(!storage.store_physical_instance(physical, &catalog));
+        assert!(storage.entries.is_empty());
     }
 
     #[test]
@@ -723,7 +745,7 @@ mod tests {
             rotation_radians: 0.7,
         });
 
-        let prepared = MaterialStorage::prepare_physical_batch(vec![source])
+        let prepared = MaterialStorage::prepare_physical_batch(vec![source], &catalog())
             .expect("valid stored split should prepare");
         let StoredMaterial::Physical(piece) = &prepared[0];
         let placement = piece.placements.as_ref().unwrap()[0];
