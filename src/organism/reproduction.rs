@@ -864,23 +864,22 @@ fn commit_candidate_attachment(
         return ConstructionStatus::Detached;
     }
 
-    let candidate_units = child.structure.units.len();
-    let aggregate_owned = construction.is_aggregate_owned_by(parent_structure);
-    if aggregate_owned && (!child.usable_energy.is_finite() || child.usable_energy < 0.0) {
+    // This function is reachable only for a construction admitted into the
+    // parent's authoritative aggregate. Never fall back to detached graph state.
+    if !construction.is_aggregate_owned_by(parent_structure) {
+        return ConstructionStatus::Dead;
+    }
+    if !child.usable_energy.is_finite() || child.usable_energy < 0.0 {
         return ConstructionStatus::Waiting;
     }
-
+    let candidate_units = child.structure.units.len();
     let mut staged_parent_structure = parent_structure.clone();
-    let mut staged_child_structure = child.structure.clone();
-    if aggregate_owned {
-        let old_ids = construction.developing_member_ids.clone();
-        let Some((_, refreshed_view)) = staged_parent_structure
-            .replace_subgraph_remapping_new_ids_and_extract(&old_ids, &child.structure)
-        else {
-            return ConstructionStatus::Waiting;
-        };
-        staged_child_structure = refreshed_view;
-    }
+    let old_ids = construction.developing_member_ids.clone();
+    let Some((_, staged_child_structure)) = staged_parent_structure
+        .replace_subgraph_remapping_new_ids_and_extract(&old_ids, &child.structure)
+    else {
+        return ConstructionStatus::Waiting;
+    };
 
     let mut staged_parent_storage = parent_storage.clone();
     if let Some(parent_index) = transferred {
@@ -895,24 +894,12 @@ fn commit_candidate_attachment(
     let mut staged_construction = construction.clone();
     staged_construction.committed_material = child.stored_material;
     staged_construction.developing_member_ids = staged_child_structure.physical_constituent_ids();
-    staged_construction.developing_structure = if aggregate_owned {
-        OrganismStructure::new()
-    } else {
-        staged_child_structure
-    };
+    staged_construction.developing_structure = OrganismStructure::new();
     staged_construction.needs_space = false;
-    staged_construction.developing_energy = if aggregate_owned {
-        0.0
-    } else {
-        child.usable_energy
-    };
+    staged_construction.developing_energy = 0.0;
     staged_construction.developing_stress = child.stress;
 
-    let readiness_structure = if aggregate_owned {
-        &staged_parent_structure
-    } else {
-        &*parent_structure
-    };
+    let readiness_structure = &staged_parent_structure;
     let status = if birth_ready_with_reference(
         &staged_construction,
         readiness_structure,
@@ -927,10 +914,8 @@ fn commit_candidate_attachment(
     };
 
     // Commit point: all fallible checks and inventory operations have completed.
-    if aggregate_owned {
-        *parent_structure = staged_parent_structure;
-        *parent_energy = child.usable_energy;
-    }
+    *parent_structure = staged_parent_structure;
+    *parent_energy = child.usable_energy;
     *parent_storage = staged_parent_storage;
     *ledger = candidate_ledger;
     *construction = staged_construction;
