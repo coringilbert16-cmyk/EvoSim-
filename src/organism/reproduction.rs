@@ -11,6 +11,7 @@ use crate::material_storage::MaterialStorage;
 use crate::organism_viability::{
     validate_realized_organism_for_core, OrganismViabilityRequirements,
 };
+use crate::organism::developmental_blueprint::MaterialPreferenceField;
 use crate::resources::Material;
 use crate::state::{EnergyLedger, Environment, Organism, Position, ReproductiveConstruction};
 use crate::structure::OrganismStructure;
@@ -2244,7 +2245,7 @@ mod tests {
             // deliberately reduced geometry. Give each candidate an explicit,
             // valid preference for the resource being preflighted.
             let mut trial_child = developing_child.clone();
-            let preference = crate::organism::developmental_blueprint::MaterialPreferenceField {
+            let preference = MaterialPreferenceField {
                 resource_name: resource.name.clone(),
                 center_preference: 1.0,
                 radial_falloff: 1.0,
@@ -2270,7 +2271,7 @@ mod tests {
             .expect("at least one resource shape must fit the developing anchor");
         // Keep the selected preference for the real resume attempt so the
         // preflight and production path evaluate the same material.
-        let preference = crate::organism::developmental_blueprint::MaterialPreferenceField {
+        let preference = MaterialPreferenceField {
             resource_name: newly_available_resource.clone(),
             center_preference: 1.0,
             radial_falloff: 1.0,
