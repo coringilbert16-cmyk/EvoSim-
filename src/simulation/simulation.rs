@@ -2275,6 +2275,37 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn rejected_unowned_energy_release_preserves_world_inventory_atomically() {
+        let mut simulation = Simulation::new(914, 10.0);
+        let inventory_before = simulation.energy_inventory_snapshot();
+        let ledger_before = simulation.energy_ledger;
+        let usable_before = simulation.organisms[0].usable_energy;
+        let structure_before = simulation.organisms[0].structure.clone();
+
+        // The arithmetic balances, but this transaction has no named physical
+        // source holder to debit. Rejection must leave both energy and structure
+        // unchanged, not merely leave the ledger counters untouched.
+        let transaction = crate::energy_ledger::EnergyTransaction {
+            reason: crate::energy_ledger::EnergyReason::Transfer,
+            potential_released: 1.0,
+            usable_delta: 0.0,
+            structural_delta: 0.0,
+            work_expended: 0.0,
+            heat_dissipated: 1.0,
+        };
+        assert!(!simulation.energy_ledger.settle_transaction(
+            &mut simulation.organisms[0].usable_energy,
+            transaction,
+        ));
+
+        assert_eq!(simulation.organisms[0].usable_energy, usable_before);
+        assert_eq!(simulation.organisms[0].structure.units, structure_before.units);
+        assert_eq!(simulation.organisms[0].structure.bonds, structure_before.bonds);
+        assert_eq!(simulation.energy_ledger, ledger_before);
+        assert_eq!(simulation.energy_inventory_snapshot(), inventory_before);
+    }
+
+    #[test]
     fn stress_without_retained_resonance_cannot_authorize_a_random_bond_break() {
         let mut simulation = Simulation::new(915, 10.0);
         let before = simulation.energy_inventory_snapshot();
