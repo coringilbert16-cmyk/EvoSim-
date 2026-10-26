@@ -2530,6 +2530,24 @@ mod tests {
             });
         }
 
+        fn material_totals(
+            structure: &OrganismStructure,
+        ) -> std::collections::BTreeMap<String, u64> {
+            let mut totals = std::collections::BTreeMap::new();
+            for unit in &structure.units {
+                for (name, amount) in &unit.material.parts {
+                    assert!(amount.is_finite() && *amount >= 0.0);
+                    assert!((amount.fract()).abs() <= 1e-9);
+                    *totals.entry(name.clone()).or_default() += amount.round() as u64;
+                }
+            }
+            totals
+        }
+
+        fn structural_energy(structure: &OrganismStructure) -> f64 {
+            structure.bonds.iter().map(|bond| bond.bond_energy).sum()
+        }
+
         fn cavity_with_attached_carbon(
             catalog: &[crate::resources::BaseResource],
             origin_x: f64,
@@ -2635,6 +2653,8 @@ mod tests {
         let before_ids = parent.structure.physical_constituent_ids();
         let before_id_set: HashSet<_> = before_ids.iter().copied().collect();
         assert_eq!(before_ids.len(), before_id_set.len());
+        let before_materials = material_totals(&parent.structure);
+        let before_structural_energy = structural_energy(&parent.structure);
         let before_energy = parent.usable_energy;
         let mut ledger = EnergyLedger::default();
         let original_ledger = ledger;
@@ -2667,6 +2687,30 @@ mod tests {
                 .abs()
                 < 1e-9,
             "usable energy must include exactly the energy released by the severed bond"
+        );
+        let mut after_materials = material_totals(&parent.structure);
+        for (name, count) in material_totals(&child.structure) {
+            *after_materials.entry(name).or_default() += count;
+        }
+        assert_eq!(
+            after_materials, before_materials,
+            "division must conserve every physical constituent"
+        );
+        let after_structural_energy =
+            structural_energy(&parent.structure) + structural_energy(&child.structure);
+        assert!(
+            (after_structural_energy
+                - (before_structural_energy - CROSSING_BOND_ENERGY))
+                .abs()
+                < 1e-9,
+            "only crossing-bond energy may leave structural storage"
+        );
+        assert!(
+            (parent.usable_energy + child.usable_energy + after_structural_energy
+                - (before_energy + before_structural_energy))
+                .abs()
+                < 1e-9,
+            "usable plus structural energy must reconcile across division"
         );
         assert_ne!(
             ledger, original_ledger,
