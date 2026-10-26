@@ -127,9 +127,10 @@ impl ExternalInputTransaction {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct EnergyTransaction {
     pub(crate) reason: EnergyReason,
-    /// Non-structural energy source explicitly released by this event.
-    /// Energy already stored in a bond is represented by a negative
-    /// structural_delta when that bond is removed, not by this field.
+    /// Legacy compatibility field. Must remain exactly zero: this transaction
+    /// has no named non-structural source owner to debit. Energy stored in a
+    /// realized bond is represented by a negative structural_delta when removed.
+    /// External input must use ExternalInputTransaction instead.
     pub(crate) potential_released: f64,
     pub(crate) usable_delta: f64,
     pub(crate) structural_delta: f64,
