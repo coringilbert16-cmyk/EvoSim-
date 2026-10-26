@@ -12,19 +12,19 @@ Prove that movement rejection preserves authoritative world state, energy, mater
 - [x] Snapshot the moving organism, pushed organism, complete field cells/revision, spatial-index cells/membership, ledger, active movement counters, and independent integer-material inventory.
 - [x] Add a blocked push-chain case that rejects after successful energy preflight and proves no physical/energy/index side effects.
 - [x] Add a successful control that proves the mover, pushed organism, and realized field material move once, indexing updates, material inventory is conserved, and energy/heat reconcile.
-- [ ] Address any real implementation defect exposed by the tests without adding a redundant transaction framework.
+- [x] No production defect was exposed by the three movement transaction regressions; existing preflight/push-plan behavior passed.
 
 ## Acceptance criteria
 
-- [ ] Rejected movement preserves geometry, physical ownership, IDs, storage, revisions, indexes, movement counters, energy, ledger values, and independent inventories (excluding the expected failure diagnostic).
-- [ ] Failed push chains discard preflight settlement without side effects.
-- [ ] Successful movement updates each owner once and reconciles the expected energy debit.
+- [x] Rejected movement preserves geometry, physical ownership, IDs, storage, revisions, indexes, movement counters, energy, ledger values, and independent inventories (excluding the expected failure diagnostic).
+- [x] Failed push chains discard preflight settlement without side effects.
+- [x] Successful movement updates each owner once and reconciles the expected energy debit.
 - [ ] Compare failure identities against the PR #205 forward baseline.
 
 ## Verification
 
-- [ ] Targeted movement tests pass on the final PR head.
-- [ ] Formatting and source-size checks pass.
+- [x] Targeted movement tests pass on the final PR head (GitHub Actions run 9631).
+- [x] Formatting and source-size checks pass (GitHub Actions run 9631).
 - [ ] Compare test failure identities with PR #205 merge baseline `10521705d8f921ceb071b17240f1b7e069f52f1a`; do not compare only failure totals.
 - [ ] Confirm no production changes are needed, or make only a focused fix proven necessary by a failing regression.
 
