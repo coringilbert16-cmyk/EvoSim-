@@ -350,7 +350,12 @@ impl Material {
         if !self
             .parts
             .iter()
-            .all(|(name, amount)| !name.is_empty() && *amount > 0.0 && is_whole_count(*amount))
+            .all(|(name, amount)| {
+                !name.is_empty()
+                    && *amount > 0.0
+                    && *amount < u64::MAX as f64
+                    && is_whole_count(*amount)
+            })
         {
             return false;
         }
@@ -527,6 +532,10 @@ mod material_contract_tests {
         let catalog = default_catalog();
         assert!(Material::free_base("Carbon", 2.0).is_valid());
         assert!(!Material::free_base("Carbon", 1.5).is_valid());
+        assert!(
+            !Material::free_base("Carbon", u64::MAX as f64).is_valid(),
+            "constituent counts must remain representable by the independent inventory oracle"
+        );
         assert!(Material::free_base("Carbon", 1.0).is_valid_for_catalog(&catalog));
 
         let mut ambiguous_catalog = catalog.clone();
