@@ -1241,7 +1241,7 @@ pub(crate) fn finish_reproduction(
         maintenance_debt: construction.developing_maintenance_debt,
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
         stored_material: construction.committed_material,
-        genome_core_identity_established: false,
+        genome_core_identity_established: true,
         active_transformation_id: None,
         active_movement: None,
         reproductive_construction: None,
@@ -2689,6 +2689,10 @@ mod tests {
             child.structure.genome_constituent_ids(),
             &[child_core_id],
             "the child's core identity must be independent after division"
+        );
+        assert!(
+            child.genome_core_identity_established,
+            "a child born from a validated genome core starts with that identity established"
         );
     }
 
