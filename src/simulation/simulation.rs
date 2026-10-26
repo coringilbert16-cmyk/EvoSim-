@@ -2293,12 +2293,11 @@ mod decomposition_finalization_tests {
             work_expended: 0.0,
             heat_dissipated: 1.0,
         };
-        assert!(
-            !simulation.energy_ledger.settle_transaction(
-                &mut simulation.organisms[0].usable_energy,
-                transaction,
-            )
+        let accepted = simulation.energy_ledger.settle_transaction(
+            &mut simulation.organisms[0].usable_energy,
+            transaction,
         );
+        assert!(!accepted);
 
         assert_eq!(simulation.organisms[0].usable_energy, usable_before);
         assert_eq!(simulation.organisms[0].structure.units, structure_before.units);
