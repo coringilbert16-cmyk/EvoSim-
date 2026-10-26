@@ -1064,10 +1064,7 @@ mod tests {
         ) {
             for (name, amount) in &material.parts {
                 assert!(amount.is_finite() && *amount > 0.0);
-                assert!(
-                    (amount.fract()).abs() <= 1e-9,
-                    "fractional material: {name}={amount}"
-                );
+                assert!((amount.fract()).abs() <= 1e-9, "fractional material: {name}={amount}");
                 *inventory.entry(name.clone()).or_default() += amount.round() as u64;
             }
         }
@@ -1103,8 +1100,7 @@ mod tests {
     }
 
     fn organism_state_without_movement_diagnostic(organism: &Organism) -> serde_json::Value {
-        let mut state =
-            serde_json::to_value(organism).expect("organism snapshot should serialize");
+        let mut state = serde_json::to_value(organism).expect("organism snapshot should serialize");
         if let Some(object) = state.as_object_mut() {
             // A rejected attempt is allowed to record its diagnostic; all
             // physical, ownership, energy, storage, and lifecycle state is not.
