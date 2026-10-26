@@ -2143,7 +2143,7 @@ mod tests {
     fn waiting_construction_resumes_from_same_graph_when_material_arrives() {
         use crate::structure::{Placement, StructuralUnit};
 
-        let mut simulation = Simulation::new(37, 20.0);
+        let mut simulation = Simulation::new(31, 20.0);
         let mut parent = simulation.organisms.remove(0);
         let catalog = simulation.environment.catalog.clone();
         // Keep the anchor in open space so the regression tests wait/resume
