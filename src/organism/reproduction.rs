@@ -2229,7 +2229,12 @@ mod tests {
         let before_units = before_view.units.len();
         let before_bonds = before_view.bonds.len();
 
-        let developing_child = developing_organism(&construction, before_view);
+        let mut developing_child = developing_organism(&construction, before_view);
+        // The production path gives the transient developing view the parent's
+        // one authoritative usable-energy balance before attempting attachment.
+        // Mirror that transfer during preflight; the legacy construction energy
+        // cache is intentionally zero and must not be treated as a second holder.
+        developing_child.usable_energy = parent.usable_energy;
         // Chemical preference alone does not guarantee a physical bond can be
         // formed at the current geometry. Preflight candidate resources and
         // supply one that the real attachment solver can use, so this regression
