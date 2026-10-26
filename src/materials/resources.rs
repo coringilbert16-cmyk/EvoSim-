@@ -347,16 +347,12 @@ impl Material {
         if self.parts.is_empty() {
             return self.internal_bonds.is_empty();
         }
-        if !self
-            .parts
-            .iter()
-            .all(|(name, amount)| {
-                !name.is_empty()
-                    && *amount >= 1.0
-                    && *amount < u64::MAX as f64
-                    && is_whole_count(*amount)
-            })
-        {
+        if !self.parts.iter().all(|(name, amount)| {
+            !name.is_empty()
+                && *amount >= 1.0
+                && *amount < u64::MAX as f64
+                && is_whole_count(*amount)
+        }) {
             return false;
         }
         for (i, bond) in self.internal_bonds.iter().enumerate() {

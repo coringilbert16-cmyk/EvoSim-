@@ -309,7 +309,9 @@ fn try_child_construction(
             };
 
             let mut candidate = child.clone();
-            candidate.stored_material.take_physical_at(storage_index, &environment.catalog)?;
+            candidate
+                .stored_material
+                .take_physical_at(storage_index, &environment.catalog)?;
             candidate.structure = trial_structure;
             candidate.usable_energy = candidate_energy;
             return Some((candidate, candidate_ledger, None));

@@ -256,7 +256,10 @@ impl MaterialStorage {
         })
     }
 
-    pub(crate) fn take_first_unstructured(&mut self, catalog: &[crate::resources::BaseResource]) -> Option<PhysicalMaterial> {
+    pub(crate) fn take_first_unstructured(
+        &mut self,
+        catalog: &[crate::resources::BaseResource],
+    ) -> Option<PhysicalMaterial> {
         let index = self.entries.iter().position(|entry| {
             let material = entry.material();
             !material.has_internal_structure()
@@ -279,7 +282,11 @@ impl MaterialStorage {
         })
     }
 
-    pub(crate) fn take_one_unstructured_named(&mut self, name: &str, catalog: &[crate::resources::BaseResource]) -> Option<PhysicalMaterial> {
+    pub(crate) fn take_one_unstructured_named(
+        &mut self,
+        name: &str,
+        catalog: &[crate::resources::BaseResource],
+    ) -> Option<PhysicalMaterial> {
         let index = self.entries.iter().position(|entry| {
             let material = entry.material();
             !material.has_internal_structure()
@@ -294,7 +301,11 @@ impl MaterialStorage {
         Some(self.entries.swap_remove(index).into_physical())
     }
 
-    pub(crate) fn take_matching(&mut self, target: &Material, catalog: &[crate::resources::BaseResource]) -> Option<PhysicalMaterial> {
+    pub(crate) fn take_matching(
+        &mut self,
+        target: &Material,
+        catalog: &[crate::resources::BaseResource],
+    ) -> Option<PhysicalMaterial> {
         if !target.is_valid_for_catalog(catalog) || target.is_empty() {
             return None;
         }
@@ -309,7 +320,11 @@ impl MaterialStorage {
         Some(self.entries.swap_remove(index).into_physical())
     }
 
-    pub(crate) fn take_physical_at(&mut self, index: usize, catalog: &[crate::resources::BaseResource]) -> Option<PhysicalMaterial> {
+    pub(crate) fn take_physical_at(
+        &mut self,
+        index: usize,
+        catalog: &[crate::resources::BaseResource],
+    ) -> Option<PhysicalMaterial> {
         match self.entries.get(index)? {
             StoredMaterial::Physical(instance)
                 if instance.is_realized()
@@ -351,17 +366,24 @@ impl MaterialStorage {
         count: usize,
         catalog: &[crate::resources::BaseResource],
     ) -> Option<Vec<PhysicalMaterial>> {
-        let indices: Vec<usize> = self.entries.iter().enumerate().filter_map(|(index, entry)| {
-            match entry {
+        let indices: Vec<usize> = self
+            .entries
+            .iter()
+            .enumerate()
+            .filter_map(|(index, entry)| match entry {
                 StoredMaterial::Physical(instance)
                     if !instance.material.has_internal_structure()
                         && !instance.material.is_empty()
                         && instance.is_realized()
                         && instance.material.is_valid_for_catalog(catalog)
-                        && Self::is_discrete(&instance.material) => Some(index),
+                        && Self::is_discrete(&instance.material) =>
+                {
+                    Some(index)
+                }
                 _ => None,
-            }
-        }).take(count).collect();
+            })
+            .take(count)
+            .collect();
         if indices.len() != count {
             return None;
         }
@@ -433,7 +455,11 @@ mod tests {
         let mut storage = MaterialStorage::default();
         assert!(storage.store_physical(
             Material::free_base("Carbon", 1.0),
-            vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            ],
             &catalog(),
         ));
         let StoredMaterial::Physical(instance) = &mut storage.entries[0];
@@ -443,7 +469,10 @@ mod tests {
         assert!(storage
             .take_matching_physical(&Material::free_base("Uncatalogued", 1.0), &catalog())
             .is_none());
-        assert_eq!(storage, before, "rejected transfer must preserve the source owner");
+        assert_eq!(
+            storage, before,
+            "rejected transfer must preserve the source owner"
+        );
     }
 
     #[test]
@@ -451,7 +480,11 @@ mod tests {
         let mut storage = MaterialStorage::default();
         assert!(storage.store_physical(
             Material::free_base("Carbon", 1.0),
-            vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            ],
             &catalog(),
         ));
         let StoredMaterial::Physical(instance) = &mut storage.entries[0];
@@ -459,7 +492,10 @@ mod tests {
         let before = storage.clone();
 
         assert!(storage.take_physical_at(0, &catalog()).is_none());
-        assert_eq!(storage, before, "rejected indexed take must preserve ownership");
+        assert_eq!(
+            storage, before,
+            "rejected indexed take must preserve ownership"
+        );
     }
 
     #[test]
@@ -539,7 +575,9 @@ mod tests {
             &catalog(),
         ));
         assert_eq!(
-            storage.take_matching(&m, &catalog()).map(|instance| instance.material),
+            storage
+                .take_matching(&m, &catalog())
+                .map(|instance| instance.material),
             Some(m.clone())
         );
         assert!(storage.is_empty());
@@ -563,7 +601,9 @@ mod tests {
         ];
         assert!(storage.store_physical(m.clone(), placements, &catalog()));
         assert_eq!(storage.physical_count(), 1);
-        let restored = storage.take_matching_physical(&m, &catalog()).expect("stored instance");
+        let restored = storage
+            .take_matching_physical(&m, &catalog())
+            .expect("stored instance");
         assert_eq!(restored.material, m);
         let intrinsic = restored.placements.expect("intrinsic realization");
         assert!(intrinsic[0].x.abs() <= 1e-12);
@@ -585,7 +625,9 @@ mod tests {
         }];
         assert!(storage.store_physical(m.clone(), placements, &catalog()));
         assert_eq!(storage.physical_count(), 1);
-        let restored = storage.take_matching_physical(&m, &catalog()).expect("stored instance");
+        let restored = storage
+            .take_matching_physical(&m, &catalog())
+            .expect("stored instance");
         assert_eq!(restored.material, m);
         let intrinsic = restored.placements.expect("intrinsic realization");
         assert!(intrinsic[0].x.abs() <= 1e-12);
