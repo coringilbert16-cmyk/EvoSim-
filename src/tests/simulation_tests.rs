@@ -155,9 +155,11 @@ mod integration_tests {
 
         let before =
             integer_material_inventory(&simulation).expect("fixture inventory is integral");
+        let catalog = simulation.environment.catalog.clone();
         let taken = crate::material_transfer::take_whole_unstructured(
             &mut simulation.environment.field.cells[0].materials[0],
             1,
+            &catalog,
         )
         .expect("one whole carbon constituent should transfer");
         let placement = Placement {
@@ -166,11 +168,11 @@ mod integration_tests {
             rotation_radians: 0.0,
         };
         let physical =
-            PhysicalMaterial::realized(taken, vec![placement], &simulation.environment.catalog)
+            PhysicalMaterial::realized(taken, vec![placement], &catalog)
                 .expect("whole carbon should be physically realizable");
         assert!(simulation.organisms[0]
             .stored_material
-            .store_physical_instance(physical, &simulation.environment.catalog));
+            .store_physical_instance(physical, &catalog));
 
         let after = integer_material_inventory(&simulation).expect("result inventory is integral");
         assert_eq!(
