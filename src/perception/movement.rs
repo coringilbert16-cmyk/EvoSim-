@@ -2305,6 +2305,7 @@ mod tests {
             .map(|unit| unit.placement.x)
             .collect();
         let original_energy = organism.usable_energy;
+        let field_revision_before_move = environment.field.revision;
         let expected_cost = movement_energy_cost_for_distance(
             organism.structural_mass(&environment.catalog),
             organism.genome.movement_efficiency(),
@@ -2335,7 +2336,11 @@ mod tests {
         assert!((ledger.total_heat_dissipated - expected_cost).abs() < 1e-9);
         assert_eq!(ledger.total_work_expended, 0.0);
         assert_eq!(active.remaining_steps, 0);
-        assert_eq!(environment.field.revision, 2, "deposit plus one committed push");
+        assert_eq!(
+            environment.field.revision,
+            field_revision_before_move.wrapping_add(1),
+            "a committed physical push should revise the field exactly once"
+        );
         assert_eq!(
             movement_material_inventory(&[organism.clone(), before[0].clone()], &environment),
             original_inventory,
