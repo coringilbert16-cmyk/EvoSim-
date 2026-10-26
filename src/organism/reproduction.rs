@@ -2685,9 +2685,19 @@ mod tests {
             parent_ids.contains(&parent_core_id),
             "the parent retains its original genome core"
         );
+        assert_eq!(
+            parent.structure.genome_constituent_ids(),
+            &[parent_core_id],
+            "the child core must not remain registered in the parent after division"
+        );
         assert!(
             child_ids.contains(&child_core_id),
             "the child retains its own genome core"
+        );
+        assert_eq!(
+            child.structure.genome_constituent_ids(),
+            &[child_core_id],
+            "the child's core identity must be independent after division"
         );
     }
 
