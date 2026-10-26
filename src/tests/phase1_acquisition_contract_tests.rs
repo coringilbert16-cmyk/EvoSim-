@@ -101,7 +101,7 @@ mod tests {
     #[test]
     fn logical_material_is_not_promoted_into_physical_containment() {
         let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
-        field.deposit_at_index(0, compound());
+        field.deposit_at_index(0, compound(), &catalog());
         let contained =
             field.take_contained_physical_materials_in_regions(&body(), &[], &catalog());
         assert!(contained.is_empty());
@@ -130,7 +130,7 @@ mod tests {
         .expect("test composite must have a valid physical realization");
 
         let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
-        field.deposit(0.0, 0.0, physical);
+        field.deposit(0.0, 0.0, physical, &catalog);
         let contained =
             field.take_contained_physical_materials_in_regions(&body(), &[region(1.0)], &catalog);
 
@@ -168,7 +168,7 @@ mod tests {
         .expect("test composite must have a valid physical realization");
 
         let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
-        field.deposit(0.0, 0.0, physical);
+        field.deposit(0.0, 0.0, physical, &catalog);
         let contained = field.take_contained_physical_materials_in_regions(
             &large_body(),
             &[region(2.0)],

@@ -921,7 +921,7 @@ mod integration_tests {
         )
         .expect("base resource should have a valid physical realization");
         let before = s.organisms[0].stored_material.total_amount();
-        s.environment.field.deposit(anchor.x, anchor.y, physical);
+        s.environment.field.deposit(anchor.x, anchor.y, physical, &s.environment.catalog)
 
         // An in-flight transformation owns a stable view of storage: acquiring
         // now could shift a stored-BREAK rollback index or be overwritten by a
@@ -1003,7 +1003,7 @@ mod integration_tests {
             realization.expect("test composite must straddle the realized body");
         let original = physical.clone();
         let before = s.organisms[0].stored_material.total_amount();
-        s.environment.field.deposit(anchor.x, anchor.y, physical);
+        s.environment.field.deposit(anchor.x, anchor.y, physical, &s.environment.catalog)
         Simulation::transfer_contained_environmental_material(
             &mut s.organisms[0],
             &mut s.environment,

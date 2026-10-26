@@ -29,7 +29,7 @@ mod tests {
         assert!(released.iter().all(|material| material.is_realized()));
 
         for material in released {
-            assert!(environment.field.deposit(position.x, position.y, material));
+            assert!(environment.field.deposit(position.x, position.y, material, &environment.catalog));
         }
         let index = environment
             .field
