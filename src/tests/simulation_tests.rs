@@ -25,7 +25,7 @@ mod integration_tests {
                 }
                 if !amount.is_finite()
                     || *amount < 1.0
-                    || amount.fract().abs() > 1e-9
+                    || amount.fract() != 0.0
                     || *amount >= u64::MAX as f64
                 {
                     return Err(format!(
@@ -632,6 +632,11 @@ mod integration_tests {
         let error = integer_material_inventory(&simulation)
             .expect_err("sub-unit quantities must not round down to zero inventory");
         assert!(error.contains("non-integer or invalid amount for Carbon: 0.0000000001"));
+
+        simulation.environment.field.cells[0].materials[0].parts[0].1 = 1.0000000001;
+        let error = integer_material_inventory(&simulation)
+            .expect_err("near-integer fractional quantities must not be rounded into atoms");
+        assert!(error.contains("non-integer or invalid amount for Carbon"));
     }
 
     #[test]

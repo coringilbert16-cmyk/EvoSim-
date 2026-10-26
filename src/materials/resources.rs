@@ -320,7 +320,7 @@ impl InternalBond {
 const MATERIAL_COUNT_EPSILON: f64 = 1e-9;
 
 fn is_whole_count(amount: f64) -> bool {
-    amount.is_finite() && amount >= 0.0 && (amount - amount.round()).abs() <= MATERIAL_COUNT_EPSILON
+    amount.is_finite() && amount >= 0.0 && amount.fract() == 0.0
 }
 
 /// A material is defined by its composition and its internal structure.
@@ -528,6 +528,7 @@ mod material_contract_tests {
         let catalog = default_catalog();
         assert!(Material::free_base("Carbon", 2.0).is_valid());
         assert!(!Material::free_base("Carbon", 1.5).is_valid());
+        assert!(!Material::free_base("Carbon", 1.0000000001).is_valid());
         assert!(
             !Material::free_base("Carbon", 1e-10).is_valid(),
             "positive sub-unit quantities are fractional atoms, not whole-count values"
