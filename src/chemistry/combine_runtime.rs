@@ -212,17 +212,40 @@ pub(crate) fn form_selected_bond_diagnostic(
     if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b {
         return Err("invalid unit indices");
     }
+    // A selected candidate is only a proposal. Rebuild it from the live
+    // graph before committing so a small geometry change cannot reuse stale
+    // distance/facing/load values (and undercharge formation work).
+    let live_candidate = crate::contact::connection_pair_candidates_cached(
+        structure, unit_a, unit_b, catalog, cache,
+    )
+    .into_iter()
+    .find(|live| {
+        live.endpoint_a == candidate.endpoint_a
+            && live.endpoint_b == candidate.endpoint_b
+            && live.distance <= COMBINE_CONTACT_TOLERANCE
+            && live.available_a
+            && live.available_b
+    })
+    .ok_or("selected contact is no longer eligible")?;
     if candidate.distance > COMBINE_CONTACT_TOLERANCE
         || !candidate.available_a
         || !candidate.available_b
+        || !candidate.distance.is_finite()
+        || !candidate.facing.is_finite()
+        || !candidate.load_a.is_finite()
+        || !candidate.load_b.is_finite()
+        || (live_candidate.distance - candidate.distance).abs() > EPSILON
+        || (live_candidate.facing - candidate.facing).abs() > EPSILON
+        || (live_candidate.load_a - candidate.load_a).abs() > EPSILON
+        || (live_candidate.load_b - candidate.load_b).abs() > EPSILON
     {
-        return Err("candidate contact is outside tolerance or an endpoint is unavailable");
+        return Err("selected contact metrics changed before commit");
     }
-    let point_a = candidate
+    let point_a = live_candidate
         .endpoint_a
         .world_point(&structure.units[unit_a], catalog)
         .ok_or("candidate endpoint A has no world point")?;
-    let point_b = candidate
+    let point_b = live_candidate
         .endpoint_b
         .world_point(&structure.units[unit_b], catalog)
         .ok_or("candidate endpoint B has no world point")?;
@@ -234,11 +257,11 @@ pub(crate) fn form_selected_bond_diagnostic(
         BondFormationRequest {
             unit_a,
             unit_b,
-            endpoint_a: candidate.endpoint_a,
-            endpoint_b: candidate.endpoint_b,
+            endpoint_a: live_candidate.endpoint_a,
+            endpoint_b: live_candidate.endpoint_b,
             investment,
         },
-        candidate,
+        live_candidate,
         catalog,
         cache,
         ledger,
