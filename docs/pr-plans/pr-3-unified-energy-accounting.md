@@ -10,7 +10,7 @@ Establish one consistent energy accounting model across initialization, sources,
 
 - [ ] Audit energy entry points, spending paths, transfers, and sinks.
 - [ ] Define accounting contracts and units at each boundary.
-- [ ] Close duplicate or inconsistent energy ownership and settlement paths.
+- [ ] Close duplicate or inconsistent energy ownership and settlement paths (initial-source shortcut fix started).
 - [ ] Test rejected settlement, initialization, and cross-system reconciliation.
 
 ## Acceptance criteria
@@ -18,7 +18,7 @@ Establish one consistent energy accounting model across initialization, sources,
 - [ ] Every energy change has an identified source, transfer, storage change, or sink.
 - [ ] Failed operations do not partially debit or credit energy.
 - [ ] Independent world-energy accounting reconciles within defined tolerances.
-- [ ] Legacy source-budget shortcuts cannot silently create energy.
+- [ ] Legacy source-budget shortcuts cannot silently create energy; the initial constructor-budget-to-energy conversion is removed and covered by an acceptance assertion.
 
 ## Guardrails
 
