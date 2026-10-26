@@ -1,36 +1,54 @@
 # Make Reaction Realization and Bond Ownership Transactional
 
-> **Planning scaffold only.** This file records the proposed scope and acceptance gate. No implementation changes or tests are included in this setup PR. Do not start implementation until explicitly authorized.
+## Status
 
-## Summary
+Implementation and focused verification are consolidated in this PR. The current-head Rust suite has the same ten named failures as accepted baseline `10521705d8f921ceb071b17240f1b7e069f52f1a`; it completed in 278.22 seconds, under the seven-minute ceiling. Clippy still fails on the pre-existing repository warning backlog (34 application-target diagnostics and 14 test-target diagnostics on this run); this PR does not expand into that cleanup.
+
+## Scope and invariant
 
 Ensure chemistry reactions change authoritative physical material and bonds exactly once, with accounting committed consistently alongside physical realization.
 
-## Outline
+This phase owns **atomic physical realization and settlement of a selected reaction**: validate live contacts/endpoints, stage material/bond changes, settle energy, then commit once or roll back completely. It does not own the world-wide candidate scheduler, reaction-progress lifetime, or environment-first UI/logging; those are separate planning scopes.
 
-- [ ] Map reaction planning to material realization and bond mutation.
-- [ ] Identify duplicate ownership or non-atomic reaction paths.
-- [ ] Stage and validate reaction outcomes before committing changes.
-- [ ] Add success, rejection, and rollback coverage for representative reactions.
+## Implemented
+
+- Revalidate a selected COMBINE contact against live geometry before settlement; reject stale contact metrics or unavailable endpoints without mutating structure or energy.
+- Stage bond insertion and fluid coalescence on a trial graph; commit the physical graph only after energy settlement succeeds.
+- Preserve rollback behavior for failed COMBINE realization, including energy/ledger state and environmental-source restoration.
+- Preserve transactional BREAK behavior: validate the target bond and trial graph before settlement; commit structure only after the energy transaction succeeds.
+- Keep stored and environmental BREAK sources escrowed while a transformation is active; restore them on failed completion, preserving original holder/cell position when valid and retaining material explicitly when exact restoration is unavailable.
+- Add a successful live-COMBINE test against the independent simulation-level world-energy inventory.
+- Add a regression proving that a small geometry change after candidate selection rejects stale COMBINE metrics and preserves structure, energy, and ledger.
+- Retain the existing BREAK inventory, source rollback, and bond ownership regressions.
 
 ## Acceptance criteria
 
-- [ ] Reaction bookkeeping corresponds to actual physical changes.
-- [ ] Bonds have unambiguous ownership and valid endpoints.
-- [ ] Rejected reactions preserve material, bonds, energy, and inventories.
-- [ ] Successful reactions reconcile material and energy consequences.
+- [x] Reaction bookkeeping corresponds to actual physical changes.
+- [x] Bonds have unambiguous ownership and valid endpoints on committed graphs.
+- [x] Rejected reactions preserve material, bonds, energy, and inventories through staged transaction/rollback paths.
+- [x] Successful reactions reconcile material and energy consequences.
+- [x] Formatting, architecture checks, and all focused test groups pass on the current head.
+- [x] Full-suite failure identities match the accepted baseline and runtime remains under seven minutes.
+- [ ] Merge readiness confirmed after final review of the current PR head.
 
-## Guardrails
+## Verification on current head
 
-- Start with one focused audit of the current merged `main` before implementation.
-- Use PR #205 merge commit `10521705d8f921ceb071b17240f1b7e069f52f1a` as the forward baseline; compare named test failure identities, not only totals.
-- Keep each command and test run within five minutes; a timeout is incomplete evidence.
-- Keep this PR limited to its primary invariant. Do not fold in unrelated cleanup.
+Head: `386b04b120137a55433a2e639b55f4aa34297012`
+
+- Formatting: passed.
+- Repository architecture checks: passed.
+- Energy accounting focused tests: passed.
+- Chemistry/reactions focused tests: passed.
+- Transactions/ownership focused tests: passed.
+- Geometry/persistence focused tests: passed.
+- Organism/seed acceptance focused tests: passed.
+- Full Rust suite: 754 passed, 10 failed, 1 ignored in 278.22 seconds. The ten failing test names match the accepted baseline; no new failure identities observed.
+- Clippy: failed on the existing warning backlog; not treated as a new transactionality regression.
+
+## Guardrails and dependencies
+
+- Use PR #205 merge commit `10521705d8f921ceb071b17240f1b7e069f52f1a` as the baseline; compare named test failure identities, not only totals.
+- Keep this PR limited to its primary invariant. Do not fold in unrelated cleanup or optimization.
 - PR #204 is the roadmap/handoff; PR #196 constructor/Bob work is out of scope.
-
-
-## Cross-PR boundary and dependency clarification (2026-10-26)
-
-This phase owns **atomic physical realization and settlement of a selected reaction**: validate live contacts/endpoints, stage all material/bond changes, settle energy, then commit once or roll back completely. It does not own the world-wide candidate scheduler, reaction-progress lifetime, or environment-first UI/logging; those are separate planning scopes.
-
-**Required shared-rule invariant:** the same reaction policy and settlement path must be usable for environmental material and organism/cell-held material. Do not create a special environmental reaction law. Depend on PR #207 material ownership, PR #208 energy accounting, the cache-version boundary, and the shared chemistry runtime/scheduler. Cached results never override live geometry or settlement.
+- PR #207 owns material ownership and PR #208 owns energy accounting. The shared chemistry runtime/scheduler and cache-version boundary remain separate scopes; this PR does not add a special environmental reaction law.
+- The temporary supporting changes from PRs #219 and #220 are consolidated here; those PRs are closed and are not independent merge targets.
