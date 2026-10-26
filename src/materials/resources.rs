@@ -380,7 +380,11 @@ impl Material {
                         .any(|previous| previous.name == resource.name)
             })
             && self.parts.iter().all(|(name, _)| {
-                catalog.iter().filter(|resource| resource.name == *name).count() == 1
+                catalog
+                    .iter()
+                    .filter(|resource| resource.name == *name)
+                    .count()
+                    == 1
             })
     }
 

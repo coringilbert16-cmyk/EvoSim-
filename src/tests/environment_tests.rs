@@ -288,10 +288,14 @@ fn logical_deposit_rejects_invalid_payload_without_claiming_success() {
     assert_eq!(field.cells, before_cells);
     assert_eq!(field.revision, before_revision);
 
-    assert!(!field.deposit(12.5, 12.5, Material {
-        parts: Vec::new(),
-        internal_bonds: Vec::new(),
-    }));
+    assert!(!field.deposit(
+        12.5,
+        12.5,
+        Material {
+            parts: Vec::new(),
+            internal_bonds: Vec::new(),
+        },
+    ));
     assert_eq!(field.cells, before_cells);
     assert_eq!(field.revision, before_revision);
 }
