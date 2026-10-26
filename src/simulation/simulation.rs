@@ -489,7 +489,8 @@ impl Simulation {
         }
         let self_maintenance_pressure =
             (organism.peak_developmental_realization - current_realization).clamp(0.0, 1.0);
-        let energy_survival = (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
+        let stress_input = organism.stress.max(0.0) * crate::state::STRESS_INPUT_SCALE;
+        let energy_survival = (reserve_pressure * (1.0 + stress_input)).clamp(0.0, 1.0);
         // Survival is first the pressure to preserve the organism's realized
         // physical self. Energy fills the remaining survival deficit rather
         // than replacing that structural pressure.

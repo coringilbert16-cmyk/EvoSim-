@@ -1075,9 +1075,7 @@ pub(crate) fn resolve_transformation(
         // tick as its energy transaction, before chemistry or stress can run.
         organism.structure = structure.clone();
         organism.stored_material = stored_material.clone();
-        if stress.is_finite() {
-            organism.stress += stress;
-        }
+        organism.add_stress_input(stress);
         organism.mark_structure_changed();
         organism.active_transformation_id = None;
 

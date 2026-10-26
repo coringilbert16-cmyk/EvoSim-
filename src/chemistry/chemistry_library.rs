@@ -1212,10 +1212,21 @@ mod tests {
             serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
         manifest["equation_fingerprint"] = serde_json::Value::String("old-equations".into());
         fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+
+        // Rejecting stale cache data must not silently rewrite the evidence or
+        // make it appear compatible. Recovery/regeneration is a separate,
+        // explicit operation performed only after the stale store is handled.
+        let data_path = root.join("chemistry.jsonl");
+        let original_data = fs::read(&data_path).unwrap();
+        let original_manifest = fs::read(&manifest_path).unwrap();
+
         let error = ChemistryLibrary::open(&root)
             .err()
             .expect("mismatched equation cache must be rejected");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
         assert!(error.to_string().contains("fingerprint mismatch"));
+        assert_eq!(fs::read(&data_path).unwrap(), original_data);
+        assert_eq!(fs::read(&manifest_path).unwrap(), original_manifest);
         let _ = fs::remove_dir_all(root);
     }
 
