@@ -52,7 +52,7 @@ Make environmental materials and material held by cells/organisms participate in
 - [x] Added a regression proving a large activation signal cannot pay a physical BREAK energy shortfall; focused chemistry tests passed, while exact-head full-suite/Clippy verification remains pending.
 - [x] Identified a hard integration gap: environmental `PhysicalMaterialBond` records store topology/endpoints but no bond-energy holder, while decomposing bodies use a separate bond-break settlement path. Environment-only realization must not invent an energy source; the shared transaction/ownership bridge needs to preserve or derive actual energy provenance.
 - [ ] Define the source-backed energy/ownership bridge for physical-material internal bonds before enabling environmental realization. Existing `PhysicalMaterialBond` records contain endpoints only; deriving energy from type-level potential or activation signal would create unaccounted energy.
-- [ ] Generalize candidate discovery/activation to environmental and organism-held material using local spatial neighborhoods, using the same reaction policy and transaction boundary.
+- [ ] Add environmental material to the **chemical** candidate/activation runtime using local spatial neighborhoods and the same transaction boundary. Existing `environmental_break_candidates`/`try_start_environmental_break` is a separate voluntary BREAK transformation, not chemical activation; it does not satisfy this gate.
 - [ ] Add acceptance coverage for dead-material behavior. Audit confirms nonliving organisms remain in `Simulation::step`'s organism loop and pass through the same `chemical_reaction::accumulate` path; do not reactivate the disconnected legacy recycling/decomposition path as a second chemistry engine.
 - [ ] Add transactional and independent-inventory acceptance tests for environment-only and organism-held reactions.
 - [ ] Benchmark candidate discovery and document bounded-work behavior.
@@ -68,3 +68,8 @@ Make environmental materials and material held by cells/organisms participate in
 3. Keep dead organisms on the canonical reaction path; add an acceptance regression rather than enabling the legacy recycling carrier.
 4. Add environment-only and cross-holder acceptance tests with independent integer-material and world-energy inventory oracles.
 5. Benchmark the completed path and document current temporary safeguards. The 307.58-second full-suite run slightly exceeded the five-minute command target, so recheck runtime after implementation; do not weaken test coverage to meet it.
+
+
+### Scope clarification from live code audit (2026-10-27)
+
+Environmental material already has a physical BREAK action path (`environmental_break_candidates` and `try_start_environmental_break`) with escrow/rollback and a zero-energy settlement for pre-existing internal connections. That is **not** the missing shared chemical runtime: it does not accumulate chemical activation for environmental interfaces. Keep it intact; do not mistake it for chemical environmental reaction support or add a parallel chemical law. The remaining gate is to connect eligible environmental interfaces to the canonical chemistry scheduler only after their energy/ownership semantics are defined. The current workflow test job is still in progress; the GitHub log endpoint returned a missing blob, so no final status is inferred from that endpoint.
