@@ -914,7 +914,6 @@ impl Simulation {
             // its geometry and progress keys are independent of organism graphs.
             let environmental_operations = if organism_index == 0 {
                 crate::chemical_reaction::accumulate_environmental(
-                    organism,
                     &self.environment,
                     &mut self.chemical_reaction_accumulation,
                     &mut self.chemistry_library,
@@ -971,7 +970,6 @@ impl Simulation {
             for operation in environmental_operations {
                 let _ = crate::chemical_reaction::resolve_environmental_preserving_accumulation(
                     operation,
-                    organism,
                     &mut self.environment,
                     &mut self.energy_ledger,
                     &mut self.chemical_reaction_accumulation,
