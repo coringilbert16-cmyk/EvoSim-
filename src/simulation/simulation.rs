@@ -831,10 +831,10 @@ impl Simulation {
         for (organism_index, organism) in self.organisms.iter_mut().enumerate() {
             let mut chemistry_work_remaining = crate::chemical_reaction::work_budget_for_owner(
                 crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK,
-                    chemistry_owner_count,
-                    organism_index,
-                    self.tick,
-                );
+                chemistry_owner_count,
+                organism_index,
+                self.tick,
+            );
             let is_living = living_ids.contains(&organism.id);
             if is_living {
                 organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
