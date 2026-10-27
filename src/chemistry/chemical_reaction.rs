@@ -991,7 +991,12 @@ mod material_identity_tests {
         simulation.decomposing_bodies.clear();
         simulation.active_transformations.clear();
 
-        let source = environmental_test_composite(&simulation.environment.catalog);
+        let mut source = environmental_test_composite(&simulation.environment.catalog);
+        if let Some(placements) = &mut source.placements {
+            for placement in placements {
+                placement.y = 0.0;
+            }
+        }
         let bond = source
             .internal_connections
             .as_ref()
@@ -1001,7 +1006,7 @@ mod material_identity_tests {
         let cell_index = simulation
             .environment
             .field
-            .index_for_position(12.5, 12.5)
+            .index_for_position(12.5, 0.0)
             .expect("source placement should be in the field");
         assert!(simulation.environment.field.deposit_physical_at_index(
             cell_index,
@@ -1011,7 +1016,7 @@ mod material_identity_tests {
 
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
-            source_y: 12.5,
+            source_y: 0.0,
             frequency_hz: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
