@@ -440,12 +440,9 @@ pub(crate) fn accumulate_environmental(
         );
         return Vec::new();
     };
-    let cells = environment.field.cells_intersecting_bounds(
-        body.min_x,
-        body.max_x,
-        body.min_y,
-        body.max_y,
-    );
+    let cells = environment
+        .field
+        .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
     let mut candidates = Vec::new();
     for cell_index in cells {
         let Some(cell) = environment.field.cells.get(cell_index) else {
@@ -725,10 +722,7 @@ pub(crate) fn resolve_environmental(
         || operation.activation_signal < 0.0
         || !operation.disruption_cost.is_finite()
         || operation.disruption_cost < 0.0
-        || !crate::chemistry::activated(
-            operation.activation_signal,
-            operation.disruption_cost,
-        )
+        || !crate::chemistry::activated(operation.activation_signal, operation.disruption_cost)
         || !operation.reaction_frequency_hz.is_finite()
         || operation.reaction_frequency_hz <= 0.0
         || organism.resonant_energy.total_energy().is_none()
@@ -756,10 +750,8 @@ pub(crate) fn resolve_environmental(
         return false;
     };
     let mut trial_reservoir = organism.resonant_energy.clone();
-    let resonant_work = trial_reservoir.withdraw_compatible(
-        operation.reaction_frequency_hz,
-        operation.disruption_cost,
-    );
+    let resonant_work = trial_reservoir
+        .withdraw_compatible(operation.reaction_frequency_hz, operation.disruption_cost);
     let Some(prepared) = crate::transformation::prepare_chemical_break_energy_with_resonance(
         organism.usable_energy,
         ledger,
@@ -971,8 +963,8 @@ mod material_identity_tests {
             &mut simulation.energy_ledger,
         ));
         assert_eq!(
-            simulation.organisms[0].structure,
-            structure_before
+            format!("{:?}", simulation.organisms[0].structure),
+            format!("{:?}", structure_before)
         );
         assert_eq!(
             simulation.organisms[0].usable_energy,
