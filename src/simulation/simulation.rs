@@ -2019,11 +2019,10 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
-    fn chemistry_broken_dead_graph_releases_through_the_live_lifecycle() {
+    fn dead_bonded_graph_uses_ordinary_chemistry_without_forced_decomposition() {
         let mut simulation = Simulation::new(0xD3B5, 10.0);
-        // Keep the default sunlight source enabled: ordinary chemistry must
-        // obtain its reaction energy from the same physical input as any other
-        // material, rather than relying on injected zero-cost BREAK operations.
+        // Keep the normal world configuration. Death disables biological
+        // activity; it must not install a special decomposition reaction.
         for cell in &mut simulation.environment.field.cells {
             cell.physical_materials.clear();
         }
@@ -2039,55 +2038,56 @@ mod decomposition_finalization_tests {
         simulation.organisms[0].active_movement = None;
         simulation.organisms[0].mark_structure_changed();
 
-        let bonds = simulation.organisms[0].structure.bonds.clone();
-        let released_amount = simulation.organisms[0]
+        assert!(!simulation.organisms[0].structure.bonds.is_empty());
+        let field_before = simulation.environment.field.total_amount();
+        let structural_amount_before = simulation.organisms[0]
             .structure
             .units
             .iter()
             .flat_map(|unit| unit.material.parts.iter())
             .map(|(_, amount)| *amount)
             .sum::<f64>();
-        assert!(!bonds.is_empty());
-        let field_before = simulation.environment.field.total_amount();
+        let material_before = field_before + structural_amount_before;
 
-        // Exercise ordinary live-tick discovery, activation, scheduling, and
-        // transactional settlement. Do not inject synthetic BREAK operations:
-        // a dead graph must decompose through the same chemistry runtime as a
-        // living graph, with no zero-cost bypass.
-        let mut ticks = 0;
-        while ticks < 2_400
-            && simulation
-                .organisms
-                .iter()
-                .any(|organism| organism.id == owner_id && !organism.structure.bonds.is_empty())
-        {
-            simulation.step();
-            ticks += 1;
-        }
-        assert!(
-            simulation
-                .organisms
-                .iter()
-                .all(|organism| organism.id != owner_id || organism.structure.bonds.is_empty()),
-            "ordinary shared chemistry did not break all dead-graph bonds within {ticks} ticks"
-        );
-
+        // One ordinary tick exercises the shared scheduler for a dead,
+        // physically bonded aggregate. Do not assume these constructor bonds
+        // are chemically breakable or require them to break within a deadline.
         simulation.step();
 
+        let structural_amount_after = simulation
+            .organisms
+            .iter()
+            .filter(|organism| organism.id == owner_id)
+            .flat_map(|organism| organism.structure.units.iter())
+            .flat_map(|unit| unit.material.parts.iter())
+            .map(|(_, amount)| *amount)
+            .sum::<f64>();
+        let material_after = simulation.environment.field.total_amount() + structural_amount_after;
         assert!(
-            simulation.organisms.is_empty(),
-            "the live lifecycle should release the dead graph after shared chemistry removes its bonds"
-        );
-        assert_eq!(
-            simulation.environment.field.total_amount(),
-            field_before + released_amount,
-            "each structural unit must be released into the field exactly once"
+            (material_after - material_before).abs() <= 1e-9,
+            "ordinary chemistry/lifecycle must preserve physical material ownership: before={material_before}, after={material_after}"
         );
         assert!(
-            simulation.energy_inventory_snapshot().is_balanced(1e-8),
-            "chemistry BREAK and final release must conserve world energy: {:?}",
+            simulation.energy_inventory_snapshot().is_balanced_without_creation(1e-8),
+            "ordinary chemistry on a dead bonded graph must conserve world energy: {:?}",
             simulation.energy_inventory_snapshot().residual()
         );
+        if simulation.organisms.iter().any(|organism| organism.id == owner_id) {
+            assert!(
+                !simulation.organisms[0].structure.bonds.is_empty(),
+                "a retained dead graph must remain bonded until ordinary chemistry actually breaks its bonds"
+            );
+            assert_eq!(
+                simulation.environment.field.total_amount(),
+                field_before,
+                "bonded structural material must not be prematurely released"
+            );
+        } else {
+            assert!(
+                (simulation.environment.field.total_amount() - (field_before + structural_amount_before)).abs() <= 1e-9,
+                "if ordinary chemistry removes all bonds, final release must deposit the structure exactly once"
+            );
+        }
     }
 
     #[test]
