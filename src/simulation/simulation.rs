@@ -687,8 +687,7 @@ impl Simulation {
             };
             let deposits = materials
                 .into_iter()
-                .zip(&organism.structure.units)
-                .map(|(material, unit)| (unit.placement.x, unit.placement.y, material))
+                .map(|material| (position.x, position.y, material))
                 .collect();
             if !self
                 .environment
