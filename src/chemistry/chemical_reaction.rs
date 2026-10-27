@@ -506,11 +506,17 @@ pub(crate) fn accumulate_environmental(
         let Some(&unit_b) = restored_indices.get(connection.part_b) else {
             continue;
         };
-        let Some(a) = hypothetical.units.get(unit_a).and_then(|u| u.properties(&environment.catalog))
+        let Some(a) = hypothetical
+            .units
+            .get(unit_a)
+            .and_then(|unit| unit.properties(&environment.catalog))
         else {
             continue;
         };
-        let Some(b) = hypothetical.units.get(unit_b).and_then(|u| u.properties(&environment.catalog))
+        let Some(b) = hypothetical
+            .units
+            .get(unit_b)
+            .and_then(|unit| unit.properties(&environment.catalog))
         else {
             continue;
         };
@@ -560,7 +566,12 @@ pub(crate) fn accumulate_environmental(
         let material_b = material_identity(&hypothetical.units[unit_b].material);
         let key = format!(
             "{}|environment:{}:{}:{}:{}:{:?}",
-            organism.id, cell_index, material_index, bond_index, material_identity(&instance.material), connection
+            organism.id,
+            cell_index,
+            material_index,
+            bond_index,
+            material_identity(&instance.material),
+            connection
         );
         let key_record = ChemistryKey::from_live_geometry(
             &material_a,
