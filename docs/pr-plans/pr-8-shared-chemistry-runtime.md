@@ -46,6 +46,7 @@ Make environmental materials and material held by cells/organisms participate in
 - [x] Added a deterministic, shared per-tick cap for physical reaction-realization attempts. Activated operations deferred by the cap retain progress only and are revalidated on a later tick; this cap does not yet bound candidate discovery.
 - [x] Added unit coverage for stable-key scheduling and budget limits.
 - [x] Named the accumulated comparison value an activation signal and documented that it is not an energy source or inventory term; physical source provenance remains a separate invariant to verify.
+- [x] Identified a hard integration gap: environmental `PhysicalMaterialBond` records store topology/endpoints but no bond-energy holder, while decomposing bodies use a separate bond-break settlement path. Environment-only realization must not invent an energy source; the shared transaction/ownership bridge needs to preserve or derive actual energy provenance.
 - [ ] Generalize candidate discovery/activation to environmental and organism-held material using local spatial neighborhoods.
 - [ ] Bring dead/decomposing material onto the same chemistry policy without duplicating its physical transaction path.
 - [ ] Add transactional and independent-inventory acceptance tests for environment-only and organism-held reactions.
