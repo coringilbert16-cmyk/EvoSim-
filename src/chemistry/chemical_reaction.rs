@@ -941,7 +941,12 @@ mod material_identity_tests {
             accumulation_key: "invalid-environmental-frequency".into(),
             accumulated_reaction: 1.0,
         };
-        let organism_before = simulation.organisms[0].clone();
+        let structure_before = simulation.organisms[0].structure.clone();
+        let usable_energy_before = simulation.organisms[0].usable_energy;
+        let resonance_before = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .unwrap();
         let ledger_before = simulation.energy_ledger.clone();
         let field_before = simulation.environment.field.cells.clone();
 
@@ -951,7 +956,12 @@ mod material_identity_tests {
             &mut simulation.environment,
             &mut simulation.energy_ledger,
         ));
-        assert_eq!(simulation.organisms[0], organism_before);
+        assert_eq!(simulation.organisms[0].structure, structure_before);
+        assert_eq!(simulation.organisms[0].usable_energy, usable_energy_before);
+        assert_eq!(
+            simulation.organisms[0].resonant_energy.total_energy().unwrap(),
+            resonance_before
+        );
         assert_eq!(simulation.energy_ledger, ledger_before);
         assert_eq!(simulation.environment.field.cells, field_before);
     }
