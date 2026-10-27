@@ -237,6 +237,7 @@ impl WorldToneOccluderSnapshot {
             frame,
             organism_body_indices,
             body_resonance_owners,
+            environment_body_indices,
             body_properties: relevant_properties,
             occluder_count,
         })
@@ -1283,11 +1284,25 @@ mod tests {
         );
         assert!(
             simulation.energy_ledger.total_heat_dissipated > 0.0,
-            "nonliving material response must settle as heat"
+            "damped response must still dissipate as heat"
         );
-        assert_eq!(
-            simulation.energy_ledger.total_resonant_energy_held, 0.0,
-            "a nonliving receiver must not receive biological resonance storage"
+        let environmental_resonance = simulation
+            .environment
+            .resonant_energy
+            .total_energy()
+            .expect("environment resonance should remain valid");
+        assert!(
+            environmental_resonance > 0.0,
+            "sunlight-exposed environmental material must retain compatible resonance"
+        );
+        assert!(
+            (simulation.energy_ledger.total_resonant_energy_held - environmental_resonance).abs()
+                < 1e-9,
+            "the ledger must include resonance retained by the environmental field"
+        );
+        assert!(
+            simulation.energy_inventory_snapshot().is_balanced(1e-7),
+            "environment resonance capture must conserve the world energy inventory"
         );
     }
 
