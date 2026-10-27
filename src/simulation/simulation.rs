@@ -1942,6 +1942,24 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn dead_release_settles_remaining_usable_energy_as_heat() {
+        let mut simulation = Simulation::new(0xD3B3, 10.0);
+        prepare_bondless_dead_fixture(&mut simulation);
+        simulation.organisms[0].usable_energy = 2.0;
+        let field_before = simulation.environment.field.total_amount();
+        let heat_before = simulation.energy_ledger.total_heat_dissipated;
+
+        simulation.release_finished_dead_organisms(&HashSet::new());
+
+        assert!(simulation.organisms.is_empty());
+        assert_eq!(simulation.environment.field.total_amount(), field_before + 1.0);
+        assert_eq!(
+            simulation.energy_ledger.total_heat_dissipated,
+            heat_before + 2.0
+        );
+    }
+
+    #[test]
     fn failed_dead_material_release_preserves_organism_energy_and_field() {
         let mut simulation = Simulation::new(0xD3AE, 10.0);
         prepare_bondless_dead_fixture(&mut simulation);
