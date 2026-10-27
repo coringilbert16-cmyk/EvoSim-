@@ -714,6 +714,13 @@ pub(crate) fn resolve_environmental(
         || operation.activation_signal < 0.0
         || !operation.disruption_cost.is_finite()
         || operation.disruption_cost < 0.0
+        || !crate::chemistry::activated(
+            operation.activation_signal,
+            operation.disruption_cost,
+        )
+        || !operation.reaction_frequency_hz.is_finite()
+        || operation.reaction_frequency_hz <= 0.0
+        || organism.resonant_energy.total_energy().is_none()
     {
         return false;
     }
@@ -793,13 +800,17 @@ pub(crate) fn resolve(
     if organism.id != operation.organism_id {
         return false;
     }
-    if organism.resonant_energy.total_energy().is_none() {
-        return false;
-    }
-    if !operation.activation_signal.is_finite()
+    if organism.resonant_energy.total_energy().is_none()
+        || !operation.activation_signal.is_finite()
         || operation.activation_signal < 0.0
         || !operation.disruption_cost.is_finite()
         || operation.disruption_cost < 0.0
+        || !crate::chemistry::activated(
+            operation.activation_signal,
+            operation.disruption_cost,
+        )
+        || !operation.reaction_frequency_hz.is_finite()
+        || operation.reaction_frequency_hz <= 0.0
     {
         return false;
     }
