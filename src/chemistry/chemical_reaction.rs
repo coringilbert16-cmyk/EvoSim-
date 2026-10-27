@@ -795,7 +795,13 @@ pub(crate) fn resolve_environmental(
     };
     let usable_delta = prepared.usable_energy - environment.chemistry_usable_energy;
     let next_total_usable = ledger.total_usable_energy_held + usable_delta;
-    if !usable_delta.is_finite() || !next_total_usable.is_finite() || next_total_usable < 0.0 {
+    let next_total_resonant = ledger.total_resonant_energy_held - resonant_work;
+    if !usable_delta.is_finite()
+        || !next_total_usable.is_finite()
+        || next_total_usable < 0.0
+        || !next_total_resonant.is_finite()
+        || next_total_resonant < 0.0
+    {
         return false;
     }
     if !environment.field.split_physical_at_index(
@@ -811,6 +817,7 @@ pub(crate) fn resolve_environmental(
     environment.resonant_energy = staged_resonance;
     *ledger = prepared.ledger;
     ledger.total_usable_energy_held = next_total_usable;
+    ledger.total_resonant_energy_held = next_total_resonant;
     true
 }
 
