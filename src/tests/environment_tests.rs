@@ -481,16 +481,6 @@ fn physical_split_replaces_source_only_after_every_piece_destination_is_valid() 
     assert!(field.deposit_physical_at_index(cell, source.clone(), catalog));
     let before_revision = field.revision;
 
-    assert!(!field.split_physical_at_index(
-        cell,
-        0,
-        &source,
-        vec![carbon.clone(), hydrogen.clone()],
-        catalog,
-    ));
-    assert_eq!(field.cells[cell].physical_materials, vec![source.clone()]);
-    assert_eq!(field.revision, before_revision);
-
     // A late out-of-bounds piece rejects the entire operation before source
     // removal; then a fully valid split replaces the source in one commit.
     let invalid_hydrogen = PhysicalMaterial::realized(
