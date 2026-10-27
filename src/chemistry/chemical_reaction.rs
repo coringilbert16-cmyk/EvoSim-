@@ -1106,6 +1106,57 @@ mod material_identity_tests {
     }
 
     #[test]
+    fn sparse_environmental_discovery_rotates_with_a_bounded_scan_window() {
+        let mut simulation = crate::state::Simulation::new(937, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        let source = environmental_test_composite(&simulation.environment.catalog);
+        let cell_index = simulation
+            .environment
+            .field
+            .index_for_position(12.5, 12.5)
+            .expect("source placement should be in the field");
+        assert!(
+            cell_index > 8,
+            "fixture must put its only candidate beyond the first bounded scan window"
+        );
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            cell_index,
+            source,
+            &simulation.environment.catalog,
+        ));
+
+        let target_prefix = format!("environment|environment:{cell_index}:");
+        let mut accumulation = std::collections::BTreeMap::new();
+        let mut found = false;
+        for tick in 0..(cell_index as u64 + 8) {
+            let mut discovery_budget = 1;
+            let operations = accumulate_environmental(
+                &simulation.environment,
+                &mut accumulation,
+                &mut simulation.chemistry_library,
+                tick,
+                &mut discovery_budget,
+            );
+            if !operations.is_empty()
+                || accumulation.keys().any(|key| key.starts_with(&target_prefix))
+            {
+                found = true;
+                break;
+            }
+            assert_eq!(
+                discovery_budget, 1,
+                "empty-cell traversal must not consume the candidate budget"
+            );
+        }
+        assert!(
+            found,
+            "rotating bounded traversal must eventually reach sparse environmental material"
+        );
+    }
+
+    #[test]
     fn sunlight_resonance_funds_environmental_chemical_break_without_external_grant() {
         let mut simulation = crate::state::Simulation::new(936, 10.0);
         for cell in &mut simulation.environment.field.cells {
