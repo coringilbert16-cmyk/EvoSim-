@@ -525,7 +525,7 @@ mod material_identity_tests {
         );
     }
     #[test]
-    fn successful_chemical_break_does_not_spend_resonance_when_reaction_covers_barrier() {
+    fn successful_chemical_break_still_pays_work_when_activation_covers_barrier() {
         let mut simulation = crate::state::Simulation::new(920, 10.0);
         let bond = *simulation.organisms[0]
             .structure
@@ -555,7 +555,7 @@ mod material_identity_tests {
             .resonant_energy
             .total_energy()
             .unwrap();
-        assert!((before - after).abs() < 1e-9);
+        assert!((before - after - 0.5).abs() < 1e-9);
         assert!(!simulation.organisms[0]
             .structure
             .bonds
@@ -564,7 +564,7 @@ mod material_identity_tests {
     }
 
     #[test]
-    fn successful_chemical_break_spends_only_resonance_needed_for_reaction_shortfall() {
+    fn successful_chemical_break_spends_resonance_for_full_disruption_work() {
         let mut simulation = crate::state::Simulation::new(924, 10.0);
         let bond = *simulation.organisms[0]
             .structure
@@ -575,7 +575,7 @@ mod material_identity_tests {
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            activation_signal: 0.25,
+            activation_signal: 0.5,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -594,7 +594,7 @@ mod material_identity_tests {
             .resonant_energy
             .total_energy()
             .unwrap();
-        assert!((before - after - 0.25).abs() < 1e-9);
+        assert!((before - after - 0.5).abs() < 1e-9);
         assert!(!simulation.organisms[0]
             .structure
             .bonds
