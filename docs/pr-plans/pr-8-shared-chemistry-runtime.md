@@ -45,6 +45,7 @@ Make environmental materials and material held by cells/organisms participate in
 - [x] Audited current `main`: organism-bond activation is implemented, but the scheduler currently resolves activated operations immediately inside the per-organism loop. Environmental material and decomposing bodies do not yet share that path.
 - [x] Added a deterministic, shared per-tick cap for physical reaction-realization attempts. Activated operations deferred by the cap retain progress only and are revalidated on a later tick; this cap does not yet bound candidate discovery.
 - [x] Added unit coverage for stable-key scheduling and budget limits.
+- [x] Named the accumulated comparison value an activation signal and documented that it is not an energy source or inventory term; physical source provenance remains a separate invariant to verify.
 - [ ] Generalize candidate discovery/activation to environmental and organism-held material using local spatial neighborhoods.
 - [ ] Bring dead/decomposing material onto the same chemistry policy without duplicating its physical transaction path.
 - [ ] Add transactional and independent-inventory acceptance tests for environment-only and organism-held reactions.
