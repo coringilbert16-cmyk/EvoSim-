@@ -1524,7 +1524,6 @@ impl Simulation {
                 .units
                 .iter()
                 .any(|unit| unit.shape(&self.environment.catalog).is_none())
-                || organism.occupied_cells.first().is_none()
             {
                 continue;
             }
@@ -1533,9 +1532,6 @@ impl Simulation {
 
         for index in release_indices.into_iter().rev() {
             let organism = &self.organisms[index];
-            let Some(position) = organism.occupied_cells.first().cloned() else {
-                continue;
-            };
             let Some(materials) = organism
                 .structure
                 .units
