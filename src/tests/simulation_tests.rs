@@ -1379,8 +1379,14 @@ mod integration_tests {
         );
         assert!(!resolved);
 
-        assert_eq!(simulation.organisms[0].structure.units, before_structure.units);
-        assert_eq!(simulation.organisms[0].structure.bonds, before_structure.bonds);
+        assert_eq!(
+            simulation.organisms[0].structure.units,
+            before_structure.units
+        );
+        assert_eq!(
+            simulation.organisms[0].structure.bonds,
+            before_structure.bonds
+        );
         assert_eq!(simulation.energy_ledger, before_ledger);
         assert_eq!(
             integer_material_inventory(&simulation)
