@@ -1830,6 +1830,77 @@ mod material_identity_tests {
     }
 
     #[test]
+    fn mixed_graph_and_environment_workload_shares_one_realization_budget() {
+        let simulation = crate::state::Simulation::new(927, 10.0);
+        let graph_bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        let source = environmental_test_composite(&simulation.environment.catalog);
+        let environmental_bond = source
+            .internal_connections
+            .as_ref()
+            .and_then(|connections| connections.first())
+            .expect("environmental fixture should contain a bond")
+            .clone();
+        let graph_operations = (0..40)
+            .map(|index| ChemicalBreakOperation {
+                organism_id: simulation.organisms[0].id.clone(),
+                bond: graph_bond,
+                activation_signal: 1.0,
+                disruption_cost: 0.5,
+                reaction_frequency_hz: 440.0,
+                accumulation_key: format!("graph|candidate-{index:02}"),
+                accumulated_reaction: 1.0 + index as f64,
+            })
+            .collect();
+        let environmental_operations = (0..40)
+            .map(|index| EnvironmentalChemicalBreakOperation {
+                organism_id: simulation.organisms[0].id.clone(),
+                cell_index: 0,
+                material_index: 0,
+                bond_index: 0,
+                source_material: source.clone(),
+                bond: environmental_bond.clone(),
+                activation_signal: 1.0,
+                disruption_cost: 0.5,
+                reaction_frequency_hz: 440.0,
+                accumulation_key: format!("environment|candidate-{index:02}"),
+                accumulated_reaction: 100.0 + index as f64,
+            })
+            .collect();
+        let mut remaining = 3;
+        let mut accumulation = std::collections::BTreeMap::new();
+
+        let graph_ready = schedule_operations(
+            graph_operations,
+            0,
+            &mut remaining,
+            &mut accumulation,
+        );
+        let environmental_ready = schedule_environmental_operations(
+            environmental_operations,
+            0,
+            &mut remaining,
+            &mut accumulation,
+        );
+
+        assert_eq!(graph_ready.len(), 3);
+        assert!(environmental_ready.is_empty());
+        assert_eq!(remaining, 0);
+        assert_eq!(
+            accumulation.len(),
+            77,
+            "all deferred graph and environmental activations must retain their progress"
+        );
+        assert_eq!(
+            accumulation.get("environment|candidate-00"),
+            Some(&100.0)
+        );
+    }
+
+    #[test]
     fn scheduler_rotation_prevents_permanent_first_key_starvation() {
         let keys = vec!["zeta".into(), "alpha".into(), "middle".into()];
         assert_eq!(stable_work_order(&keys, 2, 0), vec![1, 2]);
