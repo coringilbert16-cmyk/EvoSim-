@@ -838,12 +838,43 @@ impl Simulation {
                 &living_ids,
             );
         }
+        // Environmental chemistry is a first-class owner and must run
+        // even when the world contains no organisms. Reserve half of the
+        // realization and discovery budgets for the field, independently of
+        // the organism iteration below.
+        let mut environmental_discovery_remaining =
+            crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 2;
+        let environmental_operations = crate::chemical_reaction::accumulate_environmental(
+            &self.environment,
+            &mut self.chemical_reaction_accumulation,
+            &mut self.chemistry_library,
+            self.tick,
+            &mut environmental_discovery_remaining,
+        );
+        let mut environmental_work_remaining =
+            crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 2;
+        let environmental_operations =
+            crate::chemical_reaction::schedule_environmental_operations(
+                environmental_operations,
+                self.tick,
+                &mut environmental_work_remaining,
+                &mut self.chemical_reaction_accumulation,
+            );
+        for operation in environmental_operations {
+            let _ = crate::chemical_reaction::resolve_environmental_preserving_accumulation(
+                operation,
+                &mut self.environment,
+                &mut self.energy_ledger,
+                &mut self.chemical_reaction_accumulation,
+            );
+        }
+
         let mut carried_chemistry_work = 0;
         let mut carried_chemistry_discovery_work = 0;
         for (organism_index, organism) in self.organisms.iter_mut().enumerate() {
             let mut chemistry_work_remaining =
                 crate::chemical_reaction::work_budget_for_owner_with_carry(
-                    crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK,
+                    crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 2,
                     chemistry_owner_count,
                     organism_index,
                     self.tick,
@@ -894,13 +925,7 @@ impl Simulation {
             } else {
                 chemistry_discovery_work_remaining
             };
-            let environmental_discovery_budget = if organism_index == 0 {
-                chemistry_discovery_work_remaining - graph_discovery_budget
-            } else {
-                0
-            };
             let mut graph_discovery_remaining = graph_discovery_budget;
-            let mut environmental_discovery_remaining = environmental_discovery_budget;
             let chemical_operations = crate::chemical_reaction::accumulate(
                 organism,
                 &self.environment.catalog,
@@ -912,28 +937,8 @@ impl Simulation {
             // The environment is one chemistry owner, not one owner per
             // organism. Discover each field-owned bond at most once per tick;
             // its geometry and progress keys are independent of organism graphs.
-            let environmental_operations = if organism_index == 0 {
-                crate::chemical_reaction::accumulate_environmental(
-                    &self.environment,
-                    &mut self.chemical_reaction_accumulation,
-                    &mut self.chemistry_library,
-                    self.tick,
-                    &mut environmental_discovery_remaining,
-                )
-            } else {
-                Vec::new()
-            };
-            carried_chemistry_discovery_work =
-                graph_discovery_remaining + environmental_discovery_remaining;
-            // Reserve a share for the field owner before scheduling graph
-            // commits. Otherwise a saturated first organism can consume the
-            // entire realization budget and starve environmental reactions.
-            let graph_work_budget = if organism_index == 0 {
-                chemistry_work_remaining / 2
-            } else {
-                chemistry_work_remaining
-            };
-            let mut graph_work_remaining = graph_work_budget;
+            carried_chemistry_discovery_work = graph_discovery_remaining;
+            let mut graph_work_remaining = chemistry_work_remaining;
             let chemical_operations = crate::chemical_reaction::schedule_operations(
                 chemical_operations,
                 self.tick,
@@ -951,38 +956,9 @@ impl Simulation {
                     &mut self.chemical_reaction_accumulation,
                 );
             }
-            let environmental_work_budget = if organism_index == 0 {
-                // The field receives its reserved share plus any graph share
-                // that was not used; the combined work never exceeds the
-                // original owner budget.
-                chemistry_work_remaining - graph_work_budget + graph_work_remaining
-            } else {
-                0
-            };
-            let mut environmental_work_remaining = environmental_work_budget;
-            let environmental_operations =
-                crate::chemical_reaction::schedule_environmental_operations(
-                    environmental_operations,
-                    self.tick,
-                    &mut environmental_work_remaining,
-                    &mut self.chemical_reaction_accumulation,
-                );
-            for operation in environmental_operations {
-                let _ = crate::chemical_reaction::resolve_environmental_preserving_accumulation(
-                    operation,
-                    &mut self.environment,
-                    &mut self.energy_ledger,
-                    &mut self.chemical_reaction_accumulation,
-                );
-            }
-            // Carry unused slots forward, but never borrow a later owner's
-            // quota. On the first owner, environmental_work_remaining already
-            // includes the unused graph share, so the global cap is preserved.
-            carried_chemistry_work = if organism_index == 0 {
-                environmental_work_remaining
-            } else {
-                graph_work_remaining
-            };
+            // Carry unused graph slots forward, but never exceed the
+            // graph half-budget reserved for this tick.
+            carried_chemistry_work = graph_work_remaining;
 
             // Recheck immediately after chemistry: if a reaction breached the
             // genome core this tick, do not perform any later biological work.
