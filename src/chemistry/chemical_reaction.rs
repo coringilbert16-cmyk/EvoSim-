@@ -418,6 +418,72 @@ pub(crate) fn accumulate(
 /// Discover chemical reactions at realized environmental material bonds in the
 /// field. Environmental bonds are restored only into a trial graph to recover
 /// their authoritative geometry and activation strength; stored bond energy stays zero.
+/// Traverse a bounded, tick-rotated window of environmental material bonds.
+/// Returns candidates and the exact number of cell/material/bond entries inspected.
+/// Counting all three levels makes the work bound testable even in sparse fields.
+fn discover_environmental_bonds(
+    environment: &crate::state::Environment,
+    tick: u64,
+    candidate_limit: usize,
+) -> (Vec<(usize, usize, usize)>, usize) {
+    let cell_count = environment.field.cells.len();
+    let limit = candidate_limit.min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
+    let mut candidates = Vec::with_capacity(limit);
+    if limit == 0 || cell_count == 0 {
+        return (candidates, 0);
+    }
+
+    let mut scan_steps_remaining = limit.saturating_mul(8).max(1);
+    let scan_steps_initial = scan_steps_remaining;
+    let cell_start = tick as usize % cell_count;
+    'discovery: for cell_offset in 0..cell_count {
+        if scan_steps_remaining == 0 {
+            break;
+        }
+        scan_steps_remaining -= 1;
+        let cell_index = (cell_start + cell_offset) % cell_count;
+        let Some(cell) = environment.field.cells.get(cell_index) else {
+            continue;
+        };
+        let material_count = cell.physical_materials.len();
+        if material_count == 0 {
+            continue;
+        }
+        let material_start = tick as usize % material_count;
+        for material_offset in 0..material_count {
+            if scan_steps_remaining == 0 {
+                break 'discovery;
+            }
+            scan_steps_remaining -= 1;
+            let material_index = (material_start + material_offset) % material_count;
+            let Some(material) = cell.physical_materials.get(material_index) else {
+                continue;
+            };
+            let Some(connections) = material.internal_connections.as_ref() else {
+                continue;
+            };
+            let bond_count = connections.len();
+            if bond_count == 0 {
+                continue;
+            }
+            let bond_start = tick as usize % bond_count;
+            for bond_offset in 0..bond_count {
+                if scan_steps_remaining == 0 {
+                    break 'discovery;
+                }
+                scan_steps_remaining -= 1;
+                let bond_index = (bond_start + bond_offset) % bond_count;
+                candidates.push((cell_index, material_index, bond_index));
+                if candidates.len() >= limit {
+                    break 'discovery;
+                }
+            }
+        }
+    }
+
+    (candidates, scan_steps_initial - scan_steps_remaining)
+}
+
 pub(crate) fn accumulate_environmental(
     environment: &crate::state::Environment,
     accumulation: &mut std::collections::BTreeMap<String, f64>,
@@ -438,62 +504,8 @@ pub(crate) fn accumulate_environmental(
         );
         return Vec::new();
     }
-    let cell_count = environment.field.cells.len();
     let count = (*remaining_discovery_work).min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
-    let mut candidates = Vec::with_capacity(count);
-    if count > 0 && cell_count > 0 {
-        // Bound total traversal work, not just materialized candidates. Sparse
-        // fields can contain many empty cells/materials, so candidate-only
-        // accounting would still permit an unbounded scan before finding work.
-        // A rotating start lets sparse regions make progress over successive ticks.
-        let mut scan_steps_remaining = count.saturating_mul(8).max(1);
-        let cell_start = tick as usize % cell_count;
-        'discovery: for cell_offset in 0..cell_count {
-            if scan_steps_remaining == 0 {
-                break;
-            }
-            scan_steps_remaining -= 1;
-            let cell_index = (cell_start + cell_offset) % cell_count;
-            let Some(cell) = environment.field.cells.get(cell_index) else {
-                continue;
-            };
-            let material_count = cell.physical_materials.len();
-            if material_count == 0 {
-                continue;
-            }
-            let material_start = tick as usize % material_count;
-            for material_offset in 0..material_count {
-                if scan_steps_remaining == 0 {
-                    break 'discovery;
-                }
-                scan_steps_remaining -= 1;
-                let material_index = (material_start + material_offset) % material_count;
-                let Some(material) = cell.physical_materials.get(material_index) else {
-                    continue;
-                };
-                let Some(connections) = material.internal_connections.as_ref() else {
-                    continue;
-                };
-                let bond_count = connections.len();
-                if bond_count == 0 {
-                    continue;
-                }
-                let bond_start = tick as usize % bond_count;
-                for bond_offset in 0..bond_count {
-                    if scan_steps_remaining == 0 {
-                        break 'discovery;
-                    }
-                    scan_steps_remaining -= 1;
-                    let bond_index = (bond_start + bond_offset) % bond_count;
-                    candidates.push((cell_index, material_index, bond_index));
-                    if candidates.len() >= count {
-                        break 'discovery;
-                    }
-                }
-            }
-        }
-    }
-
+    let (candidates, _scan_steps) = discover_environmental_bonds(environment, tick, count);
     let indices: Vec<usize> = (0..candidates.len()).collect();
     *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
     let mut updated_keys = std::collections::BTreeSet::new();
