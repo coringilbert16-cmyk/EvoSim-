@@ -1091,6 +1091,17 @@ mod material_identity_tests {
                 < 1e-9
         );
         assert!((simulation.energy_ledger.total_work_expended - ledger_before - 0.5).abs() < 1e-9);
+        assert!(
+            simulation.energy_inventory_snapshot().is_balanced(1e-9),
+            "environment-owned energy must reconcile even with no living organisms"
+        );
+        assert_eq!(
+            simulation.energy_ledger.total_usable_energy_held,
+            crate::reproduction::total_usable_energy_held(
+                &simulation.organisms,
+                &simulation.decomposing_bodies,
+            ) + simulation.environment.chemistry_usable_energy
+        );
     }
 
     #[test]
