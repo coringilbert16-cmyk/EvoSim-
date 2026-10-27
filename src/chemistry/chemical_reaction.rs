@@ -519,7 +519,11 @@ pub(crate) fn accumulate_environmental(
         else {
             continue;
         };
-        let mut hypothetical = organism.structure.clone();
+        // Environmental chemistry must derive its candidate geometry from the
+        // realized environmental material itself. An organism graph is not a
+        // valid geometry owner for a world-owned bond: it can carry unrelated
+        // units, IDs, and contact context into candidate resolution.
+        let mut hypothetical = crate::structure::OrganismStructure::new();
         let Some(restored_indices) = crate::material_restoration::restore_material(
             &mut hypothetical,
             instance,
