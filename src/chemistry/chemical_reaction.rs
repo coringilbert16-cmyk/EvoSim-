@@ -1011,7 +1011,7 @@ mod material_identity_tests {
 
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
-            source_y: 0.0,
+            source_y: 12.5,
             frequency_hz: 440.0,
             energy_intensity_per_tick_per_width: 1000.0,
             orbital_phase: 0.75,
