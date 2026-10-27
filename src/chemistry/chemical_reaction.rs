@@ -563,12 +563,15 @@ mod material_identity_tests {
             .bonds
             .first()
             .expect("seed organism should contain a structural bond");
-        let original_bond_count = simulation.organisms[0].structure.bonds.len();
+        let original_bond_count = simulation.organisms[0]
+            .structure
+            .bonds
+            .len();
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            // Insufficient reaction work forces a settlement rejection after
-            // the event is triggered, without changing the physical structure.
+            // Insufficient physical energy forces settlement rejection after
+            // activation, without changing the physical structure.
             activation_signal: 0.1,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
@@ -623,7 +626,10 @@ mod material_identity_tests {
             &mut simulation.organisms[0],
             &mut simulation.energy_ledger,
         ));
-        assert_eq!(simulation.organisms[0].structure.bonds.len(), original_bond_count);
+        assert_eq!(
+            simulation.organisms[0].structure.bonds.len(),
+            original_bond_count
+        );
         assert_eq!(simulation.energy_ledger, original_ledger);
         assert_eq!(simulation.organisms[0].usable_energy, 0.0);
         assert_eq!(
