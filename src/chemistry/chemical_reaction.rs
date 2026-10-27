@@ -424,10 +424,10 @@ pub(crate) fn resolve(
         return false;
     }
     let processing_efficiency = organism.genome.processing_efficiency();
-    // The activation signal is a threshold, not an energy source. The actual
-    // transaction separately accounts for stored bond energy, usable energy,
-    // and any resonance withdrawn from the trial reservoir.
-    let required_resonance = (operation.disruption_cost - operation.activation_signal).max(0.0);
+    // Activation is an independent threshold, not energy and not a substitute
+    // for disruption work. Compatible resonance may pay that work, but the
+    // required amount is determined by the physical barrier alone.
+    let required_resonance = operation.disruption_cost;
     // Work from a trial reservoir. A failed or stale BREAK must not consume
     // retained resonance; only a successfully settled structural transaction
     // commits the frequency-compatible withdrawal.
