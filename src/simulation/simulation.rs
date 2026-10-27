@@ -1966,6 +1966,28 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn dead_bonded_graph_remains_owned_until_shared_chemistry_breaks_its_bonds() {
+        let mut simulation = Simulation::new(0xD3B4, 10.0);
+        assert!(
+            !simulation.organisms[0].structure.bonds.is_empty(),
+            "default fixture should contain bonded physical material"
+        );
+        let field_before = simulation.environment.field.total_amount();
+        let bonds_before = simulation.organisms[0].structure.bonds.clone();
+        let living = HashSet::new();
+
+        simulation.release_finished_dead_organisms(&living);
+
+        assert_eq!(simulation.organisms.len(), 1);
+        assert_eq!(simulation.organisms[0].structure.bonds, bonds_before);
+        assert_eq!(
+            simulation.environment.field.total_amount(),
+            field_before,
+            "death must not bypass chemistry by releasing a still-bonded graph"
+        );
+    }
+
+    #[test]
     fn live_tick_releases_a_dead_bondless_graph_into_the_environment() {
         let mut simulation = Simulation::new(0xD3B0, 10.0);
         prepare_bondless_dead_fixture(&mut simulation);
