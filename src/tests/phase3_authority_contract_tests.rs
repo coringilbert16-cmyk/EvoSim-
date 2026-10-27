@@ -18,6 +18,7 @@ mod tests {
         let mut environment = Environment {
             width: 100.0,
             height: 100.0,
+            chemistry_usable_energy: 0.0,
             catalog: catalog.clone(),
             field: ActiveMaterialField::new(100.0, 100.0, 10.0),
         };
@@ -65,6 +66,7 @@ mod tests {
         let environment = Environment {
             width: 100.0,
             height: 100.0,
+            chemistry_usable_energy: 0.0,
             catalog,
             field: ActiveMaterialField::new(100.0, 100.0, 10.0),
         };
@@ -102,6 +104,7 @@ mod tests {
         let environment = Environment {
             width: 1000.0,
             height: 1000.0,
+            chemistry_usable_energy: 0.0,
             catalog,
             field: ActiveMaterialField::new(1000.0, 1000.0, 10.0),
         };
