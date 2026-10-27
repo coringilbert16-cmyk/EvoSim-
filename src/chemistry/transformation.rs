@@ -2348,7 +2348,7 @@ mod tests {
     #[test]
     fn prepared_environmental_break_rejects_unfunded_work_without_mutation() {
         let ledger = crate::state::EnergyLedger::default();
-        assert!(prepare_chemical_break_energy_with_resonance(
+        let prepared = prepare_chemical_break_energy_with_resonance(
             1.0,
             &ledger,
             0.0,
@@ -2356,8 +2356,8 @@ mod tests {
             5.0,
             0.0,
             0.5,
-        )
-        .is_none());
+        );
+        assert!(prepared.is_none());
         assert_eq!(ledger, crate::state::EnergyLedger::default());
     }
 
