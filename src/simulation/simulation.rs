@@ -215,6 +215,7 @@ impl Simulation {
             catalog,
             field,
             chemistry_usable_energy: 0.0,
+            resonant_energy: Default::default(),
         }
     }
     pub(crate) fn create_initial_organism() -> Organism {
@@ -1802,6 +1803,7 @@ mod decomposition_finalization_tests {
             catalog: catalog.clone(),
             field: ActiveMaterialField::new(1000.0, 1000.0, crate::environment::DEFAULT_CELL_SIZE),
             chemistry_usable_energy: 0.0,
+            resonant_energy: Default::default(),
         };
         let make_single = |name: &str, x: f64| {
             PhysicalMaterial::realized(
