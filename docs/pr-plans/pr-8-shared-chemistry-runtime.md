@@ -121,3 +121,7 @@ A live-tick regression now exercises the lifecycle wiring, not only the helper: 
 ### Follow-up correction: preserve world placement during release (2026-10-27)
 
 The release batch now routes each realized unit to the field cell selected by that unit's own preserved physical placement, instead of assigning every unit to the organism's first occupied cell. The rollback test now uses a finite but out-of-field unit placement to exercise destination rejection while allowing material realization to complete. This matters because a release that preserves geometry inside each material object but deposits every object into one unrelated field cell would still corrupt spatial indexing.
+
+### Exact-head verification correction (2026-10-27)
+
+The first placement-preservation edit left a stale `position` reference after the old organism-position binding was removed. The next CI run failed across test groups at compile time, so those failures were not meaningful behavioral results. Corrected the deposit mapping to zip realized materials with their structural units and use each unit's placement; the source was re-fetched after the update to verify the stale reference is gone. CI for `c8951e1` is now running; do not treat the previous run's focused-test failures as a regression baseline or a pass.
