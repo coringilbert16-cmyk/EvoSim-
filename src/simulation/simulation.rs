@@ -2038,7 +2038,13 @@ mod decomposition_finalization_tests {
         simulation.organisms[0].mark_structure_changed();
 
         let bonds = simulation.organisms[0].structure.bonds.clone();
-        let unit_count = simulation.organisms[0].structure.units.len();
+        let released_amount = simulation.organisms[0]
+            .structure
+            .units
+            .iter()
+            .flat_map(|unit| unit.material.parts.iter())
+            .map(|(_, amount)| *amount)
+            .sum::<f64>();
         assert!(!bonds.is_empty());
         let field_before = simulation.environment.field.total_amount();
 
@@ -2071,7 +2077,7 @@ mod decomposition_finalization_tests {
         );
         assert_eq!(
             simulation.environment.field.total_amount(),
-            field_before + unit_count as f64,
+            field_before + released_amount,
             "each structural unit must be released into the field exactly once"
         );
         assert!(
