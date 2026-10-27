@@ -888,9 +888,16 @@ impl Simulation {
             // Split discovery work between graph and environmental targets so
             // a large structural graph cannot permanently starve local field
             // chemistry (and vice versa). Unused budget carries to later owners.
-            let graph_discovery_budget = chemistry_discovery_work_remaining / 2;
-            let environmental_discovery_budget =
-                chemistry_discovery_work_remaining - graph_discovery_budget;
+            let graph_discovery_budget = if organism_index == 0 {
+                chemistry_discovery_work_remaining / 2
+            } else {
+                chemistry_discovery_work_remaining
+            };
+            let environmental_discovery_budget = if organism_index == 0 {
+                chemistry_discovery_work_remaining - graph_discovery_budget
+            } else {
+                0
+            };
             let mut graph_discovery_remaining = graph_discovery_budget;
             let mut environmental_discovery_remaining = environmental_discovery_budget;
             let chemical_operations = crate::chemical_reaction::accumulate(
