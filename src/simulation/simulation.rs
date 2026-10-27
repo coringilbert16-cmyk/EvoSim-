@@ -2144,6 +2144,26 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn failed_dead_release_energy_settlement_preserves_organism_and_field() {
+        let mut simulation = Simulation::new(0xD3B6, 10.0);
+        prepare_bondless_dead_fixture(&mut simulation);
+        simulation.organisms[0].usable_energy = f64::MAX;
+        // Force the staged heat sink to overflow so settlement rejects before
+        // the field batch can commit.
+        simulation.energy_ledger.total_heat_dissipated = f64::MAX;
+        let field_before = simulation.environment.field.total_amount();
+        let ledger_before = simulation.energy_ledger;
+        let living = HashSet::new();
+
+        simulation.release_finished_dead_organisms(&living);
+
+        assert_eq!(simulation.organisms.len(), 1);
+        assert_eq!(simulation.organisms[0].usable_energy, f64::MAX);
+        assert_eq!(simulation.environment.field.total_amount(), field_before);
+        assert_eq!(simulation.energy_ledger, ledger_before);
+    }
+
+    #[test]
     fn dead_organism_with_unsettled_holders_is_not_released() {
         let mut simulation = Simulation::new(0xD3AF, 10.0);
         prepare_bondless_dead_fixture(&mut simulation);
