@@ -126,6 +126,13 @@ pub fn normalized_chemistry_to_energy(value: f64) -> Option<f64> {
     energy.is_finite().then_some(energy)
 }
 
+/// Convert accumulated chemistry to the numeric scale used for activation
+/// comparisons. This value is a signal, not an energy source or inventory term;
+/// physical settlement must account for actual stored/usable/resonant energy.
+pub fn normalized_chemistry_to_activation_signal(value: f64) -> Option<f64> {
+    normalized_chemistry_to_energy(value)
+}
+
 /// One tick of bounded reaction accumulation.
 ///
 /// The returned value is never negative. Dissipation applies to accumulated
