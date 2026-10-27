@@ -19,6 +19,72 @@ pub(crate) struct ChemicalBreakOperation {
     pub(crate) accumulated_reaction: f64,
 }
 
+/// Hard cap on successful reaction-realization attempts per simulation tick.
+/// Candidate discovery and activation remain separate from this commit budget.
+pub(crate) const MAX_REACTION_REALIZATIONS_PER_TICK: usize = 64;
+
+/// Select work in stable key order, independent of the order in which callers
+/// discovered candidates. Ties retain their original index for deterministic
+/// behavior when multiple records share a key.
+fn stable_work_order(keys: &[String], limit: usize) -> Vec<usize> {
+    let mut indices: Vec<usize> = (0..keys.len()).collect();
+    indices.sort_by(|left, right| {
+        keys[*left]
+            .cmp(&keys[*right])
+            .then_with(|| left.cmp(right))
+    });
+    indices.truncate(limit);
+    indices
+}
+
+/// Apply the per-tick realization budget. Activated operations that do not fit
+/// are returned to the progress map without changing any physical or energy
+/// state; they are revalidated by normal candidate discovery on a later tick.
+pub(crate) fn schedule_operations(
+    operations: Vec<ChemicalBreakOperation>,
+    remaining_work: &mut usize,
+    accumulation: &mut std::collections::BTreeMap<String, f64>,
+) -> Vec<ChemicalBreakOperation> {
+    if operations.is_empty() || *remaining_work == 0 {
+        for operation in operations {
+            accumulation
+                .entry(operation.accumulation_key)
+                .and_modify(|current| {
+                    *current = (*current).max(operation.accumulated_reaction);
+                })
+                .or_insert(operation.accumulated_reaction);
+        }
+        return Vec::new();
+    }
+
+    let keys: Vec<String> = operations
+        .iter()
+        .map(|operation| operation.accumulation_key.clone())
+        .collect();
+    let order = stable_work_order(&keys, *remaining_work);
+    let mut selected = vec![false; operations.len()];
+    for index in &order {
+        selected[*index] = true;
+    }
+
+    let mut ready = Vec::with_capacity(order.len());
+    for (index, operation) in operations.into_iter().enumerate() {
+        if selected[index] {
+            ready.push((keys[index].clone(), operation));
+        } else {
+            accumulation
+                .entry(operation.accumulation_key)
+                .and_modify(|current| {
+                    *current = (*current).max(operation.accumulated_reaction);
+                })
+                .or_insert(operation.accumulated_reaction);
+        }
+    }
+    ready.sort_by(|left, right| left.0.cmp(&right.0));
+    *remaining_work = remaining_work.saturating_sub(ready.len());
+    ready.into_iter().map(|(_, operation)| operation).collect()
+}
+
 fn reaction_key(bond: &Bond, interface_signature: &str) -> String {
     format!(
         "{:?}|{:?}|{}",
@@ -754,6 +820,20 @@ mod material_identity_tests {
                 .get(&unrelated_key),
             Some(&0.25)
         );
+    }
+
+    #[test]
+    fn scheduler_orders_work_by_stable_key_and_respects_budget() {
+        let keys = vec!["zeta".into(), "alpha".into(), "middle".into()];
+        assert_eq!(stable_work_order(&keys, 2), vec![1, 2]);
+        assert_eq!(stable_work_order(&keys, 0), Vec::<usize>::new());
+        assert_eq!(stable_work_order(&keys, 8), vec![1, 2, 0]);
+    }
+
+    #[test]
+    fn scheduler_breaks_duplicate_key_ties_by_original_index() {
+        let keys = vec!["same".into(), "same".into(), "first".into()];
+        assert_eq!(stable_work_order(&keys, 2), vec![2, 0]);
     }
 
     #[test]
