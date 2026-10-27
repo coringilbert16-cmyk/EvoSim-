@@ -911,10 +911,7 @@ mod material_identity_tests {
             format!("{:?}", structure_before)
         );
         assert_eq!(organism.usable_energy, energy_before);
-        assert_eq!(
-            organism.resonant_energy.total_energy().unwrap(),
-            resonance_before
-        );
+        assert_eq!(organism.resonant_energy.total_energy().unwrap(), resonance_before);
         assert_eq!(simulation.energy_ledger, ledger_before);
         assert_eq!(simulation.environment.field.cells, field_before);
     }
