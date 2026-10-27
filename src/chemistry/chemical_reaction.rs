@@ -920,6 +920,31 @@ mod material_identity_tests {
         .expect("test composite should be physically realizable")
     }
 
+    fn remove_living_organisms_preserving_inventory(simulation: &mut crate::state::Simulation) {
+        for organism in simulation.organisms.drain(..) {
+            let resonant_energy = organism
+                .resonant_energy
+                .total_energy()
+                .expect("test fixture resonance must be finite");
+            assert!(
+                resonant_energy.abs() <= 1e-9,
+                "test fixture must not discard retained resonance"
+            );
+            let position = organism
+                .occupied_cells
+                .first()
+                .cloned()
+                .unwrap_or(crate::state::Position { x: 0.0, y: 0.0 });
+            let body = crate::decomposition::DecomposingBody::new(
+                organism.structure,
+                organism.usable_energy,
+                position,
+            )
+            .expect("test fixture energy must be finite and nonnegative");
+            simulation.decomposing_bodies.push(body);
+        }
+    }
+
     fn fund_environment_chemistry_for_test(simulation: &mut crate::state::Simulation, amount: f64) {
         use crate::energy_ledger::{
             EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction,
@@ -962,6 +987,7 @@ mod material_identity_tests {
             &simulation.environment.catalog,
         ));
 
+        remove_living_organisms_preserving_inventory(&mut simulation);
         fund_environment_chemistry_for_test(&mut simulation, 1.0);
         let energy_before = simulation.environment.chemistry_usable_energy;
         let ledger_before = simulation.energy_ledger.total_work_expended;
@@ -982,7 +1008,7 @@ mod material_identity_tests {
             accumulated_reaction: 1.0,
         };
 
-        simulation.organisms.clear();
+        assert!(simulation.organisms.is_empty());
         assert!(resolve_environmental(
             operation,
             &mut simulation.environment,
@@ -1029,6 +1055,7 @@ mod material_identity_tests {
             source.clone(),
             &simulation.environment.catalog,
         ));
+        remove_living_organisms_preserving_inventory(&mut simulation);
         fund_environment_chemistry_for_test(&mut simulation, 0.5);
         let environment_energy_before = simulation.environment.chemistry_usable_energy;
         let ledger_before = simulation.energy_ledger.total_work_expended;
@@ -1045,6 +1072,7 @@ mod material_identity_tests {
             accumulated_reaction: 1.0,
         };
 
+        assert!(simulation.organisms.is_empty());
         assert!(resolve_environmental(
             operation,
             &mut simulation.environment,
@@ -1085,6 +1113,7 @@ mod material_identity_tests {
             source.clone(),
             &simulation.environment.catalog,
         ));
+        remove_living_organisms_preserving_inventory(&mut simulation);
         let energy_before = simulation.environment.chemistry_usable_energy;
         let ledger_before = simulation.energy_ledger.clone();
         let field_before = simulation.environment.field.cells.clone();
