@@ -1870,33 +1870,39 @@ mod material_identity_tests {
                 accumulated_reaction: 100.0 + index as f64,
             })
             .collect();
-        let mut remaining = 3;
+        let total_budget = 3;
+        let graph_budget = total_budget / 2;
+        let mut graph_remaining = graph_budget;
         let mut accumulation = std::collections::BTreeMap::new();
 
         let graph_ready = schedule_operations(
             graph_operations,
             0,
-            &mut remaining,
+            &mut graph_remaining,
             &mut accumulation,
         );
+        let mut environmental_remaining =
+            total_budget - graph_budget + graph_remaining;
         let environmental_ready = schedule_environmental_operations(
             environmental_operations,
             0,
-            &mut remaining,
+            &mut environmental_remaining,
             &mut accumulation,
         );
 
-        assert_eq!(graph_ready.len(), 3);
-        assert!(environmental_ready.is_empty());
-        assert_eq!(remaining, 0);
+        assert_eq!(graph_ready.len(), 1);
+        assert_eq!(environmental_ready.len(), 2);
+        assert_eq!(graph_ready.len() + environmental_ready.len(), total_budget);
+        assert_eq!(environmental_remaining, 0);
         assert_eq!(
             accumulation.len(),
             77,
             "all deferred graph and environmental activations must retain their progress"
         );
         assert_eq!(
-            accumulation.get("environment|candidate-00"),
-            Some(&100.0)
+            accumulation.get("environment|candidate-02"),
+            Some(&102.0),
+            "environmental work beyond its share must retain activation progress"
         );
     }
 
