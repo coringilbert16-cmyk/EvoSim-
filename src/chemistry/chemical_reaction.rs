@@ -1118,6 +1118,92 @@ mod material_identity_tests {
     }
 
     #[test]
+    fn environmental_discovery_work_is_bounded_at_each_budget_size() {
+        let mut simulation = crate::state::Simulation::new(938, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+
+        // Empty cells are the worst case for candidate-only accounting: no
+        // candidate is found, but traversal must still stop at the scan bound.
+        for budget in [1_usize, 8, 64, MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK] {
+            let (candidates, inspected) =
+                discover_environmental_bonds(&simulation.environment, 0, budget);
+            assert!(candidates.len() <= budget);
+            assert!(
+                inspected <= budget.saturating_mul(8).max(1),
+                "empty-field traversal exceeded the documented 8x bound: budget={budget}, inspected={inspected}"
+            );
+            assert!(candidates.is_empty());
+        }
+
+        // A sparse candidate at the far end must remain reachable across
+        // rotated windows while every individual tick stays within its bound.
+        let source = environmental_test_composite(&simulation.environment.catalog);
+        let last_cell = simulation.environment.field.cells.len() - 1;
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            last_cell,
+            source,
+            &simulation.environment.catalog,
+        ));
+        let budget = 8;
+        let mut reached = false;
+        for tick in 0..simulation.environment.field.cells.len() as u64 + 8 {
+            let (candidates, inspected) =
+                discover_environmental_bonds(&simulation.environment, tick, budget);
+            assert!(candidates.len() <= budget);
+            assert!(inspected <= budget * 8);
+            if candidates.iter().any(|(cell, _, _)| *cell == last_cell) {
+                reached = true;
+                break;
+            }
+        }
+        assert!(reached, "rotated bounded scans must eventually reach sparse material");
+    }
+
+    /// Manual wall-clock benchmark for environmental candidate discovery.
+    /// Run with:
+    /// cargo test environmental_discovery_timing_benchmark -- --ignored --nocapture
+    #[test]
+    #[ignore = "manual timing benchmark; run with --ignored --nocapture"]
+    fn environmental_discovery_timing_benchmark() {
+        use std::time::Instant;
+
+        let mut simulation = crate::state::Simulation::new(939, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        let source = environmental_test_composite(&simulation.environment.catalog);
+        let last_cell = simulation.environment.field.cells.len() - 1;
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            last_cell,
+            source,
+            &simulation.environment.catalog,
+        ));
+
+        for budget in [1_usize, 16, MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK] {
+            let start = Instant::now();
+            let mut candidates_seen = 0_usize;
+            let mut inspected_total = 0_usize;
+            for tick in 0..500_u64 {
+                let (candidates, inspected) =
+                    discover_environmental_bonds(&simulation.environment, tick, budget);
+                candidates_seen += candidates.len();
+                inspected_total += inspected;
+            }
+            let elapsed = start.elapsed();
+            eprintln!(
+                "environmental discovery benchmark: budget={budget}, ticks=500, candidates={candidates_seen}, inspected={inspected_total}, elapsed_ms={}",
+                elapsed.as_millis()
+            );
+            assert!(
+                inspected_total <= 500 * budget.saturating_mul(8).max(1),
+                "aggregate discovery work exceeded the per-tick bound"
+            );
+        }
+    }
+
+    #[test]
     fn sparse_environmental_discovery_rotates_with_a_bounded_scan_window() {
         let mut simulation = crate::state::Simulation::new(937, 10.0);
         for cell in &mut simulation.environment.field.cells {
