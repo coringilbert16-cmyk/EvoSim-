@@ -96,6 +96,9 @@ jobs:
           run_check cargo test --locked rejects_unrepresentable_chemical_position_keys
           run_check cargo test --locked rejects_schema_four_store_after_chemical_position_key_migration
           run_check cargo test --locked chemical_break_
+          run_check cargo test --locked sunlight_resonance_funds_environmental_chemical_break_without_external_grant
+          run_check cargo test --locked sparse_environmental_discovery_rotates_with_a_bounded_scan_window
+          run_check cargo test --locked exposed_environmental_material_settles_heat_without_a_living_receiver
           run_check cargo test --locked insert_partial_append_failure_rolls_back_original_cache_bytes_and_reopens_cleanly
           run_check cargo test --locked cache_append_rollback_failure_reports_both_errors_and_preserves_recovery_evidence
           run_check cargo test --locked manifest_failure_rolls_back_appended_record_and_reopens_cleanly
@@ -148,6 +151,9 @@ jobs:
           run_check cargo test --locked breached_organism_material_and_energy_holders_reconcile_over_live_ticks
           run_check cargo test --locked breached_organism_retains_storage_and_construction_without_biological_progress
           run_check cargo test --locked invalid_finished_body_position_preserves_released_material_ownership
+          run_check cargo test --locked dead_organism_dissipates_retained_resonance_as_heat_on_final_release
+          run_check cargo test --locked chemistry_broken_dead_graph_releases_through_the_live_lifecycle
+          run_check cargo test --locked live_tick_releases_a_dead_bondless_graph_into_the_environment
           run_check cargo test --locked failed_stored_break
           run_check cargo test --locked failed_environmental_break
           run_check cargo test --locked failed_late_physical_restoration_preserves_destination_structure
