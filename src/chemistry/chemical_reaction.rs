@@ -26,13 +26,19 @@ pub(crate) const MAX_REACTION_REALIZATIONS_PER_TICK: usize = 64;
 /// Select work in stable key order, independent of the order in which callers
 /// discovered candidates. Ties retain their original index for deterministic
 /// behavior when multiple records share a key.
-fn stable_work_order(keys: &[String], limit: usize) -> Vec<usize> {
+fn stable_work_order(keys: &[String], limit: usize, tick: u64) -> Vec<usize> {
     let mut indices: Vec<usize> = (0..keys.len()).collect();
     indices.sort_by(|left, right| {
         keys[*left]
             .cmp(&keys[*right])
             .then_with(|| left.cmp(right))
     });
+    // Rotate deterministically by tick so a permanently rejected early key
+    // cannot starve later candidates whenever the work budget is saturated.
+    if !indices.is_empty() {
+        let rotation = tick as usize % indices.len();
+        indices.rotate_left(rotation);
+    }
     indices.truncate(limit);
     indices
 }
@@ -42,6 +48,7 @@ fn stable_work_order(keys: &[String], limit: usize) -> Vec<usize> {
 /// state; they are revalidated by normal candidate discovery on a later tick.
 pub(crate) fn schedule_operations(
     operations: Vec<ChemicalBreakOperation>,
+    tick: u64,
     remaining_work: &mut usize,
     accumulation: &mut std::collections::BTreeMap<String, f64>,
 ) -> Vec<ChemicalBreakOperation> {
@@ -61,7 +68,7 @@ pub(crate) fn schedule_operations(
         .iter()
         .map(|operation| operation.accumulation_key.clone())
         .collect();
-    let order = stable_work_order(&keys, *remaining_work);
+    let order = stable_work_order(&keys, *remaining_work, tick);
     let mut selected = vec![false; operations.len()];
     for index in &order {
         selected[*index] = true;
@@ -825,15 +832,22 @@ mod material_identity_tests {
     #[test]
     fn scheduler_orders_work_by_stable_key_and_respects_budget() {
         let keys = vec!["zeta".into(), "alpha".into(), "middle".into()];
-        assert_eq!(stable_work_order(&keys, 2), vec![1, 2]);
-        assert_eq!(stable_work_order(&keys, 0), Vec::<usize>::new());
-        assert_eq!(stable_work_order(&keys, 8), vec![1, 2, 0]);
+        assert_eq!(stable_work_order(&keys, 2, 0), vec![1, 2]);
+        assert_eq!(stable_work_order(&keys, 0, 0), Vec::<usize>::new());
+        assert_eq!(stable_work_order(&keys, 8, 0), vec![1, 2, 0]);
     }
 
     #[test]
     fn scheduler_breaks_duplicate_key_ties_by_original_index() {
         let keys = vec!["same".into(), "same".into(), "first".into()];
-        assert_eq!(stable_work_order(&keys, 2), vec![2, 0]);
+        assert_eq!(stable_work_order(&keys, 2, 0), vec![2, 0]);
+    }
+
+    #[test]
+    fn scheduler_rotation_prevents_permanent_first_key_starvation() {
+        let keys = vec!["zeta".into(), "alpha".into(), "middle".into()];
+        assert_eq!(stable_work_order(&keys, 2, 0), vec![1, 2]);
+        assert_eq!(stable_work_order(&keys, 2, 1), vec![2, 0]);
     }
 
     #[test]
