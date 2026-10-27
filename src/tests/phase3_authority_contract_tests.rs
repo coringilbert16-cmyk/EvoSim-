@@ -19,6 +19,7 @@ mod tests {
             width: 100.0,
             height: 100.0,
             chemistry_usable_energy: 0.0,
+            resonant_energy: Default::default(),
             catalog: catalog.clone(),
             field: ActiveMaterialField::new(100.0, 100.0, 10.0),
         };
@@ -67,6 +68,7 @@ mod tests {
             width: 100.0,
             height: 100.0,
             chemistry_usable_energy: 0.0,
+            resonant_energy: Default::default(),
             catalog,
             field: ActiveMaterialField::new(100.0, 100.0, 10.0),
         };
@@ -105,6 +107,7 @@ mod tests {
             width: 1000.0,
             height: 1000.0,
             chemistry_usable_energy: 0.0,
+            resonant_energy: Default::default(),
             catalog,
             field: ActiveMaterialField::new(1000.0, 1000.0, 10.0),
         };
