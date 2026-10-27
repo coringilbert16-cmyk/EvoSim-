@@ -92,7 +92,7 @@ pub(crate) fn prepare_chemical_break_energy_with_resonance(
         || resonant_work > disruption_cost
         || !activation_signal.is_finite()
         || activation_signal < 0.0
-        || !crate::chemistry::can_chemical_break(activation_signal, disruption_cost - resonant_work)
+        || !crate::chemistry::can_chemical_break(activation_signal, disruption_cost)
     {
         return None;
     }
@@ -2314,6 +2314,18 @@ mod tests {
         // dissipated heat, and the full physical disruption work.
         let residual = -structural_energy - resonant_work + usable + heat + total_disruption_work;
         assert!(residual.abs() < 1e-12);
+    }
+
+    #[test]
+    fn activation_signal_cannot_replace_disruption_work_or_lower_its_threshold() {
+        let ledger = crate::state::EnergyLedger::default();
+        // Even if a later caller can provide resonance, activation itself must
+        // cross the full physical barrier; it is not an energy credit.
+        let prepared = prepare_chemical_break_energy_with_resonance(
+            10.0, &ledger, 0.0, 1.0, 5.0, 0.0, 0.5,
+        );
+        assert!(prepared.is_none());
+        assert_eq!(ledger, crate::state::EnergyLedger::default());
     }
 
     #[test]
