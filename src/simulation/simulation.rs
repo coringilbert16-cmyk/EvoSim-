@@ -730,9 +730,8 @@ impl Simulation {
     pub(crate) fn step(&mut self) {
         self.tick += 1;
 
-        // A single deterministic realization budget is shared across all owners this tick.
-        let mut chemistry_work_remaining =
-            crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK;
+        // Divide the realization budget across owners; the remainder rotates by tick.
+        let chemistry_owner_count = self.organisms.len();
 
         let mut still_active = Vec::new();
         let mut completed = Vec::new();
@@ -829,7 +828,14 @@ impl Simulation {
                 &living_ids,
             );
         }
-        for organism in &mut self.organisms {
+        for (organism_index, organism) in self.organisms.iter_mut().enumerate() {
+            let mut chemistry_work_remaining =
+                crate::chemical_reaction::work_budget_for_owner(
+                    crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK,
+                    chemistry_owner_count,
+                    organism_index,
+                    self.tick,
+                );
             let is_living = living_ids.contains(&organism.id);
             if is_living {
                 organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
