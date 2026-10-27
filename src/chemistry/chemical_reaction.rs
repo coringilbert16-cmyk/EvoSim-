@@ -1026,7 +1026,10 @@ mod material_identity_tests {
             .resonant_energy
             .total_energy()
             .expect("sunlight capture should leave a valid environmental spectrum");
-        assert!(captured > 0.5, "sunlight must fund more than the BREAK cost");
+        assert!(
+            captured > 0.5,
+            "sunlight must fund more than the BREAK cost"
+        );
         assert!(
             simulation.energy_inventory_snapshot().is_balanced(1e-7),
             "sunlight capture must balance before chemistry spends the energy"
@@ -1056,9 +1059,7 @@ mod material_identity_tests {
             .total_energy()
             .expect("environment resonance must remain valid after BREAK");
         assert!((captured - remaining - 0.5).abs() < 1e-7);
-        assert!(
-            (simulation.energy_ledger.total_work_expended - work_before - 0.5).abs() < 1e-7
-        );
+        assert!((simulation.energy_ledger.total_work_expended - work_before - 0.5).abs() < 1e-7);
         assert!(
             simulation.energy_inventory_snapshot().is_balanced(1e-7),
             "sunlight-captured resonance must be spent once and remain conserved"
