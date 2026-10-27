@@ -139,3 +139,13 @@ Added a test that retained resonance prevents final release instead of being sil
 ### Verification results from the repaired baseline commit (2026-10-27)
 
 The workflow for `60d5efd` passed formatting, architecture checks, and every focused test group. The full Rust suite completed with **778 passed, 10 failed, 1 ignored**; failures were in construction/contact/cavity/combine/movement/viability/storage tests rather than the new decomposition tests. Because this PR touches some of those subsystems, their baseline status and causal relationship to this branch are not yet proven. Clippy then failed on **34 application-target and 17 test-target errors**; the reported diagnostics were in other modules, but a clean baseline comparison is still needed before classifying all of them as pre-existing. This run predates the latest owner-transaction and retained-resonance tests. A newer run is verifying those changes; its formatting gate currently fails, so the exact rustfmt difference still needs to be isolated before the branch can be considered clean.
+
+### Follow-up: sunlight-funded environmental chemistry and final resonance settlement (2026-10-27)
+
+The world-tone capture reconciliation now includes the environment's staged resonance reservoir as well as organism reservoirs. Previously, the source-frame accounting compared organism-only retained energy against an initial total that already included environmental resonance; an environmental capture could therefore be misclassified as heat even though the environment retained it. The authoritative capture delta now includes both holders.
+
+Added an end-to-end regression that captures energy through the existing world-tone path into exposed environmental physical material, verifies the compatible retained resonance and independent world inventory, then uses that resonance to fund environmental chemical BREAK without a test-only external energy grant. The test checks the reaction's work charge, reservoir debit, and final inventory conservation.
+
+Final dead-material release also now settles any remaining retained resonance as heat in the same staged release transaction. It does not convert resonance into usable chemistry energy or silently drop it; a failed material deposit leaves the live holder and ledger unchanged. This removes the prior indefinite-retention blocker at final release, subject to exact-head CI verification.
+
+These changes are committed on the PR branch. They are implementation progress, not a merge-readiness claim: verify the new live sunlight-to-reaction test, dead-resonance finalization, rollback behavior, and full acceptance gates on the exact current head.
