@@ -675,7 +675,7 @@ pub(crate) fn accumulate_environmental(
         updated_keys.insert(key.clone());
         if crate::chemistry::activated(activation_signal, barrier) {
             operations.push(EnvironmentalChemicalBreakOperation {
-                                cell_index,
+                cell_index,
                 material_index,
                 bond_index,
                 source_material: instance.clone(),
