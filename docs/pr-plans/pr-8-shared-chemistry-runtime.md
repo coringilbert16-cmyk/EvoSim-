@@ -51,8 +51,20 @@ Make environmental materials and material held by cells/organisms participate in
 - [x] Named the accumulated comparison value an activation signal and documented that it is not an energy source or inventory term; physical source provenance remains a separate invariant to verify.
 - [x] Added a regression proving a large activation signal cannot pay a physical BREAK energy shortfall; focused chemistry tests passed, while exact-head full-suite/Clippy verification remains pending.
 - [x] Identified a hard integration gap: environmental `PhysicalMaterialBond` records store topology/endpoints but no bond-energy holder, while decomposing bodies use a separate bond-break settlement path. Environment-only realization must not invent an energy source; the shared transaction/ownership bridge needs to preserve or derive actual energy provenance.
-- [ ] Generalize candidate discovery/activation to environmental and organism-held material using local spatial neighborhoods.
-- [ ] Bring dead/decomposing material onto the same chemistry policy without duplicating its physical transaction path.
+- [ ] Define the source-backed energy/ownership bridge for physical-material internal bonds before enabling environmental realization. Existing `PhysicalMaterialBond` records contain endpoints only; deriving energy from type-level potential or activation signal would create unaccounted energy.
+- [ ] Generalize candidate discovery/activation to environmental and organism-held material using local spatial neighborhoods, using the same reaction policy and transaction boundary.
+- [ ] Add acceptance coverage for dead-material behavior. Audit confirms nonliving organisms remain in `Simulation::step`'s organism loop and pass through the same `chemical_reaction::accumulate` path; do not reactivate the disconnected legacy recycling/decomposition path as a second chemistry engine.
 - [ ] Add transactional and independent-inventory acceptance tests for environment-only and organism-held reactions.
 - [ ] Benchmark candidate discovery and document bounded-work behavior.
-- [ ] Exact-head verification and named-failure comparison against the accepted baseline.
+- [x] Reconciled latest `main` (`29f0f510062eb1ec4a1db3e1f7bb3cce12ba2d08`) into this branch; the branch is no longer behind main.
+- [x] Exact integration-head verification: formatting, architecture checks, and all five focused test groups pass. Full suite: 763 passed, 10 failed, 1 ignored in 307.58s; all 10 named failures are known baseline failures (the accepted baseline had 21 distinct failures). Clippy remains at the existing 34 app-target and 14 test-target diagnostics.
+- [ ] Exact implementation-head verification after the next code change; compare named failures against the accepted baseline.
+
+
+## Correct implementation order after main integration (2026-10-27)
+
+1. Establish explicit physical-bond energy provenance and transfer semantics across graph bonds, stored `PhysicalMaterial`, and environmental field ownership. Do not infer stored energy from `ResourceProperties::potential_energy` or activation signal.
+2. Extend local/indexed discovery and activation to eligible environmental physical material, then route realization through the existing transactional boundary rather than duplicating it.
+3. Keep dead organisms on the canonical reaction path; add an acceptance regression rather than enabling the legacy recycling carrier.
+4. Add environment-only and cross-holder acceptance tests with independent integer-material and world-energy inventory oracles.
+5. Benchmark the completed path and document current temporary safeguards. The 307.58-second full-suite run slightly exceeded the five-minute command target, so recheck runtime after implementation; do not weaken test coverage to meet it.
