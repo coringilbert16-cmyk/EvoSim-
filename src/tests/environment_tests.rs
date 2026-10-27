@@ -531,13 +531,7 @@ fn physical_split_replaces_source_only_after_every_piece_destination_is_valid() 
     assert_eq!(field.cells[cell].physical_materials, vec![source.clone()]);
     assert_eq!(field.revision, before_revision);
 
-    assert!(field.split_physical_at_index(
-        cell,
-        0,
-        &source,
-        vec![carbon, hydrogen],
-        catalog,
-    ));
+    assert!(field.split_physical_at_index(cell, 0, &source, vec![carbon, hydrogen], catalog,));
     assert_eq!(
         field
             .cells
