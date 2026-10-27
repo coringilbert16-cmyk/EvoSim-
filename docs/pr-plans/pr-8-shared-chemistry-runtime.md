@@ -149,3 +149,7 @@ Added an end-to-end regression that captures energy through the existing world-t
 Final dead-material release also now settles any remaining retained resonance as heat in the same staged release transaction. It does not convert resonance into usable chemistry energy or silently drop it; a failed material deposit leaves the live holder and ledger unchanged. This removes the prior indefinite-retention blocker at final release, subject to exact-head CI verification.
 
 These changes are committed on the PR branch. They are implementation progress, not a merge-readiness claim: verify the new live sunlight-to-reaction test, dead-resonance finalization, rollback behavior, and full acceptance gates on the exact current head.
+
+### Bounded sparse-field discovery correction (2026-10-27)
+
+Environmental discovery now caps traversal steps across cells, material entries, and bond entries, rather than only capping the number of candidate bonds materialized. This prevents a sparse field with many empty cells or material entries from causing an effectively unbounded search before the candidate budget is consumed. The scan start rotates by tick so skipped regions can be reached over successive ticks. A focused regression places the only environmental candidate beyond the first scan window and checks that the rotating scan eventually reaches it. Exact-head formatting and test verification are pending.
