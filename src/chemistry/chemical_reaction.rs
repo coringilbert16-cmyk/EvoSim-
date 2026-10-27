@@ -772,15 +772,25 @@ pub(crate) fn resolve_environmental(
     let Some(pieces) = source.break_internal_bond(&operation.bond) else {
         return false;
     };
-    // Environmental material has no organism-owned reservoir and no
-    // implicit free energy. Its own explicit inventory must cover disruption.
+    // Environmental chemistry may spend only energy that actually reached
+    // the field through the world-tone path. Stage compatible resonance
+    // withdrawal first; any remainder must be covered by already-accounted
+    // usable energy. A failed BREAK leaves the live reservoir untouched.
+    let mut staged_resonance = environment.resonant_energy.clone();
+    let resonant_work = staged_resonance.withdraw_compatible(
+        operation.reaction_frequency_hz,
+        operation.disruption_cost,
+    );
+    if !resonant_work.is_finite() || resonant_work < 0.0 {
+        return false;
+    }
     let Some(prepared) = crate::transformation::prepare_chemical_break_energy_with_resonance(
         environment.chemistry_usable_energy,
         ledger,
         0.0,
         operation.activation_signal,
         operation.disruption_cost,
-        0.0,
+        resonant_work,
         1.0,
     ) else {
         return false;
@@ -800,6 +810,7 @@ pub(crate) fn resolve_environmental(
         return false;
     }
     environment.chemistry_usable_energy = prepared.usable_energy;
+    environment.resonant_energy = staged_resonance;
     *ledger = prepared.ledger;
     ledger.total_usable_energy_held = next_total_usable;
     true
