@@ -590,6 +590,49 @@ mod material_identity_tests {
     }
 
     #[test]
+    fn large_activation_signal_cannot_pay_a_physical_energy_shortfall() {
+        let mut simulation = crate::state::Simulation::new(925, 10.0);
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        let original_bond_count = simulation.organisms[0].structure.bonds.len();
+        let original_ledger = simulation.energy_ledger;
+        simulation.organisms[0].usable_energy = 0.0;
+        simulation.organisms[0].resonant_energy =
+            crate::harmonics::ResonantEnergyReservoir::default();
+        let original_resonance = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .expect("empty resonance reservoir must have a valid total");
+        let operation = ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            // The signal easily crosses the activation threshold, but the
+            // physical bond and energy holders cannot pay the requested work.
+            activation_signal: 1_000_000.0,
+            disruption_cost: bond.bond_energy + 1.0,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "test|rev:0|bond".into(),
+            accumulated_reaction: 1_000_000.0,
+        };
+
+        assert!(!resolve(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.energy_ledger,
+        ));
+        assert_eq!(simulation.organisms[0].structure.bonds.len(), original_bond_count);
+        assert_eq!(simulation.energy_ledger, original_ledger);
+        assert_eq!(simulation.organisms[0].usable_energy, 0.0);
+        assert_eq!(
+            simulation.organisms[0].resonant_energy.total_energy(),
+            Some(original_resonance)
+        );
+    }
+
+    #[test]
     fn chemical_break_reconciles_world_energy_inventory() {
         let mut simulation = crate::state::Simulation::new(922, 10.0);
         let before = simulation.energy_inventory_snapshot();
