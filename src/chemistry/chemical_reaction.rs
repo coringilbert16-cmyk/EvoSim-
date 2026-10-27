@@ -788,10 +788,7 @@ pub(crate) fn resolve_environmental(
     };
     let usable_delta = prepared.usable_energy - environment.chemistry_usable_energy;
     let next_total_usable = ledger.total_usable_energy_held + usable_delta;
-    if !usable_delta.is_finite()
-        || !next_total_usable.is_finite()
-        || next_total_usable < 0.0
-    {
+    if !usable_delta.is_finite() || !next_total_usable.is_finite() || next_total_usable < 0.0 {
         return false;
     }
     if !environment.field.split_physical_at_index(
@@ -924,10 +921,7 @@ mod material_identity_tests {
         .expect("test composite should be physically realizable")
     }
 
-    fn fund_environment_chemistry_for_test(
-        simulation: &mut crate::state::Simulation,
-        amount: f64,
-    ) {
+    fn fund_environment_chemistry_for_test(simulation: &mut crate::state::Simulation, amount: f64) {
         use crate::energy_ledger::{
             EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction,
         };
@@ -1057,7 +1051,8 @@ mod material_identity_tests {
             2
         );
         assert!(
-            (environment_energy_before - simulation.environment.chemistry_usable_energy - 0.5).abs()
+            (environment_energy_before - simulation.environment.chemistry_usable_energy - 0.5)
+                .abs()
                 < 1e-9
         );
         assert!((simulation.energy_ledger.total_work_expended - ledger_before - 0.5).abs() < 1e-9);
@@ -1105,7 +1100,10 @@ mod material_identity_tests {
             &mut simulation.energy_ledger,
         ));
         assert_eq!(simulation.environment.field.cells, field_before);
-        assert_eq!(simulation.environment.chemistry_usable_energy, energy_before);
+        assert_eq!(
+            simulation.environment.chemistry_usable_energy,
+            energy_before
+        );
         assert_eq!(simulation.energy_ledger, ledger_before);
     }
 
@@ -1842,14 +1840,9 @@ mod material_identity_tests {
         let mut graph_remaining = graph_budget;
         let mut accumulation = std::collections::BTreeMap::new();
 
-        let graph_ready = schedule_operations(
-            graph_operations,
-            0,
-            &mut graph_remaining,
-            &mut accumulation,
-        );
-        let mut environmental_remaining =
-            total_budget - graph_budget + graph_remaining;
+        let graph_ready =
+            schedule_operations(graph_operations, 0, &mut graph_remaining, &mut accumulation);
+        let mut environmental_remaining = total_budget - graph_budget + graph_remaining;
         let environmental_ready = schedule_environmental_operations(
             environmental_operations,
             0,
