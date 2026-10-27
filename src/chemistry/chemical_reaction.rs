@@ -446,8 +446,7 @@ fn discover_environmental_bonds(
     // cell. Without this headroom, a sparse bond at the end of a window can be
     // perpetually skipped: the cell itself consumes the final inspection.
     let scan_stride = scan_window.saturating_sub(2).max(1);
-    let cell_start =
-        ((tick % cell_count as u64) as usize).wrapping_mul(scan_stride) % cell_count;
+    let cell_start = ((tick % cell_count as u64) as usize).wrapping_mul(scan_stride) % cell_count;
     'discovery: for cell_offset in 0..cell_count {
         if scan_steps_remaining == 0 {
             break;
