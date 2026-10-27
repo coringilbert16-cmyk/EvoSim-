@@ -925,10 +925,19 @@ impl Simulation {
             };
             carried_chemistry_discovery_work =
                 graph_discovery_remaining + environmental_discovery_remaining;
+            // Reserve a share for the field owner before scheduling graph
+            // commits. Otherwise a saturated first organism can consume the
+            // entire realization budget and starve environmental reactions.
+            let graph_work_budget = if organism_index == 0 {
+                chemistry_work_remaining / 2
+            } else {
+                chemistry_work_remaining
+            };
+            let mut graph_work_remaining = graph_work_budget;
             let chemical_operations = crate::chemical_reaction::schedule_operations(
                 chemical_operations,
                 self.tick,
-                &mut chemistry_work_remaining,
+                &mut graph_work_remaining,
                 &mut self.chemical_reaction_accumulation,
             );
             // The shared per-tick budget bounds physical reaction realization.
@@ -942,11 +951,20 @@ impl Simulation {
                     &mut self.chemical_reaction_accumulation,
                 );
             }
+            let environmental_work_budget = if organism_index == 0 {
+                // The field receives its reserved share plus any graph share
+                // that was not used; the combined work never exceeds the
+                // original owner budget.
+                chemistry_work_remaining - graph_work_budget + graph_work_remaining
+            } else {
+                0
+            };
+            let mut environmental_work_remaining = environmental_work_budget;
             let environmental_operations =
                 crate::chemical_reaction::schedule_environmental_operations(
                     environmental_operations,
                     self.tick,
-                    &mut chemistry_work_remaining,
+                    &mut environmental_work_remaining,
                     &mut self.chemical_reaction_accumulation,
                 );
             for operation in environmental_operations {
@@ -959,8 +977,13 @@ impl Simulation {
                 );
             }
             // Carry unused slots forward, but never borrow a later owner's
-            // quota. This preserves fairness while avoiding idle capacity.
-            carried_chemistry_work = chemistry_work_remaining;
+            // quota. On the first owner, environmental_work_remaining already
+            // includes the unused graph share, so the global cap is preserved.
+            carried_chemistry_work = if organism_index == 0 {
+                environmental_work_remaining
+            } else {
+                graph_work_remaining
+            };
 
             // Recheck immediately after chemistry: if a reaction breached the
             // genome core this tick, do not perform any later biological work.
