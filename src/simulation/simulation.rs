@@ -1954,10 +1954,7 @@ mod decomposition_finalization_tests {
 
         assert!(simulation.organisms.is_empty());
         assert_eq!(simulation.environment.field.total_amount(), field_before + 1.0);
-        assert_eq!(
-            simulation.energy_ledger.total_heat_dissipated,
-            heat_before + 2.0
-        );
+        assert_eq!(simulation.energy_ledger.total_heat_dissipated, heat_before + 2.0);
     }
 
     #[test]
