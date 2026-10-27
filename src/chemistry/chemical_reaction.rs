@@ -446,7 +446,7 @@ pub(crate) fn accumulate_environmental(
         // fields can contain many empty cells/materials, so candidate-only
         // accounting would still permit an unbounded scan before finding work.
         // A rotating start lets sparse regions make progress over successive ticks.
-        let mut scan_steps_remaining = count.saturating_mul(4).max(1);
+        let mut scan_steps_remaining = count.saturating_mul(8).max(1);
         let cell_start = tick as usize % cell_count;
         'discovery: for cell_offset in 0..cell_count {
             if scan_steps_remaining == 0 {
