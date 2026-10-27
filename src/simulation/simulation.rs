@@ -1501,6 +1501,10 @@ impl Simulation {
         let mut release_indices = Vec::new();
         for (index, organism) in self.organisms.iter().enumerate() {
             if living_ids.contains(&organism.id)
+                || self
+                    .active_transformations
+                    .iter()
+                    .any(|transformation| transformation.organism_id == organism.id)
                 || !organism.structure.bonds.is_empty()
                 || organism.active_transformation_id.is_some()
                 || organism.reproductive_construction.is_some()
