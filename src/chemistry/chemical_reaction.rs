@@ -28,11 +28,7 @@ pub(crate) const MAX_REACTION_REALIZATIONS_PER_TICK: usize = 64;
 /// behavior when multiple records share a key.
 fn stable_work_order(keys: &[String], limit: usize, tick: u64) -> Vec<usize> {
     let mut indices: Vec<usize> = (0..keys.len()).collect();
-    indices.sort_by(|left, right| {
-        keys[*left]
-            .cmp(&keys[*right])
-            .then_with(|| left.cmp(right))
-    });
+    indices.sort_by(|left, right| keys[*left].cmp(&keys[*right]).then_with(|| left.cmp(right)));
     // Rotate deterministically by tick so a permanently rejected early key
     // cannot starve later candidates whenever the work budget is saturated.
     if !indices.is_empty() {
@@ -871,6 +867,7 @@ mod material_identity_tests {
         let mut remaining = 1;
         let ready = schedule_operations(
             vec![operation("z-last", 7.25), operation("a-first", 2.5)],
+            0,
             &mut remaining,
             &mut accumulation,
         );
@@ -882,6 +879,7 @@ mod material_identity_tests {
 
         let deferred = schedule_operations(
             vec![operation("b-next-tick", 3.75)],
+            1,
             &mut remaining,
             &mut accumulation,
         );
