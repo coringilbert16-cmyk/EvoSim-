@@ -19,6 +19,21 @@ pub(crate) struct ChemicalBreakOperation {
     pub(crate) accumulated_reaction: f64,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct EnvironmentalChemicalBreakOperation {
+    pub(crate) organism_id: String,
+    pub(crate) cell_index: usize,
+    pub(crate) material_index: usize,
+    pub(crate) bond_index: usize,
+    pub(crate) source_material: crate::physical_material::PhysicalMaterial,
+    pub(crate) bond: crate::physical_material::PhysicalMaterialBond,
+    pub(crate) activation_signal: f64,
+    pub(crate) disruption_cost: f64,
+    pub(crate) reaction_frequency_hz: f64,
+    pub(crate) accumulation_key: String,
+    pub(crate) accumulated_reaction: f64,
+}
+
 /// Hard cap on physical reaction-realization attempts per simulation tick.
 /// Candidate discovery and activation remain separate from this commit budget.
 pub(crate) const MAX_REACTION_REALIZATIONS_PER_TICK: usize = 64;
@@ -399,6 +414,371 @@ pub(crate) fn accumulate(
     // invalid chemistry data accidentally pauses dissipation indefinitely.
     dissipate_unupdated_accumulations(accumulation, &current_prefix, &updated_keys);
     operations
+}
+
+/// Discover chemical reactions at realized environmental material bonds in
+/// the organism's local body bounds. Environmental bonds are restored only into
+/// a trial graph to recover their authoritative geometry and activation strength;
+/// their stored energy remains zero.
+pub(crate) fn accumulate_environmental(
+    organism: &Organism,
+    environment: &crate::state::Environment,
+    accumulation: &mut std::collections::BTreeMap<String, f64>,
+    chemistry_library: &mut ChemistryLibrary,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
+) -> Vec<EnvironmentalChemicalBreakOperation> {
+    let current_prefix = format!("{}|environment:", organism.id);
+    let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+        &organism.structure,
+        &environment.catalog,
+    ) else {
+        dissipate_unupdated_accumulations(
+            accumulation,
+            &current_prefix,
+            &std::collections::BTreeSet::new(),
+        );
+        return Vec::new();
+    };
+    let cells = environment.field.cells_intersecting_bounds(
+        body.min_x,
+        body.max_x,
+        body.min_y,
+        body.max_y,
+    );
+    let mut candidates = Vec::new();
+    for cell_index in cells {
+        let Some(cell) = environment.field.cells.get(cell_index) else {
+            continue;
+        };
+        for (material_index, material) in cell.physical_materials.iter().enumerate() {
+            if let Some(connections) = material.internal_connections.as_ref() {
+                for bond_index in 0..connections.len() {
+                    candidates.push((cell_index, material_index, bond_index));
+                }
+            }
+        }
+    }
+
+    let indices = discovery_indices(candidates.len(), *remaining_discovery_work, tick);
+    *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
+    let mut updated_keys = std::collections::BTreeSet::new();
+    let mut operations = Vec::new();
+    let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
+    let mut compatibility_cache = ConnectionCompatibilityCache::new();
+
+    for candidate_index in indices {
+        let Some(&(cell_index, material_index, bond_index)) = candidates.get(candidate_index)
+        else {
+            continue;
+        };
+        let Some(instance) = environment
+            .field
+            .cells
+            .get(cell_index)
+            .and_then(|cell| cell.physical_materials.get(material_index))
+        else {
+            continue;
+        };
+        let Some(connection) = instance
+            .internal_connections
+            .as_ref()
+            .and_then(|connections| connections.get(bond_index))
+        else {
+            continue;
+        };
+        let mut hypothetical = organism.structure.clone();
+        let Some(restored_indices) = crate::material_restoration::restore_material(
+            &mut hypothetical,
+            instance,
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &environment.catalog,
+        ) else {
+            continue;
+        };
+        let Some(&unit_a) = restored_indices.get(connection.part_a) else {
+            continue;
+        };
+        let Some(&unit_b) = restored_indices.get(connection.part_b) else {
+            continue;
+        };
+        let Some(a) = hypothetical.units.get(unit_a).and_then(|u| u.properties(&environment.catalog))
+        else {
+            continue;
+        };
+        let Some(b) = hypothetical.units.get(unit_b).and_then(|u| u.properties(&environment.catalog))
+        else {
+            continue;
+        };
+        let (Some(position_a), Some(position_b)) = (a.chemical_position, b.chemical_position)
+        else {
+            continue;
+        };
+        let Some(candidate) = crate::contact::connection_pair_candidates_cached(
+            &hypothetical,
+            unit_a,
+            unit_b,
+            &environment.catalog,
+            &mut compatibility_cache,
+        )
+        .into_iter()
+        .find(|candidate| {
+            (candidate.endpoint_a == connection.endpoint_a
+                && candidate.endpoint_b == connection.endpoint_b)
+                || (candidate.endpoint_a == connection.endpoint_b
+                    && candidate.endpoint_b == connection.endpoint_a)
+        }) else {
+            continue;
+        };
+        let geometry_material_a = hypothetical.units[unit_a]
+            .material
+            .parts
+            .first()
+            .map(|part| part.0.as_str())
+            .unwrap_or("unknown");
+        let geometry_material_b = hypothetical.units[unit_b]
+            .material
+            .parts
+            .first()
+            .map(|part| part.0.as_str())
+            .unwrap_or("unknown");
+        let Some(interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
+            geometry_material_a,
+            &hypothetical.units[unit_a],
+            geometry_material_b,
+            &hypothetical.units[unit_b],
+            candidate,
+            &environment.catalog,
+        ) else {
+            continue;
+        };
+        let material_a = material_identity(&hypothetical.units[unit_a].material);
+        let material_b = material_identity(&hypothetical.units[unit_b].material);
+        let key = format!(
+            "{}|environment:{}:{}:{}:{}:{:?}",
+            organism.id, cell_index, material_index, bond_index, material_identity(&instance.material), connection
+        );
+        let key_record = ChemistryKey::from_live_geometry(
+            &material_a,
+            &material_b,
+            &interface,
+            position_a,
+            position_b,
+        );
+        let potential = match chemistry_library.get(&key_record) {
+            Some(record) => record.static_potential,
+            None => {
+                let Some(calculated) = crate::chemistry::interaction_potential(
+                    position_a,
+                    position_b,
+                    crate::chemistry::CHEMICAL_K,
+                    crate::chemistry::CHEMICAL_D_MAX,
+                ) else {
+                    continue;
+                };
+                match chemistry_library.get_or_insert_static_potential(key_record, calculated) {
+                    Ok(Some(value)) => value,
+                    Ok(None) | Err(_) => calculated,
+                }
+            }
+        };
+        let Some(contact_factor) = crate::chemistry::contact_factor(
+            candidate.distance,
+            crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+        ) else {
+            continue;
+        };
+        let Some(engagement) = crate::chemistry::interface_engagement(candidate.facing) else {
+            continue;
+        };
+        let previous = accumulation.get(&key).copied().unwrap_or(0.0);
+        let Some(next) = crate::chemistry::accumulate_reaction(
+            previous,
+            potential,
+            contact_factor,
+            engagement,
+            crate::chemistry::CHEMICAL_DISSIPATION,
+        ) else {
+            continue;
+        };
+        updated_keys.insert(key.clone());
+        if next <= 0.0 {
+            accumulation.remove(&key);
+            continue;
+        }
+        let strength = crate::combine::bond_strength(a, b);
+        let Some(barrier) = crate::chemistry::activation_barrier_from_bond_strength(strength)
+        else {
+            continue;
+        };
+        let frequency_a = crate::harmonics::natural_frequency_hz(a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_hz(b, baselines);
+        if !frequency_a.is_finite()
+            || frequency_a <= 0.0
+            || !frequency_b.is_finite()
+            || frequency_b <= 0.0
+        {
+            continue;
+        }
+        let reaction_frequency_hz = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        if !reaction_frequency_hz.is_finite() || reaction_frequency_hz <= 0.0 {
+            continue;
+        }
+        let Some(activation_signal) =
+            crate::chemistry::normalized_chemistry_to_activation_signal(next)
+        else {
+            continue;
+        };
+        if crate::chemistry::activated(activation_signal, barrier) {
+            operations.push(EnvironmentalChemicalBreakOperation {
+                organism_id: organism.id.clone(),
+                cell_index,
+                material_index,
+                bond_index,
+                source_material: instance.clone(),
+                bond: connection.clone(),
+                activation_signal,
+                disruption_cost: barrier,
+                reaction_frequency_hz,
+                accumulation_key: key,
+                accumulated_reaction: next,
+            });
+            accumulation.remove(&operations.last().expect("just pushed").accumulation_key);
+        } else {
+            accumulation.insert(key, next);
+        }
+    }
+
+    dissipate_unupdated_accumulations(accumulation, &current_prefix, &updated_keys);
+    operations
+}
+
+/// Apply the same bounded, deterministic work policy to environmental reactions
+/// after graph reactions have used their share of the owner's realization budget.
+pub(crate) fn schedule_environmental_operations(
+    operations: Vec<EnvironmentalChemicalBreakOperation>,
+    tick: u64,
+    remaining_work: &mut usize,
+    accumulation: &mut std::collections::BTreeMap<String, f64>,
+) -> Vec<EnvironmentalChemicalBreakOperation> {
+    if operations.is_empty() || *remaining_work == 0 {
+        for operation in operations {
+            accumulation
+                .entry(operation.accumulation_key)
+                .and_modify(|current| *current = (*current).max(operation.accumulated_reaction))
+                .or_insert(operation.accumulated_reaction);
+        }
+        return Vec::new();
+    }
+    let keys: Vec<String> = operations
+        .iter()
+        .map(|operation| operation.accumulation_key.clone())
+        .collect();
+    let order = stable_work_order(&keys, *remaining_work, tick);
+    let mut selected = vec![false; operations.len()];
+    for index in order {
+        selected[index] = true;
+    }
+    let mut ready = Vec::new();
+    for (index, operation) in operations.into_iter().enumerate() {
+        if selected[index] {
+            ready.push((keys[index].clone(), operation));
+        } else {
+            accumulation
+                .entry(operation.accumulation_key)
+                .and_modify(|current| *current = (*current).max(operation.accumulated_reaction))
+                .or_insert(operation.accumulated_reaction);
+        }
+    }
+    ready.sort_by(|left, right| left.0.cmp(&right.0));
+    *remaining_work = remaining_work.saturating_sub(ready.len());
+    ready.into_iter().map(|(_, operation)| operation).collect()
+}
+
+pub(crate) fn resolve_environmental(
+    operation: EnvironmentalChemicalBreakOperation,
+    organism: &mut Organism,
+    environment: &mut crate::state::Environment,
+    ledger: &mut crate::state::EnergyLedger,
+) -> bool {
+    if organism.id != operation.organism_id
+        || !operation.activation_signal.is_finite()
+        || operation.activation_signal < 0.0
+        || !operation.disruption_cost.is_finite()
+        || operation.disruption_cost < 0.0
+    {
+        return false;
+    }
+    let Some(source) = environment
+        .field
+        .cells
+        .get(operation.cell_index)
+        .and_then(|cell| cell.physical_materials.get(operation.material_index))
+    else {
+        return false;
+    };
+    if source != &operation.source_material
+        || source
+            .internal_connections
+            .as_ref()
+            .and_then(|connections| connections.get(operation.bond_index))
+            != Some(&operation.bond)
+    {
+        return false;
+    }
+    let Some(pieces) = source.break_internal_bond(&operation.bond) else {
+        return false;
+    };
+    let mut trial_reservoir = organism.resonant_energy.clone();
+    let resonant_work = trial_reservoir.withdraw_compatible(
+        operation.reaction_frequency_hz,
+        operation.disruption_cost,
+    );
+    let Some(prepared) = crate::transformation::prepare_chemical_break_energy_with_resonance(
+        organism.usable_energy,
+        ledger,
+        0.0,
+        operation.activation_signal,
+        operation.disruption_cost,
+        resonant_work,
+        organism.genome.processing_efficiency(),
+    ) else {
+        return false;
+    };
+    if !environment.field.split_physical_at_index(
+        operation.cell_index,
+        operation.material_index,
+        &operation.source_material,
+        pieces,
+        &environment.catalog,
+    ) {
+        return false;
+    }
+    organism.usable_energy = prepared.usable_energy;
+    *ledger = prepared.ledger;
+    organism.resonant_energy = trial_reservoir;
+    organism.add_transaction_stress(prepared.heat_dissipated);
+    true
+}
+
+pub(crate) fn resolve_environmental_preserving_accumulation(
+    operation: EnvironmentalChemicalBreakOperation,
+    organism: &mut Organism,
+    environment: &mut crate::state::Environment,
+    ledger: &mut crate::state::EnergyLedger,
+    accumulation: &mut std::collections::BTreeMap<String, f64>,
+) -> bool {
+    let key = operation.accumulation_key.clone();
+    let accumulated_reaction = operation.accumulated_reaction;
+    let success = resolve_environmental(operation, organism, environment, ledger);
+    if !success {
+        accumulation.insert(key, accumulated_reaction);
+    }
+    success
 }
 
 pub(crate) fn resolve(
