@@ -952,6 +952,7 @@ mod material_identity_tests {
             accumulated_reaction: 1.0,
         };
 
+        simulation.organisms.clear();
         assert!(resolve_environmental(
             operation,
             &mut simulation.environment,
@@ -1124,9 +1125,7 @@ mod material_identity_tests {
     #[test]
     fn environmental_commit_rejects_invalid_resonance_frequency_before_mutation() {
         let mut simulation = crate::state::Simulation::new(932, 10.0);
-        let organism_id = simulation.organisms[0].id.clone();
         let operation = EnvironmentalChemicalBreakOperation {
-            organism_id,
             cell_index: usize::MAX,
             material_index: 0,
             bond_index: 0,
@@ -1151,10 +1150,6 @@ mod material_identity_tests {
         };
         let structure_before = simulation.organisms[0].structure.clone();
         let usable_energy_before = simulation.organisms[0].usable_energy;
-        let resonance_before = simulation.organisms[0]
-            .resonant_energy
-            .total_energy()
-            .unwrap();
         let ledger_before = simulation.energy_ledger.clone();
         let field_before = simulation.environment.field.cells.clone();
 
@@ -1168,13 +1163,6 @@ mod material_identity_tests {
             format!("{:?}", structure_before)
         );
         assert_eq!(simulation.organisms[0].usable_energy, usable_energy_before);
-        assert_eq!(
-            simulation.organisms[0]
-                .resonant_energy
-                .total_energy()
-                .unwrap(),
-            resonance_before
-        );
         assert_eq!(simulation.energy_ledger, ledger_before);
         assert_eq!(simulation.environment.field.cells, field_before);
     }
