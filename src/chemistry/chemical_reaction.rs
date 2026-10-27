@@ -1030,9 +1030,7 @@ mod material_identity_tests {
                 .abs()
                 < 1e-9
         );
-        assert!(
-            (simulation.energy_ledger.total_work_expended - ledger_before - 0.5).abs() < 1e-9
-        );
+        assert!((simulation.energy_ledger.total_work_expended - ledger_before - 0.5).abs() < 1e-9);
     }
 
     #[test]
