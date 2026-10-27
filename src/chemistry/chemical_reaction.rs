@@ -21,7 +21,6 @@ pub(crate) struct ChemicalBreakOperation {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct EnvironmentalChemicalBreakOperation {
-    pub(crate) organism_id: String,
     pub(crate) cell_index: usize,
     pub(crate) material_index: usize,
     pub(crate) bond_index: usize,
@@ -396,8 +395,7 @@ pub(crate) fn accumulate(
         updated_keys.insert(key.clone());
         if crate::chemistry::activated(activation_signal, effective_barrier) {
             operations.push(ChemicalBreakOperation {
-                organism_id: organism.id.clone(),
-                bond,
+                                bond,
                 activation_signal,
                 disruption_cost: barrier,
                 reaction_frequency_hz,
@@ -421,7 +419,6 @@ pub(crate) fn accumulate(
 /// a trial graph to recover their authoritative geometry and activation strength;
 /// their stored energy remains zero.
 pub(crate) fn accumulate_environmental(
-    organism: &Organism,
     environment: &crate::state::Environment,
     accumulation: &mut std::collections::BTreeMap<String, f64>,
     chemistry_library: &mut ChemistryLibrary,
@@ -677,8 +674,7 @@ pub(crate) fn accumulate_environmental(
         updated_keys.insert(key.clone());
         if crate::chemistry::activated(activation_signal, barrier) {
             operations.push(EnvironmentalChemicalBreakOperation {
-                organism_id: organism.id.clone(),
-                cell_index,
+                                cell_index,
                 material_index,
                 bond_index,
                 source_material: instance.clone(),
@@ -743,19 +739,16 @@ pub(crate) fn schedule_environmental_operations(
 
 pub(crate) fn resolve_environmental(
     operation: EnvironmentalChemicalBreakOperation,
-    organism: &mut Organism,
     environment: &mut crate::state::Environment,
     ledger: &mut crate::state::EnergyLedger,
 ) -> bool {
-    if organism.id != operation.organism_id
-        || !operation.activation_signal.is_finite()
+    if !operation.activation_signal.is_finite()
         || operation.activation_signal < 0.0
         || !operation.disruption_cost.is_finite()
         || operation.disruption_cost < 0.0
         || !crate::chemistry::activated(operation.activation_signal, operation.disruption_cost)
         || !operation.reaction_frequency_hz.is_finite()
         || operation.reaction_frequency_hz <= 0.0
-        || organism.resonant_energy.total_energy().is_none()
     {
         return false;
     }
@@ -779,17 +772,16 @@ pub(crate) fn resolve_environmental(
     let Some(pieces) = source.break_internal_bond(&operation.bond) else {
         return false;
     };
-    let mut trial_reservoir = organism.resonant_energy.clone();
-    let resonant_work = trial_reservoir
-        .withdraw_compatible(operation.reaction_frequency_hz, operation.disruption_cost);
+    // Environmental material has no organism-owned reservoir and no
+    // implicit free energy. Its own explicit inventory must cover disruption.
     let Some(prepared) = crate::transformation::prepare_chemical_break_energy_with_resonance(
-        organism.usable_energy,
+        environment.chemistry_usable_energy,
         ledger,
         0.0,
         operation.activation_signal,
         operation.disruption_cost,
-        resonant_work,
-        organism.genome.processing_efficiency(),
+        0.0,
+        1.0,
     ) else {
         return false;
     };
@@ -802,23 +794,20 @@ pub(crate) fn resolve_environmental(
     ) {
         return false;
     }
-    organism.usable_energy = prepared.usable_energy;
+    environment.chemistry_usable_energy = prepared.usable_energy;
     *ledger = prepared.ledger;
-    organism.resonant_energy = trial_reservoir;
-    organism.add_transaction_stress(prepared.heat_dissipated);
     true
 }
 
 pub(crate) fn resolve_environmental_preserving_accumulation(
     operation: EnvironmentalChemicalBreakOperation,
-    organism: &mut Organism,
     environment: &mut crate::state::Environment,
     ledger: &mut crate::state::EnergyLedger,
     accumulation: &mut std::collections::BTreeMap<String, f64>,
 ) -> bool {
     let key = operation.accumulation_key.clone();
     let accumulated_reaction = operation.accumulated_reaction;
-    let success = resolve_environmental(operation, organism, environment, ledger);
+    let success = resolve_environmental(operation, environment, ledger);
     if !success {
         accumulation.insert(key, accumulated_reaction);
     }
@@ -953,8 +942,7 @@ mod material_identity_tests {
             .unwrap();
         let ledger_before = simulation.energy_ledger.total_work_expended;
         let operation = EnvironmentalChemicalBreakOperation {
-            organism_id: simulation.organisms[0].id.clone(),
-            cell_index,
+                        cell_index,
             material_index: 0,
             bond_index: 0,
             source_material: source.clone(),
@@ -1023,8 +1011,7 @@ mod material_identity_tests {
             .unwrap();
         let ledger_before = simulation.energy_ledger.total_work_expended;
         let operation = EnvironmentalChemicalBreakOperation {
-            organism_id: simulation.organisms[0].id.clone(),
-            cell_index,
+                        cell_index,
             material_index: 0,
             bond_index: 0,
             source_material: source.clone(),
@@ -1093,8 +1080,7 @@ mod material_identity_tests {
         let ledger_before = simulation.energy_ledger.clone();
         let field_before = simulation.environment.field.cells.clone();
         let operation = EnvironmentalChemicalBreakOperation {
-            organism_id: simulation.organisms[0].id.clone(),
-            cell_index,
+                        cell_index,
             material_index: 0,
             bond_index: 0,
             source_material: source,
@@ -1129,8 +1115,7 @@ mod material_identity_tests {
         let mut simulation = crate::state::Simulation::new(931, 10.0);
         let organism = &mut simulation.organisms[0];
         let operation = EnvironmentalChemicalBreakOperation {
-            organism_id: organism.id.clone(),
-            cell_index: usize::MAX,
+                        cell_index: usize::MAX,
             material_index: 0,
             bond_index: 0,
             source_material: crate::physical_material::PhysicalMaterial {
@@ -1295,8 +1280,7 @@ mod material_identity_tests {
             .expect("seed organism should contain a structural bond");
         assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
         let operation = ChemicalBreakOperation {
-            organism_id: simulation.organisms[0].id.clone(),
-            bond,
+                        bond,
             activation_signal: 1_000.0,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
@@ -1857,8 +1841,7 @@ mod material_identity_tests {
             .collect();
         let environmental_operations = (0..40)
             .map(|index| EnvironmentalChemicalBreakOperation {
-                organism_id: simulation.organisms[0].id.clone(),
-                cell_index: 0,
+                                cell_index: 0,
                 material_index: 0,
                 bond_index: 0,
                 source_material: source.clone(),
