@@ -605,8 +605,8 @@ pub(crate) fn accumulate_environmental(
         ) else {
             continue;
         };
-        updated_keys.insert(key.clone());
         if next <= 0.0 {
+            updated_keys.insert(key.clone());
             accumulation.remove(&key);
             continue;
         }
@@ -633,6 +633,10 @@ pub(crate) fn accumulate_environmental(
         else {
             continue;
         };
+        // Invalid geometry/barrier candidates must not pause dissipation of
+        // prior environmental progress. Mark a key current only after the
+        // candidate completes a valid reaction evaluation.
+        updated_keys.insert(key.clone());
         if crate::chemistry::activated(activation_signal, barrier) {
             operations.push(EnvironmentalChemicalBreakOperation {
                 organism_id: organism.id.clone(),
