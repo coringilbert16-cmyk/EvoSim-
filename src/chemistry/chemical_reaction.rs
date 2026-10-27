@@ -19,7 +19,7 @@ pub(crate) struct ChemicalBreakOperation {
     pub(crate) accumulated_reaction: f64,
 }
 
-/// Hard cap on successful reaction-realization attempts per simulation tick.
+/// Hard cap on physical reaction-realization attempts per simulation tick.
 /// Candidate discovery and activation remain separate from this commit budget.
 pub(crate) const MAX_REACTION_REALIZATIONS_PER_TICK: usize = 64;
 
@@ -834,6 +834,45 @@ mod material_identity_tests {
     fn scheduler_breaks_duplicate_key_ties_by_original_index() {
         let keys = vec!["same".into(), "same".into(), "first".into()];
         assert_eq!(stable_work_order(&keys, 2), vec![2, 0]);
+    }
+
+    #[test]
+    fn scheduler_defers_over_budget_activation_without_losing_progress() {
+        let mut simulation = crate::state::Simulation::new(925, 10.0);
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        let operation = |key: &str, progress: f64| ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            reaction_energy: progress,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: key.into(),
+            accumulated_reaction: progress,
+        };
+        let mut accumulation = std::collections::BTreeMap::new();
+        let mut remaining = 1;
+        let ready = schedule_operations(
+            vec![operation("z-last", 7.25), operation("a-first", 2.5)],
+            &mut remaining,
+            &mut accumulation,
+        );
+
+        assert_eq!(ready.len(), 1);
+        assert_eq!(ready[0].accumulation_key, "a-first");
+        assert_eq!(remaining, 0);
+        assert_eq!(accumulation.get("z-last"), Some(&7.25));
+
+        let deferred = schedule_operations(
+            vec![operation("b-next-tick", 3.75)],
+            &mut remaining,
+            &mut accumulation,
+        );
+        assert!(deferred.is_empty());
+        assert_eq!(accumulation.get("b-next-tick"), Some(&3.75));
     }
 
     #[test]
