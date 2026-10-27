@@ -1158,7 +1158,10 @@ mod material_identity_tests {
                 break;
             }
         }
-        assert!(reached, "rotated bounded scans must eventually reach sparse material");
+        assert!(
+            reached,
+            "rotated bounded scans must eventually reach sparse material"
+        );
     }
 
     /// Manual wall-clock benchmark for environmental candidate discovery.
