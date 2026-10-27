@@ -1976,6 +1976,23 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn dead_organism_with_retained_resonance_is_not_released() {
+        let mut simulation = Simulation::new(0xD3B2, 10.0);
+        prepare_bondless_dead_fixture(&mut simulation);
+        assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        let field_before = simulation.environment.field.total_amount();
+
+        simulation.release_finished_dead_organisms(&HashSet::new());
+
+        assert_eq!(simulation.organisms.len(), 1);
+        assert_eq!(simulation.environment.field.total_amount(), field_before);
+        assert_eq!(
+            simulation.organisms[0].resonant_energy.total_energy(),
+            Some(1.0)
+        );
+    }
+
+    #[test]
     fn dead_organism_with_owner_transformation_in_flight_is_not_released() {
         let mut simulation = Simulation::new(0xD3B1, 10.0);
         prepare_bondless_dead_fixture(&mut simulation);
