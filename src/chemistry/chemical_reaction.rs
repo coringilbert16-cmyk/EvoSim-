@@ -938,10 +938,6 @@ mod material_identity_tests {
 
         simulation.environment.chemistry_usable_energy = 1.0;
         let energy_before = simulation.environment.chemistry_usable_energy;
-        let resonance_before = simulation.organisms[0]
-            .resonant_energy
-            .total_energy()
-            .unwrap();
         let ledger_before = simulation.energy_ledger.total_work_expended;
         let operation = EnvironmentalChemicalBreakOperation {
                         cell_index,
@@ -973,13 +969,6 @@ mod material_identity_tests {
         }));
         assert!(!pieces.contains(&source));
         assert!((energy_before - simulation.environment.chemistry_usable_energy - 0.5).abs() < 1e-9);
-        assert_eq!(
-            simulation.organisms[0]
-                .resonant_energy
-                .total_energy()
-                .unwrap(),
-            resonance_before
-        );
         assert!((simulation.energy_ledger.total_work_expended - ledger_before - 0.5).abs() < 1e-9);
     }
 
@@ -1021,7 +1010,6 @@ mod material_identity_tests {
 
         assert!(resolve_environmental(
             operation,
-            &mut simulation.organisms[0],
             &mut simulation.environment,
             &mut simulation.energy_ledger,
         ));
@@ -1056,13 +1044,7 @@ mod material_identity_tests {
             source.clone(),
             &simulation.environment.catalog,
         ));
-        simulation.organisms[0].usable_energy = 0.0;
-
         let energy_before = simulation.environment.chemistry_usable_energy;
-        let resonance_before = simulation.organisms[0]
-            .resonant_energy
-            .total_energy()
-            .unwrap();
         let ledger_before = simulation.energy_ledger.clone();
         let field_before = simulation.environment.field.cells.clone();
         let operation = EnvironmentalChemicalBreakOperation {
@@ -1080,19 +1062,11 @@ mod material_identity_tests {
 
         assert!(!resolve_environmental(
             operation,
-            &mut simulation.organisms[0],
             &mut simulation.environment,
             &mut simulation.energy_ledger,
         ));
         assert_eq!(simulation.environment.field.cells, field_before);
         assert_eq!(simulation.environment.chemistry_usable_energy, energy_before);
-        assert_eq!(
-            simulation.organisms[0]
-                .resonant_energy
-                .total_energy()
-                .unwrap(),
-            resonance_before
-        );
         assert_eq!(simulation.energy_ledger, ledger_before);
     }
 
@@ -1186,7 +1160,6 @@ mod material_identity_tests {
 
         assert!(!resolve_environmental(
             operation,
-            &mut simulation.organisms[0],
             &mut simulation.environment,
             &mut simulation.energy_ledger,
         ));
