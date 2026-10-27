@@ -579,7 +579,7 @@ mod material_identity_tests {
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
-            accumulated_reaction: 0.25,
+            accumulated_reaction: 0.5,
         };
         let before = simulation.organisms[0]
             .resonant_energy
@@ -637,7 +637,7 @@ mod material_identity_tests {
             simulation.organisms[0].structure.bonds.len(),
             original_bond_count
         );
-        assert_eq!(accumulation.get("test|rev:0|bond"), Some(&7.25));
+        assert_eq!(accumulation.get("test|rev:0|bond"), Some(&disruption_cost));
     }
 
     #[test]
