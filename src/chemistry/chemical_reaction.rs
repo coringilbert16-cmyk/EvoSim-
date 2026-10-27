@@ -438,16 +438,22 @@ pub(crate) fn accumulate_environmental(
         );
         return Vec::new();
     }
-    let cells: Vec<usize> = (0..environment.field.cells.len()).collect();
+    let cell_count = environment.field.cells.len();
     let count = (*remaining_discovery_work).min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
     let mut candidates = Vec::with_capacity(count);
-    if count > 0 && !cells.is_empty() {
-        // Walk a rotating window through the nested field ordering. Unlike
-        // counting every bond first, this stops as soon as the inspection
-        // budget is spent, so dense fields cannot force a full bond scan.
-        let cell_start = tick as usize % cells.len();
-        'discovery: for cell_offset in 0..cells.len() {
-            let cell_index = cells[(cell_start + cell_offset) % cells.len()];
+    if count > 0 && cell_count > 0 {
+        // Bound total traversal work, not just materialized candidates. Sparse
+        // fields can contain many empty cells/materials, so candidate-only
+        // accounting would still permit an unbounded scan before finding work.
+        // A rotating start lets sparse regions make progress over successive ticks.
+        let mut scan_steps_remaining = count.saturating_mul(4).max(1);
+        let cell_start = tick as usize % cell_count;
+        'discovery: for cell_offset in 0..cell_count {
+            if scan_steps_remaining == 0 {
+                break;
+            }
+            scan_steps_remaining -= 1;
+            let cell_index = (cell_start + cell_offset) % cell_count;
             let Some(cell) = environment.field.cells.get(cell_index) else {
                 continue;
             };
@@ -457,6 +463,10 @@ pub(crate) fn accumulate_environmental(
             }
             let material_start = tick as usize % material_count;
             for material_offset in 0..material_count {
+                if scan_steps_remaining == 0 {
+                    break 'discovery;
+                }
+                scan_steps_remaining -= 1;
                 let material_index = (material_start + material_offset) % material_count;
                 let Some(material) = cell.physical_materials.get(material_index) else {
                     continue;
@@ -470,6 +480,10 @@ pub(crate) fn accumulate_environmental(
                 }
                 let bond_start = tick as usize % bond_count;
                 for bond_offset in 0..bond_count {
+                    if scan_steps_remaining == 0 {
+                        break 'discovery;
+                    }
+                    scan_steps_remaining -= 1;
                     let bond_index = (bond_start + bond_offset) % bond_count;
                     candidates.push((cell_index, material_index, bond_index));
                     if candidates.len() >= count {
