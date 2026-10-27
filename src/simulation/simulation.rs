@@ -1456,9 +1456,9 @@ impl Simulation {
         }
         self.next_organism_id = next_organism_id;
         self.organisms.extend(offspring);
-        // Stress can break the core through ordinary bond-breaking chemistry.
-        // A breached organism remains in the physical world; only living
-        // organisms receive biological stress processing on subsequent ticks.
+        // Apply biological stress bookkeeping only while the genome core is
+        // intact. A core breach is an observed life-state transition, not a
+        // separate stress-driven bond-breaking mechanism.
         for organism in &mut self.organisms {
             if living_ids.contains(&organism.id) {
                 let _ = Self::apply_survival_damage(
@@ -1469,9 +1469,12 @@ impl Simulation {
                 );
             }
         }
-        // Death is observational: breached organisms remain physical structures
-        // and continue through the same ordinary chemical-reaction pass above.
-        // Do not invoke the legacy DecomposingBody bond-breaking path here.
+        // Death changes biological eligibility, not physical ownership. The
+        // breached organism remains the sole owner of its graph, stored
+        // material, and in-flight transactions. The ordinary shared chemistry
+        // pass above continues to evaluate its physical graph. Do not run the
+        // legacy DecomposingBody bond-yield loop: decomposition must emerge from
+        // the same chemical BREAK path and only then release material.
 
         // Keep in-flight physical/chemical transactions even if their organism's
         // core has since been breached. Dropping one here could discard reserved
