@@ -1130,7 +1130,8 @@ mod material_identity_tests {
         let target_prefix = format!("environment|environment:{cell_index}:");
         let mut accumulation = std::collections::BTreeMap::new();
         let mut found = false;
-        for tick in 0..(cell_index as u64 + 8) {
+        let max_ticks = cell_index as u64 + 8;
+        for tick in 0..max_ticks {
             let mut discovery_budget = 1;
             let operations = accumulate_environmental(
                 &simulation.environment,
@@ -1141,7 +1142,9 @@ mod material_identity_tests {
             );
             if !operations.is_empty()
                 || discovery_budget == 0
-                || accumulation.keys().any(|key| key.starts_with(&target_prefix))
+                || accumulation
+                    .keys()
+                    .any(|key| key.starts_with(&target_prefix))
             {
                 found = true;
                 break;
