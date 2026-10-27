@@ -94,3 +94,8 @@ Added ActiveMaterialField::split_physical_at_index as the field-side commit prim
 ### Environmental progress invalidation fix (2026-10-27)
 
 Moved environmental reaction-key refresh until after barrier, resonance-frequency, and activation-signal validation succeeds. A candidate with invalid chemistry/geometry data can no longer refresh stale accumulation and accidentally suspend its per-tick dissipation. Nonpositive progress still removes its key explicitly. This is a narrow scheduler correctness fix; exact-head CI has not yet been observed for this commit.
+
+
+### Commit-time operation revalidation (2026-10-27)
+
+Both organism-held and environmental BREAK resolvers now re-check that the operation's activation signal meets its disruption barrier, and reject non-finite/non-positive reaction frequencies before staging resource changes. Environmental settlement also rejects an invalid resonance reservoir before inspecting or mutating the source field. Added environmental resolver regressions for under-activated operations and invalid resonance frequency; each asserts the structure/field and energy ledger/reservoir remain unchanged. Exact-head workflow is queued for commit e4edb068d7c55b0f493deba897c555196a5543b6; results are not yet available.
