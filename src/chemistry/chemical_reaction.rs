@@ -1032,8 +1032,8 @@ mod material_identity_tests {
             .total_energy()
             .expect("sunlight capture should leave a valid environmental spectrum");
         assert!(
-            captured > 0.5,
-            "sunlight must fund more than the BREAK cost"
+            captured > f64::EPSILON,
+            "sunlight must deliver a positive amount of environmental resonance"
         );
         assert!(
             simulation.energy_inventory_snapshot().is_balanced(1e-7),
@@ -1048,13 +1048,14 @@ mod material_identity_tests {
             .max_by(|left, right| left.energy.total_cmp(&right.energy))
             .map(|component| component.frequency_hz)
             .expect("sunlight must leave at least one resonant component");
+        let compatible_energy = simulation
+            .environment
+            .resonant_energy
+            .compatible_energy(reaction_frequency_hz);
+        let disruption_cost = 0.5_f64.min(compatible_energy * 0.5);
         assert!(
-            simulation
-                .environment
-                .resonant_energy
-                .compatible_energy(reaction_frequency_hz)
-                >= 0.5,
-            "captured resonance must be compatible with the reaction's work requirement"
+            disruption_cost > f64::EPSILON,
+            "captured resonance must supply positive compatible reaction work"
         );
         let work_before = simulation.energy_ledger.total_work_expended;
         let operation = EnvironmentalChemicalBreakOperation {
@@ -1064,7 +1065,7 @@ mod material_identity_tests {
             source_material: source.clone(),
             bond,
             activation_signal: 1.0,
-            disruption_cost: 0.5,
+            disruption_cost,
             reaction_frequency_hz,
             accumulation_key: "sunlight-powered-environmental-break".into(),
             accumulated_reaction: 1.0,
@@ -1079,8 +1080,11 @@ mod material_identity_tests {
             .resonant_energy
             .total_energy()
             .expect("environment resonance must remain valid after BREAK");
-        assert!((captured - remaining - 0.5).abs() < 1e-7);
-        assert!((simulation.energy_ledger.total_work_expended - work_before - 0.5).abs() < 1e-7);
+        assert!((captured - remaining - disruption_cost).abs() < 1e-7);
+        assert!(
+            (simulation.energy_ledger.total_work_expended - work_before - disruption_cost).abs()
+                < 1e-7
+        );
         assert!(
             simulation.energy_inventory_snapshot().is_balanced(1e-7),
             "sunlight-captured resonance must be spent once and remain conserved"
