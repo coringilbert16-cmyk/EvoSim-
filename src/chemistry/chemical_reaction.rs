@@ -985,9 +985,7 @@ mod material_identity_tests {
             &simulation.environment.catalog,
         ));
         simulation.organisms[0].usable_energy = 0.0;
-        assert!(simulation.organisms[0]
-            .resonant_energy
-            .deposit(440.0, 0.5));
+        assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 0.5));
 
         let resonance_before = simulation.organisms[0]
             .resonant_energy
