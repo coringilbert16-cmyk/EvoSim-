@@ -22,6 +22,23 @@ pub(crate) struct ChemicalBreakOperation {
 /// Hard cap on physical reaction-realization attempts per simulation tick.
 /// Candidate discovery and activation remain separate from this commit budget.
 pub(crate) const MAX_REACTION_REALIZATIONS_PER_TICK: usize = 64;
+/// Hard cap on structural bond candidates inspected by chemistry per tick.
+/// This bounds discovery work independently of the realization/commit budget.
+pub(crate) const MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK: usize = 256;
+
+/// Select a bounded, tick-rotated window over the owner's stable bond list.
+/// Rotating the start prevents a large structure's tail from being permanently
+/// invisible when the global discovery budget is smaller than its bond count.
+fn discovery_indices(candidate_count: usize, limit: usize, tick: u64) -> Vec<usize> {
+    if candidate_count == 0 || limit == 0 {
+        return Vec::new();
+    }
+    let count = candidate_count.min(limit);
+    let start = tick as usize % candidate_count;
+    (0..count)
+        .map(|offset| start.wrapping_add(offset) % candidate_count)
+        .collect()
+}
 
 /// Divide the global per-tick realization budget fairly among owners. Any
 /// remainder rotates by tick, including when there are more owners than slots.
@@ -174,6 +191,8 @@ pub(crate) fn accumulate(
     catalog: &[BaseResource],
     accumulation: &mut std::collections::BTreeMap<String, f64>,
     chemistry_library: &mut ChemistryLibrary,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
 ) -> Vec<ChemicalBreakOperation> {
     if organism.structure.bonds.is_empty() {
         let organism_prefix = format!("{}|rev:", organism.id);
@@ -189,8 +208,11 @@ pub(crate) fn accumulate(
     let bonds = organism.structure.bonds.clone();
     let mut operations = Vec::new();
     let mut updated_keys = std::collections::BTreeSet::new();
+    let indices = discovery_indices(bonds.len(), *remaining_discovery_work, tick);
+    *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
 
-    for bond in bonds {
+    for index in indices {
+        let bond = bonds[index];
         let Some(unit_a) = organism
             .structure
             .unit_index(bond.endpoint_a.constituent_id)
@@ -450,6 +472,16 @@ pub(crate) fn resolve_preserving_accumulation(
 mod material_identity_tests {
     use super::*;
     use crate::resources::Material;
+
+    #[test]
+    fn discovery_budget_is_bounded_and_rotates_across_bond_list() {
+        assert_eq!(discovery_indices(0, 10, 0), Vec::<usize>::new());
+        assert_eq!(discovery_indices(5, 0, 0), Vec::<usize>::new());
+        assert_eq!(discovery_indices(5, 2, 0), vec![0, 1]);
+        assert_eq!(discovery_indices(5, 2, 1), vec![1, 2]);
+        assert_eq!(discovery_indices(5, 2, 4), vec![4, 0]);
+        assert_eq!(discovery_indices(5, 99, 3), vec![3, 4, 0, 1, 2]);
+    }
 
     #[test]
     fn unobserved_reaction_progress_dissipates_once_per_tick() {
