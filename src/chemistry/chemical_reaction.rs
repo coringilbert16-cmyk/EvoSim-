@@ -415,10 +415,9 @@ pub(crate) fn accumulate(
     operations
 }
 
-/// Discover chemical reactions at realized environmental material bonds in
-/// the organism's local body bounds. Environmental bonds are restored only into
-/// a trial graph to recover their authoritative geometry and activation strength;
-/// their stored energy remains zero.
+/// Discover chemical reactions at realized environmental material bonds in the
+/// field. Environmental bonds are restored only into a trial graph to recover
+/// their authoritative geometry and activation strength; stored bond energy stays zero.
 pub(crate) fn accumulate_environmental(
     environment: &crate::state::Environment,
     accumulation: &mut std::collections::BTreeMap<String, f64>,
@@ -966,6 +965,10 @@ mod material_identity_tests {
         fund_environment_chemistry_for_test(&mut simulation, 1.0);
         let energy_before = simulation.environment.chemistry_usable_energy;
         let ledger_before = simulation.energy_ledger.total_work_expended;
+        assert!(
+            simulation.energy_inventory_snapshot().is_balanced(1e-9),
+            "environment energy input must reconcile before BREAK"
+        );
         let operation = EnvironmentalChemicalBreakOperation {
             cell_index,
             material_index: 0,
@@ -1000,6 +1003,10 @@ mod material_identity_tests {
             (energy_before - simulation.environment.chemistry_usable_energy - 0.5).abs() < 1e-9
         );
         assert!((simulation.energy_ledger.total_work_expended - ledger_before - 0.5).abs() < 1e-9);
+        assert!(
+            simulation.energy_inventory_snapshot().is_balanced(1e-9),
+            "environment BREAK must reconcile field energy, work, and global inventory"
+        );
     }
 
     #[test]
