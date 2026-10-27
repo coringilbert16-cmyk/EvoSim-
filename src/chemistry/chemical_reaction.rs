@@ -454,10 +454,12 @@ pub(crate) fn accumulate_environmental(
         .map(Vec::len)
         .sum();
     let count = candidate_count.min(*remaining_discovery_work);
+    // Advance the window by one candidate each tick. Multiplying tick by the
+    // window size can permanently skip candidates when the counts share a divisor.
     let start = if candidate_count == 0 {
         0
     } else {
-        (tick as usize).wrapping_mul(count) % candidate_count
+        tick as usize % candidate_count
     };
     let mut candidates = Vec::with_capacity(count);
     if count > 0 {
