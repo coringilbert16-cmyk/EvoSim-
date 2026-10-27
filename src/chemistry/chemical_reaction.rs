@@ -592,7 +592,7 @@ pub(crate) fn accumulate_environmental(
         let material_a = material_identity(&hypothetical.units[unit_a].material);
         let material_b = material_identity(&hypothetical.units[unit_b].material);
         let key = format!(
-            "{}{}:{}:{}:{}:{}:{:?}",
+            "{}{}:{}:{}:{}:{:?}",
             ENVIRONMENT_PREFIX,
             cell_index,
             material_index,
