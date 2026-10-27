@@ -1949,7 +1949,8 @@ mod decomposition_finalization_tests {
         let field_before = simulation.environment.field.total_amount();
         let heat_before = simulation.energy_ledger.total_heat_dissipated;
 
-        simulation.release_finished_dead_organisms(&HashSet::new());
+        let living = HashSet::new();
+        simulation.release_finished_dead_organisms(&living);
 
         assert!(simulation.organisms.is_empty());
         assert_eq!(simulation.environment.field.total_amount(), field_before + 1.0);
