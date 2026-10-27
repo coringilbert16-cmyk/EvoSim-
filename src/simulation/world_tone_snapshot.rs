@@ -575,7 +575,10 @@ impl WorldToneOccluderSnapshot {
         let staged_resonant_energy = staged_reservoirs
             .iter()
             .map(|reservoir| reservoir.total_energy().unwrap_or(f64::NAN))
-            .sum::<f64>();
+            .sum::<f64>()
+            + staged_environment_resonance
+                .total_energy()
+                .unwrap_or(f64::NAN);
         let authoritative_capture = staged_resonant_energy - initial_resonant_energy;
         let capture_correction = authoritative_capture - total_captured;
         let capture_tolerance = 1e-8 * total_incident.max(1.0);
