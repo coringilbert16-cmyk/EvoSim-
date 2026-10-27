@@ -909,7 +909,10 @@ mod material_identity_tests {
             &mut simulation.environment,
             &mut simulation.energy_ledger,
         ));
-        assert_eq!(organism.structure, structure_before);
+        assert_eq!(
+            format!("{:?}", organism.structure),
+            format!("{:?}", structure_before)
+        );
         assert_eq!(organism.usable_energy, energy_before);
         assert_eq!(
             organism.resonant_energy.total_energy().unwrap(),
