@@ -1013,7 +1013,7 @@ mod material_identity_tests {
             source_x: -5.0,
             source_y: 12.5,
             frequency_hz: 440.0,
-            energy_intensity_per_tick_per_width: 1000.0,
+            energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
         crate::world_tone_snapshot::WorldToneOccluderSnapshot::settle_living_organism_inputs(
