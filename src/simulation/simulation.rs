@@ -2019,6 +2019,69 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn chemistry_broken_dead_graph_releases_through_the_live_lifecycle() {
+        let mut simulation = Simulation::new(0xD3B5, 10.0);
+        assert!(simulation.configure_world_tone(None));
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+
+        let owner_id = simulation.organisms[0].id.clone();
+        simulation.organisms[0]
+            .structure
+            .clear_genome_constituent_ids();
+        simulation.organisms[0].genome_core_identity_established = true;
+        simulation.organisms[0].stored_material.entries.clear();
+        simulation.organisms[0].reproductive_construction = None;
+        simulation.organisms[0].active_transformation_id = None;
+        simulation.organisms[0].active_movement = None;
+        simulation.organisms[0].mark_structure_changed();
+
+        let bonds = simulation.organisms[0].structure.bonds.clone();
+        let unit_count = simulation.organisms[0].structure.units.len();
+        assert!(!bonds.is_empty());
+        let field_before = simulation.environment.field.total_amount();
+
+        for (index, bond) in bonds.into_iter().enumerate() {
+            let operation = crate::chemical_reaction::ChemicalBreakOperation {
+                organism_id: owner_id.clone(),
+                bond,
+                activation_signal: 1.0e9,
+                disruption_cost: 0.0,
+                reaction_frequency_hz: 440.0,
+                accumulation_key: format!("dead-chemistry|bond:{index}"),
+                accumulated_reaction: 1.0e9,
+            };
+            assert!(
+                crate::chemical_reaction::resolve(
+                    operation,
+                    &mut simulation.organisms[0],
+                    &mut simulation.energy_ledger,
+                ),
+                "the shared chemistry transaction should break each eligible dead-graph bond"
+            );
+        }
+        assert!(simulation.organisms[0].structure.bonds.is_empty());
+
+        simulation.step();
+
+        assert!(
+            simulation.organisms.is_empty(),
+            "the live lifecycle should release the dead graph after shared chemistry removes its bonds"
+        );
+        assert_eq!(
+            simulation.environment.field.total_amount(),
+            field_before + unit_count as f64,
+            "each structural unit must be released into the field exactly once"
+        );
+        assert!(
+            simulation.energy_inventory_snapshot().is_balanced(1e-8),
+            "chemistry BREAK and final release must conserve world energy: {:?}",
+            simulation.energy_inventory_snapshot().residual()
+        );
+    }
+
+    #[test]
     fn live_tick_releases_a_dead_bondless_graph_into_the_environment() {
         let mut simulation = Simulation::new(0xD3B0, 10.0);
         prepare_bondless_dead_fixture(&mut simulation);
