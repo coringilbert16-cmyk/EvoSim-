@@ -786,6 +786,14 @@ pub(crate) fn resolve_environmental(
     ) else {
         return false;
     };
+    let usable_delta = prepared.usable_energy - environment.chemistry_usable_energy;
+    let next_total_usable = ledger.total_usable_energy_held + usable_delta;
+    if !usable_delta.is_finite()
+        || !next_total_usable.is_finite()
+        || next_total_usable < 0.0
+    {
+        return false;
+    }
     if !environment.field.split_physical_at_index(
         operation.cell_index,
         operation.material_index,
@@ -797,6 +805,7 @@ pub(crate) fn resolve_environmental(
     }
     environment.chemistry_usable_energy = prepared.usable_energy;
     *ledger = prepared.ledger;
+    ledger.total_usable_energy_held = next_total_usable;
     true
 }
 
@@ -933,6 +942,7 @@ mod material_identity_tests {
         assert!(simulation
             .energy_ledger
             .settle_external_input(&mut holder, transaction));
+        simulation.energy_ledger.total_usable_energy_held += amount;
         simulation.environment.chemistry_usable_energy = holder;
     }
 
