@@ -1989,9 +1989,7 @@ mod decomposition_finalization_tests {
         assert_eq!(simulation.organisms.len(), 1);
         assert_eq!(simulation.environment.field.total_amount(), field_before);
         assert_eq!(
-            simulation.organisms[0]
-                .resonant_energy
-                .total_energy(),
+            simulation.organisms[0].resonant_energy.total_energy(),
             Some(1.0)
         );
     }
