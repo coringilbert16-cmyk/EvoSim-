@@ -1553,6 +1553,12 @@ impl Simulation {
         for index in release_indices.into_iter().rev() {
             let organism = &self.organisms[index];
             let organism_id = organism.id.clone();
+            let Some(resonant_energy) = organism.resonant_energy.total_energy() else {
+                continue;
+            };
+            if !resonant_energy.is_finite() || resonant_energy < 0.0 {
+                continue;
+            }
             let Some(materials) = organism
                 .structure
                 .units
