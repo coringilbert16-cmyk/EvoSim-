@@ -46,7 +46,7 @@ impl DecomposingBody {
     }
 }
 
-fn realize_released_unit(
+pub(crate) fn realize_released_unit(
     unit: &crate::structure::StructuralUnit,
     catalog: &[crate::resources::BaseResource],
 ) -> Option<PhysicalMaterial> {
