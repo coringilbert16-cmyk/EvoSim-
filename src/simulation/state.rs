@@ -574,10 +574,14 @@ pub(crate) struct Environment {
     pub(crate) height: f64,
     pub(crate) catalog: Vec<BaseResource>,
     pub(crate) field: ActiveMaterialField,
-    /// Explicit usable-energy inventory owned by the environment itself.
-    /// It starts empty; only a modeled environmental input may fund it.
+    /// Usable energy already made available to environmental chemistry.
+    /// This is not funded implicitly; sunlight first enters the resonance reservoir.
     #[serde(default)]
     pub(crate) chemistry_usable_energy: f64,
+    /// Spectrum captured by nonliving environmental material from the world tone.
+    /// Chemistry may withdraw only frequency-compatible energy from this reservoir.
+    #[serde(default)]
+    pub(crate) resonant_energy: crate::harmonics::ResonantEnergyReservoir,
 }
 #[derive(Clone)]
 pub(crate) struct Simulation {
