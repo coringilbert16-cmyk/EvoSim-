@@ -687,7 +687,8 @@ impl Simulation {
             };
             let deposits = materials
                 .into_iter()
-                .map(|material| (position.x, position.y, material))
+                .zip(&organism.structure.units)
+                .map(|(material, unit)| (unit.placement.x, unit.placement.y, material))
                 .collect();
             if !self
                 .environment
@@ -1945,7 +1946,7 @@ mod decomposition_finalization_tests {
         let mut simulation = Simulation::new(0xD3AE, 10.0);
         prepare_bondless_dead_fixture(&mut simulation);
         simulation.organisms[0].usable_energy = 2.0;
-        simulation.organisms[0].occupied_cells[0].x = f64::NAN;
+        simulation.organisms[0].structure.units[0].placement.x = f64::MAX;
         let field_before = simulation.environment.field.total_amount();
         let ledger_before = simulation.energy_ledger;
         let living = HashSet::new();
