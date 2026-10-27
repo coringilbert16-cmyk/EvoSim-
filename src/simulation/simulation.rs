@@ -1518,12 +1518,9 @@ impl Simulation {
             if !organism.usable_energy.is_finite() || organism.usable_energy < 0.0 {
                 continue;
             }
-            if organism
-                .structure
-                .units
-                .iter()
-                .any(|unit| unit.shape(&self.environment.catalog).is_none())
-                || organism.occupied_cells.first().is_none()
+            if organism.structure.units.iter().any(|unit| {
+                unit.shape(&self.environment.catalog).is_none()
+            }) || organism.occupied_cells.first().is_none()
             {
                 continue;
             }
@@ -1539,7 +1536,9 @@ impl Simulation {
                 .structure
                 .units
                 .iter()
-                .map(|unit| crate::decomposition::realize_released_unit(unit, &self.environment.catalog))
+                .map(|unit| {
+                    crate::decomposition::realize_released_unit(unit, &self.environment.catalog)
+                })
                 .collect::<Option<Vec<_>>>()
             else {
                 continue;
@@ -1564,7 +1563,11 @@ impl Simulation {
                     continue;
                 }
             }
-            if !self.environment.field.deposit_physical_batch(deposits, &self.environment.catalog) {
+            if !self
+                .environment
+                .field
+                .deposit_physical_batch(deposits, &self.environment.catalog)
+            {
                 continue;
             }
             self.energy_ledger = staged_ledger;
