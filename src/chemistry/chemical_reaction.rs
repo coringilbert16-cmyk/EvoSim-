@@ -443,19 +443,65 @@ pub(crate) fn accumulate_environmental(
     let cells = environment
         .field
         .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
-    let mut candidates = Vec::new();
-    for cell_index in cells {
-        let Some(cell) = environment.field.cells.get(cell_index) else {
-            continue;
-        };
-        for (material_index, material) in cell.physical_materials.iter().enumerate() {
-            if let Some(connections) = material.internal_connections.as_ref() {
+    // Count eligible bonds without retaining a second world-sized candidate
+    // vector. The inspection window below is bounded even when the local field
+    // contains many bonded materials.
+    let candidate_count: usize = cells
+        .iter()
+        .filter_map(|&cell_index| environment.field.cells.get(cell_index))
+        .flat_map(|cell| cell.physical_materials.iter())
+        .filter_map(|material| material.internal_connections.as_ref())
+        .map(Vec::len)
+        .sum();
+    let count = candidate_count.min(*remaining_discovery_work);
+    let start = if candidate_count == 0 {
+        0
+    } else {
+        (tick as usize).wrapping_mul(count) % candidate_count
+    };
+    let mut candidates = Vec::with_capacity(count);
+    if count > 0 {
+        let end = start.saturating_add(count);
+        let mut candidate_index = 0usize;
+        for cell_index in cells.iter().copied() {
+            let Some(cell) = environment.field.cells.get(cell_index) else {
+                continue;
+            };
+            for (material_index, material) in cell.physical_materials.iter().enumerate() {
+                let Some(connections) = material.internal_connections.as_ref() else {
+                    continue;
+                };
                 for bond_index in 0..connections.len() {
-                    candidates.push((cell_index, material_index, bond_index));
+                    if candidate_index >= start && candidate_index < end {
+                        candidates.push((cell_index, material_index, bond_index));
+                    }
+                    candidate_index = candidate_index.saturating_add(1);
+                }
+            }
+        }
+        if candidates.len() < count {
+            // The window wraps around the end of the stable candidate ordering.
+            let wrapped = count - candidates.len();
+            let mut candidate_index = 0usize;
+            for cell_index in cells.iter().copied() {
+                let Some(cell) = environment.field.cells.get(cell_index) else {
+                    continue;
+                };
+                for (material_index, material) in cell.physical_materials.iter().enumerate() {
+                    let Some(connections) = material.internal_connections.as_ref() else {
+                        continue;
+                    };
+                    for bond_index in 0..connections.len() {
+                        if candidate_index < wrapped {
+                            candidates.push((cell_index, material_index, bond_index));
+                        }
+                        candidate_index = candidate_index.saturating_add(1);
+                    }
                 }
             }
         }
     }
+    *remaining_discovery_work = remaining_discovery_work.saturating_sub(candidates.len());
 
     let indices = discovery_indices(candidates.len(), *remaining_discovery_work, tick);
     *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
