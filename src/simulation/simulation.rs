@@ -2095,10 +2095,28 @@ mod decomposition_finalization_tests {
         let mut simulation = Simulation::new(0xD3B2, 10.0);
         prepare_bondless_dead_fixture(&mut simulation);
         assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
-        // This test directly seeds a holder, so rebase the accounting oracle to
-        // treat that energy as part of the fixture's initial inventory.
-        simulation.energy_ledger.initial_resonant_energy_held += 1.0;
-        simulation.energy_ledger.total_resonant_energy_held += 1.0;
+        // The fixture replaces the seed organism with a one-unit graph, so
+        // rebase the independent inventory oracle around that deliberate setup.
+        // The manually seeded resonance is initial stored energy, not new input.
+        let structural = Simulation::structural_energy_held(
+            &simulation.organisms,
+            &simulation.decomposing_bodies,
+        );
+        simulation.energy_ledger.initial_usable_energy_held = 0.0;
+        simulation.energy_ledger.initial_resonant_energy_held = 1.0;
+        simulation.energy_ledger.initial_structural_energy_held = structural;
+        simulation.energy_ledger.total_usable_energy_held =
+            crate::reproduction::total_usable_energy_held(
+                &simulation.organisms,
+                &simulation.decomposing_bodies,
+            );
+        simulation.energy_ledger.total_resonant_energy_held = 1.0;
+        simulation.energy_ledger.total_structural_energy_held = structural;
+        simulation.energy_ledger.total_external_energy_input = 0.0;
+        simulation.energy_ledger.total_potential_energy_released = 0.0;
+        simulation.energy_ledger.total_work_expended = 0.0;
+        simulation.energy_ledger.total_heat_dissipated = 0.0;
+        simulation.energy_ledger.total_world_tone_energy_escaped = 0.0;
         let field_before = simulation.environment.field.total_amount();
         let heat_before = simulation.energy_ledger.total_heat_dissipated;
 
