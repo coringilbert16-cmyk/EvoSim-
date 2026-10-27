@@ -611,16 +611,20 @@ mod material_identity_tests {
             .first()
             .expect("seed organism should contain a structural bond");
         let original_bond_count = simulation.organisms[0].structure.bonds.len();
+        simulation.organisms[0].usable_energy = 0.0;
+        simulation.organisms[0].resonant_energy =
+            crate::harmonics::ResonantEnergyReservoir::default();
+        let disruption_cost = bond.bond_energy + 1.0;
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            // Insufficient physical energy forces settlement rejection after
-            // activation, without changing the physical structure.
-            activation_signal: 0.1,
-            disruption_cost: 0.5,
+            // Activation crosses the full barrier, but neither the bond nor
+            // an energy holder can fund the disruption work.
+            activation_signal: disruption_cost,
+            disruption_cost,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
-            accumulated_reaction: 7.25,
+            accumulated_reaction: disruption_cost,
         };
         let mut accumulation = std::collections::BTreeMap::new();
         assert!(!resolve_preserving_accumulation(
@@ -835,7 +839,7 @@ mod material_identity_tests {
             "fixture bond must have positive finite stored energy"
         );
         let disruption_cost = bond.bond_energy * 0.5;
-        let activation_signal = disruption_cost * 0.5;
+        let activation_signal = disruption_cost;
         assert!(simulation.organisms[0]
             .resonant_energy
             .deposit(440.0, disruption_cost));
