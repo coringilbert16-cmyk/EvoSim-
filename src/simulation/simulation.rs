@@ -867,6 +867,7 @@ impl Simulation {
             );
             let chemical_operations = crate::chemical_reaction::schedule_operations(
                 chemical_operations,
+                self.tick,
                 &mut chemistry_work_remaining,
                 &mut self.chemical_reaction_accumulation,
             );
