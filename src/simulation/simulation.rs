@@ -1500,7 +1500,11 @@ impl Simulation {
         ) + self.environment.chemistry_usable_energy;
         self.energy_ledger.total_resonant_energy_held =
             crate::reproduction::total_resonant_energy_held(&self.organisms)
-                + self.environment.resonant_energy.total_energy().unwrap_or(f64::NAN);
+                + self
+                    .environment
+                    .resonant_energy
+                    .total_energy()
+                    .unwrap_or(f64::NAN);
         self.energy_ledger.total_structural_energy_held =
             Self::structural_energy_held(&self.organisms, &self.decomposing_bodies);
     }
