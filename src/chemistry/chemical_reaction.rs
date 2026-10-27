@@ -867,6 +867,96 @@ mod material_identity_tests {
     use crate::resources::Material;
 
     #[test]
+    fn environmental_commit_rejects_unactivated_operation_before_mutation() {
+        let mut simulation = crate::state::Simulation::new(931, 10.0);
+        let organism = &mut simulation.organisms[0];
+        let operation = EnvironmentalChemicalBreakOperation {
+            organism_id: organism.id.clone(),
+            cell_index: usize::MAX,
+            material_index: 0,
+            bond_index: 0,
+            source_material: crate::physical_material::PhysicalMaterial {
+                material: Material::free_base("Carbon", 1.0),
+                placements: None,
+                internal_connections: None,
+                owner_relative_origin: None,
+                realized_shapes: None,
+            },
+            bond: crate::physical_material::PhysicalMaterialBond {
+                part_a: 0,
+                endpoint_a: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
+                part_b: 1,
+                endpoint_b: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
+            },
+            activation_signal: 0.0,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "invalid-environmental-activation".into(),
+            accumulated_reaction: 0.0,
+        };
+        let structure_before = organism.structure.clone();
+        let energy_before = organism.usable_energy;
+        let resonance_before = organism.resonant_energy.total_energy().unwrap();
+        let ledger_before = simulation.energy_ledger.clone();
+        let field_before = simulation.environment.field.cells.clone();
+
+        assert!(!resolve_environmental(
+            operation,
+            organism,
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
+        ));
+        assert_eq!(organism.structure, structure_before);
+        assert_eq!(organism.usable_energy, energy_before);
+        assert_eq!(organism.resonant_energy.total_energy().unwrap(), resonance_before);
+        assert_eq!(simulation.energy_ledger, ledger_before);
+        assert_eq!(simulation.environment.field.cells, field_before);
+    }
+
+    #[test]
+    fn environmental_commit_rejects_invalid_resonance_frequency_before_mutation() {
+        let mut simulation = crate::state::Simulation::new(932, 10.0);
+        let organism_id = simulation.organisms[0].id.clone();
+        let operation = EnvironmentalChemicalBreakOperation {
+            organism_id,
+            cell_index: usize::MAX,
+            material_index: 0,
+            bond_index: 0,
+            source_material: crate::physical_material::PhysicalMaterial {
+                material: Material::free_base("Carbon", 1.0),
+                placements: None,
+                internal_connections: None,
+                owner_relative_origin: None,
+                realized_shapes: None,
+            },
+            bond: crate::physical_material::PhysicalMaterialBond {
+                part_a: 0,
+                endpoint_a: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
+                part_b: 1,
+                endpoint_b: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
+            },
+            activation_signal: 1.0,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: f64::NAN,
+            accumulation_key: "invalid-environmental-frequency".into(),
+            accumulated_reaction: 1.0,
+        };
+        let organism_before = simulation.organisms[0].clone();
+        let ledger_before = simulation.energy_ledger.clone();
+        let field_before = simulation.environment.field.cells.clone();
+
+        assert!(!resolve_environmental(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
+        ));
+        assert_eq!(simulation.organisms[0], organism_before);
+        assert_eq!(simulation.energy_ledger, ledger_before);
+        assert_eq!(simulation.environment.field.cells, field_before);
+    }
+
+    #[test]
     fn discovery_budget_is_bounded_and_rotates_across_bond_list() {
         assert_eq!(discovery_indices(0, 10, 0), Vec::<usize>::new());
         assert_eq!(discovery_indices(5, 0, 0), Vec::<usize>::new());
