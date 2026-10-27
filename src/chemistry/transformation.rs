@@ -2321,15 +2321,8 @@ mod tests {
         let ledger = crate::state::EnergyLedger::default();
         // Even if a later caller can provide resonance, activation itself must
         // cross the full physical barrier; it is not an energy credit.
-        let prepared = prepare_chemical_break_energy_with_resonance(
-            10.0,
-            &ledger,
-            0.0,
-            1.0,
-            5.0,
-            0.0,
-            0.5,
-        );
+        let prepared =
+            prepare_chemical_break_energy_with_resonance(10.0, &ledger, 0.0, 1.0, 5.0, 0.0, 0.5);
         assert!(prepared.is_none());
         assert_eq!(ledger, crate::state::EnergyLedger::default());
     }
@@ -2337,16 +2330,9 @@ mod tests {
     #[test]
     fn prepared_environmental_break_work_uses_holder_energy_without_bond_credit() {
         let ledger = crate::state::EnergyLedger::default();
-        let prepared = prepare_chemical_break_energy_with_resonance(
-            10.0,
-            &ledger,
-            0.0,
-            5.0,
-            5.0,
-            0.0,
-            0.5,
-        )
-        .expect("the holder can pay the complete work for a zero-energy physical bond");
+        let prepared =
+            prepare_chemical_break_energy_with_resonance(10.0, &ledger, 0.0, 5.0, 5.0, 0.0, 0.5)
+                .expect("the holder can pay the complete work for a zero-energy physical bond");
 
         assert!((prepared.usable_energy - 5.0).abs() < 1e-12);
         assert_eq!(prepared.heat_dissipated, 0.0);
@@ -2363,15 +2349,8 @@ mod tests {
     #[test]
     fn prepared_environmental_break_rejects_unfunded_work_without_mutation() {
         let ledger = crate::state::EnergyLedger::default();
-        let prepared = prepare_chemical_break_energy_with_resonance(
-            1.0,
-            &ledger,
-            0.0,
-            5.0,
-            5.0,
-            0.0,
-            0.5,
-        );
+        let prepared =
+            prepare_chemical_break_energy_with_resonance(1.0, &ledger, 0.0, 5.0, 5.0, 0.0, 0.5);
         assert!(prepared.is_none());
         assert_eq!(ledger, crate::state::EnergyLedger::default());
     }
