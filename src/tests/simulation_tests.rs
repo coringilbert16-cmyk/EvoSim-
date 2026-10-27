@@ -1378,23 +1378,14 @@ mod integration_tests {
             &mut simulation.energy_ledger,
         ));
 
-        assert_eq!(
-            simulation.organisms[0].structure.units,
-            before_structure.units
-        );
-        assert_eq!(
-            simulation.organisms[0].structure.bonds,
-            before_structure.bonds
-        );
+        assert_eq!(simulation.organisms[0].structure.units, before_structure.units);
+        assert_eq!(simulation.organisms[0].structure.bonds, before_structure.bonds);
         assert_eq!(simulation.energy_ledger, before_ledger);
         assert_eq!(
             integer_material_inventory(&simulation)
                 .expect("rejected reaction must leave material inventory valid"),
             before_material
         );
-        assert_eq!(
-            simulation.energy_inventory_snapshot(),
-            before_energy
-        );
+        assert_eq!(simulation.energy_inventory_snapshot(), before_energy);
     }
 }
