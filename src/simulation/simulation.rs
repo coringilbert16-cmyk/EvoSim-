@@ -1518,9 +1518,12 @@ impl Simulation {
             if !organism.usable_energy.is_finite() || organism.usable_energy < 0.0 {
                 continue;
             }
-            if organism.structure.units.iter().any(|unit| {
-                unit.shape(&self.environment.catalog).is_none()
-            }) || organism.occupied_cells.first().is_none()
+            if organism
+                .structure
+                .units
+                .iter()
+                .any(|unit| unit.shape(&self.environment.catalog).is_none())
+                || organism.occupied_cells.first().is_none()
             {
                 continue;
             }
