@@ -1337,4 +1337,55 @@ mod integration_tests {
             .decision_history
             .has_knowledge(ActionKind::Break, Some("stored:0:bond:0")));
     }
+    #[test]
+    fn rejected_chemical_break_preserves_independent_material_and_energy_inventories() {
+        let mut simulation = Simulation::new(927, 10.0);
+        let before_material = integer_material_inventory(&simulation)
+            .expect("initial world material inventory should be valid");
+        let before_energy = simulation.energy_inventory_snapshot();
+        assert!(
+            before_energy.is_balanced(1e-9),
+            "fixture must start with a balanced world energy inventory: {:?}",
+            before_energy.residual()
+        );
+
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        // The signal is sufficient to trigger the reaction, but the physical
+        // disruption cost exceeds the bond's stored energy plus all usable
+        // energy. Rejection must therefore preserve every authoritative holder.
+        let disruption_cost =
+            bond.bond_energy + simulation.organisms[0].usable_energy + 1.0;
+        let operation = crate::chemical_reaction::ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            activation_signal: disruption_cost,
+            disruption_cost,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "rejected-inventory|rev:0|bond".into(),
+            accumulated_reaction: disruption_cost,
+        };
+        let before_structure = simulation.organisms[0].structure.clone();
+        let before_ledger = simulation.energy_ledger;
+
+        assert!(!crate::chemical_reaction::resolve(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.energy_ledger,
+        ));
+
+        assert_eq!(simulation.organisms[0].structure.units, before_structure.units);
+        assert_eq!(simulation.organisms[0].structure.bonds, before_structure.bonds);
+        assert_eq!(simulation.energy_ledger, before_ledger);
+        assert_eq!(
+            integer_material_inventory(&simulation)
+                .expect("rejected reaction must leave material inventory valid"),
+            before_material
+        );
+        assert_eq!(simulation.energy_inventory_snapshot(), before_energy);
+    }
+
 }
