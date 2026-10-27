@@ -162,28 +162,6 @@ pub(crate) fn settle_chemical_break_energy_with_resonance(
     true
 }
 
-/// Shared commit path for every BREAK of a realized structural bond. The
-/// candidate graph is validated before settlement; only a successful ledger
-/// transaction is followed by committing the graph mutation and heat stress.
-fn settle_break_transaction(
-    organism: &mut Organism,
-    bond: crate::structure::Bond,
-    transaction: EnergyTransaction,
-    ledger: &mut EnergyLedger,
-) -> bool {
-    let mut trial_structure = organism.structure.clone();
-    if trial_structure.break_matching_bond(bond).is_none() {
-        return false;
-    }
-    if !ledger.settle_transaction(&mut organism.usable_energy, transaction) {
-        return false;
-    }
-    organism.structure = trial_structure;
-    organism.mark_structure_changed();
-    organism.add_transaction_stress(transaction.heat_dissipated);
-    true
-}
-
 /// Destabilize a structural bond when the organism's retained resonance
 /// exceeds the energy held by its complete bond network. The total bond energy
 /// is a geometry-dependent handling capacity, not a hard reservoir cap: excess
