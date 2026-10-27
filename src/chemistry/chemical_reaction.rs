@@ -442,9 +442,7 @@ fn discover_environmental_bonds(
     // empty-field scans cover successive regions while preserving the same
     // hard per-tick inspection cap.
     let scan_window = scan_steps_initial.min(cell_count).max(1);
-    let cell_start = ((tick % cell_count as u64) as usize)
-        .wrapping_mul(scan_window)
-        % cell_count;
+    let cell_start = ((tick % cell_count as u64) as usize).wrapping_mul(scan_window) % cell_count;
     'discovery: for cell_offset in 0..cell_count {
         if scan_steps_remaining == 0 {
             break;
