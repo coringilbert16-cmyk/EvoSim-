@@ -46,6 +46,7 @@ Make environmental materials and material held by cells/organisms participate in
 - [x] Added a deterministic, shared per-tick cap for physical reaction-realization attempts. Activated operations deferred by the cap retain progress only and are revalidated on a later tick; this cap does not yet bound candidate discovery.
 - [x] Added unit coverage for stable-key scheduling and budget limits.
 - [x] Added a global 256-per-tick structural-candidate inspection cap, fairly shared across organism owners with unused budget carried forward.
+- [x] The bounded scan reads only selected bonds by index; it no longer clones the full bond list before applying the cap.
 - [x] Rotated each owner's bounded bond scan by tick and added tests for empty, zero-budget, truncated, and wraparound windows; this bounds discovery separately from the 64-per-tick physical realization cap.
 - [x] Named the accumulated comparison value an activation signal and documented that it is not an energy source or inventory term; physical source provenance remains a separate invariant to verify.
 - [x] Added a regression proving a large activation signal cannot pay a physical BREAK energy shortfall; focused chemistry tests passed, while exact-head full-suite/Clippy verification remains pending.
