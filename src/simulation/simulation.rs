@@ -1518,14 +1518,13 @@ impl Simulation {
             if !organism.usable_energy.is_finite() || organism.usable_energy < 0.0 {
                 continue;
             }
-            if organism.structure.units.iter().any(|unit| unit.shape(&self.environment.catalog).is_none()) {
-                continue;
-            }
-            if organism.structure.units.is_empty() {
-                release_indices.push(index);
-                continue;
-            }
-            if organism.occupied_cells.first().is_none() {
+            if organism
+                .structure
+                .units
+                .iter()
+                .any(|unit| unit.shape(&self.environment.catalog).is_none())
+                || organism.occupied_cells.first().is_none()
+            {
                 continue;
             }
             release_indices.push(index);
@@ -1534,11 +1533,6 @@ impl Simulation {
         for index in release_indices.into_iter().rev() {
             let organism = &self.organisms[index];
             let Some(position) = organism.occupied_cells.first().cloned() else {
-                // Empty structures carry no physical material and can be retired
-                // without inventing a destination position.
-                if organism.structure.units.is_empty() {
-                    self.organisms.remove(index);
-                }
                 continue;
             };
             let Some(materials) = organism
@@ -1884,6 +1878,79 @@ mod decomposition_finalization_tests {
 
     use super::*;
     use crate::structure::{OrganismStructure, Placement, StructuralUnit};
+
+    fn prepare_bondless_dead_fixture(simulation: &mut Simulation) {
+        let mut structure = OrganismStructure::new();
+        let mut unit = StructuralUnit::new(
+            "Carbon".to_string(),
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(unit.realize_default_geometry(&simulation.environment.catalog));
+        structure.add_unit(unit);
+
+        let organism = &mut simulation.organisms[0];
+        organism.structure = structure;
+        organism.stored_material.entries.clear();
+        organism.reproductive_construction = None;
+        organism.active_transformation_id = None;
+        organism.active_movement = None;
+        organism.usable_energy = 0.0;
+    }
+
+    #[test]
+    fn bondless_dead_organism_releases_material_after_holder_checks() {
+        let mut simulation = Simulation::new(0xD3AD, 10.0);
+        prepare_bondless_dead_fixture(&mut simulation);
+        let field_before = simulation.environment.field.total_amount();
+        let living = HashSet::new();
+
+        simulation.release_finished_dead_organisms(&living);
+
+        assert!(simulation.organisms.is_empty());
+        assert_eq!(
+            simulation.environment.field.total_amount(),
+            field_before + 1.0,
+            "the disconnected unit must be deposited exactly once"
+        );
+    }
+
+    #[test]
+    fn failed_dead_material_release_preserves_organism_energy_and_field() {
+        let mut simulation = Simulation::new(0xD3AE, 10.0);
+        prepare_bondless_dead_fixture(&mut simulation);
+        simulation.organisms[0].usable_energy = 2.0;
+        simulation.organisms[0].occupied_cells[0].x = f64::NAN;
+        let field_before = simulation.environment.field.total_amount();
+        let ledger_before = simulation.energy_ledger;
+        let living = HashSet::new();
+
+        simulation.release_finished_dead_organisms(&living);
+
+        assert_eq!(simulation.organisms.len(), 1);
+        assert_eq!(simulation.organisms[0].usable_energy, 2.0);
+        assert_eq!(simulation.environment.field.total_amount(), field_before);
+        assert_eq!(simulation.energy_ledger, ledger_before);
+    }
+
+    #[test]
+    fn dead_organism_with_unsettled_holders_is_not_released() {
+        let mut simulation = Simulation::new(0xD3AF, 10.0);
+        prepare_bondless_dead_fixture(&mut simulation);
+        assert!(simulation.organisms[0]
+            .store_material(crate::resources::Material::free_base("Hydrogen", 1.0)));
+        let field_before = simulation.environment.field.total_amount();
+        let living = HashSet::new();
+
+        simulation.release_finished_dead_organisms(&living);
+
+        assert_eq!(simulation.organisms.len(), 1);
+        assert_eq!(simulation.environment.field.total_amount(), field_before);
+        assert_eq!(simulation.organisms[0].stored_material.total_amount(), 1.0);
+    }
 
     fn rollback_material_inventory(
         simulation: &Simulation,
