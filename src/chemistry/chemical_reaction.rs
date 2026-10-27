@@ -442,7 +442,12 @@ fn discover_environmental_bonds(
     // empty-field scans cover successive regions while preserving the same
     // hard per-tick inspection cap.
     let scan_window = scan_steps_initial.min(cell_count).max(1);
-    let cell_start = ((tick % cell_count as u64) as usize).wrapping_mul(scan_window) % cell_count;
+    // Reserve two inspection slots for the material and bond nested beneath a
+    // cell. Without this headroom, a sparse bond at the end of a window can be
+    // perpetually skipped: the cell itself consumes the final inspection.
+    let scan_stride = scan_window.saturating_sub(2).max(1);
+    let cell_start =
+        ((tick % cell_count as u64) as usize).wrapping_mul(scan_stride) % cell_count;
     'discovery: for cell_offset in 0..cell_count {
         if scan_steps_remaining == 0 {
             break;
