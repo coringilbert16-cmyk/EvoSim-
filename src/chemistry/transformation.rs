@@ -670,7 +670,7 @@ impl Simulation {
                 width: environment.width,
                 height: environment.height,
                 chemistry_usable_energy: 0.0,
-            resonant_energy: Default::default(),
+                resonant_energy: Default::default(),
                 catalog: environment.catalog.clone(),
                 field: crate::environment::ActiveMaterialField::new(
                     environment.width,
