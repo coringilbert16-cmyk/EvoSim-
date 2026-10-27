@@ -2062,13 +2062,16 @@ mod decomposition_finalization_tests {
             .flat_map(|unit| unit.material.parts.iter())
             .map(|(_, amount)| *amount)
             .sum::<f64>();
-        let material_after = simulation.environment.field.total_amount() + structural_amount_after;
+        let material_after =
+            simulation.environment.field.total_amount() + structural_amount_after;
         assert!(
             (material_after - material_before).abs() <= 1e-9,
             "ordinary chemistry/lifecycle must preserve physical material ownership: before={material_before}, after={material_after}"
         );
         assert!(
-            simulation.energy_inventory_snapshot().is_balanced_without_creation(1e-8),
+            simulation
+                .energy_inventory_snapshot()
+                .is_balanced_without_creation(1e-8),
             "ordinary chemistry on a dead bonded graph must conserve world energy: {:?}",
             simulation.energy_inventory_snapshot().residual()
         );
@@ -2080,7 +2083,10 @@ mod decomposition_finalization_tests {
             );
         } else {
             assert!(
-                (simulation.environment.field.total_amount() - (field_before + structural_amount_before)).abs() <= 1e-9,
+                (simulation.environment.field.total_amount()
+                    - (field_before + structural_amount_before))
+                    .abs()
+                    <= 1e-9,
                 "if ordinary chemistry removes all bonds, final release must deposit the structure exactly once"
             );
         }
