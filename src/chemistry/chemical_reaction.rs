@@ -1092,6 +1092,101 @@ mod material_identity_tests {
     }
 
     #[test]
+    fn sunlight_resonance_funds_environmental_chemical_break_without_external_grant() {
+        let mut simulation = crate::state::Simulation::new(936, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        let source = environmental_test_composite(&simulation.environment.catalog);
+        let bond = source
+            .internal_connections
+            .as_ref()
+            .and_then(|connections| connections.first())
+            .expect("test composite should contain one internal bond")
+            .clone();
+        let cell_index = simulation
+            .environment
+            .field
+            .index_for_position(12.5, 12.5)
+            .expect("source placement should be in the field");
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            cell_index,
+            source.clone(),
+            &simulation.environment.catalog,
+        ));
+
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0,
+            source_y: 12.5,
+            frequency_hz: 440.0,
+            energy_intensity_per_tick_per_width: 10.0,
+            orbital_phase: 0.75,
+        };
+        let external_before = simulation.energy_ledger.total_external_energy_input;
+        crate::world_tone_snapshot::WorldToneOccluderSnapshot::settle_living_organism_inputs(
+            &mut simulation,
+            sample,
+            &std::collections::HashSet::new(),
+        );
+
+        let compatible = simulation
+            .environment
+            .resonant_energy
+            .compatible_energy(440.0);
+        assert!(
+            compatible > 0.1,
+            "the sunlight-exposed environmental material must retain enough compatible resonance to fund work; retained={compatible}"
+        );
+        assert!(
+            simulation.energy_ledger.total_external_energy_input > external_before,
+            "energy must enter through the existing world-tone source"
+        );
+        assert!(
+            simulation.energy_inventory_snapshot().is_balanced(1e-7),
+            "sunlight capture must reconcile before the reaction"
+        );
+
+        let operation = EnvironmentalChemicalBreakOperation {
+            cell_index,
+            material_index: 0,
+            bond_index: 0,
+            source_material: source,
+            bond,
+            activation_signal: 1.0,
+            disruption_cost: 0.1,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "sunlight-funded-environmental-break".into(),
+            accumulated_reaction: 1.0,
+        };
+        let resonance_before = simulation
+            .environment
+            .resonant_energy
+            .total_energy()
+            .expect("environment resonance must be valid");
+        let work_before = simulation.energy_ledger.total_work_expended;
+        assert!(resolve_environmental(
+            operation,
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
+        ));
+
+        let resonance_after = simulation
+            .environment
+            .resonant_energy
+            .total_energy()
+            .expect("environment resonance must remain valid");
+        assert!(resonance_after < resonance_before);
+        assert!(
+            (simulation.energy_ledger.total_work_expended - work_before - 0.1).abs() <= 1e-9,
+            "the reaction must charge its full disruption work exactly once"
+        );
+        assert!(
+            simulation.energy_inventory_snapshot().is_balanced(1e-7),
+            "sunlight capture followed by environmental BREAK must conserve the world inventory"
+        );
+    }
+
+    #[test]
     fn environmental_chemical_break_charges_work_and_splits_material_atomically() {
         let mut simulation = crate::state::Simulation::new(933, 10.0);
         let source = environmental_test_composite(&simulation.environment.catalog);
