@@ -62,7 +62,7 @@ pub(crate) fn chemical_break_energy_yield(
 pub(crate) fn settle_chemical_break_energy_with_resonance(
     organism: &mut Organism,
     bond: crate::structure::Bond,
-    reaction_energy: f64,
+    activation_signal: f64,
     disruption_cost: f64,
     resonant_work: f64,
     processing_efficiency: f64,
@@ -78,8 +78,10 @@ pub(crate) fn settle_chemical_break_energy_with_resonance(
     }
     let bond_supplied_work = disruption_cost - resonant_work;
     let next_total_work = ledger.total_work_expended + disruption_cost;
+    // The activation signal decides whether the reaction may proceed; it is
+    // not added to the energy transaction or counted as an energy source.
     if !next_total_work.is_finite()
-        || !crate::chemistry::can_chemical_break(reaction_energy, bond_supplied_work)
+        || !crate::chemistry::can_chemical_break(activation_signal, bond_supplied_work)
     {
         return false;
     }
