@@ -978,6 +978,89 @@ mod material_identity_tests {
     }
 
     #[test]
+    fn sunlight_captured_by_environment_powers_chemical_break_without_energy_injection() {
+        let mut simulation = crate::state::Simulation::new(932, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        simulation.decomposing_bodies.clear();
+        simulation.active_transformations.clear();
+
+        let source = environmental_test_composite(&simulation.environment.catalog);
+        let bond = source
+            .internal_connections
+            .as_ref()
+            .and_then(|connections| connections.first())
+            .expect("test composite should contain one internal bond")
+            .clone();
+        let cell_index = simulation
+            .environment
+            .field
+            .index_for_position(12.5, 12.5)
+            .expect("source placement should be in the field");
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            cell_index,
+            source.clone(),
+            &simulation.environment.catalog,
+        ));
+
+        let sample = crate::world_tone::WorldToneSample {
+            source_x: -5.0,
+            source_y: 0.0,
+            frequency_hz: 440.0,
+            energy_intensity_per_tick_per_width: 1000.0,
+            orbital_phase: 0.75,
+        };
+        crate::world_tone_snapshot::WorldToneOccluderSnapshot::settle_living_organism_inputs(
+            &mut simulation,
+            sample,
+            &std::collections::HashSet::new(),
+        );
+        let captured = simulation
+            .environment
+            .resonant_energy
+            .total_energy()
+            .expect("sunlight capture should leave a valid environmental spectrum");
+        assert!(captured > 0.5, "sunlight must fund more than the BREAK cost");
+        assert!(
+            simulation.energy_inventory_snapshot().is_balanced(1e-7),
+            "sunlight capture must balance before chemistry spends the energy"
+        );
+
+        let work_before = simulation.energy_ledger.total_work_expended;
+        let operation = EnvironmentalChemicalBreakOperation {
+            cell_index,
+            material_index: 0,
+            bond_index: 0,
+            source_material: source.clone(),
+            bond,
+            activation_signal: 1.0,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "sunlight-powered-environmental-break".into(),
+            accumulated_reaction: 1.0,
+        };
+        assert!(resolve_environmental(
+            operation,
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
+        ));
+        let remaining = simulation
+            .environment
+            .resonant_energy
+            .total_energy()
+            .expect("environment resonance must remain valid after BREAK");
+        assert!((captured - remaining - 0.5).abs() < 1e-7);
+        assert!(
+            (simulation.energy_ledger.total_work_expended - work_before - 0.5).abs() < 1e-7
+        );
+        assert!(
+            simulation.energy_inventory_snapshot().is_balanced(1e-7),
+            "sunlight-captured resonance must be spent once and remain conserved"
+        );
+    }
+
+    #[test]
     fn environmental_chemical_break_charges_work_and_splits_material_atomically() {
         let mut simulation = crate::state::Simulation::new(933, 10.0);
         let source = environmental_test_composite(&simulation.environment.catalog);
