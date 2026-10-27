@@ -25,6 +25,21 @@ pub(crate) const MAX_REACTION_REALIZATIONS_PER_TICK: usize = 64;
 
 /// Divide the global per-tick realization budget fairly among owners. Any
 /// remainder rotates by tick, including when there are more owners than slots.
+pub(crate) fn work_budget_for_owner(
+    total_budget: usize,
+    owner_count: usize,
+    owner_index: usize,
+    tick: u64,
+) -> usize {
+    if owner_count == 0 || owner_index >= owner_count {
+        return 0;
+    }
+    let base = total_budget / owner_count;
+    let remainder = total_budget % owner_count;
+    let rotation = tick as usize % owner_count;
+    let rank = (owner_index + owner_count - rotation) % owner_count;
+    base + if rank < remainder { 1 } else { 0 }
+}
 
 /// Add only work left unused by earlier owners to this owner's fair base share.
 /// The caller carries the returned remainder forward, keeping total attempts
