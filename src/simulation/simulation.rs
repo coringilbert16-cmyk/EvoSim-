@@ -1481,6 +1481,7 @@ impl Simulation {
         // material or energy held by the transaction. New transformations cannot
         // be initiated by breached organisms because the decision loop is gated
         // by living_ids. Existing BREAK/COMBINE transactions still settle normally.
+        self.release_finished_dead_organisms(&living_ids);
         self.energy_ledger.total_usable_energy_held = crate::reproduction::total_usable_energy_held(
             &self.organisms,
             &self.decomposing_bodies,
@@ -1490,6 +1491,93 @@ impl Simulation {
         self.energy_ledger.total_structural_energy_held =
             Self::structural_energy_held(&self.organisms, &self.decomposing_bodies);
     }
+    /// Transfer a dead, fully disconnected organism into environmental material.
+    ///
+    /// A core breach alone never moves material. Release is permitted only after
+    /// shared chemistry has removed every graph bond and every non-graph holder
+    /// that would otherwise be orphaned is empty. The field insertion and energy
+    /// sink are staged so a rejected transfer leaves the organism authoritative.
+    fn release_finished_dead_organisms(&mut self, living_ids: &HashSet<String>) {
+        let mut release_indices = Vec::new();
+        for (index, organism) in self.organisms.iter().enumerate() {
+            if living_ids.contains(&organism.id)
+                || !organism.structure.bonds.is_empty()
+                || organism.active_transformation_id.is_some()
+                || organism.reproductive_construction.is_some()
+                || !organism.stored_material.entries.is_empty()
+                || organism.active_movement.is_some()
+            {
+                continue;
+            }
+            let Some(resonant_energy) = organism.resonant_energy.total_energy() else {
+                continue;
+            };
+            if !resonant_energy.is_finite() || resonant_energy != 0.0 {
+                continue;
+            }
+            if !organism.usable_energy.is_finite() || organism.usable_energy < 0.0 {
+                continue;
+            }
+            if organism.structure.units.iter().any(|unit| unit.shape(&self.environment.catalog).is_none()) {
+                continue;
+            }
+            if organism.structure.units.is_empty() {
+                release_indices.push(index);
+                continue;
+            }
+            if organism.occupied_cells.first().is_none() {
+                continue;
+            }
+            release_indices.push(index);
+        }
+
+        for index in release_indices.into_iter().rev() {
+            let organism = &self.organisms[index];
+            let Some(position) = organism.occupied_cells.first().cloned() else {
+                // Empty structures carry no physical material and can be retired
+                // without inventing a destination position.
+                if organism.structure.units.is_empty() {
+                    self.organisms.remove(index);
+                }
+                continue;
+            };
+            let Some(materials) = organism
+                .structure
+                .units
+                .iter()
+                .map(|unit| crate::decomposition::realize_released_unit(unit, &self.environment.catalog))
+                .collect::<Option<Vec<_>>>()
+            else {
+                continue;
+            };
+            let deposits = materials
+                .into_iter()
+                .map(|material| (position.x, position.y, material))
+                .collect();
+
+            let mut staged_ledger = self.energy_ledger;
+            let mut staged_energy = organism.usable_energy;
+            if staged_energy > 0.0 {
+                let sink = crate::energy_ledger::EnergyTransaction {
+                    reason: crate::energy_ledger::EnergyReason::Decomposition,
+                    potential_released: 0.0,
+                    usable_delta: -staged_energy,
+                    structural_delta: 0.0,
+                    work_expended: 0.0,
+                    heat_dissipated: staged_energy,
+                };
+                if !staged_ledger.settle_transaction(&mut staged_energy, sink) {
+                    continue;
+                }
+            }
+            if !self.environment.field.deposit_physical_batch(deposits, &self.environment.catalog) {
+                continue;
+            }
+            self.energy_ledger = staged_ledger;
+            self.organisms.remove(index);
+        }
+    }
+
     pub(crate) fn structural_energy_held(
         organisms: &[crate::state::Organism],
         decomposing_bodies: &[crate::decomposition::DecomposingBody],
