@@ -1035,6 +1035,22 @@ mod material_identity_tests {
             "sunlight capture must balance before chemistry spends the energy"
         );
 
+        let reaction_frequency_hz = simulation
+            .environment
+            .resonant_energy
+            .components
+            .iter()
+            .max_by(|left, right| left.energy.total_cmp(&right.energy))
+            .map(|component| component.frequency_hz)
+            .expect("sunlight must leave at least one resonant component");
+        assert!(
+            simulation
+                .environment
+                .resonant_energy
+                .compatible_energy(reaction_frequency_hz)
+                >= 0.5,
+            "captured resonance must be compatible with the reaction's work requirement"
+        );
         let work_before = simulation.energy_ledger.total_work_expended;
         let operation = EnvironmentalChemicalBreakOperation {
             cell_index,
@@ -1044,7 +1060,7 @@ mod material_identity_tests {
             bond,
             activation_signal: 1.0,
             disruption_cost: 0.5,
-            reaction_frequency_hz: 440.0,
+            reaction_frequency_hz,
             accumulation_key: "sunlight-powered-environmental-break".into(),
             accumulated_reaction: 1.0,
         };
