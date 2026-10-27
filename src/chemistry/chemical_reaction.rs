@@ -501,7 +501,7 @@ pub(crate) fn accumulate_environmental(
             }
         }
     }
-    *remaining_discovery_work = remaining_discovery_work.saturating_sub(candidates.len());
+
 
     let indices = discovery_indices(candidates.len(), *remaining_discovery_work, tick);
     *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
