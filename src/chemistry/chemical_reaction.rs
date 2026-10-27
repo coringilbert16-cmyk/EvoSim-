@@ -1825,7 +1825,7 @@ mod material_identity_tests {
             .collect();
         let environmental_operations = (0..40)
             .map(|index| EnvironmentalChemicalBreakOperation {
-                                cell_index: 0,
+                cell_index: 0,
                 material_index: 0,
                 bond_index: 0,
                 source_material: source.clone(),
