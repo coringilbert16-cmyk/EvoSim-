@@ -25,20 +25,20 @@ pub(crate) const MAX_REACTION_REALIZATIONS_PER_TICK: usize = 64;
 
 /// Divide the global per-tick realization budget fairly among owners. Any
 /// remainder rotates by tick, including when there are more owners than slots.
-pub(crate) fn work_budget_for_owner(
+
+
+/// Add only work left unused by earlier owners to this owner's fair base share.
+/// The caller carries the returned remainder forward, keeping total attempts
+/// within the global cap without wasting slots on owners with no ready work.
+pub(crate) fn work_budget_for_owner_with_carry(
     total_budget: usize,
     owner_count: usize,
     owner_index: usize,
     tick: u64,
+    carried_work: usize,
 ) -> usize {
-    if owner_count == 0 || owner_index >= owner_count {
-        return 0;
-    }
-    let base = total_budget / owner_count;
-    let remainder = total_budget % owner_count;
-    let rotation = tick as usize % owner_count;
-    let rank = (owner_index + owner_count - rotation) % owner_count;
-    base + if rank < remainder { 1 } else { 0 }
+    work_budget_for_owner(total_budget, owner_count, owner_index, tick)
+        .saturating_add(carried_work)
 }
 
 /// Select work in stable key order, independent of the order in which callers
@@ -929,6 +929,54 @@ mod material_identity_tests {
         assert_eq!(first_slots[64], 0);
         assert_eq!(next_slots[0], 0);
         assert_eq!(next_slots[64], 1);
+    }
+
+    #[test]
+    fn scheduler_carries_unused_owner_budget_forward_within_global_cap() {
+        let simulation = crate::state::Simulation::new(926, 10.0);
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        let operation = |owner: usize, candidate: usize| ChemicalBreakOperation {
+            organism_id: format!("owner-{owner}"),
+            bond,
+            activation_signal: 1.0,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: format!("owner-{owner}|candidate-{candidate}"),
+            accumulated_reaction: 1.0,
+        };
+        let candidate_counts = [0, 10, 100];
+        let mut carry = 0;
+        let mut realized_attempts = 0;
+        let mut accumulation = std::collections::BTreeMap::new();
+
+        for (owner, count) in candidate_counts.into_iter().enumerate() {
+            let mut remaining = work_budget_for_owner_with_carry(
+                MAX_REACTION_REALIZATIONS_PER_TICK,
+                candidate_counts.len(),
+                owner,
+                0,
+                carry,
+            );
+            let operations = (0..count)
+                .map(|candidate| operation(owner, candidate))
+                .collect();
+            let ready = schedule_operations(
+                operations,
+                0,
+                &mut remaining,
+                &mut accumulation,
+            );
+            realized_attempts += ready.len();
+            carry = remaining;
+        }
+
+        assert_eq!(realized_attempts, MAX_REACTION_REALIZATIONS_PER_TICK);
+        assert_eq!(carry, 0);
+        assert_eq!(accumulation.len(), 46);
     }
 
     #[test]

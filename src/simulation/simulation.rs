@@ -828,13 +828,16 @@ impl Simulation {
                 &living_ids,
             );
         }
+        let mut carried_chemistry_work = 0;
         for (organism_index, organism) in self.organisms.iter_mut().enumerate() {
-            let mut chemistry_work_remaining = crate::chemical_reaction::work_budget_for_owner(
-                crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK,
-                chemistry_owner_count,
-                organism_index,
-                self.tick,
-            );
+            let mut chemistry_work_remaining =
+                crate::chemical_reaction::work_budget_for_owner_with_carry(
+                    crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK,
+                    chemistry_owner_count,
+                    organism_index,
+                    self.tick,
+                    carried_chemistry_work,
+                );
             let is_living = living_ids.contains(&organism.id);
             if is_living {
                 organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
@@ -887,6 +890,9 @@ impl Simulation {
                     &mut self.chemical_reaction_accumulation,
                 );
             }
+            // Carry unused slots forward, but never borrow a later owner's
+            // quota. This preserves fairness while avoiding idle capacity.
+            carried_chemistry_work = chemistry_work_remaining;
 
             // Recheck immediately after chemistry: if a reaction breached the
             // genome core this tick, do not perform any later biological work.
