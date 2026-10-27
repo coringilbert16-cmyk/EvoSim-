@@ -1002,7 +1002,9 @@ mod material_identity_tests {
                     .is_some_and(Vec::is_empty)
         }));
         assert!(!pieces.contains(&source));
-        assert!((energy_before - simulation.environment.chemistry_usable_energy - 0.5).abs() < 1e-9);
+        assert!(
+            (energy_before - simulation.environment.chemistry_usable_energy - 0.5).abs() < 1e-9
+        );
         assert!((simulation.energy_ledger.total_work_expended - ledger_before - 0.5).abs() < 1e-9);
     }
 
@@ -1054,7 +1056,10 @@ mod material_identity_tests {
                 .len(),
             2
         );
-        assert!((environment_energy_before - simulation.environment.chemistry_usable_energy - 0.5).abs() < 1e-9);
+        assert!(
+            (environment_energy_before - simulation.environment.chemistry_usable_energy - 0.5).abs()
+                < 1e-9
+        );
         assert!((simulation.energy_ledger.total_work_expended - ledger_before - 0.5).abs() < 1e-9);
     }
 
