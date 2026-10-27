@@ -600,7 +600,10 @@ mod material_identity_tests {
             .bonds
             .first()
             .expect("seed organism should contain a structural bond");
-        let original_bond_count = simulation.organisms[0].structure.bonds.len();
+        let original_bond_count = simulation.organisms[0]
+            .structure
+            .bonds
+            .len();
         let original_ledger = simulation.energy_ledger;
         simulation.organisms[0].usable_energy = 0.0;
         simulation.organisms[0].resonant_energy =
