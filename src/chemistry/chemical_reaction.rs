@@ -503,7 +503,7 @@ pub(crate) fn accumulate_environmental(
     }
 
 
-    let indices = discovery_indices(candidates.len(), *remaining_discovery_work, tick);
+    let indices: Vec<usize> = (0..candidates.len()).collect();
     *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
     let mut updated_keys = std::collections::BTreeSet::new();
     let mut operations = Vec::new();
