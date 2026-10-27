@@ -2075,7 +2075,11 @@ mod decomposition_finalization_tests {
             "ordinary chemistry on a dead bonded graph must conserve world energy: {:?}",
             simulation.energy_inventory_snapshot().residual()
         );
-        if simulation.organisms.iter().any(|organism| organism.id == owner_id) {
+        if simulation
+            .organisms
+            .iter()
+            .any(|organism| organism.id == owner_id)
+        {
             assert_eq!(
                 simulation.environment.field.total_amount(),
                 field_before,
