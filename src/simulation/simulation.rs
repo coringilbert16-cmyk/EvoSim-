@@ -2021,7 +2021,9 @@ mod decomposition_finalization_tests {
     #[test]
     fn chemistry_broken_dead_graph_releases_through_the_live_lifecycle() {
         let mut simulation = Simulation::new(0xD3B5, 10.0);
-        assert!(simulation.configure_world_tone(None));
+        // Keep the default sunlight source enabled: ordinary chemistry must
+        // obtain its reaction energy from the same physical input as any other
+        // material, rather than relying on injected zero-cost BREAK operations.
         for cell in &mut simulation.environment.field.cells {
             cell.physical_materials.clear();
         }
