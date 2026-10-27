@@ -777,10 +777,8 @@ pub(crate) fn resolve_environmental(
     // withdrawal first; any remainder must be covered by already-accounted
     // usable energy. A failed BREAK leaves the live reservoir untouched.
     let mut staged_resonance = environment.resonant_energy.clone();
-    let resonant_work = staged_resonance.withdraw_compatible(
-        operation.reaction_frequency_hz,
-        operation.disruption_cost,
-    );
+    let resonant_work = staged_resonance
+        .withdraw_compatible(operation.reaction_frequency_hz, operation.disruption_cost);
     if !resonant_work.is_finite() || resonant_work < 0.0 {
         return false;
     }
