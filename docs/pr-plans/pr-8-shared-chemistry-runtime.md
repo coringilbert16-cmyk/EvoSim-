@@ -125,3 +125,9 @@ The release batch now routes each realized unit to the field cell selected by th
 ### Exact-head verification correction (2026-10-27)
 
 The first placement-preservation edit left a stale `position` reference after the old organism-position binding was removed. The next CI run failed across test groups at compile time, so those failures were not meaningful behavioral results. Corrected the deposit mapping to zip realized materials with their structural units and use each unit's placement; the source was re-fetched after the update to verify the stale reference is gone. CI for `c8951e1` is now running; do not treat the previous run's focused-test failures as a regression baseline or a pass.
+
+### Follow-up transaction guard and verification repair (2026-10-27)
+
+The final-release eligibility gate now checks the simulation's in-flight transformation queue by owner ID as well as the organism's active-transformation marker. This protects the escrow case where a queued transaction is still authoritative even if the organism marker is missing or stale. Added an acceptance test that a bondless dead organism is retained while such an owner transaction exists.
+
+Verification exposed a compile regression from a broad placement edit that had accidentally changed the legacy test-only `DecomposingBody` deposit loop. Its original body-position mapping has been restored in commit `60d5efd`; the new shared dead-release path continues to deposit each unit at its own physical placement. The workflow for the repaired commit passed formatting, architecture checks, and all five focused test groups; the full Rust suite was still running at the last check. The added transaction-queue guard/test are newer than that workflow and require fresh verification.
