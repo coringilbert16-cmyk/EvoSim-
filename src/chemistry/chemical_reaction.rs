@@ -928,7 +928,9 @@ mod material_identity_tests {
         simulation: &mut crate::state::Simulation,
         amount: f64,
     ) {
-        use crate::energy_ledger::{EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction};
+        use crate::energy_ledger::{
+            EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction,
+        };
 
         let mut holder = 0.0;
         let transaction = ExternalInputTransaction {
