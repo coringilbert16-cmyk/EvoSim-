@@ -2003,7 +2003,8 @@ mod decomposition_finalization_tests {
             .deposit(440.0, 1.0));
         let field_before = simulation.environment.field.total_amount();
 
-        simulation.release_finished_dead_organisms(&HashSet::new());
+        let living = HashSet::new();
+        simulation.release_finished_dead_organisms(&living);
 
         assert_eq!(simulation.organisms.len(), 1);
         assert_eq!(simulation.environment.field.total_amount(), field_before);
@@ -2049,7 +2050,8 @@ mod decomposition_finalization_tests {
             });
         let field_before = simulation.environment.field.total_amount();
 
-        simulation.release_finished_dead_organisms(&HashSet::new());
+        let living = HashSet::new();
+        simulation.release_finished_dead_organisms(&living);
 
         assert_eq!(simulation.organisms.len(), 1);
         assert_eq!(simulation.environment.field.total_amount(), field_before);
