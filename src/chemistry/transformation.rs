@@ -59,6 +59,79 @@ pub(crate) fn chemical_break_energy_yield(
 /// of the disruption work. The reservoir debit is committed by the caller only
 /// after this transaction succeeds; the remaining work is charged to the
 /// removed bond's energy/usable-energy balance.
+/// Prepared accounting for a chemical BREAK, before its source mutation commits.
+#[derive(Clone, Copy)]
+pub(crate) struct PreparedChemicalBreakEnergy {
+    pub(crate) usable_energy: f64,
+    pub(crate) ledger: EnergyLedger,
+    pub(crate) heat_dissipated: f64,
+}
+
+/// Validate and stage chemical BREAK energy without mutating the organism or ledger.
+///
+/// This is intentionally independent of the physical source mutation so the same
+/// accounting can later be committed atomically with either an organism graph
+/// bond or a stored environmental material bond. Physical-material bonds that
+/// have no recorded stored energy supply zero energy; required work must come
+/// from the organism's usable holder or compatible resonance.
+pub(crate) fn prepare_chemical_break_energy_with_resonance(
+    usable_energy: f64,
+    ledger: &EnergyLedger,
+    bond_energy: f64,
+    activation_signal: f64,
+    disruption_cost: f64,
+    resonant_work: f64,
+    processing_efficiency: f64,
+) -> Option<PreparedChemicalBreakEnergy> {
+    if !usable_energy.is_finite()
+        || usable_energy < 0.0
+        || !resonant_work.is_finite()
+        || resonant_work < 0.0
+        || !disruption_cost.is_finite()
+        || disruption_cost < 0.0
+        || resonant_work > disruption_cost
+        || !activation_signal.is_finite()
+        || activation_signal < 0.0
+        || !crate::chemistry::can_chemical_break(
+            activation_signal,
+            disruption_cost - resonant_work,
+        )
+    {
+        return None;
+    }
+
+    let bond_supplied_work = disruption_cost - resonant_work;
+    let next_total_work = ledger.total_work_expended + disruption_cost;
+    if !next_total_work.is_finite() {
+        return None;
+    }
+    let (gross, usable, heat) =
+        chemical_break_energy_yield(bond_energy, bond_supplied_work, processing_efficiency)?;
+    let transaction = EnergyTransaction {
+        reason: EnergyReason::Break,
+        potential_released: 0.0,
+        usable_delta: usable,
+        structural_delta: -gross,
+        work_expended: bond_supplied_work,
+        heat_dissipated: heat,
+    };
+    let mut prepared_ledger = *ledger;
+    let mut prepared_usable_energy = usable_energy;
+    if !prepared_ledger.settle_transaction(&mut prepared_usable_energy, transaction) {
+        return None;
+    }
+    // The complete disruption cost is accounted once; resonance is debited by
+    // the caller only after the corresponding physical mutation commits.
+    prepared_ledger.total_work_expended = next_total_work;
+    Some(PreparedChemicalBreakEnergy {
+        usable_energy: prepared_usable_energy,
+        ledger: prepared_ledger,
+        heat_dissipated: heat,
+    })
+}
+
+/// Settle chemical BREAK energy against a graph bond. Both the candidate graph
+/// and the energy transaction are staged first; neither is committed on failure.
 pub(crate) fn settle_chemical_break_energy_with_resonance(
     organism: &mut Organism,
     bond: crate::structure::Bond,
@@ -68,44 +141,27 @@ pub(crate) fn settle_chemical_break_energy_with_resonance(
     processing_efficiency: f64,
     ledger: &mut EnergyLedger,
 ) -> bool {
-    if !resonant_work.is_finite()
-        || resonant_work < 0.0
-        || !disruption_cost.is_finite()
-        || disruption_cost < 0.0
-        || resonant_work > disruption_cost
-    {
+    let mut trial_structure = organism.structure.clone();
+    if trial_structure.break_matching_bond(bond).is_none() {
         return false;
     }
-    let bond_supplied_work = disruption_cost - resonant_work;
-    let next_total_work = ledger.total_work_expended + disruption_cost;
-    // The activation signal decides whether the reaction may proceed; it is
-    // not added to the energy transaction or counted as an energy source.
-    if !next_total_work.is_finite()
-        || !crate::chemistry::can_chemical_break(activation_signal, bond_supplied_work)
-    {
-        return false;
-    }
-    let Some((gross, usable, heat)) =
-        chemical_break_energy_yield(bond.bond_energy, bond_supplied_work, processing_efficiency)
-    else {
+    let Some(prepared) = prepare_chemical_break_energy_with_resonance(
+        organism.usable_energy,
+        ledger,
+        bond.bond_energy,
+        activation_signal,
+        disruption_cost,
+        resonant_work,
+        processing_efficiency,
+    ) else {
         return false;
     };
-    let tx = EnergyTransaction {
-        reason: EnergyReason::Break,
-        potential_released: 0.0,
-        usable_delta: usable,
-        structural_delta: -gross,
-        // This balanced subtransaction charges the bond-supplied share. The
-        // resonant share is added to the same cumulative work total below.
-        work_expended: bond_supplied_work,
-        heat_dissipated: heat,
-    };
-    if !settle_break_transaction(organism, bond, tx, ledger) {
-        return false;
-    }
-    // Prevalidated above so this final ledger update cannot overflow after the
-    // structure has changed. The reservoir debit is committed by the caller.
-    ledger.total_work_expended = next_total_work;
+
+    organism.structure = trial_structure;
+    organism.usable_energy = prepared.usable_energy;
+    *ledger = prepared.ledger;
+    organism.mark_structure_changed();
+    organism.add_transaction_stress(prepared.heat_dissipated);
     true
 }
 
