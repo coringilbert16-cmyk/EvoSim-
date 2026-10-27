@@ -435,7 +435,16 @@ fn discover_environmental_bonds(
 
     let mut scan_steps_remaining = limit.saturating_mul(8).max(1);
     let scan_steps_initial = scan_steps_remaining;
-    let cell_start = tick as usize % cell_count;
+    // Advance by the previous tick's scan window rather than one cell. The
+    // scan inspects up to `limit * 8` nested entries, so moving only one
+    // cell per tick causes heavy overlap and makes distant sparse material
+    // effectively invisible at small budgets. A window-sized stride lets
+    // empty-field scans cover successive regions while preserving the same
+    // hard per-tick inspection cap.
+    let scan_window = scan_steps_initial.min(cell_count).max(1);
+    let cell_start = ((tick % cell_count as u64) as usize)
+        .wrapping_mul(scan_window)
+        % cell_count;
     'discovery: for cell_offset in 0..cell_count {
         if scan_steps_remaining == 0 {
             break;
@@ -1188,20 +1197,31 @@ mod material_identity_tests {
             let start = Instant::now();
             let mut candidates_seen = 0_usize;
             let mut inspected_total = 0_usize;
-            for tick in 0..500_u64 {
+            let mut first_candidate_tick = None;
+            // Allow a full field traversal at the smallest budget. The timing
+            // benchmark now checks discovery progress as well as bounded work.
+            let ticks = simulation.environment.field.cells.len() as u64 + 8;
+            for tick in 0..ticks {
                 let (candidates, inspected) =
                     discover_environmental_bonds(&simulation.environment, tick, budget);
+                if !candidates.is_empty() && first_candidate_tick.is_none() {
+                    first_candidate_tick = Some(tick);
+                }
                 candidates_seen += candidates.len();
                 inspected_total += inspected;
             }
             let elapsed = start.elapsed();
             eprintln!(
-                "environmental discovery benchmark: budget={budget}, ticks=500, candidates={candidates_seen}, inspected={inspected_total}, elapsed_ms={}",
+                "environmental discovery benchmark: budget={budget}, ticks={ticks}, candidates={candidates_seen}, first_candidate_tick={first_candidate_tick:?}, inspected={inspected_total}, elapsed_ms={}",
                 elapsed.as_millis()
             );
             assert!(
-                inspected_total <= 500 * budget.saturating_mul(8).max(1),
+                inspected_total <= ticks as usize * budget.saturating_mul(8).max(1),
                 "aggregate discovery work exceeded the per-tick bound"
+            );
+            assert!(
+                first_candidate_tick.is_some(),
+                "distant sparse material must be discoverable at budget={budget}"
             );
         }
     }
