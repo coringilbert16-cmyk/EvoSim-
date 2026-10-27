@@ -1637,7 +1637,7 @@ impl Simulation {
         let current_usable_energy = crate::reproduction::total_usable_energy_held(
             &self.organisms,
             &self.decomposing_bodies,
-        );
+        ) + self.environment.chemistry_usable_energy;
         let current_resonant_energy =
             crate::reproduction::total_resonant_energy_held(&self.organisms);
         let current_structural_energy = crate::reproduction::total_structural_energy_held(
