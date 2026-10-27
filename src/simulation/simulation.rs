@@ -730,6 +730,10 @@ impl Simulation {
     pub(crate) fn step(&mut self) {
         self.tick += 1;
 
+        // A single deterministic realization budget is shared across all owners this tick.
+        let mut chemistry_work_remaining =
+            crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK;
+
         let mut still_active = Vec::new();
         let mut completed = Vec::new();
         for mut transformation in self.active_transformations.drain(..) {
@@ -861,10 +865,14 @@ impl Simulation {
                 &mut self.chemical_reaction_accumulation,
                 &mut self.chemistry_library,
             );
-            // Chemistry events have no artificial duration or per-organism
-            // serialization. Every event that still matches the current
-            // physical structure is applied immediately; conflicting events
-            // naturally fail once an earlier event has changed that structure.
+            let chemical_operations = crate::chemical_reaction::schedule_operations(
+                chemical_operations,
+                &mut chemistry_work_remaining,
+                &mut self.chemical_reaction_accumulation,
+            );
+            // The shared per-tick budget bounds physical reaction realization.
+            // Deferred activations retain progress only; they must be discovered
+            // and validated against live geometry again before a later commit.
             for operation in chemical_operations {
                 let _ = crate::chemical_reaction::resolve_preserving_accumulation(
                     operation,
