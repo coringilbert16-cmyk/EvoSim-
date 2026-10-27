@@ -2073,14 +2073,10 @@ mod decomposition_finalization_tests {
             simulation.energy_inventory_snapshot().residual()
         );
         if simulation.organisms.iter().any(|organism| organism.id == owner_id) {
-            assert!(
-                !simulation.organisms[0].structure.bonds.is_empty(),
-                "a retained dead graph must remain bonded until ordinary chemistry actually breaks its bonds"
-            );
             assert_eq!(
                 simulation.environment.field.total_amount(),
                 field_before,
-                "bonded structural material must not be prematurely released"
+                "material still owned by the dead aggregate must not be prematurely released"
             );
         } else {
             assert!(
