@@ -2062,8 +2062,7 @@ mod decomposition_finalization_tests {
             .flat_map(|unit| unit.material.parts.iter())
             .map(|(_, amount)| *amount)
             .sum::<f64>();
-        let material_after =
-            simulation.environment.field.total_amount() + structural_amount_after;
+        let material_after = simulation.environment.field.total_amount() + structural_amount_after;
         assert!(
             (material_after - material_before).abs() <= 1e-9,
             "ordinary chemistry/lifecycle must preserve physical material ownership: before={material_before}, after={material_after}"
