@@ -1126,7 +1126,7 @@ mod material_identity_tests {
         ));
         remove_living_organisms_preserving_inventory(&mut simulation);
         let energy_before = simulation.environment.chemistry_usable_energy;
-        let ledger_before = simulation.energy_ledger.clone();
+        let ledger_before = simulation.energy_ledger;
         let inventory_before = simulation.energy_inventory_snapshot();
         assert!(inventory_before.is_balanced(1e-9));
         let field_before = simulation.environment.field.cells.clone();
@@ -1187,7 +1187,7 @@ mod material_identity_tests {
         let structure_before = organism.structure.clone();
         let energy_before = organism.usable_energy;
         let resonance_before = organism.resonant_energy.total_energy().unwrap();
-        let ledger_before = simulation.energy_ledger.clone();
+        let ledger_before = simulation.energy_ledger;
         let field_before = simulation.environment.field.cells.clone();
 
         assert!(!resolve_environmental(
@@ -1236,7 +1236,7 @@ mod material_identity_tests {
         };
         let structure_before = simulation.organisms[0].structure.clone();
         let usable_energy_before = simulation.organisms[0].usable_energy;
-        let ledger_before = simulation.energy_ledger.clone();
+        let ledger_before = simulation.energy_ledger;
         let field_before = simulation.environment.field.cells.clone();
 
         assert!(!resolve_environmental(
