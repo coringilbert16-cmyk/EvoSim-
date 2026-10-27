@@ -962,7 +962,10 @@ mod material_identity_tests {
         );
         assert_eq!(simulation.organisms[0].usable_energy, usable_energy_before);
         assert_eq!(
-            simulation.organisms[0].resonant_energy.total_energy().unwrap(),
+            simulation.organisms[0]
+                .resonant_energy
+                .total_energy()
+                .unwrap(),
             resonance_before
         );
         assert_eq!(simulation.energy_ledger, ledger_before);
