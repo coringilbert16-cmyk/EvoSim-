@@ -871,7 +871,7 @@ impl Simulation {
         let mut carried_chemistry_work = 0;
         let mut carried_chemistry_discovery_work = 0;
         for (organism_index, organism) in self.organisms.iter_mut().enumerate() {
-            let mut chemistry_work_remaining =
+            let chemistry_work_remaining =
                 crate::chemical_reaction::work_budget_for_owner_with_carry(
                     crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 2,
                     chemistry_owner_count,
