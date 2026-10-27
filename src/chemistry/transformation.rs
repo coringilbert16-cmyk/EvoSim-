@@ -92,10 +92,7 @@ pub(crate) fn prepare_chemical_break_energy_with_resonance(
         || resonant_work > disruption_cost
         || !activation_signal.is_finite()
         || activation_signal < 0.0
-        || !crate::chemistry::can_chemical_break(
-            activation_signal,
-            disruption_cost - resonant_work,
-        )
+        || !crate::chemistry::can_chemical_break(activation_signal, disruption_cost - resonant_work)
     {
         return None;
     }
@@ -105,11 +102,8 @@ pub(crate) fn prepare_chemical_break_energy_with_resonance(
     if !next_total_work.is_finite() {
         return None;
     }
-    let (gross, usable, heat) = chemical_break_energy_yield(
-        bond_energy,
-        bond_supplied_work,
-        processing_efficiency,
-    )?;
+    let (gross, usable, heat) =
+        chemical_break_energy_yield(bond_energy, bond_supplied_work, processing_efficiency)?;
     let transaction = EnergyTransaction {
         reason: EnergyReason::Break,
         potential_released: 0.0,
@@ -2325,16 +2319,9 @@ mod tests {
     #[test]
     fn prepared_environmental_break_work_uses_holder_energy_without_bond_credit() {
         let ledger = crate::state::EnergyLedger::default();
-        let prepared = prepare_chemical_break_energy_with_resonance(
-            10.0,
-            &ledger,
-            0.0,
-            5.0,
-            5.0,
-            0.0,
-            0.5,
-        )
-        .expect("the holder can pay the complete work for a zero-energy physical bond");
+        let prepared =
+            prepare_chemical_break_energy_with_resonance(10.0, &ledger, 0.0, 5.0, 5.0, 0.0, 0.5)
+                .expect("the holder can pay the complete work for a zero-energy physical bond");
 
         assert!((prepared.usable_energy - 5.0).abs() < 1e-12);
         assert_eq!(prepared.heat_dissipated, 0.0);
@@ -2351,15 +2338,8 @@ mod tests {
     #[test]
     fn prepared_environmental_break_rejects_unfunded_work_without_mutation() {
         let ledger = crate::state::EnergyLedger::default();
-        let prepared = prepare_chemical_break_energy_with_resonance(
-            1.0,
-            &ledger,
-            0.0,
-            5.0,
-            5.0,
-            0.0,
-            0.5,
-        );
+        let prepared =
+            prepare_chemical_break_energy_with_resonance(1.0, &ledger, 0.0, 5.0, 5.0, 0.0, 0.5);
         assert!(prepared.is_none());
         assert_eq!(ledger, crate::state::EnergyLedger::default());
     }
