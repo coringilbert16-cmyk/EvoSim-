@@ -829,6 +829,7 @@ impl Simulation {
             );
         }
         let mut carried_chemistry_work = 0;
+        let mut carried_chemistry_discovery_work = 0;
         for (organism_index, organism) in self.organisms.iter_mut().enumerate() {
             let mut chemistry_work_remaining =
                 crate::chemical_reaction::work_budget_for_owner_with_carry(
@@ -837,6 +838,14 @@ impl Simulation {
                     organism_index,
                     self.tick,
                     carried_chemistry_work,
+                );
+            let mut chemistry_discovery_work_remaining =
+                crate::chemical_reaction::work_budget_for_owner_with_carry(
+                    crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK,
+                    chemistry_owner_count,
+                    organism_index,
+                    self.tick,
+                    carried_chemistry_discovery_work,
                 );
             let is_living = living_ids.contains(&organism.id);
             if is_living {
@@ -872,7 +881,10 @@ impl Simulation {
                 &self.environment.catalog,
                 &mut self.chemical_reaction_accumulation,
                 &mut self.chemistry_library,
+                self.tick,
+                &mut chemistry_discovery_work_remaining,
             );
+            carried_chemistry_discovery_work = chemistry_discovery_work_remaining;
             let chemical_operations = crate::chemical_reaction::schedule_operations(
                 chemical_operations,
                 self.tick,
