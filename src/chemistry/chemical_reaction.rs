@@ -340,7 +340,9 @@ pub(crate) fn accumulate(
             .compatible_energy(reaction_frequency_hz)
             .min(barrier);
         let effective_barrier = (barrier - resonance_credit).max(0.0);
-        let Some(activation_signal) = crate::chemistry::normalized_chemistry_to_activation_signal(next) else {
+        let Some(activation_signal) =
+            crate::chemistry::normalized_chemistry_to_activation_signal(next)
+        else {
             continue;
         };
         updated_keys.insert(key.clone());
