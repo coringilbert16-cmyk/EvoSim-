@@ -885,15 +885,32 @@ impl Simulation {
             }
             // Chemical reactions remain part of the physical world after
             // organism status ends; biological maintenance and memory do not.
+            // Split discovery work between graph and environmental targets so
+            // a large structural graph cannot permanently starve local field
+            // chemistry (and vice versa). Unused budget carries to later owners.
+            let graph_discovery_budget = chemistry_discovery_work_remaining / 2;
+            let environmental_discovery_budget =
+                chemistry_discovery_work_remaining - graph_discovery_budget;
+            let mut graph_discovery_remaining = graph_discovery_budget;
+            let mut environmental_discovery_remaining = environmental_discovery_budget;
             let chemical_operations = crate::chemical_reaction::accumulate(
                 organism,
                 &self.environment.catalog,
                 &mut self.chemical_reaction_accumulation,
                 &mut self.chemistry_library,
                 self.tick,
-                &mut chemistry_discovery_work_remaining,
+                &mut graph_discovery_remaining,
             );
-            carried_chemistry_discovery_work = chemistry_discovery_work_remaining;
+            let environmental_operations = crate::chemical_reaction::accumulate_environmental(
+                organism,
+                &self.environment,
+                &mut self.chemical_reaction_accumulation,
+                &mut self.chemistry_library,
+                self.tick,
+                &mut environmental_discovery_remaining,
+            );
+            carried_chemistry_discovery_work =
+                graph_discovery_remaining + environmental_discovery_remaining;
             let chemical_operations = crate::chemical_reaction::schedule_operations(
                 chemical_operations,
                 self.tick,
@@ -907,6 +924,22 @@ impl Simulation {
                 let _ = crate::chemical_reaction::resolve_preserving_accumulation(
                     operation,
                     organism,
+                    &mut self.energy_ledger,
+                    &mut self.chemical_reaction_accumulation,
+                );
+            }
+            let environmental_operations =
+                crate::chemical_reaction::schedule_environmental_operations(
+                    environmental_operations,
+                    self.tick,
+                    &mut chemistry_work_remaining,
+                    &mut self.chemical_reaction_accumulation,
+                );
+            for operation in environmental_operations {
+                let _ = crate::chemical_reaction::resolve_environmental_preserving_accumulation(
+                    operation,
+                    organism,
+                    &mut self.environment,
                     &mut self.energy_ledger,
                     &mut self.chemical_reaction_accumulation,
                 );
