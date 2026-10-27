@@ -1358,7 +1358,8 @@ mod integration_tests {
         // The signal is sufficient to trigger the reaction, but the physical
         // disruption cost exceeds the bond's stored energy plus all usable
         // energy. Rejection must therefore preserve every authoritative holder.
-        let disruption_cost = bond.bond_energy + simulation.organisms[0].usable_energy + 1.0;
+        let available_energy = simulation.organisms[0].usable_energy;
+        let disruption_cost = bond.bond_energy + available_energy + 1.0;
         let operation = crate::chemical_reaction::ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
@@ -1377,14 +1378,23 @@ mod integration_tests {
             &mut simulation.energy_ledger,
         ));
 
-        assert_eq!(simulation.organisms[0].structure.units, before_structure.units);
-        assert_eq!(simulation.organisms[0].structure.bonds, before_structure.bonds);
+        assert_eq!(
+            simulation.organisms[0].structure.units,
+            before_structure.units
+        );
+        assert_eq!(
+            simulation.organisms[0].structure.bonds,
+            before_structure.bonds
+        );
         assert_eq!(simulation.energy_ledger, before_ledger);
         assert_eq!(
             integer_material_inventory(&simulation)
                 .expect("rejected reaction must leave material inventory valid"),
             before_material
         );
-        assert_eq!(simulation.energy_inventory_snapshot(), before_energy);
+        assert_eq!(
+            simulation.energy_inventory_snapshot(),
+            before_energy
+        );
     }
 }
