@@ -61,7 +61,9 @@ impl FieldCell {
         let Some(cell) = self.cells.get(source_cell) else {
             return false;
         };
-        if cell.physical_materials.get(source_index) != Some(expected_source) || pieces.is_empty() {
+        if cell.physical_materials.get(source_index) != Some(expected_source)
+            || pieces.is_empty()
+        {
             return false;
         }
 
@@ -73,7 +75,10 @@ impl FieldCell {
             {
                 return false;
             }
-            let Some(placement) = piece.placements.as_ref().and_then(|placements| placements.first())
+            let Some(placement) = piece
+                .placements
+                .as_ref()
+                .and_then(|placements| placements.first())
             else {
                 return false;
             };
