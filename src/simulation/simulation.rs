@@ -1975,6 +1975,46 @@ mod decomposition_finalization_tests {
         assert_eq!(simulation.organisms[0].stored_material.total_amount(), 1.0);
     }
 
+    #[test]
+    fn dead_organism_with_owner_transformation_in_flight_is_not_released() {
+        let mut simulation = Simulation::new(0xD3B1, 10.0);
+        prepare_bondless_dead_fixture(&mut simulation);
+        let owner_id = simulation.organisms[0].id.clone();
+        simulation.active_transformations.push(crate::state::ActiveTransformation {
+            id: 991,
+            organism_id: owner_id,
+            kind: crate::state::TransformationKind::Break,
+            material: crate::resources::Material::free_base("Carbon", 1.0),
+            bond: None,
+            stored_material: None,
+            stored_bond: None,
+            environmental_source: false,
+            complexity: 1.0,
+            duration_ticks: 1,
+            remaining_ticks: 1,
+            prepared_energy: None,
+            pending_experience: None,
+            decision_context_key: None,
+            prepared_structure: None,
+            prepared_stored_material: None,
+            prepared_usable_energy: None,
+            prepared_stress: None,
+            prepared_ledger: None,
+            prepared_ledger_before: None,
+            prepared_usable_energy_before: None,
+            combine_environmental_source: None,
+            stored_source_index: None,
+            environmental_source_location: None,
+            combine_environmental_source_index: None,
+        });
+        let field_before = simulation.environment.field.total_amount();
+
+        simulation.release_finished_dead_organisms(&HashSet::new());
+
+        assert_eq!(simulation.organisms.len(), 1);
+        assert_eq!(simulation.environment.field.total_amount(), field_before);
+    }
+
     fn rollback_material_inventory(
         simulation: &Simulation,
     ) -> std::collections::BTreeMap<String, u64> {
