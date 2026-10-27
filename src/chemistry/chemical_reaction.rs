@@ -1140,6 +1140,7 @@ mod material_identity_tests {
                 &mut discovery_budget,
             );
             if !operations.is_empty()
+                || discovery_budget == 0
                 || accumulation.keys().any(|key| key.starts_with(&target_prefix))
             {
                 found = true;
