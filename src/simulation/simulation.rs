@@ -853,13 +853,12 @@ impl Simulation {
         );
         let mut environmental_work_remaining =
             crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 2;
-        let environmental_operations =
-            crate::chemical_reaction::schedule_environmental_operations(
-                environmental_operations,
-                self.tick,
-                &mut environmental_work_remaining,
-                &mut self.chemical_reaction_accumulation,
-            );
+        let environmental_operations = crate::chemical_reaction::schedule_environmental_operations(
+            environmental_operations,
+            self.tick,
+            &mut environmental_work_remaining,
+            &mut self.chemical_reaction_accumulation,
+        );
         for operation in environmental_operations {
             let _ = crate::chemical_reaction::resolve_environmental_preserving_accumulation(
                 operation,
@@ -1494,11 +1493,10 @@ impl Simulation {
         // be initiated by breached organisms because the decision loop is gated
         // by living_ids. Existing BREAK/COMBINE transactions still settle normally.
         self.release_finished_dead_organisms(&living_ids);
-        self.energy_ledger.total_usable_energy_held =
-            crate::reproduction::total_usable_energy_held(
-                &self.organisms,
-                &self.decomposing_bodies,
-            ) + self.environment.chemistry_usable_energy;
+        self.energy_ledger.total_usable_energy_held = crate::reproduction::total_usable_energy_held(
+            &self.organisms,
+            &self.decomposing_bodies,
+        ) + self.environment.chemistry_usable_energy;
         self.energy_ledger.total_resonant_energy_held =
             crate::reproduction::total_resonant_energy_held(&self.organisms);
         self.energy_ledger.total_structural_energy_held =
@@ -2015,8 +2013,14 @@ mod decomposition_finalization_tests {
         simulation.release_finished_dead_organisms(&living);
 
         assert!(simulation.organisms.is_empty());
-        assert_eq!(simulation.environment.field.total_amount(), field_before + 1.0);
-        assert_eq!(simulation.energy_ledger.total_heat_dissipated, heat_before + 2.0);
+        assert_eq!(
+            simulation.environment.field.total_amount(),
+            field_before + 1.0
+        );
+        assert_eq!(
+            simulation.energy_ledger.total_heat_dissipated,
+            heat_before + 2.0
+        );
     }
 
     #[test]
@@ -2057,9 +2061,7 @@ mod decomposition_finalization_tests {
     fn dead_organism_with_retained_resonance_is_not_released() {
         let mut simulation = Simulation::new(0xD3B2, 10.0);
         prepare_bondless_dead_fixture(&mut simulation);
-        assert!(simulation.organisms[0]
-            .resonant_energy
-            .deposit(440.0, 1.0));
+        assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
         let field_before = simulation.environment.field.total_amount();
 
         let living = HashSet::new();
