@@ -965,6 +965,74 @@ mod material_identity_tests {
     }
 
     #[test]
+    fn environmental_chemical_break_can_pay_work_from_compatible_resonance() {
+        let mut simulation = crate::state::Simulation::new(935, 10.0);
+        let source = environmental_test_composite(&simulation.environment.catalog);
+        let bond = source
+            .internal_connections
+            .as_ref()
+            .and_then(|connections| connections.first())
+            .expect("test composite should contain one internal bond")
+            .clone();
+        let cell_index = simulation
+            .environment
+            .field
+            .index_for_position(12.5, 12.5)
+            .expect("source placement should be in the field");
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            cell_index,
+            source.clone(),
+            &simulation.environment.catalog,
+        ));
+        simulation.organisms[0].usable_energy = 0.0;
+        assert!(simulation.organisms[0]
+            .resonant_energy
+            .deposit(440.0, 0.5));
+
+        let resonance_before = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .unwrap();
+        let ledger_before = simulation.energy_ledger.total_work_expended;
+        let operation = EnvironmentalChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            cell_index,
+            material_index: 0,
+            bond_index: 0,
+            source_material: source.clone(),
+            bond,
+            activation_signal: 1.0,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "environmental-atomic-break-resonance".into(),
+            accumulated_reaction: 1.0,
+        };
+
+        assert!(resolve_environmental(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
+        ));
+
+        assert_eq!(
+            simulation.environment.field.cells[cell_index]
+                .physical_materials
+                .len(),
+            2
+        );
+        assert_eq!(simulation.organisms[0].usable_energy, 0.0);
+        assert!((resonance_before
+            - simulation.organisms[0].resonant_energy.total_energy().unwrap()
+            - 0.5)
+            .abs()
+            < 1e-9);
+        assert!(
+            (simulation.energy_ledger.total_work_expended - ledger_before - 0.5).abs() < 1e-9
+        );
+    }
+
+    #[test]
     fn environmental_chemical_break_with_insufficient_work_rolls_back_everything() {
         let mut simulation = crate::state::Simulation::new(934, 10.0);
         let source = environmental_test_composite(&simulation.environment.catalog);
