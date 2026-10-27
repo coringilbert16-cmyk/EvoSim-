@@ -1533,7 +1533,7 @@ impl Simulation {
             let Some(resonant_energy) = organism.resonant_energy.total_energy() else {
                 continue;
             };
-            if !resonant_energy.is_finite() || resonant_energy != 0.0 {
+            if !resonant_energy.is_finite() || resonant_energy < 0.0 {
                 continue;
             }
             if !organism.usable_energy.is_finite() || organism.usable_energy < 0.0 {
@@ -1585,6 +1585,21 @@ impl Simulation {
                     continue;
                 }
             }
+            // Once the dead graph has no bonds or outstanding holders, any
+            // remaining retained resonance is dissipated as heat in the same
+            // finalization transaction. It is never silently discarded or
+            // converted into usable chemical energy.
+            let next_resonant = staged_ledger.total_resonant_energy_held - resonant_energy;
+            let next_heat = staged_ledger.total_heat_dissipated + resonant_energy;
+            if !next_resonant.is_finite()
+                || next_resonant < 0.0
+                || !next_heat.is_finite()
+                || resonant_energy > staged_ledger.total_resonant_energy_held + 1e-9
+            {
+                continue;
+            }
+            staged_ledger.total_resonant_energy_held = next_resonant.max(0.0);
+            staged_ledger.total_heat_dissipated = next_heat;
             if !self
                 .environment
                 .field
@@ -2070,20 +2085,34 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
-    fn dead_organism_with_retained_resonance_is_not_released() {
+    fn dead_organism_dissipates_retained_resonance_as_heat_on_final_release() {
         let mut simulation = Simulation::new(0xD3B2, 10.0);
         prepare_bondless_dead_fixture(&mut simulation);
         assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        // This test directly seeds a holder, so rebase the accounting oracle to
+        // treat that energy as part of the fixture's initial inventory.
+        simulation.energy_ledger.initial_resonant_energy_held += 1.0;
+        simulation.energy_ledger.total_resonant_energy_held += 1.0;
         let field_before = simulation.environment.field.total_amount();
+        let heat_before = simulation.energy_ledger.total_heat_dissipated;
 
         let living = HashSet::new();
         simulation.release_finished_dead_organisms(&living);
 
-        assert_eq!(simulation.organisms.len(), 1);
-        assert_eq!(simulation.environment.field.total_amount(), field_before);
+        assert!(simulation.organisms.is_empty());
         assert_eq!(
-            simulation.organisms[0].resonant_energy.total_energy(),
-            Some(1.0)
+            simulation.environment.field.total_amount(),
+            field_before + 1.0
+        );
+        assert_eq!(
+            simulation.energy_ledger.total_heat_dissipated,
+            heat_before + 1.0
+        );
+        assert_eq!(simulation.energy_ledger.total_resonant_energy_held, 0.0);
+        assert!(
+            simulation.energy_inventory_snapshot().is_balanced(1e-9),
+            "final release must account retained resonance as heat: {:?}",
+            simulation.energy_inventory_snapshot().residual()
         );
     }
 
