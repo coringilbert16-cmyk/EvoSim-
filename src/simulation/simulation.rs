@@ -1494,10 +1494,11 @@ impl Simulation {
         // be initiated by breached organisms because the decision loop is gated
         // by living_ids. Existing BREAK/COMBINE transactions still settle normally.
         self.release_finished_dead_organisms(&living_ids);
-        self.energy_ledger.total_usable_energy_held = crate::reproduction::total_usable_energy_held(
-            &self.organisms,
-            &self.decomposing_bodies,
-        );
+        self.energy_ledger.total_usable_energy_held =
+            crate::reproduction::total_usable_energy_held(
+                &self.organisms,
+                &self.decomposing_bodies,
+            ) + self.environment.chemistry_usable_energy;
         self.energy_ledger.total_resonant_energy_held =
             crate::reproduction::total_resonant_energy_held(&self.organisms);
         self.energy_ledger.total_structural_energy_held =
