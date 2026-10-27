@@ -1112,14 +1112,19 @@ mod material_identity_tests {
             cell.physical_materials.clear();
         }
         let source = environmental_test_composite(&simulation.environment.catalog);
+        // Choose a known-late field index directly. A hard-coded world-space
+        // position can map into an early cell when field dimensions or cell size
+        // change, making this fairness regression fail before discovery runs.
         let cell_index = simulation
             .environment
             .field
-            .index_for_position(12.5, 12.5)
-            .expect("source placement should be in the field");
+            .cells
+            .len()
+            .checked_sub(1)
+            .expect("the environmental field must contain cells");
         assert!(
             cell_index > 8,
-            "fixture must put its only candidate beyond the first bounded scan window"
+            "fixture requires a field larger than the first bounded scan window"
         );
         assert!(simulation.environment.field.deposit_physical_at_index(
             cell_index,
