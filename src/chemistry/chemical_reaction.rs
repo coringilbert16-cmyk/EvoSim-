@@ -1116,6 +1116,8 @@ mod material_identity_tests {
         remove_living_organisms_preserving_inventory(&mut simulation);
         let energy_before = simulation.environment.chemistry_usable_energy;
         let ledger_before = simulation.energy_ledger.clone();
+        let inventory_before = simulation.energy_inventory_snapshot();
+        assert!(inventory_before.is_balanced(1e-9));
         let field_before = simulation.environment.field.cells.clone();
         let operation = EnvironmentalChemicalBreakOperation {
             cell_index,
@@ -1141,6 +1143,7 @@ mod material_identity_tests {
             energy_before
         );
         assert_eq!(simulation.energy_ledger, ledger_before);
+        assert_eq!(simulation.energy_inventory_snapshot(), inventory_before);
     }
 
     #[test]
