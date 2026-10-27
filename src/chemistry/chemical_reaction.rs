@@ -10,7 +10,7 @@ use crate::structure::Bond;
 pub(crate) struct ChemicalBreakOperation {
     pub(crate) organism_id: String,
     pub(crate) bond: Bond,
-    pub(crate) reaction_energy: f64,
+    pub(crate) activation_signal: f64,
     pub(crate) disruption_cost: f64,
     pub(crate) reaction_frequency_hz: f64,
     /// Preserve accumulated progress if settlement fails without changing the
@@ -340,15 +340,15 @@ pub(crate) fn accumulate(
             .compatible_energy(reaction_frequency_hz)
             .min(barrier);
         let effective_barrier = (barrier - resonance_credit).max(0.0);
-        let Some(reaction_energy) = crate::chemistry::normalized_chemistry_to_energy(next) else {
+        let Some(activation_signal) = crate::chemistry::normalized_chemistry_to_activation_signal(next) else {
             continue;
         };
         updated_keys.insert(key.clone());
-        if crate::chemistry::activated(reaction_energy, effective_barrier) {
+        if crate::chemistry::activated(activation_signal, effective_barrier) {
             operations.push(ChemicalBreakOperation {
                 organism_id: organism.id.clone(),
                 bond,
-                reaction_energy,
+                activation_signal,
                 disruption_cost: barrier,
                 reaction_frequency_hz,
                 accumulation_key: key.clone(),
@@ -377,18 +377,18 @@ pub(crate) fn resolve(
     if organism.resonant_energy.total_energy().is_none() {
         return false;
     }
-    if !operation.reaction_energy.is_finite()
-        || operation.reaction_energy < 0.0
+    if !operation.activation_signal.is_finite()
+        || operation.activation_signal < 0.0
         || !operation.disruption_cost.is_finite()
         || operation.disruption_cost < 0.0
     {
         return false;
     }
     let processing_efficiency = organism.genome.processing_efficiency();
-    // Resonance only supplies the shortfall between the accumulated reaction
-    // energy and the physical disruption barrier. Never spend stored resonance
-    // when the reaction itself already covers that barrier.
-    let required_resonance = (operation.disruption_cost - operation.reaction_energy).max(0.0);
+    // The activation signal is a threshold, not an energy source. The actual
+    // transaction separately accounts for stored bond energy, usable energy,
+    // and any resonance withdrawn from the trial reservoir.
+    let required_resonance = (operation.disruption_cost - operation.activation_signal).max(0.0);
     // Work from a trial reservoir. A failed or stale BREAK must not consume
     // retained resonance; only a successfully settled structural transaction
     // commits the frequency-compatible withdrawal.
@@ -398,7 +398,7 @@ pub(crate) fn resolve(
     let success = crate::transformation::settle_chemical_break_energy_with_resonance(
         organism,
         operation.bond,
-        operation.reaction_energy,
+        operation.activation_signal,
         operation.disruption_cost,
         resonant_work,
         processing_efficiency,
@@ -487,7 +487,7 @@ mod material_identity_tests {
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            reaction_energy: 1_000.0,
+            activation_signal: 1_000.0,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -526,7 +526,7 @@ mod material_identity_tests {
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            reaction_energy: 0.25,
+            activation_signal: 0.25,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -567,7 +567,7 @@ mod material_identity_tests {
             bond,
             // Insufficient reaction work forces a settlement rejection after
             // the event is triggered, without changing the physical structure.
-            reaction_energy: 0.1,
+            activation_signal: 0.1,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -604,7 +604,7 @@ mod material_identity_tests {
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            reaction_energy: 1_000.0,
+            activation_signal: 1_000.0,
             disruption_cost: 0.0,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -656,7 +656,7 @@ mod material_identity_tests {
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            reaction_energy: 0.25,
+            activation_signal: 0.25,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -697,7 +697,7 @@ mod material_identity_tests {
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            reaction_energy: 1_000.0,
+            activation_signal: 1_000.0,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -740,7 +740,7 @@ mod material_identity_tests {
             "fixture bond must have positive finite stored energy"
         );
         let disruption_cost = bond.bond_energy * 0.5;
-        let reaction_energy = disruption_cost * 0.5;
+        let activation_signal = disruption_cost * 0.5;
         assert!(simulation.organisms[0]
             .resonant_energy
             .deposit(440.0, disruption_cost));
@@ -757,11 +757,11 @@ mod material_identity_tests {
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            reaction_energy,
+            activation_signal,
             disruption_cost,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
-            accumulated_reaction: reaction_energy,
+            accumulated_reaction: activation_signal,
         };
         assert!(
             !resolve(
@@ -901,7 +901,7 @@ mod material_identity_tests {
         let operation = |key: &str, progress: f64| ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            reaction_energy: progress,
+            activation_signal: progress,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
             accumulation_key: key.into(),
