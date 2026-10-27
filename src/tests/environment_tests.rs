@@ -406,3 +406,119 @@ fn physical_deposits_reject_unknown_resource_identity_without_mutation() {
     assert_eq!(field.cells, before_cells);
     assert_eq!(field.revision, before_revision);
 }
+
+#[test]
+fn physical_split_rejects_stale_source_without_mutating_field() {
+    use crate::physical_material::PhysicalMaterial;
+    use crate::state::Simulation;
+    use crate::structure::Placement;
+
+    let simulation = Simulation::new(773, 10.0);
+    let catalog = &simulation.environment.catalog;
+    let source = PhysicalMaterial::realized(
+        make_structured(2.0),
+        vec![
+            Placement { x: 12.5, y: 12.5, rotation_radians: 0.0 },
+            Placement { x: 14.3, y: 12.5, rotation_radians: 0.0 },
+        ],
+        catalog,
+    )
+    .expect("test composite should be physically realizable");
+    let wrong_source = PhysicalMaterial::realized(
+        Material::free_base("Carbon", 1.0),
+        vec![Placement { x: 12.5, y: 12.5, rotation_radians: 0.0 }],
+        catalog,
+    )
+    .expect("carbon should be physically realizable");
+    let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let cell = field.index_for_position(12.5, 12.5).unwrap();
+    assert!(field.deposit_physical_at_index(cell, source, catalog));
+    let before_cells = field.cells.clone();
+    let before_revision = field.revision;
+
+    assert!(!field.split_physical_at_index(
+        cell,
+        0,
+        &wrong_source,
+        vec![wrong_source.clone()],
+        catalog,
+    ));
+    assert_eq!(field.cells, before_cells);
+    assert_eq!(field.revision, before_revision);
+}
+
+#[test]
+fn physical_split_replaces_source_only_after_every_piece_destination_is_valid() {
+    use crate::physical_material::PhysicalMaterial;
+    use crate::state::Simulation;
+    use crate::structure::Placement;
+
+    let simulation = Simulation::new(774, 10.0);
+    let catalog = &simulation.environment.catalog;
+    let source = PhysicalMaterial::realized(
+        make_structured(2.0),
+        vec![
+            Placement { x: 12.5, y: 12.5, rotation_radians: 0.0 },
+            Placement { x: 14.3, y: 12.5, rotation_radians: 0.0 },
+        ],
+        catalog,
+    )
+    .expect("test composite should be physically realizable");
+    let carbon = PhysicalMaterial::realized(
+        Material::free_base("Carbon", 1.0),
+        vec![Placement { x: 12.5, y: 12.5, rotation_radians: 0.0 }],
+        catalog,
+    )
+    .expect("carbon should be physically realizable");
+    let hydrogen = PhysicalMaterial::realized(
+        Material::free_base("Hydrogen", 1.0),
+        vec![Placement { x: 14.3, y: 12.5, rotation_radians: 0.0 }],
+        catalog,
+    )
+    .expect("hydrogen should be physically realizable");
+    let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let cell = field.index_for_position(12.5, 12.5).unwrap();
+    assert!(field.deposit_physical_at_index(cell, source.clone(), catalog));
+    let before_revision = field.revision;
+
+    assert!(!field.split_physical_at_index(
+        cell,
+        0,
+        &source,
+        vec![carbon.clone(), hydrogen.clone()],
+        catalog,
+    ));
+    assert_eq!(field.cells[cell].physical_materials, vec![source.clone()]);
+    assert_eq!(field.revision, before_revision);
+
+    // A late out-of-bounds piece rejects the entire operation before source
+    // removal; then a fully valid split replaces the source in one commit.
+    let invalid_hydrogen = PhysicalMaterial::realized(
+        Material::free_base("Hydrogen", 1.0),
+        vec![Placement { x: 100.0, y: 12.5, rotation_radians: 0.0 }],
+        catalog,
+    )
+    .expect("hydrogen geometry itself should be valid");
+    assert!(!field.split_physical_at_index(
+        cell,
+        0,
+        &source,
+        vec![carbon.clone(), invalid_hydrogen],
+        catalog,
+    ));
+    assert_eq!(field.cells[cell].physical_materials, vec![source.clone()]);
+    assert_eq!(field.revision, before_revision);
+
+    assert!(field.split_physical_at_index(
+        cell,
+        0,
+        &source,
+        vec![carbon, hydrogen],
+        catalog,
+    ));
+    assert_eq!(
+        field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>(),
+        2
+    );
+    assert!(field.revision > before_revision);
+}
