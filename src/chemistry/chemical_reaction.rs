@@ -395,7 +395,8 @@ pub(crate) fn accumulate(
         updated_keys.insert(key.clone());
         if crate::chemistry::activated(activation_signal, effective_barrier) {
             operations.push(ChemicalBreakOperation {
-                                bond,
+                organism_id: organism.id.clone(),
+                bond,
                 activation_signal,
                 disruption_cost: barrier,
                 reaction_frequency_hz,
@@ -935,7 +936,8 @@ mod material_identity_tests {
             &simulation.environment.catalog,
         ));
 
-        let energy_before = simulation.organisms[0].usable_energy;
+        simulation.environment.chemistry_usable_energy = 1.0;
+        let energy_before = simulation.environment.chemistry_usable_energy;
         let resonance_before = simulation.organisms[0]
             .resonant_energy
             .total_energy()
@@ -956,7 +958,6 @@ mod material_identity_tests {
 
         assert!(resolve_environmental(
             operation,
-            &mut simulation.organisms[0],
             &mut simulation.environment,
             &mut simulation.energy_ledger,
         ));
@@ -971,7 +972,7 @@ mod material_identity_tests {
                     .is_some_and(Vec::is_empty)
         }));
         assert!(!pieces.contains(&source));
-        assert!((energy_before - simulation.organisms[0].usable_energy - 0.5).abs() < 1e-9);
+        assert!((energy_before - simulation.environment.chemistry_usable_energy - 0.5).abs() < 1e-9);
         assert_eq!(
             simulation.organisms[0]
                 .resonant_energy
@@ -1002,13 +1003,8 @@ mod material_identity_tests {
             source.clone(),
             &simulation.environment.catalog,
         ));
-        simulation.organisms[0].usable_energy = 0.0;
-        assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 0.5));
-
-        let resonance_before = simulation.organisms[0]
-            .resonant_energy
-            .total_energy()
-            .unwrap();
+        simulation.environment.chemistry_usable_energy = 0.5;
+        let environment_energy_before = simulation.environment.chemistry_usable_energy;
         let ledger_before = simulation.energy_ledger.total_work_expended;
         let operation = EnvironmentalChemicalBreakOperation {
                         cell_index,
@@ -1036,17 +1032,7 @@ mod material_identity_tests {
                 .len(),
             2
         );
-        assert_eq!(simulation.organisms[0].usable_energy, 0.0);
-        assert!(
-            (resonance_before
-                - simulation.organisms[0]
-                    .resonant_energy
-                    .total_energy()
-                    .unwrap()
-                - 0.5)
-                .abs()
-                < 1e-9
-        );
+        assert!((environment_energy_before - simulation.environment.chemistry_usable_energy - 0.5).abs() < 1e-9);
         assert!((simulation.energy_ledger.total_work_expended - ledger_before - 0.5).abs() < 1e-9);
     }
 
@@ -1072,7 +1058,7 @@ mod material_identity_tests {
         ));
         simulation.organisms[0].usable_energy = 0.0;
 
-        let energy_before = simulation.organisms[0].usable_energy;
+        let energy_before = simulation.environment.chemistry_usable_energy;
         let resonance_before = simulation.organisms[0]
             .resonant_energy
             .total_energy()
@@ -1099,7 +1085,7 @@ mod material_identity_tests {
             &mut simulation.energy_ledger,
         ));
         assert_eq!(simulation.environment.field.cells, field_before);
-        assert_eq!(simulation.organisms[0].usable_energy, energy_before);
+        assert_eq!(simulation.environment.chemistry_usable_energy, energy_before);
         assert_eq!(
             simulation.organisms[0]
                 .resonant_energy
@@ -1145,7 +1131,6 @@ mod material_identity_tests {
 
         assert!(!resolve_environmental(
             operation,
-            organism,
             &mut simulation.environment,
             &mut simulation.energy_ledger,
         ));
@@ -1905,7 +1890,6 @@ mod material_identity_tests {
             .first()
             .expect("seed organism should contain a structural bond");
         let operation = |key: &str, progress: f64| ChemicalBreakOperation {
-            organism_id: simulation.organisms[0].id.clone(),
             bond,
             activation_signal: progress,
             disruption_cost: 0.5,
