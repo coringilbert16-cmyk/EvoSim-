@@ -1275,6 +1275,15 @@ mod tests {
             &simulation.environment.catalog,
         ));
 
+        // The fixture intentionally removes the initial organisms' structures
+        // above. Rebase the structural inventory baseline so this test measures
+        // only the world-tone source/capture/heat/escape flow below.
+        simulation.energy_ledger.initial_structural_energy_held =
+            crate::reproduction::total_structural_energy_held(
+                &simulation.organisms,
+                &simulation.decomposing_bodies,
+            );
+
         WorldToneOccluderSnapshot::settle_living_organism_inputs(
             &mut simulation,
             sample(),
