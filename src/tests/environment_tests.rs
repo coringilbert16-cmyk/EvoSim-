@@ -418,15 +418,27 @@ fn physical_split_rejects_stale_source_without_mutating_field() {
     let source = PhysicalMaterial::realized(
         make_structured(2.0),
         vec![
-            Placement { x: 12.5, y: 12.5, rotation_radians: 0.0 },
-            Placement { x: 14.3, y: 12.5, rotation_radians: 0.0 },
+            Placement {
+                x: 12.5,
+                y: 12.5,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 14.3,
+                y: 12.5,
+                rotation_radians: 0.0,
+            },
         ],
         catalog,
     )
     .expect("test composite should be physically realizable");
     let wrong_source = PhysicalMaterial::realized(
         Material::free_base("Carbon", 1.0),
-        vec![Placement { x: 12.5, y: 12.5, rotation_radians: 0.0 }],
+        vec![Placement {
+            x: 12.5,
+            y: 12.5,
+            rotation_radians: 0.0,
+        }],
         catalog,
     )
     .expect("carbon should be physically realizable");
@@ -458,21 +470,37 @@ fn physical_split_replaces_source_only_after_every_piece_destination_is_valid() 
     let source = PhysicalMaterial::realized(
         make_structured(2.0),
         vec![
-            Placement { x: 12.5, y: 12.5, rotation_radians: 0.0 },
-            Placement { x: 14.3, y: 12.5, rotation_radians: 0.0 },
+            Placement {
+                x: 12.5,
+                y: 12.5,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 14.3,
+                y: 12.5,
+                rotation_radians: 0.0,
+            },
         ],
         catalog,
     )
     .expect("test composite should be physically realizable");
     let carbon = PhysicalMaterial::realized(
         Material::free_base("Carbon", 1.0),
-        vec![Placement { x: 12.5, y: 12.5, rotation_radians: 0.0 }],
+        vec![Placement {
+            x: 12.5,
+            y: 12.5,
+            rotation_radians: 0.0,
+        }],
         catalog,
     )
     .expect("carbon should be physically realizable");
     let hydrogen = PhysicalMaterial::realized(
         Material::free_base("Hydrogen", 1.0),
-        vec![Placement { x: 14.3, y: 12.5, rotation_radians: 0.0 }],
+        vec![Placement {
+            x: 14.3,
+            y: 12.5,
+            rotation_radians: 0.0,
+        }],
         catalog,
     )
     .expect("hydrogen should be physically realizable");
@@ -485,7 +513,11 @@ fn physical_split_replaces_source_only_after_every_piece_destination_is_valid() 
     // removal; then a fully valid split replaces the source in one commit.
     let invalid_hydrogen = PhysicalMaterial::realized(
         Material::free_base("Hydrogen", 1.0),
-        vec![Placement { x: 100.0, y: 12.5, rotation_radians: 0.0 }],
+        vec![Placement {
+            x: 100.0,
+            y: 12.5,
+            rotation_radians: 0.0,
+        }],
         catalog,
     )
     .expect("hydrogen geometry itself should be valid");
@@ -507,7 +539,11 @@ fn physical_split_replaces_source_only_after_every_piece_destination_is_valid() 
         catalog,
     ));
     assert_eq!(
-        field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>(),
+        field
+            .cells
+            .iter()
+            .map(|cell| cell.physical_materials.len())
+            .sum::<usize>(),
         2
     );
     assert!(field.revision > before_revision);
