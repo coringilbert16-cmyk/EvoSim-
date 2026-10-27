@@ -901,14 +901,21 @@ impl Simulation {
                 self.tick,
                 &mut graph_discovery_remaining,
             );
-            let environmental_operations = crate::chemical_reaction::accumulate_environmental(
-                organism,
-                &self.environment,
-                &mut self.chemical_reaction_accumulation,
-                &mut self.chemistry_library,
-                self.tick,
-                &mut environmental_discovery_remaining,
-            );
+            // The environment is one chemistry owner, not one owner per
+            // organism. Discover each field-owned bond at most once per tick;
+            // its geometry and progress keys are independent of organism graphs.
+            let environmental_operations = if organism_index == 0 {
+                crate::chemical_reaction::accumulate_environmental(
+                    organism,
+                    &self.environment,
+                    &mut self.chemical_reaction_accumulation,
+                    &mut self.chemistry_library,
+                    self.tick,
+                    &mut environmental_discovery_remaining,
+                )
+            } else {
+                Vec::new()
+            };
             carried_chemistry_discovery_work =
                 graph_discovery_remaining + environmental_discovery_remaining;
             let chemical_operations = crate::chemical_reaction::schedule_operations(
