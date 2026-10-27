@@ -210,3 +210,8 @@ jobs:
         timeout-minutes: 5
         if: always()
         run: cargo clippy --locked --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
+
+      - name: Environmental discovery timing benchmark
+        if: always()
+        timeout-minutes: 5
+        run: timeout 5m cargo test --locked environmental_discovery_timing_benchmark -- --ignored --nocapture
