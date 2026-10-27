@@ -963,10 +963,7 @@ mod material_identity_tests {
             format!("{:?}", simulation.organisms[0].structure),
             format!("{:?}", structure_before)
         );
-        assert_eq!(
-            simulation.organisms[0].usable_energy,
-            usable_energy_before
-        );
+        assert_eq!(simulation.organisms[0].usable_energy, usable_energy_before);
         assert_eq!(
             simulation.organisms[0].resonant_energy.total_energy().unwrap(),
             resonance_before
