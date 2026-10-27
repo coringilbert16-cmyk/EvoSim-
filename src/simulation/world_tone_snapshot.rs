@@ -353,7 +353,9 @@ impl WorldToneOccluderSnapshot {
             .iter()
             .map(|reservoir| reservoir.total_energy().unwrap_or(f64::NAN))
             .sum::<f64>()
-            + staged_environment_resonance.total_energy().unwrap_or(f64::NAN);
+            + staged_environment_resonance
+                .total_energy()
+                .unwrap_or(f64::NAN);
         if !initial_resonant_energy.is_finite() || initial_resonant_energy < 0.0 {
             return;
         }
@@ -436,11 +438,9 @@ impl WorldToneOccluderSnapshot {
                 let environmental_receiver =
                     snapshot.environment_body_indices.contains(&body_index);
                 let can_retain_resonance = living_organism.is_some() || environmental_receiver;
-                let Some(mut interaction_heat) = heat_for_material_response(
-                    response_energy,
-                    damping_heat,
-                    can_retain_resonance,
-                ) else {
+                let Some(mut interaction_heat) =
+                    heat_for_material_response(response_energy, damping_heat, can_retain_resonance)
+                else {
                     return;
                 };
                 let mut captured = 0.0;
