@@ -910,11 +910,14 @@ mod material_identity_tests {
         simulation
             .chemical_reaction_accumulation
             .insert(unrelated_key.clone(), 0.25);
+        let mut discovery_budget = MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
         assert!(accumulate(
             organism,
             &simulation.environment.catalog,
             &mut simulation.chemical_reaction_accumulation,
             &mut simulation.chemistry_library,
+            simulation.tick,
+            &mut discovery_budget,
         )
         .is_empty());
 
