@@ -1922,6 +1922,22 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn live_tick_releases_a_dead_bondless_graph_into_the_environment() {
+        let mut simulation = Simulation::new(0xD3B0, 10.0);
+        prepare_bondless_dead_fixture(&mut simulation);
+        let field_before = simulation.environment.field.total_amount();
+
+        simulation.step();
+
+        assert!(simulation.organisms.is_empty());
+        assert_eq!(
+            simulation.environment.field.total_amount(),
+            field_before + 1.0,
+            "the live lifecycle must release the dead graph exactly once"
+        );
+    }
+
+    #[test]
     fn failed_dead_material_release_preserves_organism_energy_and_field() {
         let mut simulation = Simulation::new(0xD3AE, 10.0);
         prepare_bondless_dead_fixture(&mut simulation);
