@@ -1372,11 +1372,12 @@ mod integration_tests {
         let before_structure = simulation.organisms[0].structure.clone();
         let before_ledger = simulation.energy_ledger;
 
-        assert!(!crate::chemical_reaction::resolve(
+        let resolved = crate::chemical_reaction::resolve(
             operation,
             &mut simulation.organisms[0],
             &mut simulation.energy_ledger,
-        ));
+        );
+        assert!(!resolved);
 
         assert_eq!(simulation.organisms[0].structure.units, before_structure.units);
         assert_eq!(simulation.organisms[0].structure.bonds, before_structure.bonds);
