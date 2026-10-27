@@ -527,9 +527,7 @@ impl ActiveMaterialField {
         let Some(cell) = self.cells.get(source_cell) else {
             return false;
         };
-        if cell.physical_materials.get(source_index) != Some(expected_source)
-            || pieces.is_empty()
-        {
+        if cell.physical_materials.get(source_index) != Some(expected_source) || pieces.is_empty() {
             return false;
         }
 
@@ -559,7 +557,9 @@ impl ActiveMaterialField {
 
         // No fallible operations remain. Remove the escrowed source and deposit
         // every piece, then invalidate each touched cell exactly once.
-        self.cells[source_cell].physical_materials.remove(source_index);
+        self.cells[source_cell]
+            .physical_materials
+            .remove(source_index);
         let mut changed = vec![false; self.cells.len()];
         changed[source_cell] = true;
         for (destination, piece) in staged {
