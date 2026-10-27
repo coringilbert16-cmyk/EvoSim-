@@ -1262,6 +1262,7 @@ mod material_identity_tests {
             .expect("seed organism should contain a structural bond");
         assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
         let operation = ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
             bond,
             activation_signal: 1_000.0,
             disruption_cost: 0.5,
@@ -1882,6 +1883,7 @@ mod material_identity_tests {
             .first()
             .expect("seed organism should contain a structural bond");
         let operation = |key: &str, progress: f64| ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
             bond,
             activation_signal: progress,
             disruption_cost: 0.5,
