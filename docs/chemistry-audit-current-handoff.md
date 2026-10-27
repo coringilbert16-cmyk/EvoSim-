@@ -1,74 +1,68 @@
 # Chemistry Unification — Current Handoff
 
-**Last refreshed:** 2026-10-25  
-**Plan:** [Chemistry Audit and Unification Plan](chemistry-audit-unification-plan.md), especially §§17.1–17.7  
+**Last refreshed:** 2026-10-26  
+**Plan:** [Chemistry Audit and Unification Plan](chemistry-audit-unification-plan.md), especially §17.7 for current phase status and §§17.1–17.6 for contracts/gates  
 **Plan branch:** `docs/chemistry-audit-unification-plan-2026-10-22`  
-**Current `main` head:** `10521705d8f921ceb071b17240f1b7e069f52f1a`  
-**PR #205:** [merged](https://github.com/coringilbert16-cmyk/EvoSim-/pull/205) on 2026-10-25; squash commit `10521705d8f921ceb071b17240f1b7e069f52f1a`.
+**Current `main` head:** `29f0f510062eb1ec4a1db3e1f7bb3cce12ba2d08` (PR #209 squash merge; 2026-10-27 UTC)  
+**Scope:** Documentation-only handoff. No implementation or tests belong in PR #204.
 
-## Purpose
+## Current state
 
-Establish one coherent, deterministic, conservation-auditable chemistry and energy model. Every material/energy change needs one authoritative owner, one transaction boundary, and an independently checkable accounting consequence. A qualifying cavity is an early structural milestone, not proof of a viable organism.
+The core ownership, material, energy, cache, and selected-reaction transaction slices are merged. Chemistry is **not yet unified**: the missing integration is a shared runtime that discovers and activates reactions for environmental material and cell/organism-held material under one policy.
 
-## Current evidence
+- [PR #212](https://github.com/coringilbert16-cmyk/EvoSim-/pull/212) — aggregate ownership and transactional construction/division: merged.
+- [PR #207](https://github.com/coringilbert16-cmyk/EvoSim-/pull/207) — canonical resource identity, integer material quantities, and independent material inventory: merged.
+- [PR #211](https://github.com/coringilbert16-cmyk/EvoSim-/pull/211) — chemistry cache schema/fingerprint validation and deterministic regeneration: merged. Sunlight validation is separate.
+- [PR #208](https://github.com/coringilbert16-cmyk/EvoSim-/pull/208) — unified energy accounting and independent world-energy inventory: merged.
+- [PR #213](https://github.com/coringilbert16-cmyk/EvoSim-/pull/213) — temporary zero-stress input for survival-first work: merged. This is not the final stress/death design.
+- [PR #209](https://github.com/coringilbert16-cmyk/EvoSim-/pull/209) — live COMBINE candidate revalidation, transactional realization/settlement regression, and successful-COMBINE world-energy inventory proof: merged. Its changes from temporary PRs #219/#220 were consolidated here; both support PRs are closed and must not be reopened.
+- [PR #214](https://github.com/coringilbert16-cmyk/EvoSim-/pull/214) — shared chemistry runtime and scheduler: open planning-only draft; **next implementation target**.
+- [PR #215](https://github.com/coringilbert16-cmyk/EvoSim-/pull/215) — bounded chemistry event inspection and environment-first experiments: open planning-only draft; depends on the runtime/event contract from #214.
+- [PR #210](https://github.com/coringilbert16-cmyk/EvoSim-/pull/210) — death and continued ordinary chemistry: open planning-only draft; depends on the shared reaction path and material/energy ownership.
+- [PR #216](https://github.com/coringilbert16-cmyk/EvoSim-/pull/216) — sunlight/world-tone validation: open planning-only draft; keep separate from cache versioning and validate against an exact small-world reference.
+- [PR #204](https://github.com/coringilbert16-cmyk/EvoSim-/pull/204) remains documentation-only. PR #196 constructor/Bob work remains out of scope.
 
-- **Forward regression baseline reset:** merged `main` at `10521705d8f921ceb071b17240f1b7e069f52f1a` (PR #205), exact-head suite **719 passed, 21 failed, 1 ignored**. All 21 failure identities were compared with the prior baseline and already existed; no new failure identity was introduced. Future work should compare against this commit and its named failure set.
-- **Historical pre-migration baseline:** `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5`, workflow [39705628427](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/39705628427): **563 passed, 28 failed, 1 ignored**. Retain for migration history; do not use it as the primary forward baseline after the reset.
-- The reset is not a green-suite claim and does not prove whole-world conservation.
-- Both corrected migration regressions passed on the final tested head: partial aggregate membership in movement and developing-offspring world-tone occlusion.
-- Strict Clippy remains red (33 application-target and 15 test-target diagnostics on the last verified head). Do not claim diagnostic identity parity without a fresh normalized comparison.
-- Whole-world material/energy reconciliation, complete post-death ordinary chemistry, exact-small-world sunlight accuracy, representative large-world performance, and complete lifecycle/division conservation remain unproven.
+## Verification checkpoint and baseline policy
+
+The latest completed full-suite run reviewed for the consolidated #209 head `4bbc0fcab167569ee19de471b70aca178a96cf61` was [workflow 40422420501](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40422420501):
+
+- Full Rust suite: **754 passed, 10 failed, 1 ignored** in **273.91 seconds**.
+- All 10 failing test identities were present in the accepted pre-change baseline failure set; no new failing identity was found. Eleven baseline failures no longer reproduced.
+- Formatting, repository architecture checks, and all focused chemistry/energy/transaction/geometry/organism acceptance groups passed.
+- Clippy remains red on repository-wide diagnostics (34 app-target, 14 test-target in this run). Do not expand chemistry phases to fix unrelated lint debt.
+- This was a completed run on the PR head, not a run on the post-squash merge SHA. Treat it as the latest verified code checkpoint; trigger/check exact-main CI before making claims about any later code changes.
+
+The prior forward baseline was reset at PR #205 merge `10521705d8f921ceb071b17240f1b7e069f52f1a` with 719 passed, 21 failed, 1 ignored. The historical pre-migration reference `cbe3c5dad9ec9a302a9596fe17ca957d6f6b0ab5` recorded 563 passed, 28 failed, 1 ignored. Preserve these as historical comparisons, but **use the latest accepted merged-main checkpoint and named failure identities for future work**. Neither result is a green-suite or whole-world conservation claim.
 
 ## Settled architecture — do not reopen
 
-- One authoritative parent-owned physical aggregate before division. Stable constituent IDs and genome-core identity are metadata; no second persistent developing graph or energy holder.
-- Attach and grow transactionally through the shared physical/chemistry mechanisms. Overlap alone is not a bond. Failure restores graph, storage, and ledger.
-- Movement/collision, world tone, viability, inventory, death, and recycling must see the aggregate exactly once.
-- A breached core stops biological work but does not erase physical ownership or create a separate decomposition law. Ordinary chemistry/recycling continues against authoritative physical ownership.
-- Reproduction starts an adjacent second genome core when the original reaches 100% size, grows to 160% total, then divides into two roughly 80%-size children. Division is one atomic transaction; validate both children before publishing either.
-- Sunlight is a deterministic rotating off-screen source. Use the fast first-hit/single-sweep approximation only with exact-small-world comparison and source-budget/occlusion proof. “Reflected” tone means onward frequency-shifted propagation, not mirror-ray tracing.
-- Resource ID 6 is Oxygen. PR #196 constructor/Bob work stays out of this workstream.
+- One authoritative parent-owned physical aggregate until division. Stable constituent IDs and genome-core identity are metadata, not a second physical graph or energy holder.
+- Attachment, growth, energy settlement, and final division are transactional. Overlap alone is not a bond.
+- Movement/collision, world tone, viability, inventories, death, and recycling must count each physical constituent exactly once.
+- Core breach ends biological activity, not physical ownership. Ordinary chemistry continues; do not create a separate decomposition law.
+- Reproduction begins an adjacent second genome core at 100% of original size, grows the parent-owned aggregate to 160%, then splits into two roughly 80%-size children; validate both before publishing either.
+- Sunlight is a deterministic rotating off-screen source. The fast first-hit approximation still needs exact-small-world, source-budget, duplicate-claim/occlusion, and performance evidence. Frequency-shifted onward propagation is not mirror reflection.
+- Resource ID 6 is Oxygen. The 12-piece nitrogen seed is a cavity-calibration fixture, not a required chemistry recipe or viable-organism definition.
+- Stress input is temporarily scaled to zero by #213; preserve that temporary decision while avoiding claims that the final stress/death contract is settled.
 
-## Direction from here
+## Next implementation sequence
 
-PR #204 is **documentation-only**. Implementation belongs in focused PRs, **one PR per open phase** of §17.2—not another giant PR. Start each phase from a fresh audit of current `main`, then make the smallest cohesive change, with one focused audit before each change. Keep every command/test under five minutes. Run focused gates first and compare named test failures to the reset forward baseline. A timeout is incomplete evidence.
+1. **#214 — shared chemistry runtime/scheduler.** Audit the current merged `main` tick loop and every environmental, stored, organism-held, and dead-material holder. Route candidate discovery, multi-tick activation, physical realization, and committed accounting through one reaction policy and #209's existing realization/settlement boundary. Use local/indexed discovery, deterministic ordering, bounded per-tick work, and no world-wide O(N²) pair scan. First demonstrate one environment-only reaction and one equivalent organism-held reaction.
+2. **#215 — event inspection/environment-first experiments.** Once #214's real event contract exists, provide environment-only setup/run and bounded structured events that distinguish candidates, activation, rejection, and committed reactions. Preserve the default world preset and expose independent inventory snapshots; do not synthesize events.
+3. **#210 — death and continued chemistry.** Ensure biological activity stops after death while matter remains owned and eligible for the same ordinary chemistry. Prove conservation through death and subsequent reactions.
+4. **#216 — sunlight/world-tone validation.** Compare the fast approximation to an exact small-world reference; prove occlusion, source budget, no duplicate claims, onward frequency-shifted propagation, and representative performance.
 
-### Recommended next action
+This is a dependency-informed order, not permission to combine phases into one PR. Keep implementation in the existing phase PRs; do not open additional PRs without authorization. Before each phase, audit current `main`, reuse existing tests, add only the missing acceptance assertions, compare named failures with the latest baseline, and keep commands/tests within five minutes. The full Rust suite has a separate agreed ceiling of seven minutes.
 
-**Selected first slice: Phase 7 — movement transaction rejection + inventory proof.** On merged `main` `10521705d8f921ceb071b17240f1b7e069f52f1a`, movement preflights ledger settlement before geometry mutation and commits that staged ledger only after the push plan succeeds. The current rejected-settlement test uses no pushed organisms or field objects and checks only a subset of mover/ledger state. Existing tests separately cover successful organism push chains and physical-material reindexing, but not a single full inventory/state assertion across rejection.
+## Definition of “chemistry unified”
 
-Acceptance tests for the first implementation PR:
-1. With an invalid/overflowed ledger and a mover, pushed organism(s), and realized physical field material in the movement path, rejection leaves all geometry, IDs/material, storage, field ordering, revisions, spatial-index results, active-movement counters, usable energy, and ledger counters unchanged.
-2. A blocked push chain after successful ledger preflight discards the preflight and leaves the same full state/inventories unchanged.
-3. A successful push-chain control moves each physical owner exactly once, preserves the independent integer-material inventory, updates spatial-index queries, and reconciles energy with the expected movement heat debit.
+Do not make that claim until:
+- environmental, organism/cell-held, and dead material use the same chemistry policy and transaction path;
+- candidate/activation state is distinct from physical reaction realization and is not counted as stored energy;
+- rejection leaves geometry, bonds, material ownership, energy, and inventories unchanged;
+- successful reactions reconcile integer material counts and independent world-energy inventory;
+- deterministic scheduling and bounded work are demonstrated;
+- sunlight approximation and whole-world conservation gates have evidence;
+- exact-head integrated verification and named baseline deltas are recorded.
 
-Reuse `rejected_movement_energy_settlement_does_not_mutate_world_geometry`, `movement_pushes_another_organism_atomically`, `movement_propagates_an_organism_push_chain_atomically`, `movement_pushes_realized_physical_material_and_reindexes_it`, and `successful_movement_commits_preflight_energy_and_ledger_after_geometry`. Add only the missing cross-domain assertions; do not add a redundant transaction wrapper where no fallible operation exists after the push plan is applied. Keep each command/test under five minutes and compare named failures with the reset forward baseline.
-
-### Completion rule
-
-Do not call chemistry “unified” until every authoritative material/energy path reconciles, transaction rejection cannot leave partial state, the sunlight approximation is evidence-gated, and integrated verification reports exact-head results and baseline deltas. Keep historical audit detail in the main plan; this file is the short resume point.
-
-
-## Chemistry planning reconciliation — 2026-10-26
-
-This section reconciles the queued chemistry planning PRs with the approved phase order and the active migration work. It does **not** authorize implementation or supersede the current next-action note above.
-
-### Current priority remains separate
-
-- PR #206 remains the narrow movement rejection/rollback and inventory proof slice called out in the current handoff.
-- PR #212 remains the aggregate-ownership/construction/division migration. Resource/energy inventory work must not create a competing physical graph or energy holder while that migration is in progress.
-- PR #213 is a temporary stress-input setting for survival-first development. It does not settle the final death/stress contract.
-- PR #196 constructor/Bob work remains out of scope.
-
-### Chemistry planning sequence and scope boundaries
-
-1. **PR #207 — resource identity and integer material inventory.** Limit it to canonical resource IDs, integer quantities, transfer/storage accounting, and independent material inventory. Do not redo parent-aggregate ownership, construction membership, or division handled by PR #212.
-2. **PR #211 — cache versioning only.** It has been narrowed from cache-plus-sunlight. Establish equation/schema compatibility before downstream phases rely on cached results.
-3. **PR #208 — unified energy accounting.** Establish the independent world-energy oracle and source/transfer/storage/work/heat settlement contract after ownership state is coherent.
-4. **PR #214 — shared chemistry runtime and scheduler.** This is the missing integration layer: one reaction policy for environmental and cell/organism-held material, local candidate discovery, deterministic activation progress, and bounded work. The current organism-bond accumulator alone does not establish environment-wide chemistry.
-5. **PR #209 — transactional reaction realization.** Own the atomic commit/rollback of a selected reaction; do not duplicate the scheduler from PR #214.
-6. **PR #210 — death and continued chemistry.** Stop biological behavior after death while keeping matter available to the ordinary shared chemistry path; no second decomposition law.
-7. **PR #216 — sunlight/world-tone validation.** Separate from cache work and gate on exact-small-world comparisons, occlusion, source budget, duplicate-claim checks, and performance.
-8. **PR #215 — event inspection and environment-first experiments.** Depends on the real runtime/event contract. Separate environment setup from organism population while preserving the default preset; distinguish candidates from committed reactions; bound logs and benchmark 24,000 ticks.
-
-These are dependency relationships, not a claim that every listed PR must merge in strict numerical order. Re-audit current main and the status of PR #206/#212 before selecting the next implementation slice. Every phase remains planning-only until separately authorized. PR #204 remains documentation-only; README is not changed as a side effect.
+Historical audit entries in the main plan are retained for traceability. They do not override this current handoff or settled owner decisions.
