@@ -585,7 +585,10 @@ mod material_identity_tests {
             &mut simulation.energy_ledger,
             &mut accumulation,
         ));
-        assert_eq!(simulation.organisms[0].structure.bonds.len(), original_bond_count);
+        assert_eq!(
+            simulation.organisms[0].structure.bonds.len(),
+            original_bond_count
+        );
         assert_eq!(accumulation.get("test|rev:0|bond"), Some(&7.25));
     }
 
