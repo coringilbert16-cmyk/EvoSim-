@@ -1387,5 +1387,4 @@ mod integration_tests {
         );
         assert_eq!(simulation.energy_inventory_snapshot(), before_energy);
     }
-
 }
