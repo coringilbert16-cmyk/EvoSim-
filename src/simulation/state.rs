@@ -574,6 +574,10 @@ pub(crate) struct Environment {
     pub(crate) height: f64,
     pub(crate) catalog: Vec<BaseResource>,
     pub(crate) field: ActiveMaterialField,
+    /// Explicit usable-energy inventory owned by the environment itself.
+    /// It starts empty; only a modeled environmental input may fund it.
+    #[serde(default)]
+    pub(crate) chemistry_usable_energy: f64,
 }
 #[derive(Clone)]
 pub(crate) struct Simulation {
