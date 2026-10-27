@@ -947,7 +947,10 @@ mod material_identity_tests {
         assert_eq!(pieces.len(), 2);
         assert!(pieces.iter().all(|piece| {
             piece.material.total_amount() == 1.0
-                && piece.internal_connections.as_ref().is_some_and(Vec::is_empty)
+                && piece
+                    .internal_connections
+                    .as_ref()
+                    .is_some_and(Vec::is_empty)
         }));
         assert!(!pieces.contains(&source));
         assert!((energy_before - simulation.organisms[0].usable_energy - 0.5).abs() < 1e-9);
@@ -958,9 +961,7 @@ mod material_identity_tests {
                 .unwrap(),
             resonance_before
         );
-        assert!(
-            (simulation.energy_ledger.total_work_expended - ledger_before - 0.5).abs() < 1e-9
-        );
+        assert!((simulation.energy_ledger.total_work_expended - ledger_before - 0.5).abs() < 1e-9);
     }
 
     #[test]
