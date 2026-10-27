@@ -26,7 +26,6 @@ pub(crate) const MAX_REACTION_REALIZATIONS_PER_TICK: usize = 64;
 /// Divide the global per-tick realization budget fairly among owners. Any
 /// remainder rotates by tick, including when there are more owners than slots.
 
-
 /// Add only work left unused by earlier owners to this owner's fair base share.
 /// The caller carries the returned remainder forward, keeping total attempts
 /// within the global cap without wasting slots on owners with no ready work.
@@ -37,8 +36,7 @@ pub(crate) fn work_budget_for_owner_with_carry(
     tick: u64,
     carried_work: usize,
 ) -> usize {
-    work_budget_for_owner(total_budget, owner_count, owner_index, tick)
-        .saturating_add(carried_work)
+    work_budget_for_owner(total_budget, owner_count, owner_index, tick).saturating_add(carried_work)
 }
 
 /// Select work in stable key order, independent of the order in which callers
@@ -964,12 +962,7 @@ mod material_identity_tests {
             let operations = (0..count)
                 .map(|candidate| operation(owner, candidate))
                 .collect();
-            let ready = schedule_operations(
-                operations,
-                0,
-                &mut remaining,
-                &mut accumulation,
-            );
+            let ready = schedule_operations(operations, 0, &mut remaining, &mut accumulation);
             realized_attempts += ready.len();
             carry = remaining;
         }
