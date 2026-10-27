@@ -1545,7 +1545,8 @@ impl Simulation {
             };
             let deposits = materials
                 .into_iter()
-                .map(|material| (position.x, position.y, material))
+                .zip(&organism.structure.units)
+                .map(|(material, unit)| (unit.placement.x, unit.placement.y, material))
                 .collect();
 
             let mut staged_ledger = self.energy_ledger;
