@@ -669,6 +669,7 @@ impl Simulation {
             let mut trial_environment = Environment {
                 width: environment.width,
                 height: environment.height,
+                chemistry_usable_energy: 0.0,
                 catalog: environment.catalog.clone(),
                 field: crate::environment::ActiveMaterialField::new(
                     environment.width,
@@ -1687,6 +1688,7 @@ mod tests {
         let mut environment = crate::state::Environment {
             width: 1000.0,
             height: 1000.0,
+            chemistry_usable_energy: 0.0,
             catalog,
             field: crate::environment::ActiveMaterialField::new(
                 1000.0,
@@ -1864,6 +1866,7 @@ mod tests {
         let mut environment = Environment {
             width: 1000.0,
             height: 1000.0,
+            chemistry_usable_energy: 0.0,
             catalog: catalog.to_vec(),
             field: crate::environment::ActiveMaterialField::new(
                 1000.0,
@@ -2176,6 +2179,7 @@ mod tests {
         let mut environment = crate::state::Environment {
             width: 1000.0,
             height: 1000.0,
+            chemistry_usable_energy: 0.0,
             catalog: catalog.clone(),
             field: crate::environment::ActiveMaterialField::new(
                 1000.0,
@@ -2386,6 +2390,7 @@ mod tests {
         let environment = crate::state::Environment {
             width: 1000.0,
             height: 1000.0,
+            chemistry_usable_energy: 0.0,
             catalog: catalog.clone(),
             field: crate::environment::ActiveMaterialField::new(
                 1000.0,
