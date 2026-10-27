@@ -1549,6 +1549,7 @@ impl Simulation {
 
         for index in release_indices.into_iter().rev() {
             let organism = &self.organisms[index];
+            let organism_id = organism.id.clone();
             let Some(materials) = organism
                 .structure
                 .units
@@ -1590,6 +1591,13 @@ impl Simulation {
             }
             self.energy_ledger = staged_ledger;
             self.organisms.remove(index);
+
+            // Activation progress is not physical material or energy. Once
+            // the dead graph has been atomically released, discard its stale
+            // graph-reaction progress so a later owner cannot inherit it.
+            let organism_prefix = format!("{}|rev:", organism_id);
+            self.chemical_reaction_accumulation
+                .retain(|key, _| !key.starts_with(&organism_prefix));
         }
     }
 
@@ -1926,11 +1934,29 @@ mod decomposition_finalization_tests {
     fn bondless_dead_organism_releases_material_after_holder_checks() {
         let mut simulation = Simulation::new(0xD3AD, 10.0);
         prepare_bondless_dead_fixture(&mut simulation);
+        let organism_id = simulation.organisms[0].id.clone();
+        let stale_progress = format!("{}|rev:0|stale-reaction", organism_id);
+        simulation
+            .chemical_reaction_accumulation
+            .insert(stale_progress.clone(), 0.75);
+        simulation
+            .chemical_reaction_accumulation
+            .insert("unrelated-owner|rev:0|reaction".into(), 0.25);
         let field_before = simulation.environment.field.total_amount();
         let living = HashSet::new();
 
         simulation.release_finished_dead_organisms(&living);
 
+        assert!(!simulation
+            .chemical_reaction_accumulation
+            .contains_key(&stale_progress));
+        assert_eq!(
+            simulation
+                .chemical_reaction_accumulation
+                .get("unrelated-owner|rev:0|reaction"),
+            Some(&0.25),
+            "releasing one dead graph must not clear another owner's progress"
+        );
         assert!(simulation.organisms.is_empty());
         assert_eq!(
             simulation.environment.field.total_amount(),
