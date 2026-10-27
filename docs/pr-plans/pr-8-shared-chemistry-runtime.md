@@ -51,7 +51,8 @@ Make environmental materials and material held by cells/organisms participate in
 - [x] Named the accumulated comparison value an activation signal and documented that it is not an energy source or inventory term; physical source provenance remains a separate invariant to verify.
 - [x] Added a regression proving a large activation signal cannot pay a physical BREAK energy shortfall; focused chemistry tests passed, while exact-head full-suite/Clippy verification remains pending.
 - [x] Identified a hard integration gap: environmental `PhysicalMaterialBond` records store topology/endpoints but no bond-energy holder, while decomposing bodies use a separate bond-break settlement path. Environment-only realization must not invent an energy source; the shared transaction/ownership bridge needs to preserve or derive actual energy provenance.
-- [ ] Refactor chemical BREAK settlement so its energy transaction can be staged independently of a graph mutation and then committed atomically with the selected source mutation. Physical-material internal bonds currently have zero stored energy on restoration; charge work to organism usable energy/resonance and credit no bond-energy release unless a real stored-energy allocation path exists.
+- [x] Refactored chemical BREAK energy accounting into `prepare_chemical_break_energy_with_resonance`, which stages the holder/ledger transaction without mutating either. The existing organism-graph path now stages its candidate graph and energy settlement before committing them together. Added focused tests for zero-stored-energy bond work and rejection of unfunded work; exact-head CI is pending.
+- [ ] Reuse the staged energy helper for environmental physical-material BREAK, committing source split/deposit, organism holder/resonance, and ledger as one transaction. Physical-material internal bonds currently have zero stored energy on restoration; credit no bond-energy release unless a real stored-energy allocation path exists.
 - [ ] Add environmental material to the **chemical** candidate/activation runtime using local spatial neighborhoods and the same transaction boundary. Existing `environmental_break_candidates`/`try_start_environmental_break` is a separate voluntary BREAK transformation, not chemical activation; it does not satisfy this gate.
 - [ ] Add acceptance coverage for dead-material behavior. Audit confirms nonliving organisms remain in `Simulation::step`'s organism loop and pass through the same `chemical_reaction::accumulate` path; do not reactivate the disconnected legacy recycling/decomposition path as a second chemistry engine.
 - [ ] Add transactional and independent-inventory acceptance tests for environment-only and organism-held reactions.
@@ -69,6 +70,10 @@ Make environmental materials and material held by cells/organisms participate in
 4. Add environment-only and cross-holder acceptance tests with independent integer-material and world-energy inventory oracles.
 5. Benchmark the completed path and document current temporary safeguards. The 307.58-second full-suite run slightly exceeded the five-minute command target, so recheck runtime after implementation; do not weaken test coverage to meet it.
 
+
+### Implementation update (2026-10-27)
+
+The chemical BREAK settlement helper has now been separated from graph mutation so environmental settlement can reuse the same source-accounting rules. This is a preparatory refactor only; environmental chemical activation/discovery is still not implemented. Two focused unit tests cover a zero-energy physical bond paid from the organism holder and rejection when the holder cannot fund the work.
 
 ### Scope clarification from live code audit (2026-10-27)
 
