@@ -451,7 +451,7 @@ pub(crate) fn accumulate_environmental(
     let cells = environment
         .field
         .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
-    let count = *remaining_discovery_work;
+    let count = (*remaining_discovery_work).min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
     let mut candidates = Vec::with_capacity(count);
     if count > 0 && !cells.is_empty() {
         // Walk a rotating window through the nested field ordering. Unlike
