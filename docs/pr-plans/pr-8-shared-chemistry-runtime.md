@@ -1,6 +1,6 @@
 # Build a Shared Chemistry Runtime and Reaction Scheduler
 
-> **Planning scaffold only.** This defines the missing integration contract; it does not implement production code or tests.
+> **Implementation in progress.** This document is the acceptance contract for PR #214; implementation and tests are being added incrementally in this same PR.
 
 ## Purpose
 
@@ -40,10 +40,13 @@ Make environmental materials and material held by cells/organisms participate in
 - No hard-coded organism roles, body plans, or fixed reaction recipes as a substitute for shared rules.
 - No silent conservation repair, all-pairs world scan, or duplicate environmental material owner.
 
-## Status
+## Implementation progress (2026-10-27)
 
-- [ ] Current-main audit
-- [ ] Shared environmental and organism/cell reaction path
-- [ ] Transactional and independent-inventory tests
-- [ ] Determinism and bounded-work benchmarks
-- [ ] Exact-head verification and baseline comparison
+- [x] Audited current `main`: organism-bond activation is implemented, but the scheduler currently resolves activated operations immediately inside the per-organism loop. Environmental material and decomposing bodies do not yet share that path.
+- [x] Added a deterministic, shared per-tick cap for physical reaction-realization attempts. Activated operations deferred by the cap retain progress only and are revalidated on a later tick; this cap does not yet bound candidate discovery.
+- [x] Added unit coverage for stable-key scheduling and budget limits.
+- [ ] Generalize candidate discovery/activation to environmental and organism-held material using local spatial neighborhoods.
+- [ ] Bring dead/decomposing material onto the same chemistry policy without duplicating its physical transaction path.
+- [ ] Add transactional and independent-inventory acceptance tests for environment-only and organism-held reactions.
+- [ ] Benchmark candidate discovery and document bounded-work behavior.
+- [ ] Exact-head verification and named-failure comparison against the accepted baseline.
