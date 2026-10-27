@@ -599,6 +599,46 @@ mod material_identity_tests {
     }
 
     #[test]
+    fn resonance_cannot_substitute_for_activation_signal() {
+        let mut simulation = crate::state::Simulation::new(925, 10.0);
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        let operation = ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            activation_signal: 0.0,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "test|rev:0|bond".into(),
+            accumulated_reaction: 0.0,
+        };
+        let before_resonance = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .expect("valid reservoir");
+        let before_energy = simulation.organisms[0].usable_energy;
+        let before_ledger = simulation.energy_ledger;
+        let before_bonds = simulation.organisms[0].structure.bonds.clone();
+
+        assert!(!resolve(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.energy_ledger,
+        ));
+        assert_eq!(simulation.organisms[0].structure.bonds, before_bonds);
+        assert_eq!(simulation.organisms[0].usable_energy, before_energy);
+        assert_eq!(simulation.energy_ledger, before_ledger);
+        assert_eq!(
+            simulation.organisms[0].resonant_energy.total_energy(),
+            Some(before_resonance)
+        );
+    }
+
+    #[test]
     fn failed_chemical_settlement_preserves_triggered_reaction_progress() {
         let mut simulation = crate::state::Simulation::new(921, 10.0);
         let bond = *simulation.organisms[0]
