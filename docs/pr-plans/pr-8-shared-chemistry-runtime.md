@@ -153,3 +153,16 @@ These changes are committed on the PR branch. They are implementation progress, 
 ### Bounded sparse-field discovery correction (2026-10-27)
 
 Environmental discovery now caps traversal steps across cells, material entries, and bond entries, rather than only capping the number of candidate bonds materialized. This prevents a sparse field with many empty cells or material entries from causing an effectively unbounded search before the candidate budget is consumed. The scan start rotates by tick so skipped regions can be reached over successive ticks. A focused regression places the only environmental candidate beyond the first scan window and checks that the rotating scan eventually reaches it. Exact-head formatting and test verification are pending.
+
+
+### Dead-material acceptance and bounded-discovery measurement (2026-10-27)
+
+Dead-material tests now cover the lifecycle boundary at multiple levels: a still-bonded dead graph is retained; shared chemical BREAK can remove its bonds before the live lifecycle releases the graph; the live tick deposits a bondless dead graph exactly once; stored material and in-flight owner transactions defer release; failed destination insertion preserves the organism, energy holder, field, and ledger; and retained resonance is settled as heat on final release. These are acceptance cases, not a pass claim until the latest exact-head workflow completes.
+
+Environmental candidate discovery now exposes a deterministic inspection count for the bounded traversal. The non-timing acceptance test checks empty/sparse fields at budgets 1, 8, 64, and 256, enforces no more than 8 traversal inspections per unit of candidate budget, and checks that a far-end sparse candidate remains reachable across rotated windows. This counts cell, material, and bond entries inspected; it does not treat only discovered candidates as the work measure.
+
+A separate ignored wall-clock benchmark runs 500 discovery ticks at budgets 1, 16, and 256 and reports candidate count, inspected-entry count, and elapsed milliseconds. Run it from the repository root with:
+
+    cargo test environmental_discovery_timing_benchmark -- --ignored --nocapture
+
+The timing benchmark has been added but has not yet been run, so no wall-clock performance result is claimed. Record the measurements from a clean, same-machine run before setting any timing threshold; the deterministic inspection bound remains the portable acceptance gate.
