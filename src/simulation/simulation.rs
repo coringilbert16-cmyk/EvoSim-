@@ -848,7 +848,7 @@ impl Simulation {
                     self.tick,
                     carried_chemistry_work,
                 );
-            let mut chemistry_discovery_work_remaining =
+            let chemistry_discovery_work_remaining =
                 crate::chemical_reaction::work_budget_for_owner_with_carry(
                     crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK,
                     chemistry_owner_count,
