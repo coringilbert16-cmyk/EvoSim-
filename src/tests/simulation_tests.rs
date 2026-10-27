@@ -1337,6 +1337,7 @@ mod integration_tests {
             .decision_history
             .has_knowledge(ActionKind::Break, Some("stored:0:bond:0")));
     }
+
     #[test]
     fn rejected_chemical_break_preserves_independent_material_and_energy_inventories() {
         let mut simulation = Simulation::new(927, 10.0);
