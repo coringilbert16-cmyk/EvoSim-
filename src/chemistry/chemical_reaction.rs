@@ -755,11 +755,11 @@ mod material_identity_tests {
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            activation_signal: 0.25,
+            activation_signal: 0.5,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
-            accumulated_reaction: 0.25,
+            accumulated_reaction: 0.5,
         };
         assert!(resolve(
             operation,
@@ -774,8 +774,8 @@ mod material_identity_tests {
             after.residual()
         );
         assert!(
-            (before.current_resonant_energy - after.current_resonant_energy - 0.25).abs() < 1e-9,
-            "only the reaction-energy shortfall should be withdrawn from resonance"
+            (before.current_resonant_energy - after.current_resonant_energy - 0.5).abs() < 1e-9,
+            "the full physical disruption work must be withdrawn from resonance"
         );
         assert!(!simulation.organisms[0]
             .structure
