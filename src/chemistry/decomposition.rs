@@ -304,6 +304,7 @@ mod tests {
         let environment = Environment {
             width: 1000.0,
             height: 1000.0,
+            chemistry_usable_energy: 0.0,
             catalog,
             field: crate::environment::ActiveMaterialField::new(
                 1000.0,
