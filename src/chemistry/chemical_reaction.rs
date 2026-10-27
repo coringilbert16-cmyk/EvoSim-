@@ -205,14 +205,16 @@ pub(crate) fn accumulate(
     });
     let mut cache = ConnectionCompatibilityCache::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
-    let bonds = organism.structure.bonds.clone();
+    let bond_count = organism.structure.bonds.len();
     let mut operations = Vec::new();
     let mut updated_keys = std::collections::BTreeSet::new();
-    let indices = discovery_indices(bonds.len(), *remaining_discovery_work, tick);
+    let indices = discovery_indices(bond_count, *remaining_discovery_work, tick);
     *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
 
     for index in indices {
-        let bond = bonds[index];
+        let Some(bond) = organism.structure.bonds.get(index).copied() else {
+            continue;
+        };
         let Some(unit_a) = organism
             .structure
             .unit_index(bond.endpoint_a.constituent_id)
