@@ -2048,26 +2048,27 @@ mod decomposition_finalization_tests {
         assert!(!bonds.is_empty());
         let field_before = simulation.environment.field.total_amount();
 
-        for (index, bond) in bonds.into_iter().enumerate() {
-            let operation = crate::chemical_reaction::ChemicalBreakOperation {
-                organism_id: owner_id.clone(),
-                bond,
-                activation_signal: 1.0e9,
-                disruption_cost: 0.0,
-                reaction_frequency_hz: 440.0,
-                accumulation_key: format!("dead-chemistry|bond:{index}"),
-                accumulated_reaction: 1.0e9,
-            };
-            assert!(
-                crate::chemical_reaction::resolve(
-                    operation,
-                    &mut simulation.organisms[0],
-                    &mut simulation.energy_ledger,
-                ),
-                "the shared chemistry transaction should break each eligible dead-graph bond"
-            );
+        // Exercise ordinary live-tick discovery, activation, scheduling, and
+        // transactional settlement. Do not inject synthetic BREAK operations:
+        // a dead graph must decompose through the same chemistry runtime as a
+        // living graph, with no zero-cost bypass.
+        let mut ticks = 0;
+        while ticks < 2_400
+            && simulation
+                .organisms
+                .iter()
+                .any(|organism| organism.id == owner_id && !organism.structure.bonds.is_empty())
+        {
+            simulation.step();
+            ticks += 1;
         }
-        assert!(simulation.organisms[0].structure.bonds.is_empty());
+        assert!(
+            simulation
+                .organisms
+                .iter()
+                .all(|organism| organism.id != owner_id || organism.structure.bonds.is_empty()),
+            "ordinary shared chemistry did not break all dead-graph bonds within {ticks} ticks"
+        );
 
         simulation.step();
 
