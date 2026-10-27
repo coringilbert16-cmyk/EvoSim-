@@ -632,7 +632,7 @@ mod material_identity_tests {
 
     #[test]
     fn chemical_break_with_resonance_shortfall_reconciles_world_inventory() {
-        let mut simulation = crate::state::Simulation::new(925, 10.0);
+        let simulation = crate::state::Simulation::new(925, 10.0);
         assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
         let retained_resonance = simulation.organisms[0]
             .resonant_energy
