@@ -369,14 +369,10 @@ pub(crate) fn accumulate(
             continue;
         }
 
-        // Compatible retained resonance lowers the remaining activation
-        // requirement. It is not copied into the accumulator: resolve() will
-        // withdraw the same energy only if the bond transaction succeeds.
-        let resonance_credit = organism
-            .resonant_energy
-            .compatible_energy(reaction_frequency_hz)
-            .min(barrier);
-        let effective_barrier = (barrier - resonance_credit).max(0.0);
+        // Activation is an independent signal threshold. Compatible
+        // resonance may fund disruption work at settlement, but it cannot
+        // lower the activation threshold or be counted in the accumulator.
+        let effective_barrier = barrier;
         let Some(activation_signal) =
             crate::chemistry::normalized_chemistry_to_activation_signal(next)
         else {
