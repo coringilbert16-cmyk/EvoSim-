@@ -915,6 +915,27 @@ mod material_identity_tests {
         .expect("test composite should be physically realizable")
     }
 
+    fn fund_environment_chemistry_for_test(
+        simulation: &mut crate::state::Simulation,
+        amount: f64,
+    ) {
+        use crate::energy_ledger::{EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction};
+
+        let mut holder = 0.0;
+        let transaction = ExternalInputTransaction {
+            source: ExternalEnergySource::WorldTone,
+            source_available: amount,
+            external_input: amount,
+            usable_delta: amount,
+            work_expended: 0.0,
+            heat_dissipated: 0.0,
+        };
+        assert!(simulation
+            .energy_ledger
+            .settle_external_input(&mut holder, transaction));
+        simulation.environment.chemistry_usable_energy = holder;
+    }
+
     #[test]
     fn environmental_chemical_break_charges_work_and_splits_material_atomically() {
         let mut simulation = crate::state::Simulation::new(933, 10.0);
@@ -936,11 +957,11 @@ mod material_identity_tests {
             &simulation.environment.catalog,
         ));
 
-        simulation.environment.chemistry_usable_energy = 1.0;
+        fund_environment_chemistry_for_test(&mut simulation, 1.0);
         let energy_before = simulation.environment.chemistry_usable_energy;
         let ledger_before = simulation.energy_ledger.total_work_expended;
         let operation = EnvironmentalChemicalBreakOperation {
-                        cell_index,
+            cell_index,
             material_index: 0,
             bond_index: 0,
             source_material: source.clone(),
@@ -974,7 +995,7 @@ mod material_identity_tests {
     }
 
     #[test]
-    fn environmental_chemical_break_can_pay_work_from_compatible_resonance() {
+    fn environmental_chemical_break_spends_its_own_usable_energy() {
         let mut simulation = crate::state::Simulation::new(935, 10.0);
         let source = environmental_test_composite(&simulation.environment.catalog);
         let bond = source
@@ -993,11 +1014,11 @@ mod material_identity_tests {
             source.clone(),
             &simulation.environment.catalog,
         ));
-        simulation.environment.chemistry_usable_energy = 0.5;
+        fund_environment_chemistry_for_test(&mut simulation, 0.5);
         let environment_energy_before = simulation.environment.chemistry_usable_energy;
         let ledger_before = simulation.energy_ledger.total_work_expended;
         let operation = EnvironmentalChemicalBreakOperation {
-                        cell_index,
+            cell_index,
             material_index: 0,
             bond_index: 0,
             source_material: source.clone(),
@@ -1049,7 +1070,7 @@ mod material_identity_tests {
         let ledger_before = simulation.energy_ledger.clone();
         let field_before = simulation.environment.field.cells.clone();
         let operation = EnvironmentalChemicalBreakOperation {
-                        cell_index,
+            cell_index,
             material_index: 0,
             bond_index: 0,
             source_material: source,
@@ -1076,7 +1097,7 @@ mod material_identity_tests {
         let mut simulation = crate::state::Simulation::new(931, 10.0);
         let organism = &mut simulation.organisms[0];
         let operation = EnvironmentalChemicalBreakOperation {
-                        cell_index: usize::MAX,
+            cell_index: usize::MAX,
             material_index: 0,
             bond_index: 0,
             source_material: crate::physical_material::PhysicalMaterial {
@@ -1226,7 +1247,7 @@ mod material_identity_tests {
             .expect("seed organism should contain a structural bond");
         assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
         let operation = ChemicalBreakOperation {
-                        bond,
+            bond,
             activation_signal: 1_000.0,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
