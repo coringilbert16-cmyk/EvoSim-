@@ -939,16 +939,14 @@ mod material_identity_tests {
             .bonds
             .first()
             .expect("seed organism should contain a structural bond");
-        let operation = |owner: usize, candidate: usize| {
-            ChemicalBreakOperation {
-                organism_id: format!("owner-{owner}"),
-                bond,
-                activation_signal: 1.0,
-                disruption_cost: 0.5,
-                reaction_frequency_hz: 440.0,
-                accumulation_key: format!("owner-{owner}|candidate-{candidate}"),
-                accumulated_reaction: 1.0,
-            }
+        let operation = |owner, candidate| ChemicalBreakOperation {
+            organism_id: format!("owner-{owner}"),
+            bond,
+            activation_signal: 1.0,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: format!("owner-{owner}|candidate-{candidate}"),
+            accumulated_reaction: 1.0,
         };
         let candidate_counts = [0, 10, 100];
         let mut carry = 0;
