@@ -23,6 +23,24 @@ pub(crate) struct ChemicalBreakOperation {
 /// Candidate discovery and activation remain separate from this commit budget.
 pub(crate) const MAX_REACTION_REALIZATIONS_PER_TICK: usize = 64;
 
+/// Divide the global per-tick realization budget fairly among owners. Any
+/// remainder rotates by tick, including when there are more owners than slots.
+pub(crate) fn work_budget_for_owner(
+    total_budget: usize,
+    owner_count: usize,
+    owner_index: usize,
+    tick: u64,
+) -> usize {
+    if owner_count == 0 || owner_index >= owner_count {
+        return 0;
+    }
+    let base = total_budget / owner_count;
+    let remainder = total_budget % owner_count;
+    let rotation = tick as usize % owner_count;
+    let rank = (owner_index + owner_count - rotation) % owner_count;
+    base + if rank < remainder { 1 } else { 0 }
+}
+
 /// Select work in stable key order, independent of the order in which callers
 /// discovered candidates. Ties retain their original index for deterministic
 /// behavior when multiple records share a key.
@@ -837,6 +855,32 @@ mod material_identity_tests {
     fn scheduler_breaks_duplicate_key_ties_by_original_index() {
         let keys = vec!["same".into(), "same".into(), "first".into()];
         assert_eq!(stable_work_order(&keys, 2, 0), vec![2, 0]);
+    }
+
+    #[test]
+    fn per_owner_budget_rotates_remainder_and_large_populations() {
+        let first_tick: Vec<usize> = (0..3)
+            .map(|index| work_budget_for_owner(64, 3, index, 0))
+            .collect();
+        let next_tick: Vec<usize> = (0..3)
+            .map(|index| work_budget_for_owner(64, 3, index, 1))
+            .collect();
+        assert_eq!(first_tick, vec![22, 21, 21]);
+        assert_eq!(next_tick, vec![21, 22, 21]);
+        assert_eq!(first_tick.iter().sum::<usize>(), 64);
+
+        let first_slots: Vec<usize> = (0..100)
+            .map(|index| work_budget_for_owner(64, 100, index, 0))
+            .collect();
+        let next_slots: Vec<usize> = (0..100)
+            .map(|index| work_budget_for_owner(64, 100, index, 1))
+            .collect();
+        assert_eq!(first_slots.iter().sum::<usize>(), 64);
+        assert_eq!(next_slots.iter().sum::<usize>(), 64);
+        assert_eq!(first_slots[0], 1);
+        assert_eq!(first_slots[64], 0);
+        assert_eq!(next_slots[0], 0);
+        assert_eq!(next_slots[64], 1);
     }
 
     #[test]
