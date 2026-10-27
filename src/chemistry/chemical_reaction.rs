@@ -440,6 +440,14 @@ pub(crate) fn accumulate_environmental(
         );
         return Vec::new();
     };
+    if *remaining_discovery_work == 0 {
+        dissipate_unupdated_accumulations(
+            accumulation,
+            &current_prefix,
+            &std::collections::BTreeSet::new(),
+        );
+        return Vec::new();
+    }
     let cells = environment
         .field
         .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
