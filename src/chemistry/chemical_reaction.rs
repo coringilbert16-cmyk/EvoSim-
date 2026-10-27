@@ -428,18 +428,11 @@ pub(crate) fn accumulate_environmental(
     tick: u64,
     remaining_discovery_work: &mut usize,
 ) -> Vec<EnvironmentalChemicalBreakOperation> {
-    let current_prefix = format!("{}|environment:", organism.id);
-    let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
-        &organism.structure,
-        &environment.catalog,
-    ) else {
-        dissipate_unupdated_accumulations(
-            accumulation,
-            &current_prefix,
-            &std::collections::BTreeSet::new(),
-        );
-        return Vec::new();
-    };
+    // Environmental progress belongs to the field, not to the organism
+    // whose turn happens to discover it. Search the field directly; the
+    // bounded candidate budget below keeps this world-owned scan finite.
+    const ENVIRONMENT_PREFIX: &str = "environment|environment:";
+    let current_prefix = ENVIRONMENT_PREFIX.to_owned();
     if *remaining_discovery_work == 0 {
         dissipate_unupdated_accumulations(
             accumulation,
@@ -448,9 +441,7 @@ pub(crate) fn accumulate_environmental(
         );
         return Vec::new();
     }
-    let cells = environment
-        .field
-        .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
+    let cells: Vec<usize> = (0..environment.field.cells.len()).collect();
     let count = (*remaining_discovery_work).min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
     let mut candidates = Vec::with_capacity(count);
     if count > 0 && !cells.is_empty() {
@@ -601,8 +592,8 @@ pub(crate) fn accumulate_environmental(
         let material_a = material_identity(&hypothetical.units[unit_a].material);
         let material_b = material_identity(&hypothetical.units[unit_b].material);
         let key = format!(
-            "{}|environment:{}:{}:{}:{}:{:?}",
-            organism.id,
+            "{}{}:{}:{}:{}:{}:{:?}",
+            ENVIRONMENT_PREFIX,
             cell_index,
             material_index,
             bond_index,
