@@ -10,13 +10,130 @@ use crate::structure::Bond;
 pub(crate) struct ChemicalBreakOperation {
     pub(crate) organism_id: String,
     pub(crate) bond: Bond,
-    pub(crate) reaction_energy: f64,
+    pub(crate) activation_signal: f64,
     pub(crate) disruption_cost: f64,
     pub(crate) reaction_frequency_hz: f64,
     /// Preserve accumulated progress if settlement fails without changing the
     /// physical structure (for example, because the event became stale).
     pub(crate) accumulation_key: String,
     pub(crate) accumulated_reaction: f64,
+}
+
+/// Hard cap on physical reaction-realization attempts per simulation tick.
+/// Candidate discovery and activation remain separate from this commit budget.
+pub(crate) const MAX_REACTION_REALIZATIONS_PER_TICK: usize = 64;
+/// Hard cap on structural bond candidates inspected by chemistry per tick.
+/// This bounds discovery work independently of the realization/commit budget.
+pub(crate) const MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK: usize = 256;
+
+/// Select a bounded, tick-rotated window over the owner's stable bond list.
+/// Rotating the start prevents a large structure's tail from being permanently
+/// invisible when the global discovery budget is smaller than its bond count.
+fn discovery_indices(candidate_count: usize, limit: usize, tick: u64) -> Vec<usize> {
+    if candidate_count == 0 || limit == 0 {
+        return Vec::new();
+    }
+    let count = candidate_count.min(limit);
+    let start = tick as usize % candidate_count;
+    (0..count)
+        .map(|offset| start.wrapping_add(offset) % candidate_count)
+        .collect()
+}
+
+/// Divide the global per-tick realization budget fairly among owners. Any
+/// remainder rotates by tick, including when there are more owners than slots.
+pub(crate) fn work_budget_for_owner(
+    total_budget: usize,
+    owner_count: usize,
+    owner_index: usize,
+    tick: u64,
+) -> usize {
+    if owner_count == 0 || owner_index >= owner_count {
+        return 0;
+    }
+    let base = total_budget / owner_count;
+    let remainder = total_budget % owner_count;
+    let rotation = tick as usize % owner_count;
+    let rank = (owner_index + owner_count - rotation) % owner_count;
+    base + if rank < remainder { 1 } else { 0 }
+}
+
+/// Add only work left unused by earlier owners to this owner's fair base share.
+/// The caller carries the returned remainder forward, keeping total attempts
+/// within the global cap without wasting slots on owners with no ready work.
+pub(crate) fn work_budget_for_owner_with_carry(
+    total_budget: usize,
+    owner_count: usize,
+    owner_index: usize,
+    tick: u64,
+    carried_work: usize,
+) -> usize {
+    work_budget_for_owner(total_budget, owner_count, owner_index, tick).saturating_add(carried_work)
+}
+
+/// Select work in stable key order, independent of the order in which callers
+/// discovered candidates. Ties retain their original index for deterministic
+/// behavior when multiple records share a key.
+fn stable_work_order(keys: &[String], limit: usize, tick: u64) -> Vec<usize> {
+    let mut indices: Vec<usize> = (0..keys.len()).collect();
+    indices.sort_by(|left, right| keys[*left].cmp(&keys[*right]).then_with(|| left.cmp(right)));
+    // Rotate deterministically by tick so a permanently rejected early key
+    // cannot starve later candidates whenever the work budget is saturated.
+    if !indices.is_empty() {
+        let rotation = tick as usize % indices.len();
+        indices.rotate_left(rotation);
+    }
+    indices.truncate(limit);
+    indices
+}
+
+/// Apply the per-tick realization budget. Activated operations that do not fit
+/// are returned to the progress map without changing any physical or energy
+/// state; they are revalidated by normal candidate discovery on a later tick.
+pub(crate) fn schedule_operations(
+    operations: Vec<ChemicalBreakOperation>,
+    tick: u64,
+    remaining_work: &mut usize,
+    accumulation: &mut std::collections::BTreeMap<String, f64>,
+) -> Vec<ChemicalBreakOperation> {
+    if operations.is_empty() || *remaining_work == 0 {
+        for operation in operations {
+            accumulation
+                .entry(operation.accumulation_key)
+                .and_modify(|current| {
+                    *current = (*current).max(operation.accumulated_reaction);
+                })
+                .or_insert(operation.accumulated_reaction);
+        }
+        return Vec::new();
+    }
+
+    let keys: Vec<String> = operations
+        .iter()
+        .map(|operation| operation.accumulation_key.clone())
+        .collect();
+    let order = stable_work_order(&keys, *remaining_work, tick);
+    let mut selected = vec![false; operations.len()];
+    for index in &order {
+        selected[*index] = true;
+    }
+
+    let mut ready = Vec::with_capacity(order.len());
+    for (index, operation) in operations.into_iter().enumerate() {
+        if selected[index] {
+            ready.push((keys[index].clone(), operation));
+        } else {
+            accumulation
+                .entry(operation.accumulation_key)
+                .and_modify(|current| {
+                    *current = (*current).max(operation.accumulated_reaction);
+                })
+                .or_insert(operation.accumulated_reaction);
+        }
+    }
+    ready.sort_by(|left, right| left.0.cmp(&right.0));
+    *remaining_work = remaining_work.saturating_sub(ready.len());
+    ready.into_iter().map(|(_, operation)| operation).collect()
 }
 
 fn reaction_key(bond: &Bond, interface_signature: &str) -> String {
@@ -74,6 +191,8 @@ pub(crate) fn accumulate(
     catalog: &[BaseResource],
     accumulation: &mut std::collections::BTreeMap<String, f64>,
     chemistry_library: &mut ChemistryLibrary,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
 ) -> Vec<ChemicalBreakOperation> {
     if organism.structure.bonds.is_empty() {
         let organism_prefix = format!("{}|rev:", organism.id);
@@ -86,11 +205,16 @@ pub(crate) fn accumulate(
     });
     let mut cache = ConnectionCompatibilityCache::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
-    let bonds = organism.structure.bonds.clone();
+    let bond_count = organism.structure.bonds.len();
     let mut operations = Vec::new();
     let mut updated_keys = std::collections::BTreeSet::new();
+    let indices = discovery_indices(bond_count, *remaining_discovery_work, tick);
+    *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
 
-    for bond in bonds {
+    for index in indices {
+        let Some(bond) = organism.structure.bonds.get(index).copied() else {
+            continue;
+        };
         let Some(unit_a) = organism
             .structure
             .unit_index(bond.endpoint_a.constituent_id)
@@ -253,15 +377,17 @@ pub(crate) fn accumulate(
             .compatible_energy(reaction_frequency_hz)
             .min(barrier);
         let effective_barrier = (barrier - resonance_credit).max(0.0);
-        let Some(reaction_energy) = crate::chemistry::normalized_chemistry_to_energy(next) else {
+        let Some(activation_signal) =
+            crate::chemistry::normalized_chemistry_to_activation_signal(next)
+        else {
             continue;
         };
         updated_keys.insert(key.clone());
-        if crate::chemistry::activated(reaction_energy, effective_barrier) {
+        if crate::chemistry::activated(activation_signal, effective_barrier) {
             operations.push(ChemicalBreakOperation {
                 organism_id: organism.id.clone(),
                 bond,
-                reaction_energy,
+                activation_signal,
                 disruption_cost: barrier,
                 reaction_frequency_hz,
                 accumulation_key: key.clone(),
@@ -290,18 +416,18 @@ pub(crate) fn resolve(
     if organism.resonant_energy.total_energy().is_none() {
         return false;
     }
-    if !operation.reaction_energy.is_finite()
-        || operation.reaction_energy < 0.0
+    if !operation.activation_signal.is_finite()
+        || operation.activation_signal < 0.0
         || !operation.disruption_cost.is_finite()
         || operation.disruption_cost < 0.0
     {
         return false;
     }
     let processing_efficiency = organism.genome.processing_efficiency();
-    // Resonance only supplies the shortfall between the accumulated reaction
-    // energy and the physical disruption barrier. Never spend stored resonance
-    // when the reaction itself already covers that barrier.
-    let required_resonance = (operation.disruption_cost - operation.reaction_energy).max(0.0);
+    // The activation signal is a threshold, not an energy source. The actual
+    // transaction separately accounts for stored bond energy, usable energy,
+    // and any resonance withdrawn from the trial reservoir.
+    let required_resonance = (operation.disruption_cost - operation.activation_signal).max(0.0);
     // Work from a trial reservoir. A failed or stale BREAK must not consume
     // retained resonance; only a successfully settled structural transaction
     // commits the frequency-compatible withdrawal.
@@ -311,7 +437,7 @@ pub(crate) fn resolve(
     let success = crate::transformation::settle_chemical_break_energy_with_resonance(
         organism,
         operation.bond,
-        operation.reaction_energy,
+        operation.activation_signal,
         operation.disruption_cost,
         resonant_work,
         processing_efficiency,
@@ -348,6 +474,16 @@ pub(crate) fn resolve_preserving_accumulation(
 mod material_identity_tests {
     use super::*;
     use crate::resources::Material;
+
+    #[test]
+    fn discovery_budget_is_bounded_and_rotates_across_bond_list() {
+        assert_eq!(discovery_indices(0, 10, 0), Vec::<usize>::new());
+        assert_eq!(discovery_indices(5, 0, 0), Vec::<usize>::new());
+        assert_eq!(discovery_indices(5, 2, 0), vec![0, 1]);
+        assert_eq!(discovery_indices(5, 2, 1), vec![1, 2]);
+        assert_eq!(discovery_indices(5, 2, 4), vec![4, 0]);
+        assert_eq!(discovery_indices(5, 99, 3), vec![3, 4, 0, 1, 2]);
+    }
 
     #[test]
     fn unobserved_reaction_progress_dissipates_once_per_tick() {
@@ -400,7 +536,7 @@ mod material_identity_tests {
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            reaction_energy: 1_000.0,
+            activation_signal: 1_000.0,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -439,7 +575,7 @@ mod material_identity_tests {
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            reaction_energy: 0.25,
+            activation_signal: 0.25,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -478,9 +614,9 @@ mod material_identity_tests {
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            // Insufficient reaction work forces a settlement rejection after
-            // the event is triggered, without changing the physical structure.
-            reaction_energy: 0.1,
+            // Insufficient physical energy forces settlement rejection after
+            // activation, without changing the physical structure.
+            activation_signal: 0.1,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -501,6 +637,52 @@ mod material_identity_tests {
     }
 
     #[test]
+    fn large_activation_signal_cannot_pay_a_physical_energy_shortfall() {
+        let mut simulation = crate::state::Simulation::new(925, 10.0);
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        let original_bond_count = simulation.organisms[0].structure.bonds.len();
+        let original_ledger = simulation.energy_ledger;
+        simulation.organisms[0].usable_energy = 0.0;
+        simulation.organisms[0].resonant_energy =
+            crate::harmonics::ResonantEnergyReservoir::default();
+        let original_resonance = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .expect("empty resonance reservoir must have a valid total");
+        let operation = ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            // The signal easily crosses the activation threshold, but the
+            // physical bond and energy holders cannot pay the requested work.
+            activation_signal: 1_000_000.0,
+            disruption_cost: bond.bond_energy + 1.0,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "test|rev:0|bond".into(),
+            accumulated_reaction: 1_000_000.0,
+        };
+
+        assert!(!resolve(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.energy_ledger,
+        ));
+        assert_eq!(
+            simulation.organisms[0].structure.bonds.len(),
+            original_bond_count
+        );
+        assert_eq!(simulation.energy_ledger, original_ledger);
+        assert_eq!(simulation.organisms[0].usable_energy, 0.0);
+        assert_eq!(
+            simulation.organisms[0].resonant_energy.total_energy(),
+            Some(original_resonance)
+        );
+    }
+
+    #[test]
     fn chemical_break_reconciles_world_energy_inventory() {
         let mut simulation = crate::state::Simulation::new(922, 10.0);
         let before = simulation.energy_inventory_snapshot();
@@ -517,7 +699,7 @@ mod material_identity_tests {
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            reaction_energy: 1_000.0,
+            activation_signal: 1_000.0,
             disruption_cost: 0.0,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -569,7 +751,7 @@ mod material_identity_tests {
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            reaction_energy: 0.25,
+            activation_signal: 0.25,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -610,7 +792,7 @@ mod material_identity_tests {
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            reaction_energy: 1_000.0,
+            activation_signal: 1_000.0,
             disruption_cost: 0.5,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -653,7 +835,7 @@ mod material_identity_tests {
             "fixture bond must have positive finite stored energy"
         );
         let disruption_cost = bond.bond_energy * 0.5;
-        let reaction_energy = disruption_cost * 0.5;
+        let activation_signal = disruption_cost * 0.5;
         assert!(simulation.organisms[0]
             .resonant_energy
             .deposit(440.0, disruption_cost));
@@ -670,11 +852,11 @@ mod material_identity_tests {
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
-            reaction_energy,
+            activation_signal,
             disruption_cost,
             reaction_frequency_hz: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
-            accumulated_reaction: reaction_energy,
+            accumulated_reaction: activation_signal,
         };
         assert!(
             !resolve(
@@ -728,11 +910,14 @@ mod material_identity_tests {
         simulation
             .chemical_reaction_accumulation
             .insert(unrelated_key.clone(), 0.25);
+        let mut discovery_budget = MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
         assert!(accumulate(
             organism,
             &simulation.environment.catalog,
             &mut simulation.chemical_reaction_accumulation,
             &mut simulation.chemistry_library,
+            simulation.tick,
+            &mut discovery_budget,
         )
         .is_empty());
 
@@ -754,6 +939,137 @@ mod material_identity_tests {
                 .get(&unrelated_key),
             Some(&0.25)
         );
+    }
+
+    #[test]
+    fn scheduler_orders_work_by_stable_key_and_respects_budget() {
+        let keys = vec!["zeta".into(), "alpha".into(), "middle".into()];
+        assert_eq!(stable_work_order(&keys, 2, 0), vec![1, 2]);
+        assert_eq!(stable_work_order(&keys, 0, 0), Vec::<usize>::new());
+        assert_eq!(stable_work_order(&keys, 8, 0), vec![1, 2, 0]);
+    }
+
+    #[test]
+    fn scheduler_breaks_duplicate_key_ties_by_original_index() {
+        let keys = vec!["same".into(), "same".into(), "first".into()];
+        assert_eq!(stable_work_order(&keys, 2, 0), vec![2, 0]);
+    }
+
+    #[test]
+    fn per_owner_budget_rotates_remainder_and_large_populations() {
+        let first_tick: Vec<usize> = (0..3)
+            .map(|index| work_budget_for_owner(64, 3, index, 0))
+            .collect();
+        let next_tick: Vec<usize> = (0..3)
+            .map(|index| work_budget_for_owner(64, 3, index, 1))
+            .collect();
+        assert_eq!(first_tick, vec![22, 21, 21]);
+        assert_eq!(next_tick, vec![21, 22, 21]);
+        assert_eq!(first_tick.iter().sum::<usize>(), 64);
+
+        let first_slots: Vec<usize> = (0..100)
+            .map(|index| work_budget_for_owner(64, 100, index, 0))
+            .collect();
+        let next_slots: Vec<usize> = (0..100)
+            .map(|index| work_budget_for_owner(64, 100, index, 1))
+            .collect();
+        assert_eq!(first_slots.iter().sum::<usize>(), 64);
+        assert_eq!(next_slots.iter().sum::<usize>(), 64);
+        assert_eq!(first_slots[0], 1);
+        assert_eq!(first_slots[64], 0);
+        assert_eq!(next_slots[0], 0);
+        assert_eq!(next_slots[64], 1);
+    }
+
+    #[test]
+    fn scheduler_carries_unused_owner_budget_forward_within_global_cap() {
+        let simulation = crate::state::Simulation::new(926, 10.0);
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        let operation = |owner, candidate| ChemicalBreakOperation {
+            organism_id: format!("owner-{owner}"),
+            bond,
+            activation_signal: 1.0,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: format!("owner-{owner}|candidate-{candidate}"),
+            accumulated_reaction: 1.0,
+        };
+        let candidate_counts = [0, 10, 100];
+        let mut carry = 0;
+        let mut realized_attempts = 0;
+        let mut accumulation = std::collections::BTreeMap::new();
+
+        for (owner, count) in candidate_counts.into_iter().enumerate() {
+            let mut remaining = work_budget_for_owner_with_carry(
+                MAX_REACTION_REALIZATIONS_PER_TICK,
+                candidate_counts.len(),
+                owner,
+                0,
+                carry,
+            );
+            let operations = (0..count)
+                .map(|candidate| operation(owner, candidate))
+                .collect();
+            let ready = schedule_operations(operations, 0, &mut remaining, &mut accumulation);
+            realized_attempts += ready.len();
+            carry = remaining;
+        }
+
+        assert_eq!(realized_attempts, MAX_REACTION_REALIZATIONS_PER_TICK);
+        assert_eq!(carry, 0);
+        assert_eq!(accumulation.len(), 46);
+    }
+
+    #[test]
+    fn scheduler_rotation_prevents_permanent_first_key_starvation() {
+        let keys = vec!["zeta".into(), "alpha".into(), "middle".into()];
+        assert_eq!(stable_work_order(&keys, 2, 0), vec![1, 2]);
+        assert_eq!(stable_work_order(&keys, 2, 1), vec![2, 0]);
+    }
+
+    #[test]
+    fn scheduler_defers_over_budget_activation_without_losing_progress() {
+        let simulation = crate::state::Simulation::new(925, 10.0);
+        let bond = *simulation.organisms[0]
+            .structure
+            .bonds
+            .first()
+            .expect("seed organism should contain a structural bond");
+        let operation = |key: &str, progress: f64| ChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            bond,
+            activation_signal: progress,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: key.into(),
+            accumulated_reaction: progress,
+        };
+        let mut accumulation = std::collections::BTreeMap::new();
+        let mut remaining = 1;
+        let ready = schedule_operations(
+            vec![operation("z-last", 7.25), operation("a-first", 2.5)],
+            0,
+            &mut remaining,
+            &mut accumulation,
+        );
+
+        assert_eq!(ready.len(), 1);
+        assert_eq!(ready[0].accumulation_key, "a-first");
+        assert_eq!(remaining, 0);
+        assert_eq!(accumulation.get("z-last"), Some(&7.25));
+
+        let deferred = schedule_operations(
+            vec![operation("b-next-tick", 3.75)],
+            1,
+            &mut remaining,
+            &mut accumulation,
+        );
+        assert!(deferred.is_empty());
+        assert_eq!(accumulation.get("b-next-tick"), Some(&3.75));
     }
 
     #[test]

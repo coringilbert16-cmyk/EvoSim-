@@ -739,6 +739,9 @@ impl Simulation {
     pub(crate) fn step(&mut self) {
         self.tick += 1;
 
+        // Divide the realization budget across owners; the remainder rotates by tick.
+        let chemistry_owner_count = self.organisms.len();
+
         let mut still_active = Vec::new();
         let mut completed = Vec::new();
         for mut transformation in self.active_transformations.drain(..) {
@@ -834,7 +837,25 @@ impl Simulation {
                 &living_ids,
             );
         }
-        for organism in &mut self.organisms {
+        let mut carried_chemistry_work = 0;
+        let mut carried_chemistry_discovery_work = 0;
+        for (organism_index, organism) in self.organisms.iter_mut().enumerate() {
+            let mut chemistry_work_remaining =
+                crate::chemical_reaction::work_budget_for_owner_with_carry(
+                    crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK,
+                    chemistry_owner_count,
+                    organism_index,
+                    self.tick,
+                    carried_chemistry_work,
+                );
+            let mut chemistry_discovery_work_remaining =
+                crate::chemical_reaction::work_budget_for_owner_with_carry(
+                    crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK,
+                    chemistry_owner_count,
+                    organism_index,
+                    self.tick,
+                    carried_chemistry_discovery_work,
+                );
             let is_living = living_ids.contains(&organism.id);
             if is_living {
                 organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
@@ -869,11 +890,19 @@ impl Simulation {
                 &self.environment.catalog,
                 &mut self.chemical_reaction_accumulation,
                 &mut self.chemistry_library,
+                self.tick,
+                &mut chemistry_discovery_work_remaining,
             );
-            // Chemistry events have no artificial duration or per-organism
-            // serialization. Every event that still matches the current
-            // physical structure is applied immediately; conflicting events
-            // naturally fail once an earlier event has changed that structure.
+            carried_chemistry_discovery_work = chemistry_discovery_work_remaining;
+            let chemical_operations = crate::chemical_reaction::schedule_operations(
+                chemical_operations,
+                self.tick,
+                &mut chemistry_work_remaining,
+                &mut self.chemical_reaction_accumulation,
+            );
+            // The shared per-tick budget bounds physical reaction realization.
+            // Deferred activations retain progress only; they must be discovered
+            // and validated against live geometry again before a later commit.
             for operation in chemical_operations {
                 let _ = crate::chemical_reaction::resolve_preserving_accumulation(
                     operation,
@@ -882,6 +911,9 @@ impl Simulation {
                     &mut self.chemical_reaction_accumulation,
                 );
             }
+            // Carry unused slots forward, but never borrow a later owner's
+            // quota. This preserves fairness while avoiding idle capacity.
+            carried_chemistry_work = chemistry_work_remaining;
 
             // Recheck immediately after chemistry: if a reaction breached the
             // genome core this tick, do not perform any later biological work.
