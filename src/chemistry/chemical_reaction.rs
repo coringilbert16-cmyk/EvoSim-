@@ -864,7 +864,159 @@ pub(crate) fn resolve_preserving_accumulation(
 #[cfg(test)]
 mod material_identity_tests {
     use super::*;
-    use crate::resources::Material;
+    use crate::resources::{InternalBond, Material};
+
+    fn environmental_test_composite(
+        catalog: &[crate::resources::BaseResource],
+    ) -> crate::physical_material::PhysicalMaterial {
+        let material = Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
+        crate::physical_material::PhysicalMaterial::realized(
+            material,
+            vec![
+                crate::structure::Placement {
+                    x: 12.5,
+                    y: 12.5,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 14.3,
+                    y: 12.5,
+                    rotation_radians: 0.0,
+                },
+            ],
+            catalog,
+        )
+        .expect("test composite should be physically realizable")
+    }
+
+    #[test]
+    fn environmental_chemical_break_charges_work_and_splits_material_atomically() {
+        let mut simulation = crate::state::Simulation::new(933, 10.0);
+        let source = environmental_test_composite(&simulation.environment.catalog);
+        let bond = source
+            .internal_connections
+            .as_ref()
+            .and_then(|connections| connections.first())
+            .expect("test composite should contain one internal bond")
+            .clone();
+        let cell_index = simulation
+            .environment
+            .field
+            .index_for_position(12.5, 12.5)
+            .expect("source placement should be in the field");
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            cell_index,
+            source.clone(),
+            &simulation.environment.catalog,
+        ));
+
+        let energy_before = simulation.organisms[0].usable_energy;
+        let resonance_before = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .unwrap();
+        let ledger_before = simulation.energy_ledger.total_work_expended;
+        let operation = EnvironmentalChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            cell_index,
+            material_index: 0,
+            bond_index: 0,
+            source_material: source.clone(),
+            bond,
+            activation_signal: 1.0,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "environmental-atomic-break-success".into(),
+            accumulated_reaction: 1.0,
+        };
+
+        assert!(resolve_environmental(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
+        ));
+
+        let pieces = &simulation.environment.field.cells[cell_index].physical_materials;
+        assert_eq!(pieces.len(), 2);
+        assert!(pieces.iter().all(|piece| {
+            piece.material.total_amount() == 1.0
+                && piece.internal_connections.as_ref().is_some_and(Vec::is_empty)
+        }));
+        assert!(!pieces.contains(&source));
+        assert!((energy_before - simulation.organisms[0].usable_energy - 0.5).abs() < 1e-9);
+        assert_eq!(
+            simulation.organisms[0].resonant_energy.total_energy().unwrap(),
+            resonance_before
+        );
+        assert!(
+            (simulation.energy_ledger.total_work_expended - ledger_before - 0.5).abs() < 1e-9
+        );
+    }
+
+    #[test]
+    fn environmental_chemical_break_with_insufficient_work_rolls_back_everything() {
+        let mut simulation = crate::state::Simulation::new(934, 10.0);
+        let source = environmental_test_composite(&simulation.environment.catalog);
+        let bond = source
+            .internal_connections
+            .as_ref()
+            .and_then(|connections| connections.first())
+            .expect("test composite should contain one internal bond")
+            .clone();
+        let cell_index = simulation
+            .environment
+            .field
+            .index_for_position(12.5, 12.5)
+            .expect("source placement should be in the field");
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            cell_index,
+            source.clone(),
+            &simulation.environment.catalog,
+        ));
+        simulation.organisms[0].usable_energy = 0.0;
+
+        let energy_before = simulation.organisms[0].usable_energy;
+        let resonance_before = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .unwrap();
+        let ledger_before = simulation.energy_ledger.clone();
+        let field_before = simulation.environment.field.cells.clone();
+        let operation = EnvironmentalChemicalBreakOperation {
+            organism_id: simulation.organisms[0].id.clone(),
+            cell_index,
+            material_index: 0,
+            bond_index: 0,
+            source_material: source,
+            bond,
+            activation_signal: 1.0,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "environmental-atomic-break-no-work".into(),
+            accumulated_reaction: 1.0,
+        };
+
+        assert!(!resolve_environmental(
+            operation,
+            &mut simulation.organisms[0],
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
+        ));
+        assert_eq!(simulation.environment.field.cells, field_before);
+        assert_eq!(simulation.organisms[0].usable_energy, energy_before);
+        assert_eq!(
+            simulation.organisms[0].resonant_energy.total_energy().unwrap(),
+            resonance_before
+        );
+        assert_eq!(simulation.energy_ledger, ledger_before);
+    }
 
     #[test]
     fn environmental_commit_rejects_unactivated_operation_before_mutation() {
