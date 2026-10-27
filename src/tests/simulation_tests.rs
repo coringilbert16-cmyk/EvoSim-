@@ -1357,8 +1357,7 @@ mod integration_tests {
         // The signal is sufficient to trigger the reaction, but the physical
         // disruption cost exceeds the bond's stored energy plus all usable
         // energy. Rejection must therefore preserve every authoritative holder.
-        let disruption_cost =
-            bond.bond_energy + simulation.organisms[0].usable_energy + 1.0;
+        let disruption_cost = bond.bond_energy + simulation.organisms[0].usable_energy + 1.0;
         let operation = crate::chemical_reaction::ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
