@@ -1182,7 +1182,8 @@ pub(crate) fn finish_reproduction(
             )
             .and_then(|balance| {
                 balance.settlement_transaction(crate::energy_ledger::EnergyReason::Break)
-            }) else {
+            })
+            else {
                 return None;
             };
             if !staged_ledger.settle_transaction(&mut combined_energy, transaction) {
