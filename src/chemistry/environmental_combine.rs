@@ -595,8 +595,7 @@ pub(crate) fn resolve_environmental(
         return false;
     }
 
-    let Some((mut trial_structure, indices_a)) =
-        restored_source(&operation.source_a, environment)
+    let Some((mut trial_structure, indices_a)) = restored_source(&operation.source_a, environment)
     else {
         return false;
     };
