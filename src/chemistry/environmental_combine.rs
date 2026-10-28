@@ -1006,6 +1006,13 @@ mod tests {
             "BREAK must keep the ledger usable-energy total aligned with its live holders"
         );
         assert!(
+            (simulation.energy_ledger.total_structural_energy_held
+                - after_break.current_structural_energy)
+                .abs()
+                <= 1e-6,
+            "BREAK must keep the ledger structural-energy total aligned with its live bonds"
+        );
+        assert!(
             after_break.is_balanced_without_creation(1e-6),
             "COMBINE followed by environmental BREAK must conserve the complete inventory; inventory={after_break:?}, residual={:?}",
             after_break.residual()
