@@ -52,8 +52,12 @@ fn transient_fluid_pair(
 ) -> Option<bool> {
     let resource_a_name = &structure.units.get(unit_a)?.material.parts.first()?.0;
     let resource_b_name = &structure.units.get(unit_b)?.material.parts.first()?.0;
-    let resource_a = catalog.iter().find(|resource| &resource.name == resource_a_name)?;
-    let resource_b = catalog.iter().find(|resource| &resource.name == resource_b_name)?;
+    let resource_a = catalog
+        .iter()
+        .find(|resource| &resource.name == resource_a_name)?;
+    let resource_b = catalog
+        .iter()
+        .find(|resource| &resource.name == resource_b_name)?;
     Some(
         resource_a.physical_state == crate::resources::PhysicalState::Fluid
             && resource_b.physical_state == crate::resources::PhysicalState::Fluid,
@@ -61,14 +65,11 @@ fn transient_fluid_pair(
 }
 
 fn structural_potential(structure: &crate::structure::OrganismStructure) -> Option<f64> {
-    let potential = structure
-        .bonds
-        .iter()
-        .try_fold(0.0, |total, bond| {
-            let next = total - bond.bond_energy;
-            (bond.bond_energy.is_finite() && bond.bond_energy >= 0.0 && next.is_finite())
-                .then_some(next)
-        })?;
+    let potential = structure.bonds.iter().try_fold(0.0, |total, bond| {
+        let next = total - bond.bond_energy;
+        (bond.bond_energy.is_finite() && bond.bond_energy >= 0.0 && next.is_finite())
+            .then_some(next)
+    })?;
     potential.is_finite().then_some(potential)
 }
 
@@ -463,8 +464,8 @@ fn form_bond_from_candidate_diagnostic(
                 resource.physical_state == crate::resources::PhysicalState::Fluid
             })
     });
-    let reactant_structural_energy = structural_potential(structure)
-        .ok_or("COMBINE reactant structural energy is invalid")?;
+    let reactant_structural_energy =
+        structural_potential(structure).ok_or("COMBINE reactant structural energy is invalid")?;
     let product_structural_energy = structural_potential(&trial_structure)
         .ok_or("COMBINE product structural energy is invalid")?;
     let transaction = combine_energy_transaction(
