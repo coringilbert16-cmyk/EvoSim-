@@ -455,8 +455,8 @@ fn form_bond_from_candidate_diagnostic(
                 resource.physical_state == crate::resources::PhysicalState::Fluid
             })
     });
-    let reactant_structural_energy =
-        structural_potential(structure).ok_or("COMBINE reactant structural energy is invalid")?;
+    let reactant_structural_energy = crate::energy_ledger::structural_potential(structure)
+        .ok_or("COMBINE reactant structural energy is invalid")?;
     let product_structural_energy = crate::energy_ledger::structural_potential(&trial_structure)
         .ok_or("COMBINE product structural energy is invalid")?;
     let transaction = combine_energy_transaction(
