@@ -4,12 +4,12 @@ use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransactio
 use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
 use crate::structure::Placement;
 
-/// Release the intrinsic potential stored in an existing physical bond.
+/// Energy accounting for separating a stable physical bond.
 ///
-/// This is distinct from material decomposition: the constituent potential was
-/// already present before the bond formed, while bond potential was explicitly
-/// allocated during COMBINE. Breaking the physical bond therefore releases the
-/// bond potential exactly once.
+/// `bond_energy` is the positive dissociation-energy magnitude, not a stored
+/// energy reservoir. A stable bond has negative structural potential relative to
+/// separated constituents, so breaking it raises structural potential and must
+/// be paid for by a legitimate energy holder.
 pub(crate) fn bond_break_energy_yield(
     bond_energy: f64,
     processing_efficiency: f64,
@@ -17,10 +17,9 @@ pub(crate) fn bond_break_energy_yield(
     if !bond_energy.is_finite() || bond_energy < 0.0 || !processing_efficiency.is_finite() {
         return None;
     }
-    let efficiency = processing_efficiency.clamp(0.0, 1.0);
-    let usable = bond_energy * efficiency;
-    let heat = (bond_energy - usable).max(0.0);
-    (usable.is_finite() && heat.is_finite() && (bond_energy - usable - heat).abs() <= 1e-9)
+    let usable = -bond_energy;
+    let heat = 0.0;
+    (usable.is_finite() && (usable + bond_energy + heat).abs() <= 1e-9)
         .then_some((bond_energy, usable, heat))
 }
 
@@ -37,17 +36,12 @@ pub(crate) fn chemical_break_energy_yield(
     {
         return None;
     }
-    let efficiency = processing_efficiency.clamp(0.0, 1.0);
-    // The accumulated reaction quantity is an activation signal, not an
-    // energy reservoir. The removed bond's stored energy pays disruption work
-    // first; any shortfall is charged to the organism's usable-energy holder.
-    let surplus = (bond_energy - disruption_cost).max(0.0);
-    let deficit = (disruption_cost - bond_energy).max(0.0);
-    let usable = surplus * efficiency - deficit;
-    let heat = (surplus - surplus * efficiency).max(0.0);
+    // BREAK raises structural potential by the dissociation energy and expends
+    // the remaining physical work. Activation is only a gate, never a source.
+    let usable = -(bond_energy + disruption_cost);
+    let heat = 0.0;
     (usable.is_finite()
-        && heat.is_finite()
-        && (usable - bond_energy + disruption_cost + heat).abs() <= 1e-9)
+        && (usable + bond_energy + disruption_cost + heat).abs() <= 1e-9)
         .then_some((bond_energy, usable, heat))
 }
 
@@ -108,7 +102,7 @@ pub(crate) fn prepare_chemical_break_energy_with_resonance(
         reason: EnergyReason::Break,
         potential_released: 0.0,
         usable_delta: usable,
-        structural_delta: -gross,
+        structural_delta: gross,
         work_expended: bond_supplied_work,
         heat_dissipated: heat,
     };
@@ -1451,12 +1445,12 @@ mod tests {
     }
 
     #[test]
-    fn bond_break_releases_only_stored_bond_potential() {
+    fn bond_break_requires_energy_for_binding_potential() {
         let (gross, usable, heat) = bond_break_energy_yield(4.0, 0.5).unwrap();
         assert_eq!(gross, 4.0);
-        assert_eq!(usable, 2.0);
-        assert_eq!(heat, 2.0);
-        assert!((gross - usable - heat).abs() < 1e-12);
+        assert_eq!(usable, -4.0);
+        assert_eq!(heat, 0.0);
+        assert!((gross + usable + heat).abs() < 1e-12);
     }
 
     #[test]
@@ -2294,11 +2288,11 @@ mod tests {
             chemical_break_energy_yield(bond_energy, bond_supplied_work, 0.5).unwrap();
 
         assert!((structural_energy - bond_energy).abs() < 1e-12);
-        assert!((usable - 0.5).abs() < 1e-12);
-        assert!((heat - 0.5).abs() < 1e-12);
-        // Bond energy plus the reservoir debit exactly pays usable gain,
-        // dissipated heat, and the full physical disruption work.
-        let residual = -structural_energy - resonant_work + usable + heat + total_disruption_work;
+        assert!((usable + bond_energy + bond_supplied_work).abs() < 1e-12);
+        assert_eq!(heat, 0.0);
+        // The binding-energy increase, usable-holder debit, resonance debit,
+        // and full physical disruption work reconcile independently.
+        let residual = structural_energy - resonant_work + usable + total_disruption_work;
         assert!(residual.abs() < 1e-12);
     }
 
