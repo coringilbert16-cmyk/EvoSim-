@@ -96,16 +96,14 @@ pub(crate) fn prepare_chemical_break_energy_with_resonance(
     if !next_total_work.is_finite() {
         return None;
     }
-    let (gross, usable, heat) =
+    let (gross, _usable, heat) =
         chemical_break_energy_yield(bond_energy, bond_supplied_work, processing_efficiency)?;
-    let transaction = EnergyTransaction {
-        reason: EnergyReason::Break,
-        potential_released: 0.0,
-        usable_delta: usable,
-        structural_delta: gross,
-        work_expended: bond_supplied_work,
-        heat_dissipated: heat,
-    };
+    let transaction = EnergyTransaction::reaction(
+        EnergyReason::Break,
+        gross,
+        bond_supplied_work,
+        heat,
+    )?;
     let mut prepared_ledger = *ledger;
     let mut prepared_usable_energy = usable_energy;
     if !prepared_ledger.settle_transaction(&mut prepared_usable_energy, transaction) {
