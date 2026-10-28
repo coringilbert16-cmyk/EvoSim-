@@ -95,6 +95,38 @@ mod tests {
     }
 
     #[test]
+    fn decomposition_rejects_unaffordable_break_without_mutating_state() {
+        let catalog = default_catalog();
+        let simulation = crate::state::Simulation::new(904, 10.0);
+        let mut structure = simulation.organisms[0].structure.clone();
+        assert!(!structure.bonds.is_empty());
+        structure.bonds.truncate(1);
+        assert!(structure.bonds[0].bond_energy > 0.0);
+
+        let mut body = DecomposingBody::new(
+            structure.clone(),
+            0.0,
+            Position { x: 50.0, y: 50.0 },
+        )
+        .unwrap();
+        let environment = Environment {
+            width: 100.0,
+            height: 100.0,
+            chemistry_usable_energy: 0.0,
+            resonant_energy: Default::default(),
+            catalog,
+            field: ActiveMaterialField::new(100.0, 100.0, 10.0),
+        };
+        let mut ledger = EnergyLedger::default();
+        let before_ledger = ledger;
+
+        assert!(resolve_one_bond_with_ledger(&mut body, &environment, &mut ledger).is_none());
+        assert_eq!(body.structure, structure);
+        assert_eq!(body.energy_budget, 0.0);
+        assert_eq!(ledger, before_ledger);
+    }
+
+    #[test]
     fn stress_without_resonance_cannot_break_a_bond_or_spend_energy() {
         let catalog = default_catalog();
         let mut simulation = crate::state::Simulation::new(903, 10.0);
