@@ -89,6 +89,7 @@ fn dissipate_unupdated_accumulations(
 
 fn restored_source(
     source: &PhysicalMaterial,
+    cell_index: usize,
     environment: &Environment,
 ) -> Option<(OrganismStructure, Vec<usize>)> {
     if !source.is_realized()
@@ -98,10 +99,15 @@ fn restored_source(
         return None;
     }
     let mut structure = OrganismStructure::new();
+    let (x, y) = environment.field.cell_center(cell_index);
     let indices = crate::material_restoration::restore_material(
         &mut structure,
         source,
-        origin(),
+        Placement {
+            x,
+            y,
+            rotation_radians: 0.0,
+        },
         &environment.catalog,
     )?;
     Some((structure, indices))
@@ -369,7 +375,8 @@ pub(crate) fn accumulate_environmental(
             anchor_work -= 1;
             let material_a = (material_start + material_offset) % material_count;
             let source_a = environment.field.cells[cell_a].physical_materials[material_a].clone();
-            let Some((source_structure, indices_a)) = restored_source(&source_a, environment)
+            let Some((source_structure, indices_a)) =
+                restored_source(&source_a, cell_a, environment)
             else {
                 continue;
             };
@@ -414,10 +421,15 @@ pub(crate) fn accumulate_environmental(
                         continue;
                     }
                     let mut trial_structure = source_structure.clone();
+                    let (source_b_x, source_b_y) = environment.field.cell_center(cell_b);
                     let Some(indices_b) = crate::material_restoration::restore_material(
                         &mut trial_structure,
                         &source_b,
-                        origin(),
+                        Placement {
+                            x: source_b_x,
+                            y: source_b_y,
+                            rotation_radians: 0.0,
+                        },
                         &environment.catalog,
                     ) else {
                         continue;
@@ -595,14 +607,20 @@ pub(crate) fn resolve_environmental(
         return false;
     }
 
-    let Some((mut trial_structure, indices_a)) = restored_source(&operation.source_a, environment)
+    let Some((mut trial_structure, indices_a)) =
+        restored_source(&operation.source_a, operation.cell_a, environment)
     else {
         return false;
     };
+    let (source_b_x, source_b_y) = environment.field.cell_center(operation.cell_b);
     let Some(indices_b) = crate::material_restoration::restore_material(
         &mut trial_structure,
         &operation.source_b,
-        origin(),
+        Placement {
+            x: source_b_x,
+            y: source_b_y,
+            rotation_radians: 0.0,
+        },
         &environment.catalog,
     ) else {
         return false;
