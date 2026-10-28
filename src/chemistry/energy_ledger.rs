@@ -632,6 +632,14 @@ mod tests {
     }
 
     #[test]
+    fn surplus_external_input_is_retained_without_being_double_counted() {
+        let balance = ReactionEnergyBalance::calculate(2.0, 5.0, 1.0, 0.0).unwrap();
+        assert_eq!(balance.required_external_input, 4.0);
+        assert!(balance.can_commit_with(7.0));
+        assert_eq!(balance.residual(7.0), Some(0.0));
+    }
+
+    #[test]
     fn reaction_balance_rejects_non_finite_or_negative_state_values() {
         assert!(ReactionEnergyBalance::calculate(-1.0, 0.0, 0.0, 0.0).is_none());
         assert!(ReactionEnergyBalance::calculate(0.0, f64::NAN, 0.0, 0.0).is_none());
