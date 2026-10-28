@@ -369,9 +369,7 @@ pub(crate) fn accumulate_environmental(
             anchor_work -= 1;
             let material_a = (material_start + material_offset) % material_count;
             let source_a = environment.field.cells[cell_a].physical_materials[material_a].clone();
-            let Some((source_structure, indices_a)) =
-                restored_source(&source_a, environment)
-            else {
+            let Some((source_structure, indices_a)) = restored_source(&source_a, environment) else {
                 continue;
             };
             let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
@@ -390,8 +388,7 @@ pub(crate) fn accumulate_environmental(
                 continue;
             }
             let target_start = tick as usize % target_cells.len();
-            let target_cell_scan_count =
-                target_cells.len().min(FIELD_TARGET_CELL_INSPECTION_LIMIT);
+            let target_cell_scan_count = target_cells.len().min(FIELD_TARGET_CELL_INSPECTION_LIMIT);
             for target_offset in 0..target_cell_scan_count {
                 if *remaining_discovery_work == 0 {
                     break 'anchors;
@@ -757,7 +754,10 @@ mod tests {
             &catalog,
         )
         .unwrap();
-        assert_ne!(original, source_pair_key(0, 0, &moved, 0, 1, &b, 0, 0, candidate));
+        assert_ne!(
+            original,
+            source_pair_key(0, 0, &moved, 0, 1, &b, 0, 0, candidate)
+        );
     }
 
     #[test]
@@ -774,7 +774,10 @@ mod tests {
         )
         .unwrap();
         let (structure, _) = restored_source(&source, &simulation.environment).unwrap();
-        assert_eq!(structure.units[0].placement, source.placements.as_ref().unwrap()[0]);
+        assert_eq!(
+            structure.units[0].placement,
+            source.placements.as_ref().unwrap()[0]
+        );
     }
 
     #[test]
@@ -848,12 +851,7 @@ mod tests {
                     let mut cache = ConnectionCompatibilityCache::new();
                     let mut work = FIELD_COMPONENT_PAIR_LIMIT;
                     if let Some(selected) = select_best_contact(
-                        &structure,
-                        &indices_a,
-                        &indices_b,
-                        &catalog,
-                        &mut cache,
-                        &mut work,
+                        &structure, &indices_a, &indices_b, &catalog, &mut cache, &mut work,
                     ) {
                         selected_pair = Some((source_a, source_b, selected));
                         break 'search;
@@ -881,7 +879,8 @@ mod tests {
         simulation.energy_ledger.total_usable_energy_held = baseline.current_usable_energy;
         simulation.energy_ledger.initial_resonant_energy_held = baseline.current_resonant_energy;
         simulation.energy_ledger.total_resonant_energy_held = baseline.current_resonant_energy;
-        simulation.energy_ledger.initial_structural_energy_held = baseline.current_structural_energy;
+        simulation.energy_ledger.initial_structural_energy_held =
+            baseline.current_structural_energy;
         simulation.energy_ledger.total_structural_energy_held = baseline.current_structural_energy;
 
         let key = source_pair_key(
