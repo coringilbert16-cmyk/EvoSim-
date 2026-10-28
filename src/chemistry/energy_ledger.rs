@@ -1114,12 +1114,17 @@ mod tests {
 
     #[test]
     fn reaction_transaction_reconciles_favorable_and_unfavorable_structural_changes() {
-        let favorable =
-            EnergyTransaction::reaction(EnergyReason::Combine, -7.0, 3.0, 1.0).unwrap();
+        let favorable = ReactionEnergyBalance::calculate(12.0, 5.0, 3.0, 1.0)
+            .unwrap()
+            .settlement_transaction(EnergyReason::Combine)
+            .unwrap();
         assert!(favorable.balanced());
         assert_eq!(favorable.usable_delta, 3.0);
 
-        let unfavorable = EnergyTransaction::reaction(EnergyReason::Break, 7.0, 3.0, 1.0).unwrap();
+        let unfavorable = ReactionEnergyBalance::calculate(5.0, 12.0, 3.0, 1.0)
+            .unwrap()
+            .settlement_transaction(EnergyReason::Break)
+            .unwrap();
         assert!(unfavorable.balanced());
         assert_eq!(unfavorable.usable_delta, -11.0);
     }
