@@ -1170,12 +1170,26 @@ pub(crate) fn finish_reproduction(
         // Severing division-boundary bonds raises structural potential by
         // their dissociation-energy magnitude. The parent must fund that cost
         // before its usable energy is partitioned between the two offspring.
+        let reactant_structural_energy =
+            crate::energy_ledger::structural_potential(&parent.structure)?;
+        let product_structural_energy = crate::energy_ledger::structural_potential(
+            &staged_parent_structure,
+        )? + crate::energy_ledger::structural_potential(&child_structure)?;
+        let structural_delta = product_structural_energy - reactant_structural_energy;
+        let crossing_tolerance = 1e-9 * crossing_bond_energy.abs().max(1.0);
+        if !product_structural_energy.is_finite()
+            || !structural_delta.is_finite()
+            || (structural_delta - crossing_bond_energy).abs() > crossing_tolerance
+        {
+            return None;
+        }
+
         let mut staged_ledger = *ledger;
         let mut combined_energy = parent.usable_energy;
         if crossing_bond_energy > 0.0 {
             let transaction = crate::energy_ledger::ReactionEnergyBalance::calculate(
-                0.0,
-                crossing_bond_energy,
+                reactant_structural_energy,
+                product_structural_energy,
                 0.0,
                 0.0,
             )?
