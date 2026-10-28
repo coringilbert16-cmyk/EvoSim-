@@ -1728,8 +1728,7 @@ mod fluid_coalescence_transaction_tests {
         // A weak bond releases one unit of structural potential, but ten units
         // of formation work are required. The shared transaction must debit the
         // remaining nine units from the holder and may not invent that deficit.
-        let transaction =
-            combine_energy_transaction(1.0, 10.0, false, 0.0, -1.0).unwrap();
+        let transaction = combine_energy_transaction(1.0, 10.0, false, 0.0, -1.0).unwrap();
         assert_eq!(transaction.usable_delta, -9.0);
 
         let mut ledger = EnergyLedger::default();
