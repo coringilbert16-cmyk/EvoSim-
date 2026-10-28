@@ -81,6 +81,8 @@ mod chemistry_library;
 mod combine;
 #[path = "chemistry/combine_runtime.rs"]
 mod combine_runtime;
+#[path = "chemistry/environmental_combine.rs"]
+mod environmental_combine;
 #[path = "chemistry/decomposition.rs"]
 mod decomposition;
 #[path = "infrastructure/diagnostics.rs"]
