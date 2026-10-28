@@ -10,7 +10,7 @@ use crate::resources::{BaseResource, Form, Material, PhysicalState, Shape};
 use crate::state::EnergyLedger;
 use crate::structure::Placement;
 
-const CONSTRUCTION_ENERGY: f64 = 1.0e12;
+const CONSTRUCTION_ENERGY: f64 = 1.0e6;
 const INNER_RING_RADIUS: i32 = 3;
 const OUTER_RING_RADIUS: i32 = 5;
 const SPOKE_RADIUS: i32 = 4;
