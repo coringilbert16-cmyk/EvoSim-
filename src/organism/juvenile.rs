@@ -153,10 +153,14 @@ pub(crate) fn realize_initial_with_reserve(
     let mut trial_ledger = EnergyLedger::default();
     let mut trial_energy = TRIAL_ENERGY;
     construct_calibration_structure(blueprint, catalog, &mut trial_ledger, &mut trial_energy)?;
-    let required_initial_energy = TRIAL_ENERGY - trial_energy;
-    if !required_initial_energy.is_finite() || required_initial_energy < 0.0 {
+    let energy_deficit = TRIAL_ENERGY - trial_energy;
+    if !trial_energy.is_finite() || !energy_deficit.is_finite() {
         return Err("juvenile construction produced an invalid energy requirement".into());
     }
+    // Favorable bond formation can release enough structural potential to
+    // cover construction costs. That lowers the required initial reserve to
+    // zero; it must not be treated as a negative external-energy requirement.
+    let required_initial_energy = energy_deficit.max(0.0);
 
     let mut ledger = EnergyLedger::default();
     let mut energy = required_initial_energy + reserve_energy;
