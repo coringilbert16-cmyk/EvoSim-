@@ -667,9 +667,7 @@ pub(crate) fn resolve_environmental(
         cell.physical_materials.remove(operation.material_a);
         cell.physical_materials
             .insert(operation.material_a, product);
-        environment
-            .field
-            .mark_changed_at_index(operation.cell_a);
+        environment.field.mark_changed_at_index(operation.cell_a);
     } else {
         environment.field.cells[operation.cell_a]
             .physical_materials
@@ -680,9 +678,7 @@ pub(crate) fn resolve_environmental(
         environment.field.cells[operation.cell_a]
             .physical_materials
             .insert(operation.material_a, product);
-        environment
-            .field
-            .mark_changed_at_index(operation.cell_a);
+        environment.field.mark_changed_at_index(operation.cell_a);
         environment.field.mark_changed_at_index(operation.cell_b);
     }
     environment.chemistry_usable_energy = staged_usable_energy;
