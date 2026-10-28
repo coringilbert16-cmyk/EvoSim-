@@ -978,13 +978,23 @@ mod tests {
             inventory.is_balanced_without_creation(1e-6),
             concat!(
                 "environmental COMBINE must conserve the complete energy inventory; ",
-                "before={baseline:?}, after={inventory:?}, residual={residual:?}; ",
+                "before={:?}, after={:?}, residual={:?}; ",
                 "deltas: usable={:.12}, resonant={:.12}, structural={:.12}, ",
                 "external_input={:.12}, escaped_tone={:.12}, work={:.12}, heat={:.12}; ",
                 "product parts={:?}, realized bond_energy={:.12}; ",
                 "candidate required_energy={:.12}, investment={:.12}, distance={:.12}; ",
                 "ledger totals: usable={:.12}, structural={:.12}, work={:.12}, heat={:.12}"
             ),
+            baseline,
+            inventory,
+            residual,
+            inventory.current_usable_energy - baseline.current_usable_energy,
+            inventory.current_resonant_energy - baseline.current_resonant_energy,
+            inventory.current_structural_energy - baseline.current_structural_energy,
+            inventory.external_energy_input - baseline.external_energy_input,
+            inventory.world_tone_energy_escaped - baseline.world_tone_energy_escaped,
+            inventory.work_expended - baseline.work_expended,
+            inventory.heat_dissipated - baseline.heat_dissipated,
             product[0]
                 .material
                 .parts
@@ -995,13 +1005,6 @@ mod tests {
             selected.required_energy,
             selected.investment,
             selected.candidate.distance,
-            inventory.current_usable_energy - baseline.current_usable_energy,
-            inventory.current_resonant_energy - baseline.current_resonant_energy,
-            inventory.current_structural_energy - baseline.current_structural_energy,
-            inventory.external_energy_input - baseline.external_energy_input,
-            inventory.world_tone_energy_escaped - baseline.world_tone_energy_escaped,
-            inventory.work_expended - baseline.work_expended,
-            inventory.heat_dissipated - baseline.heat_dissipated,
             simulation.energy_ledger.total_usable_energy_held,
             simulation.energy_ledger.total_structural_energy_held,
             simulation.energy_ledger.total_work_expended,
