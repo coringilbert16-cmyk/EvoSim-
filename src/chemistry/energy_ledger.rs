@@ -187,7 +187,10 @@ impl EnergyTransaction {
         {
             return None;
         }
-        let usable_delta = -(structural_delta + work_expended + heat_dissipated);
+        // Subtract in the same order used by the world inventory residual.
+        // This avoids a tiny positive rounding residual for otherwise exact
+        // dissociation transactions.
+        let usable_delta = -structural_delta - work_expended - heat_dissipated;
         if !usable_delta.is_finite() {
             return None;
         }
