@@ -261,7 +261,8 @@ impl ReactionEnergyBalance {
         }
         // Any source input beyond the deficit remains in the source holder;
         // it is not a reaction output and must not be mistaken for creation.
-        let retained_input = (legitimate_external_input - self.required_external_input).max(0.0);
+        let retained_input =
+            (legitimate_external_input - self.required_external_input).max(0.0);
         let residual = self.reactant_energy + legitimate_external_input
             - self.product_energy
             - self.physical_work
