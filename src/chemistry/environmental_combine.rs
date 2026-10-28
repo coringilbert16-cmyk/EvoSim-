@@ -83,7 +83,6 @@ fn dissipate_unupdated_accumulations(
 
 fn restored_source(
     source: &PhysicalMaterial,
-    cell_index: usize,
     environment: &Environment,
 ) -> Option<(OrganismStructure, Vec<usize>)> {
     if !source.is_realized()
@@ -93,15 +92,10 @@ fn restored_source(
         return None;
     }
     let mut structure = OrganismStructure::new();
-    let (x, y) = environment.field.cell_center(cell_index);
     let indices = crate::material_restoration::restore_material(
         &mut structure,
         source,
-        Placement {
-            x,
-            y,
-            rotation_radians: 0.0,
-        },
+        origin(),
         &environment.catalog,
     )?;
     Some((structure, indices))
@@ -367,7 +361,7 @@ pub(crate) fn accumulate_environmental(
             let material_a = (material_start + material_offset) % material_count;
             let source_a = environment.field.cells[cell_a].physical_materials[material_a].clone();
             let Some((source_structure, indices_a)) =
-                restored_source(&source_a, cell_a, environment)
+                restored_source(&source_a, environment)
             else {
                 continue;
             };
@@ -412,15 +406,10 @@ pub(crate) fn accumulate_environmental(
                         continue;
                     }
                     let mut trial_structure = source_structure.clone();
-                    let (source_b_x, source_b_y) = environment.field.cell_center(cell_b);
                     let Some(indices_b) = crate::material_restoration::restore_material(
                         &mut trial_structure,
                         &source_b,
-                        Placement {
-                            x: source_b_x,
-                            y: source_b_y,
-                            rotation_radians: 0.0,
-                        },
+                        origin(),
                         &environment.catalog,
                     ) else {
                         continue;
@@ -599,19 +588,14 @@ pub(crate) fn resolve_environmental(
     }
 
     let Some((mut trial_structure, indices_a)) =
-        restored_source(&operation.source_a, operation.cell_a, environment)
+        restored_source(&operation.source_a, environment)
     else {
         return false;
     };
-    let (source_b_x, source_b_y) = environment.field.cell_center(operation.cell_b);
     let Some(indices_b) = crate::material_restoration::restore_material(
         &mut trial_structure,
         &operation.source_b,
-        Placement {
-            x: source_b_x,
-            y: source_b_y,
-            rotation_radians: 0.0,
-        },
+        origin(),
         &environment.catalog,
     ) else {
         return false;
@@ -766,36 +750,20 @@ mod tests {
     }
 
     #[test]
-    fn environmental_sources_restore_in_their_field_cell_frames() {
+    fn environmental_source_restoration_preserves_world_placements() {
         let simulation = crate::state::Simulation::new(941, 10.0);
-        let catalog = &simulation.environment.catalog;
         let source = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
             vec![Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
+                x: 37.0,
+                y: 42.0,
+                rotation_radians: 0.25,
             }],
-            catalog,
+            &simulation.environment.catalog,
         )
         .unwrap();
-        let first_cell = 0;
-        let second_cell = 1;
-        let (first_x, first_y) = simulation.environment.field.cell_center(first_cell);
-        let (second_x, second_y) = simulation.environment.field.cell_center(second_cell);
-        let (first_structure, _) =
-            restored_source(&source, first_cell, &simulation.environment).unwrap();
-        let (second_structure, _) =
-            restored_source(&source, second_cell, &simulation.environment).unwrap();
-
-        assert_eq!(first_structure.units[0].placement.x, first_x);
-        assert_eq!(first_structure.units[0].placement.y, first_y);
-        assert_eq!(second_structure.units[0].placement.x, second_x);
-        assert_eq!(second_structure.units[0].placement.y, second_y);
-        assert_ne!(
-            first_structure.units[0].placement,
-            second_structure.units[0].placement
-        );
+        let (structure, _) = restored_source(&source, &simulation.environment).unwrap();
+        assert_eq!(structure.units[0].placement, source.placements.as_ref().unwrap()[0]);
     }
 
     #[test]
