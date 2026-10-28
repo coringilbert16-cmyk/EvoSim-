@@ -753,6 +753,10 @@ mod tests {
             available_b: true,
         };
         let original = source_pair_key(0, 0, &a, 0, 1, &b, 0, 0, candidate);
+        assert_ne!(
+            original,
+            source_pair_key(0, 0, &a, 0, 1, &b, 1, 0, candidate)
+        );
         let moved = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
             vec![Placement {
