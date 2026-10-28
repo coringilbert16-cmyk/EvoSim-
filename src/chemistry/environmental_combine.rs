@@ -655,6 +655,19 @@ pub(crate) fn resolve_environmental(
         return false;
     };
 
+    // Keep the ledger's world-wide usable-energy total synchronized with the
+    // environment-owned holder. settle_transaction updates the holder and flow
+    // counters, but deliberately leaves this aggregate total to the owner.
+    let usable_delta = staged_usable_energy - environment.chemistry_usable_energy;
+    let next_total_usable = staged_ledger.total_usable_energy_held + usable_delta;
+    if !usable_delta.is_finite()
+        || !next_total_usable.is_finite()
+        || next_total_usable < 0.0
+    {
+        return false;
+    }
+    staged_ledger.total_usable_energy_held = next_total_usable;
+
     // All fallible checks are complete. Remove in descending index order for a
     // same-cell pair, insert the product at the first source slot, and invalidate
     // every touched cell exactly once.
@@ -924,6 +937,12 @@ mod tests {
         assert!(connections[0].bond_energy > 0.0);
         let inventory = simulation.energy_inventory_snapshot();
         assert!(
+            (simulation.energy_ledger.total_usable_energy_held - inventory.current_usable_energy)
+                .abs()
+                <= 1e-6,
+            "COMBINE must keep the ledger usable-energy total aligned with its live holders"
+        );
+        assert!(
             inventory.is_balanced_without_creation(1e-6),
             "environmental COMBINE must conserve the complete energy inventory; inventory={inventory:?}, residual={:?}",
             inventory.residual()
@@ -966,6 +985,13 @@ mod tests {
             "split sources must no longer retain the realized bond"
         );
         let after_break = simulation.energy_inventory_snapshot();
+        assert!(
+            (simulation.energy_ledger.total_usable_energy_held
+                - after_break.current_usable_energy)
+                .abs()
+                <= 1e-6,
+            "BREAK must keep the ledger usable-energy total aligned with its live holders"
+        );
         assert!(
             after_break.is_balanced_without_creation(1e-6),
             "COMBINE followed by environmental BREAK must conserve the complete inventory; inventory={after_break:?}, residual={:?}",
