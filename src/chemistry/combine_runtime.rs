@@ -720,10 +720,7 @@ pub(crate) fn try_combine_stored_unit(
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| a.4.partial_cmp(&b.4).unwrap_or(std::cmp::Ordering::Equal))
         });
-        for (ua, part_index, origin, evaluation, _, required, _) in candidates {
-            if organism.usable_energy + EPSILON < required {
-                continue;
-            }
+        for (ua, part_index, origin, evaluation, _, _required, _) in candidates {
             let mut hypothetical = organism.structure.clone();
             let indices = crate::material_restoration::restore_material(
                 &mut hypothetical,
@@ -734,7 +731,8 @@ pub(crate) fn try_combine_stored_unit(
             let ub = *indices.get(part_index)?;
             let mut candidate_ledger = *ledger;
             let mut candidate_energy = organism.usable_energy;
-            if let Some(attempt) = form_bond(
+            let mut candidate_resonance = organism.resonant_energy.clone();
+            if let Some(attempt) = form_bond_with_resonance(
                 &mut hypothetical,
                 BondFormationRequest {
                     unit_a: ua,
@@ -747,6 +745,8 @@ pub(crate) fn try_combine_stored_unit(
                 cache,
                 &mut candidate_ledger,
                 &mut candidate_energy,
+                &mut candidate_resonance,
+                organism.genome.processing_efficiency(),
             ) {
                 if !coalesce_fluid_pair_after_bond(&mut hypothetical, ua, ub, &environment.catalog)
                 {
@@ -757,6 +757,7 @@ pub(crate) fn try_combine_stored_unit(
                     .take_matching_physical(&raw, &environment.catalog)?;
                 organism.structure = hypothetical;
                 organism.usable_energy = candidate_energy;
+                organism.resonant_energy = candidate_resonance;
                 *ledger = candidate_ledger;
                 organism.mark_structure_changed();
                 organism.add_transaction_stress(attempt.work_cost);
@@ -865,7 +866,7 @@ pub(crate) fn try_combine_stored_unit(
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| a.3.partial_cmp(&b.3).unwrap_or(std::cmp::Ordering::Equal))
     });
-    for (ua, placement, evaluation, _, required, _) in candidates {
+    for (ua, placement, evaluation, _, _required, _) in candidates {
         if organism.usable_energy + EPSILON < required {
             continue;
         }
@@ -879,7 +880,8 @@ pub(crate) fn try_combine_stored_unit(
         let ub = *indices.first()?;
         let mut candidate_ledger = *ledger;
         let mut candidate_energy = organism.usable_energy;
-        if let Some(attempt) = form_bond(
+        let mut candidate_resonance = organism.resonant_energy.clone();
+        if let Some(attempt) = form_bond_with_resonance(
             &mut hypothetical,
             BondFormationRequest {
                 unit_a: ua,
@@ -892,6 +894,8 @@ pub(crate) fn try_combine_stored_unit(
             cache,
             &mut candidate_ledger,
             &mut candidate_energy,
+            &mut candidate_resonance,
+            organism.genome.processing_efficiency(),
         ) {
             if !coalesce_fluid_pair_after_bond(&mut hypothetical, ua, ub, &environment.catalog) {
                 continue;
@@ -902,6 +906,7 @@ pub(crate) fn try_combine_stored_unit(
             organism.structure = hypothetical;
             organism.mark_structure_changed();
             organism.usable_energy = candidate_energy;
+            organism.resonant_energy = candidate_resonance;
             *ledger = candidate_ledger;
             organism.add_transaction_stress(attempt.work_cost);
             return Some(attempt);
