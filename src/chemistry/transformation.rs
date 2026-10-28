@@ -136,7 +136,8 @@ fn prepare_chemical_break_energy_with_structural_potentials(
     if !next_total_work.is_finite() {
         return None;
     }
-    let (gross, _usable, _heat) = chemical_break_energy_yield(bond_energy, bond_supplied_work)?;
+    let (gross, _usable, _heat) =
+        chemical_break_energy_yield(bond_energy, bond_supplied_work)?;
     let delta_tolerance = 1e-9 * gross.abs().max(1.0);
     if (structural_delta - gross).abs() > delta_tolerance {
         return None;
