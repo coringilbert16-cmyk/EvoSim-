@@ -174,8 +174,8 @@ mod tests {
                     "holder balance must include the bond-formation energy release"
                 );
                 assert!(
-                    (attempt.net_energy_change - (energy - before_energy)).abs() < 1.0e-9,
-                    "reported net energy change must match the holder balance"
+                    (attempt.usable_energy_delta - (energy - before_energy)).abs() < 1.0e-9,
+                    "reported usable-energy delta must match the holder balance"
                 );
                 assert_eq!(
                     ledger.total_heat_dissipated, 0.0,
