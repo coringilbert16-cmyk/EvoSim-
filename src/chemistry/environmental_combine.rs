@@ -763,6 +763,39 @@ mod tests {
     }
 
     #[test]
+    fn environmental_sources_restore_in_their_field_cell_frames() {
+        let simulation = crate::state::Simulation::new(941, 10.0);
+        let catalog = &simulation.environment.catalog;
+        let source = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            catalog,
+        )
+        .unwrap();
+        let first_cell = 0;
+        let second_cell = 1;
+        let (first_x, first_y) = simulation.environment.field.cell_center(first_cell);
+        let (second_x, second_y) = simulation.environment.field.cell_center(second_cell);
+        let (first_structure, _) =
+            restored_source(&source, first_cell, &simulation.environment).unwrap();
+        let (second_structure, _) =
+            restored_source(&source, second_cell, &simulation.environment).unwrap();
+
+        assert_eq!(first_structure.units[0].placement.x, first_x);
+        assert_eq!(first_structure.units[0].placement.y, first_y);
+        assert_eq!(second_structure.units[0].placement.x, second_x);
+        assert_eq!(second_structure.units[0].placement.y, second_y);
+        assert_ne!(
+            first_structure.units[0].placement,
+            second_structure.units[0].placement
+        );
+    }
+
+    #[test]
     fn environmental_product_preserves_allocated_internal_bond_energy() {
         let catalog = crate::resources::default_catalog();
         let mut structure = OrganismStructure::new();
