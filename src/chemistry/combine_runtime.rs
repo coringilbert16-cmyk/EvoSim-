@@ -52,12 +52,8 @@ fn transient_fluid_pair(
 ) -> Option<bool> {
     let resource_a_name = &structure.units.get(unit_a)?.material.parts.first()?.0;
     let resource_b_name = &structure.units.get(unit_b)?.material.parts.first()?.0;
-    let resource_a = catalog
-        .iter()
-        .find(|resource| &resource.name == resource_a_name)?;
-    let resource_b = catalog
-        .iter()
-        .find(|resource| &resource.name == resource_b_name)?;
+    let resource_a = catalog.iter().find(|resource| &resource.name == resource_a_name)?;
+    let resource_b = catalog.iter().find(|resource| &resource.name == resource_b_name)?;
     Some(
         resource_a.physical_state == crate::resources::PhysicalState::Fluid
             && resource_b.physical_state == crate::resources::PhysicalState::Fluid,
