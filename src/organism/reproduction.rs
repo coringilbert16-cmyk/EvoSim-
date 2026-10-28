@@ -2683,7 +2683,7 @@ mod tests {
         }
 
         fn structural_energy(structure: &OrganismStructure) -> f64 {
-            structure.bonds.iter().map(|bond| bond.bond_energy).sum()
+            structure.bonds.iter().map(|bond| -bond.bond_energy).sum()
         }
 
         fn cavity_with_attached_carbon(
