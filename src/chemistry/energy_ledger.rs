@@ -752,6 +752,35 @@ mod tests {
     }
 
     #[test]
+    fn reaction_balance_accepts_tiny_negative_algebraic_rounding() {
+        let transaction = EnergyTransaction::reaction(
+            EnergyReason::Break,
+            12.98158853027627,
+            1.258588936436521,
+            0.21107516949790017,
+        )
+        .unwrap();
+        let allocation = transaction.allocation();
+        let residual = allocation.source_energy
+            - allocation.usable_delta
+            - allocation.structural_delta
+            - allocation.work_expended
+            - allocation.heat_dissipated;
+        assert!(residual < 0.0 && residual.abs() < EPSILON);
+        assert!(
+            transaction.balanced(),
+            "signed algebraic rounding within tolerance must reach represented-state settlement"
+        );
+
+        let mut ledger = EnergyLedger::default();
+        let mut usable = 1_000.0;
+        assert!(
+            ledger.settle_transaction(&mut usable, transaction),
+            "the represented transaction must settle without creating energy"
+        );
+    }
+
+    #[test]
     fn reaction_settlement_corrects_tiny_rounding_without_inventing_heat() {
         // At this holder magnitude, the nominal +0.07 increment rounds to a
         // slightly larger represented delta. Correct only the holder by one
