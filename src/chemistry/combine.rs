@@ -512,17 +512,22 @@ mod tests {
         ));
         let mut cache = ConnectionCompatibilityCache::new();
         let candidates = eligible_candidates(&s, 0, 1, &catalog, &mut cache);
-        assert!(!candidates.is_empty(), "Hydrogen must support COMBINE candidates");
         assert!(
-            candidates
-                .iter()
-                .any(|candidate| matches!(candidate.endpoint_a, ConnectionEndpoint::LineEndpoint { .. })),
+            !candidates.is_empty(),
+            "Hydrogen must support COMBINE candidates"
+        );
+        assert!(
+            candidates.iter().any(|candidate| matches!(
+                candidate.endpoint_a,
+                ConnectionEndpoint::LineEndpoint { .. }
+            )),
             "Hydrogen's two primary end interfaces should remain available"
         );
         assert!(
-            candidates
-                .iter()
-                .any(|candidate| matches!(candidate.endpoint_a, ConnectionEndpoint::Boundary { .. })),
+            candidates.iter().any(|candidate| matches!(
+                candidate.endpoint_a,
+                ConnectionEndpoint::Boundary { .. }
+            )),
             "Hydrogen's physical boundary should also support continuous contacts"
         );
     }
