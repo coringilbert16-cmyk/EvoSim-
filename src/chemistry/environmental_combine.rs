@@ -1088,7 +1088,9 @@ mod tests {
         let hydrogen = crate::structure::StructuralUnit::from_material(
             Material::free_base("Hydrogen", 1.0),
             Placement {
-                x: 2.0,
+                // The hexagon's rightmost vertex touches the rectangle's
+                // left endpoint without the two physical shapes overlapping.
+                x: 2.5,
                 y: 2.0,
                 rotation_radians: 0.0,
             },
