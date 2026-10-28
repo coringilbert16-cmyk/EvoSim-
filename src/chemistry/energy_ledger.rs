@@ -289,7 +289,10 @@ impl ReactionEnergyBalance {
 
     /// Build the ledger transaction from the same pre/post-state balance
     /// used to decide whether the reaction is favorable or needs energy input.
-    pub(crate) fn settlement_transaction(self, reason: EnergyReason) -> Option<EnergyTransaction> {
+    pub(crate) fn settlement_transaction(
+        self,
+        reason: EnergyReason,
+    ) -> Option<EnergyTransaction> {
         EnergyTransaction::reaction(
             reason,
             self.net_reaction_change,
