@@ -1748,6 +1748,41 @@ mod fluid_coalescence_transaction_tests {
         }
     }
 
+    // Find a real chemical contact whose product-minus-reactant potential plus
+    // physical formation work leaves a positive external-energy deficit. A
+    // Water/nonchemical pair is unsuitable because its formation work is zero.
+    fn build_energy_deficient_chemical_pair() -> (
+        OrganismStructure,
+        Vec<BaseResource>,
+        crate::contact::ConnectionPairCandidate,
+        f64,
+        f64,
+    ) {
+        let catalog = default_catalog();
+        for step in 1..=100 {
+            let x = step as f64 * 0.025;
+            let mut structure = OrganismStructure::new();
+            structure.add_unit(StructuralUnit::new(
+                "Carbon",
+                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+            ));
+            structure.add_unit(StructuralUnit::new(
+                "Oxygen",
+                Placement { x, y: 0.0, rotation_radians: 0.0 },
+            ));
+            let mut cache = ConnectionCompatibilityCache;
+            for candidate in eligible_candidates(&structure, 0, 1, &catalog, &mut cache) {
+                let Some((_, _, investment, required)) =
+                    evaluate_candidate(&structure, 0, 1, candidate, &catalog)
+                else { continue };
+                if required > EPSILON {
+                    return (structure, catalog, candidate, investment, required);
+                }
+            }
+        }
+        panic!("fixture search must find an attractive chemical contact with a positive external energy deficit");
+    }
+
     fn build_bonded_pair(
         second_x: f64,
         with_rigid_contact: bool,
@@ -2329,22 +2364,16 @@ mod fluid_coalescence_transaction_tests {
     #[test]
     fn organism_combine_resonance_funding_accounts_for_efficiency_without_changing_structure_energy(
     ) {
-        let (mut structure, catalog, _) = build_bonded_pair(0.0, true);
-        structure.bonds.clear();
+        let (mut structure, catalog, candidate, investment, required) =
+            build_energy_deficient_chemical_pair();
         let mut cache = ConnectionCompatibilityCache;
-        let candidate = eligible_candidates(&structure, 0, 2, &catalog, &mut cache)
-            .into_iter()
-            .find(|candidate| evaluate_candidate(&structure, 0, 2, *candidate, &catalog).is_some())
-            .expect("rigid/fluid contact should have an eligible COMBINE candidate");
-        let (_, _, investment, required) =
-            evaluate_candidate(&structure, 0, 2, candidate, &catalog).unwrap();
         assert!(
             required > 0.0,
             "fixture must require physical formation work"
         );
 
         let properties_a = structure.units[0].properties(&catalog).unwrap();
-        let properties_b = structure.units[2].properties(&catalog).unwrap();
+        let properties_b = structure.units[1].properties(&catalog).unwrap();
         let baselines = crate::resources::ResourceBaselines::from_catalog(&catalog);
         let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
         let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
@@ -2367,7 +2396,7 @@ mod fluid_coalescence_transaction_tests {
                 &mut trial_structure,
                 BondFormationRequest {
                     unit_a: 0,
-                    unit_b: 2,
+                    unit_b: 1,
                     endpoint_a: candidate.endpoint_a,
                     endpoint_b: candidate.endpoint_b,
                     investment,
@@ -2466,19 +2495,13 @@ mod fluid_coalescence_transaction_tests {
 
     #[test]
     fn insufficient_resonance_rolls_back_organism_combine_state_atomically() {
-        let (mut structure, catalog, _) = build_bonded_pair(0.0, true);
-        structure.bonds.clear();
+        let (mut structure, catalog, candidate, investment, required) =
+            build_energy_deficient_chemical_pair();
         let mut cache = ConnectionCompatibilityCache;
-        let candidate = eligible_candidates(&structure, 0, 2, &catalog, &mut cache)
-            .into_iter()
-            .find(|candidate| evaluate_candidate(&structure, 0, 2, *candidate, &catalog).is_some())
-            .expect("rigid/fluid contact should have an eligible COMBINE candidate");
-        let (_, _, investment, required) =
-            evaluate_candidate(&structure, 0, 2, candidate, &catalog).unwrap();
         assert!(required > 0.0);
 
         let properties_a = structure.units[0].properties(&catalog).unwrap();
-        let properties_b = structure.units[2].properties(&catalog).unwrap();
+        let properties_b = structure.units[1].properties(&catalog).unwrap();
         let baselines = crate::resources::ResourceBaselines::from_catalog(&catalog);
         let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
         let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
@@ -2495,7 +2518,7 @@ mod fluid_coalescence_transaction_tests {
             &mut structure,
             BondFormationRequest {
                 unit_a: 0,
-                unit_b: 2,
+                unit_b: 1,
                 endpoint_a: candidate.endpoint_a,
                 endpoint_b: candidate.endpoint_b,
                 investment,
