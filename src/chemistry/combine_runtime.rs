@@ -64,15 +64,6 @@ fn transient_fluid_pair(
     )
 }
 
-fn structural_potential(structure: &crate::structure::OrganismStructure) -> Option<f64> {
-    let potential = structure.bonds.iter().try_fold(0.0, |total, bond| {
-        let next = total - bond.bond_energy;
-        (bond.bond_energy.is_finite() && bond.bond_energy >= 0.0 && next.is_finite())
-            .then_some(next)
-    })?;
-    potential.is_finite().then_some(potential)
-}
-
 fn energy_requirement(
     investment: f64,
     bond_energy: f64,
@@ -185,7 +176,7 @@ fn evaluate_candidate(
         return None;
     }
     let transient_fluid_bond = transient_fluid_pair(structure, ua, ub, catalog)?;
-    let reactant_structural_energy = structural_potential(structure)?;
+    let reactant_structural_energy = crate::energy_ledger::structural_potential(structure)?;
     let product_structural_energy = if transient_fluid_bond {
         reactant_structural_energy
     } else {
@@ -466,7 +457,7 @@ fn form_bond_from_candidate_diagnostic(
     });
     let reactant_structural_energy =
         structural_potential(structure).ok_or("COMBINE reactant structural energy is invalid")?;
-    let product_structural_energy = structural_potential(&trial_structure)
+    let product_structural_energy = crate::energy_ledger::structural_potential(&trial_structure)
         .ok_or("COMBINE product structural energy is invalid")?;
     let transaction = combine_energy_transaction(
         investment,
