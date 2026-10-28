@@ -100,7 +100,8 @@ mod tests {
         let simulation = crate::state::Simulation::new(904, 10.0);
         let mut structure = simulation.organisms[0].structure.clone();
         assert!(!structure.bonds.is_empty());
-        structure.bonds.truncate(1);
+        structure.bonds.truncate(2);
+        assert_eq!(structure.bonds.len(), 2);
         assert!(structure.bonds[0].bond_energy > 0.0);
 
         let mut body = DecomposingBody::new(
