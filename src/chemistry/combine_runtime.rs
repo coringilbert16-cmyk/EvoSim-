@@ -2327,9 +2327,12 @@ mod fluid_coalescence_transaction_tests {
     }
 
     #[test]
-    fn organism_combine_resonance_funding_accounts_for_efficiency_without_changing_structure_energy() {
+    fn organism_combine_resonance_funding_accounts_for_efficiency_without_changing_structure_energy(
+    ) {
         let (mut structure, catalog, _) = build_bonded_pair(0.0, false);
         structure.bonds.clear();
+        // A small positive gap within contact tolerance exercises nonzero physical work.
+        structure.units[1].placement.x += 0.05;
         let mut cache = ConnectionCompatibilityCache;
         let candidate = eligible_candidates(&structure, 0, 1, &catalog, &mut cache)
             .into_iter()
@@ -2337,7 +2340,10 @@ mod fluid_coalescence_transaction_tests {
             .expect("touching fluid pair should have an eligible COMBINE candidate");
         let (_, _, investment, required) =
             evaluate_candidate(&structure, 0, 1, candidate, &catalog).unwrap();
-        assert!(required > 0.0, "fixture must require physical formation work");
+        assert!(
+            required > 0.0,
+            "fixture must require physical formation work"
+        );
 
         let properties_a = structure.units[0].properties(&catalog).unwrap();
         let properties_b = structure.units[1].properties(&catalog).unwrap();
@@ -2404,22 +2410,20 @@ mod fluid_coalescence_transaction_tests {
         let reactant_potential = -10.0;
         let product_potential = -13.0;
         let work = 4.0;
-        let full_efficiency =
-            crate::energy_ledger::ReactionEnergyBalance::calculate(
-                reactant_potential,
-                product_potential,
-                work,
-                0.0,
-            )
-            .unwrap();
-        let low_efficiency =
-            crate::energy_ledger::ReactionEnergyBalance::calculate(
-                reactant_potential,
-                product_potential,
-                work,
-                0.0,
-            )
-            .unwrap();
+        let full_efficiency = crate::energy_ledger::ReactionEnergyBalance::calculate(
+            reactant_potential,
+            product_potential,
+            work,
+            0.0,
+        )
+        .unwrap();
+        let low_efficiency = crate::energy_ledger::ReactionEnergyBalance::calculate(
+            reactant_potential,
+            product_potential,
+            work,
+            0.0,
+        )
+        .unwrap();
 
         assert_eq!(full_efficiency.net_reaction_change, -3.0);
         assert_eq!(low_efficiency.net_reaction_change, -3.0);
@@ -2485,7 +2489,10 @@ mod fluid_coalescence_transaction_tests {
 
         assert_eq!(structure.units, original_structure.units);
         assert_eq!(structure.bonds, original_structure.bonds);
-        assert_eq!(structure.genome_constituent_ids(), original_structure.genome_constituent_ids());
+        assert_eq!(
+            structure.genome_constituent_ids(),
+            original_structure.genome_constituent_ids()
+        );
         assert_eq!(usable_energy, 0.0);
         assert_eq!(ledger, original_ledger);
         assert!((resonance.total_energy().unwrap() - original_resonance).abs() < 1e-12);
