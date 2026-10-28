@@ -1072,9 +1072,9 @@ mod tests {
     }
 
     #[test]
-    fn bond_energy_release_can_be_represented_as_a_negative_structural_delta() {
+    fn favorable_bond_formation_can_be_represented_as_a_negative_structural_delta() {
         let tx = EnergyTransaction {
-            reason: EnergyReason::Break,
+            reason: EnergyReason::Combine,
             potential_released: 0.0,
             usable_delta: 2.0,
             structural_delta: -5.0,
@@ -1221,11 +1221,11 @@ mod tests {
     }
 
     #[test]
-    fn settling_bond_release_debits_structural_store_without_faking_a_source() {
+    fn settling_favorable_bond_formation_credits_surplus_without_faking_a_source() {
         let mut ledger = EnergyLedger::default();
         let mut energy = 0.0;
         let tx = EnergyTransaction {
-            reason: EnergyReason::Break,
+            reason: EnergyReason::Combine,
             potential_released: 0.0,
             usable_delta: 2.0,
             structural_delta: -5.0,
