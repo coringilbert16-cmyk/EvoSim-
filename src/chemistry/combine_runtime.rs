@@ -2344,7 +2344,7 @@ mod fluid_coalescence_transaction_tests {
         );
 
         let properties_a = structure.units[0].properties(&catalog).unwrap();
-        let properties_b = structure.units[1].properties(&catalog).unwrap();
+        let properties_b = structure.units[2].properties(&catalog).unwrap();
         let baselines = crate::resources::ResourceBaselines::from_catalog(&catalog);
         let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
         let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
