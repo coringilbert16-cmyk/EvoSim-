@@ -1493,11 +1493,8 @@ fn try_combine_environmental(
             .then_with(|| a.5.partial_cmp(&b.5).unwrap_or(std::cmp::Ordering::Equal))
     });
 
-    for (cell_index, material_index, ua, ub, evaluation, _distance, required, _score) in candidates
+    for (cell_index, material_index, ua, ub, evaluation, _distance, _required, _score) in candidates
     {
-        if organism.usable_energy + EPSILON < required {
-            continue;
-        }
         let instance = environment
             .field
             .cells
@@ -1528,7 +1525,8 @@ fn try_combine_environmental(
         };
         let mut trial_ledger = *ledger;
         let mut trial_energy = organism.usable_energy;
-        let Some(attempt) = form_bond(
+        let mut trial_resonance = organism.resonant_energy.clone();
+        let Some(attempt) = form_bond_with_resonance(
             &mut trial_structure,
             BondFormationRequest {
                 unit_a: ua,
@@ -1541,6 +1539,8 @@ fn try_combine_environmental(
             cache,
             &mut trial_ledger,
             &mut trial_energy,
+            &mut trial_resonance,
+            organism.genome.processing_efficiency(),
         ) else {
             continue;
         };
@@ -1570,6 +1570,7 @@ fn try_combine_environmental(
         attempt.environmental_source = Some((cell_index, removed));
         organism.structure = trial_structure;
         organism.usable_energy = trial_energy;
+        organism.resonant_energy = trial_resonance;
         *ledger = trial_ledger;
         organism.add_transaction_stress(attempt.work_cost);
         return Some(attempt);
@@ -1657,14 +1658,12 @@ pub(crate) fn try_combine(
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| a.3.partial_cmp(&b.3).unwrap_or(std::cmp::Ordering::Equal))
     });
-    for (ua, ub, evaluation, _, required, _) in pairs {
-        if organism.usable_energy + EPSILON < required {
-            continue;
-        }
+    for (ua, ub, evaluation, _, _required, _) in pairs {
         let mut trial_structure = organism.structure.clone();
         let mut trial_ledger = *ledger;
         let mut trial_energy = organism.usable_energy;
-        if let Some(attempt) = form_bond(
+        let mut trial_resonance = organism.resonant_energy.clone();
+        if let Some(attempt) = form_bond_with_resonance(
             &mut trial_structure,
             BondFormationRequest {
                 unit_a: ua,
@@ -1677,12 +1676,15 @@ pub(crate) fn try_combine(
             cache,
             &mut trial_ledger,
             &mut trial_energy,
+            &mut trial_resonance,
+            organism.genome.processing_efficiency(),
         ) {
             if !coalesce_fluid_pair_after_bond(&mut trial_structure, ua, ub, catalog) {
                 continue;
             }
             organism.structure = trial_structure;
             organism.usable_energy = trial_energy;
+            organism.resonant_energy = trial_resonance;
             *ledger = trial_ledger;
             organism.add_transaction_stress(attempt.work_cost);
             return Some(attempt);
