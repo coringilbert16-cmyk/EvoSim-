@@ -1073,6 +1073,47 @@ mod tests {
     }
 
     #[test]
+    fn reaction_energy_balance_favorable_reaction_funds_work_and_heat() {
+        let balance = ReactionEnergyBalance::calculate(12.0, 5.0, 3.0, 1.0).unwrap();
+        assert_eq!(balance.net_reaction_change, -7.0);
+        assert_eq!(balance.required_external_input, 0.0);
+        assert_eq!(balance.released_surplus, 3.0);
+        assert_eq!(balance.residual(0.0), Some(0.0));
+        assert!(balance.can_commit_with(0.0));
+    }
+
+    #[test]
+    fn reaction_energy_balance_unfavorable_reaction_requires_real_input() {
+        let balance = ReactionEnergyBalance::calculate(5.0, 9.0, 2.0, 1.0).unwrap();
+        assert_eq!(balance.net_reaction_change, 4.0);
+        assert_eq!(balance.required_external_input, 7.0);
+        assert_eq!(balance.released_surplus, 0.0);
+        assert!(!balance.can_commit_with(6.999));
+        assert!(balance.can_commit_with(7.0));
+        assert_eq!(balance.residual(7.0), Some(0.0));
+    }
+
+    #[test]
+    fn reaction_energy_balance_neutral_reaction_accounts_for_work() {
+        let balance = ReactionEnergyBalance::calculate(5.0, 5.0, 2.0, 1.0).unwrap();
+        assert_eq!(balance.required_external_input, 3.0);
+        assert_eq!(balance.released_surplus, 0.0);
+        assert_eq!(balance.residual(3.0), Some(0.0));
+    }
+
+    #[test]
+    fn reaction_transaction_reconciles_favorable_and_unfavorable_structural_changes() {
+        let favorable =
+            EnergyTransaction::reaction(EnergyReason::Combine, -7.0, 3.0, 1.0).unwrap();
+        assert!(favorable.balanced());
+        assert_eq!(favorable.usable_delta, 3.0);
+
+        let unfavorable = EnergyTransaction::reaction(EnergyReason::Break, 7.0, 3.0, 1.0).unwrap();
+        assert!(unfavorable.balanced());
+        assert_eq!(unfavorable.usable_delta, -11.0);
+    }
+
+    #[test]
     fn pure_expenditure_does_not_release_potential_energy() {
         let tx = EnergyTransaction::expenditure(EnergyReason::Combine, 3.0, 1.0, 2.0).unwrap();
         assert!(tx.balanced());
