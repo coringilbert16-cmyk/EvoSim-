@@ -197,8 +197,8 @@ jobs:
           test "$failures" -eq 0
       - name: Run Rust tests
         if: always()
-        # Keep a small margin over the observed ~4-minute full-suite runtime.
-        timeout-minutes: 6
+        # The accepted-base full suite exceeds five minutes; allow up to ten minutes for comparison.
+        timeout-minutes: 10
         run: cargo test --locked --all-targets
       - name: Run Clippy
         timeout-minutes: 5
