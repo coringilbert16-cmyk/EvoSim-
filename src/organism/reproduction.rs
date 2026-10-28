@@ -6,7 +6,6 @@
 use crate::combine_runtime::DevelopmentalContext;
 use crate::construction_material_selection::ConstructionMaterialDecision;
 use crate::contact::ConnectionCompatibilityCache;
-use crate::developmental_blueprint::MaterialPreferenceField;
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::material_storage::MaterialStorage;
 use crate::organism_viability::{
@@ -1270,6 +1269,7 @@ pub(crate) fn finish_reproduction(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::developmental_blueprint::MaterialPreferenceField;
     use crate::genome::initial_genome;
     use crate::resources::{default_catalog, Material};
     use crate::state::Simulation;
