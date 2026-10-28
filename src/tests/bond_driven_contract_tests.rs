@@ -129,16 +129,22 @@ mod tests {
             let Some(candidate) = candidate else {
                 continue;
             };
-            let Some((_, _, investment, _required_energy)) =
+            let Some((_, _, investment, required_energy)) =
                 crate::combine_runtime::selected_candidate_evaluation(
                     &trial, 0, 1, candidate, &catalog,
                 )
             else {
                 continue;
             };
+            // This integration test specifically proves a favorable rigid-bond
+            // reaction can fund its own physical work from structural-potential
+            // reduction, without an arbitrary initial usable-energy grant.
+            if required_energy > 0.0 {
+                continue;
+            }
 
             let mut ledger = EnergyLedger::default();
-            let mut energy = 1.0e6;
+            let mut energy = 0.0;
             let before_energy = energy;
             let before_units = trial.units.len();
             let attempt = crate::combine_runtime::form_selected_bond(
