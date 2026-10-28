@@ -928,6 +928,49 @@ mod tests {
             "environmental COMBINE must conserve the complete energy inventory; inventory={inventory:?}, residual={:?}",
             inventory.residual()
         );
+
+        // Carry the exact COMBINE product into the environmental BREAK path.
+        // This proves the allocated bond energy survives the field-owned round
+        // trip and is settled once when the product is split again.
+        let combined = product[0].clone();
+        let bond = combined
+            .internal_connections
+            .as_ref()
+            .and_then(|connections| connections.first())
+            .expect("combined product must expose its allocated bond")
+            .clone();
+        let break_operation = crate::chemical_reaction::EnvironmentalChemicalBreakOperation {
+            cell_index: cell,
+            material_index: 0,
+            bond_index: 0,
+            source_material: combined,
+            bond,
+            activation_signal: 1.0,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "environmental-combine-round-trip-break".into(),
+            accumulated_reaction: 1.0,
+        };
+        assert!(crate::chemical_reaction::resolve_environmental(
+            break_operation,
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
+        ));
+        let split = &simulation.environment.field.cells[cell].physical_materials;
+        assert_eq!(split.len(), 2, "environmental BREAK must restore both source objects");
+        assert!(
+            split.iter().all(|piece| piece
+                .internal_connections
+                .as_ref()
+                .is_some_and(Vec::is_empty)),
+            "split sources must no longer retain the realized bond"
+        );
+        let after_break = simulation.energy_inventory_snapshot();
+        assert!(
+            after_break.is_balanced_without_creation(1e-6),
+            "COMBINE followed by environmental BREAK must conserve the complete inventory; inventory={after_break:?}, residual={:?}",
+            after_break.residual()
+        );
     }
 
     #[test]
