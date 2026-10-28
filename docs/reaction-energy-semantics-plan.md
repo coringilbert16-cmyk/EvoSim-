@@ -46,17 +46,24 @@ The first source audit confirms this is not a missing-ledger problem; it is a mi
 
 Do not simply change the sign of `bond_energy` or treat the current intrinsic bond-potential value as a reaction-energy delta. The current field is a positive structural energy store that COMBINE pays to create and BREAK can later release. A favorable chemical reaction requires an explicit, authoritative definition of reactant and product energy states and a consistent delta calculation. If the current model lacks enough state to derive that delta without guessing, the implementation must make that representation gap explicit rather than invent values from resource maximum potential or activation signal.
 
-## Implementation progress and representation gap
+## Implementation progress and remaining representation gap
 
-The first implementation commit adds `ReactionEnergyBalance` in `src/chemistry/energy_ledger.rs`, a pure calculation of product-minus-reactant energy, work, dissipation, required legitimate input, and released surplus. Focused unit tests cover favorable, unfavorable, neutral, invalid-value, and surplus-input cases. This helper is deliberately a planner only; it does not mutate holders or claim that live COMBINE/BREAK now use the model.
+The implementation now routes stable-bond COMBINE and graph-bond BREAK through the shared `ReactionEnergyBalance` calculation and `EnergyTransaction::reaction` settlement contract.
 
-The follow-up source audit found a prerequisite that must be resolved before wiring the helper into live reactions:
+- **COMBINE:** computes signed structural potential from the current realized bond graph, computes the candidate product structural potential after adding the proposed bond, and uses the product-minus-reactant difference together with formation work and investment/dissipation. Favorable reactions can credit the usable holder after work and heat; an unfavorable balance debits the holder and fails if it is unaffordable.
+- **BREAK:** treats the positive bond-energy magnitude as a dissociation cost, not as an automatically available stored-energy reservoir. Because the unaffected graph is otherwise unchanged, the bond magnitude is the signed structural-potential increase. The same settlement primitive is used for chemical BREAK, decomposition, and division-boundary bond separation. Resonance, when used for disruption work, remains a separately debited holder; activation remains a gate only.
+- **Inventory:** structural energy is now represented as signed potential (stable realized bonds contribute negative values). Initialization, independent world-inventory recomputation, and reproduction structural-energy accounting have been updated to use that convention.
+- **Tests added/updated:** favorable, unfavorable, and neutral reaction-balance tests; favorable COMBINE with no external input; unaffordable BREAK atomicity; COMBINE energy/work/heat reconciliation; and the independent structural-inventory oracle.
 
-- `ResourceProperties::potential_energy` is immutable type-level maximum potential; `Material::potential_energy()` derives from catalog values. Neither is a mutable energy holder for an individual reactant and neither may be treated as energy released by a reaction.
-- A realized graph bond's `bond_energy` is an explicit structural energy store. Environmental `PhysicalMaterialBond` has no stored-energy field, and no energy is allocated when those internal bonds are stored.
-- The chemical interaction/attraction calculations describe compatibility and force/work, but the current world inventory does not independently inventory an authoritative unbonded chemical-potential store or a pre/post interaction-energy delta.
+This is progress, not merge approval. Exact-head CI has repeatedly reported a formatting failure and a failure in the transactions/ownership focused group on earlier commits. A later run is still needed to verify the fixes and the latest implementation; its complete result must be inspected before any status is upgraded.
 
-Therefore the pure balance must not yet be plugged into COMBINE by inventing reactant energy from maximum type potential, by re-labeling the activation signal, or by crediting calculated attraction work that has not physically occurred. The next implementation task is to establish the smallest authoritative pre/post reaction-energy representation that can be reconciled with the existing world inventory, then wire COMBINE and BREAK through it atomically. If that representation cannot be made authoritative within this scope, the missing state must be resolved explicitly rather than hidden behind a tuning constant.
+### Remaining physics/representation limits
+
+- The current stable-bond energy delta is the realized graph's signed bond-potential change. That is authoritative for the *existing bond representation*, but it does not by itself prove that `intrinsic_bond_potential` is a calibrated chemical free-energy difference for every resource pair. The interaction model's physical meaning and calibration remain a scientific assumption to document, not a measured result.
+- Environmental `PhysicalMaterialBond` still has no stored bond-energy field. This PR must not infer a release from resource type maxima or activation values. Environmental BREAK with no authoritative bond-energy representation must remain unable to claim such energy.
+- Fluid coalescence remains an explicit expenditure path because the merged fluid product does not yet expose authoritative internal-bond potential. Do not count its transient graph bond as persistent binding energy.
+- The model does not automatically source an unfavorable reaction's deficit from sunlight or environmental resonance. If no legitimate holder/source is attached to the reaction, it must fail atomically rather than mint energy.
+- Full verification still needs to prove all transaction rollback paths, independently reconcile material/bond and energy inventories, and compare full-suite failure identities against the accepted baseline.
 
 ## Merge requirements
 
