@@ -955,10 +955,27 @@ mod tests {
                 <= 1e-6,
             "COMBINE must keep the ledger structural-energy total aligned with its live bonds"
         );
+        let residual = inventory.residual();
         assert!(
             inventory.is_balanced_without_creation(1e-6),
-            "environmental COMBINE must conserve the complete energy inventory; inventory={inventory:?}, residual={:?}",
-            inventory.residual()
+            concat!(
+                "environmental COMBINE must conserve the complete energy inventory; ",
+                "before={baseline:?}, after={inventory:?}, residual={residual:?}; ",
+                "deltas: usable={:.12}, resonant={:.12}, structural={:.12}, ",
+                "external_input={:.12}, escaped_tone={:.12}, work={:.12}, heat={:.12}; ",
+                "ledger totals: usable={:.12}, structural={:.12}, work={:.12}, heat={:.12}"
+            ),
+            inventory.current_usable_energy - baseline.current_usable_energy,
+            inventory.current_resonant_energy - baseline.current_resonant_energy,
+            inventory.current_structural_energy - baseline.current_structural_energy,
+            inventory.external_energy_input - baseline.external_energy_input,
+            inventory.world_tone_energy_escaped - baseline.world_tone_energy_escaped,
+            inventory.work_expended - baseline.work_expended,
+            inventory.heat_dissipated - baseline.heat_dissipated,
+            simulation.energy_ledger.total_usable_energy_held,
+            simulation.energy_ledger.total_structural_energy_held,
+            simulation.energy_ledger.total_energy_spent,
+            simulation.energy_ledger.total_heat_dissipated
         );
 
         // Carry the exact COMBINE product into the environmental BREAK path.
