@@ -64,11 +64,25 @@ fn transient_fluid_pair(
     )
 }
 
+fn structural_potential(structure: &crate::structure::OrganismStructure) -> Option<f64> {
+    let potential = structure
+        .bonds
+        .iter()
+        .try_fold(0.0, |total, bond| {
+            let next = total - bond.bond_energy;
+            (bond.bond_energy.is_finite() && bond.bond_energy >= 0.0 && next.is_finite())
+                .then_some(next)
+        })?;
+    potential.is_finite().then_some(potential)
+}
+
 fn energy_requirement(
     investment: f64,
     bond_energy: f64,
     work: f64,
     transient_fluid_bond: bool,
+    reactant_structural_energy: f64,
+    product_structural_energy: f64,
 ) -> Option<f64> {
     if !investment.is_finite()
         || investment < 0.0
@@ -83,8 +97,13 @@ fn energy_requirement(
         let required = investment + bond_energy + work;
         return required.is_finite().then_some(required);
     }
-    crate::energy_ledger::ReactionEnergyBalance::calculate(0.0, -bond_energy, work, investment)
-        .map(|balance| balance.required_external_input)
+    crate::energy_ledger::ReactionEnergyBalance::calculate(
+        reactant_structural_energy,
+        product_structural_energy,
+        work,
+        investment,
+    )
+    .map(|balance| balance.required_external_input)
 }
 
 fn combine_energy_transaction(
@@ -92,6 +111,8 @@ fn combine_energy_transaction(
     bond_energy: f64,
     work: f64,
     transient_fluid_bond: bool,
+    reactant_structural_energy: f64,
+    product_structural_energy: f64,
 ) -> Option<EnergyTransaction> {
     if !investment.is_finite()
         || investment < 0.0
@@ -116,8 +137,8 @@ fn combine_energy_transaction(
     // The same pre/post-state balance drives both affordability and
     // settlement. Formation lowers structural potential by the bond magnitude.
     crate::energy_ledger::ReactionEnergyBalance::calculate(
-        0.0,
-        -bond_energy,
+        reactant_structural_energy,
+        product_structural_energy,
         work,
         investment,
     )?
@@ -167,7 +188,20 @@ fn evaluate_candidate(
         return None;
     }
     let transient_fluid_bond = transient_fluid_pair(structure, ua, ub, catalog)?;
-    let required = energy_requirement(investment, bond_energy, work, transient_fluid_bond)?;
+    let reactant_structural_energy = structural_potential(structure)?;
+    let product_structural_energy = if transient_fluid_bond {
+        reactant_structural_energy
+    } else {
+        reactant_structural_energy - bond_energy
+    };
+    let required = energy_requirement(
+        investment,
+        bond_energy,
+        work,
+        transient_fluid_bond,
+        reactant_structural_energy,
+        product_structural_energy,
+    )?;
     Some((evaluation, work, investment, required))
 }
 
@@ -433,8 +467,19 @@ fn form_bond_from_candidate_diagnostic(
                 resource.physical_state == crate::resources::PhysicalState::Fluid
             })
     });
-    let transaction = combine_energy_transaction(investment, bond_energy, work, fluid_pair)
-        .ok_or("COMBINE energy transaction could not be constructed")?;
+    let reactant_structural_energy = structural_potential(structure)
+        .ok_or("COMBINE reactant structural energy is invalid")?;
+    let product_structural_energy = structural_potential(&trial_structure)
+        .ok_or("COMBINE product structural energy is invalid")?;
+    let transaction = combine_energy_transaction(
+        investment,
+        bond_energy,
+        work,
+        fluid_pair,
+        reactant_structural_energy,
+        product_structural_energy,
+    )
+    .ok_or("COMBINE energy transaction could not be constructed")?;
     if !ledger.settle_transaction(energy, transaction) {
         *energy = before;
         return Err("energy ledger rejected COMBINE expenditure");
@@ -2086,8 +2131,8 @@ mod fluid_coalescence_transaction_tests {
 
     #[test]
     fn fluid_coalescence_costs_energy_but_stable_bond_formation_releases_binding_energy() {
-        let fluid_tx = combine_energy_transaction(2.0, 3.0, 4.0, true).unwrap();
-        let rigid_tx = combine_energy_transaction(2.0, 3.0, 4.0, false).unwrap();
+        let fluid_tx = combine_energy_transaction(2.0, 3.0, 4.0, true, 0.0, 0.0).unwrap();
+        let rigid_tx = combine_energy_transaction(2.0, 3.0, 4.0, false, 0.0, -3.0).unwrap();
 
         assert!(fluid_tx.balanced());
         assert!(rigid_tx.balanced());
