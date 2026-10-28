@@ -1174,12 +1174,15 @@ pub(crate) fn finish_reproduction(
         let mut staged_ledger = *ledger;
         let mut combined_energy = parent.usable_energy;
         if crossing_bond_energy > 0.0 {
-            let Some(transaction) = crate::energy_ledger::EnergyTransaction::reaction(
-                crate::energy_ledger::EnergyReason::Break,
+            let Some(transaction) = crate::energy_ledger::ReactionEnergyBalance::calculate(
+                0.0,
                 crossing_bond_energy,
                 0.0,
                 0.0,
-            ) else {
+            )
+            .and_then(|balance| {
+                balance.settlement_transaction(crate::energy_ledger::EnergyReason::Break)
+            }) else {
                 return None;
             };
             if !staged_ledger.settle_transaction(&mut combined_energy, transaction) {
