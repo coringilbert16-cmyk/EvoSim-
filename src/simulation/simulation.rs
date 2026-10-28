@@ -174,12 +174,11 @@ impl Simulation {
         energy_ledger.total_resonant_energy_held =
             crate::reproduction::total_resonant_energy_held(std::slice::from_ref(&organism));
         energy_ledger.initial_resonant_energy_held = energy_ledger.total_resonant_energy_held;
-        energy_ledger.total_structural_energy_held = organism
-            .structure
-            .bonds
-            .iter()
-            .map(|bond| -bond.bond_energy)
-            .sum();
+        energy_ledger.total_structural_energy_held =
+            crate::reproduction::total_structural_energy_held(
+                std::slice::from_ref(&organism),
+                &[],
+            ) + Self::environmental_structural_energy_held(&environment);
         energy_ledger.initial_structural_energy_held = energy_ledger.total_structural_energy_held;
         Self {
             tick: 0,
@@ -1506,7 +1505,8 @@ impl Simulation {
                     .total_energy()
                     .unwrap_or(f64::NAN);
         self.energy_ledger.total_structural_energy_held =
-            Self::structural_energy_held(&self.organisms, &self.decomposing_bodies);
+            Self::structural_energy_held(&self.organisms, &self.decomposing_bodies)
+                + Self::environmental_structural_energy_held(&self.environment);
     }
     /// Transfer a dead, fully disconnected organism into environmental material.
     ///
@@ -1631,6 +1631,24 @@ impl Simulation {
     ) -> f64 {
         crate::reproduction::total_structural_energy_held(organisms, decomposing_bodies)
     }
+
+    /// Signed potential stored in realized physical bonds owned by the field.
+    /// Old field bonds deserialize with zero energy rather than inventing a source.
+    fn environmental_structural_energy_held(environment: &Environment) -> f64 {
+        environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .map(|material| {
+                material
+                    .internal_connections
+                    .as_ref()
+                    .map(|bonds| bonds.iter().map(|bond| -bond.bond_energy).sum::<f64>())
+                    .unwrap_or(f64::NAN)
+            })
+            .sum()
+    }
     /// Independent test oracle: recompute current stores from their owning state,
     /// rather than trusting the production ledger's cached aggregate totals.
     /// Cumulative flows and tick-zero baselines still come from the ledger because
@@ -1650,10 +1668,11 @@ impl Simulation {
                     .resonant_energy
                     .total_energy()
                     .unwrap_or(f64::NAN);
-        let current_structural_energy = crate::reproduction::total_structural_energy_held(
-            &self.organisms,
-            &self.decomposing_bodies,
-        );
+        let current_structural_energy =
+            crate::reproduction::total_structural_energy_held(
+                &self.organisms,
+                &self.decomposing_bodies,
+            ) + Self::environmental_structural_energy_held(&self.environment);
 
         crate::energy_ledger::EnergyInventorySnapshot {
             initial_usable_energy: self.energy_ledger.initial_usable_energy_held,
