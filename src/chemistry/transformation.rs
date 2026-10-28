@@ -164,9 +164,7 @@ pub(crate) fn settle_chemical_break_energy_with_resonance(
     if trial_structure.break_matching_bond(bond).is_none() {
         return false;
     }
-    let Some(before_potential) =
-        crate::energy_ledger::structural_potential(&organism.structure)
-    else {
+    let Some(before_potential) = crate::energy_ledger::structural_potential(&organism.structure) else {
         return false;
     };
     let Some(after_potential) = crate::energy_ledger::structural_potential(&trial_structure) else {
