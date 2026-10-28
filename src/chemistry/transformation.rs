@@ -19,8 +19,11 @@ pub(crate) fn bond_break_energy_yield(
     }
     let usable = -bond_energy;
     let heat = 0.0;
-    (usable.is_finite() && (usable + bond_energy + heat).abs() <= 1e-9)
-        .then_some((bond_energy, usable, heat))
+    (usable.is_finite() && (usable + bond_energy + heat).abs() <= 1e-9).then_some((
+        bond_energy,
+        usable,
+        heat,
+    ))
 }
 
 pub(crate) fn chemical_break_energy_yield(
@@ -40,8 +43,7 @@ pub(crate) fn chemical_break_energy_yield(
     // the remaining physical work. Activation is only a gate, never a source.
     let usable = -(bond_energy + disruption_cost);
     let heat = 0.0;
-    (usable.is_finite()
-        && (usable + bond_energy + disruption_cost + heat).abs() <= 1e-9)
+    (usable.is_finite() && (usable + bond_energy + disruption_cost + heat).abs() <= 1e-9)
         .then_some((bond_energy, usable, heat))
 }
 
@@ -2270,8 +2272,7 @@ mod tests {
 
     #[test]
     fn chemical_break_charges_binding_energy_and_work_to_the_usable_holder() {
-        let (structural_energy, usable, heat) =
-            chemical_break_energy_yield(4.0, 5.0, 0.5).unwrap();
+        let (structural_energy, usable, heat) = chemical_break_energy_yield(4.0, 5.0, 0.5).unwrap();
         assert!((structural_energy - 4.0).abs() < 1e-12);
         assert!((usable + 9.0).abs() < 1e-12);
         assert_eq!(heat, 0.0);
