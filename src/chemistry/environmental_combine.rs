@@ -334,14 +334,8 @@ pub(crate) fn accumulate_environmental(
         dissipate_unupdated_accumulations(accumulation, &BTreeSet::new());
         return Vec::new();
     }
-    let occupied_cells: Vec<usize> = environment
-        .field
-        .cells
-        .iter()
-        .enumerate()
-        .filter_map(|(index, cell)| (!cell.physical_materials.is_empty()).then_some(index))
-        .collect();
-    if occupied_cells.is_empty() {
+    let field_cell_count = environment.field.cells.len();
+    if field_cell_count == 0 {
         dissipate_unupdated_accumulations(accumulation, &BTreeSet::new());
         return Vec::new();
     }
@@ -349,16 +343,17 @@ pub(crate) fn accumulate_environmental(
     let mut anchor_work = (*remaining_discovery_work)
         .min(FIELD_SCAN_ANCHOR_LIMIT)
         .min(crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
+    let cell_scan_count = field_cell_count.min(FIELD_SCAN_ANCHOR_LIMIT);
     let mut operations = Vec::new();
     let mut updated_keys = BTreeSet::new();
     let mut cache = ConnectionCompatibilityCache::new();
-    let cell_start = tick as usize % occupied_cells.len();
+    let cell_start = tick as usize % field_cell_count;
 
-    'anchors: for cell_offset in 0..occupied_cells.len() {
+    'anchors: for cell_offset in 0..cell_scan_count {
         if anchor_work == 0 || *remaining_discovery_work == 0 {
             break;
         }
-        let cell_a = occupied_cells[(cell_start + cell_offset) % occupied_cells.len()];
+        let cell_a = (cell_start + cell_offset) % field_cell_count;
         let material_count = environment.field.cells[cell_a].physical_materials.len();
         if material_count == 0 {
             continue;
