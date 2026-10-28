@@ -867,9 +867,6 @@ pub(crate) fn try_combine_stored_unit(
             .then_with(|| a.3.partial_cmp(&b.3).unwrap_or(std::cmp::Ordering::Equal))
     });
     for (ua, placement, evaluation, _, _required, _) in candidates {
-        if organism.usable_energy + EPSILON < required {
-            continue;
-        }
         let mut hypothetical = organism.structure.clone();
         let indices = crate::material_restoration::restore_material(
             &mut hypothetical,
@@ -2382,5 +2379,28 @@ mod fluid_coalescence_transaction_tests {
             + ledger.total_heat_dissipated;
         assert!(residual.abs() < 1e-8,
             "resonance-funded COMBINE must reconcile withdrawal, work, and conversion heat: {residual}");
+    }
+
+    #[test]
+    fn combine_physical_energy_delta_is_independent_of_processing_efficiency() {
+        let reactant_potential = -10.0;
+        let product_potential = -13.0;
+        let work = 4.0;
+        let full_efficiency = crate::energy_ledger::ReactionEnergyBalance::calculate(
+            reactant_potential, product_potential, work, 0.0,
+        ).unwrap();
+        let low_efficiency = crate::energy_ledger::ReactionEnergyBalance::calculate(
+            reactant_potential, product_potential, work, 0.0,
+        ).unwrap();
+
+        assert_eq!(full_efficiency.net_reaction_change, -3.0);
+        assert_eq!(low_efficiency.net_reaction_change, -3.0);
+        assert_eq!(full_efficiency.required_external_input, 1.0);
+        assert_eq!(low_efficiency.required_external_input, 1.0);
+        assert_eq!(
+            full_efficiency.settlement_transaction(EnergyReason::Combine).unwrap().structural_delta,
+            low_efficiency.settlement_transaction(EnergyReason::Combine).unwrap().structural_delta,
+            "processing efficiency belongs to energy funding, not physical product-minus-reactant potential"
+        );
     }
 }
