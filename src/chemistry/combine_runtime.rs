@@ -2313,4 +2313,69 @@ mod fluid_coalescence_transaction_tests {
             original_genome_ids.as_slice()
         );
     }
+
+    #[test]
+    fn organism_combine_resonance_funding_accounts_for_efficiency_without_changing_structure_energy() {
+        let (mut structure, catalog, _) = build_bonded_pair(0.0, false);
+        structure.bonds.clear();
+        let mut cache = ConnectionCompatibilityCache;
+        let candidate = eligible_candidates(&structure, 0, 1, &catalog, &mut cache)
+            .into_iter()
+            .find(|candidate| evaluate_candidate(&structure, 0, 1, *candidate, &catalog).is_some())
+            .expect("touching fluid pair should have an eligible COMBINE candidate");
+        let (_, _, investment, required) =
+            evaluate_candidate(&structure, 0, 1, candidate, &catalog).unwrap();
+        assert!(required > 0.0, "fixture must require physical formation work");
+
+        let properties_a = structure.units[0].properties(&catalog).unwrap();
+        let properties_b = structure.units[1].properties(&catalog).unwrap();
+        let baselines = crate::resources::ResourceBaselines::from_catalog(&catalog);
+        let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
+        let frequency = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+
+        let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
+        let efficiency = 0.5;
+        let withdrawal = required / efficiency;
+        assert!(resonance.deposit(frequency, withdrawal));
+        let before_resonance = resonance.total_energy().unwrap();
+        let before_potential = crate::energy_ledger::structural_potential(&structure).unwrap();
+        let mut ledger = EnergyLedger::default();
+        let mut usable_energy = 0.0;
+
+        let attempt = form_bond_with_resonance(
+            &mut structure,
+            BondFormationRequest {
+                unit_a: 0,
+                unit_b: 1,
+                endpoint_a: candidate.endpoint_a,
+                endpoint_b: candidate.endpoint_b,
+                investment,
+            },
+            &catalog,
+            &mut cache,
+            &mut ledger,
+            &mut usable_energy,
+            &mut resonance,
+            efficiency,
+        )
+        .expect("compatible resonance should fund the COMBINE work shortfall");
+
+        let after_potential = crate::energy_ledger::structural_potential(&structure).unwrap();
+        let after_resonance = resonance.total_energy().unwrap();
+        assert!((before_resonance - after_resonance - withdrawal).abs() < 1e-9);
+        assert!((ledger.total_work_expended - required).abs() < 1e-9);
+        assert!((ledger.total_heat_dissipated - (withdrawal - required)).abs() < 1e-9);
+        assert!((after_potential - before_potential).abs() < 1e-9,
+            "transient fluid coalescence must not create a persistent structural potential");
+        assert!(usable_energy.abs() < 1e-9);
+        assert!(attempt.net_energy_change.abs() < 1e-9);
+        let residual = usable_energy
+            + (after_potential - before_potential)
+            + (after_resonance - before_resonance)
+            + ledger.total_work_expended
+            + ledger.total_heat_dissipated;
+        assert!(residual.abs() < 1e-8,
+            "resonance-funded COMBINE must reconcile withdrawal, work, and conversion heat: {residual}");
+    }
 }
