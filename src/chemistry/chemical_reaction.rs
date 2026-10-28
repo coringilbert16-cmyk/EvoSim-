@@ -2016,7 +2016,8 @@ mod material_identity_tests {
         );
         assert!(
             (before.current_resonant_energy
-                - after.current_resonant_energy - 0.5 / processing_efficiency)
+                - after.current_resonant_energy
+                - 0.5 / processing_efficiency)
                 .abs()
                 < 1e-9,
             "resonance withdrawal must account for processing efficiency"
