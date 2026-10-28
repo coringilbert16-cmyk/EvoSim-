@@ -2130,8 +2130,7 @@ mod fluid_coalescence_transaction_tests {
         let fluid_tx = combine_energy_transaction(2.0, 3.0, 4.0, true, 0.0, 0.0).unwrap();
         // Existing bonds contribute equally to both states and must cancel;
         // only the new bond's product-minus-reactant potential funds the costs.
-        let rigid_tx =
-            combine_energy_transaction(2.0, 3.0, 4.0, false, -10.0, -13.0).unwrap();
+        let rigid_tx = combine_energy_transaction(2.0, 3.0, 4.0, false, -10.0, -13.0).unwrap();
 
         assert!(fluid_tx.balanced());
         assert!(rigid_tx.balanced());
