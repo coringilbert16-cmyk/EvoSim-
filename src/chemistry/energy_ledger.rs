@@ -67,6 +67,19 @@ impl EnergySourceBudget {
 /// Source identity and source-availability rules remain on the concrete
 /// transaction. This common allocation enforces the same balance equation
 /// without treating external input as released chemical potential.
+/// Signed structural potential for the authoritative realized bond graph.
+/// A stable bond contributes negative potential relative to separated materials.
+pub(crate) fn structural_potential(
+    structure: &crate::structure::OrganismStructure,
+) -> Option<f64> {
+    let potential = structure.bonds.iter().try_fold(0.0, |total, bond| {
+        let next = total - bond.bond_energy;
+        (bond.bond_energy.is_finite() && bond.bond_energy >= 0.0 && next.is_finite())
+            .then_some(next)
+    })?;
+    potential.is_finite().then_some(potential)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct EnergyAllocation {
     pub(crate) source_energy: f64,
