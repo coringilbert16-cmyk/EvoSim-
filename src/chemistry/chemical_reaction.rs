@@ -894,21 +894,24 @@ pub(crate) fn resolve(
     }
     let processing_efficiency = organism.genome.processing_efficiency();
     // Activation is an independent threshold, not energy and not a substitute
-    // for disruption work. Compatible resonance may pay that work, but the
-    // required amount is determined by the physical barrier alone.
-    let required_resonance = operation.disruption_cost;
+    // for disruption work. Processing efficiency determines how much compatible
+    // resonance must be withdrawn to deliver useful work for this reaction.
+    let required_resonance = operation.disruption_cost / processing_efficiency;
+    if !required_resonance.is_finite() {
+        return false;
+    }
     // Work from a trial reservoir. A failed or stale BREAK must not consume
     // retained resonance; only a successfully settled structural transaction
-    // commits the frequency-compatible withdrawal.
+    // commits the frequency-compatible withdrawal and its conversion loss.
     let mut trial_reservoir = organism.resonant_energy.clone();
-    let resonant_work =
+    let resonance_withdrawal =
         trial_reservoir.withdraw_compatible(operation.reaction_frequency_hz, required_resonance);
     let success = crate::transformation::settle_chemical_break_energy_with_resonance(
         organism,
         operation.bond,
         operation.activation_signal,
         operation.disruption_cost,
-        resonant_work,
+        resonance_withdrawal,
         processing_efficiency,
         ledger,
     );
