@@ -2415,10 +2415,22 @@ mod fluid_coalescence_transaction_tests {
                 ledger.total_heat_dissipated,
             ));
         }
-        assert_eq!(observed[0].0, observed[1].0, "physical reaction delta must not depend on efficiency");
-        assert_eq!(observed[0].1, observed[1].1, "holder delta must not be conflated with conversion loss");
-        assert!(observed[0].2 > observed[1].2, "lower efficiency must withdraw more resonance");
-        assert!(observed[0].4 > observed[1].4, "lower efficiency must dissipate more conversion heat");
+        assert_eq!(
+            observed[0].0, observed[1].0,
+            "physical reaction delta must not depend on efficiency"
+        );
+        assert_eq!(
+            observed[0].1, observed[1].1,
+            "holder delta must not be conflated with conversion loss"
+        );
+        assert!(
+            observed[0].2 > observed[1].2,
+            "lower efficiency must withdraw more resonance"
+        );
+        assert!(
+            observed[0].4 > observed[1].4,
+            "lower efficiency must dissipate more conversion heat"
+        );
     }
 
     #[test]
