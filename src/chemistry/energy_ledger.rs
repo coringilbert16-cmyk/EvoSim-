@@ -632,10 +632,19 @@ impl EnergyLedgerAuthority for EnergyLedger {
 
     fn settle_transaction(&mut self, holder: &mut f64, transaction: EnergyTransaction) -> bool {
         if !holder.is_finite() || *holder < 0.0 || !transaction.balanced() {
+            #[cfg(test)]
+            eprintln!(
+                "settle_transaction rejected input: holder={holder:?}, transaction={transaction:?}, balanced={}",
+                transaction.balanced()
+            );
             return false;
         }
         let mut next_holder = *holder + transaction.usable_delta;
         if !next_holder.is_finite() || next_holder < 0.0 {
+            #[cfg(test)]
+            eprintln!(
+                "settle_transaction rejected holder delta: holder={holder:?}, next_holder={next_holder:?}, transaction={transaction:?}"
+            );
             return false;
         }
         let next_released = self.total_potential_energy_released + transaction.potential_released;
@@ -647,6 +656,10 @@ impl EnergyLedgerAuthority for EnergyLedger {
             || !next_work.is_finite()
             || !next_heat.is_finite()
         {
+            #[cfg(test)]
+            eprintln!(
+                "settle_transaction rejected cumulative totals: released={next_released:?}, structural={next_structural:?}, work={next_work:?}, heat={next_heat:?}, transaction={transaction:?}"
+            );
             return false;
         }
 
@@ -677,12 +690,18 @@ impl EnergyLedgerAuthority for EnergyLedger {
             rounding_steps += 1;
         }
         if !residual.is_finite() || residual.abs() > EPSILON {
+            #[cfg(test)]
+            eprintln!(
+                "settle_transaction rejected residual: initial_holder={holder:?}, next_holder={next_holder:?}, residual={residual:?}, steps={rounding_steps}, actual_work={actual_work_delta:?}, actual_heat={actual_heat_delta:?}, transaction={transaction:?}"
+            );
             return false;
         }
 
         let actual_usable_delta = next_holder - *holder;
         let next_gained = self.total_usable_energy_gained + actual_usable_delta.max(0.0);
         if !next_gained.is_finite() {
+            #[cfg(test)]
+            eprintln!("settle_transaction rejected gained total: {next_gained:?}");
             return false;
         }
 
