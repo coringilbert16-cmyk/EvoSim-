@@ -235,13 +235,16 @@ impl EnergyTransaction {
     }
 }
 
-/// Thermodynamic result for a proposed physical reaction, before any live state mutates.
+/// Structural-energy result for a proposed physical reaction, before live state mutates.
 ///
-/// Reactant and product energy are totals from authoritative pre/post reaction
-/// states, with every stored-energy owner counted exactly once. Physical work
-/// and dissipation are outputs from that same energy budget. Activation is
-/// deliberately not a field here: crossing an activation threshold controls
-/// whether a reaction may proceed, but a signal/threshold is not an energy source.
+/// The current runtime supplies the signed potential of the authoritative
+/// reactant and product bond graphs. This does not claim to model every possible
+/// chemical free-energy term; a reaction that changes composition without a
+/// represented structural-potential change needs additional chemistry data before
+/// its true thermodynamic favorability can be inferred. Physical work and
+/// dissipation are outputs from this same budget. Activation is deliberately
+/// separate: a threshold controls whether a reaction may proceed, but is not
+/// an energy source.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ReactionEnergyBalance {
     pub(crate) reactant_energy: f64,
