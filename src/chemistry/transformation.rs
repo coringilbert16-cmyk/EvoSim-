@@ -10,7 +10,9 @@ use crate::structure::Placement;
 /// energy reservoir. A stable bond has negative structural potential relative to
 /// separated constituents, so breaking it raises structural potential and must
 /// be paid for by a legitimate energy holder.
-pub(crate) fn bond_break_energy_yield(bond_energy: f64) -> Option<(f64, f64, f64)> {
+pub(crate) fn bond_break_energy_yield(
+    bond_energy: f64,
+) -> Option<(f64, f64, f64)> {
     if !bond_energy.is_finite() || bond_energy < 0.0 {
         return None;
     }
@@ -2312,7 +2314,8 @@ mod tests {
 
     #[test]
     fn chemical_break_requires_binding_energy_and_disruption_work() {
-        let (structural_energy, usable, heat) = chemical_break_energy_yield(10.0, 4.0).unwrap();
+        let (structural_energy, usable, heat) =
+            chemical_break_energy_yield(10.0, 4.0).unwrap();
         assert!((structural_energy - 10.0).abs() < 1e-12);
         assert!((usable + 14.0).abs() < 1e-12);
         assert_eq!(heat, 0.0);
@@ -2350,15 +2353,7 @@ mod tests {
     fn resonance_funding_efficiency_loss_is_heat_and_not_double_charged() {
         let ledger = crate::state::EnergyLedger::default();
         let prepared = prepare_chemical_break_energy_with_structural_potentials(
-            20.0,
-            &ledger,
-            4.0,
-            0.0,
-            4.0,
-            5.0,
-            5.0,
-            2.0,
-            0.5,
+            20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0, 0.5,
         )
         .expect("two reservoir units at 50% efficiency provide one unit of work");
 
@@ -2369,9 +2364,7 @@ mod tests {
         assert!((prepared.heat_dissipated - 1.0).abs() < 1e-12);
         assert!((prepared.ledger.total_work_expended - 5.0).abs() < 1e-12);
         assert!((prepared.ledger.total_heat_dissipated - 1.0).abs() < 1e-12);
-        let world_residual = (prepared.usable_energy - 20.0)
-            + 4.0
-            - 2.0
+        let world_residual = (prepared.usable_energy - 20.0) + 4.0 - 2.0
             + prepared.ledger.total_work_expended
             + prepared.ledger.total_heat_dissipated;
         assert!(world_residual.abs() < 1e-12);
