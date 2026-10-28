@@ -2425,4 +2425,57 @@ mod fluid_coalescence_transaction_tests {
             "processing efficiency belongs to energy funding, not physical product-minus-reactant potential"
         );
     }
+
+    #[test]
+    fn insufficient_resonance_rolls_back_organism_combine_state_atomically() {
+        let (mut structure, catalog, _) = build_bonded_pair(0.0, false);
+        structure.bonds.clear();
+        let mut cache = ConnectionCompatibilityCache;
+        let candidate = eligible_candidates(&structure, 0, 1, &catalog, &mut cache)
+            .into_iter()
+            .find(|candidate| evaluate_candidate(&structure, 0, 1, *candidate, &catalog).is_some())
+            .expect("touching fluid pair should have an eligible COMBINE candidate");
+        let (_, _, investment, required) =
+            evaluate_candidate(&structure, 0, 1, candidate, &catalog).unwrap();
+        assert!(required > 0.0);
+
+        let properties_a = structure.units[0].properties(&catalog).unwrap();
+        let properties_b = structure.units[1].properties(&catalog).unwrap();
+        let baselines = crate::resources::ResourceBaselines::from_catalog(&catalog);
+        let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
+        let frequency = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
+        assert!(resonance.deposit(frequency, required * 0.5));
+        let original_resonance = resonance.total_energy().unwrap();
+        let original_structure = structure.clone();
+        let mut ledger = EnergyLedger::default();
+        let original_ledger = ledger;
+        let mut usable_energy = 0.0;
+
+        assert!(form_bond_with_resonance(
+            &mut structure,
+            BondFormationRequest {
+                unit_a: 0,
+                unit_b: 1,
+                endpoint_a: candidate.endpoint_a,
+                endpoint_b: candidate.endpoint_b,
+                investment,
+            },
+            &catalog,
+            &mut cache,
+            &mut ledger,
+            &mut usable_energy,
+            &mut resonance,
+            0.5,
+        )
+        .is_none());
+
+        assert_eq!(structure.units, original_structure.units);
+        assert_eq!(structure.bonds, original_structure.bonds);
+        assert_eq!(structure.genome_constituent_ids(), original_structure.genome_constituent_ids());
+        assert_eq!(usable_energy, 0.0);
+        assert_eq!(ledger, original_ledger);
+        assert!((resonance.total_energy().unwrap() - original_resonance).abs() < 1e-12);
+    }
 }
