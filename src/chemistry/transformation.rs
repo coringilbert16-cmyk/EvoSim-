@@ -320,15 +320,20 @@ pub(crate) fn resolve_resonance_overload_break(
     else {
         return false;
     };
+    let processing_efficiency = organism.genome.processing_efficiency();
+    let required_resonance = barrier / processing_efficiency;
+    if !required_resonance.is_finite() {
+        return false;
+    }
     let mut trial_reservoir = organism.resonant_energy.clone();
-    let resonant_work = trial_reservoir.withdraw_compatible(reaction_frequency_hz, barrier);
-    if !resonant_work.is_finite() || resonant_work <= 1e-9 {
+    let resonance_withdrawal =
+        trial_reservoir.withdraw_compatible(reaction_frequency_hz, required_resonance);
+    if !resonance_withdrawal.is_finite() || resonance_withdrawal <= 1e-9 {
         return false;
     }
     // The overload event itself supplies the full activation signal; the
-    // settlement below separately accounts how much work came from resonance.
+    // settlement separately accounts useful resonance-funded work and loss.
     let reaction_energy = barrier;
-    let processing_efficiency = organism.genome.processing_efficiency();
     if !settle_chemical_break_energy_with_resonance(
         organism,
         target,
@@ -1501,18 +1506,11 @@ mod tests {
 
     #[test]
     fn bond_break_requires_energy_for_binding_potential() {
-        let (gross, usable, heat) = bond_break_energy_yield(4.0, 0.5).unwrap();
+        let (gross, usable, heat) = bond_break_energy_yield(4.0).unwrap();
         assert_eq!(gross, 4.0);
         assert_eq!(usable, -4.0);
         assert_eq!(heat, 0.0);
         assert!((gross + usable + heat).abs() < 1e-12);
-    }
-
-    #[test]
-    fn bond_break_rejects_non_finite_processing_efficiency() {
-        assert!(bond_break_energy_yield(4.0, f64::NAN).is_none());
-        assert!(bond_break_energy_yield(4.0, f64::INFINITY).is_none());
-        assert!(bond_break_energy_yield(4.0, f64::NEG_INFINITY).is_none());
     }
 
     #[test]
@@ -2349,6 +2347,37 @@ mod tests {
         // and full physical disruption work reconcile independently.
         let residual = structural_energy - resonant_work + usable + total_disruption_work;
         assert!(residual.abs() < 1e-12);
+    }
+
+    #[test]
+    fn resonance_funding_efficiency_loss_is_heat_and_not_double_charged() {
+        let ledger = crate::state::EnergyLedger::default();
+        let prepared = prepare_chemical_break_energy_with_structural_potentials(
+            20.0,
+            &ledger,
+            4.0,
+            0.0,
+            4.0,
+            5.0,
+            5.0,
+            2.0,
+            0.5,
+        )
+        .expect("two reservoir units at 50% efficiency provide one unit of work");
+
+        // The reaction needs four binding-energy units plus five work units.
+        // Resonance withdraws 2, supplies 1 work, and loses 1 as heat; the
+        // usable holder pays the remaining 8 units.
+        assert!((prepared.usable_energy - 12.0).abs() < 1e-12);
+        assert!((prepared.heat_dissipated - 1.0).abs() < 1e-12);
+        assert!((prepared.ledger.total_work_expended - 5.0).abs() < 1e-12);
+        assert!((prepared.ledger.total_heat_dissipated - 1.0).abs() < 1e-12);
+        let world_residual = (prepared.usable_energy - 20.0)
+            + 4.0
+            - 2.0
+            + prepared.ledger.total_work_expended
+            + prepared.ledger.total_heat_dissipated;
+        assert!(world_residual.abs() < 1e-12);
     }
 
     #[test]
