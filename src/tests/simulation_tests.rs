@@ -1277,7 +1277,7 @@ mod integration_tests {
                     .structure
                     .bonds
                     .iter()
-                    .map(|bond| bond.bond_energy)
+                    .map(|bond| -bond.bond_energy)
                     .sum::<f64>()
                     + organism
                         .reproductive_construction
@@ -1287,7 +1287,7 @@ mod integration_tests {
                                 .developing_structure
                                 .bonds
                                 .iter()
-                                .map(|bond| bond.bond_energy)
+                                .map(|bond| -bond.bond_energy)
                                 .sum::<f64>()
                         })
             })
@@ -1299,7 +1299,7 @@ mod integration_tests {
                     body.structure
                         .bonds
                         .iter()
-                        .map(|bond| bond.bond_energy)
+                        .map(|bond| -bond.bond_energy)
                         .sum::<f64>()
                 })
                 .sum::<f64>();
