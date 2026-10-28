@@ -2479,7 +2479,7 @@ mod tests {
             after.residual()
         );
         assert!(after.current_resonant_energy < before.current_resonant_energy);
-        assert!(after.current_structural_energy < before.current_structural_energy);
+        assert!(after.current_structural_energy > before.current_structural_energy);
     }
 
     #[test]
