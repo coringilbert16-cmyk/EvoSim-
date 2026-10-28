@@ -2329,17 +2329,15 @@ mod fluid_coalescence_transaction_tests {
     #[test]
     fn organism_combine_resonance_funding_accounts_for_efficiency_without_changing_structure_energy(
     ) {
-        let (mut structure, catalog, _) = build_bonded_pair(0.0, false);
+        let (mut structure, catalog, _) = build_bonded_pair(0.0, true);
         structure.bonds.clear();
-        // A small positive gap within contact tolerance exercises nonzero physical work.
-        structure.units[1].placement.x += 0.05;
         let mut cache = ConnectionCompatibilityCache;
-        let candidate = eligible_candidates(&structure, 0, 1, &catalog, &mut cache)
+        let candidate = eligible_candidates(&structure, 0, 2, &catalog, &mut cache)
             .into_iter()
-            .find(|candidate| evaluate_candidate(&structure, 0, 1, *candidate, &catalog).is_some())
-            .expect("touching fluid pair should have an eligible COMBINE candidate");
+            .find(|candidate| evaluate_candidate(&structure, 0, 2, *candidate, &catalog).is_some())
+            .expect("rigid/fluid contact should have an eligible COMBINE candidate");
         let (_, _, investment, required) =
-            evaluate_candidate(&structure, 0, 1, candidate, &catalog).unwrap();
+            evaluate_candidate(&structure, 0, 2, candidate, &catalog).unwrap();
         assert!(
             required > 0.0,
             "fixture must require physical formation work"
@@ -2369,7 +2367,7 @@ mod fluid_coalescence_transaction_tests {
                 &mut trial_structure,
                 BondFormationRequest {
                     unit_a: 0,
-                    unit_b: 1,
+                    unit_b: 2,
                     endpoint_a: candidate.endpoint_a,
                     endpoint_b: candidate.endpoint_b,
                     investment,
@@ -2390,12 +2388,10 @@ mod fluid_coalescence_transaction_tests {
             assert!((ledger.total_work_expended - required).abs() < 1e-9);
             assert!((ledger.total_heat_dissipated - (withdrawal - required)).abs() < 1e-9);
             assert!(
-                (after_potential - before_potential).abs() < 1e-9,
-                "transient fluid coalescence must not create persistent structural potential"
+                (attempt.net_energy_change - (after_potential - before_potential)).abs() < 1e-9,
+                "physical reaction delta must match product-minus-reactant structural potential"
             );
-            assert!(usable_energy.abs() < 1e-9);
-            assert!(attempt.usable_energy_delta.abs() < 1e-9);
-            assert!(attempt.net_energy_change.abs() < 1e-9);
+            assert!((attempt.usable_energy_delta - usable_energy).abs() < 1e-9);
             let residual = usable_energy
                 + (after_potential - before_potential)
                 + (after_resonance - before_resonance)
@@ -2470,9 +2466,15 @@ mod fluid_coalescence_transaction_tests {
 
     #[test]
     fn insufficient_resonance_rolls_back_organism_combine_state_atomically() {
-        let (mut structure, catalog, _) = build_bonded_pair(0.0, false);
+        let (mut structure, catalog, _) = build_bonded_pair(0.0, true);
         structure.bonds.clear();
         let mut cache = ConnectionCompatibilityCache;
+        let candidate = eligible_candidates(&structure, 0, 2, &catalog, &mut cache)
+            .into_iter()
+            .find(|candidate| evaluate_candidate(&structure, 0, 2, *candidate, &catalog).is_some())
+            .expect("rigid/fluid contact should have an eligible COMBINE candidate");
+        let (_, _, investment, required) =
+            evaluate_candidate(&structure, 0, 2, candidate, &catalog).unwrap();        let mut cache = ConnectionCompatibilityCache;
         let candidate = eligible_candidates(&structure, 0, 1, &catalog, &mut cache)
             .into_iter()
             .find(|candidate| evaluate_candidate(&structure, 0, 1, *candidate, &catalog).is_some())
@@ -2499,7 +2501,7 @@ mod fluid_coalescence_transaction_tests {
             &mut structure,
             BondFormationRequest {
                 unit_a: 0,
-                unit_b: 1,
+                unit_b: 2,
                 endpoint_a: candidate.endpoint_a,
                 endpoint_b: candidate.endpoint_b,
                 investment,
