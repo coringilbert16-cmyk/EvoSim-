@@ -79,7 +79,7 @@ mod tests {
             .structure
             .bonds
             .iter()
-            .map(|bond| bond.bond_energy)
+            .map(|bond| -bond.bond_energy)
             .sum();
         let residual = (body.energy_budget - initial_usable_energy)
             + (remaining_structural_energy - initial_structural_energy)
