@@ -625,6 +625,29 @@ pub(crate) fn resolve_environmental(
         return false;
     };
 
+    // Discovery normally schedules only activated pairs, but the commit
+    // boundary must enforce that contract too: an operation may be stale or
+    // constructed by another caller. Recompute the activation barrier from
+    // the restored live materials and the operation's accumulated chemistry.
+    let (Some(properties_a), Some(properties_b)) = (
+        trial_structure.units[unit_a].properties(&environment.catalog),
+        trial_structure.units[unit_b].properties(&environment.catalog),
+    ) else {
+        return false;
+    };
+    let strength = crate::combine::bond_strength(properties_a, properties_b);
+    let Some(barrier) = crate::chemistry::activation_barrier_from_bond_strength(strength) else {
+        return false;
+    };
+    let Some(activation_signal) =
+        crate::chemistry::normalized_chemistry_to_activation_signal(operation.accumulated_reaction)
+    else {
+        return false;
+    };
+    if !crate::chemistry::activated(activation_signal, barrier) {
+        return false;
+    }
+
     let Some(reactant_structural_energy) =
         crate::energy_ledger::structural_potential(&trial_structure)
     else {
