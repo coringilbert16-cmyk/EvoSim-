@@ -139,7 +139,7 @@ pub(crate) struct EnergyTransaction {
 }
 
 impl EnergyTransaction {
-    /// A non-chemical expenditure with no structural-potential change.
+    /// A pure expenditure with no structural-potential change.
     /// Any bond formation/breaking must use the shared reaction settlement
     /// contract so its signed pre/post-state delta cannot be treated as a cost
     /// destination or a stored-energy reservoir.
