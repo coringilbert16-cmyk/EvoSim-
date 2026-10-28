@@ -108,9 +108,13 @@ pub(crate) fn resolve_one_bond_with_ledger(
     if (structural_delta - gross).abs() > delta_tolerance {
         return None;
     }
-    let transaction =
-        crate::energy_ledger::ReactionEnergyBalance::calculate(0.0, structural_delta, 0.0, heat)?
-            .settlement_transaction(EnergyReason::Decomposition)?;
+    let transaction = crate::energy_ledger::ReactionEnergyBalance::calculate(
+        before_potential,
+        after_potential,
+        0.0,
+        heat,
+    )?
+    .settlement_transaction(EnergyReason::Decomposition)?;
     if !ledger.settle_transaction(&mut body.energy_budget, transaction) {
         return None;
     }
