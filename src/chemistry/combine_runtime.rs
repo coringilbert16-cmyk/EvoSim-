@@ -44,7 +44,28 @@ struct BondFormationRequest {
     investment: f64,
 }
 
-fn energy_requirement(investment: f64, bond_energy: f64, work: f64) -> Option<f64> {
+fn transient_fluid_pair(
+    structure: &crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    catalog: &[BaseResource],
+) -> Option<bool> {
+    let resource_a_name = &structure.units.get(unit_a)?.material.parts.first()?.0;
+    let resource_b_name = &structure.units.get(unit_b)?.material.parts.first()?.0;
+    let resource_a = catalog.iter().find(|resource| &resource.name == resource_a_name)?;
+    let resource_b = catalog.iter().find(|resource| &resource.name == resource_b_name)?;
+    Some(
+        resource_a.physical_state == crate::resources::PhysicalState::Fluid
+            && resource_b.physical_state == crate::resources::PhysicalState::Fluid,
+    )
+}
+
+fn energy_requirement(
+    investment: f64,
+    bond_energy: f64,
+    work: f64,
+    transient_fluid_bond: bool,
+) -> Option<f64> {
     if !investment.is_finite()
         || investment < 0.0
         || !bond_energy.is_finite()
@@ -54,8 +75,12 @@ fn energy_requirement(investment: f64, bond_energy: f64, work: f64) -> Option<f6
     {
         return None;
     }
-    let required = investment + bond_energy + work;
-    required.is_finite().then_some(required)
+    if transient_fluid_bond {
+        let required = investment + bond_energy + work;
+        return required.is_finite().then_some(required);
+    }
+    crate::energy_ledger::ReactionEnergyBalance::calculate(0.0, -bond_energy, work, investment)
+        .map(|balance| balance.required_external_input)
 }
 
 fn combine_energy_transaction(
@@ -73,19 +98,21 @@ fn combine_energy_transaction(
     {
         return None;
     }
-    // Only a bond that survives COMBINE retains structural energy. Formation
-    // work is tracked separately; investment not retained as a bond is waste.
-    let (structural_allocation, work_expended, dissipated_heat) = if transient_fluid_bond {
-        (0.0, work, investment + bond_energy)
-    } else {
-        (bond_energy, work, investment)
-    };
-    EnergyTransaction::expenditure(
-        EnergyReason::Combine,
-        structural_allocation,
-        work_expended,
-        dissipated_heat,
-    )
+    if transient_fluid_bond {
+        // Fluid coalescence removes the temporary graph bond. Until its
+        // product material carries authoritative internal-bond potential,
+        // do not credit the temporary bond energy as a persistent store.
+        return EnergyTransaction::expenditure(
+            EnergyReason::Combine,
+            0.0,
+            work,
+            investment + bond_energy,
+        );
+    }
+    // A stable chemical bond lowers structural potential by its dissociation
+    // magnitude. That release pays work and investment first; only a deficit
+    // is debited from the usable holder.
+    EnergyTransaction::reaction(EnergyReason::Combine, -bond_energy, work, investment)
 }
 
 fn evaluate_candidate(
@@ -130,7 +157,8 @@ fn evaluate_candidate(
     if !bond_energy.is_finite() || bond_energy < 0.0 {
         return None;
     }
-    let required = energy_requirement(investment, bond_energy, work)?;
+    let transient_fluid_bond = transient_fluid_pair(structure, ua, ub, catalog)?;
+    let required = energy_requirement(investment, bond_energy, work, transient_fluid_bond)?;
     Some((evaluation, work, investment, required))
 }
 
