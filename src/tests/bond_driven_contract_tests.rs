@@ -116,7 +116,7 @@ mod tests {
         let mut found = false;
         for placement in placements {
             let mut trial = structure.clone();
-            trial.add_unit(crate::structure::StructuralUnit::new("Water", placement));
+            trial.add_unit(crate::structure::StructuralUnit::new("Carbon", placement));
             let mut cache = crate::contact::ConnectionCompatibilityCache::new();
             let candidate = crate::contact::connection_pair_candidates_cached(
                 &trial, 0, 1, &catalog, &mut cache,
@@ -516,7 +516,7 @@ mod tests {
             &catalog,
         ) {
             let mut trial = structure.clone();
-            trial.add_unit(crate::structure::StructuralUnit::new("Carbon", placement));
+            trial.add_unit(crate::structure::StructuralUnit::new("Water", placement));
             let mut cache = crate::contact::ConnectionCompatibilityCache::new();
             let candidates = crate::contact::connection_pair_candidates_cached(
                 &trial, 0, 1, &catalog, &mut cache,
