@@ -185,6 +185,89 @@ impl EnergyTransaction {
     }
 }
 
+/// Thermodynamic result for a proposed physical reaction, before any live state mutates.
+///
+/// Reactant and product energy are totals from authoritative pre/post reaction
+/// states, with every stored-energy owner counted exactly once. Physical work
+/// and dissipation are outputs from that same energy budget. Activation is
+/// deliberately not a field here: crossing an activation threshold controls
+/// whether a reaction may proceed, but a signal/threshold is not an energy source.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ReactionEnergyBalance {
+    pub(crate) reactant_energy: f64,
+    pub(crate) product_energy: f64,
+    pub(crate) physical_work: f64,
+    pub(crate) dissipated_heat: f64,
+    /// Signed product-minus-reactant energy before work and dissipation.
+    pub(crate) net_reaction_change: f64,
+    /// Minimum legitimate external energy needed after accounting for the
+    /// reactant-to-product energy change and modeled work/heat.
+    pub(crate) required_external_input: f64,
+    /// Energy left over after work and dissipation, available for explicit
+    /// modeled destinations. It is not credited automatically by this plan.
+    pub(crate) released_surplus: f64,
+}
+
+impl ReactionEnergyBalance {
+    /// Derive the reaction budget from actual pre/post energy states.
+    ///
+    /// A negative net balance can fund work and heat without external input;
+    /// a positive deficit must be funded by a named source before commit.
+    /// This constructor only plans the balance and never mutates a holder.
+    pub(crate) fn calculate(
+        reactant_energy: f64,
+        product_energy: f64,
+        physical_work: f64,
+        dissipated_heat: f64,
+    ) -> Option<Self> {
+        let values = [
+            reactant_energy,
+            product_energy,
+            physical_work,
+            dissipated_heat,
+        ];
+        if values.iter().any(|value| !value.is_finite() || *value < 0.0) {
+            return None;
+        }
+        let net_reaction_change = product_energy - reactant_energy;
+        let net_budget_change = net_reaction_change + physical_work + dissipated_heat;
+        if !net_reaction_change.is_finite() || !net_budget_change.is_finite() {
+            return None;
+        }
+        let required_external_input = net_budget_change.max(0.0);
+        let released_surplus = (-net_budget_change).max(0.0);
+        Some(Self {
+            reactant_energy,
+            product_energy,
+            physical_work,
+            dissipated_heat,
+            net_reaction_change,
+            required_external_input,
+            released_surplus,
+        })
+    }
+
+    pub(crate) fn can_commit_with(self, legitimate_external_input: f64) -> bool {
+        legitimate_external_input.is_finite()
+            && legitimate_external_input >= self.required_external_input
+            && (legitimate_external_input - self.required_external_input).is_finite()
+    }
+
+    /// The signed conservation residual after applying the supplied input and
+    /// recording all explicit destinations. Positive residual means creation.
+    pub(crate) fn residual(self, legitimate_external_input: f64) -> Option<f64> {
+        if !legitimate_external_input.is_finite() || legitimate_external_input < 0.0 {
+            return None;
+        }
+        let residual = self.reactant_energy + legitimate_external_input
+            - self.product_energy
+            - self.physical_work
+            - self.dissipated_heat
+            - self.released_surplus;
+        residual.is_finite().then_some(residual)
+    }
+}
+
 /// A point-in-time inventory used to reconcile world-level energy accounting.
 ///
 /// Structural energy is the total energy currently stored in realized bonds,
@@ -514,6 +597,45 @@ impl EnergyLedgerAuthority for EnergyLedger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn favorable_reaction_can_fund_work_without_external_input() {
+        let balance = ReactionEnergyBalance::calculate(10.0, 6.0, 2.0, 1.0).unwrap();
+        assert_eq!(balance.net_reaction_change, -4.0);
+        assert_eq!(balance.required_external_input, 0.0);
+        assert_eq!(balance.released_surplus, 1.0);
+        assert!(balance.can_commit_with(0.0));
+        assert_eq!(balance.residual(0.0), Some(0.0));
+    }
+
+    #[test]
+    fn unfavorable_reaction_requires_legitimate_input_for_the_deficit() {
+        let balance = ReactionEnergyBalance::calculate(3.0, 8.0, 1.0, 0.5).unwrap();
+        assert_eq!(balance.net_reaction_change, 5.0);
+        assert_eq!(balance.required_external_input, 6.5);
+        assert_eq!(balance.released_surplus, 0.0);
+        assert!(!balance.can_commit_with(6.49));
+        assert!(balance.can_commit_with(6.5));
+        assert_eq!(balance.residual(6.5), Some(0.0));
+    }
+
+    #[test]
+    fn energy_neutral_reaction_still_accounts_for_work_and_heat() {
+        let balance = ReactionEnergyBalance::calculate(4.0, 4.0, 1.0, 0.25).unwrap();
+        assert_eq!(balance.net_reaction_change, 0.0);
+        assert_eq!(balance.required_external_input, 1.25);
+        assert_eq!(balance.released_surplus, 0.0);
+    }
+
+    #[test]
+    fn reaction_balance_rejects_non_finite_or_negative_state_values() {
+        assert!(ReactionEnergyBalance::calculate(-1.0, 0.0, 0.0, 0.0).is_none());
+        assert!(ReactionEnergyBalance::calculate(0.0, f64::NAN, 0.0, 0.0).is_none());
+        assert!(ReactionEnergyBalance::calculate(0.0, 0.0, f64::INFINITY, 0.0).is_none());
+        let balance = ReactionEnergyBalance::calculate(1.0, 1.0, 0.0, 0.0).unwrap();
+        assert!(!balance.can_commit_with(f64::NAN));
+        assert!(balance.residual(-1.0).is_none());
+    }
 
     #[test]
     fn strict_world_inventory_oracle_rejects_even_sub_tolerance_energy_creation() {
