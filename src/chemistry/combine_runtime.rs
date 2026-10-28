@@ -70,11 +70,7 @@ fn energy_requirement(
     reactant_structural_energy: f64,
     product_structural_energy: f64,
 ) -> Option<f64> {
-    if !bond_energy.is_finite()
-        || bond_energy < 0.0
-        || !work.is_finite()
-        || work < 0.0
-    {
+    if !bond_energy.is_finite() || bond_energy < 0.0 || !work.is_finite() || work < 0.0 {
         return None;
     }
     let product_energy = if transient_fluid_bond {
