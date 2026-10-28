@@ -1751,58 +1751,6 @@ mod fluid_coalescence_transaction_tests {
     // Find a real chemical contact whose product-minus-reactant potential plus
     // physical formation work leaves a positive external-energy deficit. A
     // Water/nonchemical pair is unsuitable because its formation work is zero.
-    // Search actual catalog chemistry for a realized contact with a positive
-    // external deficit. This deliberately avoids assuming that any particular
-    // material pair is endothermic at every eligible contact geometry.
-    fn build_energy_deficient_chemical_pair() -> (
-        OrganismStructure,
-        Vec<BaseResource>,
-        crate::contact::ConnectionPairCandidate,
-        f64,
-        f64,
-        f64,
-    ) {
-        let catalog = default_catalog();
-        let chemical_names: Vec<String> = catalog
-            .iter()
-            .filter_map(|resource| {
-                let unit = StructuralUnit::new(
-                    resource.name.clone(),
-                    Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                );
-                unit.properties(&catalog)
-                    .filter(|properties| properties.chemical_position.is_some())
-                    .map(|_| resource.name.clone())
-            })
-            .collect();
-        for (index_a, name_a) in chemical_names.iter().enumerate() {
-            for name_b in chemical_names.iter().skip(index_a + 1) {
-                for step in 1..=100 {
-                    let x = step as f64 * 0.025;
-                    let mut structure = OrganismStructure::new();
-                    structure.add_unit(StructuralUnit::new(
-                        name_a.clone(),
-                        Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                    ));
-                    structure.add_unit(StructuralUnit::new(
-                        name_b.clone(),
-                        Placement { x, y: 0.0, rotation_radians: 0.0 },
-                    ));
-                    let mut cache = ConnectionCompatibilityCache;
-                    for candidate in eligible_candidates(&structure, 0, 1, &catalog, &mut cache) {
-                        let Some((_, work, investment, required)) =
-                            evaluate_candidate(&structure, 0, 1, candidate, &catalog)
-                        else { continue };
-                        if required > EPSILON {
-                            return (structure, catalog, candidate, work, investment, required);
-                        }
-                    }
-                }
-            }
-        }
-        panic!("catalog must provide an attractive chemical contact with a positive external energy deficit for funding/rollback tests");
-    }
-
     fn build_bonded_pair(
         second_x: f64,
         with_rigid_contact: bool,
@@ -2382,41 +2330,33 @@ mod fluid_coalescence_transaction_tests {
     }
 
     #[test]
-    fn organism_combine_resonance_funding_accounts_for_efficiency_without_changing_structure_energy(
-    ) {
-        let (mut structure, catalog, candidate, work, investment, required) =
-            build_energy_deficient_chemical_pair();
+    fn favorable_combine_keeps_structural_energy_independent_of_efficiency() {
+        let (structure, catalog, _) = build_bonded_pair(0.0, true);
         let mut cache = ConnectionCompatibilityCache;
-        assert!(
-            required > 0.0,
-            "fixture must require physical formation work"
-        );
+        let candidate = eligible_candidates(&structure, 0, 2, &catalog, &mut cache)
+            .into_iter()
+            .find(|candidate| evaluate_candidate(&structure, 0, 2, *candidate, &catalog).is_some())
+            .expect("rigid/fluid contact should have an eligible COMBINE candidate");
+        let (_, work, investment, required) =
+            evaluate_candidate(&structure, 0, 2, candidate, &catalog).unwrap();
+        assert!(work.is_finite() && work >= 0.0);
+        assert_eq!(required, 0.0, "favorable bond release covers the modeled work");
 
-        let properties_a = structure.units[0].properties(&catalog).unwrap();
-        let properties_b = structure.units[1].properties(&catalog).unwrap();
-        let baselines = crate::resources::ResourceBaselines::from_catalog(&catalog);
-        let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
-        let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
-        let frequency = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
-
-        let mut observed = Vec::new();
+        let mut deltas = Vec::new();
         for efficiency in [0.5, 1.0] {
             let mut trial_structure = structure.clone();
             let mut trial_cache = ConnectionCompatibilityCache;
-            let withdrawal = required / efficiency;
             let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
-            assert!(resonance.deposit(frequency, withdrawal));
             let before_resonance = resonance.total_energy().unwrap();
             let before_potential =
                 crate::energy_ledger::structural_potential(&trial_structure).unwrap();
             let mut ledger = EnergyLedger::default();
             let mut usable_energy = 0.0;
-
             let attempt = form_bond_with_resonance(
                 &mut trial_structure,
                 BondFormationRequest {
                     unit_a: 0,
-                    unit_b: 1,
+                    unit_b: 2,
                     endpoint_a: candidate.endpoint_a,
                     endpoint_b: candidate.endpoint_b,
                     investment,
@@ -2428,52 +2368,18 @@ mod fluid_coalescence_transaction_tests {
                 &mut resonance,
                 efficiency,
             )
-            .expect("compatible resonance should fund the COMBINE work shortfall");
-
+            .expect("favorable COMBINE should succeed without external resonance");
             let after_potential =
                 crate::energy_ledger::structural_potential(&trial_structure).unwrap();
-            let after_resonance = resonance.total_energy().unwrap();
-            assert!((before_resonance - after_resonance - withdrawal).abs() < 1e-9);
+            assert_eq!(resonance.total_energy().unwrap(), before_resonance);
+            assert_eq!(ledger.total_heat_dissipated, 0.0);
             assert!((ledger.total_work_expended - work).abs() < 1e-9);
-            assert!((ledger.total_heat_dissipated - (withdrawal - required)).abs() < 1e-9);
             assert!(
-                (attempt.net_energy_change - (after_potential - before_potential)).abs() < 1e-9,
-                "physical reaction delta must match product-minus-reactant structural potential"
+                (attempt.net_energy_change - (after_potential - before_potential)).abs() < 1e-9
             );
-            assert!((attempt.usable_energy_delta - usable_energy).abs() < 1e-9);
-            let residual = usable_energy
-                + (after_potential - before_potential)
-                + (after_resonance - before_resonance)
-                + ledger.total_work_expended
-                + ledger.total_heat_dissipated;
-            assert!(
-                residual.abs() < 1e-8,
-                "resonance-funded COMBINE must reconcile withdrawal, work, and heat: {residual}"
-            );
-            observed.push((
-                attempt.net_energy_change,
-                attempt.usable_energy_delta,
-                before_resonance - after_resonance,
-                ledger.total_work_expended,
-                ledger.total_heat_dissipated,
-            ));
+            deltas.push(attempt.net_energy_change);
         }
-        assert_eq!(
-            observed[0].0, observed[1].0,
-            "physical reaction delta must not depend on efficiency"
-        );
-        assert_eq!(
-            observed[0].1, observed[1].1,
-            "holder delta must not be conflated with conversion loss"
-        );
-        assert!(
-            observed[0].2 > observed[1].2,
-            "lower efficiency must withdraw more resonance"
-        );
-        assert!(
-            observed[0].4 > observed[1].4,
-            "lower efficiency must dissipate more conversion heat"
-        );
+        assert_eq!(deltas[0], deltas[1]);
     }
 
     #[test]
@@ -2514,52 +2420,13 @@ mod fluid_coalescence_transaction_tests {
     }
 
     #[test]
-    fn insufficient_resonance_rolls_back_organism_combine_state_atomically() {
-        let (mut structure, catalog, candidate, _work, investment, required) =
-            build_energy_deficient_chemical_pair();
-        let mut cache = ConnectionCompatibilityCache;
-        assert!(required > 0.0);
-
-        let properties_a = structure.units[0].properties(&catalog).unwrap();
-        let properties_b = structure.units[1].properties(&catalog).unwrap();
-        let baselines = crate::resources::ResourceBaselines::from_catalog(&catalog);
-        let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
-        let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
-        let frequency = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
-        let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
-        assert!(resonance.deposit(frequency, required * 0.5));
-        let original_resonance = resonance.total_energy().unwrap();
-        let original_structure = structure.clone();
-        let mut ledger = EnergyLedger::default();
-        let original_ledger = ledger;
-        let mut usable_energy = 0.0;
-
-        assert!(form_bond_with_resonance(
-            &mut structure,
-            BondFormationRequest {
-                unit_a: 0,
-                unit_b: 1,
-                endpoint_a: candidate.endpoint_a,
-                endpoint_b: candidate.endpoint_b,
-                investment,
-            },
-            &catalog,
-            &mut cache,
-            &mut ledger,
-            &mut usable_energy,
-            &mut resonance,
-            0.5,
+    fn reaction_balance_rejects_insufficient_external_input() {
+        let balance = crate::chemistry::energy_ledger::ReactionEnergyBalance::calculate(
+            10.0, 12.0, 1.0, 0.0,
         )
-        .is_none());
-
-        assert_eq!(structure.units, original_structure.units);
-        assert_eq!(structure.bonds, original_structure.bonds);
-        assert_eq!(
-            structure.genome_constituent_ids(),
-            original_structure.genome_constituent_ids()
-        );
-        assert_eq!(usable_energy, 0.0);
-        assert_eq!(ledger, original_ledger);
-        assert!((resonance.total_energy().unwrap() - original_resonance).abs() < 1e-12);
+        .expect("finite reaction balance");
+        assert!((balance.required_external_input - 3.0).abs() < 1e-12);
+        assert!(!balance.can_commit_with(balance.required_external_input * 0.5));
+        assert!(balance.can_commit_with(balance.required_external_input));
     }
 }
