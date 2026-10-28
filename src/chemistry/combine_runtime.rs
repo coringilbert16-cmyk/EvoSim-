@@ -2340,7 +2340,10 @@ mod fluid_coalescence_transaction_tests {
         let (_, work, investment, required) =
             evaluate_candidate(&structure, 0, 2, candidate, &catalog).unwrap();
         assert!(work.is_finite() && work >= 0.0);
-        assert_eq!(required, 0.0, "favorable bond release covers the modeled work");
+        assert_eq!(
+            required, 0.0,
+            "favorable bond release covers the modeled work"
+        );
 
         let mut deltas = Vec::new();
         for efficiency in [0.5, 1.0] {
@@ -2424,7 +2427,7 @@ mod fluid_coalescence_transaction_tests {
     #[test]
     fn reaction_balance_rejects_insufficient_external_input() {
         let balance = crate::energy_ledger::ReactionEnergyBalance::calculate(10.0, 12.0, 1.0, 0.0)
-        .expect("finite reaction balance");
+            .expect("finite reaction balance");
         assert!((balance.required_external_input - 3.0).abs() < 1e-12);
         assert!(!balance.can_commit_with(balance.required_external_input * 0.5));
         assert!(balance.can_commit_with(balance.required_external_input));
