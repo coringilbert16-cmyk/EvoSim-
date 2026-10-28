@@ -123,7 +123,7 @@ fn select_best_contact(
             if *remaining_work == 0 {
                 break 'pairs;
             }
-            *remaining_work = remaining_work.saturating_sub(1);
+            *remaining_work = (*remaining_work).saturating_sub(1);
             let candidates = crate::contact::connection_pair_candidates_cached(
                 structure, unit_a, unit_b, catalog, cache,
             );
@@ -286,8 +286,8 @@ fn chemical_step(
     ) else {
         return;
     };
-    updated_keys.insert(key.clone());
     if next <= 0.0 {
+        updated_keys.insert(key.clone());
         accumulation.remove(&key);
         return;
     }
@@ -300,6 +300,7 @@ fn chemical_step(
     else {
         return;
     };
+    updated_keys.insert(key.clone());
     if crate::chemistry::activated(activation_signal, barrier) {
         accumulation.remove(&key);
         operations.push(EnvironmentalCombineOperation {
@@ -310,7 +311,10 @@ fn chemical_step(
             material_b,
             source_b: source_b.clone(),
             unit_a: selected.unit_a,
-            unit_b: selected.unit_b,
+            unit_b: match selected.unit_b.checked_sub(source_a.material.parts.len()) {
+                Some(index) => index,
+                None => return,
+            },
             candidate: selected.candidate,
             investment: selected.investment,
             accumulation_key: key,
@@ -347,8 +351,6 @@ pub(crate) fn accumulate_environmental(
     let mut anchor_work = (*remaining_discovery_work)
         .min(FIELD_SCAN_ANCHOR_LIMIT)
         .min(crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
-    let mut component_work = (*remaining_discovery_work)
-        .min(FIELD_COMPONENT_PAIR_LIMIT);
     let mut operations = Vec::new();
     let mut updated_keys = BTreeSet::new();
     let mut cache = ConnectionCompatibilityCache::new();
@@ -406,10 +408,7 @@ pub(crate) fn accumulate_environmental(
                     if *remaining_discovery_work == 0 {
                         break 'anchors;
                     }
-                    *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
-                    if component_work == 0 {
-                        break 'anchors;
-                    }
+                    *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
                     let material_b = (target_material_start + target_offset) % target_count;
                     if (cell_b, material_b) <= (cell_a, material_a) {
                         continue;
@@ -438,14 +437,22 @@ pub(crate) fn accumulate_environmental(
                     }) {
                         continue;
                     }
-                    let Some(selected) = select_best_contact(
+                    let mut component_work =
+                        (*remaining_discovery_work).min(FIELD_COMPONENT_PAIR_LIMIT);
+                    let component_work_initial = component_work;
+                    let selected = select_best_contact(
                         &trial_structure,
                         &indices_a,
                         &indices_b,
                         &environment.catalog,
                         &mut cache,
                         &mut component_work,
-                    ) else {
+                    );
+                    let component_work_used =
+                        component_work_initial.saturating_sub(component_work);
+                    *remaining_discovery_work =
+                        (*remaining_discovery_work).saturating_sub(component_work_used);
+                    let Some(selected) = selected else {
                         continue;
                     };
                     chemical_step(
