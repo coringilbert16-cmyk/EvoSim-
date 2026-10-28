@@ -822,8 +822,8 @@ mod tests {
         let id_a = structure.physical_id(a).unwrap();
         let id_b = structure.physical_id(b).unwrap();
         let candidate = crate::contact::connection_pair_candidates(&structure, a, b, &catalog)
-        .into_iter()
-        .find(|candidate| candidate.available_a && candidate.available_b);
+            .into_iter()
+            .find(|candidate| candidate.available_a && candidate.available_b);
         let Some(candidate) = candidate else {
             return;
         };
