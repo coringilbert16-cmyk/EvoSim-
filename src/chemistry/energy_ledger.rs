@@ -99,40 +99,6 @@ impl EnergyAllocation {
 }
 
 impl ExternalInputTransaction {
-    /// Settle a reaction whose structural-potential change may be favorable
-    /// (negative) or unfavorable (positive). Bond energy is a dissociation
-    /// magnitude; a newly formed stable bond lowers structural potential, while
-    /// breaking it raises structural potential and therefore requires energy.
-    /// The usable holder receives any surplus or pays any deficit after work
-    /// and heat are accounted for.
-    pub(crate) fn reaction(
-        reason: EnergyReason,
-        structural_delta: f64,
-        work_expended: f64,
-        heat_dissipated: f64,
-    ) -> Option<Self> {
-        if !structural_delta.is_finite()
-            || !work_expended.is_finite()
-            || work_expended < 0.0
-            || !heat_dissipated.is_finite()
-            || heat_dissipated < 0.0
-        {
-            return None;
-        }
-        let usable_delta = -(structural_delta + work_expended + heat_dissipated);
-        if !usable_delta.is_finite() {
-            return None;
-        }
-        Some(Self {
-            reason,
-            potential_released: 0.0,
-            usable_delta,
-            structural_delta,
-            work_expended,
-            heat_dissipated,
-        })
-    }
-
     pub(crate) fn allocation(self) -> EnergyAllocation {
         EnergyAllocation {
             source_energy: self.external_input,
@@ -195,6 +161,40 @@ impl EnergyTransaction {
             reason,
             potential_released: 0.0,
             usable_delta: -cost,
+            structural_delta,
+            work_expended,
+            heat_dissipated,
+        })
+    }
+
+    /// Settle a reaction whose structural-potential change may be favorable
+    /// (negative) or unfavorable (positive). Bond energy is a dissociation
+    /// magnitude; a newly formed stable bond lowers structural potential, while
+    /// breaking it raises structural potential and therefore requires energy.
+    /// The usable holder receives any surplus or pays any deficit after work
+    /// and heat are accounted for.
+    pub(crate) fn reaction(
+        reason: EnergyReason,
+        structural_delta: f64,
+        work_expended: f64,
+        heat_dissipated: f64,
+    ) -> Option<Self> {
+        if !structural_delta.is_finite()
+            || !work_expended.is_finite()
+            || work_expended < 0.0
+            || !heat_dissipated.is_finite()
+            || heat_dissipated < 0.0
+        {
+            return None;
+        }
+        let usable_delta = -(structural_delta + work_expended + heat_dissipated);
+        if !usable_delta.is_finite() {
+            return None;
+        }
+        Some(Self {
+            reason,
+            potential_released: 0.0,
+            usable_delta,
             structural_delta,
             work_expended,
             heat_dissipated,
