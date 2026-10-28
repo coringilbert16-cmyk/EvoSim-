@@ -2383,7 +2383,11 @@ mod fluid_coalescence_transaction_tests {
             "transient fluid coalescence must not create a persistent structural potential"
         );
         assert!(usable_energy.abs() < 1e-9);
-        assert!(attempt.net_energy_change.abs() < 1e-9);
+        assert!(attempt.usable_energy_delta.abs() < 1e-9);
+        assert!(
+            attempt.net_energy_change.abs() < 1e-9,
+            "transient fluid COMBINE has no persistent physical structural-energy change"
+        );
         let residual = usable_energy
             + (after_potential - before_potential)
             + (after_resonance - before_resonance)
