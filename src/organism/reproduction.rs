@@ -638,6 +638,18 @@ pub(crate) fn total_structural_energy_held(
                 .iter()
                 .map(|bond| -bond.bond_energy)
                 .sum::<f64>();
+            let stored_material_energy = organism
+                .stored_material
+                .entries
+                .iter()
+                .map(|entry| match entry {
+                    crate::material_storage::StoredMaterial::Physical(instance) => instance
+                        .internal_connections
+                        .as_ref()
+                        .map(|bonds| bonds.iter().map(|bond| -bond.bond_energy).sum::<f64>())
+                        .unwrap_or(f64::NAN),
+                })
+                .sum::<f64>();
             let construction_energy =
                 organism
                     .reproductive_construction
@@ -652,7 +664,7 @@ pub(crate) fn total_structural_energy_held(
                             f64::NAN
                         }
                     });
-            own_energy + construction_energy
+            own_energy + stored_material_energy + construction_energy
         })
         .sum::<f64>();
     let decomposition_energy = decomposing_bodies
