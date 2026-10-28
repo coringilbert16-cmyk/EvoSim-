@@ -249,9 +249,8 @@ pub(crate) struct EnergyLedger {
     /// Usable-energy baseline captured at simulation tick zero.
     #[serde(default)]
     pub(crate) initial_usable_energy_held: f64,
-    /// Current stored bond energy across realized live and decomposing structures.
-    #[serde(default)]
     /// Signed current structural potential, recomputed from authoritative bond state.
+    #[serde(default)]
     pub(crate) total_structural_energy_held: f64,
     /// Signed structural-potential baseline captured at simulation tick zero.
     #[serde(default)]
