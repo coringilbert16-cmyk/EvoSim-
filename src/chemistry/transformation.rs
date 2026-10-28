@@ -2629,9 +2629,11 @@ mod tests {
         assert_eq!(inefficient.heat_dissipated, 1.0);
 
         let efficient_residual = (efficient.usable_energy - 20.0) + 4.0 - 1.0
-            + efficient.ledger.total_work_expended + efficient.heat_dissipated;
+            + efficient.ledger.total_work_expended
+            + efficient.heat_dissipated;
         let inefficient_residual = (inefficient.usable_energy - 20.0) + 4.0 - 2.0
-            + inefficient.ledger.total_work_expended + inefficient.heat_dissipated;
+            + inefficient.ledger.total_work_expended
+            + inefficient.heat_dissipated;
         assert!(efficient_residual.abs() < 1e-12);
         assert!(inefficient_residual.abs() < 1e-12);
     }
