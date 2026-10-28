@@ -178,7 +178,7 @@ impl Simulation {
             .structure
             .bonds
             .iter()
-            .map(|bond| bond.bond_energy)
+            .map(|bond| -bond.bond_energy)
             .sum();
         energy_ledger.initial_structural_energy_held = energy_ledger.total_structural_energy_held;
         Self {
