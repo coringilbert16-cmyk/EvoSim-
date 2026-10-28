@@ -1630,7 +1630,7 @@ impl Simulation {
         decomposing_bodies: &[crate::decomposition::DecomposingBody],
     ) -> f64 {
         fn graph_energy(structure: &crate::structure::OrganismStructure) -> f64 {
-            structure.bonds.iter().map(|bond| bond.bond_energy).sum()
+            structure.bonds.iter().map(|bond| -bond.bond_energy).sum()
         }
 
         let organism_energy: f64 = organisms
