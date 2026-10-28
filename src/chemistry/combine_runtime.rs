@@ -438,7 +438,7 @@ fn form_bond_from_candidate_diagnostic(
         endpoint_a,
         endpoint_b,
         work_cost: work,
-        energy_invested: investment + bond_energy,
+        energy_invested: investment,
         formation_threshold: threshold,
         net_energy_change: net,
         bond_strength: strength,
