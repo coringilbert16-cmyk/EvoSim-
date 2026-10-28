@@ -139,9 +139,9 @@ pub(crate) fn restore_material(
             endpoint_a: BondEndpoint::new(id_a, connection.endpoint_a),
             endpoint_b: BondEndpoint::new(id_b, connection.endpoint_b),
             strength,
-            // This bond predates organism admission. Restoration therefore
-            // carries no new COMBINE investment or energy transaction.
-            bond_energy: 0.0,
+            // Preserve energy already allocated to this physical bond.
+            // Restoration is not a new reaction and therefore charges nothing.
+            bond_energy: connection.bond_energy,
         };
         crate::contact::try_add_bond(&mut trial, bond, catalog).ok()?;
     }
