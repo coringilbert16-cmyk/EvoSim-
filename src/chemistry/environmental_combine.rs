@@ -1127,10 +1127,29 @@ mod tests {
                 .sum::<f64>(),
             2.5
         );
+        // Exercise the actual storage path, not only a direct serialization-
+        // shaped handoff: allocated bond energy and endpoint identity must
+        // survive conversion to the intrinsic storage frame and retrieval.
+        let mut storage = crate::material_storage::MaterialStorage::default();
+        assert!(storage.store_physical_instance(physical.clone(), &catalog));
+        let stored = storage
+            .take_matching_physical(&physical.material, &catalog)
+            .expect("stored product must retain its realized physical instance");
+        assert_eq!(
+            stored
+                .internal_connections
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|bond| bond.bond_energy)
+                .sum::<f64>(),
+            2.5
+        );
+
         let mut restored = OrganismStructure::new();
         let restored_indices = crate::material_restoration::restore_material(
             &mut restored,
-            &physical,
+            &stored,
             origin(),
             &catalog,
         )
