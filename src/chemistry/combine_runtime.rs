@@ -1751,6 +1751,9 @@ mod fluid_coalescence_transaction_tests {
     // Find a real chemical contact whose product-minus-reactant potential plus
     // physical formation work leaves a positive external-energy deficit. A
     // Water/nonchemical pair is unsuitable because its formation work is zero.
+    // Search actual catalog chemistry for a realized contact with a positive
+    // external deficit. This deliberately avoids assuming that any particular
+    // material pair is endothermic at every eligible contact geometry.
     fn build_energy_deficient_chemical_pair() -> (
         OrganismStructure,
         Vec<BaseResource>,
@@ -1760,28 +1763,44 @@ mod fluid_coalescence_transaction_tests {
         f64,
     ) {
         let catalog = default_catalog();
-        for step in 1..=100 {
-            let x = step as f64 * 0.025;
-            let mut structure = OrganismStructure::new();
-            structure.add_unit(StructuralUnit::new(
-                "Carbon",
-                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-            ));
-            structure.add_unit(StructuralUnit::new(
-                "Oxygen",
-                Placement { x, y: 0.0, rotation_radians: 0.0 },
-            ));
-            let mut cache = ConnectionCompatibilityCache;
-            for candidate in eligible_candidates(&structure, 0, 1, &catalog, &mut cache) {
-                let Some((_, work, investment, required)) =
-                    evaluate_candidate(&structure, 0, 1, candidate, &catalog)
-                else { continue };
-                if required > EPSILON {
-                    return (structure, catalog, candidate, work, investment, required);
+        let chemical_names: Vec<String> = catalog
+            .iter()
+            .filter_map(|resource| {
+                let unit = StructuralUnit::new(
+                    resource.name.clone(),
+                    Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                );
+                unit.properties(&catalog)
+                    .filter(|properties| properties.chemical_position.is_some())
+                    .map(|_| resource.name.clone())
+            })
+            .collect();
+        for (index_a, name_a) in chemical_names.iter().enumerate() {
+            for name_b in chemical_names.iter().skip(index_a + 1) {
+                for step in 1..=100 {
+                    let x = step as f64 * 0.025;
+                    let mut structure = OrganismStructure::new();
+                    structure.add_unit(StructuralUnit::new(
+                        name_a.clone(),
+                        Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                    ));
+                    structure.add_unit(StructuralUnit::new(
+                        name_b.clone(),
+                        Placement { x, y: 0.0, rotation_radians: 0.0 },
+                    ));
+                    let mut cache = ConnectionCompatibilityCache;
+                    for candidate in eligible_candidates(&structure, 0, 1, &catalog, &mut cache) {
+                        let Some((_, work, investment, required)) =
+                            evaluate_candidate(&structure, 0, 1, candidate, &catalog)
+                        else { continue };
+                        if required > EPSILON {
+                            return (structure, catalog, candidate, work, investment, required);
+                        }
+                    }
                 }
             }
         }
-        panic!("fixture search must find an attractive chemical contact with a positive external energy deficit");
+        panic!("catalog must provide an attractive chemical contact with a positive external energy deficit for funding/rollback tests");
     }
 
     fn build_bonded_pair(
