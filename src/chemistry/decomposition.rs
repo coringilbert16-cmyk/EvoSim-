@@ -101,13 +101,9 @@ pub(crate) fn resolve_one_bond_with_ledger(
     let before = body.energy_budget;
     let (gross, _usable, heat) =
         crate::transformation::bond_break_energy_yield(target.bond_energy, 1.0)?;
-    let transaction = crate::energy_ledger::ReactionEnergyBalance::calculate(
-        0.0,
-        gross,
-        0.0,
-        heat,
-    )?
-    .settlement_transaction(EnergyReason::Decomposition)?;
+    let transaction =
+        crate::energy_ledger::ReactionEnergyBalance::calculate(0.0, gross, 0.0, heat)?
+            .settlement_transaction(EnergyReason::Decomposition)?;
     if !ledger.settle_transaction(&mut body.energy_budget, transaction) {
         return None;
     }
