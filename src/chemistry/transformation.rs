@@ -10,9 +10,7 @@ use crate::structure::Placement;
 /// energy reservoir. A stable bond has negative structural potential relative to
 /// separated constituents, so breaking it raises structural potential and must
 /// be paid for by a legitimate energy holder.
-pub(crate) fn bond_break_energy_yield(
-    bond_energy: f64,
-) -> Option<(f64, f64, f64)> {
+pub(crate) fn bond_break_energy_yield(bond_energy: f64) -> Option<(f64, f64, f64)> {
     if !bond_energy.is_finite() || bond_energy < 0.0 {
         return None;
     }
