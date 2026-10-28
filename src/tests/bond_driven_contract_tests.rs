@@ -163,8 +163,7 @@ mod tests {
                     "committed bond energy must match the transaction result"
                 );
                 assert!(
-                    ((before_energy - energy) - (attempt.work_cost - attempt.bond_energy))
-                        .abs()
+                    ((before_energy - energy) - (attempt.work_cost - attempt.bond_energy)).abs()
                         < 1.0e-6,
                     "holder balance must include the bond-formation energy release"
                 );
@@ -539,7 +538,10 @@ mod tests {
                     &mut ledger,
                     &mut energy,
                 );
-                assert!(result.is_some(), "zero-deficit COMBINE should not require an arbitrary energy grant");
+                assert!(
+                    result.is_some(),
+                    "zero-deficit COMBINE should not require an arbitrary energy grant"
+                );
                 assert_eq!(ledger.total_heat_dissipated, 0.0);
                 checked = true;
                 break;
@@ -548,7 +550,10 @@ mod tests {
                 break;
             }
         }
-        assert!(checked, "expected a fluid COMBINE candidate with no net energy deficit");
+        assert!(
+            checked,
+            "expected a fluid COMBINE candidate with no net energy deficit"
+        );
     }
     #[test]
     fn whole_structure_overlap_check_catches_non_anchor_constituent() {
