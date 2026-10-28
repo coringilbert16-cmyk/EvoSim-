@@ -13,6 +13,7 @@ use crate::structure::{OrganismStructure, Placement};
 
 const ENVIRONMENT_PREFIX: &str = "environment|combine:";
 const FIELD_SCAN_ANCHOR_LIMIT: usize = 64;
+const FIELD_TARGET_CELL_INSPECTION_LIMIT: usize = 64;
 const FIELD_COMPONENT_PAIR_LIMIT: usize = 128;
 const BOUNDS_PADDING: f64 = 2.1;
 
@@ -389,7 +390,9 @@ pub(crate) fn accumulate_environmental(
                 continue;
             }
             let target_start = tick as usize % target_cells.len();
-            for target_offset in 0..target_cells.len() {
+            let target_cell_scan_count =
+                target_cells.len().min(FIELD_TARGET_CELL_INSPECTION_LIMIT);
+            for target_offset in 0..target_cell_scan_count {
                 if *remaining_discovery_work == 0 {
                     break 'anchors;
                 }
