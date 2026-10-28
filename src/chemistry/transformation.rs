@@ -49,12 +49,12 @@ pub(crate) fn chemical_break_energy_yield(
 
 /// Apply a chemistry-caused BREAK after the chemistry system has crossed
 /// the activation threshold. Reaction accumulation is a trigger, not an energy
-/// reservoir: disruption work is paid from the removed bond's stored energy
-/// first, with any shortfall debited from the organism's usable-energy holder.
+/// reservoir. Breaking a stable bond raises structural potential by its
+/// dissociation-energy magnitude, which must be paid from a real energy holder.
 /// Settle a chemistry BREAK where compatible retained resonance supplies part
-/// of the disruption work. The reservoir debit is committed by the caller only
-/// after this transaction succeeds; the remaining work is charged to the
-/// removed bond's energy/usable-energy balance.
+/// of the physical disruption work. Resonant energy is debited only after this
+/// transaction succeeds; the usable holder pays the structural-potential increase
+/// plus any disruption work not supplied by resonance.
 /// Prepared accounting for a chemical BREAK, before its source mutation commits.
 #[derive(Clone, Copy)]
 pub(crate) struct PreparedChemicalBreakEnergy {
