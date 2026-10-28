@@ -486,7 +486,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn activation_threshold_is_not_charged_as_combine_energy() {
         let catalog = default_catalog();
         let mut structure = crate::structure::OrganismStructure::new();
