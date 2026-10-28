@@ -40,7 +40,8 @@ pub(crate) fn chemical_break_energy_yield(
     // the remaining physical work. Activation is only a gate, never a source.
     let usable = -(bond_energy + disruption_cost);
     let heat = 0.0;
-    (usable.is_finite() && (usable + bond_energy + disruption_cost + heat).abs() <= 1e-9)
+    (usable.is_finite()
+        && (usable + bond_energy + disruption_cost + heat).abs() <= 1e-9)
         .then_some((bond_energy, usable, heat))
 }
 
