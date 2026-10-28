@@ -875,8 +875,14 @@ mod tests {
             &catalog,
         ));
         simulation.environment.chemistry_usable_energy = 1_000.0;
-        simulation.energy_ledger.total_usable_energy_held = 1_000.0;
-        simulation.energy_ledger.initial_usable_energy_held = 1_000.0;
+        let baseline = simulation.energy_inventory_snapshot();
+        simulation.energy_ledger = crate::energy_ledger::EnergyLedger::default();
+        simulation.energy_ledger.initial_usable_energy_held = baseline.current_usable_energy;
+        simulation.energy_ledger.total_usable_energy_held = baseline.current_usable_energy;
+        simulation.energy_ledger.initial_resonant_energy_held = baseline.current_resonant_energy;
+        simulation.energy_ledger.total_resonant_energy_held = baseline.current_resonant_energy;
+        simulation.energy_ledger.initial_structural_energy_held = baseline.current_structural_energy;
+        simulation.energy_ledger.total_structural_energy_held = baseline.current_structural_energy;
 
         let key = source_pair_key(
             cell,
@@ -918,6 +924,12 @@ mod tests {
         assert_eq!(connections.len(), 1);
         assert!(connections[0].bond_energy.is_finite());
         assert!(connections[0].bond_energy > 0.0);
+        assert!(
+            simulation
+                .energy_inventory_snapshot()
+                .is_balanced_without_creation(1e-6),
+            "environmental COMBINE must conserve the complete energy inventory"
+        );
     }
 
     #[test]
