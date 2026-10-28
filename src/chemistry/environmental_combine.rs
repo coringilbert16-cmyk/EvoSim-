@@ -261,8 +261,7 @@ fn chemical_step(
     ) else {
         return;
     };
-    let Some(engagement) = crate::chemistry::interface_engagement(selected.candidate.facing)
-    else {
+    let Some(engagement) = crate::chemistry::interface_engagement(selected.candidate.facing) else {
         return;
     };
     let key = source_pair_key(
@@ -293,8 +292,7 @@ fn chemical_step(
     let Some(barrier) = crate::chemistry::activation_barrier_from_bond_strength(strength) else {
         return;
     };
-    let Some(activation_signal) =
-        crate::chemistry::normalized_chemistry_to_activation_signal(next)
+    let Some(activation_signal) = crate::chemistry::normalized_chemistry_to_activation_signal(next)
     else {
         return;
     };
@@ -400,8 +398,7 @@ pub(crate) fn accumulate_environmental(
                 if target_count == 0 {
                     continue;
                 }
-                let target_material_start =
-                    (tick as usize + cell_b + material_a) % target_count;
+                let target_material_start = (tick as usize + cell_b + material_a) % target_count;
                 for target_offset in 0..target_count {
                     if *remaining_discovery_work == 0 {
                         break 'anchors;
@@ -446,8 +443,7 @@ pub(crate) fn accumulate_environmental(
                         &mut cache,
                         &mut component_work,
                     );
-                    let component_work_used =
-                        component_work_initial.saturating_sub(component_work);
+                    let component_work_used = component_work_initial.saturating_sub(component_work);
                     *remaining_discovery_work =
                         (*remaining_discovery_work).saturating_sub(component_work_used);
                     let Some(selected) = selected else {
@@ -499,8 +495,8 @@ pub(crate) fn schedule_environmental_operations(
     let mut used_cells = HashSet::new();
     let mut ready = Vec::new();
     for operation in operations {
-        let cells_available = !used_cells.contains(&operation.cell_a)
-            && !used_cells.contains(&operation.cell_b);
+        let cells_available =
+            !used_cells.contains(&operation.cell_a) && !used_cells.contains(&operation.cell_b);
         if cells_available && *remaining_work > 0 {
             used_cells.insert(operation.cell_a);
             used_cells.insert(operation.cell_b);
@@ -687,9 +683,7 @@ pub(crate) fn resolve_environmental(
         environment
             .field
             .mark_changed_at_index(operation.cell_a);
-        environment
-            .field
-            .mark_changed_at_index(operation.cell_b);
+        environment.field.mark_changed_at_index(operation.cell_b);
     }
     environment.chemistry_usable_energy = staged_usable_energy;
     *ledger = staged_ledger;
@@ -788,9 +782,7 @@ mod tests {
         let b = structure.add_unit(hydrogen);
         let id_a = structure.physical_id(a).unwrap();
         let id_b = structure.physical_id(b).unwrap();
-        let candidate = crate::contact::connection_pair_candidates(
-            &structure, a, b, &catalog,
-        )
+        let candidate = crate::contact::connection_pair_candidates(&structure, a, b, &catalog)
         .into_iter()
         .find(|candidate| candidate.available_a && candidate.available_b);
         let Some(candidate) = candidate else {
