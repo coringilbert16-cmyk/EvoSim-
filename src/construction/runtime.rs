@@ -1561,7 +1561,10 @@ fn realize_next_bond_driven(
                         Ok(attempt) => attempt,
                         Err(reason) => {
                             rejection_counts.combine_rejections += 1;
-                            *rejection_counts.combine_rejection_reasons.entry(reason).or_default() += 1;
+                            *rejection_counts
+                                .combine_rejection_reasons
+                                .entry(reason)
+                                .or_default() += 1;
                             continue;
                         }
                     };
