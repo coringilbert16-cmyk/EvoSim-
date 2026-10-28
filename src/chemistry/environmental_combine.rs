@@ -369,7 +369,8 @@ pub(crate) fn accumulate_environmental(
             anchor_work -= 1;
             let material_a = (material_start + material_offset) % material_count;
             let source_a = environment.field.cells[cell_a].physical_materials[material_a].clone();
-            let Some((source_structure, indices_a)) = restored_source(&source_a, environment) else {
+            let Some((source_structure, indices_a)) = restored_source(&source_a, environment)
+            else {
                 continue;
             };
             let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
@@ -1035,7 +1036,11 @@ mod tests {
             &mut simulation.energy_ledger,
         ));
         let split = &simulation.environment.field.cells[cell].physical_materials;
-        assert_eq!(split.len(), 2, "environmental BREAK must restore both source objects");
+        assert_eq!(
+            split.len(),
+            2,
+            "environmental BREAK must restore both source objects"
+        );
         assert!(
             split.iter().all(|piece| piece
                 .internal_connections
@@ -1045,8 +1050,7 @@ mod tests {
         );
         let after_break = simulation.energy_inventory_snapshot();
         assert!(
-            (simulation.energy_ledger.total_usable_energy_held
-                - after_break.current_usable_energy)
+            (simulation.energy_ledger.total_usable_energy_held - after_break.current_usable_energy)
                 .abs()
                 <= 1e-6,
             "BREAK must keep the ledger usable-energy total aligned with its live holders"
