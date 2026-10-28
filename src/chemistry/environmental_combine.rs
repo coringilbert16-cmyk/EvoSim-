@@ -967,6 +967,27 @@ mod tests {
             accumulation_key: key,
             accumulated_reaction: 1.0,
         };
+        // The resolver is a transaction boundary, not merely a trusted
+        // scheduler callback: an under-activated operation must leave the
+        // source objects, usable holder, and ledger untouched.
+        let original_materials =
+            simulation.environment.field.cells[cell].physical_materials.clone();
+        let original_usable = simulation.environment.chemistry_usable_energy;
+        let original_ledger = simulation.energy_ledger;
+        let mut underactivated = operation.clone();
+        underactivated.accumulated_reaction = 0.0;
+        assert!(!resolve_environmental(
+            underactivated,
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
+        ));
+        assert_eq!(
+            simulation.environment.field.cells[cell].physical_materials,
+            original_materials
+        );
+        assert_eq!(simulation.environment.chemistry_usable_energy, original_usable);
+        assert_eq!(simulation.energy_ledger, original_ledger);
+
         assert!(resolve_environmental(
             operation,
             &mut simulation.environment,
