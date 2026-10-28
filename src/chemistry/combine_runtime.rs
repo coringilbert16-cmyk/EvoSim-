@@ -2466,7 +2466,7 @@ mod fluid_coalescence_transaction_tests {
                 .settlement_transaction(EnergyReason::Combine)
                 .unwrap()
                 .structural_delta,
-            "processing efficiency belongs to energy funding, not physical product-minus-reactant potential"
+            "efficiency changes funding, not physical potential"
         );
     }
 
