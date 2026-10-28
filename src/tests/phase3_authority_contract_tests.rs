@@ -55,8 +55,8 @@ mod tests {
         structure.bonds.truncate(1);
 
         let initial_structural_energy: f64 =
-            structure.bonds.iter().map(|bond| bond.bond_energy).sum();
-        assert!(initial_structural_energy > 0.0);
+            structure.bonds.iter().map(|bond| -bond.bond_energy).sum();
+        assert!(initial_structural_energy < 0.0);
         let initial_usable_energy = 1000.0;
         let mut body = DecomposingBody::new(
             structure,
