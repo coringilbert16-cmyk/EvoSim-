@@ -1731,6 +1731,7 @@ mod material_identity_tests {
             .first()
             .expect("seed organism should contain a structural bond");
         assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        let processing_efficiency = simulation.organisms[0].genome.processing_efficiency();
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
@@ -1753,7 +1754,7 @@ mod material_identity_tests {
             .resonant_energy
             .total_energy()
             .unwrap();
-        assert!((before - after - 0.5).abs() < 1e-9);
+        assert!((before - after - 0.5 / processing_efficiency).abs() < 1e-9);
         assert!(!simulation.organisms[0]
             .structure
             .bonds
@@ -1770,6 +1771,7 @@ mod material_identity_tests {
             .first()
             .expect("seed organism should contain a structural bond");
         assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        let processing_efficiency = simulation.organisms[0].genome.processing_efficiency();
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
@@ -1792,7 +1794,7 @@ mod material_identity_tests {
             .resonant_energy
             .total_energy()
             .unwrap();
-        assert!((before - after - 0.5).abs() < 1e-9);
+        assert!((before - after - 0.5 / processing_efficiency).abs() < 1e-9);
         assert!(!simulation.organisms[0]
             .structure
             .bonds
@@ -1969,6 +1971,7 @@ mod material_identity_tests {
     fn resonance_funded_chemical_break_reconciles_world_inventory() {
         let mut simulation = crate::state::Simulation::new(925, 10.0);
         assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        let processing_efficiency = simulation.organisms[0].genome.processing_efficiency();
         let retained_resonance = simulation.organisms[0]
             .resonant_energy
             .total_energy()
@@ -2012,8 +2015,12 @@ mod material_identity_tests {
             after.residual()
         );
         assert!(
-            (before.current_resonant_energy - after.current_resonant_energy - 0.5).abs() < 1e-9,
-            "the full physical disruption work must be withdrawn from resonance"
+            (before.current_resonant_energy
+                - after.current_resonant_energy
+                - 0.5 / processing_efficiency)
+                .abs()
+                < 1e-9,
+            "resonance withdrawal must account for processing efficiency"
         );
         assert!(!simulation.organisms[0]
             .structure
