@@ -1757,6 +1757,7 @@ mod fluid_coalescence_transaction_tests {
         crate::contact::ConnectionPairCandidate,
         f64,
         f64,
+        f64,
     ) {
         let catalog = default_catalog();
         for step in 1..=100 {
@@ -1772,11 +1773,11 @@ mod fluid_coalescence_transaction_tests {
             ));
             let mut cache = ConnectionCompatibilityCache;
             for candidate in eligible_candidates(&structure, 0, 1, &catalog, &mut cache) {
-                let Some((_, _, investment, required)) =
+                let Some((_, work, investment, required)) =
                     evaluate_candidate(&structure, 0, 1, candidate, &catalog)
                 else { continue };
                 if required > EPSILON {
-                    return (structure, catalog, candidate, investment, required);
+                    return (structure, catalog, candidate, work, investment, required);
                 }
             }
         }
@@ -2364,7 +2365,7 @@ mod fluid_coalescence_transaction_tests {
     #[test]
     fn organism_combine_resonance_funding_accounts_for_efficiency_without_changing_structure_energy(
     ) {
-        let (mut structure, catalog, candidate, investment, required) =
+        let (mut structure, catalog, candidate, work, investment, required) =
             build_energy_deficient_chemical_pair();
         let mut cache = ConnectionCompatibilityCache;
         assert!(
@@ -2414,7 +2415,7 @@ mod fluid_coalescence_transaction_tests {
                 crate::energy_ledger::structural_potential(&trial_structure).unwrap();
             let after_resonance = resonance.total_energy().unwrap();
             assert!((before_resonance - after_resonance - withdrawal).abs() < 1e-9);
-            assert!((ledger.total_work_expended - required).abs() < 1e-9);
+            assert!((ledger.total_work_expended - work).abs() < 1e-9);
             assert!((ledger.total_heat_dissipated - (withdrawal - required)).abs() < 1e-9);
             assert!(
                 (attempt.net_energy_change - (after_potential - before_potential)).abs() < 1e-9,
