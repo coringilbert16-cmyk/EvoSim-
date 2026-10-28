@@ -53,9 +53,28 @@ The implementation now routes stable-bond COMBINE and graph-bond BREAK through t
 - **COMBINE:** computes signed structural potential from the current realized bond graph and the candidate product graph, then settles the product-minus-reactant difference with physical formation work. The formation threshold is used only for activation/formation eligibility; it is not charged as usable-energy investment or misclassified as heat. A favorable structural balance can credit the usable holder after work, while an unfavorable balance debits the holder and fails if unaffordable.
 - **BREAK:** treats the positive bond-energy magnitude as a dissociation cost, not as an automatically available stored-energy reservoir. Because the unaffected graph is otherwise unchanged, the bond magnitude is the signed structural-potential increase. The same settlement primitive is used for chemical BREAK, decomposition, and division-boundary bond separation. Resonance, when used for disruption work, remains a separately debited holder; activation remains a gate only.
 - **Inventory:** structural energy is now represented as signed potential (stable realized bonds contribute negative values). Initialization, independent world-inventory recomputation, and reproduction structural-energy accounting have been updated to use that convention.
-- **Tests added/updated:** favorable, unfavorable, and neutral reaction-balance tests; zero-deficit COMBINE without an arbitrary energy grant; unaffordable BREAK atomicity; COMBINE energy/work/heat reconciliation; and the independent structural-inventory oracle. Focused energy-accounting, chemistry/reaction, transaction/ownership, and geometry/persistence groups passed on the latest observed CI run; organism/seed acceptance and formatting still need investigation, and the full-suite result is pending.
+- **Tests added/updated:** favorable, unfavorable, and neutral reaction-balance tests; zero-deficit COMBINE without an arbitrary energy grant; unaffordable BREAK atomicity; COMBINE energy/work/heat reconciliation; and the independent structural-inventory oracle.
 
-This is progress, not merge approval. Exact-head CI has repeatedly reported a formatting failure and a failure in the transactions/ownership focused group on earlier commits. A later run is still needed to verify the fixes and the latest implementation; its complete result must be inspected before any status is upgraded.
+### Latest exact-head verification — 2026-10-28
+
+Commit `077680fb96e9ccb9031325ebd67eba073ce76ec7`, workflow run [#40676440725](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/40676440725):
+
+- Formatting and repository architecture checks passed.
+- All focused groups passed: energy accounting; chemistry/reactions; transactions/ownership; geometry/persistence; organism/seed acceptance.
+- Full Rust suite: **804 passed, 9 failed, 2 ignored** in 325.55 seconds.
+- All nine failing test identities are a subset of the accepted baseline run #40605811843 (**789 passed, 10 failed, 2 ignored**). The previous baseline failure `exact_construction_bond_forms_the_supplied_contact` now passes. No new failing test identity was introduced by this head.
+- Clippy remains red: 32 application-target and 14 test-target diagnostics, none located in files changed by PR #222. The recorded prior baseline was 34 application-target and 14 test-target diagnostics, so this is not new PR-specific lint debt.
+- The environmental discovery benchmark passed: budget 1 inspected 12,852 entries / 6 candidates in 0 ms; budget 16 inspected 205,824 / 126 candidates in 3 ms; budget 256 inspected 2,576,016 / 1,608 candidates in 40 ms.
+
+The workflow is still red overall because the full suite retains the nine known baseline failures and strict Clippy retains repository-wide lint debt. The exact-head result does not show a new regression, but it is not a green CI run and is not by itself merge approval.
+
+### Audit findings and next steps
+
+- The shared accounting path is internally consistent for realized graph bonds: COMBINE uses actual reactant/product graph potentials; graph BREAK, decomposition, and division-boundary separation charge the corresponding structural-potential increase plus work; failed settlements are staged and reject without committing the relevant graph/ledger changes.
+- Two naming/representation caveats should remain explicit in review: `required_external_input` currently describes the minimum deficit that must be covered by a usable holder in the generic settlement path, not an automatic draw from sunlight or another external source; and `processing_efficiency` is validated by the BREAK helper but does not currently change its energy allocation.
+- Environmental/stored-material internal bonds still have no authoritative potential field, so their BREAK path must not claim a bond-energy credit. Fluid coalescence likewise does not claim a persistent bond-potential release. The intrinsic graph-bond potential is a model assumption, not a calibrated chemical free-energy table.
+
+Recommended next steps: keep PR #222 draft while reviewing the two caveats above and preserving the explicit representation limits; do not spend this PR fixing the known unrelated Clippy debt or baseline test failures. Then run exact-head focused conservation/rollback checks again after any semantic edit, compare the full-suite failure identities to the baseline, and only then decide whether to mark the PR ready. Do not open PR B until this audit is closed.
 
 ### Remaining physics/representation limits
 
