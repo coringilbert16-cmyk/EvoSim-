@@ -2260,22 +2260,23 @@ mod tests {
     }
 
     #[test]
-    fn chemical_break_energy_comes_from_the_removed_bond_not_the_reaction_signal() {
+    fn chemical_break_requires_binding_energy_and_disruption_work() {
         let (structural_energy, usable, heat) =
             chemical_break_energy_yield(10.0, 4.0, 0.5).unwrap();
         assert!((structural_energy - 10.0).abs() < 1e-12);
-        assert!((usable - 3.0).abs() < 1e-12);
-        assert!((heat - 3.0).abs() < 1e-12);
-        assert!((usable - structural_energy + 4.0 + heat).abs() < 1e-12);
+        assert!((usable + 14.0).abs() < 1e-12);
+        assert_eq!(heat, 0.0);
+        assert!((usable + structural_energy + 4.0 + heat).abs() < 1e-12);
     }
 
     #[test]
-    fn chemical_break_charges_a_work_shortfall_to_the_usable_holder() {
-        let (structural_energy, usable, heat) = chemical_break_energy_yield(4.0, 5.0, 0.5).unwrap();
+    fn chemical_break_charges_binding_energy_and_work_to_the_usable_holder() {
+        let (structural_energy, usable, heat) =
+            chemical_break_energy_yield(4.0, 5.0, 0.5).unwrap();
         assert!((structural_energy - 4.0).abs() < 1e-12);
-        assert!((usable + 1.0).abs() < 1e-12);
+        assert!((usable + 9.0).abs() < 1e-12);
         assert_eq!(heat, 0.0);
-        assert!((usable - structural_energy + 5.0 + heat).abs() < 1e-12);
+        assert!((usable + structural_energy + 5.0 + heat).abs() < 1e-12);
     }
 
     #[test]
