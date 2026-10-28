@@ -28,7 +28,10 @@ pub(crate) struct CombineAttempt {
     pub endpoint_b: ConnectionEndpoint,
     pub work_cost: f64,
     pub formation_threshold: f64,
+    /// Signed product-minus-reactant structural potential, independent of funding efficiency.
     pub net_energy_change: f64,
+    /// Change in the usable-energy holder caused by this COMBINE transaction.
+    pub usable_energy_delta: f64,
     pub bond_strength: f64,
     pub bond_energy: f64,
     pub environmental_source: Option<(usize, PhysicalMaterial)>,
@@ -452,6 +455,7 @@ fn form_bond_with_resonance(
         }
     }
 
+    let reactant_structural_energy = crate::energy_ledger::structural_potential(structure)?;
     let mut attempt = form_bond(
         structure,
         request,
@@ -460,7 +464,9 @@ fn form_bond_with_resonance(
         &mut trial_ledger,
         &mut trial_energy,
     )?;
-    attempt.net_energy_change = trial_energy - original_energy;
+    let product_structural_energy = crate::energy_ledger::structural_potential(structure)?;
+    attempt.net_energy_change = product_structural_energy - reactant_structural_energy;
+    attempt.usable_energy_delta = trial_energy - original_energy;
     *energy = trial_energy;
     *ledger = trial_ledger;
     *resonance = trial_resonance;
@@ -551,7 +557,8 @@ fn form_bond_from_candidate_diagnostic(
         *energy = before;
         return Err("energy ledger rejected COMBINE expenditure");
     }
-    let net = *energy - before;
+    let usable_energy_delta = *energy - before;
+    let net_energy_change = product_structural_energy - reactant_structural_energy;
     *structure = trial_structure;
     Ok(CombineAttempt {
         unit_a: ua,
@@ -560,7 +567,8 @@ fn form_bond_from_candidate_diagnostic(
         endpoint_b,
         work_cost: work,
         formation_threshold: threshold,
-        net_energy_change: net,
+        net_energy_change,
+        usable_energy_delta,
         bond_strength: strength,
         bond_energy,
         environmental_source: None,
