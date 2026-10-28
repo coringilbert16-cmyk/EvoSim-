@@ -65,70 +65,55 @@ fn transient_fluid_pair(
 }
 
 fn energy_requirement(
-    investment: f64,
     bond_energy: f64,
     work: f64,
     transient_fluid_bond: bool,
     reactant_structural_energy: f64,
     product_structural_energy: f64,
 ) -> Option<f64> {
-    if !investment.is_finite()
-        || investment < 0.0
-        || !bond_energy.is_finite()
+    if !bond_energy.is_finite()
         || bond_energy < 0.0
         || !work.is_finite()
         || work < 0.0
     {
         return None;
     }
-    if transient_fluid_bond {
-        let required = investment + bond_energy + work;
-        return required.is_finite().then_some(required);
-    }
+    let product_energy = if transient_fluid_bond {
+        // The temporary contact bond is not retained as a structural store.
+        reactant_structural_energy
+    } else {
+        product_structural_energy
+    };
     crate::energy_ledger::ReactionEnergyBalance::calculate(
         reactant_structural_energy,
-        product_structural_energy,
+        product_energy,
         work,
-        investment,
+        0.0,
     )
     .map(|balance| balance.required_external_input)
 }
 
 fn combine_energy_transaction(
-    investment: f64,
     bond_energy: f64,
     work: f64,
     transient_fluid_bond: bool,
     reactant_structural_energy: f64,
     product_structural_energy: f64,
 ) -> Option<EnergyTransaction> {
-    if !investment.is_finite()
-        || investment < 0.0
-        || !bond_energy.is_finite()
-        || bond_energy < 0.0
-        || !work.is_finite()
-        || work < 0.0
-    {
+    if !bond_energy.is_finite() || bond_energy < 0.0 || !work.is_finite() || work < 0.0 {
         return None;
     }
     if transient_fluid_bond {
-        // Fluid coalescence removes the temporary graph bond. Until its
-        // product material carries authoritative internal-bond potential,
-        // do not credit the temporary bond energy as a persistent store.
-        return EnergyTransaction::expenditure(
-            EnergyReason::Combine,
-            0.0,
-            work,
-            investment + bond_energy,
-        );
+        // The temporary fluid contact is not a retained structural store, so
+        // only actual physical work is debited from usable energy.
+        return EnergyTransaction::expenditure(EnergyReason::Combine, 0.0, work, 0.0);
     }
-    // The same pre/post-state balance drives both affordability and
-    // settlement. Formation lowers structural potential by the bond magnitude.
+    // The same pre/post-state balance drives both affordability and settlement.
     crate::energy_ledger::ReactionEnergyBalance::calculate(
         reactant_structural_energy,
         product_structural_energy,
         work,
-        investment,
+        0.0,
     )?
     .settlement_transaction(EnergyReason::Combine)
 }
@@ -183,7 +168,6 @@ fn evaluate_candidate(
         reactant_structural_energy - bond_energy
     };
     let required = energy_requirement(
-        investment,
         bond_energy,
         work,
         transient_fluid_bond,
@@ -460,7 +444,6 @@ fn form_bond_from_candidate_diagnostic(
     let product_structural_energy = crate::energy_ledger::structural_potential(&trial_structure)
         .ok_or("COMBINE product structural energy is invalid")?;
     let transaction = combine_energy_transaction(
-        investment,
         bond_energy,
         work,
         fluid_pair,
