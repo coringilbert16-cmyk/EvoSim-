@@ -163,8 +163,7 @@ mod tests {
                     "committed bond energy must match the transaction result"
                 );
                 assert!(
-                    ((before_energy - energy)
-                        - (attempt.energy_invested + attempt.work_cost - attempt.bond_energy))
+                    ((before_energy - energy) - (attempt.work_cost - attempt.bond_energy))
                         .abs()
                         < 1.0e-6,
                     "holder balance must include the bond-formation energy release"
@@ -173,9 +172,9 @@ mod tests {
                     (attempt.net_energy_change - (energy - before_energy)).abs() < 1.0e-9,
                     "reported net energy change must match the holder balance"
                 );
-                assert!(
-                    (ledger.total_heat_dissipated - attempt.energy_invested).abs() < 1.0e-9,
-                    "formation investment is recorded as heat"
+                assert_eq!(
+                    ledger.total_heat_dissipated, 0.0,
+                    "activation threshold is not energy or heat"
                 );
                 assert!(
                     (ledger.total_work_expended - attempt.work_cost).abs() < 1.0e-9,
@@ -487,7 +486,8 @@ mod tests {
     }
 
     #[test]
-    fn insufficient_energy_rolls_back_selected_bond_structure_and_ledger() {
+    #[test]
+    fn activation_threshold_is_not_charged_as_combine_energy() {
         let catalog = default_catalog();
         let mut structure = crate::structure::OrganismStructure::new();
         structure.add_unit(crate::structure::StructuralUnit::new(
@@ -498,12 +498,9 @@ mod tests {
                 rotation_radians: 0.0,
             },
         ));
-
-        // Fluid coalescence has no persistent graph-bond potential to credit,
-        // so it remains a genuinely expenditure-funded COMBINE path even when
-        // stable chemical bond formation can be favorable.
         let water = catalog.iter().find(|r| r.name == "Water").unwrap();
-        let mut found_failure = false;
+        let mut checked = false;
+
         for placement in crate::construction_runtime::candidate_placements(
             &structure,
             water,
@@ -522,68 +519,41 @@ mod tests {
                 &trial, 0, 1, &catalog, &mut cache,
             );
             for candidate in candidates {
-                let Some((_, _, investment, required)) =
+                let Some((_, _, threshold, required)) =
                     crate::combine_runtime::selected_candidate_evaluation(
                         &trial, 0, 1, candidate, &catalog,
                     )
                 else {
                     continue;
                 };
-                if required <= 0.0 {
+                if required > 0.0 {
                     continue;
                 }
 
-                let before_structure = trial.clone();
                 let mut ledger = EnergyLedger::default();
-                let before_ledger = ledger;
                 let mut energy = 0.0;
-
                 let result = crate::combine_runtime::form_selected_bond(
                     &mut trial,
                     0,
                     1,
                     candidate,
-                    investment,
+                    threshold,
                     &catalog,
                     &mut cache,
                     &mut ledger,
                     &mut energy,
                 );
-
-                assert!(result.is_none(), "bond should fail without enough energy");
-                assert_eq!(trial.units, before_structure.units);
-                assert_eq!(trial.bonds, before_structure.bonds);
-                assert_eq!(energy, 0.0);
-                assert_eq!(
-                    ledger.total_potential_energy_released,
-                    before_ledger.total_potential_energy_released
-                );
-                assert_eq!(
-                    ledger.total_usable_energy_gained,
-                    before_ledger.total_usable_energy_gained
-                );
-                assert_eq!(
-                    ledger.total_heat_dissipated,
-                    before_ledger.total_heat_dissipated
-                );
-                assert_eq!(
-                    ledger.total_usable_energy_held,
-                    before_ledger.total_usable_energy_held
-                );
-                found_failure = true;
+                assert!(result.is_some(), "zero-deficit COMBINE should not require an arbitrary energy grant");
+                assert_eq!(ledger.total_heat_dissipated, 0.0);
+                checked = true;
                 break;
             }
-            if found_failure {
+            if checked {
                 break;
             }
         }
-
-        assert!(
-            found_failure,
-            "no candidate with a positive energy requirement was found"
-        );
+        assert!(checked, "expected a fluid COMBINE candidate with no net energy deficit");
     }
-
     #[test]
     fn whole_structure_overlap_check_catches_non_anchor_constituent() {
         let catalog = default_catalog();
