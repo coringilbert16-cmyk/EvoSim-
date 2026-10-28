@@ -1114,6 +1114,36 @@ mod tests {
     }
 
     #[test]
+    fn favorable_reaction_credits_surplus_once_without_external_input() {
+        let mut ledger = EnergyLedger::default();
+        let mut usable = 0.0;
+        let transaction =
+            EnergyTransaction::reaction(EnergyReason::Combine, -8.0, 3.0, 1.0).unwrap();
+
+        assert!(ledger.settle_transaction(&mut usable, transaction));
+        assert_eq!(usable, 4.0);
+        assert_eq!(ledger.total_external_energy_input, 0.0);
+        assert_eq!(ledger.total_structural_energy_delta, -8.0);
+        assert_eq!(ledger.total_work_expended, 3.0);
+        assert_eq!(ledger.total_heat_dissipated, 1.0);
+    }
+
+    #[test]
+    fn unaffordable_break_is_rejected_without_mutating_holder_or_ledger() {
+        let mut ledger = EnergyLedger::default();
+        let mut usable = 2.0;
+        let transaction =
+            EnergyTransaction::reaction(EnergyReason::Break, 5.0, 1.0, 0.0).unwrap();
+
+        assert!(!ledger.settle_transaction(&mut usable, transaction));
+        assert_eq!(usable, 2.0);
+        assert_eq!(ledger.total_structural_energy_delta, 0.0);
+        assert_eq!(ledger.total_work_expended, 0.0);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+        assert_eq!(ledger.total_usable_energy_gained, 0.0);
+    }
+
+    #[test]
     fn pure_expenditure_does_not_release_potential_energy() {
         let tx = EnergyTransaction::expenditure(EnergyReason::Combine, 3.0, 1.0, 2.0).unwrap();
         assert!(tx.balanced());
