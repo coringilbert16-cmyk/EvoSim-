@@ -42,14 +42,6 @@ struct SelectedContact {
     required_energy: f64,
 }
 
-fn origin() -> Placement {
-    Placement {
-        x: 0.0,
-        y: 0.0,
-        rotation_radians: 0.0,
-    }
-}
-
 fn material_signature(material: &PhysicalMaterial) -> String {
     // The realized payload, rather than composition alone, distinguishes moved,
     // reshaped, or differently bonded instances that happen to share a recipe.
