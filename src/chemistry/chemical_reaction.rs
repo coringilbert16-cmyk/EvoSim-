@@ -417,7 +417,8 @@ pub(crate) fn accumulate(
 
 /// Discover chemical reactions at realized environmental material bonds in the
 /// field. Environmental bonds are restored only into a trial graph to recover
-/// their authoritative geometry and activation strength; stored bond energy stays zero.
+/// their authoritative geometry and activation strength; allocated bond energy
+/// remains attached to the environmental bond and is transferred through restoration.
 /// Traverse a bounded, tick-rotated window of environmental material bonds.
 /// Returns candidates and the exact number of cell/material/bond entries inspected.
 /// Counting all three levels makes the work bound testable even in sparse fields.
@@ -822,7 +823,7 @@ pub(crate) fn resolve_environmental(
     let Some(prepared) = crate::transformation::prepare_chemical_break_energy_with_resonance(
         environment.chemistry_usable_energy,
         ledger,
-        0.0,
+        operation.bond.bond_energy,
         operation.activation_signal,
         operation.disruption_cost,
         resonant_work,
