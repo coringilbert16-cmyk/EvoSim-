@@ -32,6 +32,20 @@ This is the thermodynamic foundation for environment-first chemistry experiments
 - Death/decomposition policy, sunlight-model redesign, environment-only UI/observability, organism construction changes, or unrelated Clippy/test-baseline cleanup.
 - Reimplementing the COMBINE transaction or environmental BREAK scheduler already added in PRs #209 and #214.
 
+## Baseline audit findings (main)
+
+The first source audit confirms this is not a missing-ledger problem; it is a mismatch between the existing transaction model and reaction thermodynamics.
+
+- `combine_runtime` currently constructs COMBINE cost as formation investment + positive structural bond energy + formation work. `EnergyTransaction::expenditure` then charges that full amount to usable energy, allocating the positive bond energy to persistent structure (or dissipation for transient fluid bonds). The transaction is internally balanced, but it has no signed reactant-to-product reaction-energy term that lets a favorable reaction's net release offset the formation cost.
+- The existing BREAK path can release only energy explicitly stored in a realized graph bond. `chemical_break_energy_yield` applies the recorded bond energy to disruption work first, with any deficit charged to usable energy and surplus allocated between usable energy and heat. Environmental `PhysicalMaterialBond` values currently have no stored-energy field and are restored with `bond_energy: 0.0`; environmental BREAK therefore cannot credit an unallocated bond-energy source.
+- `EnergyTransaction` already represents signed structural change and checks a transaction balance. The ledger also exposes a world inventory snapshot. These are useful foundations, but COMBINE's expenditure constructor and BREAK's release formula do not yet implement one shared thermodynamic calculation from authoritative reactant/product states.
+- Chemical activation is already modeled separately from energy settlement. The reaction accumulator is a trigger, not an energy reservoir; that invariant must be preserved.
+- The environmental scheduler inspected in `chemical_reaction` discovers existing environmental bonds to BREAK. It does not discover unbonded environmental pairs for COMBINE. This confirms the capability is absent in the inspected path, but PR B remains deferred until PR A is implemented and its tests establish the actual integration seam. Do not open PR B as part of this audit.
+
+### Implementation implication
+
+Do not simply change the sign of `bond_energy` or treat the current intrinsic bond-potential value as a reaction-energy delta. The current field is a positive structural energy store that COMBINE pays to create and BREAK can later release. A favorable chemical reaction requires an explicit, authoritative definition of reactant and product energy states and a consistent delta calculation. If the current model lacks enough state to derive that delta without guessing, the implementation must make that representation gap explicit rather than invent values from resource maximum potential or activation signal.
+
 ## Merge requirements
 
 PR A is mergeable only when all of the following are satisfied:
