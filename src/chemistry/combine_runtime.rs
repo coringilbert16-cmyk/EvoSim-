@@ -2368,8 +2368,10 @@ mod fluid_coalescence_transaction_tests {
         assert!((before_resonance - after_resonance - withdrawal).abs() < 1e-9);
         assert!((ledger.total_work_expended - required).abs() < 1e-9);
         assert!((ledger.total_heat_dissipated - (withdrawal - required)).abs() < 1e-9);
-        assert!((after_potential - before_potential).abs() < 1e-9,
-            "transient fluid coalescence must not create a persistent structural potential");
+        assert!(
+            (after_potential - before_potential).abs() < 1e-9,
+            "transient fluid coalescence must not create a persistent structural potential"
+        );
         assert!(usable_energy.abs() < 1e-9);
         assert!(attempt.net_energy_change.abs() < 1e-9);
         let residual = usable_energy
@@ -2377,8 +2379,10 @@ mod fluid_coalescence_transaction_tests {
             + (after_resonance - before_resonance)
             + ledger.total_work_expended
             + ledger.total_heat_dissipated;
-        assert!(residual.abs() < 1e-8,
-            "resonance-funded COMBINE must reconcile withdrawal, work, and conversion heat: {residual}");
+        assert!(
+            residual.abs() < 1e-8,
+            "resonance-funded COMBINE must reconcile withdrawal, work, and conversion heat: {residual}"
+        );
     }
 
     #[test]
@@ -2386,20 +2390,36 @@ mod fluid_coalescence_transaction_tests {
         let reactant_potential = -10.0;
         let product_potential = -13.0;
         let work = 4.0;
-        let full_efficiency = crate::energy_ledger::ReactionEnergyBalance::calculate(
-            reactant_potential, product_potential, work, 0.0,
-        ).unwrap();
-        let low_efficiency = crate::energy_ledger::ReactionEnergyBalance::calculate(
-            reactant_potential, product_potential, work, 0.0,
-        ).unwrap();
+        let full_efficiency =
+            crate::energy_ledger::ReactionEnergyBalance::calculate(
+                reactant_potential,
+                product_potential,
+                work,
+                0.0,
+            )
+            .unwrap();
+        let low_efficiency =
+            crate::energy_ledger::ReactionEnergyBalance::calculate(
+                reactant_potential,
+                product_potential,
+                work,
+                0.0,
+            )
+            .unwrap();
 
         assert_eq!(full_efficiency.net_reaction_change, -3.0);
         assert_eq!(low_efficiency.net_reaction_change, -3.0);
         assert_eq!(full_efficiency.required_external_input, 1.0);
         assert_eq!(low_efficiency.required_external_input, 1.0);
         assert_eq!(
-            full_efficiency.settlement_transaction(EnergyReason::Combine).unwrap().structural_delta,
-            low_efficiency.settlement_transaction(EnergyReason::Combine).unwrap().structural_delta,
+            full_efficiency
+                .settlement_transaction(EnergyReason::Combine)
+                .unwrap()
+                .structural_delta,
+            low_efficiency
+                .settlement_transaction(EnergyReason::Combine)
+                .unwrap()
+                .structural_delta,
             "processing efficiency belongs to energy funding, not physical product-minus-reactant potential"
         );
     }
