@@ -100,7 +100,7 @@ pub(crate) fn resolve_one_bond_with_ledger(
 
     let before = body.energy_budget;
     let (gross, _usable, heat) =
-        crate::transformation::bond_break_energy_yield(target.bond_energy, 1.0)?;
+        crate::transformation::bond_break_energy_yield(target.bond_energy)?;
     let before_potential = crate::energy_ledger::structural_potential(&body.structure)?;
     let after_potential = crate::energy_ledger::structural_potential(&trial_structure)?;
     let structural_delta = after_potential - before_potential;
