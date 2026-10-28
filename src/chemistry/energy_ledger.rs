@@ -633,45 +633,31 @@ impl EnergyLedgerAuthority for EnergyLedger {
 
         // A transaction can be balanced algebraically but become unbalanced
         // after the holder and cumulative f64 counters round their increments.
-        // Measure the increments those stores can actually represent. If that
-        // rounded result would create energy, conservatively debit the holder
-        // by one representable step at a time. Any tiny extra loss is assigned
-        // to heat when the cumulative heat store can represent it.
+        // Use the increments those stores actually represent. If rounding would
+        // create energy, move the usable holder down by one representable step.
+        // Do not manufacture extra heat to hide an unrepresentable transaction:
+        // reject atomically if the resulting non-creating residual exceeds the
+        // existing tolerance.
         let actual_work_delta = next_work - self.total_work_expended;
-        let residual_for = |candidate_holder: f64, candidate_heat: f64| {
+        let actual_heat_delta = next_heat - self.total_heat_dissipated;
+        let residual_for = |candidate_holder: f64| {
             let actual_usable_delta = candidate_holder - *holder;
-            let actual_heat_delta = candidate_heat - self.total_heat_dissipated;
             actual_usable_delta
                 + transaction.structural_delta
                 + actual_work_delta
                 + actual_heat_delta
         };
-        let mut residual = residual_for(next_holder, next_heat);
+        let mut residual = residual_for(next_holder);
         let mut rounding_steps = 0;
         while residual > 0.0 {
             if next_holder <= 0.0 || rounding_steps >= 64 {
                 return false;
             }
             next_holder = f64::from_bits(next_holder.to_bits() - 1);
-            residual = residual_for(next_holder, next_heat);
+            residual = residual_for(next_holder);
             rounding_steps += 1;
         }
-
-        if residual < 0.0 {
-            let compensated_heat = next_heat + -residual;
-            if compensated_heat.is_finite() && compensated_heat > next_heat {
-                let compensated_residual = residual_for(next_holder, compensated_heat);
-                if compensated_residual <= 0.0
-                    && compensated_residual.abs() < residual.abs()
-                {
-                    next_heat = compensated_heat;
-                    residual = compensated_residual;
-                }
-            }
-        }
         if !residual.is_finite() || residual.abs() > EPSILON {
-            // If f64 cannot represent a conservative holder/heat allocation
-            // within the transaction tolerance, reject without mutating state.
             return false;
         }
 
@@ -748,14 +734,14 @@ mod tests {
     }
 
     #[test]
-    fn reaction_settlement_accounts_for_holder_rounding_without_creating_energy() {
-        // At this magnitude, adding the nominal +99 surplus rounds to +100.
-        // Settlement must debit the representable overrun and account for the
-        // one-unit rounding loss as heat instead of creating energy.
+    fn reaction_settlement_corrects_tiny_rounding_without_inventing_heat() {
+        // At this holder magnitude, the nominal +0.07 increment rounds to a
+        // slightly larger represented delta. Correct only the holder by one
+        // ULP, leaving a tiny non-creating residual within the existing limit.
         let transaction =
-            EnergyTransaction::reaction(EnergyReason::Combine, -100.0, 1.0, 0.0).unwrap();
+            EnergyTransaction::reaction(EnergyReason::Combine, -0.1, 0.03, 0.0).unwrap();
         let mut ledger = EnergyLedger::default();
-        let mut usable = 1.0e16;
+        let mut usable = 1_000.0;
         let initial_usable = usable;
 
         assert!(ledger.settle_transaction(&mut usable, transaction));
@@ -772,7 +758,24 @@ mod tests {
             ledger.total_heat_dissipated
         );
         assert_eq!(ledger.total_usable_energy_gained, actual_usable_delta);
-        assert_eq!(ledger.total_heat_dissipated, 1.0);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+    }
+
+    #[test]
+    fn reaction_settlement_rejects_unrepresentable_rounding_atomically() {
+        // At this magnitude, adding +99 rounds to +100 and subtracting one ULP
+        // would overshoot by a full energy unit. Do not disguise that mismatch
+        // as heat; reject without changing the holder or ledger.
+        let transaction =
+            EnergyTransaction::reaction(EnergyReason::Combine, -100.0, 1.0, 0.0).unwrap();
+        let mut ledger = EnergyLedger::default();
+        let ledger_before = ledger;
+        let mut usable = 1.0e16;
+        let usable_before = usable;
+
+        assert!(!ledger.settle_transaction(&mut usable, transaction));
+        assert_eq!(usable, usable_before);
+        assert_eq!(ledger, ledger_before);
     }
 
     #[test]
