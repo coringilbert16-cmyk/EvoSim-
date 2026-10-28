@@ -104,12 +104,8 @@ mod tests {
         assert_eq!(structure.bonds.len(), 2);
         assert!(structure.bonds[0].bond_energy > 0.0);
 
-        let mut body = DecomposingBody::new(
-            structure.clone(),
-            0.0,
-            Position { x: 50.0, y: 50.0 },
-        )
-        .unwrap();
+        let mut body =
+            DecomposingBody::new(structure.clone(), 0.0, Position { x: 50.0, y: 50.0 }).unwrap();
         let environment = Environment {
             width: 100.0,
             height: 100.0,
@@ -122,7 +118,8 @@ mod tests {
         let before_ledger = ledger;
 
         assert!(resolve_one_bond_with_ledger(&mut body, &environment, &mut ledger).is_none());
-        assert_eq!(body.structure, structure);
+        assert_eq!(body.structure.units, structure.units);
+        assert_eq!(body.structure.bonds, structure.bonds);
         assert_eq!(body.energy_budget, 0.0);
         assert_eq!(ledger, before_ledger);
     }
