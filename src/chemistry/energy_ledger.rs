@@ -71,8 +71,8 @@ impl EnergySourceBudget {
 pub(crate) struct EnergyAllocation {
     pub(crate) source_energy: f64,
     pub(crate) usable_delta: f64,
-    /// Signed change in energy held by persistent structure: positive when
-    /// stored, negative when an existing structural store is released.
+    /// Signed change in structural potential: negative when a stable bond
+    /// forms and positive when a bond is broken.
     pub(crate) structural_delta: f64,
     pub(crate) work_expended: f64,
     pub(crate) heat_dissipated: f64,
@@ -128,9 +128,9 @@ impl ExternalInputTransaction {
 pub(crate) struct EnergyTransaction {
     pub(crate) reason: EnergyReason,
     /// Legacy compatibility field. Must remain exactly zero: this transaction
-    /// has no named non-structural source owner to debit. Energy stored in a
-    /// realized bond is represented by a negative structural_delta when removed.
-    /// External input must use ExternalInputTransaction instead.
+    /// has no named non-structural source owner to debit. Bond formation/breaking
+    /// is represented by the signed structural_delta. External input must use
+    /// ExternalInputTransaction instead.
     pub(crate) potential_released: f64,
     pub(crate) usable_delta: f64,
     pub(crate) structural_delta: f64,
