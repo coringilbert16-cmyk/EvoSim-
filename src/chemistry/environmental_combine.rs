@@ -13,10 +13,8 @@ use crate::structure::{OrganismStructure, Placement};
 
 const ENVIRONMENT_PREFIX: &str = "environment|combine:";
 const FIELD_SCAN_ANCHOR_LIMIT: usize = 64;
-const FIELD_PAIR_INSPECTION_LIMIT: usize = 128;
 const FIELD_COMPONENT_PAIR_LIMIT: usize = 128;
 const BOUNDS_PADDING: f64 = 2.1;
-const ENERGY_EPSILON: f64 = 1e-9;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct EnvironmentalCombineOperation {
@@ -142,7 +140,7 @@ fn select_best_contact(
                     investment,
                     required_energy,
                 };
-                let replace = best.is_none_or(|current| {
+                let replace = best.map_or(true, |current| {
                     proposed
                         .required_energy
                         .partial_cmp(&current.required_energy)
