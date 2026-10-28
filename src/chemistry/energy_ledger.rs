@@ -99,6 +99,40 @@ impl EnergyAllocation {
 }
 
 impl ExternalInputTransaction {
+    /// Settle a reaction whose structural-potential change may be favorable
+    /// (negative) or unfavorable (positive). Bond energy is a dissociation
+    /// magnitude; a newly formed stable bond lowers structural potential, while
+    /// breaking it raises structural potential and therefore requires energy.
+    /// The usable holder receives any surplus or pays any deficit after work
+    /// and heat are accounted for.
+    pub(crate) fn reaction(
+        reason: EnergyReason,
+        structural_delta: f64,
+        work_expended: f64,
+        heat_dissipated: f64,
+    ) -> Option<Self> {
+        if !structural_delta.is_finite()
+            || !work_expended.is_finite()
+            || work_expended < 0.0
+            || !heat_dissipated.is_finite()
+            || heat_dissipated < 0.0
+        {
+            return None;
+        }
+        let usable_delta = -(structural_delta + work_expended + heat_dissipated);
+        if !usable_delta.is_finite() {
+            return None;
+        }
+        Some(Self {
+            reason,
+            potential_released: 0.0,
+            usable_delta,
+            structural_delta,
+            work_expended,
+            heat_dissipated,
+        })
+    }
+
     pub(crate) fn allocation(self) -> EnergyAllocation {
         EnergyAllocation {
             source_energy: self.external_input,
@@ -648,6 +682,41 @@ mod tests {
         let balance = ReactionEnergyBalance::calculate(1.0, 1.0, 0.0, 0.0).unwrap();
         assert!(!balance.can_commit_with(f64::NAN));
         assert!(balance.residual(-1.0).is_none());
+    }
+
+    #[test]
+    fn favorable_bond_formation_releases_binding_energy_after_work_and_heat() {
+        let transaction =
+            EnergyTransaction::reaction(EnergyReason::Combine, -5.0, 2.0, 1.0).unwrap();
+        assert_eq!(transaction.usable_delta, 2.0);
+        assert!(transaction.balanced());
+
+        let mut ledger = EnergyLedger::default();
+        let mut usable = 0.0;
+        assert!(ledger.settle_transaction(&mut usable, transaction));
+        assert_eq!(usable, 2.0);
+        assert_eq!(ledger.total_structural_energy_delta, -5.0);
+        assert_eq!(ledger.total_work_expended, 2.0);
+        assert_eq!(ledger.total_heat_dissipated, 1.0);
+    }
+
+    #[test]
+    fn bond_breaking_requires_input_for_binding_energy_and_work() {
+        let transaction =
+            EnergyTransaction::reaction(EnergyReason::Break, 5.0, 1.0, 0.0).unwrap();
+        assert_eq!(transaction.usable_delta, -6.0);
+        assert!(transaction.balanced());
+
+        let mut ledger = EnergyLedger::default();
+        let mut insufficient = 5.0;
+        assert!(!ledger.settle_transaction(&mut insufficient, transaction));
+        assert_eq!(insufficient, 5.0);
+        assert_eq!(ledger.total_structural_energy_delta, 0.0);
+
+        let mut sufficient = 6.0;
+        assert!(ledger.settle_transaction(&mut sufficient, transaction));
+        assert_eq!(sufficient, 0.0);
+        assert_eq!(ledger.total_structural_energy_delta, 5.0);
     }
 
     #[test]
