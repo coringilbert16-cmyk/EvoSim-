@@ -974,7 +974,7 @@ mod tests {
             inventory.heat_dissipated - baseline.heat_dissipated,
             simulation.energy_ledger.total_usable_energy_held,
             simulation.energy_ledger.total_structural_energy_held,
-            simulation.energy_ledger.total_energy_spent,
+            simulation.energy_ledger.total_work_expended,
             simulation.energy_ledger.total_heat_dissipated
         );
 
