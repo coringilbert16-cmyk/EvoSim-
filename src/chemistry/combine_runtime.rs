@@ -27,7 +27,6 @@ pub(crate) struct CombineAttempt {
     pub endpoint_a: ConnectionEndpoint,
     pub endpoint_b: ConnectionEndpoint,
     pub work_cost: f64,
-    pub energy_invested: f64,
     pub formation_threshold: f64,
     pub net_energy_change: f64,
     pub bond_strength: f64,
@@ -463,7 +462,6 @@ fn form_bond_from_candidate_diagnostic(
         endpoint_a,
         endpoint_b,
         work_cost: work,
-        energy_invested: investment,
         formation_threshold: threshold,
         net_energy_change: net,
         bond_strength: strength,
@@ -2102,21 +2100,21 @@ mod fluid_coalescence_transaction_tests {
 
     #[test]
     fn fluid_coalescence_costs_energy_but_stable_bond_formation_releases_binding_energy() {
-        let fluid_tx = combine_energy_transaction(2.0, 3.0, 4.0, true, 0.0, 0.0).unwrap();
+        let fluid_tx = combine_energy_transaction(3.0, 4.0, true, 0.0, 0.0).unwrap();
         // Existing bonds contribute equally to both states and must cancel;
         // only the new bond's product-minus-reactant potential funds the costs.
-        let rigid_tx = combine_energy_transaction(2.0, 3.0, 4.0, false, -10.0, -13.0).unwrap();
+        let rigid_tx = combine_energy_transaction(3.0, 4.0, false, -10.0, -13.0).unwrap();
 
         assert!(fluid_tx.balanced());
         assert!(rigid_tx.balanced());
-        assert_eq!(fluid_tx.usable_delta, -9.0);
+        assert_eq!(fluid_tx.usable_delta, -4.0);
         assert_eq!(fluid_tx.structural_delta, 0.0);
         assert_eq!(fluid_tx.work_expended, 4.0);
-        assert_eq!(fluid_tx.heat_dissipated, 5.0);
-        assert_eq!(rigid_tx.usable_delta, -3.0);
+        assert_eq!(fluid_tx.heat_dissipated, 0.0);
+        assert_eq!(rigid_tx.usable_delta, -1.0);
         assert_eq!(rigid_tx.structural_delta, -3.0);
         assert_eq!(rigid_tx.work_expended, 4.0);
-        assert_eq!(rigid_tx.heat_dissipated, 2.0);
+        assert_eq!(rigid_tx.heat_dissipated, 0.0);
     }
 
     #[test]
