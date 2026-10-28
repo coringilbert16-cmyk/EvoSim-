@@ -2605,4 +2605,34 @@ mod tests {
         assert_eq!(candidates.len(), organism.structure.bonds.len());
         assert!(!candidates.is_empty());
     }
+
+    #[test]
+    fn break_physical_energy_delta_is_independent_of_processing_efficiency() {
+        let ledger = crate::state::EnergyLedger::default();
+        let efficient = prepare_chemical_break_energy_with_structural_potentials(
+            20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 1.0, 1.0,
+        )
+        .expect("fully efficient resonance should fund one work unit");
+        let inefficient = prepare_chemical_break_energy_with_structural_potentials(
+            20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0, 0.5,
+        )
+        .expect("50% efficient resonance should fund the same useful work");
+
+        // The structural state transition is fixed by the physical bond,
+        // never by the efficiency of the organism's energy-conversion process.
+        assert_eq!(efficient.ledger.total_structural_energy_delta, 4.0);
+        assert_eq!(inefficient.ledger.total_structural_energy_delta, 4.0);
+        assert!((efficient.usable_energy - inefficient.usable_energy).abs() < 1e-12);
+        assert_eq!(efficient.ledger.total_work_expended, 5.0);
+        assert_eq!(inefficient.ledger.total_work_expended, 5.0);
+        assert_eq!(efficient.heat_dissipated, 0.0);
+        assert_eq!(inefficient.heat_dissipated, 1.0);
+
+        let efficient_residual = (efficient.usable_energy - 20.0) + 4.0 - 1.0
+            + efficient.ledger.total_work_expended + efficient.heat_dissipated;
+        let inefficient_residual = (inefficient.usable_energy - 20.0) + 4.0 - 2.0
+            + inefficient.ledger.total_work_expended + inefficient.heat_dissipated;
+        assert!(efficient_residual.abs() < 1e-12);
+        assert!(inefficient_residual.abs() < 1e-12);
+    }
 }
