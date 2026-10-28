@@ -79,8 +79,31 @@ pub(crate) fn prepare_chemical_break_energy_with_resonance(
     resonant_work: f64,
     processing_efficiency: f64,
 ) -> Option<PreparedChemicalBreakEnergy> {
+    prepare_chemical_break_energy_with_structural_delta(
+        usable_energy,
+        ledger,
+        bond_energy,
+        bond_energy,
+        activation_signal,
+        disruption_cost,
+        resonant_work,
+        processing_efficiency,
+    )
+}
+
+fn prepare_chemical_break_energy_with_structural_delta(
+    usable_energy: f64,
+    ledger: &EnergyLedger,
+    bond_energy: f64,
+    structural_delta: f64,
+    activation_signal: f64,
+    disruption_cost: f64,
+    resonant_work: f64,
+    processing_efficiency: f64,
+) -> Option<PreparedChemicalBreakEnergy> {
     if !usable_energy.is_finite()
         || usable_energy < 0.0
+        || !structural_delta.is_finite()
         || !resonant_work.is_finite()
         || resonant_work < 0.0
         || !disruption_cost.is_finite()
@@ -100,9 +123,13 @@ pub(crate) fn prepare_chemical_break_energy_with_resonance(
     }
     let (gross, _usable, heat) =
         chemical_break_energy_yield(bond_energy, bond_supplied_work, processing_efficiency)?;
+    let delta_tolerance = 1e-9 * gross.abs().max(1.0);
+    if (structural_delta - gross).abs() > delta_tolerance {
+        return None;
+    }
     let transaction = crate::energy_ledger::ReactionEnergyBalance::calculate(
         0.0,
-        gross,
+        structural_delta,
         bond_supplied_work,
         heat,
     )?
@@ -137,10 +164,20 @@ pub(crate) fn settle_chemical_break_energy_with_resonance(
     if trial_structure.break_matching_bond(bond).is_none() {
         return false;
     }
-    let Some(prepared) = prepare_chemical_break_energy_with_resonance(
+    let Some(before_potential) =
+        crate::energy_ledger::structural_potential(&organism.structure)
+    else {
+        return false;
+    };
+    let Some(after_potential) = crate::energy_ledger::structural_potential(&trial_structure) else {
+        return false;
+    };
+    let structural_delta = after_potential - before_potential;
+    let Some(prepared) = prepare_chemical_break_energy_with_structural_delta(
         organism.usable_energy,
         ledger,
         bond.bond_energy,
+        structural_delta,
         activation_signal,
         disruption_cost,
         resonant_work,
