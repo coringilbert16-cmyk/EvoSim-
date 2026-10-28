@@ -197,7 +197,7 @@ pub(crate) fn settle_chemical_break_energy_with_resonance(
         after_potential,
         activation_signal,
         disruption_cost,
-        resonant_work,
+        resonance_withdrawal,
         processing_efficiency,
     ) else {
         return false;
