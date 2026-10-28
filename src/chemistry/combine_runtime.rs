@@ -2419,6 +2419,8 @@ mod fluid_coalescence_transaction_tests {
         );
     }
 
+    // This checks the energy-balance gate directly; current catalog COMBINE
+    // reactions are favorable and do not naturally reach resonance shortfall.
     #[test]
     fn reaction_balance_rejects_insufficient_external_input() {
         let balance = crate::energy_ledger::ReactionEnergyBalance::calculate(10.0, 12.0, 1.0, 0.0)
