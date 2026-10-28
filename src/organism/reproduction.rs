@@ -637,7 +637,7 @@ pub(crate) fn total_structural_energy_held(
                 .structure
                 .bonds
                 .iter()
-                .map(|bond| bond.bond_energy)
+                .map(|bond| -bond.bond_energy)
                 .sum::<f64>();
             let construction_energy =
                 organism
@@ -662,7 +662,7 @@ pub(crate) fn total_structural_energy_held(
             body.structure
                 .bonds
                 .iter()
-                .map(|bond| bond.bond_energy)
+                .map(|bond| -bond.bond_energy)
                 .sum::<f64>()
         })
         .sum::<f64>();
