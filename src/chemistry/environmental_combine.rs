@@ -55,10 +55,12 @@ fn source_pair_key(
     cell_b: usize,
     material_b: usize,
     source_b: &PhysicalMaterial,
+    unit_a: usize,
+    unit_b: usize,
     candidate: ConnectionPairCandidate,
 ) -> String {
     format!(
-        "{ENVIRONMENT_PREFIX}{cell_a}:{material_a}:{}|{cell_b}:{material_b}:{}|{:?}|{:?}",
+        "{ENVIRONMENT_PREFIX}{cell_a}:{material_a}:{}:{unit_a}|{cell_b}:{material_b}:{}:{unit_b}|{:?}|{:?}",
         material_signature(source_a),
         material_signature(source_b),
         candidate.endpoint_a,
@@ -269,6 +271,8 @@ fn chemical_step(
         cell_b,
         material_b,
         source_b,
+        selected.unit_a,
+        selected.unit_b,
         selected.candidate,
     );
     let previous = accumulation.get(&key).copied().unwrap_or(0.0);
@@ -748,7 +752,7 @@ mod tests {
             available_a: true,
             available_b: true,
         };
-        let original = source_pair_key(0, 0, &a, 0, 1, &b, candidate);
+        let original = source_pair_key(0, 0, &a, 0, 1, &b, 0, 0, candidate);
         let moved = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
             vec![Placement {
@@ -759,7 +763,7 @@ mod tests {
             &catalog,
         )
         .unwrap();
-        assert_ne!(original, source_pair_key(0, 0, &moved, 0, 1, &b, candidate));
+        assert_ne!(original, source_pair_key(0, 0, &moved, 0, 1, &b, 0, 0, candidate));
     }
 
     #[test]
