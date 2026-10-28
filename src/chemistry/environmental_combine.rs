@@ -985,7 +985,10 @@ mod tests {
             simulation.environment.field.cells[cell].physical_materials,
             original_materials
         );
-        assert_eq!(simulation.environment.chemistry_usable_energy, original_usable);
+        assert_eq!(
+            simulation.environment.chemistry_usable_energy,
+            original_usable
+        );
         assert_eq!(simulation.energy_ledger, original_ledger);
 
         assert!(resolve_environmental(
