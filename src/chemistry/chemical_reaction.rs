@@ -833,8 +833,11 @@ pub(crate) fn resolve_environmental(
     };
     let usable_delta = prepared.usable_energy - environment.chemistry_usable_energy;
     let next_total_usable = ledger.total_usable_energy_held + usable_delta;
-    let structural_delta =
-        prepared.ledger.total_structural_energy_delta - ledger.total_structural_energy_delta;
+    // The BREAK operation removes this exact realized bond from the physical
+    // source. Do not infer the live structural-store change by subtracting two
+    // cumulative f64 counters: a small reaction delta can disappear after a
+    // long history while the physical bond was still removed.
+    let structural_delta = operation.bond.bond_energy;
     let next_total_structural = ledger.total_structural_energy_held + structural_delta;
     let next_total_resonant = ledger.total_resonant_energy_held - resonant_work;
     if !usable_delta.is_finite()

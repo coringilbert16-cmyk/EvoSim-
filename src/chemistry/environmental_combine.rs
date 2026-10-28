@@ -913,6 +913,10 @@ mod tests {
         simulation.energy_ledger.initial_structural_energy_held =
             baseline.current_structural_energy;
         simulation.energy_ledger.total_structural_energy_held = baseline.current_structural_energy;
+        // Simulate an older cumulative history whose small next structural
+        // increment rounds away. The live held total must still track the
+        // actual COMBINE/BREAK bond mutations.
+        simulation.energy_ledger.total_structural_energy_delta = -1.0e16;
 
         let key = source_pair_key(
             cell,
