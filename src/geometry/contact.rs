@@ -206,6 +206,17 @@ fn rigid_surface_candidates(
     let Some(shape_b) = b.shape(catalog) else {
         return Vec::new();
     };
+
+    // Hydrogen is represented by a thin rectangle for collision geometry, but
+    // its structural interface is intentionally limited to its two longitudinal
+    // ends. Do not add arbitrary continuous side-surface bond candidates for it.
+    let is_hydrogen = |unit: &StructuralUnit| {
+        unit.material.parts.len() == 1 && unit.material.parts[0].0 == "Hydrogen"
+    };
+    if is_hydrogen(a) || is_hydrogen(b) {
+        return Vec::new();
+    }
+
     if matches!(
         shape_a.form,
         Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }
