@@ -13,6 +13,12 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
 
+# Push and pull_request both fire for a branch update. Share a concurrency
+# group across both event types so only the latest head runs the expensive suite.
+concurrency:
+  group: pr-223-energy-accounting-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
