@@ -113,10 +113,15 @@ fn combine_energy_transaction(
             investment + bond_energy,
         );
     }
-    // A stable chemical bond lowers structural potential by its dissociation
-    // magnitude. That release pays work and investment first; only a deficit
-    // is debited from the usable holder.
-    EnergyTransaction::reaction(EnergyReason::Combine, -bond_energy, work, investment)
+    // The same pre/post-state balance drives both affordability and
+    // settlement. Formation lowers structural potential by the bond magnitude.
+    crate::energy_ledger::ReactionEnergyBalance::calculate(
+        0.0,
+        -bond_energy,
+        work,
+        investment,
+    )?
+    .settlement_transaction(EnergyReason::Combine)
 }
 
 fn evaluate_candidate(
