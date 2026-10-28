@@ -1153,8 +1153,7 @@ mod tests {
     fn unaffordable_break_is_rejected_without_mutating_holder_or_ledger() {
         let mut ledger = EnergyLedger::default();
         let mut usable = 2.0;
-        let transaction =
-            EnergyTransaction::reaction(EnergyReason::Break, 5.0, 1.0, 0.0).unwrap();
+        let transaction = EnergyTransaction::reaction(EnergyReason::Break, 5.0, 1.0, 0.0).unwrap();
 
         assert!(!ledger.settle_transaction(&mut usable, transaction));
         assert_eq!(usable, 2.0);
