@@ -181,6 +181,8 @@ fn chemical_step(
     chemistry_library: &mut crate::chemistry_library::ChemistryLibrary,
     structure: &OrganismStructure,
     selected: SelectedContact,
+    indices_a: &[usize],
+    indices_b: &[usize],
     source_a: &PhysicalMaterial,
     source_b: &PhysicalMaterial,
     cell_a: usize,
@@ -303,6 +305,15 @@ fn chemical_step(
     };
     updated_keys.insert(key.clone());
     if crate::chemistry::activated(activation_signal, barrier) {
+        // Selected indices address the combined trial graph. Store each unit's
+        // position within its own restored source instead of subtracting recipe
+        // entry counts, which need not equal the number of realized constituents.
+        let Some(unit_a) = indices_a.iter().position(|index| *index == selected.unit_a) else {
+            return;
+        };
+        let Some(unit_b) = indices_b.iter().position(|index| *index == selected.unit_b) else {
+            return;
+        };
         accumulation.remove(&key);
         operations.push(EnvironmentalCombineOperation {
             cell_a,
@@ -311,11 +322,8 @@ fn chemical_step(
             cell_b,
             material_b,
             source_b: source_b.clone(),
-            unit_a: selected.unit_a,
-            unit_b: match selected.unit_b.checked_sub(source_a.material.parts.len()) {
-                Some(index) => index,
-                None => return,
-            },
+            unit_a,
+            unit_b,
             candidate: selected.candidate,
             investment: selected.investment,
             accumulation_key: key,
@@ -455,6 +463,8 @@ pub(crate) fn accumulate_environmental(
                         chemistry_library,
                         &trial_structure,
                         selected,
+                        &indices_a,
+                        &indices_b,
                         &source_a,
                         &source_b,
                         cell_a,
