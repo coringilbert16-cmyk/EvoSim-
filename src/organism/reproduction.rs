@@ -1168,17 +1168,17 @@ pub(crate) fn finish_reproduction(
             return None;
         }
 
-        // Bonds severed at the division boundary release their stored energy
-        // exactly once. The release is a structural debit and usable-energy
-        // credit, not a second external chemical source.
+        // Severing division-boundary bonds raises structural potential by
+        // their dissociation-energy magnitude. The parent must fund that cost
+        // before its usable energy is partitioned between the two offspring.
         let mut staged_ledger = *ledger;
         let mut combined_energy = parent.usable_energy;
         if crossing_bond_energy > 0.0 {
             let transaction = crate::energy_ledger::EnergyTransaction {
                 reason: crate::energy_ledger::EnergyReason::Break,
                 potential_released: 0.0,
-                usable_delta: crossing_bond_energy,
-                structural_delta: -crossing_bond_energy,
+                usable_delta: -crossing_bond_energy,
+                structural_delta: crossing_bond_energy,
                 work_expended: 0.0,
                 heat_dissipated: 0.0,
             };
