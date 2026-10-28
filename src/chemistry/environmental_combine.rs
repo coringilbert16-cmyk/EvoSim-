@@ -660,10 +660,19 @@ pub(crate) fn resolve_environmental(
     // counters, but deliberately leaves this aggregate total to the owner.
     let usable_delta = staged_usable_energy - environment.chemistry_usable_energy;
     let next_total_usable = staged_ledger.total_usable_energy_held + usable_delta;
-    if !usable_delta.is_finite() || !next_total_usable.is_finite() || next_total_usable < 0.0 {
+    let structural_delta =
+        staged_ledger.total_structural_energy_delta - ledger.total_structural_energy_delta;
+    let next_total_structural = staged_ledger.total_structural_energy_held + structural_delta;
+    if !usable_delta.is_finite()
+        || !next_total_usable.is_finite()
+        || next_total_usable < 0.0
+        || !structural_delta.is_finite()
+        || !next_total_structural.is_finite()
+    {
         return false;
     }
     staged_ledger.total_usable_energy_held = next_total_usable;
+    staged_ledger.total_structural_energy_held = next_total_structural;
 
     // All fallible checks are complete. Remove in descending index order for a
     // same-cell pair, insert the product at the first source slot, and invalidate
@@ -938,6 +947,13 @@ mod tests {
                 .abs()
                 <= 1e-6,
             "COMBINE must keep the ledger usable-energy total aligned with its live holders"
+        );
+        assert!(
+            (simulation.energy_ledger.total_structural_energy_held
+                - inventory.current_structural_energy)
+                .abs()
+                <= 1e-6,
+            "COMBINE must keep the ledger structural-energy total aligned with its live bonds"
         );
         assert!(
             inventory.is_balanced_without_creation(1e-6),
