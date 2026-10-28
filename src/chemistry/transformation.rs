@@ -178,7 +178,6 @@ pub(crate) fn settle_chemical_break_energy_with_resonance(
     let Some(after_potential) = crate::energy_ledger::structural_potential(&trial_structure) else {
         return false;
     };
-    let structural_delta = after_potential - before_potential;
     let Some(prepared) = prepare_chemical_break_energy_with_structural_potentials(
         organism.usable_energy,
         ledger,
