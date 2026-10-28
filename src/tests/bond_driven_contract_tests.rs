@@ -177,7 +177,10 @@ mod tests {
                     (attempt.net_energy_change - (energy - before_energy)).abs() < 1.0e-9,
                     "reported net energy change must match the holder balance"
                 );
-                assert_eq!(ledger.total_heat_dissipated, 0.0, "activation threshold is not energy or heat");
+                assert_eq!(
+                    ledger.total_heat_dissipated, 0.0,
+                    "activation threshold is not energy or heat"
+                );
                 assert!(
                     (ledger.total_work_expended - attempt.work_cost).abs() < 1.0e-9,
                     "physical work is recorded exactly once"
