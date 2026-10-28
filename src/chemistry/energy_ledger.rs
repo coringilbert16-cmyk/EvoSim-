@@ -259,11 +259,15 @@ impl ReactionEnergyBalance {
         if !legitimate_external_input.is_finite() || legitimate_external_input < 0.0 {
             return None;
         }
+        // Any source input beyond the deficit remains in the source holder;
+        // it is not a reaction output and must not be mistaken for creation.
+        let retained_input = (legitimate_external_input - self.required_external_input).max(0.0);
         let residual = self.reactant_energy + legitimate_external_input
             - self.product_energy
             - self.physical_work
             - self.dissipated_heat
-            - self.released_surplus;
+            - self.released_surplus
+            - retained_input;
         residual.is_finite().then_some(residual)
     }
 }
