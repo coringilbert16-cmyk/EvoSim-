@@ -69,9 +69,7 @@ impl EnergySourceBudget {
 /// without treating external input as released chemical potential.
 /// Signed structural potential for the authoritative realized bond graph.
 /// A stable bond contributes negative potential relative to separated materials.
-pub(crate) fn structural_potential(
-    structure: &crate::structure::OrganismStructure,
-) -> Option<f64> {
+pub(crate) fn structural_potential(structure: &crate::structure::OrganismStructure) -> Option<f64> {
     let potential = structure.bonds.iter().try_fold(0.0, |total, bond| {
         let next = total - bond.bond_energy;
         (bond.bond_energy.is_finite() && bond.bond_energy >= 0.0 && next.is_finite())
