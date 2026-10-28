@@ -1144,11 +1144,12 @@ mod tests {
         )
         .unwrap();
         let hydrogen = crate::structure::StructuralUnit::from_material(
-            Material::free_base("Hydrogen", 1.0),
+            Material::free_base("Carbon", 1.0),
             Placement {
-                // Keep the physical shapes clearly separated: this regression
-                // isolates allocated bond-energy persistence, not contact geometry.
-                x: 3.0,
+                // Carbon hexagons share a valid edge at this axial-lattice spacing.
+                // The regression isolates allocated bond-energy persistence after
+                // creating a real physical bond.
+                x: 2.5,
                 y: 2.0,
                 rotation_radians: 0.0,
             },
