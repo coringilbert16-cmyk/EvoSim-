@@ -799,8 +799,8 @@ mod tests {
                 if resource_b.physical_state == crate::resources::PhysicalState::Fluid {
                     continue;
                 }
-                for step in 1..=16 {
-                    let distance = step as f64 * 0.25;
+                for step in 1..=60 {
+                    let distance = step as f64 * 0.05;
                     let source_a = PhysicalMaterial::realized(
                         Material::free_base(resource_a.name.clone(), 1.0),
                         vec![Placement {
