@@ -662,8 +662,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         }
 
         let actual_usable_delta = next_holder - *holder;
-        let next_gained =
-            self.total_usable_energy_gained + actual_usable_delta.max(0.0);
+        let next_gained = self.total_usable_energy_gained + actual_usable_delta.max(0.0);
         if !next_gained.is_finite() {
             return false;
         }
