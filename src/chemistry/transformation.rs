@@ -136,8 +136,7 @@ fn prepare_chemical_break_energy_with_structural_potentials(
     if !next_total_work.is_finite() {
         return None;
     }
-    let (gross, _usable, _heat) =
-        chemical_break_energy_yield(bond_energy, bond_supplied_work)?;
+    let (gross, _usable, _heat) = chemical_break_energy_yield(bond_energy, bond_supplied_work)?;
     let delta_tolerance = 1e-9 * gross.abs().max(1.0);
     if (structural_delta - gross).abs() > delta_tolerance {
         return None;
@@ -2312,8 +2311,7 @@ mod tests {
 
     #[test]
     fn chemical_break_requires_binding_energy_and_disruption_work() {
-        let (structural_energy, usable, heat) =
-            chemical_break_energy_yield(10.0, 4.0).unwrap();
+        let (structural_energy, usable, heat) = chemical_break_energy_yield(10.0, 4.0).unwrap();
         assert!((structural_energy - 10.0).abs() < 1e-12);
         assert!((usable + 14.0).abs() < 1e-12);
         assert_eq!(heat, 0.0);
