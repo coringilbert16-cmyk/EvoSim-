@@ -660,10 +660,7 @@ pub(crate) fn resolve_environmental(
     // counters, but deliberately leaves this aggregate total to the owner.
     let usable_delta = staged_usable_energy - environment.chemistry_usable_energy;
     let next_total_usable = staged_ledger.total_usable_energy_held + usable_delta;
-    if !usable_delta.is_finite()
-        || !next_total_usable.is_finite()
-        || next_total_usable < 0.0
-    {
+    if !usable_delta.is_finite() || !next_total_usable.is_finite() || next_total_usable < 0.0 {
         return false;
     }
     staged_ledger.total_usable_energy_held = next_total_usable;
