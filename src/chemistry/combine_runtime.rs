@@ -2466,10 +2466,8 @@ mod fluid_coalescence_transaction_tests {
 
     #[test]
     fn combine_resonance_funding_scales_with_efficiency_and_conserves_energy() {
-        let mut low_efficiency_resonance =
-            crate::harmonics::ResonantEnergyReservoir::default();
-        let mut full_efficiency_resonance =
-            crate::harmonics::ResonantEnergyReservoir::default();
+        let mut low_efficiency_resonance = crate::harmonics::ResonantEnergyReservoir::default();
+        let mut full_efficiency_resonance = crate::harmonics::ResonantEnergyReservoir::default();
         assert!(low_efficiency_resonance.deposit(440.0, 10.0));
         assert!(full_efficiency_resonance.deposit(440.0, 10.0));
         let mut low_energy = 0.0;
