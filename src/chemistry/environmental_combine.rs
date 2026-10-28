@@ -624,6 +624,11 @@ pub(crate) fn resolve_environmental(
         return false;
     };
 
+    let Some(reactant_structural_energy) =
+        crate::energy_ledger::structural_potential(&trial_structure)
+    else {
+        return false;
+    };
     let mut staged_ledger = *ledger;
     let mut staged_usable_energy = environment.chemistry_usable_energy;
     let mut cache = ConnectionCompatibilityCache::new();
@@ -650,18 +655,26 @@ pub(crate) fn resolve_environmental(
     ) {
         return false;
     }
+    let Some(product_structural_energy) =
+        crate::energy_ledger::structural_potential(&trial_structure)
+    else {
+        return false;
+    };
+    let structural_delta = product_structural_energy - reactant_structural_energy;
+    if !structural_delta.is_finite() {
+        return false;
+    }
     let Some(product) = physical_material_from_structure(&trial_structure, &environment.catalog)
     else {
         return false;
     };
 
-    // Keep the ledger's world-wide usable-energy total synchronized with the
-    // environment-owned holder. settle_transaction updates the holder and flow
-    // counters, but deliberately leaves this aggregate total to the owner.
+    // Keep world-held totals synchronized with the environment-owned physical
+    // result. Use the authoritative pre/post structure directly: subtracting
+    // cumulative signed-delta counters can lose a small reaction's change after
+    // many prior reactions and is not the physical state change itself.
     let usable_delta = staged_usable_energy - environment.chemistry_usable_energy;
     let next_total_usable = staged_ledger.total_usable_energy_held + usable_delta;
-    let structural_delta =
-        staged_ledger.total_structural_energy_delta - ledger.total_structural_energy_delta;
     let next_total_structural = staged_ledger.total_structural_energy_held + structural_delta;
     if !usable_delta.is_finite()
         || !next_total_usable.is_finite()
