@@ -1,0 +1,58 @@
+# Reaction Energy Semantics — PR A
+
+## Intention
+
+Establish one authoritative, auditable energy-settlement model for physical chemical COMBINE and BREAK reactions. A reaction's net energy change must be derived from its actual reactant and product states, rather than assuming that every bond formation requires an external energy grant or that every bond break has a universal fixed cost.
+
+This is the thermodynamic foundation for environment-first chemistry experiments. It reuses the existing COMBINE transaction/rollback work from PR #209 and shared reaction runtime from PR #214; it must not duplicate those systems.
+
+## Goals
+
+1. **One reaction-energy contract.** Define how reactant state, product state, bond/material energy, formation or separation work, and dissipation contribute to the net balance.
+2. **Separate thermodynamics from kinetics.** Net reaction energy and activation barriers are distinct. A favorable net reaction is not automatically guaranteed to occur, and an activation signal is not itself an energy source.
+3. **Allow favorable reactions to fund themselves.** When the modeled reaction is energetically favorable and its physical pathway is accessible, COMBINE must not require an arbitrary external usable-energy grant merely to make the transaction balance. Any released energy must be accounted for exactly once.
+4. **Conserve energy for unfavorable reactions.** If the product state requires more energy than the reactants provide, the difference must be funded by a legitimate modeled energy source or the reaction must not commit.
+5. **Make COMBINE and BREAK consistent.** Both directions must use the same underlying accounting principles, with direction-appropriate work and activation requirements.
+6. **Preserve atomicity.** A rejected, stale, unaffordable, or otherwise failed reaction must leave geometry, bonds, material ownership, energy holders, and ledgers unchanged.
+7. **Keep accounting independently checkable.** Tests must reconcile authoritative material/bond inventories and energy ledgers without relying solely on the implementation's own calculated total.
+
+## In scope
+
+- Audit and implement the smallest shared settlement primitive needed for COMBINE and BREAK.
+- Derive energy change from authoritative pre-reaction and post-reaction physical state; do not infer stored bond energy from a resource's maximum potential energy or from activation/signal values.
+- Explicitly define the status and ownership of bond energy, formation/separation work, and dissipated energy so each quantity is counted once.
+- Route released energy into explicitly modeled destinations (for example, physical work, resonance/usable energy where the existing model permits it, and heat/dissipation) with conservation checks.
+- Add focused unit/integration tests for favorable, unfavorable, and energy-neutral reactions, activation barriers, successful settlement, insufficient legitimate energy, stale/rejected transactions, and rollback.
+- Document the energy equation and assumptions beside the implementation and in tests.
+
+## Out of scope
+
+- Autonomous discovery of unbonded environmental pairs, environmental COMBINE scheduling, and multi-tick candidate progression. Those belong in a later PR only if this audit demonstrates they are necessary after PR A.
+- New chemistry rules chosen only to make a seed or test structure survive.
+- Death/decomposition policy, sunlight-model redesign, environment-only UI/observability, organism construction changes, or unrelated Clippy/test-baseline cleanup.
+- Reimplementing the COMBINE transaction or environmental BREAK scheduler already added in PRs #209 and #214.
+
+## Merge requirements
+
+PR A is mergeable only when all of the following are satisfied:
+
+- [ ] The shared reaction-energy equation and its terms are explicit, reviewed, and used consistently by COMBINE and BREAK.
+- [ ] A favorable COMBINE can commit without an arbitrary external energy grant when the modeled pathway is accessible; any net release is recorded exactly once.
+- [ ] An energetically unfavorable reaction cannot commit unless a legitimate energy source covers the deficit; failed attempts create no energy.
+- [ ] Activation barriers/work are accounted for separately from net reaction energy. Activation signals do not count as energy.
+- [ ] Stored bond energy has an authoritative representation or is explicitly absent from the model; resource maximum potential energy is not silently substituted for it.
+- [ ] Successful COMBINE and BREAK pass independent inventory/ledger reconciliation, including material/bond changes, released energy, work, and dissipation.
+- [ ] Rejected, stale, and insufficient-energy cases prove atomic rollback of all relevant physical and energy state.
+- [ ] Tests cover favorable, unfavorable, and neutral balances and verify no double-counting of bond energy or dissipation.
+- [ ] Focused chemistry/transaction tests, formatting, architecture checks, and the agreed full-suite verification pass without new regressions against the current baseline. Existing baseline failures must be identified by test identity, not treated as new failures.
+- [ ] The PR description and implementation state clearly what remains unresolved. Do not mark ready to merge while any conservation or rollback requirement is unverified.
+
+## Audit gate for a later environmental-COMBINE PR
+
+Do not open PR B automatically. After PR A's code and tests are audited, decide whether environmental COMBINE discovery/scheduling is actually a separate necessary change. If the existing runtime already supports the required path after a small integration, document that finding and avoid a second PR. If a separate environmental discovery layer is still missing, propose PR B with its own bounded-scheduling and end-to-end acceptance criteria before opening it.
+
+## Existing foundations to preserve
+
+- PR #209: selected-COMBINE transactionality, live contact revalidation, staged geometry/bond changes, settlement-before-commit, and rollback.
+- PR #214: shared chemistry runtime and bounded environmental BREAK discovery/scheduling.
+- PR #215: environment-first experiments and reaction-event observability; it should consume real runtime events, not define thermodynamic semantics.
