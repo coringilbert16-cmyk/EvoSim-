@@ -163,18 +163,23 @@ mod tests {
                     "committed bond energy must match the transaction result"
                 );
                 assert!(
-                    ((before_energy - energy) - (attempt.energy_invested + attempt.work_cost))
+                    ((before_energy - energy)
+                        - (attempt.energy_invested + attempt.work_cost - attempt.bond_energy))
                         .abs()
                         < 1.0e-6,
-                    "holder energy loss must equal structural investment plus dissipated work"
+                    "holder balance must include the bond-formation energy release"
                 );
                 assert!(
                     (attempt.net_energy_change - (energy - before_energy)).abs() < 1.0e-9,
                     "reported net energy change must match the holder balance"
                 );
                 assert!(
-                    (ledger.total_heat_dissipated - attempt.work_cost).abs() < 1.0e-9,
-                    "the ledger must record the transaction's dissipated work"
+                    (ledger.total_heat_dissipated - attempt.energy_invested).abs() < 1.0e-9,
+                    "formation investment is recorded as heat"
+                );
+                assert!(
+                    (ledger.total_work_expended - attempt.work_cost).abs() < 1.0e-9,
+                    "physical work is recorded exactly once"
                 );
                 found = true;
                 break;
