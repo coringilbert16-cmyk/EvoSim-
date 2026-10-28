@@ -231,7 +231,26 @@ impl EnergyTransaction {
         // A generic transaction has no named non-structural source owner to
         // debit. Bond energy must be represented by structural_delta; any
         // genuinely external input must use ExternalInputTransaction.
-        self.potential_released == 0.0 && self.allocation().balanced()
+        // Unlike an external-input allocation, a reaction's algebraic balance
+        // can round a few ULPs to either side of zero. Permit that signed
+        // construction error here; settle_transaction checks the represented
+        // holder/counter increments and rejects any actual energy creation.
+        let allocation = self.allocation();
+        let residual = allocation.source_energy
+            - allocation.usable_delta
+            - allocation.structural_delta
+            - allocation.work_expended
+            - allocation.heat_dissipated;
+        self.potential_released == 0.0
+            && allocation.source_energy.is_finite()
+            && allocation.usable_delta.is_finite()
+            && allocation.structural_delta.is_finite()
+            && allocation.work_expended.is_finite()
+            && allocation.work_expended >= 0.0
+            && allocation.heat_dissipated.is_finite()
+            && allocation.heat_dissipated >= 0.0
+            && residual.is_finite()
+            && residual.abs() <= EPSILON
     }
 }
 
