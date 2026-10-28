@@ -309,10 +309,11 @@ impl ReactionEnergyBalance {
 
 /// A point-in-time inventory used to reconcile world-level energy accounting.
 ///
-/// Structural energy is the total energy currently stored in realized bonds,
-/// counted once across all structures. The initial values are the tick-zero
-/// baseline; cumulative flows are totals since that baseline. Transfers among
-/// internal holders are intentionally absent because they cancel at world scale.
+/// Structural energy is the signed potential of realized bonds relative to the
+/// separated-material baseline: stable bonds contribute negative potential,
+/// counted once across all structures. Initial values are the tick-zero baseline;
+/// cumulative flows are totals since that baseline. Internal transfers cancel
+/// at world scale and are intentionally absent.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct EnergyInventorySnapshot {
     pub(crate) initial_usable_energy: f64,
@@ -336,13 +337,11 @@ impl EnergyInventorySnapshot {
     /// usable, resonant, and structural energy plus work, heat, and escaped tone
     /// equals all external sources.
     pub(crate) fn residual(self) -> Option<f64> {
-        let values = [
+        let nonnegative_values = [
             self.initial_usable_energy,
             self.current_usable_energy,
             self.initial_resonant_energy,
             self.current_resonant_energy,
-            self.initial_structural_energy,
-            self.current_structural_energy,
             self.external_energy_input,
             self.world_tone_energy_escaped,
             self.other_energy_released,
@@ -350,7 +349,9 @@ impl EnergyInventorySnapshot {
             self.heat_dissipated,
         ];
         if self.other_energy_released != 0.0
-            || values
+            || !self.initial_structural_energy.is_finite()
+            || !self.current_structural_energy.is_finite()
+            || nonnegative_values
                 .iter()
                 .any(|value| !value.is_finite() || *value < 0.0)
         {
