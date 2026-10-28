@@ -101,8 +101,15 @@ pub(crate) fn resolve_one_bond_with_ledger(
     let before = body.energy_budget;
     let (gross, _usable, heat) =
         crate::transformation::bond_break_energy_yield(target.bond_energy, 1.0)?;
+    let before_potential = crate::energy_ledger::structural_potential(&body.structure)?;
+    let after_potential = crate::energy_ledger::structural_potential(&trial_structure)?;
+    let structural_delta = after_potential - before_potential;
+    let delta_tolerance = 1e-9 * gross.abs().max(1.0);
+    if (structural_delta - gross).abs() > delta_tolerance {
+        return None;
+    }
     let transaction =
-        crate::energy_ledger::ReactionEnergyBalance::calculate(0.0, gross, 0.0, heat)?
+        crate::energy_ledger::ReactionEnergyBalance::calculate(0.0, structural_delta, 0.0, heat)?
             .settlement_transaction(EnergyReason::Decomposition)?;
     if !ledger.settle_transaction(&mut body.energy_budget, transaction) {
         return None;
