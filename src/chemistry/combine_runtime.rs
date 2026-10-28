@@ -2474,17 +2474,11 @@ mod fluid_coalescence_transaction_tests {
             .find(|candidate| evaluate_candidate(&structure, 0, 2, *candidate, &catalog).is_some())
             .expect("rigid/fluid contact should have an eligible COMBINE candidate");
         let (_, _, investment, required) =
-            evaluate_candidate(&structure, 0, 2, candidate, &catalog).unwrap();        let mut cache = ConnectionCompatibilityCache;
-        let candidate = eligible_candidates(&structure, 0, 1, &catalog, &mut cache)
-            .into_iter()
-            .find(|candidate| evaluate_candidate(&structure, 0, 1, *candidate, &catalog).is_some())
-            .expect("touching fluid pair should have an eligible COMBINE candidate");
-        let (_, _, investment, required) =
-            evaluate_candidate(&structure, 0, 1, candidate, &catalog).unwrap();
+            evaluate_candidate(&structure, 0, 2, candidate, &catalog).unwrap();
         assert!(required > 0.0);
 
         let properties_a = structure.units[0].properties(&catalog).unwrap();
-        let properties_b = structure.units[1].properties(&catalog).unwrap();
+        let properties_b = structure.units[2].properties(&catalog).unwrap();
         let baselines = crate::resources::ResourceBaselines::from_catalog(&catalog);
         let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
         let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
