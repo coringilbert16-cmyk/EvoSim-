@@ -225,7 +225,15 @@ fn new_structure_bond_is_formed_only_through_combine() {
     assert!(attempt.energy_invested >= 0.0);
     assert!(ledger.total_usable_energy_gained.is_finite());
     assert!(ledger.total_heat_dissipated > 0.0);
-    assert!(energy < 100.0 || attempt.energy_invested == 0.0);
+    let residual = energy - 100.0
+        + ledger.total_structural_energy_delta
+        + ledger.total_work_expended
+        + ledger.total_heat_dissipated
+        - ledger.total_external_energy_input;
+    assert!(
+        residual.abs() < 1e-9,
+        "COMBINE must reconcile released binding energy, usable energy, work, and heat"
+    );
 }
 
 #[test]
