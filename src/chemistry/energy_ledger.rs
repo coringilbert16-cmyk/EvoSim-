@@ -1176,6 +1176,12 @@ mod tests {
     }
 
     #[test]
+    fn pure_expenditure_rejects_structural_potential_changes() {
+        assert!(EnergyTransaction::expenditure(EnergyReason::Combine, 1.0, 0.0, 0.0).is_none());
+        assert!(EnergyTransaction::expenditure(EnergyReason::Combine, -1.0, 0.0, 0.0).is_none());
+    }
+
+    #[test]
     fn unowned_non_structural_release_is_rejected_atomically() {
         let tx = EnergyTransaction {
             reason: EnergyReason::Combine,
