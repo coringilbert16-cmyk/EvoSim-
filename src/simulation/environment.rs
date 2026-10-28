@@ -511,6 +511,69 @@ impl ActiveMaterialField {
         self.revision = self.revision.wrapping_add(1);
     }
 
+    /// Atomically replace an environmental physical composite with its
+    /// already-validated split pieces. The source is compared against the
+    /// expected snapshot before any mutation, and every destination is checked
+    /// before the source is removed. This is the field half of a shared
+    /// chemical BREAK transaction; callers stage energy and ledger changes first.
+    pub(crate) fn split_physical_at_index(
+        &mut self,
+        source_cell: usize,
+        source_index: usize,
+        expected_source: &PhysicalMaterial,
+        pieces: Vec<PhysicalMaterial>,
+        catalog: &[crate::resources::BaseResource],
+    ) -> bool {
+        let Some(cell) = self.cells.get(source_cell) else {
+            return false;
+        };
+        if cell.physical_materials.get(source_index) != Some(expected_source) || pieces.is_empty() {
+            return false;
+        }
+
+        let mut staged = Vec::with_capacity(pieces.len());
+        for piece in pieces {
+            if !piece.is_realized()
+                || piece.material.is_empty()
+                || !piece.material.is_valid_for_catalog(catalog)
+            {
+                return false;
+            }
+            let Some(placement) = piece
+                .placements
+                .as_ref()
+                .and_then(|placements| placements.first())
+            else {
+                return false;
+            };
+            let Some(destination) = self.index_for_position(placement.x, placement.y) else {
+                return false;
+            };
+            if destination >= self.cells.len() {
+                return false;
+            }
+            staged.push((destination, piece));
+        }
+
+        // No fallible operations remain. Remove the escrowed source and deposit
+        // every piece, then invalidate each touched cell exactly once.
+        self.cells[source_cell]
+            .physical_materials
+            .remove(source_index);
+        let mut changed = vec![false; self.cells.len()];
+        changed[source_cell] = true;
+        for (destination, piece) in staged {
+            self.cells[destination].physical_materials.push(piece);
+            changed[destination] = true;
+        }
+        for (index, did_change) in changed.into_iter().enumerate() {
+            if did_change {
+                self.mark_changed_at_index(index);
+            }
+        }
+        true
+    }
+
     pub(crate) fn mark_changed_at_index(&mut self, index: usize) {
         self.mark_cell_changed(index);
     }

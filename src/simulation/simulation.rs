@@ -214,6 +214,8 @@ impl Simulation {
             height,
             catalog,
             field,
+            chemistry_usable_energy: 0.0,
+            resonant_energy: Default::default(),
         }
     }
     pub(crate) fn create_initial_organism() -> Organism {
@@ -739,6 +741,9 @@ impl Simulation {
     pub(crate) fn step(&mut self) {
         self.tick += 1;
 
+        // Divide the realization budget across owners; the remainder rotates by tick.
+        let chemistry_owner_count = self.organisms.len();
+
         let mut still_active = Vec::new();
         let mut completed = Vec::new();
         for mut transformation in self.active_transformations.drain(..) {
@@ -834,7 +839,55 @@ impl Simulation {
                 &living_ids,
             );
         }
-        for organism in &mut self.organisms {
+        // Environmental chemistry is a first-class owner and must run
+        // even when the world contains no organisms. Reserve half of the
+        // realization and discovery budgets for the field, independently of
+        // the organism iteration below.
+        let mut environmental_discovery_remaining =
+            crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 2;
+        let environmental_operations = crate::chemical_reaction::accumulate_environmental(
+            &self.environment,
+            &mut self.chemical_reaction_accumulation,
+            &mut self.chemistry_library,
+            self.tick,
+            &mut environmental_discovery_remaining,
+        );
+        let mut environmental_work_remaining =
+            crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 2;
+        let environmental_operations = crate::chemical_reaction::schedule_environmental_operations(
+            environmental_operations,
+            self.tick,
+            &mut environmental_work_remaining,
+            &mut self.chemical_reaction_accumulation,
+        );
+        for operation in environmental_operations {
+            let _ = crate::chemical_reaction::resolve_environmental_preserving_accumulation(
+                operation,
+                &mut self.environment,
+                &mut self.energy_ledger,
+                &mut self.chemical_reaction_accumulation,
+            );
+        }
+
+        let mut carried_chemistry_work = 0;
+        let mut carried_chemistry_discovery_work = 0;
+        for (organism_index, organism) in self.organisms.iter_mut().enumerate() {
+            let chemistry_work_remaining =
+                crate::chemical_reaction::work_budget_for_owner_with_carry(
+                    crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 2,
+                    chemistry_owner_count,
+                    organism_index,
+                    self.tick,
+                    carried_chemistry_work,
+                );
+            let chemistry_discovery_work_remaining =
+                crate::chemical_reaction::work_budget_for_owner_with_carry(
+                    crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK,
+                    chemistry_owner_count,
+                    organism_index,
+                    self.tick,
+                    carried_chemistry_discovery_work,
+                );
             let is_living = living_ids.contains(&organism.id);
             if is_living {
                 organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
@@ -864,16 +917,37 @@ impl Simulation {
             }
             // Chemical reactions remain part of the physical world after
             // organism status ends; biological maintenance and memory do not.
+            // Split discovery work between graph and environmental targets so
+            // a large structural graph cannot permanently starve local field
+            // chemistry (and vice versa). Unused budget carries to later owners.
+            let graph_discovery_budget = if organism_index == 0 {
+                chemistry_discovery_work_remaining / 2
+            } else {
+                chemistry_discovery_work_remaining
+            };
+            let mut graph_discovery_remaining = graph_discovery_budget;
             let chemical_operations = crate::chemical_reaction::accumulate(
                 organism,
                 &self.environment.catalog,
                 &mut self.chemical_reaction_accumulation,
                 &mut self.chemistry_library,
+                self.tick,
+                &mut graph_discovery_remaining,
             );
-            // Chemistry events have no artificial duration or per-organism
-            // serialization. Every event that still matches the current
-            // physical structure is applied immediately; conflicting events
-            // naturally fail once an earlier event has changed that structure.
+            // The environment is one chemistry owner, not one owner per
+            // organism. Discover each field-owned bond at most once per tick;
+            // its geometry and progress keys are independent of organism graphs.
+            carried_chemistry_discovery_work = graph_discovery_remaining;
+            let mut graph_work_remaining = chemistry_work_remaining;
+            let chemical_operations = crate::chemical_reaction::schedule_operations(
+                chemical_operations,
+                self.tick,
+                &mut graph_work_remaining,
+                &mut self.chemical_reaction_accumulation,
+            );
+            // The shared per-tick budget bounds physical reaction realization.
+            // Deferred activations retain progress only; they must be discovered
+            // and validated against live geometry again before a later commit.
             for operation in chemical_operations {
                 let _ = crate::chemical_reaction::resolve_preserving_accumulation(
                     operation,
@@ -882,6 +956,9 @@ impl Simulation {
                     &mut self.chemical_reaction_accumulation,
                 );
             }
+            // Carry unused graph slots forward, but never exceed the
+            // graph half-budget reserved for this tick.
+            carried_chemistry_work = graph_work_remaining;
 
             // Recheck immediately after chemistry: if a reaction breached the
             // genome core this tick, do not perform any later biological work.
@@ -1391,9 +1468,9 @@ impl Simulation {
         }
         self.next_organism_id = next_organism_id;
         self.organisms.extend(offspring);
-        // Stress can break the core through ordinary bond-breaking chemistry.
-        // A breached organism remains in the physical world; only living
-        // organisms receive biological stress processing on subsequent ticks.
+        // Apply biological stress bookkeeping only while the genome core is
+        // intact. A core breach is an observed life-state transition, not a
+        // separate stress-driven bond-breaking mechanism.
         for organism in &mut self.organisms {
             if living_ids.contains(&organism.id) {
                 let _ = Self::apply_survival_damage(
@@ -1404,24 +1481,150 @@ impl Simulation {
                 );
             }
         }
-        // Death is observational: breached organisms remain physical structures
-        // and continue through the same ordinary chemical-reaction pass above.
-        // Do not invoke the legacy DecomposingBody bond-breaking path here.
+        // Death changes biological eligibility, not physical ownership. The
+        // breached organism remains the sole owner of its graph, stored
+        // material, and in-flight transactions. The ordinary shared chemistry
+        // pass above continues to evaluate its physical graph. Do not run the
+        // legacy DecomposingBody bond-yield loop: decomposition must emerge from
+        // the same chemical BREAK path and only then release material.
 
         // Keep in-flight physical/chemical transactions even if their organism's
         // core has since been breached. Dropping one here could discard reserved
         // material or energy held by the transaction. New transformations cannot
         // be initiated by breached organisms because the decision loop is gated
         // by living_ids. Existing BREAK/COMBINE transactions still settle normally.
+        self.release_finished_dead_organisms(&living_ids);
         self.energy_ledger.total_usable_energy_held = crate::reproduction::total_usable_energy_held(
             &self.organisms,
             &self.decomposing_bodies,
-        );
+        ) + self.environment.chemistry_usable_energy;
         self.energy_ledger.total_resonant_energy_held =
-            crate::reproduction::total_resonant_energy_held(&self.organisms);
+            crate::reproduction::total_resonant_energy_held(&self.organisms)
+                + self
+                    .environment
+                    .resonant_energy
+                    .total_energy()
+                    .unwrap_or(f64::NAN);
         self.energy_ledger.total_structural_energy_held =
             Self::structural_energy_held(&self.organisms, &self.decomposing_bodies);
     }
+    /// Transfer a dead, fully disconnected organism into environmental material.
+    ///
+    /// A core breach alone never moves material. Release is permitted only after
+    /// shared chemistry has removed every graph bond and every non-graph holder
+    /// that would otherwise be orphaned is empty. The field insertion and energy
+    /// sink are staged so a rejected transfer leaves the organism authoritative.
+    fn release_finished_dead_organisms(&mut self, living_ids: &HashSet<String>) {
+        let mut release_indices = Vec::new();
+        for (index, organism) in self.organisms.iter().enumerate() {
+            if living_ids.contains(&organism.id)
+                || self
+                    .active_transformations
+                    .iter()
+                    .any(|transformation| transformation.organism_id == organism.id)
+                || !organism.structure.bonds.is_empty()
+                || organism.active_transformation_id.is_some()
+                || organism.reproductive_construction.is_some()
+                || !organism.stored_material.entries.is_empty()
+                || organism.active_movement.is_some()
+            {
+                continue;
+            }
+            let Some(resonant_energy) = organism.resonant_energy.total_energy() else {
+                continue;
+            };
+            if !resonant_energy.is_finite() || resonant_energy < 0.0 {
+                continue;
+            }
+            if !organism.usable_energy.is_finite() || organism.usable_energy < 0.0 {
+                continue;
+            }
+            if organism
+                .structure
+                .units
+                .iter()
+                .any(|unit| unit.shape(&self.environment.catalog).is_none())
+            {
+                continue;
+            }
+            release_indices.push(index);
+        }
+
+        for index in release_indices.into_iter().rev() {
+            let organism = &self.organisms[index];
+            let organism_id = organism.id.clone();
+            let Some(resonant_energy) = organism.resonant_energy.total_energy() else {
+                continue;
+            };
+            if !resonant_energy.is_finite() || resonant_energy < 0.0 {
+                continue;
+            }
+            let Some(materials) = organism
+                .structure
+                .units
+                .iter()
+                .map(|unit| {
+                    crate::decomposition::realize_released_unit(unit, &self.environment.catalog)
+                })
+                .collect::<Option<Vec<_>>>()
+            else {
+                continue;
+            };
+            let deposits = materials
+                .into_iter()
+                .zip(&organism.structure.units)
+                .map(|(material, unit)| (unit.placement.x, unit.placement.y, material))
+                .collect();
+
+            let mut staged_ledger = self.energy_ledger;
+            let mut staged_energy = organism.usable_energy;
+            if staged_energy > 0.0 {
+                let sink = crate::energy_ledger::EnergyTransaction {
+                    reason: crate::energy_ledger::EnergyReason::Decomposition,
+                    potential_released: 0.0,
+                    usable_delta: -staged_energy,
+                    structural_delta: 0.0,
+                    work_expended: 0.0,
+                    heat_dissipated: staged_energy,
+                };
+                if !staged_ledger.settle_transaction(&mut staged_energy, sink) {
+                    continue;
+                }
+            }
+            // Once the dead graph has no bonds or outstanding holders, any
+            // remaining retained resonance is dissipated as heat in the same
+            // finalization transaction. It is never silently discarded or
+            // converted into usable chemical energy.
+            let next_resonant = staged_ledger.total_resonant_energy_held - resonant_energy;
+            let next_heat = staged_ledger.total_heat_dissipated + resonant_energy;
+            if !next_resonant.is_finite()
+                || next_resonant < 0.0
+                || !next_heat.is_finite()
+                || resonant_energy > staged_ledger.total_resonant_energy_held + 1e-9
+            {
+                continue;
+            }
+            staged_ledger.total_resonant_energy_held = next_resonant.max(0.0);
+            staged_ledger.total_heat_dissipated = next_heat;
+            if !self
+                .environment
+                .field
+                .deposit_physical_batch(deposits, &self.environment.catalog)
+            {
+                continue;
+            }
+            self.energy_ledger = staged_ledger;
+            self.organisms.remove(index);
+
+            // Activation progress is not physical material or energy. Once
+            // the dead graph has been atomically released, discard its stale
+            // graph-reaction progress so a later owner cannot inherit it.
+            let organism_prefix = format!("{}|rev:", organism_id);
+            self.chemical_reaction_accumulation
+                .retain(|key, _| !key.starts_with(&organism_prefix));
+        }
+    }
+
     pub(crate) fn structural_energy_held(
         organisms: &[crate::state::Organism],
         decomposing_bodies: &[crate::decomposition::DecomposingBody],
@@ -1460,9 +1663,14 @@ impl Simulation {
         let current_usable_energy = crate::reproduction::total_usable_energy_held(
             &self.organisms,
             &self.decomposing_bodies,
-        );
+        ) + self.environment.chemistry_usable_energy;
         let current_resonant_energy =
-            crate::reproduction::total_resonant_energy_held(&self.organisms);
+            crate::reproduction::total_resonant_energy_held(&self.organisms)
+                + self
+                    .environment
+                    .resonant_energy
+                    .total_energy()
+                    .unwrap_or(f64::NAN);
         let current_structural_energy = crate::reproduction::total_structural_energy_held(
             &self.organisms,
             &self.decomposing_bodies,
@@ -1623,6 +1831,8 @@ mod decomposition_finalization_tests {
             height: 1000.0,
             catalog: catalog.clone(),
             field: ActiveMaterialField::new(1000.0, 1000.0, crate::environment::DEFAULT_CELL_SIZE),
+            chemistry_usable_energy: 0.0,
+            resonant_energy: Default::default(),
         };
         let make_single = |name: &str, x: f64| {
             PhysicalMaterial::realized(
@@ -1728,6 +1938,347 @@ mod decomposition_finalization_tests {
 
     use super::*;
     use crate::structure::{OrganismStructure, Placement, StructuralUnit};
+
+    fn prepare_bondless_dead_fixture(simulation: &mut Simulation) {
+        let mut structure = OrganismStructure::new();
+        let mut unit = StructuralUnit::new(
+            "Carbon".to_string(),
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(unit.realize_default_geometry(&simulation.environment.catalog));
+        structure.add_unit(unit);
+
+        let organism = &mut simulation.organisms[0];
+        organism.structure = structure;
+        organism.stored_material.entries.clear();
+        organism.reproductive_construction = None;
+        organism.active_transformation_id = None;
+        organism.active_movement = None;
+        organism.usable_energy = 0.0;
+    }
+
+    #[test]
+    fn bondless_dead_organism_releases_material_after_holder_checks() {
+        let mut simulation = Simulation::new(0xD3AD, 10.0);
+        prepare_bondless_dead_fixture(&mut simulation);
+        let organism_id = simulation.organisms[0].id.clone();
+        let stale_progress = format!("{}|rev:0|stale-reaction", organism_id);
+        simulation
+            .chemical_reaction_accumulation
+            .insert(stale_progress.clone(), 0.75);
+        simulation
+            .chemical_reaction_accumulation
+            .insert("unrelated-owner|rev:0|reaction".into(), 0.25);
+        let field_before = simulation.environment.field.total_amount();
+        let living = HashSet::new();
+
+        simulation.release_finished_dead_organisms(&living);
+
+        assert!(!simulation
+            .chemical_reaction_accumulation
+            .contains_key(&stale_progress));
+        assert_eq!(
+            simulation
+                .chemical_reaction_accumulation
+                .get("unrelated-owner|rev:0|reaction"),
+            Some(&0.25),
+            "releasing one dead graph must not clear another owner's progress"
+        );
+        assert!(simulation.organisms.is_empty());
+        assert_eq!(
+            simulation.environment.field.total_amount(),
+            field_before + 1.0,
+            "the disconnected unit must be deposited exactly once"
+        );
+    }
+
+    #[test]
+    fn dead_bonded_graph_remains_owned_until_shared_chemistry_breaks_its_bonds() {
+        let mut simulation = Simulation::new(0xD3B4, 10.0);
+        assert!(
+            !simulation.organisms[0].structure.bonds.is_empty(),
+            "default fixture should contain bonded physical material"
+        );
+        let field_before = simulation.environment.field.total_amount();
+        let bonds_before = simulation.organisms[0].structure.bonds.clone();
+        let living = HashSet::new();
+
+        simulation.release_finished_dead_organisms(&living);
+
+        assert_eq!(simulation.organisms.len(), 1);
+        assert_eq!(simulation.organisms[0].structure.bonds, bonds_before);
+        assert_eq!(
+            simulation.environment.field.total_amount(),
+            field_before,
+            "death must not bypass chemistry by releasing a still-bonded graph"
+        );
+    }
+
+    #[test]
+    fn dead_bonded_graph_uses_ordinary_chemistry_without_forced_decomposition() {
+        let mut simulation = Simulation::new(0xD3B5, 10.0);
+        // Keep the normal world configuration. Death disables biological
+        // activity; it must not install a special decomposition reaction.
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+
+        let owner_id = simulation.organisms[0].id.clone();
+        simulation.organisms[0]
+            .structure
+            .clear_genome_constituent_ids();
+        simulation.organisms[0].genome_core_identity_established = true;
+        simulation.organisms[0].stored_material.entries.clear();
+        simulation.organisms[0].reproductive_construction = None;
+        simulation.organisms[0].active_transformation_id = None;
+        simulation.organisms[0].active_movement = None;
+        simulation.organisms[0].mark_structure_changed();
+
+        assert!(!simulation.organisms[0].structure.bonds.is_empty());
+        let field_before = simulation.environment.field.total_amount();
+        let structural_amount_before = simulation.organisms[0]
+            .structure
+            .units
+            .iter()
+            .flat_map(|unit| unit.material.parts.iter())
+            .map(|(_, amount)| *amount)
+            .sum::<f64>();
+        let material_before = field_before + structural_amount_before;
+
+        // One ordinary tick exercises the shared scheduler for a dead,
+        // physically bonded aggregate. Do not assume these constructor bonds
+        // are chemically breakable or require them to break within a deadline.
+        simulation.step();
+
+        let structural_amount_after = simulation
+            .organisms
+            .iter()
+            .filter(|organism| organism.id == owner_id)
+            .flat_map(|organism| organism.structure.units.iter())
+            .flat_map(|unit| unit.material.parts.iter())
+            .map(|(_, amount)| *amount)
+            .sum::<f64>();
+        let material_after = simulation.environment.field.total_amount() + structural_amount_after;
+        assert!(
+            (material_after - material_before).abs() <= 1e-9,
+            "ordinary chemistry/lifecycle must preserve physical material ownership: before={material_before}, after={material_after}"
+        );
+        assert!(
+            simulation
+                .energy_inventory_snapshot()
+                .is_balanced_without_creation(1e-8),
+            "ordinary chemistry on a dead bonded graph must conserve world energy: {:?}",
+            simulation.energy_inventory_snapshot().residual()
+        );
+        if simulation
+            .organisms
+            .iter()
+            .any(|organism| organism.id == owner_id)
+        {
+            assert_eq!(
+                simulation.environment.field.total_amount(),
+                field_before,
+                "material still owned by the dead aggregate must not be prematurely released"
+            );
+        } else {
+            assert!(
+                (simulation.environment.field.total_amount()
+                    - (field_before + structural_amount_before))
+                    .abs()
+                    <= 1e-9,
+                "if ordinary chemistry removes all bonds, final release must deposit the structure exactly once"
+            );
+        }
+    }
+
+    #[test]
+    fn live_tick_releases_a_dead_bondless_graph_into_the_environment() {
+        let mut simulation = Simulation::new(0xD3B0, 10.0);
+        prepare_bondless_dead_fixture(&mut simulation);
+        let field_before = simulation.environment.field.total_amount();
+
+        simulation.step();
+
+        assert!(simulation.organisms.is_empty());
+        assert_eq!(
+            simulation.environment.field.total_amount(),
+            field_before + 1.0,
+            "the live lifecycle must release the dead graph exactly once"
+        );
+    }
+
+    #[test]
+    fn dead_release_settles_remaining_usable_energy_as_heat() {
+        let mut simulation = Simulation::new(0xD3B3, 10.0);
+        prepare_bondless_dead_fixture(&mut simulation);
+        simulation.organisms[0].usable_energy = 2.0;
+        let field_before = simulation.environment.field.total_amount();
+        let heat_before = simulation.energy_ledger.total_heat_dissipated;
+
+        let living = HashSet::new();
+        simulation.release_finished_dead_organisms(&living);
+
+        assert!(simulation.organisms.is_empty());
+        assert_eq!(
+            simulation.environment.field.total_amount(),
+            field_before + 1.0
+        );
+        assert_eq!(
+            simulation.energy_ledger.total_heat_dissipated,
+            heat_before + 2.0
+        );
+    }
+
+    #[test]
+    fn failed_dead_material_release_preserves_organism_energy_and_field() {
+        let mut simulation = Simulation::new(0xD3AE, 10.0);
+        prepare_bondless_dead_fixture(&mut simulation);
+        simulation.organisms[0].usable_energy = 2.0;
+        simulation.organisms[0].structure.units[0].placement.x = f64::MAX;
+        let field_before = simulation.environment.field.total_amount();
+        let ledger_before = simulation.energy_ledger;
+        let living = HashSet::new();
+
+        simulation.release_finished_dead_organisms(&living);
+
+        assert_eq!(simulation.organisms.len(), 1);
+        assert_eq!(simulation.organisms[0].usable_energy, 2.0);
+        assert_eq!(simulation.environment.field.total_amount(), field_before);
+        assert_eq!(simulation.energy_ledger, ledger_before);
+    }
+
+    #[test]
+    fn failed_dead_release_energy_settlement_preserves_organism_and_field() {
+        let mut simulation = Simulation::new(0xD3B6, 10.0);
+        prepare_bondless_dead_fixture(&mut simulation);
+        simulation.organisms[0].usable_energy = f64::MAX;
+        // Force the staged heat sink to overflow so settlement rejects before
+        // the field batch can commit.
+        simulation.energy_ledger.total_heat_dissipated = f64::MAX;
+        let field_before = simulation.environment.field.total_amount();
+        let ledger_before = simulation.energy_ledger;
+        let living = HashSet::new();
+
+        simulation.release_finished_dead_organisms(&living);
+
+        assert_eq!(simulation.organisms.len(), 1);
+        assert_eq!(simulation.organisms[0].usable_energy, f64::MAX);
+        assert_eq!(simulation.environment.field.total_amount(), field_before);
+        assert_eq!(simulation.energy_ledger, ledger_before);
+    }
+
+    #[test]
+    fn dead_organism_with_unsettled_holders_is_not_released() {
+        let mut simulation = Simulation::new(0xD3AF, 10.0);
+        prepare_bondless_dead_fixture(&mut simulation);
+        assert!(simulation.organisms[0]
+            .store_material(crate::resources::Material::free_base("Hydrogen", 1.0)));
+        let field_before = simulation.environment.field.total_amount();
+        let living = HashSet::new();
+
+        simulation.release_finished_dead_organisms(&living);
+
+        assert_eq!(simulation.organisms.len(), 1);
+        assert_eq!(simulation.environment.field.total_amount(), field_before);
+        assert_eq!(simulation.organisms[0].stored_material.total_amount(), 1.0);
+    }
+
+    #[test]
+    fn dead_organism_dissipates_retained_resonance_as_heat_on_final_release() {
+        let mut simulation = Simulation::new(0xD3B2, 10.0);
+        prepare_bondless_dead_fixture(&mut simulation);
+        assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        // The fixture replaces the seed organism with a one-unit graph, so
+        // rebase the independent inventory oracle around that deliberate setup.
+        // The manually seeded resonance is initial stored energy, not new input.
+        let structural = Simulation::structural_energy_held(
+            &simulation.organisms,
+            &simulation.decomposing_bodies,
+        );
+        simulation.energy_ledger.initial_usable_energy_held = 0.0;
+        simulation.energy_ledger.initial_resonant_energy_held = 1.0;
+        simulation.energy_ledger.initial_structural_energy_held = structural;
+        simulation.energy_ledger.total_usable_energy_held =
+            crate::reproduction::total_usable_energy_held(
+                &simulation.organisms,
+                &simulation.decomposing_bodies,
+            );
+        simulation.energy_ledger.total_resonant_energy_held = 1.0;
+        simulation.energy_ledger.total_structural_energy_held = structural;
+        simulation.energy_ledger.total_external_energy_input = 0.0;
+        simulation.energy_ledger.total_potential_energy_released = 0.0;
+        simulation.energy_ledger.total_work_expended = 0.0;
+        simulation.energy_ledger.total_heat_dissipated = 0.0;
+        simulation.energy_ledger.total_world_tone_energy_escaped = 0.0;
+        let field_before = simulation.environment.field.total_amount();
+        let heat_before = simulation.energy_ledger.total_heat_dissipated;
+
+        let living = HashSet::new();
+        simulation.release_finished_dead_organisms(&living);
+
+        assert!(simulation.organisms.is_empty());
+        assert_eq!(
+            simulation.environment.field.total_amount(),
+            field_before + 1.0
+        );
+        assert_eq!(
+            simulation.energy_ledger.total_heat_dissipated,
+            heat_before + 1.0
+        );
+        assert_eq!(simulation.energy_ledger.total_resonant_energy_held, 0.0);
+        assert!(
+            simulation.energy_inventory_snapshot().is_balanced(1e-9),
+            "final release must account retained resonance as heat: {:?}",
+            simulation.energy_inventory_snapshot().residual()
+        );
+    }
+
+    #[test]
+    fn dead_organism_with_owner_transformation_in_flight_is_not_released() {
+        let mut simulation = Simulation::new(0xD3B1, 10.0);
+        prepare_bondless_dead_fixture(&mut simulation);
+        let owner_id = simulation.organisms[0].id.clone();
+        simulation
+            .active_transformations
+            .push(crate::state::ActiveTransformation {
+                id: 991,
+                organism_id: owner_id,
+                kind: crate::state::TransformationKind::Break,
+                material: crate::resources::Material::free_base("Carbon", 1.0),
+                bond: None,
+                stored_material: None,
+                stored_bond: None,
+                environmental_source: false,
+                complexity: 1.0,
+                duration_ticks: 1,
+                remaining_ticks: 1,
+                prepared_energy: None,
+                pending_experience: None,
+                decision_context_key: None,
+                prepared_structure: None,
+                prepared_stored_material: None,
+                prepared_usable_energy: None,
+                prepared_stress: None,
+                prepared_ledger: None,
+                prepared_ledger_before: None,
+                prepared_usable_energy_before: None,
+                combine_environmental_source: None,
+                stored_source_index: None,
+                environmental_source_location: None,
+                combine_environmental_source_index: None,
+            });
+        let field_before = simulation.environment.field.total_amount();
+
+        let living = HashSet::new();
+        simulation.release_finished_dead_organisms(&living);
+
+        assert_eq!(simulation.organisms.len(), 1);
+        assert_eq!(simulation.environment.field.total_amount(), field_before);
+    }
 
     fn rollback_material_inventory(
         simulation: &Simulation,

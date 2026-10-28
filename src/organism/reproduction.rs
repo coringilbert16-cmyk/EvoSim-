@@ -1349,6 +1349,8 @@ mod tests {
         let environment = Environment {
             width: 1000.0,
             height: 1000.0,
+            chemistry_usable_energy: 0.0,
+            resonant_energy: Default::default(),
             catalog: catalog.clone(),
             field: ActiveMaterialField::new(1000.0, 1000.0, DEFAULT_CELL_SIZE),
         };
@@ -1409,6 +1411,8 @@ mod tests {
         let environment = Environment {
             width: 1000.0,
             height: 1000.0,
+            chemistry_usable_energy: 0.0,
+            resonant_energy: Default::default(),
             catalog: catalog.clone(),
             field: ActiveMaterialField::new(1000.0, 1000.0, DEFAULT_CELL_SIZE),
         };
@@ -1912,6 +1916,8 @@ mod tests {
         let environment = Environment {
             width: 1000.0,
             height: 1000.0,
+            chemistry_usable_energy: 0.0,
+            resonant_energy: Default::default(),
             catalog: catalog.clone(),
             field: crate::environment::ActiveMaterialField::new(
                 1000.0,

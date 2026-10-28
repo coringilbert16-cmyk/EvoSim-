@@ -59,73 +59,106 @@ pub(crate) fn chemical_break_energy_yield(
 /// of the disruption work. The reservoir debit is committed by the caller only
 /// after this transaction succeeds; the remaining work is charged to the
 /// removed bond's energy/usable-energy balance.
-pub(crate) fn settle_chemical_break_energy_with_resonance(
-    organism: &mut Organism,
-    bond: crate::structure::Bond,
-    reaction_energy: f64,
+/// Prepared accounting for a chemical BREAK, before its source mutation commits.
+#[derive(Clone, Copy)]
+pub(crate) struct PreparedChemicalBreakEnergy {
+    pub(crate) usable_energy: f64,
+    pub(crate) ledger: EnergyLedger,
+    pub(crate) heat_dissipated: f64,
+}
+
+/// Validate and stage chemical BREAK energy without mutating the organism or ledger.
+///
+/// This is intentionally independent of the physical source mutation so the same
+/// accounting can later be committed atomically with either an organism graph
+/// bond or a stored environmental material bond. Physical-material bonds that
+/// have no recorded stored energy supply zero energy; required work must come
+/// from the organism's usable holder or compatible resonance.
+pub(crate) fn prepare_chemical_break_energy_with_resonance(
+    usable_energy: f64,
+    ledger: &EnergyLedger,
+    bond_energy: f64,
+    activation_signal: f64,
     disruption_cost: f64,
     resonant_work: f64,
     processing_efficiency: f64,
-    ledger: &mut EnergyLedger,
-) -> bool {
-    if !resonant_work.is_finite()
+) -> Option<PreparedChemicalBreakEnergy> {
+    if !usable_energy.is_finite()
+        || usable_energy < 0.0
+        || !resonant_work.is_finite()
         || resonant_work < 0.0
         || !disruption_cost.is_finite()
         || disruption_cost < 0.0
         || resonant_work > disruption_cost
+        || !activation_signal.is_finite()
+        || activation_signal < 0.0
+        || !crate::chemistry::can_chemical_break(activation_signal, disruption_cost)
     {
-        return false;
+        return None;
     }
+
     let bond_supplied_work = disruption_cost - resonant_work;
     let next_total_work = ledger.total_work_expended + disruption_cost;
-    if !next_total_work.is_finite()
-        || !crate::chemistry::can_chemical_break(reaction_energy, bond_supplied_work)
-    {
-        return false;
+    if !next_total_work.is_finite() {
+        return None;
     }
-    let Some((gross, usable, heat)) =
-        chemical_break_energy_yield(bond.bond_energy, bond_supplied_work, processing_efficiency)
-    else {
-        return false;
-    };
-    let tx = EnergyTransaction {
+    let (gross, usable, heat) =
+        chemical_break_energy_yield(bond_energy, bond_supplied_work, processing_efficiency)?;
+    let transaction = EnergyTransaction {
         reason: EnergyReason::Break,
         potential_released: 0.0,
         usable_delta: usable,
         structural_delta: -gross,
-        // This balanced subtransaction charges the bond-supplied share. The
-        // resonant share is added to the same cumulative work total below.
         work_expended: bond_supplied_work,
         heat_dissipated: heat,
     };
-    if !settle_break_transaction(organism, bond, tx, ledger) {
-        return false;
+    let mut prepared_ledger = *ledger;
+    let mut prepared_usable_energy = usable_energy;
+    if !prepared_ledger.settle_transaction(&mut prepared_usable_energy, transaction) {
+        return None;
     }
-    // Prevalidated above so this final ledger update cannot overflow after the
-    // structure has changed. The reservoir debit is committed by the caller.
-    ledger.total_work_expended = next_total_work;
-    true
+    // The complete disruption cost is accounted once; resonance is debited by
+    // the caller only after the corresponding physical mutation commits.
+    prepared_ledger.total_work_expended = next_total_work;
+    Some(PreparedChemicalBreakEnergy {
+        usable_energy: prepared_usable_energy,
+        ledger: prepared_ledger,
+        heat_dissipated: heat,
+    })
 }
 
-/// Shared commit path for every BREAK of a realized structural bond. The
-/// candidate graph is validated before settlement; only a successful ledger
-/// transaction is followed by committing the graph mutation and heat stress.
-fn settle_break_transaction(
+/// Settle chemical BREAK energy against a graph bond. Both the candidate graph
+/// and the energy transaction are staged first; neither is committed on failure.
+pub(crate) fn settle_chemical_break_energy_with_resonance(
     organism: &mut Organism,
     bond: crate::structure::Bond,
-    transaction: EnergyTransaction,
+    activation_signal: f64,
+    disruption_cost: f64,
+    resonant_work: f64,
+    processing_efficiency: f64,
     ledger: &mut EnergyLedger,
 ) -> bool {
     let mut trial_structure = organism.structure.clone();
     if trial_structure.break_matching_bond(bond).is_none() {
         return false;
     }
-    if !ledger.settle_transaction(&mut organism.usable_energy, transaction) {
+    let Some(prepared) = prepare_chemical_break_energy_with_resonance(
+        organism.usable_energy,
+        ledger,
+        bond.bond_energy,
+        activation_signal,
+        disruption_cost,
+        resonant_work,
+        processing_efficiency,
+    ) else {
         return false;
-    }
+    };
+
     organism.structure = trial_structure;
+    organism.usable_energy = prepared.usable_energy;
+    *ledger = prepared.ledger;
     organism.mark_structure_changed();
-    organism.add_transaction_stress(transaction.heat_dissipated);
+    organism.add_transaction_stress(prepared.heat_dissipated);
     true
 }
 
@@ -636,6 +669,8 @@ impl Simulation {
             let mut trial_environment = Environment {
                 width: environment.width,
                 height: environment.height,
+                chemistry_usable_energy: 0.0,
+                resonant_energy: Default::default(),
                 catalog: environment.catalog.clone(),
                 field: crate::environment::ActiveMaterialField::new(
                     environment.width,
@@ -1654,6 +1689,8 @@ mod tests {
         let mut environment = crate::state::Environment {
             width: 1000.0,
             height: 1000.0,
+            chemistry_usable_energy: 0.0,
+            resonant_energy: Default::default(),
             catalog,
             field: crate::environment::ActiveMaterialField::new(
                 1000.0,
@@ -1831,6 +1868,8 @@ mod tests {
         let mut environment = Environment {
             width: 1000.0,
             height: 1000.0,
+            chemistry_usable_energy: 0.0,
+            resonant_energy: Default::default(),
             catalog: catalog.to_vec(),
             field: crate::environment::ActiveMaterialField::new(
                 1000.0,
@@ -2143,6 +2182,8 @@ mod tests {
         let mut environment = crate::state::Environment {
             width: 1000.0,
             height: 1000.0,
+            chemistry_usable_energy: 0.0,
+            resonant_energy: Default::default(),
             catalog: catalog.clone(),
             field: crate::environment::ActiveMaterialField::new(
                 1000.0,
@@ -2261,6 +2302,45 @@ mod tests {
         assert!(residual.abs() < 1e-12);
     }
 
+    #[test]
+    fn activation_signal_cannot_replace_disruption_work_or_lower_its_threshold() {
+        let ledger = crate::state::EnergyLedger::default();
+        // Even if a later caller can provide resonance, activation itself must
+        // cross the full physical barrier; it is not an energy credit.
+        let prepared =
+            prepare_chemical_break_energy_with_resonance(10.0, &ledger, 0.0, 1.0, 5.0, 0.0, 0.5);
+        assert!(prepared.is_none());
+        assert_eq!(ledger, crate::state::EnergyLedger::default());
+    }
+
+    #[test]
+    fn prepared_environmental_break_work_uses_holder_energy_without_bond_credit() {
+        let ledger = crate::state::EnergyLedger::default();
+        let prepared =
+            prepare_chemical_break_energy_with_resonance(10.0, &ledger, 0.0, 5.0, 5.0, 0.0, 0.5)
+                .expect("the holder can pay the complete work for a zero-energy physical bond");
+
+        assert!((prepared.usable_energy - 5.0).abs() < 1e-12);
+        assert_eq!(prepared.heat_dissipated, 0.0);
+        assert!((prepared.ledger.total_work_expended - 5.0).abs() < 1e-12);
+        assert_eq!(prepared.ledger.total_structural_energy_delta, 0.0);
+        assert_eq!(prepared.ledger.total_potential_energy_released, 0.0);
+        assert_eq!(
+            ledger,
+            crate::state::EnergyLedger::default(),
+            "preparing a transaction must not mutate the authoritative ledger"
+        );
+    }
+
+    #[test]
+    fn prepared_environmental_break_rejects_unfunded_work_without_mutation() {
+        let ledger = crate::state::EnergyLedger::default();
+        let prepared =
+            prepare_chemical_break_energy_with_resonance(1.0, &ledger, 0.0, 5.0, 5.0, 0.0, 0.5);
+        assert!(prepared.is_none());
+        assert_eq!(ledger, crate::state::EnergyLedger::default());
+    }
+
     fn resonance_break_test_organism() -> (
         crate::state::Organism,
         crate::state::Environment,
@@ -2314,6 +2394,8 @@ mod tests {
         let environment = crate::state::Environment {
             width: 1000.0,
             height: 1000.0,
+            chemistry_usable_energy: 0.0,
+            resonant_energy: Default::default(),
             catalog: catalog.clone(),
             field: crate::environment::ActiveMaterialField::new(
                 1000.0,

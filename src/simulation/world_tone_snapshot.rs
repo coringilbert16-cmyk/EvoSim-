@@ -21,6 +21,9 @@ pub(crate) struct WorldToneOccluderSnapshot {
     /// Attached primary/developing structure belongs to the owner's resonance.
     /// Stored, environmental, and legacy nonliving material has no owner.
     body_resonance_owners: Vec<Option<usize>>,
+    /// Bodies backed directly by the environmental material field, which may
+    /// retain resonance without a living-organism owner.
+    environment_body_indices: std::collections::HashSet<usize>,
     /// Material properties keyed by the constituent indices used by geometry.
     pub(crate) body_properties: Vec<Vec<(usize, ResourceProperties)>>,
     /// Number of bodies retained by the conservative receiver-angle broad phase.
@@ -64,6 +67,7 @@ impl WorldToneOccluderSnapshot {
         let mut body_properties = Vec::new();
         let mut organism_body_indices = vec![None; simulation.organisms.len()];
         let mut body_resonance_owners = Vec::<Option<usize>>::new();
+        let mut environment_body_indices = std::collections::HashSet::new();
 
         // Every organism remains a physical occluder regardless of whether its
         // genome is still intact. Structure placements are already world-space.
@@ -116,6 +120,7 @@ impl WorldToneOccluderSnapshot {
         for cell in &simulation.environment.field.cells {
             for physical in &cell.physical_materials {
                 body_properties.push(physical_material_properties(physical, catalog)?);
+                environment_body_indices.insert(bodies.len());
                 bodies.push(OrganismBodyGeometry::from_physical_material(
                     physical, catalog,
                 )?);
@@ -232,6 +237,7 @@ impl WorldToneOccluderSnapshot {
             frame,
             organism_body_indices,
             body_resonance_owners,
+            environment_body_indices,
             body_properties: relevant_properties,
             occluder_count,
         })
@@ -342,10 +348,14 @@ impl WorldToneOccluderSnapshot {
             .iter()
             .map(|organism| organism.resonant_energy.clone())
             .collect();
+        let mut staged_environment_resonance = simulation.environment.resonant_energy.clone();
         let initial_resonant_energy = staged_reservoirs
             .iter()
             .map(|reservoir| reservoir.total_energy().unwrap_or(f64::NAN))
-            .sum::<f64>();
+            .sum::<f64>()
+            + staged_environment_resonance
+                .total_energy()
+                .unwrap_or(f64::NAN);
         if !initial_resonant_energy.is_finite() || initial_resonant_energy < 0.0 {
             return;
         }
@@ -421,20 +431,21 @@ impl WorldToneOccluderSnapshot {
                         .filter(|organism_index| {
                             living_ids.contains(&simulation.organisms[*organism_index].id)
                         });
-                // A living receiver may retain the non-damped response in its
-                // resonance reservoir. A physical receiver without a living
-                // reservoir instead converts the entire material response to
-                // heat; only the unresponded remainder continues downstream.
-                let Some(mut interaction_heat) = heat_for_material_response(
-                    response_energy,
-                    damping_heat,
-                    living_organism.is_some(),
-                ) else {
+                // Living structures and environmental field material retain
+                // the non-damped response as resonance. Other nonliving material
+                // dissipates its response as heat; only the unresponded remainder
+                // continues downstream.
+                let environmental_receiver =
+                    snapshot.environment_body_indices.contains(&body_index);
+                let can_retain_resonance = living_organism.is_some() || environmental_receiver;
+                let Some(mut interaction_heat) =
+                    heat_for_material_response(response_energy, damping_heat, can_retain_resonance)
+                else {
                     return;
                 };
                 let mut captured = 0.0;
 
-                if let Some(organism_index) = living_organism {
+                if can_retain_resonance {
                     let retained_budget = response_energy - damping_heat;
                     let Some(retained_spectrum) =
                         crate::harmonics::transform_signal_to_energy_budget(
@@ -446,7 +457,11 @@ impl WorldToneOccluderSnapshot {
                     else {
                         return;
                     };
-                    let mut candidate = staged_reservoirs[organism_index].clone();
+                    let mut candidate = if let Some(organism_index) = living_organism {
+                        staged_reservoirs[organism_index].clone()
+                    } else {
+                        staged_environment_resonance.clone()
+                    };
                     let before_energy = candidate.total_energy();
                     let mut deposit_ok = before_energy.is_some();
                     for component in &retained_spectrum.components {
@@ -467,15 +482,16 @@ impl WorldToneOccluderSnapshot {
                             stored.is_finite() && stored >= 0.0 && stored <= response_energy
                         })
                     {
-                        staged_reservoirs[organism_index] = candidate;
-                        // Count the energy actually retained by the reservoir.
-                        // Any tiny difference from the requested retention
-                        // budget becomes heat instead of unbacked stored energy.
+                        if let Some(organism_index) = living_organism {
+                            staged_reservoirs[organism_index] = candidate;
+                        } else {
+                            staged_environment_resonance = candidate;
+                        }
+                        // Count only energy actually retained by the reservoir.
+                        // Any rejected spectrum or rounding difference becomes heat.
                         captured = stored_delta.unwrap_or(0.0);
                         interaction_heat = response_energy - captured;
                     } else {
-                        // A bounded reservoir must not silently discard a
-                        // spectral component; rejected response energy is heat.
                         interaction_heat = response_energy;
                     }
                 }
@@ -559,7 +575,10 @@ impl WorldToneOccluderSnapshot {
         let staged_resonant_energy = staged_reservoirs
             .iter()
             .map(|reservoir| reservoir.total_energy().unwrap_or(f64::NAN))
-            .sum::<f64>();
+            .sum::<f64>()
+            + staged_environment_resonance
+                .total_energy()
+                .unwrap_or(f64::NAN);
         let authoritative_capture = staged_resonant_energy - initial_resonant_energy;
         let capture_correction = authoritative_capture - total_captured;
         let capture_tolerance = 1e-8 * total_incident.max(1.0);
@@ -617,6 +636,7 @@ impl WorldToneOccluderSnapshot {
         for (organism, reservoir) in simulation.organisms.iter_mut().zip(staged_reservoirs) {
             organism.resonant_energy = reservoir;
         }
+        simulation.environment.resonant_energy = staged_environment_resonance;
     }
 }
 
@@ -1255,6 +1275,15 @@ mod tests {
             &simulation.environment.catalog,
         ));
 
+        // The fixture intentionally removes the initial organisms' structures
+        // above. Rebase the structural inventory baseline so this test measures
+        // only the world-tone source/capture/heat/escape flow below.
+        simulation.energy_ledger.initial_structural_energy_held =
+            crate::reproduction::total_structural_energy_held(
+                &simulation.organisms,
+                &simulation.decomposing_bodies,
+            );
+
         WorldToneOccluderSnapshot::settle_living_organism_inputs(
             &mut simulation,
             sample(),
@@ -1265,13 +1294,25 @@ mod tests {
             simulation.energy_ledger.total_external_energy_input > 0.0,
             "physical material must receive the source even when no living organism is present"
         );
+        // This material may retain the entire non-damped response, so zero
+        // incremental heat is valid as long as the captured inventory balances.
+        let environmental_resonance = simulation
+            .environment
+            .resonant_energy
+            .total_energy()
+            .expect("environment resonance should remain valid");
         assert!(
-            simulation.energy_ledger.total_heat_dissipated > 0.0,
-            "nonliving material response must settle as heat"
+            environmental_resonance > 0.0,
+            "sunlight-exposed environmental material must retain compatible resonance"
         );
-        assert_eq!(
-            simulation.energy_ledger.total_resonant_energy_held, 0.0,
-            "a nonliving receiver must not receive biological resonance storage"
+        assert!(
+            (simulation.energy_ledger.total_resonant_energy_held - environmental_resonance).abs()
+                < 1e-9,
+            "the ledger must include resonance retained by the environmental field"
+        );
+        assert!(
+            simulation.energy_inventory_snapshot().is_balanced(1e-7),
+            "environment resonance capture must conserve the world energy inventory"
         );
     }
 

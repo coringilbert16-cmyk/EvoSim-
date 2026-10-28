@@ -126,6 +126,13 @@ pub fn normalized_chemistry_to_energy(value: f64) -> Option<f64> {
     energy.is_finite().then_some(energy)
 }
 
+/// Convert accumulated chemistry to the numeric scale used for activation
+/// comparisons. This value is a signal, not an energy source or inventory term;
+/// physical settlement must account for actual stored/usable/resonant energy.
+pub fn normalized_chemistry_to_activation_signal(value: f64) -> Option<f64> {
+    normalized_chemistry_to_energy(value)
+}
+
 /// One tick of bounded reaction accumulation.
 ///
 /// The returned value is never negative. Dissipation applies to accumulated
@@ -157,37 +164,29 @@ pub fn accumulate_reaction(
     Some(next.max(0.0))
 }
 
-/// Energy left after the physical work required to disrupt an existing bond.
-///
-/// Chemical BREAK is not a random extra failure mode: a reaction can disrupt
-/// a bond only when the reaction has produced enough energy to overcome that
-/// bond's physical disruption requirement. The caller supplies both quantities
-/// because the chemistry model does not invent a bond-strength or activation
-/// parameter.
-pub fn chemical_break_surplus(reaction_energy: f64, disruption_cost: f64) -> Option<f64> {
-    if !reaction_energy.is_finite()
+/// Non-negative excess of the activation signal over a bond's disruption
+/// threshold. This is a comparison value only, not energy released or stored.
+pub fn chemical_break_surplus(activation_signal: f64, disruption_cost: f64) -> Option<f64> {
+    if !activation_signal.is_finite()
         || !disruption_cost.is_finite()
-        || reaction_energy < 0.0
+        || activation_signal < 0.0
         || disruption_cost < 0.0
     {
         return None;
     }
 
-    Some((reaction_energy - disruption_cost).max(0.0))
+    Some((activation_signal - disruption_cost).max(0.0))
 }
 
-/// Whether a chemical reaction has enough energy to disrupt a particular bond.
-///
-/// Equality is sufficient: the reaction does not need an arbitrary probability
-/// or extra threshold once the physical disruption requirement has been met.
-pub fn can_chemical_break(reaction_energy: f64, disruption_cost: f64) -> bool {
-    // Do not infer sufficiency from chemical_break_surplus: that reporting
-    // function clamps an insufficient (negative) surplus to zero.
-    reaction_energy.is_finite()
+/// Whether the activation signal reaches the threshold for a chemical BREAK.
+/// This comparison does not credit energy; the physical transaction separately
+/// accounts for stored bond energy, usable energy, and any resonance withdrawal.
+pub fn can_chemical_break(activation_signal: f64, disruption_cost: f64) -> bool {
+    activation_signal.is_finite()
         && disruption_cost.is_finite()
-        && reaction_energy > 0.0
+        && activation_signal > 0.0
         && disruption_cost >= 0.0
-        && reaction_energy >= disruption_cost
+        && activation_signal >= disruption_cost
 }
 
 /// Whether accumulated interaction has reached the calculated activation
