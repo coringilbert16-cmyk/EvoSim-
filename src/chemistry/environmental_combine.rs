@@ -876,7 +876,7 @@ mod tests {
         ));
         simulation.environment.chemistry_usable_energy = 1_000.0;
         let baseline = simulation.energy_inventory_snapshot();
-        simulation.energy_ledger = crate::energy_ledger::EnergyLedger::default();
+        simulation.energy_ledger = crate::state::EnergyLedger::default();
         simulation.energy_ledger.initial_usable_energy_held = baseline.current_usable_energy;
         simulation.energy_ledger.total_usable_energy_held = baseline.current_usable_energy;
         simulation.energy_ledger.initial_resonant_energy_held = baseline.current_resonant_energy;
