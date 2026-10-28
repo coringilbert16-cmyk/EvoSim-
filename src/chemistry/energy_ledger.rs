@@ -711,8 +711,7 @@ mod tests {
 
     #[test]
     fn bond_breaking_requires_input_for_binding_energy_and_work() {
-        let transaction =
-            EnergyTransaction::reaction(EnergyReason::Break, 5.0, 1.0, 0.0).unwrap();
+        let transaction = EnergyTransaction::reaction(EnergyReason::Break, 5.0, 1.0, 0.0).unwrap();
         assert_eq!(transaction.usable_delta, -6.0);
         assert!(transaction.balanced());
 
