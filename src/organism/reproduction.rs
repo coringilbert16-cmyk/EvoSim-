@@ -2922,10 +2922,10 @@ mod tests {
             "reserved physical material must transfer to the child exactly once at division"
         );
         assert!(
-            (parent.usable_energy + child.usable_energy - (before_energy + CROSSING_BOND_ENERGY))
+            (parent.usable_energy + child.usable_energy - (before_energy - CROSSING_BOND_ENERGY))
                 .abs()
                 < 1e-9,
-            "usable energy must include exactly the energy released by the severed bond"
+            "usable energy must pay exactly the dissociation cost of the severed bond"
         );
         let mut after_materials = material_totals(&parent.structure);
         for (name, count) in material_totals(&child.structure) {
@@ -2938,9 +2938,9 @@ mod tests {
         let after_structural_energy =
             structural_energy(&parent.structure) + structural_energy(&child.structure);
         assert!(
-            (after_structural_energy - (before_structural_energy - CROSSING_BOND_ENERGY)).abs()
+            (after_structural_energy - (before_structural_energy + CROSSING_BOND_ENERGY)).abs()
                 < 1e-9,
-            "only crossing-bond energy may leave structural storage"
+            "severing a bond must raise structural potential by its dissociation energy"
         );
         assert!(
             (parent.usable_energy + child.usable_energy + after_structural_energy
