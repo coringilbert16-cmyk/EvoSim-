@@ -622,7 +622,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         let next_released = self.total_potential_energy_released + transaction.potential_released;
         let next_structural = self.total_structural_energy_delta + transaction.structural_delta;
         let next_work = self.total_work_expended + transaction.work_expended;
-        let mut next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
+        let next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
         if !next_released.is_finite()
             || !next_structural.is_finite()
             || !next_work.is_finite()
