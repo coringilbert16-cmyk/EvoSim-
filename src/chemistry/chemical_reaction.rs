@@ -894,21 +894,24 @@ pub(crate) fn resolve(
     }
     let processing_efficiency = organism.genome.processing_efficiency();
     // Activation is an independent threshold, not energy and not a substitute
-    // for disruption work. Compatible resonance may pay that work, but the
-    // required amount is determined by the physical barrier alone.
-    let required_resonance = operation.disruption_cost;
+    // for disruption work. Processing efficiency determines how much compatible
+    // resonance must be withdrawn to deliver useful work for this reaction.
+    let required_resonance = operation.disruption_cost / processing_efficiency;
+    if !required_resonance.is_finite() {
+        return false;
+    }
     // Work from a trial reservoir. A failed or stale BREAK must not consume
     // retained resonance; only a successfully settled structural transaction
-    // commits the frequency-compatible withdrawal.
+    // commits the frequency-compatible withdrawal and its conversion loss.
     let mut trial_reservoir = organism.resonant_energy.clone();
-    let resonant_work =
+    let resonance_withdrawal =
         trial_reservoir.withdraw_compatible(operation.reaction_frequency_hz, required_resonance);
     let success = crate::transformation::settle_chemical_break_energy_with_resonance(
         organism,
         operation.bond,
         operation.activation_signal,
         operation.disruption_cost,
-        resonant_work,
+        resonance_withdrawal,
         processing_efficiency,
         ledger,
     );
@@ -1728,6 +1731,7 @@ mod material_identity_tests {
             .first()
             .expect("seed organism should contain a structural bond");
         assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        let processing_efficiency = simulation.organisms[0].genome.processing_efficiency();
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
@@ -1750,7 +1754,7 @@ mod material_identity_tests {
             .resonant_energy
             .total_energy()
             .unwrap();
-        assert!((before - after - 0.5).abs() < 1e-9);
+        assert!((before - after - 0.5 / processing_efficiency).abs() < 1e-9);
         assert!(!simulation.organisms[0]
             .structure
             .bonds
@@ -1767,6 +1771,7 @@ mod material_identity_tests {
             .first()
             .expect("seed organism should contain a structural bond");
         assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        let processing_efficiency = simulation.organisms[0].genome.processing_efficiency();
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
@@ -1789,7 +1794,7 @@ mod material_identity_tests {
             .resonant_energy
             .total_energy()
             .unwrap();
-        assert!((before - after - 0.5).abs() < 1e-9);
+        assert!((before - after - 0.5 / processing_efficiency).abs() < 1e-9);
         assert!(!simulation.organisms[0]
             .structure
             .bonds
@@ -1966,6 +1971,7 @@ mod material_identity_tests {
     fn resonance_funded_chemical_break_reconciles_world_inventory() {
         let mut simulation = crate::state::Simulation::new(925, 10.0);
         assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        let processing_efficiency = simulation.organisms[0].genome.processing_efficiency();
         let retained_resonance = simulation.organisms[0]
             .resonant_energy
             .total_energy()
@@ -2009,8 +2015,12 @@ mod material_identity_tests {
             after.residual()
         );
         assert!(
-            (before.current_resonant_energy - after.current_resonant_energy - 0.5).abs() < 1e-9,
-            "the full physical disruption work must be withdrawn from resonance"
+            (before.current_resonant_energy
+                - after.current_resonant_energy
+                - 0.5 / processing_efficiency)
+                .abs()
+                < 1e-9,
+            "resonance withdrawal must account for processing efficiency"
         );
         assert!(!simulation.organisms[0]
             .structure

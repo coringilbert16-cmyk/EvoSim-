@@ -178,7 +178,7 @@ impl Simulation {
             .structure
             .bonds
             .iter()
-            .map(|bond| bond.bond_energy)
+            .map(|bond| -bond.bond_energy)
             .sum();
         energy_ledger.initial_structural_energy_held = energy_ledger.total_structural_energy_held;
         Self {
@@ -1629,28 +1629,7 @@ impl Simulation {
         organisms: &[crate::state::Organism],
         decomposing_bodies: &[crate::decomposition::DecomposingBody],
     ) -> f64 {
-        fn graph_energy(structure: &crate::structure::OrganismStructure) -> f64 {
-            structure.bonds.iter().map(|bond| bond.bond_energy).sum()
-        }
-
-        let organism_energy: f64 = organisms
-            .iter()
-            .map(|organism| {
-                graph_energy(&organism.structure)
-                    + organism
-                        .reproductive_construction
-                        .as_ref()
-                        .filter(|construction| {
-                            !construction.is_aggregate_owned_by(&organism.structure)
-                        })
-                        .map_or(0.0, |_| f64::NAN)
-            })
-            .sum();
-        let decomposition_energy: f64 = decomposing_bodies
-            .iter()
-            .map(|body| graph_energy(&body.structure))
-            .sum();
-        organism_energy + decomposition_energy
+        crate::reproduction::total_structural_energy_held(organisms, decomposing_bodies)
     }
     /// Independent test oracle: recompute current stores from their owning state,
     /// rather than trusting the production ledger's cached aggregate totals.
@@ -3230,7 +3209,7 @@ mod decomposition_finalization_tests {
             .structure
             .bonds
             .iter()
-            .map(|bond| bond.bond_energy)
+            .map(|bond| -bond.bond_energy)
             .sum::<f64>();
         let inventory = simulation.energy_inventory_snapshot();
 

@@ -1,5 +1,5 @@
 #![expect(dead_code, reason = "Staged API retained for subsystem integration")]
-use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
+use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason};
 use crate::physical_material::PhysicalMaterial;
 use crate::state::{EnergyLedger, Environment, Organism, Position};
 use crate::structure::OrganismStructure;
@@ -81,10 +81,9 @@ pub(crate) fn resolve_one_bond_with_ledger(
     ledger: &mut EnergyLedger,
 ) -> Option<DecompositionStep> {
     let target = *body.structure.bonds.first()?;
-    // A decomposition step still breaks an existing physical bond. Its
-    // energy source is therefore the bond's stored intrinsic potential, not
-    // the constituent material potential (which was never consumed by
-    // formation).
+    // Decomposition BREAK raises structural potential by the bond's
+    // dissociation-energy magnitude. It must be funded by the body's own
+    // legitimate energy budget; constituent type maxima are not energy stores.
     let mut trial_structure = body.structure.clone();
     trial_structure.break_matching_bond(target)?;
     let released_material = if trial_structure.bonds.is_empty() {
@@ -100,16 +99,22 @@ pub(crate) fn resolve_one_bond_with_ledger(
     };
 
     let before = body.energy_budget;
-    let (gross, usable, heat) =
-        crate::transformation::bond_break_energy_yield(target.bond_energy, 1.0)?;
-    let transaction = EnergyTransaction {
-        reason: EnergyReason::Decomposition,
-        potential_released: 0.0,
-        usable_delta: usable,
-        structural_delta: -gross,
-        work_expended: 0.0,
-        heat_dissipated: heat,
-    };
+    let (gross, _usable, heat) =
+        crate::transformation::bond_break_energy_yield(target.bond_energy)?;
+    let before_potential = crate::energy_ledger::structural_potential(&body.structure)?;
+    let after_potential = crate::energy_ledger::structural_potential(&trial_structure)?;
+    let structural_delta = after_potential - before_potential;
+    let delta_tolerance = 1e-9 * gross.abs().max(1.0);
+    if (structural_delta - gross).abs() > delta_tolerance {
+        return None;
+    }
+    let transaction = crate::energy_ledger::ReactionEnergyBalance::calculate(
+        before_potential,
+        after_potential,
+        0.0,
+        heat,
+    )?
+    .settlement_transaction(EnergyReason::Decomposition)?;
     if !ledger.settle_transaction(&mut body.energy_budget, transaction) {
         return None;
     }

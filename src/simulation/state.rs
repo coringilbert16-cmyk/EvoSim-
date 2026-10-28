@@ -217,7 +217,8 @@ pub(crate) struct EnergyLedger {
     /// Explicit non-structural energy sources; stored bond energy release is
     /// represented by the structural-store delta instead.
     pub(crate) total_potential_energy_released: f64,
-    /// Net change in energy stored in realized structure (positive stores, negative releases).
+    /// Net signed structural-potential change (negative on stable bond formation,
+    /// positive on bond dissociation).
     #[serde(default)]
     pub(crate) total_structural_energy_delta: f64,
     /// Energy received from explicit external sources, distinct from bond release.
@@ -248,10 +249,10 @@ pub(crate) struct EnergyLedger {
     /// Usable-energy baseline captured at simulation tick zero.
     #[serde(default)]
     pub(crate) initial_usable_energy_held: f64,
-    /// Current stored bond energy across realized live and decomposing structures.
+    /// Signed current structural potential, recomputed from authoritative bond state.
     #[serde(default)]
     pub(crate) total_structural_energy_held: f64,
-    /// Stored bond-energy baseline captured at simulation tick zero.
+    /// Signed structural-potential baseline captured at simulation tick zero.
     #[serde(default)]
     pub(crate) initial_structural_energy_held: f64,
 }

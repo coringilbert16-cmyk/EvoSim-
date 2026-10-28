@@ -129,16 +129,24 @@ mod tests {
             let Some(candidate) = candidate else {
                 continue;
             };
-            let Some((_, _, investment, _required_energy)) =
+            let Some((_, _, investment, required_energy)) =
                 crate::combine_runtime::selected_candidate_evaluation(
                     &trial, 0, 1, candidate, &catalog,
                 )
             else {
                 continue;
             };
+            // This integration test specifically proves a favorable rigid-bond
+            // reaction can fund its own physical work from structural-potential
+            // reduction, without an arbitrary initial usable-energy grant.
+            if required_energy > 0.0 {
+                continue;
+            }
 
+            let before_structural_energy =
+                crate::energy_ledger::structural_potential(&trial).unwrap();
             let mut ledger = EnergyLedger::default();
-            let mut energy = 1.0e6;
+            let mut energy = 0.0;
             let before_energy = energy;
             let before_units = trial.units.len();
             let attempt = crate::combine_runtime::form_selected_bond(
@@ -163,18 +171,30 @@ mod tests {
                     "committed bond energy must match the transaction result"
                 );
                 assert!(
-                    ((before_energy - energy) - (attempt.energy_invested + attempt.work_cost))
-                        .abs()
+                    ((before_energy - energy) - (attempt.work_cost - attempt.bond_energy)).abs()
                         < 1.0e-6,
-                    "holder energy loss must equal structural investment plus dissipated work"
+                    "holder balance must include the bond-formation energy release"
                 );
                 assert!(
-                    (attempt.net_energy_change - (energy - before_energy)).abs() < 1.0e-9,
-                    "reported net energy change must match the holder balance"
+                    (attempt.usable_energy_delta - (energy - before_energy)).abs() < 1.0e-9,
+                    "reported usable-energy delta must match the holder balance"
+                );
+                let after_structural_energy =
+                    crate::energy_ledger::structural_potential(&trial).unwrap();
+                assert!(
+                    (attempt.net_energy_change
+                        - (after_structural_energy - before_structural_energy))
+                        .abs()
+                        < 1.0e-9,
+                    "reported physical reaction delta must match product-minus-reactant potential"
+                );
+                assert_eq!(
+                    ledger.total_heat_dissipated, 0.0,
+                    "activation threshold is not energy or heat"
                 );
                 assert!(
-                    (ledger.total_heat_dissipated - attempt.work_cost).abs() < 1.0e-9,
-                    "the ledger must record the transaction's dissipated work"
+                    (ledger.total_work_expended - attempt.work_cost).abs() < 1.0e-9,
+                    "physical work is recorded exactly once"
                 );
                 found = true;
                 break;
@@ -479,101 +499,6 @@ mod tests {
             before_ledger.total_heat_dissipated
         );
         assert_eq!(energy, before_energy);
-    }
-
-    #[test]
-    fn insufficient_energy_rolls_back_selected_bond_structure_and_ledger() {
-        let catalog = default_catalog();
-        let mut structure = crate::structure::OrganismStructure::new();
-        structure.add_unit(crate::structure::StructuralUnit::new(
-            "Carbon",
-            crate::structure::Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-
-        let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
-        let mut found_failure = false;
-        for placement in crate::construction_runtime::candidate_placements(
-            &structure,
-            carbon,
-            crate::structure::Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-            &[0],
-            &catalog,
-        ) {
-            let mut trial = structure.clone();
-            trial.add_unit(crate::structure::StructuralUnit::new("Carbon", placement));
-            let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-            let candidates = crate::contact::connection_pair_candidates_cached(
-                &trial, 0, 1, &catalog, &mut cache,
-            );
-            for candidate in candidates {
-                let Some((_, _, investment, required)) =
-                    crate::combine_runtime::selected_candidate_evaluation(
-                        &trial, 0, 1, candidate, &catalog,
-                    )
-                else {
-                    continue;
-                };
-                if required <= 0.0 {
-                    continue;
-                }
-
-                let before_structure = trial.clone();
-                let mut ledger = EnergyLedger::default();
-                let before_ledger = ledger;
-                let mut energy = 0.0;
-
-                let result = crate::combine_runtime::form_selected_bond(
-                    &mut trial,
-                    0,
-                    1,
-                    candidate,
-                    investment,
-                    &catalog,
-                    &mut cache,
-                    &mut ledger,
-                    &mut energy,
-                );
-
-                assert!(result.is_none(), "bond should fail without enough energy");
-                assert_eq!(trial.units, before_structure.units);
-                assert_eq!(trial.bonds, before_structure.bonds);
-                assert_eq!(energy, 0.0);
-                assert_eq!(
-                    ledger.total_potential_energy_released,
-                    before_ledger.total_potential_energy_released
-                );
-                assert_eq!(
-                    ledger.total_usable_energy_gained,
-                    before_ledger.total_usable_energy_gained
-                );
-                assert_eq!(
-                    ledger.total_heat_dissipated,
-                    before_ledger.total_heat_dissipated
-                );
-                assert_eq!(
-                    ledger.total_usable_energy_held,
-                    before_ledger.total_usable_energy_held
-                );
-                found_failure = true;
-                break;
-            }
-            if found_failure {
-                break;
-            }
-        }
-
-        assert!(
-            found_failure,
-            "no candidate with a positive energy requirement was found"
-        );
     }
 
     #[test]

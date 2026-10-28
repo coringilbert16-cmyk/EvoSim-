@@ -6,7 +6,6 @@
 use crate::combine_runtime::DevelopmentalContext;
 use crate::construction_material_selection::ConstructionMaterialDecision;
 use crate::contact::ConnectionCompatibilityCache;
-use crate::developmental_blueprint::MaterialPreferenceField;
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::material_storage::MaterialStorage;
 use crate::organism_viability::{
@@ -637,7 +636,7 @@ pub(crate) fn total_structural_energy_held(
                 .structure
                 .bonds
                 .iter()
-                .map(|bond| bond.bond_energy)
+                .map(|bond| -bond.bond_energy)
                 .sum::<f64>();
             let construction_energy =
                 organism
@@ -662,7 +661,7 @@ pub(crate) fn total_structural_energy_held(
             body.structure
                 .bonds
                 .iter()
-                .map(|bond| bond.bond_energy)
+                .map(|bond| -bond.bond_energy)
                 .sum::<f64>()
         })
         .sum::<f64>();
@@ -1168,20 +1167,33 @@ pub(crate) fn finish_reproduction(
             return None;
         }
 
-        // Bonds severed at the division boundary release their stored energy
-        // exactly once. The release is a structural debit and usable-energy
-        // credit, not a second external chemical source.
+        // Severing division-boundary bonds raises structural potential by
+        // their dissociation-energy magnitude. The parent must fund that cost
+        // before its usable energy is partitioned between the two offspring.
+        let reactant_structural_energy =
+            crate::energy_ledger::structural_potential(&parent.structure)?;
+        let product_structural_energy =
+            crate::energy_ledger::structural_potential(&staged_parent_structure)?
+                + crate::energy_ledger::structural_potential(&child_structure)?;
+        let structural_delta = product_structural_energy - reactant_structural_energy;
+        let crossing_tolerance = 1e-9 * crossing_bond_energy.abs().max(1.0);
+        if !product_structural_energy.is_finite()
+            || !structural_delta.is_finite()
+            || (structural_delta - crossing_bond_energy).abs() > crossing_tolerance
+        {
+            return None;
+        }
+
         let mut staged_ledger = *ledger;
         let mut combined_energy = parent.usable_energy;
         if crossing_bond_energy > 0.0 {
-            let transaction = crate::energy_ledger::EnergyTransaction {
-                reason: crate::energy_ledger::EnergyReason::Break,
-                potential_released: 0.0,
-                usable_delta: crossing_bond_energy,
-                structural_delta: -crossing_bond_energy,
-                work_expended: 0.0,
-                heat_dissipated: 0.0,
-            };
+            let transaction = crate::energy_ledger::ReactionEnergyBalance::calculate(
+                reactant_structural_energy,
+                product_structural_energy,
+                0.0,
+                0.0,
+            )?
+            .settlement_transaction(crate::energy_ledger::EnergyReason::Break)?;
             if !staged_ledger.settle_transaction(&mut combined_energy, transaction) {
                 return None;
             }
@@ -1271,6 +1283,7 @@ pub(crate) fn finish_reproduction(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::developmental_blueprint::MaterialPreferenceField;
     use crate::genome::initial_genome;
     use crate::resources::{default_catalog, Material};
     use crate::state::Simulation;
@@ -2679,7 +2692,7 @@ mod tests {
         }
 
         fn structural_energy(structure: &OrganismStructure) -> f64 {
-            structure.bonds.iter().map(|bond| bond.bond_energy).sum()
+            structure.bonds.iter().map(|bond| -bond.bond_energy).sum()
         }
 
         fn cavity_with_attached_carbon(
@@ -2918,10 +2931,10 @@ mod tests {
             "reserved physical material must transfer to the child exactly once at division"
         );
         assert!(
-            (parent.usable_energy + child.usable_energy - (before_energy + CROSSING_BOND_ENERGY))
+            (parent.usable_energy + child.usable_energy - (before_energy - CROSSING_BOND_ENERGY))
                 .abs()
                 < 1e-9,
-            "usable energy must include exactly the energy released by the severed bond"
+            "usable energy must pay exactly the dissociation cost of the severed bond"
         );
         let mut after_materials = material_totals(&parent.structure);
         for (name, count) in material_totals(&child.structure) {
@@ -2934,9 +2947,9 @@ mod tests {
         let after_structural_energy =
             structural_energy(&parent.structure) + structural_energy(&child.structure);
         assert!(
-            (after_structural_energy - (before_structural_energy - CROSSING_BOND_ENERGY)).abs()
+            (after_structural_energy - (before_structural_energy + CROSSING_BOND_ENERGY)).abs()
                 < 1e-9,
-            "only crossing-bond energy may leave structural storage"
+            "severing a bond must raise structural potential by its dissociation energy"
         );
         assert!(
             (parent.usable_energy + child.usable_energy + after_structural_energy

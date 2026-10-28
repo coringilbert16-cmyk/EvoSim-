@@ -222,10 +222,18 @@ fn new_structure_bond_is_formed_only_through_combine() {
     .expect("COMBINE should form the new bond");
 
     assert_eq!(structure.bonds.len(), 1);
-    assert!(attempt.energy_invested >= 0.0);
+    assert!(attempt.formation_threshold >= 0.0);
     assert!(ledger.total_usable_energy_gained.is_finite());
-    assert!(ledger.total_heat_dissipated > 0.0);
-    assert!(energy < 100.0 || attempt.energy_invested == 0.0);
+    assert_eq!(ledger.total_heat_dissipated, 0.0);
+    let residual = energy - 100.0
+        + ledger.total_structural_energy_delta
+        + ledger.total_work_expended
+        + ledger.total_heat_dissipated
+        - ledger.total_external_energy_input;
+    assert!(
+        residual.abs() < 1e-9,
+        "COMBINE must reconcile released binding energy, usable energy, work, and heat"
+    );
 }
 
 #[test]
@@ -287,5 +295,5 @@ fn stored_realized_single_constituent_enters_combine_through_physical_path() {
     assert_eq!(organism.structure.units.len(), 2);
     assert_eq!(organism.structure.bonds.len(), 1);
     assert!(organism.structure.units[1].geometry.is_some());
-    assert!(attempt.energy_invested >= 0.0);
+    assert!(attempt.formation_threshold >= 0.0);
 }

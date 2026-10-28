@@ -67,12 +67,23 @@ impl EnergySourceBudget {
 /// Source identity and source-availability rules remain on the concrete
 /// transaction. This common allocation enforces the same balance equation
 /// without treating external input as released chemical potential.
+/// Signed structural potential for the authoritative realized bond graph.
+/// A stable bond contributes negative potential relative to separated materials.
+pub(crate) fn structural_potential(structure: &crate::structure::OrganismStructure) -> Option<f64> {
+    let potential = structure.bonds.iter().try_fold(0.0, |total, bond| {
+        let next = total - bond.bond_energy;
+        (bond.bond_energy.is_finite() && bond.bond_energy >= 0.0 && next.is_finite())
+            .then_some(next)
+    })?;
+    potential.is_finite().then_some(potential)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct EnergyAllocation {
     pub(crate) source_energy: f64,
     pub(crate) usable_delta: f64,
-    /// Signed change in energy held by persistent structure: positive when
-    /// stored, negative when an existing structural store is released.
+    /// Signed change in structural potential: negative when a stable bond
+    /// forms and positive when a bond is broken.
     pub(crate) structural_delta: f64,
     pub(crate) work_expended: f64,
     pub(crate) heat_dissipated: f64,
@@ -128,9 +139,9 @@ impl ExternalInputTransaction {
 pub(crate) struct EnergyTransaction {
     pub(crate) reason: EnergyReason,
     /// Legacy compatibility field. Must remain exactly zero: this transaction
-    /// has no named non-structural source owner to debit. Energy stored in a
-    /// realized bond is represented by a negative structural_delta when removed.
-    /// External input must use ExternalInputTransaction instead.
+    /// has no named non-structural source owner to debit. Bond formation/breaking
+    /// is represented by the signed structural_delta. External input must use
+    /// ExternalInputTransaction instead.
     pub(crate) potential_released: f64,
     pub(crate) usable_delta: f64,
     pub(crate) structural_delta: f64,
@@ -139,8 +150,10 @@ pub(crate) struct EnergyTransaction {
 }
 
 impl EnergyTransaction {
-    /// A pure expenditure: usable energy is consumed and allocated exactly
-    /// once among persistent structure, work, and dissipated energy.
+    /// A pure expenditure with no structural-potential change.
+    /// Any bond formation/breaking must use the shared reaction settlement
+    /// contract so its signed pre/post-state delta cannot be treated as a cost
+    /// destination or a stored-energy reservoir.
     pub(crate) fn expenditure(
         reason: EnergyReason,
         structural_delta: f64,
@@ -148,7 +161,7 @@ impl EnergyTransaction {
         heat_dissipated: f64,
     ) -> Option<Self> {
         if !structural_delta.is_finite()
-            || structural_delta < 0.0
+            || structural_delta != 0.0
             || !work_expended.is_finite()
             || work_expended < 0.0
             || !heat_dissipated.is_finite()
@@ -156,11 +169,48 @@ impl EnergyTransaction {
         {
             return None;
         }
-        let cost = structural_delta + work_expended + heat_dissipated;
+        let cost = work_expended + heat_dissipated;
         cost.is_finite().then_some(Self {
             reason,
             potential_released: 0.0,
             usable_delta: -cost,
+            structural_delta: 0.0,
+            work_expended,
+            heat_dissipated,
+        })
+    }
+
+    /// Settle a reaction whose structural-potential change may be favorable
+    /// (negative) or unfavorable (positive). Bond energy is a dissociation
+    /// magnitude; a newly formed stable bond lowers structural potential, while
+    /// breaking it raises structural potential and therefore requires energy.
+    /// The usable holder receives any surplus or pays any deficit after work
+    /// and heat are accounted for.
+    pub(crate) fn reaction(
+        reason: EnergyReason,
+        structural_delta: f64,
+        work_expended: f64,
+        heat_dissipated: f64,
+    ) -> Option<Self> {
+        if !structural_delta.is_finite()
+            || !work_expended.is_finite()
+            || work_expended < 0.0
+            || !heat_dissipated.is_finite()
+            || heat_dissipated < 0.0
+        {
+            return None;
+        }
+        // Subtract in the same order used by the world inventory residual.
+        // This avoids a tiny positive rounding residual for otherwise exact
+        // dissociation transactions.
+        let usable_delta = -structural_delta - work_expended - heat_dissipated;
+        if !usable_delta.is_finite() {
+            return None;
+        }
+        Some(Self {
+            reason,
+            potential_released: 0.0,
+            usable_delta,
             structural_delta,
             work_expended,
             heat_dissipated,
@@ -185,12 +235,114 @@ impl EnergyTransaction {
     }
 }
 
+/// Structural-energy result for a proposed physical reaction, before live state mutates.
+///
+/// The current runtime supplies the signed potential of the authoritative
+/// reactant and product bond graphs. This does not claim to model every possible
+/// chemical free-energy term; a reaction that changes composition without a
+/// represented structural-potential change needs additional chemistry data before
+/// its true thermodynamic favorability can be inferred. Physical work and
+/// dissipation are outputs from this same budget. Activation is deliberately
+/// separate: a threshold controls whether a reaction may proceed, but is not
+/// an energy source.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ReactionEnergyBalance {
+    pub(crate) reactant_energy: f64,
+    pub(crate) product_energy: f64,
+    pub(crate) physical_work: f64,
+    pub(crate) dissipated_heat: f64,
+    /// Signed product-minus-reactant energy before work and dissipation.
+    pub(crate) net_reaction_change: f64,
+    /// Minimum legitimate external energy needed after accounting for the
+    /// reactant-to-product energy change and modeled work/heat.
+    pub(crate) required_external_input: f64,
+    /// Energy left over after work and dissipation, available for explicit
+    /// modeled destinations. It is not credited automatically by this plan.
+    pub(crate) released_surplus: f64,
+}
+
+impl ReactionEnergyBalance {
+    /// Derive the reaction budget from actual pre/post energy states.
+    ///
+    /// A negative net balance can fund work and heat without external input;
+    /// a positive deficit must be funded by a named source before commit.
+    /// This constructor only plans the balance and never mutates a holder.
+    pub(crate) fn calculate(
+        reactant_energy: f64,
+        product_energy: f64,
+        physical_work: f64,
+        dissipated_heat: f64,
+    ) -> Option<Self> {
+        if !reactant_energy.is_finite()
+            || !product_energy.is_finite()
+            || !physical_work.is_finite()
+            || physical_work < 0.0
+            || !dissipated_heat.is_finite()
+            || dissipated_heat < 0.0
+        {
+            return None;
+        }
+        let net_reaction_change = product_energy - reactant_energy;
+        let net_budget_change = net_reaction_change + physical_work + dissipated_heat;
+        if !net_reaction_change.is_finite() || !net_budget_change.is_finite() {
+            return None;
+        }
+        let required_external_input = net_budget_change.max(0.0);
+        let released_surplus = (-net_budget_change).max(0.0);
+        Some(Self {
+            reactant_energy,
+            product_energy,
+            physical_work,
+            dissipated_heat,
+            net_reaction_change,
+            required_external_input,
+            released_surplus,
+        })
+    }
+
+    pub(crate) fn can_commit_with(self, legitimate_external_input: f64) -> bool {
+        legitimate_external_input.is_finite()
+            && legitimate_external_input >= self.required_external_input
+            && (legitimate_external_input - self.required_external_input).is_finite()
+    }
+
+    /// Build the ledger transaction from the same pre/post-state balance
+    /// used to decide whether the reaction is favorable or needs energy input.
+    pub(crate) fn settlement_transaction(self, reason: EnergyReason) -> Option<EnergyTransaction> {
+        EnergyTransaction::reaction(
+            reason,
+            self.net_reaction_change,
+            self.physical_work,
+            self.dissipated_heat,
+        )
+    }
+
+    /// The signed conservation residual after applying the supplied input and
+    /// recording all explicit destinations. Positive residual means creation.
+    pub(crate) fn residual(self, legitimate_external_input: f64) -> Option<f64> {
+        if !legitimate_external_input.is_finite() || legitimate_external_input < 0.0 {
+            return None;
+        }
+        // Any source input beyond the deficit remains in the source holder;
+        // it is not a reaction output and must not be mistaken for creation.
+        let retained_input = (legitimate_external_input - self.required_external_input).max(0.0);
+        let residual = self.reactant_energy + legitimate_external_input
+            - self.product_energy
+            - self.physical_work
+            - self.dissipated_heat
+            - self.released_surplus
+            - retained_input;
+        residual.is_finite().then_some(residual)
+    }
+}
+
 /// A point-in-time inventory used to reconcile world-level energy accounting.
 ///
-/// Structural energy is the total energy currently stored in realized bonds,
-/// counted once across all structures. The initial values are the tick-zero
-/// baseline; cumulative flows are totals since that baseline. Transfers among
-/// internal holders are intentionally absent because they cancel at world scale.
+/// Structural energy is the signed potential of realized bonds relative to the
+/// separated-material baseline: stable bonds contribute negative potential,
+/// counted once across all structures. Initial values are the tick-zero baseline;
+/// cumulative flows are totals since that baseline. Internal transfers cancel
+/// at world scale and are intentionally absent.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct EnergyInventorySnapshot {
     pub(crate) initial_usable_energy: f64,
@@ -214,13 +366,11 @@ impl EnergyInventorySnapshot {
     /// usable, resonant, and structural energy plus work, heat, and escaped tone
     /// equals all external sources.
     pub(crate) fn residual(self) -> Option<f64> {
-        let values = [
+        let nonnegative_values = [
             self.initial_usable_energy,
             self.current_usable_energy,
             self.initial_resonant_energy,
             self.current_resonant_energy,
-            self.initial_structural_energy,
-            self.current_structural_energy,
             self.external_energy_input,
             self.world_tone_energy_escaped,
             self.other_energy_released,
@@ -228,7 +378,9 @@ impl EnergyInventorySnapshot {
             self.heat_dissipated,
         ];
         if self.other_energy_released != 0.0
-            || values
+            || !self.initial_structural_energy.is_finite()
+            || !self.current_structural_energy.is_finite()
+            || nonnegative_values
                 .iter()
                 .any(|value| !value.is_finite() || *value < 0.0)
         {
@@ -514,6 +666,96 @@ impl EnergyLedgerAuthority for EnergyLedger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn favorable_reaction_can_fund_work_without_external_input() {
+        let balance = ReactionEnergyBalance::calculate(10.0, 6.0, 2.0, 1.0).unwrap();
+        assert_eq!(balance.net_reaction_change, -4.0);
+        assert_eq!(balance.required_external_input, 0.0);
+        assert_eq!(balance.released_surplus, 1.0);
+        assert!(balance.can_commit_with(0.0));
+        assert_eq!(balance.residual(0.0), Some(0.0));
+    }
+
+    #[test]
+    fn stable_bond_formation_is_a_negative_product_potential_change() {
+        let balance = ReactionEnergyBalance::calculate(0.0, -5.0, 2.0, 1.0).unwrap();
+        assert_eq!(balance.net_reaction_change, -5.0);
+        assert_eq!(balance.required_external_input, 0.0);
+        assert_eq!(balance.released_surplus, 2.0);
+        assert_eq!(balance.residual(0.0), Some(0.0));
+    }
+
+    #[test]
+    fn unfavorable_reaction_requires_legitimate_input_for_the_deficit() {
+        let balance = ReactionEnergyBalance::calculate(3.0, 8.0, 1.0, 0.5).unwrap();
+        assert_eq!(balance.net_reaction_change, 5.0);
+        assert_eq!(balance.required_external_input, 6.5);
+        assert_eq!(balance.released_surplus, 0.0);
+        assert!(!balance.can_commit_with(6.49));
+        assert!(balance.can_commit_with(6.5));
+        assert_eq!(balance.residual(6.5), Some(0.0));
+    }
+
+    #[test]
+    fn energy_neutral_reaction_still_accounts_for_work_and_heat() {
+        let balance = ReactionEnergyBalance::calculate(4.0, 4.0, 1.0, 0.25).unwrap();
+        assert_eq!(balance.net_reaction_change, 0.0);
+        assert_eq!(balance.required_external_input, 1.25);
+        assert_eq!(balance.released_surplus, 0.0);
+    }
+
+    #[test]
+    fn surplus_external_input_is_retained_without_being_double_counted() {
+        let balance = ReactionEnergyBalance::calculate(2.0, 5.0, 1.0, 0.0).unwrap();
+        assert_eq!(balance.required_external_input, 4.0);
+        assert!(balance.can_commit_with(7.0));
+        assert_eq!(balance.residual(7.0), Some(0.0));
+    }
+
+    #[test]
+    fn reaction_balance_rejects_non_finite_or_negative_state_values() {
+        assert!(ReactionEnergyBalance::calculate(0.0, f64::NAN, 0.0, 0.0).is_none());
+        assert!(ReactionEnergyBalance::calculate(0.0, 0.0, -1.0, 0.0).is_none());
+        assert!(ReactionEnergyBalance::calculate(0.0, 0.0, f64::INFINITY, 0.0).is_none());
+        let balance = ReactionEnergyBalance::calculate(1.0, 1.0, 0.0, 0.0).unwrap();
+        assert!(!balance.can_commit_with(f64::NAN));
+        assert!(balance.residual(-1.0).is_none());
+    }
+
+    #[test]
+    fn favorable_bond_formation_releases_binding_energy_after_work_and_heat() {
+        let transaction =
+            EnergyTransaction::reaction(EnergyReason::Combine, -5.0, 2.0, 1.0).unwrap();
+        assert_eq!(transaction.usable_delta, 2.0);
+        assert!(transaction.balanced());
+
+        let mut ledger = EnergyLedger::default();
+        let mut usable = 0.0;
+        assert!(ledger.settle_transaction(&mut usable, transaction));
+        assert_eq!(usable, 2.0);
+        assert_eq!(ledger.total_structural_energy_delta, -5.0);
+        assert_eq!(ledger.total_work_expended, 2.0);
+        assert_eq!(ledger.total_heat_dissipated, 1.0);
+    }
+
+    #[test]
+    fn bond_breaking_requires_input_for_binding_energy_and_work() {
+        let transaction = EnergyTransaction::reaction(EnergyReason::Break, 5.0, 1.0, 0.0).unwrap();
+        assert_eq!(transaction.usable_delta, -6.0);
+        assert!(transaction.balanced());
+
+        let mut ledger = EnergyLedger::default();
+        let mut insufficient = 5.0;
+        assert!(!ledger.settle_transaction(&mut insufficient, transaction));
+        assert_eq!(insufficient, 5.0);
+        assert_eq!(ledger.total_structural_energy_delta, 0.0);
+
+        let mut sufficient = 6.0;
+        assert!(ledger.settle_transaction(&mut sufficient, transaction));
+        assert_eq!(sufficient, 0.0);
+        assert_eq!(ledger.total_structural_energy_delta, 5.0);
+    }
 
     #[test]
     fn strict_world_inventory_oracle_rejects_even_sub_tolerance_energy_creation() {
@@ -846,9 +1088,9 @@ mod tests {
     }
 
     #[test]
-    fn bond_energy_release_can_be_represented_as_a_negative_structural_delta() {
+    fn favorable_bond_formation_can_be_represented_as_a_negative_structural_delta() {
         let tx = EnergyTransaction {
-            reason: EnergyReason::Break,
+            reason: EnergyReason::Combine,
             potential_released: 0.0,
             usable_delta: 2.0,
             structural_delta: -5.0,
@@ -861,14 +1103,95 @@ mod tests {
     }
 
     #[test]
-    fn pure_expenditure_does_not_release_potential_energy() {
-        let tx = EnergyTransaction::expenditure(EnergyReason::Combine, 3.0, 1.0, 2.0).unwrap();
+    fn reaction_energy_balance_favorable_reaction_funds_work_and_heat() {
+        let balance = ReactionEnergyBalance::calculate(12.0, 5.0, 3.0, 1.0).unwrap();
+        assert_eq!(balance.net_reaction_change, -7.0);
+        assert_eq!(balance.required_external_input, 0.0);
+        assert_eq!(balance.released_surplus, 3.0);
+        assert_eq!(balance.residual(0.0), Some(0.0));
+        assert!(balance.can_commit_with(0.0));
+    }
+
+    #[test]
+    fn reaction_energy_balance_unfavorable_reaction_requires_real_input() {
+        let balance = ReactionEnergyBalance::calculate(5.0, 9.0, 2.0, 1.0).unwrap();
+        assert_eq!(balance.net_reaction_change, 4.0);
+        assert_eq!(balance.required_external_input, 7.0);
+        assert_eq!(balance.released_surplus, 0.0);
+        assert!(!balance.can_commit_with(6.999));
+        assert!(balance.can_commit_with(7.0));
+        assert_eq!(balance.residual(7.0), Some(0.0));
+    }
+
+    #[test]
+    fn reaction_energy_balance_neutral_reaction_accounts_for_work() {
+        let balance = ReactionEnergyBalance::calculate(5.0, 5.0, 2.0, 1.0).unwrap();
+        assert_eq!(balance.required_external_input, 3.0);
+        assert_eq!(balance.released_surplus, 0.0);
+        assert_eq!(balance.residual(3.0), Some(0.0));
+    }
+
+    #[test]
+    fn reaction_transaction_reconciles_favorable_and_unfavorable_structural_changes() {
+        let favorable = ReactionEnergyBalance::calculate(12.0, 5.0, 3.0, 1.0)
+            .unwrap()
+            .settlement_transaction(EnergyReason::Combine)
+            .unwrap();
+        assert!(favorable.balanced());
+        assert_eq!(favorable.usable_delta, 3.0);
+
+        let unfavorable = ReactionEnergyBalance::calculate(5.0, 12.0, 3.0, 1.0)
+            .unwrap()
+            .settlement_transaction(EnergyReason::Break)
+            .unwrap();
+        assert!(unfavorable.balanced());
+        assert_eq!(unfavorable.usable_delta, -11.0);
+    }
+
+    #[test]
+    fn favorable_reaction_credits_surplus_once_without_external_input() {
+        let mut ledger = EnergyLedger::default();
+        let mut usable = 0.0;
+        let transaction =
+            EnergyTransaction::reaction(EnergyReason::Combine, -8.0, 3.0, 1.0).unwrap();
+
+        assert!(ledger.settle_transaction(&mut usable, transaction));
+        assert_eq!(usable, 4.0);
+        assert_eq!(ledger.total_external_energy_input, 0.0);
+        assert_eq!(ledger.total_structural_energy_delta, -8.0);
+        assert_eq!(ledger.total_work_expended, 3.0);
+        assert_eq!(ledger.total_heat_dissipated, 1.0);
+    }
+
+    #[test]
+    fn unaffordable_break_is_rejected_without_mutating_holder_or_ledger() {
+        let mut ledger = EnergyLedger::default();
+        let mut usable = 2.0;
+        let transaction = EnergyTransaction::reaction(EnergyReason::Break, 5.0, 1.0, 0.0).unwrap();
+
+        assert!(!ledger.settle_transaction(&mut usable, transaction));
+        assert_eq!(usable, 2.0);
+        assert_eq!(ledger.total_structural_energy_delta, 0.0);
+        assert_eq!(ledger.total_work_expended, 0.0);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+        assert_eq!(ledger.total_usable_energy_gained, 0.0);
+    }
+
+    #[test]
+    fn pure_expenditure_does_not_change_structural_potential() {
+        let tx = EnergyTransaction::expenditure(EnergyReason::Combine, 0.0, 1.0, 2.0).unwrap();
         assert!(tx.balanced());
         assert_eq!(tx.potential_released, 0.0);
-        assert_eq!(tx.usable_delta, -6.0);
-        assert_eq!(tx.structural_delta, 3.0);
+        assert_eq!(tx.usable_delta, -3.0);
+        assert_eq!(tx.structural_delta, 0.0);
         assert_eq!(tx.work_expended, 1.0);
         assert_eq!(tx.heat_dissipated, 2.0);
+    }
+
+    #[test]
+    fn pure_expenditure_rejects_structural_potential_changes() {
+        assert!(EnergyTransaction::expenditure(EnergyReason::Combine, 1.0, 0.0, 0.0).is_none());
+        assert!(EnergyTransaction::expenditure(EnergyReason::Combine, -1.0, 0.0, 0.0).is_none());
     }
 
     #[test]
@@ -919,11 +1242,11 @@ mod tests {
     }
 
     #[test]
-    fn settling_bond_release_debits_structural_store_without_faking_a_source() {
+    fn settling_favorable_bond_formation_credits_surplus_without_faking_a_source() {
         let mut ledger = EnergyLedger::default();
         let mut energy = 0.0;
         let tx = EnergyTransaction {
-            reason: EnergyReason::Break,
+            reason: EnergyReason::Combine,
             potential_released: 0.0,
             usable_delta: 2.0,
             structural_delta: -5.0,

@@ -55,8 +55,8 @@ mod tests {
         structure.bonds.truncate(1);
 
         let initial_structural_energy: f64 =
-            structure.bonds.iter().map(|bond| bond.bond_energy).sum();
-        assert!(initial_structural_energy > 0.0);
+            structure.bonds.iter().map(|bond| -bond.bond_energy).sum();
+        assert!(initial_structural_energy < 0.0);
         let initial_usable_energy = 1000.0;
         let mut body = DecomposingBody::new(
             structure,
@@ -79,7 +79,7 @@ mod tests {
             .structure
             .bonds
             .iter()
-            .map(|bond| bond.bond_energy)
+            .map(|bond| -bond.bond_energy)
             .sum();
         let residual = (body.energy_budget - initial_usable_energy)
             + (remaining_structural_energy - initial_structural_energy)
@@ -92,6 +92,36 @@ mod tests {
         assert_eq!(ledger.total_potential_energy_released, 0.0);
         assert!((ledger.total_structural_energy_delta + initial_structural_energy).abs() <= 1e-9);
         assert!((ledger.total_heat_dissipated - step.heat).abs() <= 1e-9);
+    }
+
+    #[test]
+    fn decomposition_rejects_unaffordable_break_without_mutating_state() {
+        let catalog = default_catalog();
+        let simulation = crate::state::Simulation::new(904, 10.0);
+        let mut structure = simulation.organisms[0].structure.clone();
+        assert!(!structure.bonds.is_empty());
+        structure.bonds.truncate(2);
+        assert_eq!(structure.bonds.len(), 2);
+        assert!(structure.bonds[0].bond_energy > 0.0);
+
+        let mut body =
+            DecomposingBody::new(structure.clone(), 0.0, Position { x: 50.0, y: 50.0 }).unwrap();
+        let environment = Environment {
+            width: 100.0,
+            height: 100.0,
+            chemistry_usable_energy: 0.0,
+            resonant_energy: Default::default(),
+            catalog,
+            field: ActiveMaterialField::new(100.0, 100.0, 10.0),
+        };
+        let mut ledger = EnergyLedger::default();
+        let before_ledger = ledger;
+
+        assert!(resolve_one_bond_with_ledger(&mut body, &environment, &mut ledger).is_none());
+        assert_eq!(body.structure.units, structure.units);
+        assert_eq!(body.structure.bonds, structure.bonds);
+        assert_eq!(body.energy_budget, 0.0);
+        assert_eq!(ledger, before_ledger);
     }
 
     #[test]

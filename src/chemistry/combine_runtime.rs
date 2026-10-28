@@ -27,9 +27,11 @@ pub(crate) struct CombineAttempt {
     pub endpoint_a: ConnectionEndpoint,
     pub endpoint_b: ConnectionEndpoint,
     pub work_cost: f64,
-    pub energy_invested: f64,
     pub formation_threshold: f64,
+    /// Signed product-minus-reactant structural potential, independent of funding efficiency.
     pub net_energy_change: f64,
+    /// Change in the usable-energy holder caused by this COMBINE transaction.
+    pub usable_energy_delta: f64,
     pub bond_strength: f64,
     pub bond_energy: f64,
     pub environmental_source: Option<(usize, PhysicalMaterial)>,
@@ -44,48 +46,74 @@ struct BondFormationRequest {
     investment: f64,
 }
 
-fn energy_requirement(investment: f64, bond_energy: f64, work: f64) -> Option<f64> {
-    if !investment.is_finite()
-        || investment < 0.0
-        || !bond_energy.is_finite()
-        || bond_energy < 0.0
-        || !work.is_finite()
-        || work < 0.0
-    {
-        return None;
-    }
-    let required = investment + bond_energy + work;
-    required.is_finite().then_some(required)
+fn transient_fluid_pair(
+    structure: &crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    catalog: &[BaseResource],
+) -> Option<bool> {
+    let resource_a_name = &structure.units.get(unit_a)?.material.parts.first()?.0;
+    let resource_b_name = &structure.units.get(unit_b)?.material.parts.first()?.0;
+    let resource_a = catalog
+        .iter()
+        .find(|resource| &resource.name == resource_a_name)?;
+    let resource_b = catalog
+        .iter()
+        .find(|resource| &resource.name == resource_b_name)?;
+    Some(
+        resource_a.physical_state == crate::resources::PhysicalState::Fluid
+            && resource_b.physical_state == crate::resources::PhysicalState::Fluid,
+    )
 }
 
-fn combine_energy_transaction(
-    investment: f64,
+fn energy_requirement(
     bond_energy: f64,
     work: f64,
     transient_fluid_bond: bool,
-) -> Option<EnergyTransaction> {
-    if !investment.is_finite()
-        || investment < 0.0
-        || !bond_energy.is_finite()
-        || bond_energy < 0.0
-        || !work.is_finite()
-        || work < 0.0
-    {
+    reactant_structural_energy: f64,
+    product_structural_energy: f64,
+) -> Option<f64> {
+    if !bond_energy.is_finite() || bond_energy < 0.0 || !work.is_finite() || work < 0.0 {
         return None;
     }
-    // Only a bond that survives COMBINE retains structural energy. Formation
-    // work is tracked separately; investment not retained as a bond is waste.
-    let (structural_allocation, work_expended, dissipated_heat) = if transient_fluid_bond {
-        (0.0, work, investment + bond_energy)
+    let product_energy = if transient_fluid_bond {
+        // The temporary contact bond is not retained as a structural store.
+        reactant_structural_energy
     } else {
-        (bond_energy, work, investment)
+        product_structural_energy
     };
-    EnergyTransaction::expenditure(
-        EnergyReason::Combine,
-        structural_allocation,
-        work_expended,
-        dissipated_heat,
+    crate::energy_ledger::ReactionEnergyBalance::calculate(
+        reactant_structural_energy,
+        product_energy,
+        work,
+        0.0,
     )
+    .map(|balance| balance.required_external_input)
+}
+
+fn combine_energy_transaction(
+    bond_energy: f64,
+    work: f64,
+    transient_fluid_bond: bool,
+    reactant_structural_energy: f64,
+    product_structural_energy: f64,
+) -> Option<EnergyTransaction> {
+    if !bond_energy.is_finite() || bond_energy < 0.0 || !work.is_finite() || work < 0.0 {
+        return None;
+    }
+    if transient_fluid_bond {
+        // The temporary fluid contact is not a retained structural store, so
+        // only actual physical work is debited from usable energy.
+        return EnergyTransaction::expenditure(EnergyReason::Combine, 0.0, work, 0.0);
+    }
+    // The same pre/post-state balance drives both affordability and settlement.
+    crate::energy_ledger::ReactionEnergyBalance::calculate(
+        reactant_structural_energy,
+        product_structural_energy,
+        work,
+        0.0,
+    )?
+    .settlement_transaction(EnergyReason::Combine)
 }
 
 fn evaluate_candidate(
@@ -130,7 +158,20 @@ fn evaluate_candidate(
     if !bond_energy.is_finite() || bond_energy < 0.0 {
         return None;
     }
-    let required = energy_requirement(investment, bond_energy, work)?;
+    let transient_fluid_bond = transient_fluid_pair(structure, ua, ub, catalog)?;
+    let reactant_structural_energy = crate::energy_ledger::structural_potential(structure)?;
+    let product_structural_energy = if transient_fluid_bond {
+        reactant_structural_energy
+    } else {
+        reactant_structural_energy - bond_energy
+    };
+    let required = energy_requirement(
+        bond_energy,
+        work,
+        transient_fluid_bond,
+        reactant_structural_energy,
+        product_structural_energy,
+    )?;
     Some((evaluation, work, investment, required))
 }
 
@@ -328,6 +369,152 @@ fn form_bond_from_candidate(
     .ok()
 }
 
+/// Stage the resonance-funded part of a COMBINE deficit. The reservoir,
+/// usable holder, and heat ledger are committed together only when compatible
+/// resonance covers the full useful-energy shortfall.
+fn fund_combine_deficit_with_resonance(
+    shortfall: f64,
+    energy: &mut f64,
+    ledger: &mut EnergyLedger,
+    resonance: &mut crate::harmonics::ResonantEnergyReservoir,
+    reaction_frequency_hz: f64,
+    processing_efficiency: f64,
+) -> bool {
+    if !shortfall.is_finite()
+        || shortfall < 0.0
+        || !energy.is_finite()
+        || *energy < 0.0
+        || !ledger.total_heat_dissipated.is_finite()
+        || ledger.total_heat_dissipated < 0.0
+        || !reaction_frequency_hz.is_finite()
+        || reaction_frequency_hz <= 0.0
+        || !processing_efficiency.is_finite()
+        || !(0.05..=1.0).contains(&processing_efficiency)
+    {
+        return false;
+    }
+
+    let mut trial_energy = *energy;
+    let mut trial_ledger = *ledger;
+    let mut trial_resonance = resonance.clone();
+    let requested_withdrawal = shortfall / processing_efficiency;
+    if !requested_withdrawal.is_finite() {
+        return false;
+    }
+    let withdrawal =
+        trial_resonance.withdraw_compatible(reaction_frequency_hz, requested_withdrawal);
+    let useful_energy = withdrawal * processing_efficiency;
+    let conversion_loss = withdrawal - useful_energy;
+    if !withdrawal.is_finite()
+        || withdrawal < 0.0
+        || !useful_energy.is_finite()
+        || !conversion_loss.is_finite()
+        || conversion_loss < 0.0
+        || useful_energy + EPSILON < shortfall
+    {
+        return false;
+    }
+    trial_energy += useful_energy;
+    trial_ledger.total_heat_dissipated += conversion_loss;
+    if !trial_energy.is_finite() || !trial_ledger.total_heat_dissipated.is_finite() {
+        return false;
+    }
+
+    *energy = trial_energy;
+    *ledger = trial_ledger;
+    *resonance = trial_resonance;
+    true
+}
+
+/// Fund an organism's COMBINE deficit from compatible retained resonance
+/// before falling back to its usable-energy holder. Constructor/reproduction
+/// callers keep using the ordinary bond path because they have no organism
+/// resonance context.
+fn form_bond_with_resonance(
+    structure: &mut crate::structure::OrganismStructure,
+    request: BondFormationRequest,
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+    resonance: &mut crate::harmonics::ResonantEnergyReservoir,
+    processing_efficiency: f64,
+) -> Option<CombineAttempt> {
+    if !processing_efficiency.is_finite() || !(0.05..=1.0).contains(&processing_efficiency) {
+        return None;
+    }
+    let candidate = crate::contact::connection_pair_candidates_cached(
+        structure,
+        request.unit_a,
+        request.unit_b,
+        catalog,
+        cache,
+    )
+    .into_iter()
+    .find(|candidate| {
+        candidate.endpoint_a == request.endpoint_a
+            && candidate.endpoint_b == request.endpoint_b
+            && candidate.distance <= COMBINE_CONTACT_TOLERANCE
+            && candidate.available_a
+            && candidate.available_b
+    })?;
+    let (_, _, _, required) = evaluate_candidate(
+        structure,
+        request.unit_a,
+        request.unit_b,
+        candidate,
+        catalog,
+    )?;
+    let original_energy = *energy;
+    let mut trial_energy = original_energy;
+    let mut trial_ledger = *ledger;
+    let mut trial_resonance = resonance.clone();
+
+    let shortfall = (required - original_energy).max(0.0);
+    if shortfall > EPSILON {
+        let properties_a = structure.units.get(request.unit_a)?.properties(catalog)?;
+        let properties_b = structure.units.get(request.unit_b)?.properties(catalog)?;
+        let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
+        let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
+        if !frequency_a.is_finite()
+            || frequency_a <= 0.0
+            || !frequency_b.is_finite()
+            || frequency_b <= 0.0
+        {
+            return None;
+        }
+        let reaction_frequency_hz = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        if !fund_combine_deficit_with_resonance(
+            shortfall,
+            &mut trial_energy,
+            &mut trial_ledger,
+            &mut trial_resonance,
+            reaction_frequency_hz,
+            processing_efficiency,
+        ) {
+            return None;
+        }
+    }
+
+    let reactant_structural_energy = crate::energy_ledger::structural_potential(structure)?;
+    let mut attempt = form_bond(
+        structure,
+        request,
+        catalog,
+        cache,
+        &mut trial_ledger,
+        &mut trial_energy,
+    )?;
+    let product_structural_energy = crate::energy_ledger::structural_potential(structure)?;
+    attempt.net_energy_change = product_structural_energy - reactant_structural_energy;
+    attempt.usable_energy_delta = trial_energy - original_energy;
+    *energy = trial_energy;
+    *ledger = trial_ledger;
+    *resonance = trial_resonance;
+    Some(attempt)
+}
+
 fn form_bond_from_candidate_diagnostic(
     structure: &mut crate::structure::OrganismStructure,
     request: BondFormationRequest,
@@ -396,13 +583,24 @@ fn form_bond_from_candidate_diagnostic(
                 resource.physical_state == crate::resources::PhysicalState::Fluid
             })
     });
-    let transaction = combine_energy_transaction(investment, bond_energy, work, fluid_pair)
-        .ok_or("COMBINE energy transaction could not be constructed")?;
+    let reactant_structural_energy = crate::energy_ledger::structural_potential(structure)
+        .ok_or("COMBINE reactant structural energy is invalid")?;
+    let product_structural_energy = crate::energy_ledger::structural_potential(&trial_structure)
+        .ok_or("COMBINE product structural energy is invalid")?;
+    let transaction = combine_energy_transaction(
+        bond_energy,
+        work,
+        fluid_pair,
+        reactant_structural_energy,
+        product_structural_energy,
+    )
+    .ok_or("COMBINE energy transaction could not be constructed")?;
     if !ledger.settle_transaction(energy, transaction) {
         *energy = before;
         return Err("energy ledger rejected COMBINE expenditure");
     }
-    let net = *energy - before;
+    let usable_energy_delta = *energy - before;
+    let net_energy_change = product_structural_energy - reactant_structural_energy;
     *structure = trial_structure;
     Ok(CombineAttempt {
         unit_a: ua,
@@ -410,9 +608,9 @@ fn form_bond_from_candidate_diagnostic(
         endpoint_a,
         endpoint_b,
         work_cost: work,
-        energy_invested: investment + bond_energy,
         formation_threshold: threshold,
-        net_energy_change: net,
+        net_energy_change,
+        usable_energy_delta,
         bond_strength: strength,
         bond_energy,
         environmental_source: None,
@@ -572,10 +770,7 @@ pub(crate) fn try_combine_stored_unit(
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| a.4.partial_cmp(&b.4).unwrap_or(std::cmp::Ordering::Equal))
         });
-        for (ua, part_index, origin, evaluation, _, required, _) in candidates {
-            if organism.usable_energy + EPSILON < required {
-                continue;
-            }
+        for (ua, part_index, origin, evaluation, _, _required, _) in candidates {
             let mut hypothetical = organism.structure.clone();
             let indices = crate::material_restoration::restore_material(
                 &mut hypothetical,
@@ -586,7 +781,8 @@ pub(crate) fn try_combine_stored_unit(
             let ub = *indices.get(part_index)?;
             let mut candidate_ledger = *ledger;
             let mut candidate_energy = organism.usable_energy;
-            if let Some(attempt) = form_bond(
+            let mut candidate_resonance = organism.resonant_energy.clone();
+            if let Some(attempt) = form_bond_with_resonance(
                 &mut hypothetical,
                 BondFormationRequest {
                     unit_a: ua,
@@ -599,6 +795,8 @@ pub(crate) fn try_combine_stored_unit(
                 cache,
                 &mut candidate_ledger,
                 &mut candidate_energy,
+                &mut candidate_resonance,
+                organism.genome.processing_efficiency(),
             ) {
                 if !coalesce_fluid_pair_after_bond(&mut hypothetical, ua, ub, &environment.catalog)
                 {
@@ -609,6 +807,7 @@ pub(crate) fn try_combine_stored_unit(
                     .take_matching_physical(&raw, &environment.catalog)?;
                 organism.structure = hypothetical;
                 organism.usable_energy = candidate_energy;
+                organism.resonant_energy = candidate_resonance;
                 *ledger = candidate_ledger;
                 organism.mark_structure_changed();
                 organism.add_transaction_stress(attempt.work_cost);
@@ -717,10 +916,7 @@ pub(crate) fn try_combine_stored_unit(
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| a.3.partial_cmp(&b.3).unwrap_or(std::cmp::Ordering::Equal))
     });
-    for (ua, placement, evaluation, _, required, _) in candidates {
-        if organism.usable_energy + EPSILON < required {
-            continue;
-        }
+    for (ua, placement, evaluation, _, _required, _) in candidates {
         let mut hypothetical = organism.structure.clone();
         let indices = crate::material_restoration::restore_material(
             &mut hypothetical,
@@ -731,7 +927,8 @@ pub(crate) fn try_combine_stored_unit(
         let ub = *indices.first()?;
         let mut candidate_ledger = *ledger;
         let mut candidate_energy = organism.usable_energy;
-        if let Some(attempt) = form_bond(
+        let mut candidate_resonance = organism.resonant_energy.clone();
+        if let Some(attempt) = form_bond_with_resonance(
             &mut hypothetical,
             BondFormationRequest {
                 unit_a: ua,
@@ -744,6 +941,8 @@ pub(crate) fn try_combine_stored_unit(
             cache,
             &mut candidate_ledger,
             &mut candidate_energy,
+            &mut candidate_resonance,
+            organism.genome.processing_efficiency(),
         ) {
             if !coalesce_fluid_pair_after_bond(&mut hypothetical, ua, ub, &environment.catalog) {
                 continue;
@@ -754,6 +953,7 @@ pub(crate) fn try_combine_stored_unit(
             organism.structure = hypothetical;
             organism.mark_structure_changed();
             organism.usable_energy = candidate_energy;
+            organism.resonant_energy = candidate_resonance;
             *ledger = candidate_ledger;
             organism.add_transaction_stress(attempt.work_cost);
             return Some(attempt);
@@ -1343,11 +1543,8 @@ fn try_combine_environmental(
             .then_with(|| a.5.partial_cmp(&b.5).unwrap_or(std::cmp::Ordering::Equal))
     });
 
-    for (cell_index, material_index, ua, ub, evaluation, _distance, required, _score) in candidates
+    for (cell_index, material_index, ua, ub, evaluation, _distance, _required, _score) in candidates
     {
-        if organism.usable_energy + EPSILON < required {
-            continue;
-        }
         let instance = environment
             .field
             .cells
@@ -1378,7 +1575,8 @@ fn try_combine_environmental(
         };
         let mut trial_ledger = *ledger;
         let mut trial_energy = organism.usable_energy;
-        let Some(attempt) = form_bond(
+        let mut trial_resonance = organism.resonant_energy.clone();
+        let Some(attempt) = form_bond_with_resonance(
             &mut trial_structure,
             BondFormationRequest {
                 unit_a: ua,
@@ -1391,6 +1589,8 @@ fn try_combine_environmental(
             cache,
             &mut trial_ledger,
             &mut trial_energy,
+            &mut trial_resonance,
+            organism.genome.processing_efficiency(),
         ) else {
             continue;
         };
@@ -1420,6 +1620,7 @@ fn try_combine_environmental(
         attempt.environmental_source = Some((cell_index, removed));
         organism.structure = trial_structure;
         organism.usable_energy = trial_energy;
+        organism.resonant_energy = trial_resonance;
         *ledger = trial_ledger;
         organism.add_transaction_stress(attempt.work_cost);
         return Some(attempt);
@@ -1507,14 +1708,12 @@ pub(crate) fn try_combine(
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| a.3.partial_cmp(&b.3).unwrap_or(std::cmp::Ordering::Equal))
     });
-    for (ua, ub, evaluation, _, required, _) in pairs {
-        if organism.usable_energy + EPSILON < required {
-            continue;
-        }
+    for (ua, ub, evaluation, _, _required, _) in pairs {
         let mut trial_structure = organism.structure.clone();
         let mut trial_ledger = *ledger;
         let mut trial_energy = organism.usable_energy;
-        if let Some(attempt) = form_bond(
+        let mut trial_resonance = organism.resonant_energy.clone();
+        if let Some(attempt) = form_bond_with_resonance(
             &mut trial_structure,
             BondFormationRequest {
                 unit_a: ua,
@@ -1527,12 +1726,15 @@ pub(crate) fn try_combine(
             cache,
             &mut trial_ledger,
             &mut trial_energy,
+            &mut trial_resonance,
+            organism.genome.processing_efficiency(),
         ) {
             if !coalesce_fluid_pair_after_bond(&mut trial_structure, ua, ub, catalog) {
                 continue;
             }
             organism.structure = trial_structure;
             organism.usable_energy = trial_energy;
+            organism.resonant_energy = trial_resonance;
             *ledger = trial_ledger;
             organism.add_transaction_stress(attempt.work_cost);
             return Some(attempt);
@@ -1588,6 +1790,9 @@ mod fluid_coalescence_transaction_tests {
         }
     }
 
+    // Find a real chemical contact whose product-minus-reactant potential plus
+    // physical formation work leaves a positive external-energy deficit. A
+    // Water/nonchemical pair is unsuitable because its formation work is zero.
     fn build_bonded_pair(
         second_x: f64,
         with_rigid_contact: bool,
@@ -2048,20 +2253,22 @@ mod fluid_coalescence_transaction_tests {
     }
 
     #[test]
-    fn consumed_fluid_bond_potential_is_heat_not_persistent_structure() {
-        let fluid_tx = combine_energy_transaction(2.0, 3.0, 4.0, true).unwrap();
-        let rigid_tx = combine_energy_transaction(2.0, 3.0, 4.0, false).unwrap();
+    fn fluid_coalescence_costs_energy_but_stable_bond_formation_releases_binding_energy() {
+        let fluid_tx = combine_energy_transaction(3.0, 4.0, true, 0.0, 0.0).unwrap();
+        // Existing bonds contribute equally to both states and must cancel;
+        // only the new bond's product-minus-reactant potential funds the costs.
+        let rigid_tx = combine_energy_transaction(3.0, 4.0, false, -10.0, -13.0).unwrap();
 
         assert!(fluid_tx.balanced());
         assert!(rigid_tx.balanced());
-        assert_eq!(fluid_tx.usable_delta, -9.0);
-        assert_eq!(rigid_tx.usable_delta, -9.0);
+        assert_eq!(fluid_tx.usable_delta, -4.0);
         assert_eq!(fluid_tx.structural_delta, 0.0);
         assert_eq!(fluid_tx.work_expended, 4.0);
-        assert_eq!(fluid_tx.heat_dissipated, 5.0);
-        assert_eq!(rigid_tx.structural_delta, 3.0);
+        assert_eq!(fluid_tx.heat_dissipated, 0.0);
+        assert_eq!(rigid_tx.usable_delta, -1.0);
+        assert_eq!(rigid_tx.structural_delta, -3.0);
         assert_eq!(rigid_tx.work_expended, 4.0);
-        assert_eq!(rigid_tx.heat_dissipated, 2.0);
+        assert_eq!(rigid_tx.heat_dissipated, 0.0);
     }
 
     #[test]
@@ -2162,5 +2369,178 @@ mod fluid_coalescence_transaction_tests {
             structure.genome_constituent_ids(),
             original_genome_ids.as_slice()
         );
+    }
+
+    #[test]
+    fn favorable_combine_keeps_structural_energy_independent_of_efficiency() {
+        let (structure, catalog, _) = build_bonded_pair(0.0, true);
+        let mut cache = ConnectionCompatibilityCache;
+        let candidate = eligible_candidates(&structure, 0, 2, &catalog, &mut cache)
+            .into_iter()
+            .find(|candidate| evaluate_candidate(&structure, 0, 2, *candidate, &catalog).is_some())
+            .expect("rigid/fluid contact should have an eligible COMBINE candidate");
+        let (_, work, investment, required) =
+            evaluate_candidate(&structure, 0, 2, candidate, &catalog).unwrap();
+        assert!(work.is_finite() && work >= 0.0);
+        assert_eq!(
+            required, 0.0,
+            "favorable bond release covers the modeled work"
+        );
+
+        let mut deltas = Vec::new();
+        for efficiency in [0.5, 1.0] {
+            let mut trial_structure = structure.clone();
+            let mut trial_cache = ConnectionCompatibilityCache;
+            let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
+            let before_resonance = resonance.total_energy().unwrap();
+            let before_potential =
+                crate::energy_ledger::structural_potential(&trial_structure).unwrap();
+            let mut ledger = EnergyLedger::default();
+            let mut usable_energy = 0.0;
+            let attempt = form_bond_with_resonance(
+                &mut trial_structure,
+                BondFormationRequest {
+                    unit_a: 0,
+                    unit_b: 2,
+                    endpoint_a: candidate.endpoint_a,
+                    endpoint_b: candidate.endpoint_b,
+                    investment,
+                },
+                &catalog,
+                &mut trial_cache,
+                &mut ledger,
+                &mut usable_energy,
+                &mut resonance,
+                efficiency,
+            )
+            .expect("favorable COMBINE should succeed without external resonance");
+            let after_potential =
+                crate::energy_ledger::structural_potential(&trial_structure).unwrap();
+            assert_eq!(resonance.total_energy().unwrap(), before_resonance);
+            assert_eq!(ledger.total_heat_dissipated, 0.0);
+            assert!((ledger.total_work_expended - work).abs() < 1e-9);
+            assert!(
+                (attempt.net_energy_change - (after_potential - before_potential)).abs() < 1e-9
+            );
+            deltas.push(attempt.net_energy_change);
+        }
+        assert_eq!(deltas[0], deltas[1]);
+    }
+
+    #[test]
+    fn combine_physical_energy_delta_is_independent_of_processing_efficiency() {
+        let reactant_potential = -10.0;
+        let product_potential = -13.0;
+        let work = 4.0;
+        let full_efficiency = crate::energy_ledger::ReactionEnergyBalance::calculate(
+            reactant_potential,
+            product_potential,
+            work,
+            0.0,
+        )
+        .unwrap();
+        let low_efficiency = crate::energy_ledger::ReactionEnergyBalance::calculate(
+            reactant_potential,
+            product_potential,
+            work,
+            0.0,
+        )
+        .unwrap();
+
+        assert_eq!(full_efficiency.net_reaction_change, -3.0);
+        assert_eq!(low_efficiency.net_reaction_change, -3.0);
+        assert_eq!(full_efficiency.required_external_input, 1.0);
+        assert_eq!(low_efficiency.required_external_input, 1.0);
+        assert_eq!(
+            full_efficiency
+                .settlement_transaction(EnergyReason::Combine)
+                .unwrap()
+                .structural_delta,
+            low_efficiency
+                .settlement_transaction(EnergyReason::Combine)
+                .unwrap()
+                .structural_delta,
+            "efficiency changes funding, not physical potential"
+        );
+    }
+
+    #[test]
+    fn combine_resonance_funding_scales_with_efficiency_and_conserves_energy() {
+        let mut low_efficiency_resonance = crate::harmonics::ResonantEnergyReservoir::default();
+        let mut full_efficiency_resonance = crate::harmonics::ResonantEnergyReservoir::default();
+        assert!(low_efficiency_resonance.deposit(440.0, 10.0));
+        assert!(full_efficiency_resonance.deposit(440.0, 10.0));
+        let mut low_energy = 0.0;
+        let mut full_energy = 0.0;
+        let mut low_ledger = EnergyLedger::default();
+        let mut full_ledger = EnergyLedger::default();
+
+        assert!(fund_combine_deficit_with_resonance(
+            4.0,
+            &mut low_energy,
+            &mut low_ledger,
+            &mut low_efficiency_resonance,
+            440.0,
+            0.5,
+        ));
+        assert!(fund_combine_deficit_with_resonance(
+            4.0,
+            &mut full_energy,
+            &mut full_ledger,
+            &mut full_efficiency_resonance,
+            440.0,
+            1.0,
+        ));
+
+        assert!((low_energy - 4.0).abs() < 1e-9);
+        assert!((full_energy - 4.0).abs() < 1e-9);
+        assert!((low_ledger.total_heat_dissipated - 4.0).abs() < 1e-9);
+        assert_eq!(full_ledger.total_heat_dissipated, 0.0);
+        assert!((low_efficiency_resonance.total_energy().unwrap() - 2.0).abs() < 1e-9);
+        assert!((full_efficiency_resonance.total_energy().unwrap() - 6.0).abs() < 1e-9);
+
+        let low_total = low_energy
+            + low_ledger.total_heat_dissipated
+            + low_efficiency_resonance.total_energy().unwrap();
+        let full_total = full_energy
+            + full_ledger.total_heat_dissipated
+            + full_efficiency_resonance.total_energy().unwrap();
+        assert!((low_total - 10.0).abs() < 1e-9);
+        assert!((full_total - 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn insufficient_combine_resonance_rolls_back_funding_state() {
+        let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
+        assert!(resonance.deposit(440.0, 2.0));
+        let original_resonance = resonance.clone();
+        let mut energy = 1.0;
+        let original_energy = energy;
+        let mut ledger = EnergyLedger::default();
+        ledger.total_heat_dissipated = 3.0;
+        let original_ledger = ledger;
+
+        assert!(!fund_combine_deficit_with_resonance(
+            4.0,
+            &mut energy,
+            &mut ledger,
+            &mut resonance,
+            440.0,
+            0.5,
+        ));
+        assert_eq!(energy, original_energy);
+        assert_eq!(ledger, original_ledger);
+        assert_eq!(resonance, original_resonance);
+    }
+
+    // This checks the energy-balance gate directly; current catalog COMBINE
+    // reactions are favorable and do not naturally reach resonance shortfall.
+    #[test]
+    fn reaction_balance_rejects_insufficient_external_input() {
+        let balance = crate::energy_ledger::ReactionEnergyBalance::calculate(10.0, 12.0, 1.0, 0.0)
+            .expect("finite reaction balance");
+        assert!((balance.required_external_input - 3.0).abs() < 1e-12);
+        assert!(!balance.can_commit_with(balance.required_external_input * 0.5));
+        assert!(balance.can_commit_with(balance.required_external_input));
     }
 }

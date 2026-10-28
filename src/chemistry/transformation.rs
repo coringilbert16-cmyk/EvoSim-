@@ -4,61 +4,52 @@ use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransactio
 use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
 use crate::structure::Placement;
 
-/// Release the intrinsic potential stored in an existing physical bond.
+/// Energy accounting for separating a stable physical bond.
 ///
-/// This is distinct from material decomposition: the constituent potential was
-/// already present before the bond formed, while bond potential was explicitly
-/// allocated during COMBINE. Breaking the physical bond therefore releases the
-/// bond potential exactly once.
-pub(crate) fn bond_break_energy_yield(
-    bond_energy: f64,
-    processing_efficiency: f64,
-) -> Option<(f64, f64, f64)> {
-    if !bond_energy.is_finite() || bond_energy < 0.0 || !processing_efficiency.is_finite() {
+/// `bond_energy` is the positive dissociation-energy magnitude, not a stored
+/// energy reservoir. A stable bond has negative structural potential relative to
+/// separated constituents, so breaking it raises structural potential and must
+/// be paid for by a legitimate energy holder.
+pub(crate) fn bond_break_energy_yield(bond_energy: f64) -> Option<(f64, f64, f64)> {
+    if !bond_energy.is_finite() || bond_energy < 0.0 {
         return None;
     }
-    let efficiency = processing_efficiency.clamp(0.0, 1.0);
-    let usable = bond_energy * efficiency;
-    let heat = (bond_energy - usable).max(0.0);
-    (usable.is_finite() && heat.is_finite() && (bond_energy - usable - heat).abs() <= 1e-9)
-        .then_some((bond_energy, usable, heat))
+    let usable = -bond_energy;
+    let heat = 0.0;
+    (usable.is_finite() && (usable + bond_energy + heat).abs() <= 1e-9).then_some((
+        bond_energy,
+        usable,
+        heat,
+    ))
 }
 
 pub(crate) fn chemical_break_energy_yield(
     bond_energy: f64,
     disruption_cost: f64,
-    processing_efficiency: f64,
 ) -> Option<(f64, f64, f64)> {
     if !bond_energy.is_finite()
         || bond_energy < 0.0
         || !disruption_cost.is_finite()
         || disruption_cost < 0.0
-        || !processing_efficiency.is_finite()
     {
         return None;
     }
-    let efficiency = processing_efficiency.clamp(0.0, 1.0);
-    // The accumulated reaction quantity is an activation signal, not an
-    // energy reservoir. The removed bond's stored energy pays disruption work
-    // first; any shortfall is charged to the organism's usable-energy holder.
-    let surplus = (bond_energy - disruption_cost).max(0.0);
-    let deficit = (disruption_cost - bond_energy).max(0.0);
-    let usable = surplus * efficiency - deficit;
-    let heat = (surplus - surplus * efficiency).max(0.0);
-    (usable.is_finite()
-        && heat.is_finite()
-        && (usable - bond_energy + disruption_cost + heat).abs() <= 1e-9)
+    // BREAK raises structural potential by the dissociation energy and expends
+    // the remaining physical work. Activation is only a gate, never a source.
+    let usable = -(bond_energy + disruption_cost);
+    let heat = 0.0;
+    (usable.is_finite() && (usable + bond_energy + disruption_cost + heat).abs() <= 1e-9)
         .then_some((bond_energy, usable, heat))
 }
 
 /// Apply a chemistry-caused BREAK after the chemistry system has crossed
 /// the activation threshold. Reaction accumulation is a trigger, not an energy
-/// reservoir: disruption work is paid from the removed bond's stored energy
-/// first, with any shortfall debited from the organism's usable-energy holder.
+/// reservoir. Breaking a stable bond raises structural potential by its
+/// dissociation-energy magnitude, which must be paid from a real energy holder.
 /// Settle a chemistry BREAK where compatible retained resonance supplies part
-/// of the disruption work. The reservoir debit is committed by the caller only
-/// after this transaction succeeds; the remaining work is charged to the
-/// removed bond's energy/usable-energy balance.
+/// of the physical disruption work. Resonant energy is debited only after this
+/// transaction succeeds; the usable holder pays the structural-potential increase
+/// plus any disruption work not supplied by resonance.
 /// Prepared accounting for a chemical BREAK, before its source mutation commits.
 #[derive(Clone, Copy)]
 pub(crate) struct PreparedChemicalBreakEnergy {
@@ -80,16 +71,43 @@ pub(crate) fn prepare_chemical_break_energy_with_resonance(
     bond_energy: f64,
     activation_signal: f64,
     disruption_cost: f64,
-    resonant_work: f64,
+    resonance_withdrawal: f64,
+    processing_efficiency: f64,
+) -> Option<PreparedChemicalBreakEnergy> {
+    prepare_chemical_break_energy_with_structural_potentials(
+        usable_energy,
+        ledger,
+        bond_energy,
+        0.0,
+        bond_energy,
+        activation_signal,
+        disruption_cost,
+        resonance_withdrawal,
+        processing_efficiency,
+    )
+}
+
+fn prepare_chemical_break_energy_with_structural_potentials(
+    usable_energy: f64,
+    ledger: &EnergyLedger,
+    bond_energy: f64,
+    reactant_structural_potential: f64,
+    product_structural_potential: f64,
+    activation_signal: f64,
+    disruption_cost: f64,
+    resonance_withdrawal: f64,
     processing_efficiency: f64,
 ) -> Option<PreparedChemicalBreakEnergy> {
     if !usable_energy.is_finite()
         || usable_energy < 0.0
-        || !resonant_work.is_finite()
-        || resonant_work < 0.0
+        || !reactant_structural_potential.is_finite()
+        || !product_structural_potential.is_finite()
+        || !resonance_withdrawal.is_finite()
+        || resonance_withdrawal < 0.0
+        || !processing_efficiency.is_finite()
+        || !(0.05..=1.0).contains(&processing_efficiency)
         || !disruption_cost.is_finite()
         || disruption_cost < 0.0
-        || resonant_work > disruption_cost
         || !activation_signal.is_finite()
         || activation_signal < 0.0
         || !crate::chemistry::can_chemical_break(activation_signal, disruption_cost)
@@ -97,21 +115,39 @@ pub(crate) fn prepare_chemical_break_energy_with_resonance(
         return None;
     }
 
+    let structural_delta = product_structural_potential - reactant_structural_potential;
+    if !structural_delta.is_finite() {
+        return None;
+    }
+    // Efficiency determines how much useful disruption work the withdrawn
+    // compatible resonance supplies. The remainder is conversion heat, not
+    // an additional debit to the usable holder.
+    let resonant_work = (resonance_withdrawal * processing_efficiency).min(disruption_cost);
+    let conversion_loss = resonance_withdrawal - resonant_work;
+    if !resonant_work.is_finite() || !conversion_loss.is_finite() || conversion_loss < 0.0 {
+        return None;
+    }
     let bond_supplied_work = disruption_cost - resonant_work;
     let next_total_work = ledger.total_work_expended + disruption_cost;
+    let next_total_heat = ledger.total_heat_dissipated + conversion_loss;
+    if !next_total_heat.is_finite() {
+        return None;
+    }
     if !next_total_work.is_finite() {
         return None;
     }
-    let (gross, usable, heat) =
-        chemical_break_energy_yield(bond_energy, bond_supplied_work, processing_efficiency)?;
-    let transaction = EnergyTransaction {
-        reason: EnergyReason::Break,
-        potential_released: 0.0,
-        usable_delta: usable,
-        structural_delta: -gross,
-        work_expended: bond_supplied_work,
-        heat_dissipated: heat,
-    };
+    let (gross, _usable, _heat) = chemical_break_energy_yield(bond_energy, bond_supplied_work)?;
+    let delta_tolerance = 1e-9 * gross.abs().max(1.0);
+    if (structural_delta - gross).abs() > delta_tolerance {
+        return None;
+    }
+    let transaction = crate::energy_ledger::ReactionEnergyBalance::calculate(
+        reactant_structural_potential,
+        product_structural_potential,
+        bond_supplied_work,
+        0.0,
+    )?
+    .settlement_transaction(EnergyReason::Break)?;
     let mut prepared_ledger = *ledger;
     let mut prepared_usable_energy = usable_energy;
     if !prepared_ledger.settle_transaction(&mut prepared_usable_energy, transaction) {
@@ -120,10 +156,11 @@ pub(crate) fn prepare_chemical_break_energy_with_resonance(
     // The complete disruption cost is accounted once; resonance is debited by
     // the caller only after the corresponding physical mutation commits.
     prepared_ledger.total_work_expended = next_total_work;
+    prepared_ledger.total_heat_dissipated = next_total_heat;
     Some(PreparedChemicalBreakEnergy {
         usable_energy: prepared_usable_energy,
         ledger: prepared_ledger,
-        heat_dissipated: heat,
+        heat_dissipated: conversion_loss,
     })
 }
 
@@ -134,7 +171,7 @@ pub(crate) fn settle_chemical_break_energy_with_resonance(
     bond: crate::structure::Bond,
     activation_signal: f64,
     disruption_cost: f64,
-    resonant_work: f64,
+    resonance_withdrawal: f64,
     processing_efficiency: f64,
     ledger: &mut EnergyLedger,
 ) -> bool {
@@ -142,13 +179,22 @@ pub(crate) fn settle_chemical_break_energy_with_resonance(
     if trial_structure.break_matching_bond(bond).is_none() {
         return false;
     }
-    let Some(prepared) = prepare_chemical_break_energy_with_resonance(
+    let Some(before_potential) = crate::energy_ledger::structural_potential(&organism.structure)
+    else {
+        return false;
+    };
+    let Some(after_potential) = crate::energy_ledger::structural_potential(&trial_structure) else {
+        return false;
+    };
+    let Some(prepared) = prepare_chemical_break_energy_with_structural_potentials(
         organism.usable_energy,
         ledger,
         bond.bond_energy,
+        before_potential,
+        after_potential,
         activation_signal,
         disruption_cost,
-        resonant_work,
+        resonance_withdrawal,
         processing_efficiency,
     ) else {
         return false;
@@ -271,21 +317,26 @@ pub(crate) fn resolve_resonance_overload_break(
     else {
         return false;
     };
+    let processing_efficiency = organism.genome.processing_efficiency();
+    let required_resonance = barrier / processing_efficiency;
+    if !required_resonance.is_finite() {
+        return false;
+    }
     let mut trial_reservoir = organism.resonant_energy.clone();
-    let resonant_work = trial_reservoir.withdraw_compatible(reaction_frequency_hz, barrier);
-    if !resonant_work.is_finite() || resonant_work <= 1e-9 {
+    let resonance_withdrawal =
+        trial_reservoir.withdraw_compatible(reaction_frequency_hz, required_resonance);
+    if !resonance_withdrawal.is_finite() || resonance_withdrawal <= 1e-9 {
         return false;
     }
     // The overload event itself supplies the full activation signal; the
-    // settlement below separately accounts how much work came from resonance.
+    // settlement separately accounts useful resonance-funded work and loss.
     let reaction_energy = barrier;
-    let processing_efficiency = organism.genome.processing_efficiency();
     if !settle_chemical_break_energy_with_resonance(
         organism,
         target,
         reaction_energy,
         barrier,
-        resonant_work,
+        resonance_withdrawal,
         processing_efficiency,
         ledger,
     ) {
@@ -1451,19 +1502,12 @@ mod tests {
     }
 
     #[test]
-    fn bond_break_releases_only_stored_bond_potential() {
-        let (gross, usable, heat) = bond_break_energy_yield(4.0, 0.5).unwrap();
+    fn bond_break_requires_energy_for_binding_potential() {
+        let (gross, usable, heat) = bond_break_energy_yield(4.0).unwrap();
         assert_eq!(gross, 4.0);
-        assert_eq!(usable, 2.0);
-        assert_eq!(heat, 2.0);
-        assert!((gross - usable - heat).abs() < 1e-12);
-    }
-
-    #[test]
-    fn bond_break_rejects_non_finite_processing_efficiency() {
-        assert!(bond_break_energy_yield(4.0, f64::NAN).is_none());
-        assert!(bond_break_energy_yield(4.0, f64::INFINITY).is_none());
-        assert!(bond_break_energy_yield(4.0, f64::NEG_INFINITY).is_none());
+        assert_eq!(usable, -4.0);
+        assert_eq!(heat, 0.0);
+        assert!((gross + usable + heat).abs() < 1e-12);
     }
 
     #[test]
@@ -2266,22 +2310,21 @@ mod tests {
     }
 
     #[test]
-    fn chemical_break_energy_comes_from_the_removed_bond_not_the_reaction_signal() {
-        let (structural_energy, usable, heat) =
-            chemical_break_energy_yield(10.0, 4.0, 0.5).unwrap();
+    fn chemical_break_requires_binding_energy_and_disruption_work() {
+        let (structural_energy, usable, heat) = chemical_break_energy_yield(10.0, 4.0).unwrap();
         assert!((structural_energy - 10.0).abs() < 1e-12);
-        assert!((usable - 3.0).abs() < 1e-12);
-        assert!((heat - 3.0).abs() < 1e-12);
-        assert!((usable - structural_energy + 4.0 + heat).abs() < 1e-12);
+        assert!((usable + 14.0).abs() < 1e-12);
+        assert_eq!(heat, 0.0);
+        assert!((usable + structural_energy + 4.0 + heat).abs() < 1e-12);
     }
 
     #[test]
-    fn chemical_break_charges_a_work_shortfall_to_the_usable_holder() {
-        let (structural_energy, usable, heat) = chemical_break_energy_yield(4.0, 5.0, 0.5).unwrap();
+    fn chemical_break_charges_binding_energy_and_work_to_the_usable_holder() {
+        let (structural_energy, usable, heat) = chemical_break_energy_yield(4.0, 5.0).unwrap();
         assert!((structural_energy - 4.0).abs() < 1e-12);
-        assert!((usable + 1.0).abs() < 1e-12);
+        assert!((usable + 9.0).abs() < 1e-12);
         assert_eq!(heat, 0.0);
-        assert!((usable - structural_energy + 5.0 + heat).abs() < 1e-12);
+        assert!((usable + structural_energy + 5.0 + heat).abs() < 1e-12);
     }
 
     #[test]
@@ -2291,15 +2334,36 @@ mod tests {
         let resonant_work = 2.0;
         let bond_supplied_work = total_disruption_work - resonant_work;
         let (structural_energy, usable, heat) =
-            chemical_break_energy_yield(bond_energy, bond_supplied_work, 0.5).unwrap();
+            chemical_break_energy_yield(bond_energy, bond_supplied_work).unwrap();
 
         assert!((structural_energy - bond_energy).abs() < 1e-12);
-        assert!((usable - 0.5).abs() < 1e-12);
-        assert!((heat - 0.5).abs() < 1e-12);
-        // Bond energy plus the reservoir debit exactly pays usable gain,
-        // dissipated heat, and the full physical disruption work.
-        let residual = -structural_energy - resonant_work + usable + heat + total_disruption_work;
+        assert!((usable + bond_energy + bond_supplied_work).abs() < 1e-12);
+        assert_eq!(heat, 0.0);
+        // The binding-energy increase, usable-holder debit, resonance debit,
+        // and full physical disruption work reconcile independently.
+        let residual = structural_energy - resonant_work + usable + total_disruption_work;
         assert!(residual.abs() < 1e-12);
+    }
+
+    #[test]
+    fn resonance_funding_efficiency_loss_is_heat_and_not_double_charged() {
+        let ledger = crate::state::EnergyLedger::default();
+        let prepared = prepare_chemical_break_energy_with_structural_potentials(
+            20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0, 0.5,
+        )
+        .expect("two reservoir units at 50% efficiency provide one unit of work");
+
+        // The reaction needs four binding-energy units plus five work units.
+        // Resonance withdraws 2, supplies 1 work, and loses 1 as heat; the
+        // usable holder pays the remaining 8 units.
+        assert!((prepared.usable_energy - 12.0).abs() < 1e-12);
+        assert!((prepared.heat_dissipated - 1.0).abs() < 1e-12);
+        assert!((prepared.ledger.total_work_expended - 5.0).abs() < 1e-12);
+        assert!((prepared.ledger.total_heat_dissipated - 1.0).abs() < 1e-12);
+        let world_residual = (prepared.usable_energy - 20.0) + 4.0 - 2.0
+            + prepared.ledger.total_work_expended
+            + prepared.ledger.total_heat_dissipated;
+        assert!(world_residual.abs() < 1e-12);
     }
 
     #[test]
@@ -2484,7 +2548,7 @@ mod tests {
             after.residual()
         );
         assert!(after.current_resonant_energy < before.current_resonant_energy);
-        assert!(after.current_structural_energy < before.current_structural_energy);
+        assert!(after.current_structural_energy > before.current_structural_energy);
     }
 
     #[test]
@@ -2540,5 +2604,37 @@ mod tests {
         let candidates = resonance_break_candidate_indices(&organism, &environment);
         assert_eq!(candidates.len(), organism.structure.bonds.len());
         assert!(!candidates.is_empty());
+    }
+
+    #[test]
+    fn break_physical_energy_delta_is_independent_of_processing_efficiency() {
+        let ledger = crate::state::EnergyLedger::default();
+        let efficient = prepare_chemical_break_energy_with_structural_potentials(
+            20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 1.0, 1.0,
+        )
+        .expect("fully efficient resonance should fund one work unit");
+        let inefficient = prepare_chemical_break_energy_with_structural_potentials(
+            20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0, 0.5,
+        )
+        .expect("50% efficient resonance should fund the same useful work");
+
+        // The structural state transition is fixed by the physical bond,
+        // never by the efficiency of the organism's energy-conversion process.
+        assert_eq!(efficient.ledger.total_structural_energy_delta, 4.0);
+        assert_eq!(inefficient.ledger.total_structural_energy_delta, 4.0);
+        assert!((efficient.usable_energy - inefficient.usable_energy).abs() < 1e-12);
+        assert_eq!(efficient.ledger.total_work_expended, 5.0);
+        assert_eq!(inefficient.ledger.total_work_expended, 5.0);
+        assert_eq!(efficient.heat_dissipated, 0.0);
+        assert_eq!(inefficient.heat_dissipated, 1.0);
+
+        let efficient_residual = (efficient.usable_energy - 20.0) + 4.0 - 1.0
+            + efficient.ledger.total_work_expended
+            + efficient.heat_dissipated;
+        let inefficient_residual = (inefficient.usable_energy - 20.0) + 4.0 - 2.0
+            + inefficient.ledger.total_work_expended
+            + inefficient.heat_dissipated;
+        assert!(efficient_residual.abs() < 1e-12);
+        assert!(inefficient_residual.abs() < 1e-12);
     }
 }
