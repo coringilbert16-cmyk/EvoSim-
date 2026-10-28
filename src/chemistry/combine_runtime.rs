@@ -2388,9 +2388,7 @@ mod fluid_coalescence_transaction_tests {
             let after_resonance = resonance.total_energy().unwrap();
             assert!((before_resonance - after_resonance - withdrawal).abs() < 1e-9);
             assert!((ledger.total_work_expended - required).abs() < 1e-9);
-            assert!(
-                (ledger.total_heat_dissipated - (withdrawal - required)).abs() < 1e-9
-            );
+            assert!((ledger.total_heat_dissipated - (withdrawal - required)).abs() < 1e-9);
             assert!(
                 (after_potential - before_potential).abs() < 1e-9,
                 "transient fluid coalescence must not create persistent structural potential"
