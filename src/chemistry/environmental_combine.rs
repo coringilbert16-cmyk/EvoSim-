@@ -922,11 +922,11 @@ mod tests {
         assert_eq!(connections.len(), 1);
         assert!(connections[0].bond_energy.is_finite());
         assert!(connections[0].bond_energy > 0.0);
+        let inventory = simulation.energy_inventory_snapshot();
         assert!(
-            simulation
-                .energy_inventory_snapshot()
-                .is_balanced_without_creation(1e-6),
-            "environmental COMBINE must conserve the complete energy inventory"
+            inventory.is_balanced_without_creation(1e-6),
+            "environmental COMBINE must conserve the complete energy inventory; inventory={inventory:?}, residual={:?}",
+            inventory.residual()
         );
     }
 
