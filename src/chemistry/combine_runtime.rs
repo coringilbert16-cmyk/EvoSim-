@@ -2076,18 +2076,18 @@ mod fluid_coalescence_transaction_tests {
     }
 
     #[test]
-    fn consumed_fluid_bond_potential_is_heat_not_persistent_structure() {
+    fn fluid_coalescence_costs_energy_but_stable_bond_formation_releases_binding_energy() {
         let fluid_tx = combine_energy_transaction(2.0, 3.0, 4.0, true).unwrap();
         let rigid_tx = combine_energy_transaction(2.0, 3.0, 4.0, false).unwrap();
 
         assert!(fluid_tx.balanced());
         assert!(rigid_tx.balanced());
         assert_eq!(fluid_tx.usable_delta, -9.0);
-        assert_eq!(rigid_tx.usable_delta, -9.0);
         assert_eq!(fluid_tx.structural_delta, 0.0);
         assert_eq!(fluid_tx.work_expended, 4.0);
         assert_eq!(fluid_tx.heat_dissipated, 5.0);
-        assert_eq!(rigid_tx.structural_delta, 3.0);
+        assert_eq!(rigid_tx.usable_delta, -3.0);
+        assert_eq!(rigid_tx.structural_delta, -3.0);
         assert_eq!(rigid_tx.work_expended, 4.0);
         assert_eq!(rigid_tx.heat_dissipated, 2.0);
     }
