@@ -778,6 +778,149 @@ mod tests {
     }
 
     #[test]
+    fn environmental_pair_combine_commits_a_realized_product() {
+        let mut simulation = crate::state::Simulation::new(942, 10.0);
+        let catalog = simulation.environment.catalog.clone();
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        let cell = simulation
+            .environment
+            .field
+            .index_for_position(10.0, 10.0)
+            .unwrap();
+
+        let mut selected_pair = None;
+        'search: for resource_a in &catalog {
+            if resource_a.physical_state == crate::resources::PhysicalState::Fluid {
+                continue;
+            }
+            for resource_b in &catalog {
+                if resource_b.physical_state == crate::resources::PhysicalState::Fluid {
+                    continue;
+                }
+                for step in 1..=16 {
+                    let distance = step as f64 * 0.25;
+                    let source_a = PhysicalMaterial::realized(
+                        Material::free_base(resource_a.name.clone(), 1.0),
+                        vec![Placement {
+                            x: 10.0,
+                            y: 10.0,
+                            rotation_radians: 0.0,
+                        }],
+                        &catalog,
+                    );
+                    let source_b = PhysicalMaterial::realized(
+                        Material::free_base(resource_b.name.clone(), 1.0),
+                        vec![Placement {
+                            x: 10.0 + distance,
+                            y: 10.0,
+                            rotation_radians: 0.0,
+                        }],
+                        &catalog,
+                    );
+                    let (Some(source_a), Some(source_b)) = (source_a, source_b) else {
+                        continue;
+                    };
+                    let Some((mut structure, indices_a)) =
+                        restored_source(&source_a, &simulation.environment)
+                    else {
+                        continue;
+                    };
+                    let Some(indices_b) = crate::material_restoration::restore_material(
+                        &mut structure,
+                        &source_b,
+                        origin(),
+                        &catalog,
+                    ) else {
+                        continue;
+                    };
+                    if indices_b.iter().any(|index| {
+                        crate::construction_runtime::placed_unit_overlaps(
+                            &structure,
+                            &structure.units[*index],
+                            &indices_b,
+                            &catalog,
+                        )
+                    }) {
+                        continue;
+                    }
+                    let mut cache = ConnectionCompatibilityCache::new();
+                    let mut work = FIELD_COMPONENT_PAIR_LIMIT;
+                    if let Some(selected) = select_best_contact(
+                        &structure,
+                        &indices_a,
+                        &indices_b,
+                        &catalog,
+                        &mut cache,
+                        &mut work,
+                    ) {
+                        selected_pair = Some((source_a, source_b, selected));
+                        break 'search;
+                    }
+                }
+            }
+        }
+
+        let (source_a, source_b, selected) =
+            selected_pair.expect("catalog should contain a physically eligible material pair");
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            cell,
+            source_a.clone(),
+            &catalog,
+        ));
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            cell,
+            source_b.clone(),
+            &catalog,
+        ));
+        simulation.environment.chemistry_usable_energy = 1_000.0;
+        simulation.energy_ledger.total_usable_energy_held = 1_000.0;
+        simulation.energy_ledger.initial_usable_energy_held = 1_000.0;
+
+        let key = source_pair_key(
+            cell,
+            0,
+            &source_a,
+            cell,
+            1,
+            &source_b,
+            selected.unit_a,
+            selected.unit_b,
+            selected.candidate,
+        );
+        let operation = EnvironmentalCombineOperation {
+            cell_a: cell,
+            material_a: 0,
+            source_a,
+            cell_b: cell,
+            material_b: 1,
+            source_b,
+            unit_a: selected.unit_a,
+            unit_b: selected.unit_b - 1,
+            candidate: selected.candidate,
+            investment: selected.investment,
+            accumulation_key: key,
+            accumulated_reaction: 1.0,
+        };
+        assert!(resolve_environmental(
+            operation,
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
+        ));
+
+        let product = &simulation.environment.field.cells[cell].physical_materials;
+        assert_eq!(product.len(), 1);
+        let connections = product[0]
+            .internal_connections
+            .as_ref()
+            .expect("combined product must retain its bond graph");
+        assert_eq!(connections.len(), 1);
+        assert!(connections[0].bond_energy.is_finite());
+        assert!(connections[0].bond_energy > 0.0);
+    }
+
+    #[test]
     fn environmental_product_preserves_allocated_internal_bond_energy() {
         let catalog = crate::resources::default_catalog();
         let mut structure = OrganismStructure::new();
