@@ -366,6 +366,107 @@ fn form_bond_from_candidate(
     .ok()
 }
 
+/// Fund an organism's COMBINE deficit from compatible retained resonance
+/// before falling back to its usable-energy holder. Constructor/reproduction
+/// callers keep using the ordinary bond path because they have no organism
+/// resonance context.
+fn form_bond_with_resonance(
+    structure: &mut crate::structure::OrganismStructure,
+    request: BondFormationRequest,
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+    resonance: &mut crate::harmonics::ResonantEnergyReservoir,
+    processing_efficiency: f64,
+) -> Option<CombineAttempt> {
+    if !processing_efficiency.is_finite() || !(0.05..=1.0).contains(&processing_efficiency) {
+        return None;
+    }
+    let candidate = crate::contact::connection_pair_candidates_cached(
+        structure,
+        request.unit_a,
+        request.unit_b,
+        catalog,
+        cache,
+    )
+    .into_iter()
+    .find(|candidate| {
+        candidate.endpoint_a == request.endpoint_a
+            && candidate.endpoint_b == request.endpoint_b
+            && candidate.distance <= COMBINE_CONTACT_TOLERANCE
+            && candidate.available_a
+            && candidate.available_b
+    })?;
+    let (_, _, _, required) = evaluate_candidate(
+        structure,
+        request.unit_a,
+        request.unit_b,
+        candidate,
+        catalog,
+    )?;
+    let original_energy = *energy;
+    let mut trial_energy = original_energy;
+    let mut trial_ledger = *ledger;
+    let mut trial_resonance = resonance.clone();
+
+    let shortfall = (required - original_energy).max(0.0);
+    if shortfall > EPSILON {
+        let properties_a = structure.units.get(request.unit_a)?.properties(catalog)?;
+        let properties_b = structure.units.get(request.unit_b)?.properties(catalog)?;
+        let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
+        let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
+        if !frequency_a.is_finite()
+            || frequency_a <= 0.0
+            || !frequency_b.is_finite()
+            || frequency_b <= 0.0
+        {
+            return None;
+        }
+        let reaction_frequency_hz = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        if !reaction_frequency_hz.is_finite() || reaction_frequency_hz <= 0.0 {
+            return None;
+        }
+        let requested_withdrawal = shortfall / processing_efficiency;
+        if !requested_withdrawal.is_finite() {
+            return None;
+        }
+        let withdrawal =
+            trial_resonance.withdraw_compatible(reaction_frequency_hz, requested_withdrawal);
+        let useful_energy = withdrawal * processing_efficiency;
+        let conversion_loss = withdrawal - useful_energy;
+        if !withdrawal.is_finite()
+            || withdrawal < 0.0
+            || !useful_energy.is_finite()
+            || !conversion_loss.is_finite()
+            || conversion_loss < 0.0
+            || useful_energy + EPSILON < shortfall
+        {
+            return None;
+        }
+        trial_energy += useful_energy;
+        trial_ledger.total_heat_dissipated += conversion_loss;
+        if !trial_energy.is_finite() || !trial_ledger.total_heat_dissipated.is_finite() {
+            return None;
+        }
+    }
+
+    let mut attempt = form_bond(
+        structure,
+        request,
+        catalog,
+        cache,
+        &mut trial_ledger,
+        &mut trial_energy,
+    )?;
+    attempt.net_energy_change = trial_energy - original_energy;
+    *energy = trial_energy;
+    *ledger = trial_ledger;
+    *resonance = trial_resonance;
+    Some(attempt)
+}
+
 fn form_bond_from_candidate_diagnostic(
     structure: &mut crate::structure::OrganismStructure,
     request: BondFormationRequest,
