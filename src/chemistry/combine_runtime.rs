@@ -2496,7 +2496,7 @@ mod fluid_coalescence_transaction_tests {
 
     #[test]
     fn insufficient_resonance_rolls_back_organism_combine_state_atomically() {
-        let (mut structure, catalog, candidate, investment, required) =
+        let (mut structure, catalog, candidate, _work, investment, required) =
             build_energy_deficient_chemical_pair();
         let mut cache = ConnectionCompatibilityCache;
         assert!(required > 0.0);
