@@ -833,10 +833,15 @@ pub(crate) fn resolve_environmental(
     };
     let usable_delta = prepared.usable_energy - environment.chemistry_usable_energy;
     let next_total_usable = ledger.total_usable_energy_held + usable_delta;
+    let structural_delta =
+        prepared.ledger.total_structural_energy_delta - ledger.total_structural_energy_delta;
+    let next_total_structural = ledger.total_structural_energy_held + structural_delta;
     let next_total_resonant = ledger.total_resonant_energy_held - resonant_work;
     if !usable_delta.is_finite()
         || !next_total_usable.is_finite()
         || next_total_usable < 0.0
+        || !structural_delta.is_finite()
+        || !next_total_structural.is_finite()
         || !next_total_resonant.is_finite()
         || next_total_resonant < 0.0
     {
@@ -855,6 +860,7 @@ pub(crate) fn resolve_environmental(
     environment.resonant_energy = staged_resonance;
     *ledger = prepared.ledger;
     ledger.total_usable_energy_held = next_total_usable;
+    ledger.total_structural_energy_held = next_total_structural;
     ledger.total_resonant_energy_held = next_total_resonant;
     true
 }
