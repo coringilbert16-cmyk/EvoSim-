@@ -287,6 +287,17 @@ impl ReactionEnergyBalance {
             && (legitimate_external_input - self.required_external_input).is_finite()
     }
 
+    /// Build the ledger transaction from the same pre/post-state balance
+    /// used to decide whether the reaction is favorable or needs energy input.
+    pub(crate) fn settlement_transaction(self, reason: EnergyReason) -> Option<EnergyTransaction> {
+        EnergyTransaction::reaction(
+            reason,
+            self.net_reaction_change,
+            self.physical_work,
+            self.dissipated_heat,
+        )
+    }
+
     /// The signed conservation residual after applying the supplied input and
     /// recording all explicit destinations. Positive residual means creation.
     pub(crate) fn residual(self, legitimate_external_input: f64) -> Option<f64> {
