@@ -1172,9 +1172,9 @@ pub(crate) fn finish_reproduction(
         // before its usable energy is partitioned between the two offspring.
         let reactant_structural_energy =
             crate::energy_ledger::structural_potential(&parent.structure)?;
-        let product_structural_energy = crate::energy_ledger::structural_potential(
-            &staged_parent_structure,
-        )? + crate::energy_ledger::structural_potential(&child_structure)?;
+        let product_structural_energy =
+            crate::energy_ledger::structural_potential(&staged_parent_structure)?
+                + crate::energy_ledger::structural_potential(&child_structure)?;
         let structural_delta = product_structural_energy - reactant_structural_energy;
         let crossing_tolerance = 1e-9 * crossing_bond_energy.abs().max(1.0);
         if !product_structural_energy.is_finite()
