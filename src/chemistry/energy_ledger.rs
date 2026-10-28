@@ -139,8 +139,10 @@ pub(crate) struct EnergyTransaction {
 }
 
 impl EnergyTransaction {
-    /// A pure expenditure: usable energy is consumed and allocated exactly
-    /// once among persistent structure, work, and dissipated energy.
+    /// A non-chemical expenditure with no structural-potential change.
+    /// Any bond formation/breaking must use the shared reaction settlement
+    /// contract so its signed pre/post-state delta cannot be treated as a cost
+    /// destination or a stored-energy reservoir.
     pub(crate) fn expenditure(
         reason: EnergyReason,
         structural_delta: f64,
@@ -148,7 +150,7 @@ impl EnergyTransaction {
         heat_dissipated: f64,
     ) -> Option<Self> {
         if !structural_delta.is_finite()
-            || structural_delta < 0.0
+            || structural_delta != 0.0
             || !work_expended.is_finite()
             || work_expended < 0.0
             || !heat_dissipated.is_finite()
@@ -156,12 +158,12 @@ impl EnergyTransaction {
         {
             return None;
         }
-        let cost = structural_delta + work_expended + heat_dissipated;
+        let cost = work_expended + heat_dissipated;
         cost.is_finite().then_some(Self {
             reason,
             potential_released: 0.0,
             usable_delta: -cost,
-            structural_delta,
+            structural_delta: 0.0,
             work_expended,
             heat_dissipated,
         })
@@ -1163,12 +1165,12 @@ mod tests {
     }
 
     #[test]
-    fn pure_expenditure_does_not_release_potential_energy() {
-        let tx = EnergyTransaction::expenditure(EnergyReason::Combine, 3.0, 1.0, 2.0).unwrap();
+    fn pure_expenditure_does_not_change_structural_potential() {
+        let tx = EnergyTransaction::expenditure(EnergyReason::Combine, 0.0, 1.0, 2.0).unwrap();
         assert!(tx.balanced());
         assert_eq!(tx.potential_released, 0.0);
-        assert_eq!(tx.usable_delta, -6.0);
-        assert_eq!(tx.structural_delta, 3.0);
+        assert_eq!(tx.usable_delta, -3.0);
+        assert_eq!(tx.structural_delta, 0.0);
         assert_eq!(tx.work_expended, 1.0);
         assert_eq!(tx.heat_dissipated, 2.0);
     }
