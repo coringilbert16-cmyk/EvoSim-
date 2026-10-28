@@ -143,6 +143,8 @@ mod tests {
                 continue;
             }
 
+            let before_structural_energy =
+                crate::energy_ledger::structural_potential(&trial).unwrap();
             let mut ledger = EnergyLedger::default();
             let mut energy = 0.0;
             let before_energy = energy;
@@ -176,6 +178,15 @@ mod tests {
                 assert!(
                     (attempt.usable_energy_delta - (energy - before_energy)).abs() < 1.0e-9,
                     "reported usable-energy delta must match the holder balance"
+                );
+                let after_structural_energy =
+                    crate::energy_ledger::structural_potential(&trial).unwrap();
+                assert!(
+                    (attempt.net_energy_change
+                        - (after_structural_energy - before_structural_energy))
+                        .abs()
+                        < 1.0e-9,
+                    "reported physical reaction delta must match product-minus-reactant potential"
                 );
                 assert_eq!(
                     ledger.total_heat_dissipated, 0.0,
