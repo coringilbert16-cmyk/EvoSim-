@@ -1724,6 +1724,31 @@ mod fluid_coalescence_transaction_tests {
     }
 
     #[test]
+    fn unfavorable_combine_work_deficit_is_rejected_without_creating_energy() {
+        // A weak bond releases one unit of structural potential, but ten units
+        // of formation work are required. The shared transaction must debit the
+        // remaining nine units from the holder and may not invent that deficit.
+        let transaction =
+            combine_energy_transaction(1.0, 10.0, false, 0.0, -1.0).unwrap();
+        assert_eq!(transaction.usable_delta, -9.0);
+
+        let mut ledger = EnergyLedger::default();
+        let mut underfunded = 8.0;
+        assert!(!ledger.settle_transaction(&mut underfunded, transaction));
+        assert_eq!(underfunded, 8.0, "failed settlement must be atomic");
+        assert_eq!(ledger.total_structural_energy_delta, 0.0);
+        assert_eq!(ledger.total_work_expended, 0.0);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+
+        let mut exactly_funded = 9.0;
+        assert!(ledger.settle_transaction(&mut exactly_funded, transaction));
+        assert_eq!(exactly_funded, 0.0);
+        assert_eq!(ledger.total_structural_energy_delta, -1.0);
+        assert_eq!(ledger.total_work_expended, 10.0);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+    }
+
+    #[test]
     fn successful_live_combine_reconciles_independent_world_energy_inventory() {
         let (structure, catalog, _) = build_bonded_pair(0.0, false);
         let mut structure = structure;
