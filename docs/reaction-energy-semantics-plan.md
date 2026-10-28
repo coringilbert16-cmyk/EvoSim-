@@ -46,6 +46,18 @@ The first source audit confirms this is not a missing-ledger problem; it is a mi
 
 Do not simply change the sign of `bond_energy` or treat the current intrinsic bond-potential value as a reaction-energy delta. The current field is a positive structural energy store that COMBINE pays to create and BREAK can later release. A favorable chemical reaction requires an explicit, authoritative definition of reactant and product energy states and a consistent delta calculation. If the current model lacks enough state to derive that delta without guessing, the implementation must make that representation gap explicit rather than invent values from resource maximum potential or activation signal.
 
+## Implementation progress and representation gap
+
+The first implementation commit adds `ReactionEnergyBalance` in `src/chemistry/energy_ledger.rs`, a pure calculation of product-minus-reactant energy, work, dissipation, required legitimate input, and released surplus. Focused unit tests cover favorable, unfavorable, neutral, invalid-value, and surplus-input cases. This helper is deliberately a planner only; it does not mutate holders or claim that live COMBINE/BREAK now use the model.
+
+The follow-up source audit found a prerequisite that must be resolved before wiring the helper into live reactions:
+
+- `ResourceProperties::potential_energy` is immutable type-level maximum potential; `Material::potential_energy()` derives from catalog values. Neither is a mutable energy holder for an individual reactant and neither may be treated as energy released by a reaction.
+- A realized graph bond's `bond_energy` is an explicit structural energy store. Environmental `PhysicalMaterialBond` has no stored-energy field, and no energy is allocated when those internal bonds are stored.
+- The chemical interaction/attraction calculations describe compatibility and force/work, but the current world inventory does not independently inventory an authoritative unbonded chemical-potential store or a pre/post interaction-energy delta.
+
+Therefore the pure balance must not yet be plugged into COMBINE by inventing reactant energy from maximum type potential, by re-labeling the activation signal, or by crediting calculated attraction work that has not physically occurred. The next implementation task is to establish the smallest authoritative pre/post reaction-energy representation that can be reconciled with the existing world inventory, then wire COMBINE and BREAK through it atomically. If that representation cannot be made authoritative within this scope, the missing state must be resolved explicitly rather than hidden behind a tuning constant.
+
 ## Merge requirements
 
 PR A is mergeable only when all of the following are satisfied:
