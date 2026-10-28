@@ -964,6 +964,7 @@ mod tests {
                 "deltas: usable={:.12}, resonant={:.12}, structural={:.12}, ",
                 "external_input={:.12}, escaped_tone={:.12}, work={:.12}, heat={:.12}; ",
                 "product parts={:?}, realized bond_energy={:.12}; ",
+                "candidate required_energy={:.12}, investment={:.12}, distance={:.12}; ",
                 "ledger totals: usable={:.12}, structural={:.12}, work={:.12}, heat={:.12}"
             ),
             product[0]
@@ -973,6 +974,9 @@ mod tests {
                 .map(|(name, _)| name.as_str())
                 .collect::<Vec<_>>(),
             connections[0].bond_energy,
+            selected.required_energy,
+            selected.investment,
+            selected.candidate.distance,
             inventory.current_usable_energy - baseline.current_usable_energy,
             inventory.current_resonant_energy - baseline.current_resonant_energy,
             inventory.current_structural_energy - baseline.current_structural_energy,
