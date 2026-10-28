@@ -816,7 +816,7 @@ pub(crate) fn try_combine_stored_unit(
 /// rigid-rigid COMBINE retain their ordinary path. The live caller must pass
 /// trial state: this helper stages a second clone and commits only after every
 /// retained endpoint, material amount, and bond validates.
-fn coalesce_fluid_pair_after_bond(
+pub(crate) fn coalesce_fluid_pair_after_bond(
     structure: &mut crate::structure::OrganismStructure,
     first_index: usize,
     second_index: usize,
