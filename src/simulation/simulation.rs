@@ -3230,7 +3230,7 @@ mod decomposition_finalization_tests {
             .structure
             .bonds
             .iter()
-            .map(|bond| bond.bond_energy)
+            .map(|bond| -bond.bond_energy)
             .sum::<f64>();
         let inventory = simulation.energy_inventory_snapshot();
 
