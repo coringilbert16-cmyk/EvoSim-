@@ -958,19 +958,18 @@ mod tests {
         let id_b = structure.physical_id(b).unwrap();
         let candidate = crate::contact::connection_pair_candidates(&structure, a, b, &catalog)
             .into_iter()
-            .find(|candidate| candidate.available_a && candidate.available_b);
-        let Some(candidate) = candidate else {
-            return;
-        };
+            .find(|candidate| candidate.available_a && candidate.available_b)
+            .expect("carbon-hydrogen pair should expose a compatible contact");
         let bond = crate::structure::Bond {
             endpoint_a: crate::structure::BondEndpoint::new(id_a, candidate.endpoint_a),
             endpoint_b: crate::structure::BondEndpoint::new(id_b, candidate.endpoint_b),
             strength: 0.5,
             bond_energy: 2.5,
         };
-        if crate::contact::try_add_bond(&mut structure, bond, &catalog).is_err() {
-            return;
-        }
+        assert!(
+            crate::contact::try_add_bond(&mut structure, bond, &catalog).is_ok(),
+            "valid realized contact should accept the test bond"
+        );
         let Some(physical) = physical_material_from_structure(&structure, &catalog) else {
             panic!("newly formed physical compound must retain its bond");
         };
