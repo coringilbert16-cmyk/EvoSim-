@@ -116,7 +116,7 @@ mod tests {
         let mut found = false;
         for placement in placements {
             let mut trial = structure.clone();
-            trial.add_unit(crate::structure::StructuralUnit::new("Carbon", placement));
+            trial.add_unit(crate::structure::StructuralUnit::new("Water", placement));
             let mut cache = crate::contact::ConnectionCompatibilityCache::new();
             let candidate = crate::contact::connection_pair_candidates_cached(
                 &trial, 0, 1, &catalog, &mut cache,
@@ -491,7 +491,7 @@ mod tests {
         let catalog = default_catalog();
         let mut structure = crate::structure::OrganismStructure::new();
         structure.add_unit(crate::structure::StructuralUnit::new(
-            "Carbon",
+            "Water",
             crate::structure::Placement {
                 x: 0.0,
                 y: 0.0,
@@ -499,11 +499,14 @@ mod tests {
             },
         ));
 
-        let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
+        // Fluid coalescence has no persistent graph-bond potential to credit,
+        // so it remains a genuinely expenditure-funded COMBINE path even when
+        // stable chemical bond formation can be favorable.
+        let water = catalog.iter().find(|r| r.name == "Water").unwrap();
         let mut found_failure = false;
         for placement in crate::construction_runtime::candidate_placements(
             &structure,
-            carbon,
+            water,
             crate::structure::Placement {
                 x: 0.0,
                 y: 0.0,
