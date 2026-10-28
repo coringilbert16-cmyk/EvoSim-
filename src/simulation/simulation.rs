@@ -175,10 +175,8 @@ impl Simulation {
             crate::reproduction::total_resonant_energy_held(std::slice::from_ref(&organism));
         energy_ledger.initial_resonant_energy_held = energy_ledger.total_resonant_energy_held;
         energy_ledger.total_structural_energy_held =
-            crate::reproduction::total_structural_energy_held(
-                std::slice::from_ref(&organism),
-                &[],
-            ) + Self::environmental_structural_energy_held(&environment);
+            crate::reproduction::total_structural_energy_held(std::slice::from_ref(&organism), &[])
+                + Self::environmental_structural_energy_held(&environment);
         energy_ledger.initial_structural_energy_held = energy_ledger.total_structural_energy_held;
         Self {
             tick: 0,
