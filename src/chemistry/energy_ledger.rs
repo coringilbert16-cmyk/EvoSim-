@@ -254,13 +254,13 @@ impl ReactionEnergyBalance {
         physical_work: f64,
         dissipated_heat: f64,
     ) -> Option<Self> {
-        let values = [
-            reactant_energy,
-            product_energy,
-            physical_work,
-            dissipated_heat,
-        ];
-        if values.iter().any(|value| !value.is_finite() || *value < 0.0) {
+        if !reactant_energy.is_finite()
+            || !product_energy.is_finite()
+            || !physical_work.is_finite()
+            || physical_work < 0.0
+            || !dissipated_heat.is_finite()
+            || dissipated_heat < 0.0
+        {
             return None;
         }
         let net_reaction_change = product_energy - reactant_energy;
@@ -648,6 +648,15 @@ mod tests {
     }
 
     #[test]
+    fn stable_bond_formation_is_a_negative_product_potential_change() {
+        let balance = ReactionEnergyBalance::calculate(0.0, -5.0, 2.0, 1.0).unwrap();
+        assert_eq!(balance.net_reaction_change, -5.0);
+        assert_eq!(balance.required_external_input, 0.0);
+        assert_eq!(balance.released_surplus, 2.0);
+        assert_eq!(balance.residual(0.0), Some(0.0));
+    }
+
+    #[test]
     fn unfavorable_reaction_requires_legitimate_input_for_the_deficit() {
         let balance = ReactionEnergyBalance::calculate(3.0, 8.0, 1.0, 0.5).unwrap();
         assert_eq!(balance.net_reaction_change, 5.0);
@@ -676,8 +685,8 @@ mod tests {
 
     #[test]
     fn reaction_balance_rejects_non_finite_or_negative_state_values() {
-        assert!(ReactionEnergyBalance::calculate(-1.0, 0.0, 0.0, 0.0).is_none());
         assert!(ReactionEnergyBalance::calculate(0.0, f64::NAN, 0.0, 0.0).is_none());
+        assert!(ReactionEnergyBalance::calculate(0.0, 0.0, -1.0, 0.0).is_none());
         assert!(ReactionEnergyBalance::calculate(0.0, 0.0, f64::INFINITY, 0.0).is_none());
         let balance = ReactionEnergyBalance::calculate(1.0, 1.0, 0.0, 0.0).unwrap();
         assert!(!balance.can_commit_with(f64::NAN));
