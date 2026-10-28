@@ -1261,6 +1261,8 @@ struct PlacementRejectionCounts {
     no_bond_contact: usize,
     candidate_evaluation_rejections: usize,
     combine_rejections: usize,
+    combine_rejection_reasons: std::collections::BTreeMap<&'static str, usize>,
+    multi_contact_bond_rejections: usize,
     neighbor_rejections_by_index: std::collections::BTreeMap<usize, usize>,
 }
 
@@ -1545,7 +1547,7 @@ fn realize_next_bond_driven(
                         continue;
                     };
 
-                    let Some(attempt) = crate::combine_runtime::form_selected_bond(
+                    let attempt = match crate::combine_runtime::form_selected_bond_diagnostic(
                         &mut trial,
                         existing_index,
                         new_unit_index,
@@ -1555,9 +1557,13 @@ fn realize_next_bond_driven(
                         &mut bond_cache,
                         &mut trial_ledger,
                         &mut trial_energy,
-                    ) else {
-                        rejection_counts.combine_rejections += 1;
-                        continue;
+                    ) {
+                        Ok(attempt) => attempt,
+                        Err(reason) => {
+                            rejection_counts.combine_rejections += 1;
+                            *rejection_counts.combine_rejection_reasons.entry(reason).or_default() += 1;
+                            continue;
+                        }
                     };
 
                     if !form_remaining_multi_contact_bonds(
@@ -1569,6 +1575,7 @@ fn realize_next_bond_driven(
                         &mut trial_energy,
                     ) {
                         rejection_counts.combine_rejections += 1;
+                        rejection_counts.multi_contact_bond_rejections += 1;
                         continue;
                     }
 
@@ -1937,7 +1944,7 @@ fn construct_blueprint_bond_driven_internal(
 
         if !attached {
             eprintln!(
-                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} overlap_rejections={} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={}",
+                "[construction-placement-diagnostics] element={index} cumulative_attempts={nodes} element_attempts={} generated={} deduplicated={} restore_failures={} overlap_rejections={} neighbor_contact_rejections={} neighbor_rejections_by_index={:?} no_bond_contact={} candidate_evaluation_rejections={} combine_rejections={} combine_rejection_reasons={:?} multi_contact_bond_rejections={}",
                 rejection_counts.attempted_origins,
                 rejection_counts.generated_origins,
                 rejection_counts.deduplicated_origins,
@@ -1948,6 +1955,8 @@ fn construct_blueprint_bond_driven_internal(
                 rejection_counts.no_bond_contact,
                 rejection_counts.candidate_evaluation_rejections,
                 rejection_counts.combine_rejections,
+                rejection_counts.combine_rejection_reasons,
+                rejection_counts.multi_contact_bond_rejections,
             );
             return Err(format!(
                 "no forward bond-driven placement found for blueprint element {index} after {nodes} placement attempts"
