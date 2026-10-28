@@ -369,6 +369,63 @@ fn form_bond_from_candidate(
     .ok()
 }
 
+/// Stage the resonance-funded part of a COMBINE deficit. The reservoir,
+/// usable holder, and heat ledger are committed together only when compatible
+/// resonance covers the full useful-energy shortfall.
+fn fund_combine_deficit_with_resonance(
+    shortfall: f64,
+    energy: &mut f64,
+    ledger: &mut EnergyLedger,
+    resonance: &mut crate::harmonics::ResonantEnergyReservoir,
+    reaction_frequency_hz: f64,
+    processing_efficiency: f64,
+) -> bool {
+    if !shortfall.is_finite()
+        || shortfall < 0.0
+        || !energy.is_finite()
+        || *energy < 0.0
+        || !ledger.total_heat_dissipated.is_finite()
+        || ledger.total_heat_dissipated < 0.0
+        || !reaction_frequency_hz.is_finite()
+        || reaction_frequency_hz <= 0.0
+        || !processing_efficiency.is_finite()
+        || !(0.05..=1.0).contains(&processing_efficiency)
+    {
+        return false;
+    }
+
+    let mut trial_energy = *energy;
+    let mut trial_ledger = *ledger;
+    let mut trial_resonance = resonance.clone();
+    let requested_withdrawal = shortfall / processing_efficiency;
+    if !requested_withdrawal.is_finite() {
+        return false;
+    }
+    let withdrawal =
+        trial_resonance.withdraw_compatible(reaction_frequency_hz, requested_withdrawal);
+    let useful_energy = withdrawal * processing_efficiency;
+    let conversion_loss = withdrawal - useful_energy;
+    if !withdrawal.is_finite()
+        || withdrawal < 0.0
+        || !useful_energy.is_finite()
+        || !conversion_loss.is_finite()
+        || conversion_loss < 0.0
+        || useful_energy + EPSILON < shortfall
+    {
+        return false;
+    }
+    trial_energy += useful_energy;
+    trial_ledger.total_heat_dissipated += conversion_loss;
+    if !trial_energy.is_finite() || !trial_ledger.total_heat_dissipated.is_finite() {
+        return false;
+    }
+
+    *energy = trial_energy;
+    *ledger = trial_ledger;
+    *resonance = trial_resonance;
+    true
+}
+
 /// Fund an organism's COMBINE deficit from compatible retained resonance
 /// before falling back to its usable-energy holder. Constructor/reproduction
 /// callers keep using the ordinary bond path because they have no organism
@@ -428,29 +485,14 @@ fn form_bond_with_resonance(
             return None;
         }
         let reaction_frequency_hz = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
-        if !reaction_frequency_hz.is_finite() || reaction_frequency_hz <= 0.0 {
-            return None;
-        }
-        let requested_withdrawal = shortfall / processing_efficiency;
-        if !requested_withdrawal.is_finite() {
-            return None;
-        }
-        let withdrawal =
-            trial_resonance.withdraw_compatible(reaction_frequency_hz, requested_withdrawal);
-        let useful_energy = withdrawal * processing_efficiency;
-        let conversion_loss = withdrawal - useful_energy;
-        if !withdrawal.is_finite()
-            || withdrawal < 0.0
-            || !useful_energy.is_finite()
-            || !conversion_loss.is_finite()
-            || conversion_loss < 0.0
-            || useful_energy + EPSILON < shortfall
-        {
-            return None;
-        }
-        trial_energy += useful_energy;
-        trial_ledger.total_heat_dissipated += conversion_loss;
-        if !trial_energy.is_finite() || !trial_ledger.total_heat_dissipated.is_finite() {
+        if !fund_combine_deficit_with_resonance(
+            shortfall,
+            &mut trial_energy,
+            &mut trial_ledger,
+            &mut trial_resonance,
+            reaction_frequency_hz,
+            processing_efficiency,
+        ) {
             return None;
         }
     }
@@ -2420,6 +2462,77 @@ mod fluid_coalescence_transaction_tests {
                 .structural_delta,
             "efficiency changes funding, not physical potential"
         );
+    }
+
+    #[test]
+    fn combine_resonance_funding_scales_with_efficiency_and_conserves_energy() {
+        let mut low_efficiency_resonance =
+            crate::harmonics::ResonantEnergyReservoir::default();
+        let mut full_efficiency_resonance =
+            crate::harmonics::ResonantEnergyReservoir::default();
+        assert!(low_efficiency_resonance.deposit(440.0, 10.0));
+        assert!(full_efficiency_resonance.deposit(440.0, 10.0));
+        let mut low_energy = 0.0;
+        let mut full_energy = 0.0;
+        let mut low_ledger = EnergyLedger::default();
+        let mut full_ledger = EnergyLedger::default();
+
+        assert!(fund_combine_deficit_with_resonance(
+            4.0,
+            &mut low_energy,
+            &mut low_ledger,
+            &mut low_efficiency_resonance,
+            440.0,
+            0.5,
+        ));
+        assert!(fund_combine_deficit_with_resonance(
+            4.0,
+            &mut full_energy,
+            &mut full_ledger,
+            &mut full_efficiency_resonance,
+            440.0,
+            1.0,
+        ));
+
+        assert!((low_energy - 4.0).abs() < 1e-9);
+        assert!((full_energy - 4.0).abs() < 1e-9);
+        assert!((low_ledger.total_heat_dissipated - 4.0).abs() < 1e-9);
+        assert_eq!(full_ledger.total_heat_dissipated, 0.0);
+        assert!((low_efficiency_resonance.total_energy().unwrap() - 2.0).abs() < 1e-9);
+        assert!((full_efficiency_resonance.total_energy().unwrap() - 6.0).abs() < 1e-9);
+
+        let low_total = low_energy
+            + low_ledger.total_heat_dissipated
+            + low_efficiency_resonance.total_energy().unwrap();
+        let full_total = full_energy
+            + full_ledger.total_heat_dissipated
+            + full_efficiency_resonance.total_energy().unwrap();
+        assert!((low_total - 10.0).abs() < 1e-9);
+        assert!((full_total - 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn insufficient_combine_resonance_rolls_back_funding_state() {
+        let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
+        assert!(resonance.deposit(440.0, 2.0));
+        let original_resonance = resonance.clone();
+        let mut energy = 1.0;
+        let original_energy = energy;
+        let mut ledger = EnergyLedger::default();
+        ledger.total_heat_dissipated = 3.0;
+        let original_ledger = ledger;
+
+        assert!(!fund_combine_deficit_with_resonance(
+            4.0,
+            &mut energy,
+            &mut ledger,
+            &mut resonance,
+            440.0,
+            0.5,
+        ));
+        assert_eq!(energy, original_energy);
+        assert_eq!(ledger, original_ledger);
+        assert_eq!(resonance, original_resonance);
     }
 
     // This checks the energy-balance gate directly; current catalog COMBINE
