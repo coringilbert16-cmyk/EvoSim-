@@ -222,10 +222,10 @@ fn chemical_step(
     let Some(unit_b) = structure.units.get(selected.unit_b) else {
         reject_step!();
     };
-    let Some([(material_name_a, _)]) = Some(unit_a.material.parts.as_slice()) else {
+    let [(material_name_a, _)] = unit_a.material.parts.as_slice() else {
         reject_step!();
     };
-    let Some([(material_name_b, _)]) = Some(unit_b.material.parts.as_slice()) else {
+    let [(material_name_b, _)] = unit_b.material.parts.as_slice() else {
         reject_step!();
     };
     let Some(a) = unit_a.properties(&environment.catalog) else {
