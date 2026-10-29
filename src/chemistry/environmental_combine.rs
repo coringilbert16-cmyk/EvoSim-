@@ -193,22 +193,29 @@ fn chemical_step(
     updated_keys: &mut BTreeSet<String>,
     operations: &mut Vec<EnvironmentalCombineOperation>,
 ) {
+    macro_rules! reject_step {
+        () => {{
+            #[cfg(test)]
+            eprintln!("chemical_step rejected at line {}", line!());
+            reject_step!();
+        }};
+    }
     let Some(a) = structure
         .units
         .get(selected.unit_a)
         .and_then(|unit| unit.properties(&environment.catalog))
     else {
-        return;
+        reject_step!();
     };
     let Some(b) = structure
         .units
         .get(selected.unit_b)
         .and_then(|unit| unit.properties(&environment.catalog))
     else {
-        return;
+        reject_step!();
     };
     let (Some(position_a), Some(position_b)) = (a.chemical_position, b.chemical_position) else {
-        return;
+        reject_step!();
     };
     let Some(material_name_a) = structure.units[selected.unit_a]
         .material
@@ -216,7 +223,7 @@ fn chemical_step(
         .first()
         .map(|part| part.0.as_str())
     else {
-        return;
+        reject_step!();
     };
     let Some(material_name_b) = structure.units[selected.unit_b]
         .material
@@ -224,7 +231,7 @@ fn chemical_step(
         .first()
         .map(|part| part.0.as_str())
     else {
-        return;
+        reject_step!();
     };
     let Some(interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
         material_name_a,
@@ -234,7 +241,7 @@ fn chemical_step(
         selected.candidate,
         &environment.catalog,
     ) else {
-        return;
+        reject_step!();
     };
     let cache_key = crate::chemistry_library::ChemistryKey::from_live_geometry(
         material_name_a,
@@ -252,7 +259,7 @@ fn chemical_step(
                 crate::chemistry::CHEMICAL_K,
                 crate::chemistry::CHEMICAL_D_MAX,
             ) else {
-                return;
+                reject_step!();
             };
             match chemistry_library.get_or_insert_static_potential(cache_key, calculated) {
                 Ok(Some(value)) => value,
@@ -264,10 +271,10 @@ fn chemical_step(
         selected.candidate.distance,
         crate::chemistry::CHEMICAL_CONTACT_RADIUS,
     ) else {
-        return;
+        reject_step!();
     };
     let Some(engagement) = crate::chemistry::interface_engagement(selected.candidate.facing) else {
-        return;
+        reject_step!();
     };
     let key = source_pair_key(
         cell_a,
@@ -288,20 +295,20 @@ fn chemical_step(
         engagement,
         crate::chemistry::CHEMICAL_DISSIPATION,
     ) else {
-        return;
+        reject_step!();
     };
     if next <= 0.0 {
         updated_keys.insert(key.clone());
         accumulation.remove(&key);
-        return;
+        reject_step!();
     }
     let strength = crate::combine::bond_strength(a, b);
     let Some(barrier) = crate::chemistry::activation_barrier_from_bond_strength(strength) else {
-        return;
+        reject_step!();
     };
     let Some(activation_signal) = crate::chemistry::normalized_chemistry_to_activation_signal(next)
     else {
-        return;
+        reject_step!();
     };
     updated_keys.insert(key.clone());
     if crate::chemistry::activated(activation_signal, barrier) {
@@ -309,10 +316,10 @@ fn chemical_step(
         // position within its own restored source instead of subtracting recipe
         // entry counts, which need not equal the number of realized constituents.
         let Some(unit_a) = indices_a.iter().position(|index| *index == selected.unit_a) else {
-            return;
+            reject_step!();
         };
         let Some(unit_b) = indices_b.iter().position(|index| *index == selected.unit_b) else {
-            return;
+            reject_step!();
         };
         accumulation.remove(&key);
         operations.push(EnvironmentalCombineOperation {
