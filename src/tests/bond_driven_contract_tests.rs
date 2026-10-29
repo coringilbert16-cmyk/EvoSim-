@@ -38,7 +38,7 @@ mod tests {
         let catalog = default_catalog();
         let blueprint = two_carbon_bond_blueprint();
         let mut ledger = EnergyLedger::default();
-        let mut energy = 1.0e12;
+        let mut energy = 1.0e6;
 
         let (structure, _, _) = blueprint
             .realize_with_context(&catalog, &mut ledger, &mut energy)
@@ -73,7 +73,7 @@ mod tests {
         let catalog = default_catalog();
         let blueprint = two_carbon_bond_blueprint();
         let mut ledger = EnergyLedger::default();
-        let mut energy = 1.0e12;
+        let mut energy = 1.0e6;
 
         let (structure, _, _) = blueprint
             .realize_with_context(&catalog, &mut ledger, &mut energy)
@@ -278,7 +278,7 @@ mod tests {
         let before = structure.clone();
         let mut ledger = EnergyLedger::default();
         let before_ledger = ledger;
-        let mut energy = 1.0e12;
+        let mut energy = 1.0e6;
 
         let result = crate::combine_runtime::form_selected_bond(
             &mut structure,
@@ -296,7 +296,7 @@ mod tests {
         assert_eq!(structure.bonds, before.bonds);
         assert_eq!(structure.units, before.units);
         assert_eq!(ledger, before_ledger);
-        assert_eq!(energy, 1.0e12);
+        assert_eq!(energy, 1.0e6);
     }
     #[test]
     fn failed_material_selection_does_not_consume_inventory() {
@@ -315,7 +315,7 @@ mod tests {
         let before = storage.materials_snapshot();
 
         let mut ledger = EnergyLedger::default();
-        let mut energy = 1.0e12;
+        let mut energy = 1.0e6;
         assert!(blueprint
             .realize_with_materials(&catalog, &mut storage, &mut ledger, &mut energy,)
             .is_err());
@@ -343,7 +343,7 @@ mod tests {
 
         let before_storage = storage.materials_snapshot();
         let mut ledger = EnergyLedger::default();
-        let mut energy = 1.0e12;
+        let mut energy = 1.0e6;
 
         assert!(blueprint
             .realize_with_materials(&catalog, &mut storage, &mut ledger, &mut energy)
@@ -391,7 +391,7 @@ mod tests {
         ));
 
         let mut ledger = EnergyLedger::default();
-        let mut energy = 1.0e12;
+        let mut energy = 1.0e6;
         let (structure, _, _) = blueprint
             .realize_with_materials(&catalog, &mut storage, &mut ledger, &mut energy)
             .expect("construction should use the stored composite material");
@@ -467,7 +467,7 @@ mod tests {
         let before_storage = storage.materials_snapshot();
         let mut ledger = EnergyLedger::default();
         let before_ledger = ledger;
-        let mut energy = 1.0e12;
+        let mut energy = 1.0e6;
         let before_energy = energy;
 
         assert!(blueprint
