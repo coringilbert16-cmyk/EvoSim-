@@ -35,6 +35,10 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Environmental COMBINE and BREAK inventory round trip
         run: timeout 5m cargo test --locked environmental_pair_combine_commits_a_realized_product -- --nocapture
+      - name: Environmental discovery and realization budgets
+        run: timeout 5m cargo test --locked environmental_combine_
+      - name: Stored product bond energy survives restoration
+        run: timeout 5m cargo test --locked environmental_product_preserves_allocated_internal_bond_energy
       - name: Reaction settlement rounding regressions
         run: timeout 5m cargo test --locked reaction_settlement_
       - name: Full Rust test suite
