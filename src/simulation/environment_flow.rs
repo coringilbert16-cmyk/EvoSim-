@@ -37,6 +37,8 @@ impl Velocity {
 
 #[derive(Clone, Copy, Debug)]
 struct Obstacle {
+    source_cell: usize,
+    source_index: usize,
     x: f64,
     y: f64,
     radius: f64,
@@ -70,7 +72,7 @@ fn shape_radius(form: &Form) -> f64 {
     }
 }
 
-fn obstacle_for(material: &PhysicalMaterial, catalog: &[BaseResource]) -> Option<Obstacle> {
+fn obstacle_for(source_cell: usize, source_index: usize, material: &PhysicalMaterial, catalog: &[BaseResource]) -> Option<Obstacle> {
     let (x, y) = material_center(material)?;
     let placements = material.placements.as_ref()?;
     let mut radius: f64 = 0.5;
@@ -89,7 +91,7 @@ fn obstacle_for(material: &PhysicalMaterial, catalog: &[BaseResource]) -> Option
     let cohesion = weighted_cohesion / total;
     let permeability = crate::resources::permeability_from_cohesion(cohesion, catalog);
     Some(Obstacle {
-        x, y, radius,
+        source_cell, source_index, x, y, radius,
         solidity: (1.0 - permeability).clamp(0.0, 1.0),
     })
 }
@@ -133,8 +135,9 @@ fn background_velocity(x: f64, y: f64, width: f64, height: f64) -> Velocity {
     velocity
 }
 
-fn obstacle_adjusted_velocity(mut velocity: Velocity, x: f64, y: f64, obstacles: &[Obstacle], height: f64) -> Velocity {
+fn obstacle_adjusted_velocity(mut velocity: Velocity, x: f64, y: f64, source_cell: usize, source_index: usize, obstacles: &[Obstacle], height: f64) -> Velocity {
     for obstacle in obstacles {
+        if obstacle.source_cell == source_cell && obstacle.source_index == source_index { continue; }
         if obstacle.solidity <= 1e-6 {
             continue;
         }
@@ -197,13 +200,13 @@ pub(crate) fn transport_field(
         .flat_map(|(cell_index, cell)| cell.physical_materials.iter().cloned().enumerate()
             .map(move |(material_index, material)| (cell_index, material_index, material)))
         .collect();
-    let obstacles: Vec<Obstacle> = snapshot.iter().filter_map(|(_, _, material)| obstacle_for(material, catalog)).collect();
+    let obstacles: Vec<Obstacle> = snapshot.iter().filter_map(|(cell, index, material)| obstacle_for(*cell, *index, material, catalog)).collect();
     let mut staged = Vec::new();
 
     for (source_cell, source_index, material) in snapshot {
         let Some((x, y)) = material_center(&material) else { continue; };
         let mass = material.material.mass(catalog);
-        let velocity = obstacle_adjusted_velocity(background_velocity(x, y, width, height), x, y, &obstacles, height);
+        let velocity = obstacle_adjusted_velocity(background_velocity(x, y, width, height), x, y, source_cell, source_index, &obstacles, height);
         let scale = mobility(mass) * 0.15;
         let mut dx = velocity.x * scale;
         let dy = velocity.y * scale;
@@ -223,6 +226,7 @@ pub(crate) fn transport_field(
         return 0;
     }
 
+    let moved_count = staged.len();
     let mut changed = vec![false; field.cells.len()];
     for (source_cell, source_index, _, _) in &staged {
         if *source_cell >= field.cells.len() || *source_index >= field.cells[*source_cell].physical_materials.len() {
@@ -241,7 +245,6 @@ pub(crate) fn transport_field(
         field.cells[destination].physical_materials.push(material);
         changed[destination] = true;
     }
-    let moved_count = changed.iter().filter(|changed| **changed).count();
     for (index, did_change) in changed.into_iter().enumerate() {
         if did_change {
             field.mark_changed_at_index(index);
@@ -281,11 +284,11 @@ mod tests {
 
     #[test]
     fn dense_obstacle_shelters_its_downstream_wake() {
-        let obstacle = Obstacle { x: 10.0, y: 10.0, radius: 3.0, solidity: 1.0 };
+        let obstacle = Obstacle { source_cell: 9, source_index: 9, x: 10.0, y: 10.0, radius: 3.0, solidity: 1.0 };
         let free = Velocity { x: 1.0, y: 0.0 };
-        let wake = obstacle_adjusted_velocity(free, 15.0, 10.0, &[obstacle], 100.0);
+        let wake = obstacle_adjusted_velocity(free, 15.0, 10.0, 1, 1, &[obstacle], 100.0);
         assert!(wake.length() < free.length());
-        let upstream = obstacle_adjusted_velocity(free, 5.0, 10.0, &[obstacle], 100.0);
+        let upstream = obstacle_adjusted_velocity(free, 5.0, 10.0, 1, 1, &[obstacle], 100.0);
         assert_eq!(upstream, free);
     }
 }
