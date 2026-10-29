@@ -969,7 +969,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn environmental_pair_keys_include_instance_realization_and_endpoints() {
         let catalog = crate::resources::default_catalog();
