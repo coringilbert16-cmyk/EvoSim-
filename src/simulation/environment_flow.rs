@@ -861,6 +861,10 @@ mod tests {
             0,
         );
         assert!(angle.is_finite());
+        assert!(
+            angle.abs() > 1e-12,
+            "an anisotropic resource should respond to local flow vorticity"
+        );
 
         let compound = PhysicalMaterial::realized(
             crate::resources::Material {
@@ -895,6 +899,10 @@ mod tests {
             1,
         );
         assert!(angle.is_finite());
+        assert!(
+            angle.abs() > 1e-12,
+            "a compound spanning a flow gradient should experience angular response"
+        );
     }
 
     #[test]
