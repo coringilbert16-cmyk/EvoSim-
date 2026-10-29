@@ -792,6 +792,111 @@ mod tests {
     }
 
     #[test]
+    fn angular_response_is_finite_for_realized_resources_and_compounds() {
+        let catalog = crate::resources::default_catalog();
+        let resource = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Hydrogen", 1.0),
+            vec![crate::structure::Placement {
+                x: 25.0,
+                y: 40.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("catalog resource should realize");
+        let angle = angular_displacement(
+            &resource,
+            &catalog,
+            25.0,
+            40.0,
+            100.0,
+            80.0,
+            &[],
+            0,
+            0,
+        );
+        assert!(angle.is_finite());
+
+        let compound = PhysicalMaterial::realized(
+            crate::resources::Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![crate::resources::InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                crate::structure::Placement {
+                    x: 25.0,
+                    y: 40.0,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 26.0,
+                    y: 40.0,
+                    rotation_radians: 0.2,
+                },
+            ],
+            &catalog,
+        )
+        .expect("compound should realize");
+        let angle = angular_displacement(
+            &compound,
+            &catalog,
+            25.5,
+            40.0,
+            100.0,
+            80.0,
+            &[],
+            0,
+            1,
+        );
+        assert!(angle.is_finite());
+    }
+
+    #[test]
+    fn rotation_preserves_compound_distances_and_bond_state() {
+        let catalog = crate::resources::default_catalog();
+        let compound = PhysicalMaterial::realized(
+            crate::resources::Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![crate::resources::InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                crate::structure::Placement {
+                    x: 10.0,
+                    y: 10.0,
+                    rotation_radians: 0.1,
+                },
+                crate::structure::Placement {
+                    x: 11.0,
+                    y: 10.0,
+                    rotation_radians: 0.4,
+                },
+            ],
+            &catalog,
+        )
+        .expect("compound should realize");
+        let rotated = rotated(&compound, std::f64::consts::FRAC_PI_2, 100.0, 100.0)
+            .expect("finite rotation should succeed");
+        let before = compound.placements.as_ref().unwrap();
+        let after = rotated.placements.as_ref().unwrap();
+        let before_distance = (before[0].x - before[1].x).hypot(before[0].y - before[1].y);
+        let after_distance = (after[0].x - after[1].x).hypot(after[0].y - after[1].y);
+        assert!((before_distance - after_distance).abs() < 1e-9);
+        assert!((after[0].rotation_radians - before[0].rotation_radians
+            - std::f64::consts::FRAC_PI_2)
+            .abs()
+            < 1e-12);
+        assert_eq!(rotated.material, compound.material);
+        assert_eq!(rotated.internal_connections, compound.internal_connections);
+        assert_eq!(rotated.realized_shapes, compound.realized_shapes);
+    }
+
+    #[test]
     fn dense_obstacle_shelters_its_downstream_wake() {
         let obstacle = Obstacle {
             source_cell: 9,
