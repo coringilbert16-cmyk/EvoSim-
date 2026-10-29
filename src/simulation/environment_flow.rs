@@ -376,10 +376,42 @@ fn angular_displacement(
             return 0.0;
         }
         let epsilon = (width.min(height) * 1e-4).max(1e-3);
-        let right = background_velocity(center_x + epsilon, center_y, width, height);
-        let left = background_velocity(center_x - epsilon, center_y, width, height);
-        let up = background_velocity(center_x, center_y + epsilon, width, height);
-        let down = background_velocity(center_x, center_y - epsilon, width, height);
+        let right = obstacle_adjusted_velocity(
+            background_velocity(center_x + epsilon, center_y, width, height),
+            center_x + epsilon,
+            center_y,
+            source_cell,
+            source_index,
+            obstacles,
+            height,
+        );
+        let left = obstacle_adjusted_velocity(
+            background_velocity(center_x - epsilon, center_y, width, height),
+            center_x - epsilon,
+            center_y,
+            source_cell,
+            source_index,
+            obstacles,
+            height,
+        );
+        let up = obstacle_adjusted_velocity(
+            background_velocity(center_x, center_y + epsilon, width, height),
+            center_x,
+            center_y + epsilon,
+            source_cell,
+            source_index,
+            obstacles,
+            height,
+        );
+        let down = obstacle_adjusted_velocity(
+            background_velocity(center_x, center_y - epsilon, width, height),
+            center_x,
+            center_y - epsilon,
+            source_cell,
+            source_index,
+            obstacles,
+            height,
+        );
         let dv_y_dx = (right.y - left.y) / (2.0 * epsilon);
         let dv_x_dy = (up.x - down.x) / (2.0 * epsilon);
         (dv_y_dx - dv_x_dy) * 0.5 * anisotropy
