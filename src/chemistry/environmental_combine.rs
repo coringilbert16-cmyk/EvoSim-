@@ -897,6 +897,60 @@ mod tests {
         assert_eq!(budget, 0);
     }
 
+
+    #[test]
+    fn environmental_combine_realization_scheduler_respects_budget_and_preserves_deferred_progress() {
+        let catalog = crate::resources::default_catalog();
+        let source = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![origin()],
+            &catalog,
+        )
+        .expect("single-resource material should realize");
+        let candidate = ConnectionPairCandidate {
+            endpoint_a: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
+            endpoint_b: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
+            distance: 0.0,
+            facing: 1.0,
+            load_a: 0.0,
+            load_b: 0.0,
+            available_a: true,
+            available_b: true,
+        };
+        let operation = |cell_a, cell_b, key: &str, progress| EnvironmentalCombineOperation {
+            cell_a,
+            material_a: 0,
+            source_a: source.clone(),
+            cell_b,
+            material_b: 0,
+            source_b: source.clone(),
+            unit_a: 0,
+            unit_b: 0,
+            candidate,
+            investment: 0.0,
+            accumulation_key: key.to_owned(),
+            accumulated_reaction: progress,
+        };
+        let operations = vec![
+            operation(0, 1, "environment|combine:a", 0.75),
+            operation(2, 3, "environment|combine:b", 0.5),
+        ];
+        let mut accumulation = BTreeMap::new();
+        let mut remaining_work = 1;
+
+        let scheduled =
+            schedule_environmental_operations(operations, 0, &mut remaining_work, &mut accumulation);
+
+        assert_eq!(scheduled.len(), 1, "one unit of realization budget permits one operation");
+        assert_eq!(remaining_work, 0, "the scheduler must charge every realized operation");
+        assert_eq!(accumulation.len(), 1, "deferred activation progress must be retained");
+        assert!(
+            accumulation.get("environment|combine:b") == Some(&0.5)
+                || accumulation.get("environment|combine:a") == Some(&0.75),
+            "the unscheduled operation's accumulated chemistry must survive deferral"
+        );
+    }
+
     #[test]
     fn environmental_pair_combine_commits_a_realized_product() {
         let mut simulation = crate::state::Simulation::new(942, 10.0);
