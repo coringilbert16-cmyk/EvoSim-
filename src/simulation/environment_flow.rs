@@ -166,7 +166,7 @@ fn background_velocity(x: f64, y: f64, width: f64, height: f64) -> Velocity {
         let dx = x - cx;
         let dy = (y - cy + height * 0.5).rem_euclid(height) - height * 0.5;
         let radial_sq = dx * dx + dy * dy;
-        let weight = (-radial_sq / (2.0 * vortex_radius * vortex_radius)).exp() * sign * 0.42;
+        let weight = (-radial_sq / (2.0 * vortex_radius * vortex_radius)).exp() * sign * 1.2;
         velocity = velocity.add(Velocity {
             x: -dy / vortex_radius * weight,
             y: dx / vortex_radius * weight,
@@ -413,6 +413,13 @@ mod tests {
         assert!(core > outer);
         let vortex = background_velocity(25.0, 40.0 + 80.0 * 0.23, 100.0, 80.0);
         assert!(vortex.x.is_finite() && vortex.y.is_finite());
+        let counter_flow = background_velocity(
+            25.0,
+            40.0 + 80.0 * 0.23 + 1.5 * (80.0 * 0.13),
+            100.0,
+            80.0,
+        );
+        assert!(counter_flow.x < 0.0, "the eddy must create a local counter-flow pocket");
     }
 
     #[test]
@@ -420,6 +427,23 @@ mod tests {
         assert!(mobility(1.5) < mobility(0.5));
         assert_eq!(mobility(100.0), 0.2);
         assert!(mobility(100.0) > 0.0);
+    }
+
+    #[test]
+    fn porous_obstacle_does_not_create_a_solid_wake() {
+        let porous = Obstacle {
+            source_cell: 9,
+            source_index: 9,
+            x: 10.0,
+            y: 10.0,
+            radius: 3.0,
+            solidity: 0.0,
+        };
+        let free = Velocity { x: 1.0, y: 0.0 };
+        assert_eq!(
+            obstacle_adjusted_velocity(free, 15.0, 10.0, 1, 1, &[porous], 100.0),
+            free
+        );
     }
 
     #[test]
