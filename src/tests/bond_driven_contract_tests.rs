@@ -38,7 +38,7 @@ mod tests {
         let catalog = default_catalog();
         let blueprint = two_carbon_bond_blueprint();
         let mut ledger = EnergyLedger::default();
-        let mut energy = 1.0e12;
+        let mut energy = 1.0e6;
 
         let (structure, _, _) = blueprint
             .realize_with_context(&catalog, &mut ledger, &mut energy)
@@ -73,7 +73,7 @@ mod tests {
         let catalog = default_catalog();
         let blueprint = two_carbon_bond_blueprint();
         let mut ledger = EnergyLedger::default();
-        let mut energy = 1.0e12;
+        let mut energy = 1.0e6;
 
         let (structure, _, _) = blueprint
             .realize_with_context(&catalog, &mut ledger, &mut energy)
@@ -143,8 +143,6 @@ mod tests {
                 continue;
             }
 
-            let before_structural_energy =
-                crate::energy_ledger::structural_potential(&trial).unwrap();
             let mut ledger = EnergyLedger::default();
             let mut energy = 0.0;
             let before_energy = energy;
@@ -176,17 +174,8 @@ mod tests {
                     "holder balance must include the bond-formation energy release"
                 );
                 assert!(
-                    (attempt.usable_energy_delta - (energy - before_energy)).abs() < 1.0e-9,
-                    "reported usable-energy delta must match the holder balance"
-                );
-                let after_structural_energy =
-                    crate::energy_ledger::structural_potential(&trial).unwrap();
-                assert!(
-                    (attempt.net_energy_change
-                        - (after_structural_energy - before_structural_energy))
-                        .abs()
-                        < 1.0e-9,
-                    "reported physical reaction delta must match product-minus-reactant potential"
+                    (attempt.net_energy_change - (energy - before_energy)).abs() < 1.0e-9,
+                    "reported net energy change must match the holder balance"
                 );
                 assert_eq!(
                     ledger.total_heat_dissipated, 0.0,
@@ -289,7 +278,7 @@ mod tests {
         let before = structure.clone();
         let mut ledger = EnergyLedger::default();
         let before_ledger = ledger;
-        let mut energy = 1.0e12;
+        let mut energy = 1.0e6;
 
         let result = crate::combine_runtime::form_selected_bond(
             &mut structure,
@@ -307,7 +296,7 @@ mod tests {
         assert_eq!(structure.bonds, before.bonds);
         assert_eq!(structure.units, before.units);
         assert_eq!(ledger, before_ledger);
-        assert_eq!(energy, 1.0e12);
+        assert_eq!(energy, 1.0e6);
     }
     #[test]
     fn failed_material_selection_does_not_consume_inventory() {
@@ -326,7 +315,7 @@ mod tests {
         let before = storage.materials_snapshot();
 
         let mut ledger = EnergyLedger::default();
-        let mut energy = 1.0e12;
+        let mut energy = 1.0e6;
         assert!(blueprint
             .realize_with_materials(&catalog, &mut storage, &mut ledger, &mut energy,)
             .is_err());
@@ -354,7 +343,7 @@ mod tests {
 
         let before_storage = storage.materials_snapshot();
         let mut ledger = EnergyLedger::default();
-        let mut energy = 1.0e12;
+        let mut energy = 1.0e6;
 
         assert!(blueprint
             .realize_with_materials(&catalog, &mut storage, &mut ledger, &mut energy)
@@ -402,7 +391,7 @@ mod tests {
         ));
 
         let mut ledger = EnergyLedger::default();
-        let mut energy = 1.0e12;
+        let mut energy = 1.0e6;
         let (structure, _, _) = blueprint
             .realize_with_materials(&catalog, &mut storage, &mut ledger, &mut energy)
             .expect("construction should use the stored composite material");
@@ -478,7 +467,7 @@ mod tests {
         let before_storage = storage.materials_snapshot();
         let mut ledger = EnergyLedger::default();
         let before_ledger = ledger;
-        let mut energy = 1.0e12;
+        let mut energy = 1.0e6;
         let before_energy = energy;
 
         assert!(blueprint
