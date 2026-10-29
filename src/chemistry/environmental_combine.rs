@@ -1069,7 +1069,7 @@ mod tests {
             }
         }
 
-        let (source_a, source_b, selected) =
+        let (source_a, source_b, _selected) =
             selected_pair.expect("catalog should contain a physically eligible material pair");
         assert!(simulation.environment.field.deposit_physical_at_index(
             cell,
