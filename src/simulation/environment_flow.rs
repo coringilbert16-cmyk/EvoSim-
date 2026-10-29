@@ -558,7 +558,13 @@ pub(crate) fn transport_field(
             source_cell,
             source_index,
         );
-        let Some(moved) = rotated(&translated_material, angular_step, catalog, width, height) else {
+        let Some(moved) = rotated(
+            &translated_material,
+            angular_step,
+            catalog,
+            width,
+            height,
+        ) else {
             continue;
         };
         let Some(anchor) = moved.placements.as_ref().and_then(|p| p.first()) else {
@@ -925,10 +931,12 @@ mod tests {
         let before_distance = (before[0].x - before[1].x).hypot(before[0].y - before[1].y);
         let after_distance = (after[0].x - after[1].x).hypot(after[0].y - after[1].y);
         assert!((before_distance - after_distance).abs() < 1e-9);
-        assert!((after[0].rotation_radians - before[0].rotation_radians
-            - std::f64::consts::FRAC_PI_2)
-            .abs()
-            < 1e-12);
+        assert!(
+            (after[0].rotation_radians - before[0].rotation_radians
+                - std::f64::consts::FRAC_PI_2)
+                .abs()
+                < 1e-12
+        );
         assert_eq!(rotated.material, compound.material);
         assert_eq!(rotated.internal_connections, compound.internal_connections);
         assert_eq!(rotated.realized_shapes, compound.realized_shapes);
