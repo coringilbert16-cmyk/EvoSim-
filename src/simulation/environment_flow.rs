@@ -372,6 +372,7 @@ fn angular_displacement(
 fn rotated(
     material: &PhysicalMaterial,
     angle: f64,
+    catalog: &[BaseResource],
     width: f64,
     height: f64,
 ) -> Option<PhysicalMaterial> {
@@ -383,15 +384,30 @@ fn rotated(
     if placements.is_empty() {
         return None;
     }
-    let center_x = placements.iter().map(|p| p.x).sum::<f64>() / placements.len() as f64;
     let anchor_y = placements[0].y;
-    let center_y = (anchor_y
-        + placements
-            .iter()
-            .map(|p| (p.y - anchor_y + height * 0.5).rem_euclid(height) - height * 0.5)
-            .sum::<f64>()
-            / placements.len() as f64)
-        .rem_euclid(height);
+    let mut total_mass = 0.0;
+    let mut weighted_x = 0.0;
+    let mut weighted_y = 0.0;
+    for (index, placement) in placements.iter().enumerate() {
+        let Some((name, amount)) = material.material.parts.get(index) else {
+            return None;
+        };
+        let resource = resource_for_part(name, catalog)?;
+        let mass = resource.properties.mass * *amount;
+        if !mass.is_finite() || mass <= 0.0 {
+            return None;
+        }
+        total_mass += mass;
+        weighted_x += placement.x * mass;
+        weighted_y += ((placement.y - anchor_y + height * 0.5).rem_euclid(height)
+            - height * 0.5)
+            * mass;
+    }
+    if !total_mass.is_finite() || total_mass <= 0.0 {
+        return None;
+    }
+    let center_x = weighted_x / total_mass;
+    let center_y = (anchor_y + weighted_y / total_mass).rem_euclid(height);
     let (sin, cos) = angle.sin_cos();
     for placement in placements.iter_mut() {
         let dx = placement.x - center_x;
@@ -522,7 +538,7 @@ pub(crate) fn transport_field(
             source_cell,
             source_index,
         );
-        let Some(moved) = rotated(&translated_material, angular_step, width, height) else {
+        let Some(moved) = rotated(&translated_material, angular_step, catalog, width, height) else {
             continue;
         };
         let Some(anchor) = moved.placements.as_ref().and_then(|p| p.first()) else {
@@ -880,7 +896,7 @@ mod tests {
             &catalog,
         )
         .expect("compound should realize");
-        let rotated = rotated(&compound, std::f64::consts::FRAC_PI_2, 100.0, 100.0)
+        let rotated = rotated(&compound, std::f64::consts::FRAC_PI_2, &catalog, 100.0, 100.0)
             .expect("finite rotation should succeed");
         let before = compound.placements.as_ref().unwrap();
         let after = rotated.placements.as_ref().unwrap();
