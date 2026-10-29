@@ -424,16 +424,24 @@ mod tests {
         assert!(core > outer);
         let vortex = background_velocity(25.0, 40.0 + 80.0 * 0.23, 100.0, 80.0);
         assert!(vortex.x.is_finite() && vortex.y.is_finite());
-        let first_bend_counter_flow =
-            background_velocity(25.0, 40.0 + 80.0 * 0.23 + 1.5 * (80.0 * 0.13), 100.0, 80.0);
+        let first_bend_counter_flow = background_velocity(
+            25.0,
+            40.0 + 80.0 * 0.23 + 1.5 * (80.0 * 0.13),
+            100.0,
+            80.0,
+        );
         assert!(
             first_bend_counter_flow.x < 0.0,
             "the first bend must create a local counter-flow pocket"
         );
 
         let second_bend_center = 40.0 - 80.0 * 0.23;
-        let second_bend_counter_flow =
-            background_velocity(75.0, second_bend_center - 1.5 * (80.0 * 0.13), 100.0, 80.0);
+        let second_bend_counter_flow = background_velocity(
+            75.0,
+            second_bend_center - 1.5 * (80.0 * 0.13),
+            100.0,
+            80.0,
+        );
         assert!(
             second_bend_counter_flow.x < 0.0,
             "the second bend must create a local counter-flow pocket"
@@ -610,7 +618,10 @@ mod tests {
         assert_eq!(objects.len(), 1);
         let placement = &objects[0].placements.as_ref().unwrap()[0];
         assert!((0.0..1000.0).contains(&placement.y));
-        assert!(placement.y < 1.0, "positive vertical motion should wrap across the seam");
+        assert!(
+            placement.y < 1.0,
+            "positive vertical motion should wrap across the seam"
+        );
     }
 
     #[test]
