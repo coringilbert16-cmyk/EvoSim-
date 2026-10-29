@@ -194,7 +194,7 @@ fn obstacle_adjusted_velocity(
         let dx = x - obstacle.x;
         let dy = (y - obstacle.y + height * 0.5).rem_euclid(height) - height * 0.5;
         let distance = dx.hypot(dy).max(1e-9);
-        let radius = obstacle.radius.max(0.5).min(width.max(height));
+        let radius = obstacle.radius.max(0.5);
         // Dense geometry pushes nearby flow around its sides.
         if distance < radius * 2.5 {
             let influence = obstacle.solidity * (1.0 - distance / (radius * 2.5)).powi(2);
@@ -278,10 +278,10 @@ pub(crate) fn transport_field(
     let flow_rows = (height / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
     let mut obstacle_bins = vec![Vec::<Obstacle>::new(); flow_cols * flow_rows];
     for obstacle in obstacles {
-        let radius = obstacle.radius.max(0.5);
+        let radius = obstacle.radius.max(0.5).min(width.max(height));
         let min_col = ((obstacle.x - radius * 2.5).max(0.0) / FLOW_BIN_SIZE).floor() as usize;
-        let max_col = ((obstacle.x + radius * 6.0).min(width - 1e-6) / FLOW_BIN_SIZE)
-            .floor() as usize;
+        let max_col =
+            ((obstacle.x + radius * 6.0).min(width - 1e-6) / FLOW_BIN_SIZE).floor() as usize;
         let max_col = max_col.min(flow_cols.saturating_sub(1));
         if min_col > max_col {
             continue;
@@ -293,9 +293,7 @@ pub(crate) fn transport_field(
             (0..flow_rows).collect::<Vec<_>>()
         } else {
             (0..row_count)
-                .map(|offset| {
-                    (min_row + offset as isize).rem_euclid(flow_rows as isize) as usize
-                })
+                .map(|offset| (min_row + offset as isize).rem_euclid(flow_rows as isize) as usize)
                 .collect::<Vec<_>>()
         };
         for row in rows {
@@ -311,10 +309,8 @@ pub(crate) fn transport_field(
             continue;
         };
         let mass = material.material.mass(catalog);
-        let flow_col = ((x / FLOW_BIN_SIZE).floor() as usize)
-            .min(flow_cols.saturating_sub(1));
-        let flow_row = ((y / FLOW_BIN_SIZE).floor() as usize)
-            .min(flow_rows.saturating_sub(1));
+        let flow_col = ((x / FLOW_BIN_SIZE).floor() as usize).min(flow_cols.saturating_sub(1));
+        let flow_row = ((y / FLOW_BIN_SIZE).floor() as usize).min(flow_rows.saturating_sub(1));
         let nearby = &obstacle_bins[flow_row * flow_cols + flow_col];
         let candidate_start = if nearby.is_empty() {
             0
@@ -461,7 +457,10 @@ mod tests {
             .collect();
         assert_eq!(objects.len(), 1);
         assert!(objects[0].placements.as_ref().unwrap()[0].x > 25.0);
-        assert_ne!(field.index_for_position(objects[0].placements.as_ref().unwrap()[0].x, 200.0), Some(source_cell));
+        assert_ne!(
+            field.index_for_position(objects[0].placements.as_ref().unwrap()[0].x, 200.0),
+            Some(source_cell)
+        );
         assert_eq!(objects[0].material.parts, vec![("Carbon".to_owned(), 1.0)]);
     }
 
