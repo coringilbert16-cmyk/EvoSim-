@@ -915,6 +915,15 @@ mod tests {
     }
 
     #[test]
+    fn intrinsic_rotation_inertia_scales_with_mass_and_geometry() {
+        let unit_line = intrinsic_moment_of_inertia(&Form::Line { length: 1.0 }, 1.0);
+        let double_line = intrinsic_moment_of_inertia(&Form::Line { length: 2.0 }, 1.0);
+        let double_mass = intrinsic_moment_of_inertia(&Form::Line { length: 1.0 }, 2.0);
+        assert!((double_line / unit_line - 4.0).abs() < 1e-12);
+        assert!((double_mass / unit_line - 2.0).abs() < 1e-12);
+    }
+
+    #[test]
     fn angular_response_is_finite_for_realized_resources_and_compounds() {
         let catalog = crate::resources::default_catalog();
         let resource = PhysicalMaterial::realized(
