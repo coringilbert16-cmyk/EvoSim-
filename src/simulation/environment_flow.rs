@@ -265,6 +265,156 @@ fn translated(
     Some(moved)
 }
 
+/// Estimate angular response to local flow shear. Compound torque is
+/// accumulated from constituent mass and the velocity difference across the
+/// object's extent; the geometry-derived moment of inertia resists rotation.
+/// Single non-circular resources respond to local vorticity according to their
+/// shape anisotropy. This is an overdamped response: it adds no arbitrary spin
+/// or per-tick angle cap, and has no hidden angular state to lose on transfer.
+fn angular_displacement(
+    material: &PhysicalMaterial,
+    catalog: &[BaseResource],
+    center_x: f64,
+    center_y: f64,
+    width: f64,
+    height: f64,
+    obstacles: &[Obstacle],
+    source_cell: usize,
+    source_index: usize,
+) -> f64 {
+    let Some(placements) = material.placements.as_ref() else {
+        return 0.0;
+    };
+    if placements.is_empty() {
+        return 0.0;
+    }
+    let total_mass = material.material.mass(catalog);
+    if !total_mass.is_finite() || total_mass <= 0.0 {
+        return 0.0;
+    }
+
+    let center_velocity = obstacle_adjusted_velocity(
+        background_velocity(center_x, center_y, width, height),
+        center_x,
+        center_y,
+        source_cell,
+        source_index,
+        obstacles,
+        height,
+    );
+    let mut torque = 0.0;
+    let mut moment = 0.0;
+    for (index, placement) in placements.iter().enumerate() {
+        let Some((name, amount)) = material.material.parts.get(index) else {
+            continue;
+        };
+        let Some(resource) = resource_for_part(name, catalog) else {
+            continue;
+        };
+        let part_mass = resource.properties.mass * *amount;
+        if !part_mass.is_finite() || part_mass <= 0.0 {
+            continue;
+        }
+        let rx = placement.x - center_x;
+        let ry = (placement.y - center_y + height * 0.5).rem_euclid(height) - height * 0.5;
+        let radius_sq = rx * rx + ry * ry;
+        moment += part_mass * radius_sq;
+        if radius_sq <= f64::EPSILON {
+            continue;
+        }
+        let local_velocity = obstacle_adjusted_velocity(
+            background_velocity(placement.x, placement.y, width, height),
+            placement.x,
+            placement.y,
+            source_cell,
+            source_index,
+            obstacles,
+            height,
+        );
+        torque += part_mass
+            * (rx * (local_velocity.y - center_velocity.y)
+                - ry * (local_velocity.x - center_velocity.x));
+    }
+
+    let response = if moment > f64::EPSILON {
+        torque / moment
+    } else {
+        // A single constituent has no center-of-mass lever arm. Its shape's
+        // anisotropy determines whether flow vorticity can turn its orientation.
+        let anisotropy = match resource_for_part(&material.material.parts[0].0, catalog)
+            .map(|resource| &resource.shape.form)
+        {
+            Some(Form::Circle { .. }) | Some(Form::Fluid { .. }) | None => 0.0,
+            Some(Form::Line { .. })
+            | Some(Form::Rectangle { .. })
+            | Some(Form::RegularPolygon { .. })
+            | Some(Form::Polygon { .. }) => 1.0,
+        };
+        if anisotropy == 0.0 {
+            return 0.0;
+        }
+        let epsilon = (width.min(height) * 1e-4).max(1e-3);
+        let right = background_velocity(center_x + epsilon, center_y, width, height);
+        let left = background_velocity(center_x - epsilon, center_y, width, height);
+        let up = background_velocity(center_x, center_y + epsilon, width, height);
+        let down = background_velocity(center_x, center_y - epsilon, width, height);
+        let dv_y_dx = (right.y - left.y) / (2.0 * epsilon);
+        let dv_x_dy = (up.x - down.x) / (2.0 * epsilon);
+        (dv_y_dx - dv_x_dy) * 0.5 * anisotropy
+    };
+
+    let angle = response * mobility(total_mass) * 0.15;
+    if angle.is_finite() { angle } else { 0.0 }
+}
+
+/// Rotate a complete realized object around its mass-center while preserving
+/// every constituent's local orientation offset and all bond metadata.
+fn rotated(
+    material: &PhysicalMaterial,
+    angle: f64,
+    width: f64,
+    height: f64,
+) -> Option<PhysicalMaterial> {
+    if !angle.is_finite() {
+        return None;
+    }
+    let mut result = material.clone();
+    let placements = result.placements.as_mut()?;
+    if placements.is_empty() {
+        return None;
+    }
+    let center_x = placements.iter().map(|p| p.x).sum::<f64>() / placements.len() as f64;
+    let anchor_y = placements[0].y;
+    let center_y = (anchor_y
+        + placements
+            .iter()
+            .map(|p| (p.y - anchor_y + height * 0.5).rem_euclid(height) - height * 0.5)
+            .sum::<f64>()
+            / placements.len() as f64)
+        .rem_euclid(height);
+    let (sin, cos) = angle.sin_cos();
+    for placement in placements.iter_mut() {
+        let dx = placement.x - center_x;
+        let dy = (placement.y - center_y + height * 0.5).rem_euclid(height) - height * 0.5;
+        placement.x = center_x + dx * cos - dy * sin;
+        placement.y = (center_y + dx * sin + dy * cos).rem_euclid(height);
+        placement.rotation_radians += angle;
+        if !placement.x.is_finite()
+            || !placement.y.is_finite()
+            || !placement.rotation_radians.is_finite()
+        {
+            return None;
+        }
+    }
+    let dx = clamp_horizontal_displacement(&result, 0.0, width)?;
+    if dx != 0.0 {
+        for placement in result.placements.as_mut()? {
+            placement.x += dx;
+        }
+    }
+    Some(result)
+}
+
 /// Advance the field by one small deterministic transport slice. All candidate
 /// destinations are computed from a snapshot, then committed together so
 /// iteration order cannot change which current an object samples.
@@ -358,7 +508,21 @@ pub(crate) fn transport_field(
         if dx.abs() + dy.abs() <= 1e-12 {
             continue;
         }
-        let Some(moved) = translated(&material, dx, dy, height) else {
+        let Some(translated_material) = translated(&material, dx, dy, height) else {
+            continue;
+        };
+        let angular_step = angular_displacement(
+            &material,
+            catalog,
+            x,
+            y,
+            width,
+            height,
+            nearby,
+            source_cell,
+            source_index,
+        );
+        let Some(moved) = rotated(&translated_material, angular_step, width, height) else {
             continue;
         };
         let Some(anchor) = moved.placements.as_ref().and_then(|p| p.first()) else {
