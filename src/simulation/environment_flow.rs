@@ -881,8 +881,11 @@ mod tests {
         let moved = translated(&material, dx, 0.0, 1000.0).unwrap();
         let placements = moved.placements.as_ref().unwrap();
         assert!(placements.iter().all(|p| p.x >= 0.0 && p.x < 1000.0));
+        let original_placements = material.placements.as_ref().unwrap();
+        let original_separation = original_placements[1].x - original_placements[0].x;
+        let moved_separation = placements[1].x - placements[0].x;
         assert!(
-            ((placements[1].x - placements[0].x) - 0.1).abs() < 1e-9,
+            (moved_separation - original_separation).abs() < 1e-9,
             "boundary handling must preserve the object's internal geometry"
         );
     }
