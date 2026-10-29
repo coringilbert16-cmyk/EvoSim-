@@ -129,37 +129,14 @@ fn select_best_contact(
     )
 }
 
-/// Choose a near-budget stride that is coprime with the pair count. Every
-/// constituent pair therefore becomes the first inspected pair once per full
-/// cycle, even when the available per-tick work budget varies.
-fn component_pair_stride(pair_count: usize) -> usize {
-    if pair_count <= 1 {
-        return 1;
-    }
-    let mut stride = FIELD_COMPONENT_PAIR_LIMIT.min(pair_count - 1).max(1);
-    while greatest_common_divisor(stride, pair_count) != 1 {
-        stride += 1;
-        if stride >= pair_count {
-            stride = 1;
-        }
-    }
-    stride
-}
-
-fn greatest_common_divisor(mut left: usize, mut right: usize) -> usize {
-    while right != 0 {
-        let remainder = left % right;
-        left = right;
-        right = remainder;
-    }
-    left
-}
-
+/// Advance the bounded constituent-pair window by one pair per tick.
+/// Every pair therefore becomes the first inspected pair once per full cycle,
+/// even when the available per-tick work budget varies.
 fn component_pair_start(tick: u64, pair_count: usize) -> usize {
     if pair_count == 0 {
         0
     } else {
-        (tick as usize).wrapping_mul(component_pair_stride(pair_count)) % pair_count
+        tick as usize % pair_count
     }
 }
 
@@ -2941,18 +2918,18 @@ mod tests {
         assert_eq!(first_window_work, 0);
 
         let mut second_window_work = FIELD_COMPONENT_PAIR_LIMIT;
-        let second_window = select_best_contact_from_offset(
+        let late_window = select_best_contact_from_offset(
             &structure,
             &indices_a,
             &indices_b,
             &catalog,
             &mut cache,
-            component_pair_start(1, pair_count),
+            component_pair_start(41, pair_count),
             &mut second_window_work,
         )
-        .expect("the next tick's rotated window must reach the late physical contact");
-        assert_eq!(second_window.unit_a, indices_a[12]);
-        assert_eq!(second_window.unit_b, indices_b[12]);
+        .expect("the rotated window must reach the late physical contact within the cycle");
+        assert_eq!(late_window.unit_a, indices_a[12]);
+        assert_eq!(late_window.unit_b, indices_b[12]);
         assert_eq!(second_window_work, 0);
 
         let varied_budget_pair_count = 1_000;
@@ -2962,7 +2939,7 @@ mod tests {
         assert_eq!(
             visited_starts.len(),
             varied_budget_pair_count,
-            "the tick stride must visit every pair start even when the available work budget changes"
+            "the rotating start must visit every pair even when the available work budget changes"
         );
     }
 
