@@ -459,6 +459,7 @@ mod tests {
             &catalog,
         )
         .expect("catalog carbon should realize");
+        let original = material.clone();
         assert!(field.deposit_physical(24.99, 200.0, material, &catalog));
         let inventory_before = field.total_material();
         let revision_before = field.revision;
@@ -484,7 +485,20 @@ mod tests {
             field.index_for_position(objects[0].placements.as_ref().unwrap()[0].x, 200.0),
             Some(source_cell)
         );
-        assert_eq!(objects[0].material.parts, vec![("Carbon".to_owned(), 1.0)]);
+        let (center_x, center_y) = material_center(&original, 1000.0).unwrap();
+        let velocity = background_velocity(center_x, center_y, 1000.0, 1000.0);
+        let displacement_scale = mobility(original.material.mass(&catalog)) * 0.15;
+        let expected = translated(
+            &original,
+            velocity.x * displacement_scale,
+            velocity.y * displacement_scale,
+            1000.0,
+        )
+        .unwrap();
+        assert_eq!(
+            objects[0], &expected,
+            "transport must change only world-space placements, preserving the complete realized material"
+        );
     }
 
     #[test]
