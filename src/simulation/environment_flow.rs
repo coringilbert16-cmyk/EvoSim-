@@ -854,22 +854,28 @@ mod tests {
     fn horizontal_boundary_keeps_every_constituent_inside_world() {
         let catalog = crate::resources::default_catalog();
         let material = PhysicalMaterial::realized(
-            crate::resources::Material::free_base("Carbon", 2.0),
+            crate::resources::Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![crate::resources::InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
             vec![
                 crate::structure::Placement {
-                    x: 999.8,
+                    x: 998.8,
                     y: 500.0,
                     rotation_radians: 0.0,
                 },
                 crate::structure::Placement {
-                    x: 999.9,
+                    x: 999.8,
                     y: 500.0,
                     rotation_radians: 0.25,
                 },
             ],
             &catalog,
         )
-        .expect("two-atom carbon material should realize");
+        .expect("realized carbon-hydrogen compound should realize");
 
         let dx = clamp_horizontal_displacement(&material, 0.15, 1000.0).unwrap();
         let moved = translated(&material, dx, 0.0, 1000.0).unwrap();
@@ -888,14 +894,14 @@ mod tests {
         let material = PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
             vec![crate::structure::Placement {
-                x: 0.1,
-                y: 999.99,
+                x: 0.0,
+                y: 999.999,
                 rotation_radians: 0.0,
             }],
             &catalog,
         )
         .expect("catalog carbon should realize");
-        assert!(field.deposit_physical(0.1, 999.99, material, &catalog));
+        assert!(field.deposit_physical(0.0, 999.999, material, &catalog));
         let before = field.total_material();
 
         assert_eq!(transport_field(&mut field, &catalog, 1000.0, 1000.0), 1);
