@@ -980,10 +980,17 @@ mod tests {
         let compound = PhysicalMaterial::realized(
             Material {
                 parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0)],
-                internal_bonds: vec![InternalBond {\n                    part_a: 0,\n                    part_b: 1,\n                }],
+                internal_bonds: vec![InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
             },
             vec![
-                Placement {\n                    x: 10.0,\n                    y: 10.0,\n                    rotation_radians: 0.0,\n                },
+                Placement {
+                    x: 10.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
                 Placement {
                     x: 11.5,
                     y: 10.0 + 3.0_f64.sqrt() / 2.0,
@@ -993,8 +1000,9 @@ mod tests {
             &catalog,
         )
         .expect("the bonded carbon compound must have a valid physical realization");
-        let (compound_structure, compound_indices) = restored_source(&compound, &simulation.environment)
-            .expect("the stored compound must restore with its existing bond");
+        let (compound_structure, compound_indices) =
+            restored_source(&compound, &simulation.environment)
+                .expect("the stored compound must restore with its existing bond");
         assert_eq!(compound_indices.len(), 2);
         assert_eq!(compound_structure.bonds.len(), 1);
 
@@ -1047,16 +1055,21 @@ mod tests {
                     ) else {
                         continue;
                     };
-                    let name_a = structure.units[selected.unit_a].material.parts[0].0.as_str();
-                    let name_b = structure.units[selected.unit_b].material.parts[0].0.as_str();
-                    let interface = crate::geometry_reference_library::resolve_live_contact_candidate(
-                        name_a,
-                        &structure.units[selected.unit_a],
-                        name_b,
-                        &structure.units[selected.unit_b],
-                        selected.candidate,
-                        &catalog,
-                    );
+                    let name_a = structure.units[selected.unit_a].material.parts[0]
+                        .0
+                        .as_str();
+                    let name_b = structure.units[selected.unit_b].material.parts[0]
+                        .0
+                        .as_str();
+                    let interface =
+                        crate::geometry_reference_library::resolve_live_contact_candidate(
+                            name_a,
+                            &structure.units[selected.unit_a],
+                            name_b,
+                            &structure.units[selected.unit_b],
+                            selected.candidate,
+                            &catalog,
+                        );
                     if interface.is_some() && selected.candidate.facing > 0.0 {
                         selected_fixture = Some((base, structure, base_indices, selected));
                         break 'poses;
@@ -1104,9 +1117,19 @@ mod tests {
             classified += 1;
         }
 
-        assert_eq!(\n            classified,\n            catalog.len(),\n            "every base partner must be classified"\n        );
-        assert!(\n            eligible_contacts > 0,\n            "the compound must expose a physical interface to at least one base"\n        );
-        assert!(\n            chemical_progress > 0,\n            "at least one eligible compound/base contact must advance existing chemistry"\n        );
+        assert_eq!(
+            classified,
+            catalog.len(),
+            "every base partner must be classified"
+        );
+        assert!(
+            eligible_contacts > 0,
+            "the compound must expose a physical interface to at least one base"
+        );
+        assert!(
+            chemical_progress > 0,
+            "at least one eligible compound/base contact must advance existing chemistry"
+        );
     }
 
     #[test]
@@ -1609,8 +1632,7 @@ mod tests {
         let product = &simulation.environment.field.cells[cell].physical_materials;
         assert_eq!(product.len(), 1);
         assert_eq!(
-            product[0].material.parts,
-            expected_material.parts,
+            product[0].material.parts, expected_material.parts,
             "COMBINE must preserve every constituent and its identity"
         );
         assert!(
@@ -1630,7 +1652,9 @@ mod tests {
         let aggregate_properties = product[0].material.weighted_properties(&catalog);
         assert!(
             (aggregate_properties.mass - expected_properties.mass).abs() <= 1e-9
-                && (aggregate_properties.potential_energy - expected_properties.potential_energy)\n                    .abs()\n                    <= 1e-9
+                && (aggregate_properties.potential_energy - expected_properties.potential_energy)
+                    .abs()
+                    <= 1e-9
                 && (aggregate_properties.reactivity - expected_properties.reactivity).abs() <= 1e-9
                 && (aggregate_properties.cohesion - expected_properties.cohesion).abs() <= 1e-9,
             "compound aggregate properties must be the composition-weighted result"
