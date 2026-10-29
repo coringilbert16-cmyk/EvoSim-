@@ -447,6 +447,20 @@ fn form_bond_from_candidate_diagnostic(
     )
     .ok_or("COMBINE energy transaction could not be constructed")?;
     if !ledger.settle_transaction(energy, transaction) {
+        #[cfg(test)]
+        eprintln!(
+            "[combine-ledger-reject] holder={before:?} usable_delta={:?} structural_delta={:?} work={:?} heat={:?} balanced={:?} next_holder={:?} holder_ulp={:?} counters=(structural={:?},work={:?},heat={:?})",
+            transaction.usable_delta,
+            transaction.structural_delta,
+            transaction.work_expended,
+            transaction.heat_dissipated,
+            transaction.balanced(),
+            before + transaction.usable_delta,
+            (f64::from_bits(before.to_bits() + 1) - before).abs(),
+            ledger.total_structural_energy_delta,
+            ledger.total_work_expended,
+            ledger.total_heat_dissipated,
+        );
         *energy = before;
         return Err("energy ledger rejected COMBINE expenditure");
     }
