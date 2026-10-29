@@ -1398,10 +1398,7 @@ mod tests {
                     let (sin, cos) = angle.sin_cos();
                     let candidate = PhysicalMaterial::realized(
                         Material {
-                            parts: vec![
-                                (resource.name.clone(), 1.0),
-                                (resource.name.clone(), 1.0),
-                            ],
+                            parts: vec![(resource.name.clone(), 1.0), (resource.name.clone(), 1.0)],
                             internal_bonds: vec![InternalBond {
                                 part_a: 0,
                                 part_b: 1,
@@ -1550,8 +1547,8 @@ mod tests {
             }
         }
 
-        let (compound_b, partner_name, original_b_energy) = fixture
-            .expect("two bonded compounds must expose a chemically progressing interface");
+        let (compound_b, partner_name, original_b_energy) =
+            fixture.expect("two bonded compounds must expose a chemically progressing interface");
         assert!(simulation.environment.field.deposit_physical_at_index(
             cell,
             compound_a.clone(),
@@ -1619,16 +1616,24 @@ mod tests {
         assert_eq!(product.material.parts[2], (partner_name.clone(), 1.0));
         assert_eq!(product.material.parts[3], (partner_name, 1.0));
         assert_eq!(product.material.internal_bonds.len(), 3);
-        assert!(product.material.internal_bonds.iter().any(|bond| {
-            (bond.part_a == 0 && bond.part_b == 1) || (bond.part_a == 1 && bond.part_b == 0)
-        }), "first molecule's original bond must survive");
-        assert!(product.material.internal_bonds.iter().any(|bond| {
-            (bond.part_a == 2 && bond.part_b == 3) || (bond.part_a == 3 && bond.part_b == 2)
-        }), "second molecule's original bond must survive");
-        assert!(product.material.internal_bonds.iter().any(|bond| {
-            (bond.part_a < 2 && bond.part_b >= 2)
-                || (bond.part_b < 2 && bond.part_a >= 2)
-        }), "one new bond must connect the two original molecules");
+        assert!(
+            product.material.internal_bonds.iter().any(|bond| {
+                (bond.part_a == 0 && bond.part_b == 1) || (bond.part_a == 1 && bond.part_b == 0)
+            }),
+            "first molecule's original bond must survive"
+        );
+        assert!(
+            product.material.internal_bonds.iter().any(|bond| {
+                (bond.part_a == 2 && bond.part_b == 3) || (bond.part_a == 3 && bond.part_b == 2)
+            }),
+            "second molecule's original bond must survive"
+        );
+        assert!(
+            product.material.internal_bonds.iter().any(|bond| {
+                (bond.part_a < 2 && bond.part_b >= 2) || (bond.part_b < 2 && bond.part_a >= 2)
+            }),
+            "one new bond must connect the two original molecules"
+        );
         assert_eq!(product.placements.as_ref().map(Vec::len), Some(4));
         assert_eq!(product.realized_shapes.as_ref().map(Vec::len), Some(4));
 
@@ -1637,21 +1642,27 @@ mod tests {
             .as_ref()
             .expect("four-part product must preserve its physical bond graph");
         assert_eq!(connections.len(), 3);
-        assert!(connections.iter().any(|bond| {
-            ((bond.part_a == 0 && bond.part_b == 1)
-                || (bond.part_a == 1 && bond.part_b == 0))
-                && (bond.bond_energy - original_a_energy).abs() <= 1e-9
-        }), "first original bond energy must be preserved");
-        assert!(connections.iter().any(|bond| {
-            ((bond.part_a == 2 && bond.part_b == 3)
-                || (bond.part_a == 3 && bond.part_b == 2))
-                && (bond.bond_energy - original_b_energy).abs() <= 1e-9
-        }), "second original bond energy must be preserved");
-        assert!(connections.iter().any(|bond| {
-            ((bond.part_a < 2 && bond.part_b >= 2)
-                || (bond.part_b < 2 && bond.part_a >= 2))
-                && bond.bond_energy > 0.0
-        }), "new inter-molecule bond must receive allocated energy");
+        assert!(
+            connections.iter().any(|bond| {
+                ((bond.part_a == 0 && bond.part_b == 1) || (bond.part_a == 1 && bond.part_b == 0))
+                    && (bond.bond_energy - original_a_energy).abs() <= 1e-9
+            }),
+            "first original bond energy must be preserved"
+        );
+        assert!(
+            connections.iter().any(|bond| {
+                ((bond.part_a == 2 && bond.part_b == 3) || (bond.part_a == 3 && bond.part_b == 2))
+                    && (bond.bond_energy - original_b_energy).abs() <= 1e-9
+            }),
+            "second original bond energy must be preserved"
+        );
+        assert!(
+            connections.iter().any(|bond| {
+                ((bond.part_a < 2 && bond.part_b >= 2) || (bond.part_b < 2 && bond.part_a >= 2))
+                    && bond.bond_energy > 0.0
+            }),
+            "new inter-molecule bond must receive allocated energy"
+        );
 
         let expected_mass = compound_a.material.mass(&catalog) + compound_b.material.mass(&catalog);
         assert!(
