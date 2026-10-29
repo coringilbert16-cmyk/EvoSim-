@@ -445,7 +445,7 @@ mod tests {
         let revision_before = field.revision;
         let source_cell = field.index_for_position(24.99, 200.0).unwrap();
         let source_cell_revision = field.cell_revisions[source_cell];
-        let destination_cell = field.index_for_position(25.01, 200.0).unwrap();
+        let destination_cell = field.index_for_position(25.001, 200.0).unwrap();
         let destination_cell_revision = field.cell_revisions[destination_cell];
 
         assert_eq!(transport_field(&mut field, &catalog, 1000.0, 1000.0), 1);
@@ -461,6 +461,7 @@ mod tests {
             .collect();
         assert_eq!(objects.len(), 1);
         assert!(objects[0].placements.as_ref().unwrap()[0].x > 25.0);
+        assert_ne!(field.index_for_position(objects[0].placements.as_ref().unwrap()[0].x, 200.0), Some(source_cell));
         assert_eq!(objects[0].material.parts, vec![("Carbon".to_owned(), 1.0)]);
     }
 
