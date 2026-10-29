@@ -25,6 +25,14 @@ Replace the old environment concept for the experiment with a continuous blue wa
 - 'Simulation::step' runs world-tone sampling and environment-owned BREAK/COMBINE discovery/resolution, but the inspected excerpt does not establish a dedicated S-flow transport pass. Continue tracing for any existing material movement/transfer API before adding one; avoid a second competing movement path.
 - The field has cell revisions and bounded neighborhood queries that may support cache invalidation and local flow updates. Confirm their intended mutation semantics before relying on them.
 
+### Additional trace findings
+
+- The only located canonical movement APIs (`Simulation::update_movement` / `Simulation::try_move_cell`, with implementation in the current movement modules) govern organism locomotion. They move an organism's connected structure and resolve physical collision/pushing; they are not an environmental-current transport system for free `PhysicalMaterial` instances.
+- `ActiveMaterialField` supports deposits, atomic batch deposits, and transactional splitting. Deposits preserve an existing physical object, but there is no identified general-purpose API that moves a free environmental physical object from source cell to destination cell while preserving the exact object and atomically updating both cells. A new transport commit boundary likely belongs in the field subsystem after the full caller audit.
+- `PhysicalMaterial` already stores complete material composition, per-constituent placements, internal physical bond endpoints/energy, optional owner-relative origin, and optional realized constituent shapes. Translation should update only world placements and preserve all other fields. For deformable water, preserve its authoritative realized shape instead of reconstructing it from the catalog.
+- Resource types already distinguish `PhysicalState::Rigid` and `PhysicalState::Fluid`; `Form::Fluid` remains as a legacy/realized shape representation with arc and multi-contact boundary support. Water is therefore not a new material category for this work. However, the current `ResourceProperties` does not expose an explicit permeability coefficient.
+- The initial obstruction approximation should derive solid blocking and open-space/permeability from actual geometry where possible. If a numeric material permeability field proves necessary, isolate that as a separately justified schema decision rather than silently equating fluid state with porosity.
+- `ActiveMaterialField` has a global revision and per-cell revisions, plus bounded cell-intersection queries. These are candidate invalidation primitives for obstacle-flow caches; obstacle changes must update revisions through the authoritative mutation boundary.
 ## Required implementation sequence
 
 1. **Finish transport-path trace**
