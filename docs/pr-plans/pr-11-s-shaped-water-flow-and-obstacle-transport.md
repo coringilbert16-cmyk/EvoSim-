@@ -16,10 +16,12 @@ Replace the old environment concept for the experiment with a continuous blue wa
 - Start with a deterministic, one-way geometry-aware approximation. Do not implement full Navier–Stokes, pressure solving, or detailed turbulence in this PR.
 - Recompute only affected flow regions when feasible after structure geometry/permeability changes. Do not recompute the entire field every tick without evidence it is necessary.
 
-## Current scope boundary: rotation
+## Rotation physics follow-up
 
-- PR #226 currently transports realized resources and compounds by translation only. It preserves each constituent's existing `rotation_radians`; it does not integrate angular velocity or apply flow-induced rotation.
-- This is a known physical-model gap, not a restriction imposed by mass. A follow-up should add deterministic angular response from local flow shear/torque, scaled by mass and geometry-derived moment of inertia, while preserving internal constituent offsets and bonds. Collision/contact changes must follow from the rotated geometry. Avoid arbitrary per-tick angle caps that would change reachable outcomes; keep numerical stability separate from behavioral limits.
+- The original PR #226 transport path translated realized objects while preserving orientation. The follow-up branch `pr226-angular-rotation-2026-10-29` adds deterministic flow-shear-driven angular response.
+- Compounds estimate torque from each constituent's mass and local velocity difference, then divide by the geometry-derived mass moment `sum(m * r^2)`. A single anisotropic resource responds to local flow vorticity; circular/isotropic shapes do not receive meaningless orientation changes.
+- Rotation transforms every constituent position about the object's center and updates each constituent orientation by the same angle. Material composition, internal bonds/connections, bond energy, and realized shapes remain unchanged. Horizontal bounds and vertical wrap remain enforced.
+- This is an overdamped angular response, not persistent angular momentum: no angular-velocity field is stored yet. It does not impose an arbitrary per-tick angle cap. A later inertia/momentum model should only be added if the simulation requires inertial spin rather than immediate shear response; collision/contact geometry must use the rotated placements.
 
 ## Source trace so far
 
