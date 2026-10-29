@@ -420,13 +420,6 @@ pub(crate) fn accumulate_environmental(
                     .wrapping_add(cell_a)
                     .wrapping_add(material_a),
             );
-            #[cfg(test)]
-            if tick == 0 && !source_a.material.is_empty() {
-                eprintln!(
-                    "environmental discovery anchor=({cell_a},{material_a}) targets={target_cells:?} remaining={}",
-                    *remaining_discovery_work
-                );
-            }
             for target_offset in 0..target_cells.len() {
                 if *remaining_discovery_work == 0 {
                     break 'anchors;
@@ -488,12 +481,6 @@ pub(crate) fn accumulate_environmental(
                     *remaining_discovery_work =
                         (*remaining_discovery_work).saturating_sub(component_work_used);
                     let Some(selected) = selected else {
-                        #[cfg(test)]
-                        if tick == 0 {
-                            eprintln!(
-                                "environmental discovery found no contact for pair=({cell_a},{material_a})-({cell_b},{material_b}) work={component_work_initial}"
-                            );
-                        }
                         continue;
                     };
                     chemical_step(
@@ -1192,7 +1179,7 @@ mod tests {
         let mut discovered_operation = None;
         for tick in 0..500_u64 {
             let mut discovery_work =
-                crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
+                crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
             let operations = accumulate_environmental(
                 &simulation.environment,
                 &mut accumulation,
