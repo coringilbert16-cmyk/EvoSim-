@@ -197,7 +197,7 @@ fn chemical_step(
         () => {{
             #[cfg(test)]
             eprintln!("chemical_step rejected at line {}", line!());
-            reject_step!();
+            return;
         }};
     }
     let Some(a) = structure
