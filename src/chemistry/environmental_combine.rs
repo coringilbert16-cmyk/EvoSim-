@@ -1146,11 +1146,12 @@ mod tests {
         let hydrogen = crate::structure::StructuralUnit::from_material(
             Material::free_base("Carbon", 1.0),
             Placement {
-                // Carbon hexagons share a valid edge at this axial-lattice spacing.
-                // The regression isolates allocated bond-energy persistence after
-                // creating a real physical bond.
+                // Carbon has a vertex on +x, so its horizontal axial neighbor
+                // is offset by (1.5, sqrt(3)/2). Using x=2.5 with the same y
+                // overlaps the hexagons instead of producing a valid edge contact.
+                // Keep the regression focused on allocated bond-energy persistence.
                 x: 2.5,
-                y: 2.0,
+                y: 2.0 + 3.0_f64.sqrt() / 2.0,
                 rotation_radians: 0.0,
             },
         )
