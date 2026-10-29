@@ -214,6 +214,30 @@ fn obstacle_adjusted_velocity(
     velocity
 }
 
+fn clamp_horizontal_displacement(
+    material: &PhysicalMaterial,
+    requested_dx: f64,
+    width: f64,
+) -> Option<f64> {
+    let placements = material.placements.as_ref()?;
+    if placements.is_empty() || !width.is_finite() || width <= 0.0 {
+        return None;
+    }
+    let min_x = placements.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+    let max_x = placements.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
+    let world_max = (width - 1e-6).max(0.0);
+    let min_dx = -min_x;
+    let max_dx = world_max - max_x;
+    if min_dx <= max_dx {
+        Some(requested_dx.clamp(min_dx, max_dx))
+    } else {
+        // If an object is wider than the world, preserve it as a unit and keep
+        // its anchor in range; never split the object to satisfy the boundary.
+        let anchor_x = placements[0].x;
+        Some((anchor_x + requested_dx).clamp(0.0, world_max) - anchor_x)
+    }
+}
+
 fn translated(
     material: &PhysicalMaterial,
     dx: f64,
@@ -324,15 +348,10 @@ pub(crate) fn transport_field(
         let scale = mobility(mass) * 0.15;
         let mut dx = velocity.x * scale;
         let dy = velocity.y * scale;
-        let anchor_x = material
-            .placements
-            .as_ref()
-            .and_then(|p| p.first())
-            .map(|p| p.x)
-            .unwrap_or(x);
-        let max_x = (width - 1e-6).max(0.0);
-        let target_x = (anchor_x + dx).clamp(0.0, max_x);
-        dx = target_x - anchor_x;
+        let Some(clamped_dx) = clamp_horizontal_displacement(&material, dx, width) else {
+            continue;
+        };
+        dx = clamped_dx;
         if dx.abs() + dy.abs() <= 1e-12 {
             continue;
         }
@@ -522,6 +541,64 @@ mod tests {
             objects[0], &expected,
             "transport must change only world-space placements, preserving the complete realized material"
         );
+    }
+
+    #[test]
+    fn horizontal_boundary_keeps_every_constituent_inside_world() {
+        let catalog = crate::resources::default_catalog();
+        let material = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 2.0),
+            vec![
+                crate::structure::Placement {
+                    x: 999.8,
+                    y: 500.0,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 999.9,
+                    y: 500.0,
+                    rotation_radians: 0.25,
+                },
+            ],
+            &catalog,
+        )
+        .expect("two-atom carbon material should realize");
+
+        let dx = clamp_horizontal_displacement(&material, 0.15, 1000.0).unwrap();
+        let moved = translated(&material, dx, 0.0, 1000.0).unwrap();
+        let placements = moved.placements.as_ref().unwrap();
+        assert!(placements.iter().all(|p| p.x >= 0.0 && p.x < 1000.0));
+        assert_eq!(
+            placements[1].x - placements[0].x,
+            0.1,
+            "boundary handling must preserve the object's internal geometry"
+        );
+    }
+
+    #[test]
+    fn vertical_boundary_wraps_without_losing_material() {
+        let catalog = crate::resources::default_catalog();
+        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
+        let material = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 0.1,
+                y: 999.95,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("catalog carbon should realize");
+        assert!(field.deposit_physical(0.1, 999.95, material, &catalog));
+        let before = field.total_material();
+
+        assert_eq!(transport_field(&mut field, &catalog, 1000.0, 1000.0), 1);
+        assert_eq!(field.total_material(), before);
+        let objects: Vec<_> = field.cells.iter().flat_map(|c| c.physical_materials.iter()).collect();
+        assert_eq!(objects.len(), 1);
+        let placement = &objects[0].placements.as_ref().unwrap()[0];
+        assert!((0.0..1000.0).contains(&placement.y));
+        assert!(placement.y < 1.0, "positive vertical motion should wrap across the seam");
     }
 
     #[test]
