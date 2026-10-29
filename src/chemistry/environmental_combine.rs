@@ -2879,10 +2879,9 @@ mod tests {
                     &catalog,
                     &mut bond_cache,
                 );
-                let candidate = candidates
-                    .into_iter()
-                    .next()
-                    .expect("adjacent carbon constituents must expose a bondable physical interface");
+                let candidate = candidates.into_iter().next().expect(
+                    "adjacent carbon constituents must expose a bondable physical interface",
+                );
                 let id_a = structure
                     .physical_id(pair[0])
                     .expect("first carbon constituent must have a stable physical ID");
