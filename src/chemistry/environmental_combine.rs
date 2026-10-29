@@ -1055,10 +1055,10 @@ mod tests {
                             .and_then(|properties| properties.chemical_position);
                         let has_chemical_separation = matches!(
                             (chemistry_a, chemistry_b),
-                            (Some(a), Some(b)) if (a - b).abs() >= 1.0
+                            (Some(a), Some(b)) if (a - b).abs() >= 9.0
                         );
                         if has_chemical_separation
-                            && selected.candidate.distance < 1.0
+                            && selected.candidate.distance <= 0.25
                             && selected.candidate.facing > 0.5
                         {
                             selected_pair = Some((source_a, source_b, selected));
@@ -1129,7 +1129,7 @@ mod tests {
                 operation.accumulated_reaction,
                 crate::chemistry::activation_barrier_from_bond_strength(
                     crate::combine::bond_strength(
-                        &operation
+                        operation
                             .source_a
                             .material
                             .parts
@@ -1143,7 +1143,7 @@ mod tests {
                             })
                             .expect("discovered source A resource must exist")
                             .properties,
-                        &operation
+                        operation
                             .source_b
                             .material
                             .parts
