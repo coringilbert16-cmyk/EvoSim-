@@ -843,20 +843,16 @@ mod tests {
                             &catalog,
                         )
                         .expect("each canonical resource pose must realize");
-                        let (Some((mut structure, indices_a)), Some(indices_b)) = (
-                            restored_source(&source_a, &simulation.environment),
-                            {
-                                let (mut structure, _) =
-                                    restored_source(&source_a, &simulation.environment)
-                                        .expect("source A must restore");
-                                crate::material_restoration::restore_material(
-                                    &mut structure,
-                                    &source_b,
-                                    origin(),
-                                    &catalog,
-                                )
-                                .map(|indices| (structure, indices))
-                            },
+                        let Some((mut structure, indices_a)) =
+                            restored_source(&source_a, &simulation.environment)
+                        else {
+                            continue;
+                        };
+                        let Some(indices_b) = crate::material_restoration::restore_material(
+                            &mut structure,
+                            &source_b,
+                            origin(),
+                            &catalog,
                         ) else {
                             continue;
                         };
