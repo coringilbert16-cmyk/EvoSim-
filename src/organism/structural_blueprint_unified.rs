@@ -255,7 +255,7 @@ impl StructuralBlueprint {
         let mut preview = self.clone();
         preview.genome_measurement = None;
         let mut ledger = EnergyLedger::default();
-        let mut preview_energy = 1.0e12;
+        let mut preview_energy = 1.0e6;
         preview
             .realize_with_context(catalog, &mut ledger, &mut preview_energy)
             .map(|(structure, _, _)| structure)
