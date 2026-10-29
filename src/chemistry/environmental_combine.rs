@@ -969,6 +969,146 @@ mod tests {
         );
     }
 
+    /// A bonded two-constituent molecule must remain chemically addressable
+    /// through its individual physical constituents when it meets a free base.
+    /// This diagnostic exercises restoration, bounded physical contact selection,
+    /// and the existing chemical accumulation path without forcing a reaction.
+    #[test]
+    fn compound_base_matrix_exercises_constituent_level_chemistry() {
+        let mut simulation = crate::state::Simulation::new(23229, 10.0);
+        let catalog = simulation.environment.catalog.clone();
+        let compound = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0)],
+                internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+            },
+            vec![
+                Placement { x: 10.0, y: 10.0, rotation_radians: 0.0 },
+                Placement {
+                    x: 11.5,
+                    y: 10.0 + 3.0_f64.sqrt() / 2.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("the bonded carbon compound must have a valid physical realization");
+        let (compound_structure, compound_indices) = restored_source(&compound, &simulation.environment)
+            .expect("the stored compound must restore with its existing bond");
+        assert_eq!(compound_indices.len(), 2);
+        assert_eq!(compound_structure.bonds.len(), 1);
+
+        let mut classified = 0usize;
+        let mut eligible_contacts = 0usize;
+        let mut chemical_progress = 0usize;
+        for resource in &catalog {
+            let mut selected_fixture = None;
+            'poses: for step in 1..=80 {
+                let distance = step as f64 * 0.05;
+                for rotation_step in 0..12 {
+                    let base = PhysicalMaterial::realized(
+                        Material::free_base(resource.name.clone(), 1.0),
+                        vec![Placement {
+                            x: 10.0 + distance,
+                            y: 10.0,
+                            rotation_radians: rotation_step as f64 * std::f64::consts::PI / 6.0,
+                        }],
+                        &catalog,
+                    )
+                    .expect("each canonical base resource must realize");
+                    let mut structure = compound_structure.clone();
+                    let Some(base_indices) = crate::material_restoration::restore_material(
+                        &mut structure,
+                        &base,
+                        origin(),
+                        &catalog,
+                    ) else {
+                        continue;
+                    };
+                    if base_indices.iter().any(|index| {
+                        crate::construction_runtime::placed_unit_overlaps(
+                            &structure,
+                            &structure.units[*index],
+                            &base_indices,
+                            &catalog,
+                        )
+                    }) {
+                        continue;
+                    }
+                    let mut cache = ConnectionCompatibilityCache::new();
+                    let mut work = FIELD_COMPONENT_PAIR_LIMIT;
+                    let Some(selected) = select_best_contact(
+                        &structure,
+                        &compound_indices,
+                        &base_indices,
+                        &catalog,
+                        &mut cache,
+                        &mut work,
+                    ) else {
+                        continue;
+                    };
+                    let name_a = structure.units[selected.unit_a].material.parts[0].0.as_str();
+                    let name_b = structure.units[selected.unit_b].material.parts[0].0.as_str();
+                    let interface = crate::geometry_reference_library::resolve_live_contact_candidate(
+                        name_a,
+                        &structure.units[selected.unit_a],
+                        name_b,
+                        &structure.units[selected.unit_b],
+                        selected.candidate,
+                        &catalog,
+                    );
+                    if interface.is_some() && selected.candidate.facing > 0.0 {
+                        selected_fixture = Some((base, structure, base_indices, selected));
+                        break 'poses;
+                    }
+                }
+            }
+
+            if let Some((base, structure, base_indices, selected)) = selected_fixture {
+                eligible_contacts += 1;
+                let mut accumulation = BTreeMap::new();
+                let mut updated = BTreeSet::new();
+                let mut operations = Vec::new();
+                chemical_step(
+                    &simulation.environment,
+                    &mut simulation.chemistry_library,
+                    &structure,
+                    selected,
+                    &compound_indices,
+                    &base_indices,
+                    &compound,
+                    &base,
+                    0,
+                    0,
+                    0,
+                    1,
+                    &mut accumulation,
+                    &mut updated,
+                    &mut operations,
+                );
+                if !accumulation.is_empty() || !operations.is_empty() {
+                    chemical_progress += 1;
+                }
+                println!(
+                    "COMPOUND_BASE_MATRIX|Carbon+Carbon|{}|contact=eligible|accumulating={}|activated={}",
+                    resource.name,
+                    !accumulation.is_empty(),
+                    !operations.is_empty()
+                );
+            } else {
+                println!(
+                    "COMPOUND_BASE_MATRIX|Carbon+Carbon|{}|contact=no_eligible_pose",
+                    resource.name
+                );
+            }
+            classified += 1;
+        }
+
+        assert_eq!(classified, catalog.len(), "every base partner must be classified");
+        assert!(eligible_contacts > 0, "the compound must expose a physical interface to at least one base");
+        assert!(chemical_progress > 0, "at least one eligible compound/base contact must advance existing chemistry");
+    }
+
     #[test]
     fn environmental_pair_keys_include_instance_realization_and_endpoints() {
         let catalog = crate::resources::default_catalog();
