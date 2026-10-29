@@ -421,6 +421,37 @@ mod tests {
     }
 
     #[test]
+    fn actual_material_cohesion_sets_obstacle_permeability() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str| {
+            PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x: 10.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("catalog material should realize")
+        };
+        let water = make_material("Water");
+        let carbon = make_material("Carbon");
+        let water_obstacle = obstacle_for(0, 0, &water, &catalog, 100.0).unwrap();
+        let carbon_obstacle = obstacle_for(0, 1, &carbon, &catalog, 100.0).unwrap();
+
+        assert_eq!(water_obstacle.solidity, 0.0);
+        assert!(
+            carbon_obstacle.solidity > 0.9,
+            "dense carbon geometry should strongly disturb local flow"
+        );
+        assert!(
+            carbon_obstacle.radius > water_obstacle.radius,
+            "the obstacle footprint should come from the material's actual catalog shape"
+        );
+    }
+
+    #[test]
     fn porous_obstacle_does_not_create_a_solid_wake() {
         let porous = Obstacle {
             source_cell: 9,
