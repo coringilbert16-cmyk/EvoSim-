@@ -44,6 +44,14 @@ Replace the old environment concept for the experiment with a continuous blue wa
 - Treat flow–chemistry interaction as a first-class emergent behavior, not an interference to suppress. Do not pause flow around reacting materials, pin reactants together, preserve stale activation across changed geometry, or relax chemistry thresholds just to guarantee a chosen reaction.
 - Calibrate the movement timescale against activation accumulation. If motion is so fast that essentially all otherwise-valid contacts are continually broken before reactions can activate, adjust the environmental transport scale/profile—not the chemistry rules. Tests should measure both expected movement/contact changes and whether valid reactions can emerge under normal ticks.
 
+## Implementation status (2026-10-29)
+
+- Added `src/simulation/environment_flow.rs` with a deterministic S-shaped velocity field, smooth outward speed falloff, two vector-field eddies, linear mass mobility with a positive floor, and cohesion-derived obstacle deflection/wakes.
+- Added snapshot-based movement of complete `PhysicalMaterial` objects before environmental BREAK/COMBINE discovery. The commit removes source entries in reverse index order, inserts translated instances only after destinations are staged, and marks touched cell revisions. Constituent counts, internal bonds, bond energy, realized shapes, and rotations are retained; only world-space placements move.
+- The obstacle approximation uses 5-unit spatial bins and caps each object's obstacle influence sample at 64 candidates to prevent dense local clouds from creating an all-pairs scan. This cap and the movement cost must be checked against the repository's benchmark before the model is accepted.
+- Added focused tests for deterministic finite flow, core-to-edge speed gradient, positive-floor mass response, obstacle wake behavior, and physical-material inventory/revision preservation. CI is being used to compile and run the tests; passing status is not yet claimed.
+- **Chemistry interaction finding:** COMBINE accumulation keys include source cell/index and full realized snapshots, including placements. Continuous movement can therefore reset activation even while a contact remains valid. Do not pause flow or weaken chemistry. PR #225 must decide and test encounter-progress identity so progress can accumulate while the same contact persists, and dissipate naturally when contact disappears or the relevant geometry/endpoints change.
+
 ## Required implementation sequence
 
 1. **Finish transport-path trace**
