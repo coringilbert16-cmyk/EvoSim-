@@ -1059,7 +1059,7 @@ mod tests {
                         );
                         if has_chemical_separation
                             && selected.candidate.distance < 1.0
-                            && selected.candidate.facing > 0.5
+                            && selected.candidate.facing > 0.0
                         {
                             selected_pair = Some((source_a, source_b, selected));
                             break 'search;
