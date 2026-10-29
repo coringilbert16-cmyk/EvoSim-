@@ -1759,6 +1759,34 @@ mod tests {
             }),
             "each restored molecule must retain its original realized bond energy"
         );
+        assert!(
+            split.iter().all(|piece| {
+                piece.placements.as_ref().map(Vec::len) == Some(2)
+                    && piece.realized_shapes.as_ref().map(Vec::len) == Some(2)
+            }),
+            "each restored molecule must retain both constituent realizations"
+        );
+        let mut restored_bond_energies: Vec<_> = split
+            .iter()
+            .filter_map(|piece| {
+                piece
+                    .internal_connections
+                    .as_ref()
+                    .and_then(|bonds| bonds.first())
+                    .map(|bond| bond.bond_energy)
+            })
+            .collect();
+        let mut original_bond_energies = vec![original_a_energy, original_b_energy];
+        restored_bond_energies.sort_by(f64::total_cmp);
+        original_bond_energies.sort_by(f64::total_cmp);
+        assert_eq!(restored_bond_energies.len(), 2);
+        assert!(
+            restored_bond_energies
+                .iter()
+                .zip(original_bond_energies.iter())
+                .all(|(restored, original)| (restored - original).abs() <= 1e-9),
+            "BREAK must preserve the exact two original bond-energy allocations"
+        );
         let split_parts: Vec<_> = split
             .iter()
             .flat_map(|piece| piece.material.parts.iter().cloned())
