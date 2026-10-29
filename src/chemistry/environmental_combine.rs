@@ -1057,8 +1057,7 @@ mod tests {
                             (chemistry_a, chemistry_b),
                             (Some(a), Some(b)) if (a - b).abs() > 0.0
                         );
-                        if has_chemical_separation
-                        {
+                        if has_chemical_separation {
                             selected_pair = Some((source_a, source_b, selected));
                             break 'search;
                         }
