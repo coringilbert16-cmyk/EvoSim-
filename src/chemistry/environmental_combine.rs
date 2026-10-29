@@ -2963,10 +2963,8 @@ mod tests {
                         continue;
                     };
                     let mut interface_potentials = indices_a.iter().filter_map(|index| {
-                        let position = constituent_chemical_position(
-                            &structure.units[*index],
-                            &catalog,
-                        )?;
+                        let position =
+                            constituent_chemical_position(&structure.units[*index], &catalog)?;
                         crate::chemistry::interaction_potential(
                             position,
                             external_position,
@@ -3013,8 +3011,7 @@ mod tests {
             .properties(&catalog)
             .expect("selected constituent aggregate properties must remain available");
         assert_eq!(
-            selected_properties.chemical_position,
-            None,
+            selected_properties.chemical_position, None,
             "weighted properties must not manufacture a molecule-wide chemical position"
         );
         assert_eq!(
@@ -3023,7 +3020,9 @@ mod tests {
             "the chemistry path must resolve the contacting constituent's catalog position"
         );
 
-        let external_name = structure.units[selected.unit_b].material.parts[0].0.as_str();
+        let external_name = structure.units[selected.unit_b].material.parts[0]
+            .0
+            .as_str();
         let external_position = catalog
             .iter()
             .find(|resource| resource.name == external_name)
