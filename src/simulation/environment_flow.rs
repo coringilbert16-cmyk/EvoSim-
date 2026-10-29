@@ -593,7 +593,11 @@ mod tests {
 
         assert_eq!(transport_field(&mut field, &catalog, 1000.0, 1000.0), 1);
         assert_eq!(field.total_material(), before);
-        let objects: Vec<_> = field.cells.iter().flat_map(|c| c.physical_materials.iter()).collect();
+        let objects: Vec<_> = field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .collect();
         assert_eq!(objects.len(), 1);
         let placement = &objects[0].placements.as_ref().unwrap()[0];
         assert!((0.0..1000.0).contains(&placement.y));
