@@ -387,6 +387,38 @@ mod tests {
     }
 
     #[test]
+    fn transport_moves_complete_material_and_preserves_inventory() {
+        let catalog = crate::resources::default_catalog();
+        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
+        let material = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 20.0,
+                y: 200.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("catalog carbon should realize");
+        assert!(field.deposit_physical(20.0, 200.0, material, &catalog));
+        let inventory_before = field.total_material();
+        let revision_before = field.revision;
+
+        assert_eq!(transport_field(&mut field, &catalog, 1000.0, 1000.0), 1);
+
+        assert_eq!(field.total_material(), inventory_before);
+        assert!(field.revision > revision_before);
+        let objects: Vec<_> = field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .collect();
+        assert_eq!(objects.len(), 1);
+        assert_ne!(objects[0].placements.as_ref().unwrap()[0].x, 20.0);
+        assert_eq!(objects[0].material.parts, vec![("Carbon".to_owned(), 1.0)]);
+    }
+
+    #[test]
     fn dense_obstacle_shelters_its_downstream_wake() {
         let obstacle = Obstacle {
             source_cell: 9,
