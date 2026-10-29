@@ -39,7 +39,7 @@ pub(crate) fn restore_material(
     origin: Placement,
     catalog: &[BaseResource],
 ) -> Option<Vec<usize>> {
-    macro_rules! reject { () => {{ eprintln!("restore_material rejected at line {}", line!()); reject!(); }}; }
+    macro_rules! reject { () => {{ eprintln!("restore_material rejected at line {}", line!()); return None; }}; }
     let relative = instance.placements.as_ref()?;
     let connections = instance.internal_connections.as_ref()?;
     let material = &instance.material;
