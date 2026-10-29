@@ -1379,6 +1379,23 @@ mod tests {
                 accumulation.values().copied().collect::<Vec<_>>()
             )
         });
+        // Capture the reactant composition independently of the transaction so
+        // the realized product can be checked for composition and aggregate-property
+        // conservation, not only for the existence of a newly formed bond.
+        let expected_material = Material {
+            parts: operation
+                .source_a
+                .material
+                .parts
+                .iter()
+                .chain(operation.source_b.material.parts.iter())
+                .cloned()
+                .collect(),
+            internal_bonds: Vec::new(),
+        };
+        let expected_mass = expected_material.mass(&catalog);
+        let expected_properties = expected_material.weighted_properties(&catalog);
+        let expected_part_count = expected_material.parts.len();
         assert!(
             crate::chemistry::activated(
                 operation.accumulated_reaction,
@@ -1451,6 +1468,38 @@ mod tests {
 
         let product = &simulation.environment.field.cells[cell].physical_materials;
         assert_eq!(product.len(), 1);
+        assert_eq!(
+            product[0].material.parts,
+            expected_material.parts,
+            "COMBINE must preserve every constituent and its identity"
+        );
+        assert!(
+            (product[0].material.mass(&catalog) - expected_mass).abs() <= 1e-9,
+            "COMBINE must conserve total material mass"
+        );
+        assert_eq!(
+            product[0].placements.as_ref().map(Vec::len),
+            Some(expected_part_count),
+            "the compound must retain one physical placement per constituent"
+        );
+        assert_eq!(
+            product[0].realized_shapes.as_ref().map(Vec::len),
+            Some(expected_part_count),
+            "the compound must retain each constituent's realized geometry"
+        );
+        let aggregate_properties = product[0].material.weighted_properties(&catalog);
+        assert!(
+            (aggregate_properties.mass - expected_properties.mass).abs() <= 1e-9
+                && (aggregate_properties.potential_energy - expected_properties.potential_energy).abs() <= 1e-9
+                && (aggregate_properties.reactivity - expected_properties.reactivity).abs() <= 1e-9
+                && (aggregate_properties.cohesion - expected_properties.cohesion).abs() <= 1e-9,
+            "compound aggregate properties must be the composition-weighted result"
+        );
+        assert!(
+            aggregate_properties.chemical_position.is_none(),
+            "a mixed compound must not be assigned an invented single chemical position"
+        );
+        assert_eq!(product[0].material.internal_bonds.len(), 1);
         let connections = product[0]
             .internal_connections
             .as_ref()
