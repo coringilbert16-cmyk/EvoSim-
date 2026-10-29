@@ -365,6 +365,9 @@ pub(crate) fn accumulate_environmental(
             break;
         }
         let cell_a = (cell_start + cell_offset) % field_cell_count;
+        // Charge every anchor-cell inspection, including empty cells. Otherwise
+        // a sparse field could traverse the scan window without consuming budget.
+        *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
         let material_count = environment.field.cells[cell_a].physical_materials.len();
         if material_count == 0 {
             continue;
@@ -850,6 +853,50 @@ mod tests {
             structure.units[0].placement,
             source.placements.as_ref().unwrap()[0]
         );
+    }
+
+    #[test]
+    fn environmental_combine_discovery_charges_empty_cell_scans_to_budget() {
+        let mut simulation = crate::state::Simulation::new(940, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        let mut accumulation = BTreeMap::new();
+        let mut library = crate::chemistry_library::ChemistryLibrary::default();
+        let mut budget = 1;
+
+        let operations = accumulate_environmental(
+            &simulation.environment,
+            &mut accumulation,
+            &mut library,
+            0,
+            &mut budget,
+        );
+
+        assert!(operations.is_empty());
+        assert_eq!(
+            budget, 0,
+            "even an empty anchor cell must consume the bounded discovery budget"
+        );
+    }
+
+    #[test]
+    fn environmental_combine_discovery_does_no_work_with_zero_budget() {
+        let mut simulation = crate::state::Simulation::new(939, 10.0);
+        let mut accumulation = BTreeMap::new();
+        let mut library = crate::chemistry_library::ChemistryLibrary::default();
+        let mut budget = 0;
+
+        let operations = accumulate_environmental(
+            &simulation.environment,
+            &mut accumulation,
+            &mut library,
+            0,
+            &mut budget,
+        );
+
+        assert!(operations.is_empty());
+        assert_eq!(budget, 0);
     }
 
     #[test]
