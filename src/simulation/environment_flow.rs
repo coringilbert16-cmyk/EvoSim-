@@ -424,11 +424,19 @@ mod tests {
         assert!(core > outer);
         let vortex = background_velocity(25.0, 40.0 + 80.0 * 0.23, 100.0, 80.0);
         assert!(vortex.x.is_finite() && vortex.y.is_finite());
-        let counter_flow =
+        let first_bend_counter_flow =
             background_velocity(25.0, 40.0 + 80.0 * 0.23 + 1.5 * (80.0 * 0.13), 100.0, 80.0);
         assert!(
-            counter_flow.x < 0.0,
-            "the eddy must create a local counter-flow pocket"
+            first_bend_counter_flow.x < 0.0,
+            "the first bend must create a local counter-flow pocket"
+        );
+
+        let second_bend_center = 40.0 - 80.0 * 0.23;
+        let second_bend_counter_flow =
+            background_velocity(75.0, second_bend_center - 1.5 * (80.0 * 0.13), 100.0, 80.0);
+        assert!(
+            second_bend_counter_flow.x < 0.0,
+            "the second bend must create a local counter-flow pocket"
         );
     }
 
