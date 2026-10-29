@@ -224,7 +224,10 @@ fn clamp_horizontal_displacement(
         return None;
     }
     let min_x = placements.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
-    let max_x = placements.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
+    let max_x = placements
+        .iter()
+        .map(|p| p.x)
+        .fold(f64::NEG_INFINITY, f64::max);
     let world_max = (width - 1e-6).max(0.0);
     let min_dx = -min_x;
     let max_dx = world_max - max_x;
