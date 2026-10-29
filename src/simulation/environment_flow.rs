@@ -194,7 +194,7 @@ fn obstacle_adjusted_velocity(
         let dx = x - obstacle.x;
         let dy = (y - obstacle.y + height * 0.5).rem_euclid(height) - height * 0.5;
         let distance = dx.hypot(dy).max(1e-9);
-        let radius = obstacle.radius.max(0.5);
+        let radius = obstacle.radius.max(0.5).min(width.max(height));
         // Dense geometry pushes nearby flow around its sides.
         if distance < radius * 2.5 {
             let influence = obstacle.solidity * (1.0 - distance / (radius * 2.5)).powi(2);
@@ -254,9 +254,17 @@ pub(crate) fn transport_field(
         return 0;
     }
 
-    let snapshot: Vec<(usize, usize, PhysicalMaterial)> = field.cells.iter().enumerate()
-        .flat_map(|(cell_index, cell)| cell.physical_materials.iter().cloned().enumerate()
-            .map(move |(material_index, material)| (cell_index, material_index, material)))
+    let snapshot: Vec<(usize, usize, PhysicalMaterial)> = field
+        .cells
+        .iter()
+        .enumerate()
+        .flat_map(|(cell_index, cell)| {
+            cell.physical_materials
+                .iter()
+                .cloned()
+                .enumerate()
+                .map(move |(material_index, material)| (cell_index, material_index, material))
+        })
         .collect();
     // Use finer bins than the material field: a dense local cloud may place
     // thousands of objects in one field cell. Bound per-object obstacle work.
