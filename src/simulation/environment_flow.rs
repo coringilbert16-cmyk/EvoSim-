@@ -97,6 +97,30 @@ fn shape_radius(form: &Form) -> f64 {
     }
 }
 
+/// Approximate each constituent's intrinsic planar moment from its
+/// realized geometry. Compound inertia adds this to the point-mass contribution
+/// from each constituent's offset from the compound center.
+fn intrinsic_moment_of_inertia(form: &Form, mass: f64) -> f64 {
+    match form {
+        Form::Circle { radius } => 0.5 * mass * radius * radius,
+        Form::Line { length } => mass * length * length / 12.0,
+        Form::Rectangle { width, height } => mass * (width * width + height * height) / 12.0,
+        Form::RegularPolygon { radius, .. } => 0.5 * mass * radius * radius,
+        Form::Polygon { vertices } => {
+            let mean_radius_sq = vertices
+                .iter()
+                .map(|(x, y)| x * x + y * y)
+                .sum::<f64>()
+                / vertices.len().max(1) as f64;
+            0.5 * mass * mean_radius_sq
+        }
+        Form::Fluid { nominal_area, .. } => {
+            let radius_sq = nominal_area.max(0.0) / std::f64::consts::PI;
+            0.5 * mass * radius_sq
+        }
+    }
+}
+
 fn obstacle_for(
     source_cell: usize,
     source_index: usize,
@@ -339,7 +363,13 @@ fn angular_displacement(
         let rx = placement.x - center_x;
         let ry = (placement.y - center_y + height * 0.5).rem_euclid(height) - height * 0.5;
         let radius_sq = rx * rx + ry * ry;
-        moment += part_mass * radius_sq;
+        let form = material
+            .realized_shapes
+            .as_ref()
+            .and_then(|shapes| shapes.get(index))
+            .map(|shape| &shape.form)
+            .unwrap_or(&resource.shape.form);
+        moment += part_mass * radius_sq + intrinsic_moment_of_inertia(form, part_mass);
         if radius_sq <= f64::EPSILON {
             continue;
         }
@@ -357,7 +387,7 @@ fn angular_displacement(
                 - ry * (local_velocity.x - center_velocity.x));
     }
 
-    let response = if moment > f64::EPSILON {
+    let response = if placements.len() > 1 && moment > f64::EPSILON {
         torque / moment
     } else {
         // A single constituent has no center-of-mass lever arm. Its shape's
@@ -394,6 +424,9 @@ fn angular_displacement(
         if anisotropy == 0.0 {
             return 0.0;
         }
+        let Some(shape_form) = shape_form else {
+            return 0.0;
+        };
         let epsilon = (width.min(height) * 1e-4).max(1e-3);
         let right = obstacle_adjusted_velocity(
             background_velocity(center_x + epsilon, center_y, width, height),
@@ -433,7 +466,14 @@ fn angular_displacement(
         );
         let dv_y_dx = (right.y - left.y) / (2.0 * epsilon);
         let dv_x_dy = (up.x - down.x) / (2.0 * epsilon);
-        (dv_y_dx - dv_x_dy) * 0.5 * anisotropy
+        let characteristic_radius_sq = shape_radius(shape_form).powi(2);
+        let intrinsic_moment = intrinsic_moment_of_inertia(shape_form, total_mass);
+        if intrinsic_moment <= f64::EPSILON {
+            0.0
+        } else {
+            (dv_y_dx - dv_x_dy) * 0.5 * anisotropy * total_mass * characteristic_radius_sq
+                / intrinsic_moment
+        }
     };
 
     let angle = response * mobility(total_mass) * 0.15;
