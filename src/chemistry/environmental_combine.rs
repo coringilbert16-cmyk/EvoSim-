@@ -118,58 +118,93 @@ fn select_best_contact(
     cache: &mut ConnectionCompatibilityCache,
     remaining_work: &mut usize,
 ) -> Option<SelectedContact> {
+    select_best_contact_from_offset(
+        structure,
+        indices_a,
+        indices_b,
+        catalog,
+        cache,
+        0,
+        remaining_work,
+    )
+}
+
+/// Rotate the bounded constituent-pair inspection window between ticks.
+/// Advancing by the previous window size prevents late graph constituents from
+/// being permanently starved by a fixed row-major prefix.
+fn component_pair_start(tick: u64, pair_count: usize, work_budget: usize) -> usize {
+    if pair_count == 0 {
+        0
+    } else {
+        (tick as usize).wrapping_mul(work_budget.max(1)) % pair_count
+    }
+}
+
+fn select_best_contact_from_offset(
+    structure: &OrganismStructure,
+    indices_a: &[usize],
+    indices_b: &[usize],
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    pair_start: usize,
+    remaining_work: &mut usize,
+) -> Option<SelectedContact> {
+    let pair_count = indices_a.len().checked_mul(indices_b.len())?;
+    if pair_count == 0 {
+        return None;
+    }
+
     let mut best: Option<SelectedContact> = None;
-    'pairs: for &unit_a in indices_a {
-        for &unit_b in indices_b {
-            if *remaining_work == 0 {
-                break 'pairs;
-            }
-            *remaining_work = (*remaining_work).saturating_sub(1);
-            let candidates = crate::contact::connection_pair_candidates_cached(
-                structure, unit_a, unit_b, catalog, cache,
-            );
-            for candidate in candidates {
-                let Some((evaluation, _work, investment, required_energy)) =
-                    crate::combine_runtime::selected_candidate_evaluation(
-                        structure, unit_a, unit_b, candidate, catalog,
-                    )
-                else {
-                    continue;
-                };
-                let proposed = SelectedContact {
-                    unit_a,
-                    unit_b,
-                    candidate: evaluation.candidate,
-                    investment,
-                    required_energy,
-                };
-                let replace = best.map_or(true, |current| {
-                    proposed
-                        .required_energy
-                        .partial_cmp(&current.required_energy)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                        .then_with(|| {
-                            proposed
-                                .candidate
-                                .distance
-                                .partial_cmp(&current.candidate.distance)
-                                .unwrap_or(std::cmp::Ordering::Equal)
-                        })
-                        .then_with(|| {
-                            format!(
-                                "{:?}|{:?}",
-                                proposed.candidate.endpoint_a, proposed.candidate.endpoint_b
-                            )
-                            .cmp(&format!(
-                                "{:?}|{:?}",
-                                current.candidate.endpoint_a, current.candidate.endpoint_b
-                            ))
-                        })
-                        .is_lt()
-                });
-                if replace {
-                    best = Some(proposed);
-                }
+    let inspected_pairs = (*remaining_work).min(pair_count);
+    for offset in 0..inspected_pairs {
+        *remaining_work = (*remaining_work).saturating_sub(1);
+        let pair_index = pair_start.wrapping_add(offset) % pair_count;
+        let unit_a = indices_a[pair_index / indices_b.len()];
+        let unit_b = indices_b[pair_index % indices_b.len()];
+        let candidates = crate::contact::connection_pair_candidates_cached(
+            structure, unit_a, unit_b, catalog, cache,
+        );
+        for candidate in candidates {
+            let Some((evaluation, _work, investment, required_energy)) =
+                crate::combine_runtime::selected_candidate_evaluation(
+                    structure, unit_a, unit_b, candidate, catalog,
+                )
+            else {
+                continue;
+            };
+            let proposed = SelectedContact {
+                unit_a,
+                unit_b,
+                candidate: evaluation.candidate,
+                investment,
+                required_energy,
+            };
+            let replace = best.map_or(true, |current| {
+                proposed
+                    .required_energy
+                    .partial_cmp(&current.required_energy)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| {
+                        proposed
+                            .candidate
+                            .distance
+                            .partial_cmp(&current.candidate.distance)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .then_with(|| {
+                        format!(
+                            "{:?}|{:?}",
+                            proposed.candidate.endpoint_a, proposed.candidate.endpoint_b
+                        )
+                        .cmp(&format!(
+                            "{:?}|{:?}",
+                            current.candidate.endpoint_a, current.candidate.endpoint_b
+                        ))
+                    })
+                    .is_lt()
+            });
+            if replace {
+                best = Some(proposed);
             }
         }
     }
@@ -476,12 +511,16 @@ pub(crate) fn accumulate_environmental(
                     let mut component_work =
                         (*remaining_discovery_work).min(FIELD_COMPONENT_PAIR_LIMIT);
                     let component_work_initial = component_work;
-                    let selected = select_best_contact(
+                    let pair_count = indices_a.len().saturating_mul(indices_b.len());
+                    let pair_start =
+                        component_pair_start(tick, pair_count, component_work_initial);
+                    let selected = select_best_contact_from_offset(
                         &trial_structure,
                         &indices_a,
                         &indices_b,
                         &environment.catalog,
                         &mut cache,
+                        pair_start,
                         &mut component_work,
                     );
                     let component_work_used = component_work_initial.saturating_sub(component_work);
@@ -2799,6 +2838,79 @@ mod tests {
             "COMBINE followed by environmental BREAK must conserve the complete inventory; inventory={after_break:?}, residual={:?}",
             after_break.residual()
         );
+    }
+
+    #[test]
+    fn bounded_component_contact_search_rotates_to_late_constituent_pairs() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let mut indices_a = Vec::new();
+        let mut indices_b = Vec::new();
+
+        for index in 0..13 {
+            indices_a.push(structure.add_unit(crate::structure::StructuralUnit::new(
+                "Carbon",
+                Placement {
+                    x: index as f64 * 3.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            )));
+        }
+        for index in 0..13 {
+            let placement = if index == 12 {
+                // Match the known non-overlapping axial neighbor pose for
+                // point-oriented carbon hexagons.
+                Placement {
+                    x: 37.5,
+                    y: 3.0_f64.sqrt() / 2.0,
+                    rotation_radians: 0.0,
+                }
+            } else {
+                Placement {
+                    x: index as f64 * 3.0,
+                    y: 100.0,
+                    rotation_radians: 0.0,
+                }
+            };
+            indices_b.push(structure.add_unit(crate::structure::StructuralUnit::new(
+                "Carbon", placement,
+            )));
+        }
+
+        let pair_count = indices_a.len() * indices_b.len();
+        assert_eq!(pair_count, 169);
+        let mut cache = ConnectionCompatibilityCache::new();
+        let mut first_window_work = FIELD_COMPONENT_PAIR_LIMIT;
+        let first_window = select_best_contact_from_offset(
+            &structure,
+            &indices_a,
+            &indices_b,
+            &catalog,
+            &mut cache,
+            component_pair_start(0, pair_count, FIELD_COMPONENT_PAIR_LIMIT),
+            &mut first_window_work,
+        );
+        assert!(
+            first_window.is_none(),
+            "the first bounded row-major window must not accidentally inspect the final constituent pair"
+        );
+        assert_eq!(first_window_work, 0);
+
+        let mut second_window_work = FIELD_COMPONENT_PAIR_LIMIT;
+        let second_window = select_best_contact_from_offset(
+            &structure,
+            &indices_a,
+            &indices_b,
+            &catalog,
+            &mut cache,
+            component_pair_start(1, pair_count, FIELD_COMPONENT_PAIR_LIMIT),
+            &mut second_window_work,
+        )
+        .expect("the next tick's rotated window must reach the late physical contact");
+        assert_eq!(second_window.unit_a, indices_a[12]);
+        assert_eq!(second_window.unit_b, indices_b[12]);
+        assert_eq!(second_window_work, 0);
     }
 
     #[test]
