@@ -14,6 +14,10 @@ pub(crate) struct PhysicalMaterialBond {
     pub(crate) endpoint_a: ConnectionEndpoint,
     pub(crate) part_b: usize,
     pub(crate) endpoint_b: ConnectionEndpoint,
+    /// Positive dissociation-energy magnitude allocated when this bond forms.
+    /// Legacy bonds deserialize to zero because their past energy allocation is unknown.
+    #[serde(default)]
+    pub(crate) bond_energy: f64,
 }
 
 fn connection_endpoint_is_finite(endpoint: ConnectionEndpoint) -> bool {
@@ -121,6 +125,8 @@ impl PhysicalMaterial {
                 endpoint_a: candidate.endpoint_a,
                 part_b: bond.part_b,
                 endpoint_b: candidate.endpoint_b,
+                // Composition-only historical bonds have no authoritative stored energy.
+                bond_energy: 0.0,
             });
         }
 
@@ -347,6 +353,7 @@ impl PhysicalMaterial {
             endpoint_a: bond.endpoint_a,
             part_b: remap[bond.part_b],
             endpoint_b: bond.endpoint_b,
+            bond_energy: bond.bond_energy,
         }
     }
 
@@ -376,6 +383,8 @@ impl PhysicalMaterial {
                     || connection.part_b >= placements.len()
                     || !connection_endpoint_is_finite(connection.endpoint_a)
                     || !connection_endpoint_is_finite(connection.endpoint_b)
+                    || !connection.bond_energy.is_finite()
+                    || connection.bond_energy < 0.0
             })
             || self
                 .material
