@@ -815,7 +815,17 @@ impl Simulation {
             })
             .collect();
 
-        // Ambient transport runs before environmental reaction discovery. Flow is\n        // allowed to change contacts and interrupt activation naturally; chemistry\n        // rules are not relaxed to guarantee any particular reaction.\n        crate::environment_flow::transport_field(\n            &mut self.environment.field,\n            &self.environment.catalog,\n            self.environment.width,\n            self.environment.height,\n        );\n\n        let decision_parameters = self.decision_parameters;
+        // Ambient transport runs before environmental reaction discovery. Flow is
+        // allowed to change contacts and interrupt activation naturally; chemistry
+        // rules are not relaxed to guarantee any particular reaction.
+        crate::environment_flow::transport_field(
+            &mut self.environment.field,
+            &self.environment.catalog,
+            self.environment.width,
+            self.environment.height,
+        );
+
+        let decision_parameters = self.decision_parameters;
         // The confirmed seed scale is deterministic for the catalog. Compute it
         // once per simulation tick instead of rebuilding the calibration
         // structure for every organism.
