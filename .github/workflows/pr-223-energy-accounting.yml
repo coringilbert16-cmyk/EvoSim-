@@ -1,0 +1,45 @@
+name: PR 223 energy accounting
+
+on:
+  push:
+    branches: [chemistry/environmental-combine-discovery]
+  pull_request:
+    branches: [main, chemistry/reaction-energy-semantics]
+    paths:
+      - "src/chemistry/**"
+      - "src/materials/**"
+      - "src/simulation/**"
+      - "src/organism/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+
+# Push and pull_request both fire for a branch update. Share a concurrency
+# group across both event types so only the latest head runs the expensive suite.
+concurrency:
+  group: pr-223-energy-accounting-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  energy-accounting:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Formatting
+        run: cargo fmt --all -- --check
+      - name: Environmental COMBINE and BREAK inventory round trip
+        run: timeout 5m cargo test --locked environmental_pair_combine_commits_a_realized_product -- --nocapture
+      - name: Environmental discovery and realization budgets
+        run: timeout 5m cargo test --locked environmental_combine_
+      - name: Stored product bond energy survives restoration
+        run: timeout 5m cargo test --locked environmental_product_preserves_allocated_internal_bond_energy
+      - name: Reaction settlement rounding regressions
+        run: timeout 5m cargo test --locked reaction_settlement_
+      - name: Full Rust test suite
+        run: timeout 7m cargo test --locked --all-targets

@@ -417,7 +417,8 @@ pub(crate) fn accumulate(
 
 /// Discover chemical reactions at realized environmental material bonds in the
 /// field. Environmental bonds are restored only into a trial graph to recover
-/// their authoritative geometry and activation strength; stored bond energy stays zero.
+/// their authoritative geometry and activation strength; allocated bond energy
+/// remains attached to the environmental bond and is transferred through restoration.
 /// Traverse a bounded, tick-rotated window of environmental material bonds.
 /// Returns candidates and the exact number of cell/material/bond entries inspected.
 /// Counting all three levels makes the work bound testable even in sparse fields.
@@ -822,7 +823,7 @@ pub(crate) fn resolve_environmental(
     let Some(prepared) = crate::transformation::prepare_chemical_break_energy_with_resonance(
         environment.chemistry_usable_energy,
         ledger,
-        0.0,
+        operation.bond.bond_energy,
         operation.activation_signal,
         operation.disruption_cost,
         resonant_work,
@@ -832,10 +833,18 @@ pub(crate) fn resolve_environmental(
     };
     let usable_delta = prepared.usable_energy - environment.chemistry_usable_energy;
     let next_total_usable = ledger.total_usable_energy_held + usable_delta;
+    // The BREAK operation removes this exact realized bond from the physical
+    // source. Do not infer the live structural-store change by subtracting two
+    // cumulative f64 counters: a small reaction delta can disappear after a
+    // long history while the physical bond was still removed.
+    let structural_delta = operation.bond.bond_energy;
+    let next_total_structural = ledger.total_structural_energy_held + structural_delta;
     let next_total_resonant = ledger.total_resonant_energy_held - resonant_work;
     if !usable_delta.is_finite()
         || !next_total_usable.is_finite()
         || next_total_usable < 0.0
+        || !structural_delta.is_finite()
+        || !next_total_structural.is_finite()
         || !next_total_resonant.is_finite()
         || next_total_resonant < 0.0
     {
@@ -854,6 +863,7 @@ pub(crate) fn resolve_environmental(
     environment.resonant_energy = staged_resonance;
     *ledger = prepared.ledger;
     ledger.total_usable_energy_held = next_total_usable;
+    ledger.total_structural_energy_held = next_total_structural;
     ledger.total_resonant_energy_held = next_total_resonant;
     true
 }
@@ -894,24 +904,21 @@ pub(crate) fn resolve(
     }
     let processing_efficiency = organism.genome.processing_efficiency();
     // Activation is an independent threshold, not energy and not a substitute
-    // for disruption work. Processing efficiency determines how much compatible
-    // resonance must be withdrawn to deliver useful work for this reaction.
-    let required_resonance = operation.disruption_cost / processing_efficiency;
-    if !required_resonance.is_finite() {
-        return false;
-    }
+    // for disruption work. Compatible resonance may pay that work, but the
+    // required amount is determined by the physical barrier alone.
+    let required_resonance = operation.disruption_cost;
     // Work from a trial reservoir. A failed or stale BREAK must not consume
     // retained resonance; only a successfully settled structural transaction
-    // commits the frequency-compatible withdrawal and its conversion loss.
+    // commits the frequency-compatible withdrawal.
     let mut trial_reservoir = organism.resonant_energy.clone();
-    let resonance_withdrawal =
+    let resonant_work =
         trial_reservoir.withdraw_compatible(operation.reaction_frequency_hz, required_resonance);
     let success = crate::transformation::settle_chemical_break_energy_with_resonance(
         organism,
         operation.bond,
         operation.activation_signal,
         operation.disruption_cost,
-        resonance_withdrawal,
+        resonant_work,
         processing_efficiency,
         ledger,
     );
@@ -1597,6 +1604,7 @@ mod material_identity_tests {
                 endpoint_a: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
                 part_b: 1,
                 endpoint_b: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
+                bond_energy: 0.0,
             },
             activation_signal: 0.0,
             disruption_cost: 0.5,
@@ -1647,6 +1655,7 @@ mod material_identity_tests {
                 endpoint_a: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
                 part_b: 1,
                 endpoint_b: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
+                bond_energy: 0.0,
             },
             activation_signal: 1.0,
             disruption_cost: 0.5,
@@ -1731,7 +1740,6 @@ mod material_identity_tests {
             .first()
             .expect("seed organism should contain a structural bond");
         assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
-        let processing_efficiency = simulation.organisms[0].genome.processing_efficiency();
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
@@ -1754,7 +1762,7 @@ mod material_identity_tests {
             .resonant_energy
             .total_energy()
             .unwrap();
-        assert!((before - after - 0.5 / processing_efficiency).abs() < 1e-9);
+        assert!((before - after - 0.5).abs() < 1e-9);
         assert!(!simulation.organisms[0]
             .structure
             .bonds
@@ -1771,7 +1779,6 @@ mod material_identity_tests {
             .first()
             .expect("seed organism should contain a structural bond");
         assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
-        let processing_efficiency = simulation.organisms[0].genome.processing_efficiency();
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
@@ -1794,7 +1801,7 @@ mod material_identity_tests {
             .resonant_energy
             .total_energy()
             .unwrap();
-        assert!((before - after - 0.5 / processing_efficiency).abs() < 1e-9);
+        assert!((before - after - 0.5).abs() < 1e-9);
         assert!(!simulation.organisms[0]
             .structure
             .bonds
@@ -1971,7 +1978,6 @@ mod material_identity_tests {
     fn resonance_funded_chemical_break_reconciles_world_inventory() {
         let mut simulation = crate::state::Simulation::new(925, 10.0);
         assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
-        let processing_efficiency = simulation.organisms[0].genome.processing_efficiency();
         let retained_resonance = simulation.organisms[0]
             .resonant_energy
             .total_energy()
@@ -2015,12 +2021,8 @@ mod material_identity_tests {
             after.residual()
         );
         assert!(
-            (before.current_resonant_energy
-                - after.current_resonant_energy
-                - 0.5 / processing_efficiency)
-                .abs()
-                < 1e-9,
-            "resonance withdrawal must account for processing efficiency"
+            (before.current_resonant_energy - after.current_resonant_energy - 0.5).abs() < 1e-9,
+            "the full physical disruption work must be withdrawn from resonance"
         );
         assert!(!simulation.organisms[0]
             .structure

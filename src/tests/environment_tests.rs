@@ -542,3 +542,37 @@ fn physical_split_replaces_source_only_after_every_piece_destination_is_valid() 
     );
     assert!(field.revision > before_revision);
 }
+
+#[test]
+fn bounded_bounds_query_limits_allocation_and_rotates_across_large_ranges() {
+    let field = ActiveMaterialField::new(100.0, 100.0, 10.0);
+    let mut visited = std::collections::BTreeSet::new();
+
+    for tick_window in 0..15 {
+        let cells = field.cells_intersecting_bounds_limited(
+            0.0,
+            99.0,
+            -100_000.0,
+            100_000.0,
+            7,
+            tick_window * 7,
+        );
+        assert!(cells.len() <= 7, "each bounded query must respect its cap");
+        visited.extend(cells);
+    }
+
+    assert_eq!(
+        visited.len(),
+        100,
+        "rotating bounded queries must eventually visit every cell in the range"
+    );
+}
+
+#[test]
+fn bounded_bounds_query_matches_full_query_for_a_complete_window() {
+    let field = ActiveMaterialField::new(100.0, 100.0, 10.0);
+    let full = field.cells_intersecting_bounds(10.0, 40.0, 80.0, 120.0);
+    let bounded = field.cells_intersecting_bounds_limited(10.0, 40.0, 80.0, 120.0, full.len(), 0);
+
+    assert_eq!(bounded, full);
+}
