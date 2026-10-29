@@ -58,9 +58,11 @@ fn resource_for_part<'a>(name: &str, catalog: &'a [BaseResource]) -> Option<&'a 
     catalog.iter().find(|resource| resource.name == name)
 }
 
-fn material_center(material: &PhysicalMaterial) -> Option<(f64, f64)> {
+fn material_center(material: &PhysicalMaterial, height: f64) -> Option<(f64, f64)> {
     let placements = material.placements.as_ref()?;
-    if placements.is_empty()
+    let anchor = placements.first()?;
+    if !height.is_finite()
+        || height <= 0.0
         || placements
             .iter()
             .any(|p| !p.x.is_finite() || !p.y.is_finite())
@@ -68,10 +70,15 @@ fn material_center(material: &PhysicalMaterial) -> Option<(f64, f64)> {
         return None;
     }
     let count = placements.len() as f64;
-    Some((
-        placements.iter().map(|p| p.x).sum::<f64>() / count,
-        placements.iter().map(|p| p.y).sum::<f64>() / count,
-    ))
+    let x = placements.iter().map(|p| p.x).sum::<f64>() / count;
+    // Average vertical offsets relative to one constituent so composites
+    // crossing the wrapped top/bottom seam keep a compact center.
+    let y_offset = placements
+        .iter()
+        .map(|p| (p.y - anchor.y + height * 0.5).rem_euclid(height) - height * 0.5)
+        .sum::<f64>()
+        / count;
+    Some((x, (anchor.y + y_offset).rem_euclid(height)))
 }
 
 fn shape_radius(form: &Form) -> f64 {
@@ -93,8 +100,9 @@ fn obstacle_for(
     source_index: usize,
     material: &PhysicalMaterial,
     catalog: &[BaseResource],
+    height: f64,
 ) -> Option<Obstacle> {
-    let (x, y) = material_center(material)?;
+    let (x, y) = material_center(material, height)?;
     let placements = material.placements.as_ref()?;
     let mut radius: f64 = 0.5;
     let mut weighted_cohesion = 0.0;
@@ -251,7 +259,7 @@ pub(crate) fn transport_field(
     // wake can affect. Avoid a global all-pairs scan in dense environments.
     let obstacles: Vec<Obstacle> = snapshot
         .iter()
-        .filter_map(|(cell, index, material)| obstacle_for(*cell, *index, material, catalog))
+        .filter_map(|(cell, index, material)| obstacle_for(*cell, *index, material, catalog, height))
         .collect();
     let mut obstacle_bins = vec![Vec::<Obstacle>::new(); field.cells.len()];
     for obstacle in obstacles {
@@ -269,7 +277,7 @@ pub(crate) fn transport_field(
     let mut staged = Vec::new();
 
     for (source_cell, source_index, material) in snapshot {
-        let Some((x, y)) = material_center(&material) else {
+        let Some((x, y)) = material_center(&material, height) else {
             continue;
         };
         let mass = material.material.mass(catalog);
