@@ -1447,5 +1447,4 @@ mod shape_tests {
         assert_eq!(branched.internal_bonds.len(), 3);
         assert_ne!(linear.internal_bonds, branched.internal_bonds);
     }
-
 }
