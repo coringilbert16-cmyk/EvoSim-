@@ -633,13 +633,21 @@ impl EnergyLedgerAuthority for EnergyLedger {
     fn settle_transaction(&mut self, holder: &mut f64, transaction: EnergyTransaction) -> bool {
         if !holder.is_finite() || *holder < 0.0 || !transaction.balanced() {
             #[cfg(test)]
-            eprintln!("[settle-reject:precondition] holder={:?} balanced={:?} allocation={:?}", *holder, transaction.balanced(), transaction.allocation());
+            eprintln!(
+                "[settle-reject:precondition] holder={:?} balanced={:?} allocation={:?}",
+                *holder,
+                transaction.balanced(),
+                transaction.allocation()
+            );
             return false;
         }
         let mut next_holder = *holder + transaction.usable_delta;
         if !next_holder.is_finite() || next_holder < 0.0 {
             #[cfg(test)]
-            eprintln!("[settle-reject:holder] before={:?} usable_delta={:?} next={:?}", *holder, transaction.usable_delta, next_holder);
+            eprintln!(
+                "[settle-reject:holder] before={:?} usable_delta={:?} next={:?}",
+                *holder, transaction.usable_delta, next_holder
+            );
             return false;
         }
         let next_released = self.total_potential_energy_released + transaction.potential_released;
@@ -652,7 +660,10 @@ impl EnergyLedgerAuthority for EnergyLedger {
             || !next_heat.is_finite()
         {
             #[cfg(test)]
-            eprintln!("[settle-reject:counters] next=(released={:?},structural={:?},work={:?},heat={:?})", next_released, next_structural, next_work, next_heat);
+            eprintln!(
+                "[settle-reject:counters] next=(released={:?},structural={:?},work={:?},heat={:?})",
+                next_released, next_structural, next_work, next_heat
+            );
             return false;
         }
 
