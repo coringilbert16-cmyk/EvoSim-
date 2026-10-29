@@ -980,10 +980,10 @@ mod tests {
         let compound = PhysicalMaterial::realized(
             Material {
                 parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0)],
-                internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+                internal_bonds: vec![InternalBond {\n                    part_a: 0,\n                    part_b: 1,\n                }],
             },
             vec![
-                Placement { x: 10.0, y: 10.0, rotation_radians: 0.0 },
+                Placement {\n                    x: 10.0,\n                    y: 10.0,\n                    rotation_radians: 0.0,\n                },
                 Placement {
                     x: 11.5,
                     y: 10.0 + 3.0_f64.sqrt() / 2.0,
@@ -1104,9 +1104,9 @@ mod tests {
             classified += 1;
         }
 
-        assert_eq!(classified, catalog.len(), "every base partner must be classified");
-        assert!(eligible_contacts > 0, "the compound must expose a physical interface to at least one base");
-        assert!(chemical_progress > 0, "at least one eligible compound/base contact must advance existing chemistry");
+        assert_eq!(\n            classified,\n            catalog.len(),\n            "every base partner must be classified"\n        );
+        assert!(\n            eligible_contacts > 0,\n            "the compound must expose a physical interface to at least one base"\n        );
+        assert!(\n            chemical_progress > 0,\n            "at least one eligible compound/base contact must advance existing chemistry"\n        );
     }
 
     #[test]
@@ -1630,7 +1630,7 @@ mod tests {
         let aggregate_properties = product[0].material.weighted_properties(&catalog);
         assert!(
             (aggregate_properties.mass - expected_properties.mass).abs() <= 1e-9
-                && (aggregate_properties.potential_energy - expected_properties.potential_energy).abs() <= 1e-9
+                && (aggregate_properties.potential_energy - expected_properties.potential_energy)\n                    .abs()\n                    <= 1e-9
                 && (aggregate_properties.reactivity - expected_properties.reactivity).abs() <= 1e-9
                 && (aggregate_properties.cohesion - expected_properties.cohesion).abs() <= 1e-9,
             "compound aggregate properties must be the composition-weighted result"
