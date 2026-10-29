@@ -176,6 +176,21 @@ fn select_best_contact(
     best
 }
 
+/// Resolve chemical identity from one realized physical constituent.
+/// Aggregate material properties intentionally have no single chemical position.
+fn constituent_chemical_position(
+    unit: &crate::structure::StructuralUnit,
+    catalog: &[BaseResource],
+) -> Option<f64> {
+    let [(material_name, _)] = unit.material.parts.as_slice() else {
+        return None;
+    };
+    catalog
+        .iter()
+        .find(|resource| resource.name == *material_name)
+        .and_then(|resource| resource.properties.chemical_position)
+}
+
 fn chemical_step(
     environment: &Environment,
     chemistry_library: &mut crate::chemistry_library::ChemistryLibrary,
@@ -198,21 +213,19 @@ fn chemical_step(
             return;
         };
     }
-    // A structural unit represents a physical constituent, so its chemical
-    // spectrum position comes from that constituent's catalog entry. The
-    // weighted property aggregate intentionally leaves chemical_position unset
-    // (mixtures have no single position); using it here also rejects every
-    // single-base unit before activation can accumulate.
+    // A structural unit is one physical constituent. Resolve its chemical
+    // position from that constituent's catalog identity; aggregate properties
+    // intentionally do not invent a molecule-wide chemical position.
     let Some(unit_a) = structure.units.get(selected.unit_a) else {
-        reject_step!();
-    };
-    let [(material_name_a, _)] = unit_a.material.parts.as_slice() else {
         reject_step!();
     };
     let Some(unit_b) = structure.units.get(selected.unit_b) else {
         reject_step!();
     };
-    let [(material_name_b, _)] = unit_b.material.parts.as_slice() else {
+    let Some([(material_name_a, _)]) = Some(unit_a.material.parts.as_slice()) else {
+        reject_step!();
+    };
+    let Some([(material_name_b, _)]) = Some(unit_b.material.parts.as_slice()) else {
         reject_step!();
     };
     let Some(a) = unit_a.properties(&environment.catalog) else {
@@ -221,20 +234,10 @@ fn chemical_step(
     let Some(b) = unit_b.properties(&environment.catalog) else {
         reject_step!();
     };
-    let Some(position_a) = environment
-        .catalog
-        .iter()
-        .find(|resource| resource.name == *material_name_a)
-        .and_then(|resource| resource.properties.chemical_position)
-    else {
+    let Some(position_a) = constituent_chemical_position(unit_a, &environment.catalog) else {
         reject_step!();
     };
-    let Some(position_b) = environment
-        .catalog
-        .iter()
-        .find(|resource| resource.name == *material_name_b)
-        .and_then(|resource| resource.properties.chemical_position)
-    else {
+    let Some(position_b) = constituent_chemical_position(unit_b, &environment.catalog) else {
         reject_step!();
     };
     let Some(interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
@@ -2978,12 +2981,48 @@ mod tests {
             .iter()
             .find(|resource| resource.name == *selected_name)
             .expect("selected constituent must exist in the base catalog");
-        let selected_properties = structure.units[selected.unit_a]
+        let selected_unit = &structure.units[selected.unit_a];
+        let selected_properties = selected_unit
             .properties(&catalog)
-            .expect("selected constituent properties must remain available");
+            .expect("selected constituent aggregate properties must remain available");
         assert_eq!(
-            selected_properties.chemical_position, selected_resource.properties.chemical_position,
-            "contact chemistry must use the contacting constituent's chemical position"
+            selected_properties.chemical_position,
+            None,
+            "weighted properties must not manufacture a molecule-wide chemical position"
+        );
+        assert_eq!(
+            constituent_chemical_position(selected_unit, &catalog),
+            selected_resource.properties.chemical_position,
+            "the chemistry path must resolve the contacting constituent's catalog position"
+        );
+
+        let external_name = structure.units[selected.unit_b].material.parts[0].0.as_str();
+        let external_position = catalog
+            .iter()
+            .find(|resource| resource.name == external_name)
+            .and_then(|resource| resource.properties.chemical_position)
+            .expect("external contact constituent must have a chemical position");
+        let interface_potentials: Vec<_> = compound_indices
+            .iter()
+            .filter_map(|index| {
+                let unit = &structure.units[*index];
+                let position = constituent_chemical_position(unit, &catalog)?;
+                crate::chemistry::interaction_potential(
+                    position,
+                    external_position,
+                    crate::chemistry::CHEMICAL_K,
+                    crate::chemistry::CHEMICAL_D_MAX,
+                )
+            })
+            .collect();
+        assert_eq!(
+            interface_potentials.len(),
+            2,
+            "both bonded constituents must independently expose chemistry identities"
+        );
+        assert_ne!(
+            interface_potentials[0], interface_potentials[1],
+            "different constituent interfaces must produce distinct interaction potentials against the same external material"
         );
     }
 
