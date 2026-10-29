@@ -2850,32 +2850,54 @@ mod tests {
             indices_a.push(structure.add_unit(crate::structure::StructuralUnit::new(
                 "Carbon",
                 Placement {
-                    x: index as f64 * 3.0,
-                    y: 0.0,
+                    x: index as f64 * 1.5,
+                    y: index as f64 * 3.0_f64.sqrt() / 2.0,
                     rotation_radians: 0.0,
                 },
             )));
         }
         for index in 0..13 {
-            let placement = if index == 12 {
-                // Match the known non-overlapping axial neighbor pose for
-                // point-oriented carbon hexagons.
-                Placement {
-                    x: 37.5,
-                    y: 3.0_f64.sqrt() / 2.0,
-                    rotation_radians: 0.0,
-                }
-            } else {
-                Placement {
-                    x: index as f64 * 3.0,
-                    y: 100.0,
-                    rotation_radians: 0.0,
-                }
+            // Build a second connected carbon chain extending away from its
+            // target contact with the final constituent of the first chain.
+            let placement = Placement {
+                x: 37.5 - index as f64 * 1.5,
+                y: (index as f64 + 1.0) * 3.0_f64.sqrt() / 2.0,
+                rotation_radians: 0.0,
             };
             indices_b.push(
                 structure.add_unit(crate::structure::StructuralUnit::new("Carbon", placement)),
             );
         }
+
+        let mut bond_cache = ConnectionCompatibilityCache::new();
+        for indices in [&indices_a, &indices_b] {
+            for pair in indices.windows(2) {
+                let candidates = crate::contact::connection_pair_candidates_cached(
+                    &structure,
+                    pair[0],
+                    pair[1],
+                    &catalog,
+                    &mut bond_cache,
+                );
+                let candidate = candidates
+                    .into_iter()
+                    .next()
+                    .expect("adjacent carbon constituents must expose a bondable physical interface");
+                let id_a = structure
+                    .physical_id(pair[0])
+                    .expect("first carbon constituent must have a stable physical ID");
+                let id_b = structure
+                    .physical_id(pair[1])
+                    .expect("second carbon constituent must have a stable physical ID");
+                structure.push_bond_unchecked(crate::structure::Bond {
+                    endpoint_a: crate::structure::BondEndpoint::new(id_a, candidate.endpoint_a),
+                    endpoint_b: crate::structure::BondEndpoint::new(id_b, candidate.endpoint_b),
+                    strength: 0.5,
+                    bond_energy: 1.0,
+                });
+            }
+        }
+        assert_eq!(structure.bonds.len(), 24);
 
         let pair_count = indices_a.len() * indices_b.len();
         assert_eq!(pair_count, 169);
