@@ -1055,7 +1055,7 @@ mod tests {
                             .and_then(|properties| properties.chemical_position);
                         let has_chemical_separation = matches!(
                             (chemistry_a, chemistry_b),
-                            (Some(a), Some(b)) if (a - b).abs() >= 5.0
+                            (Some(a), Some(b)) if (a - b).abs() > 0.0
                         );
                         if has_chemical_separation
                             && selected.candidate.distance < 1.0
