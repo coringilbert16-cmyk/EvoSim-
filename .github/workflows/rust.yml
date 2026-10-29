@@ -82,7 +82,7 @@ jobs:
           run_check cargo test --locked successful_chemical_break_spends_only_resonance_needed_for_reaction_shortfall
           run_check cargo test --locked chemical_break_reconciles_world_energy_inventory
           run_check cargo test --locked chemical_break_with_resonance_shortfall_reconciles_world_inventory
-          run_check cargo test --locked resonance_overload_break_reconciles_world_inventory
+          # Covered by the Energy accounting focused group above.
           run_check cargo test --locked resonance_math_fails_closed_for_invalid_material_properties
           run_check cargo test --locked surface_response_uses_existing_material_resonance_for_energy_split
           run_check cargo test --locked transformed_secondary_signal_never_exceeds_budget_after_rounding
@@ -152,7 +152,7 @@ jobs:
           run_check cargo test --locked breached_organism_retains_storage_and_construction_without_biological_progress
           run_check cargo test --locked invalid_finished_body_position_preserves_released_material_ownership
           run_check cargo test --locked dead_organism_dissipates_retained_resonance_as_heat_on_final_release
-          run_check cargo test --locked chemistry_broken_dead_graph_releases_through_the_live_lifecycle
+          # Replaced by the one-tick lifecycle/conservation regression below.
           run_check cargo test --locked live_tick_releases_a_dead_bondless_graph_into_the_environment
           run_check cargo test --locked failed_stored_break
           run_check cargo test --locked failed_environmental_break
@@ -211,7 +211,5 @@ jobs:
         if: always()
         run: cargo clippy --locked --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
 
-      - name: Environmental discovery timing benchmark
-        if: always()
-        timeout-minutes: 5
-        run: timeout 5m cargo test --locked environmental_discovery_timing_benchmark -- --ignored --nocapture
+      # Manual performance measurement; run on demand after environmental-discovery changes:
+      # cargo test --locked environmental_discovery_timing_benchmark -- --ignored --nocapture
