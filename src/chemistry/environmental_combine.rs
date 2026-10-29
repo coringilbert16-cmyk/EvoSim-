@@ -2989,9 +2989,10 @@ mod tests {
             }
         }
 
-        let (structure, compound_indices, external_indices, external_material, selected) = selected_fixture.expect(
-            "heterogeneous molecule must expose a physically eligible constituent interface",
-        );
+        let (structure, compound_indices, external_indices, external_material, selected) =
+            selected_fixture.expect(
+                "heterogeneous molecule must expose a physically eligible constituent interface",
+            );
         assert!(compound_indices.contains(&selected.unit_a));
         let [(selected_name, _)] = structure.units[selected.unit_a].material.parts.as_slice()
         else {
@@ -3108,11 +3109,9 @@ mod tests {
         .expect("the selected live interface must remain resolvable");
         let selected_position = constituent_chemical_position(selected_unit, &catalog)
             .expect("selected constituent must retain its chemical position");
-        let external_position = constituent_chemical_position(
-            &structure.units[selected.unit_b],
-            &catalog,
-        )
-        .expect("external constituent must retain its chemical position");
+        let external_position =
+            constituent_chemical_position(&structure.units[selected.unit_b], &catalog)
+                .expect("external constituent must retain its chemical position");
         let chemistry_key = crate::chemistry_library::ChemistryKey::from_live_geometry(
             selected_name,
             external_name,
