@@ -174,12 +174,9 @@ impl Simulation {
         energy_ledger.total_resonant_energy_held =
             crate::reproduction::total_resonant_energy_held(std::slice::from_ref(&organism));
         energy_ledger.initial_resonant_energy_held = energy_ledger.total_resonant_energy_held;
-        energy_ledger.total_structural_energy_held = organism
-            .structure
-            .bonds
-            .iter()
-            .map(|bond| -bond.bond_energy)
-            .sum();
+        energy_ledger.total_structural_energy_held =
+            crate::reproduction::total_structural_energy_held(std::slice::from_ref(&organism), &[])
+                + Self::environmental_structural_energy_held(&environment);
         energy_ledger.initial_structural_energy_held = energy_ledger.total_structural_energy_held;
         Self {
             tick: 0,
@@ -843,25 +840,58 @@ impl Simulation {
         // even when the world contains no organisms. Reserve half of the
         // realization and discovery budgets for the field, independently of
         // the organism iteration below.
-        let mut environmental_discovery_remaining =
-            crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 2;
-        let environmental_operations = crate::chemical_reaction::accumulate_environmental(
+        let mut environmental_break_discovery_remaining =
+            crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
+        let environmental_break_operations = crate::chemical_reaction::accumulate_environmental(
             &self.environment,
             &mut self.chemical_reaction_accumulation,
             &mut self.chemistry_library,
             self.tick,
-            &mut environmental_discovery_remaining,
+            &mut environmental_break_discovery_remaining,
         );
-        let mut environmental_work_remaining =
-            crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 2;
-        let environmental_operations = crate::chemical_reaction::schedule_environmental_operations(
-            environmental_operations,
-            self.tick,
-            &mut environmental_work_remaining,
-            &mut self.chemical_reaction_accumulation,
-        );
-        for operation in environmental_operations {
+        let mut environmental_combine_discovery_remaining =
+            crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
+        let environmental_combine_operations =
+            crate::environmental_combine::accumulate_environmental(
+                &self.environment,
+                &mut self.chemical_reaction_accumulation,
+                &mut self.chemistry_library,
+                self.tick,
+                &mut environmental_combine_discovery_remaining,
+            );
+
+        let mut environmental_break_work_remaining =
+            crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
+        let environmental_break_operations =
+            crate::chemical_reaction::schedule_environmental_operations(
+                environmental_break_operations,
+                self.tick,
+                &mut environmental_break_work_remaining,
+                &mut self.chemical_reaction_accumulation,
+            );
+        for operation in environmental_break_operations {
             let _ = crate::chemical_reaction::resolve_environmental_preserving_accumulation(
+                operation,
+                &mut self.environment,
+                &mut self.energy_ledger,
+                &mut self.chemical_reaction_accumulation,
+            );
+        }
+
+        // Environmental COMBINE receives its own bounded share of the field's
+        // work budget. It consumes the same shared reaction ledger and preserves
+        // progress if a source snapshot became stale before commit.
+        let mut environmental_combine_work_remaining =
+            crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
+        let environmental_combine_operations =
+            crate::environmental_combine::schedule_environmental_operations(
+                environmental_combine_operations,
+                self.tick,
+                &mut environmental_combine_work_remaining,
+                &mut self.chemical_reaction_accumulation,
+            );
+        for operation in environmental_combine_operations {
+            let _ = crate::environmental_combine::resolve_environmental_preserving_accumulation(
                 operation,
                 &mut self.environment,
                 &mut self.energy_ledger,
@@ -1506,7 +1536,8 @@ impl Simulation {
                     .total_energy()
                     .unwrap_or(f64::NAN);
         self.energy_ledger.total_structural_energy_held =
-            Self::structural_energy_held(&self.organisms, &self.decomposing_bodies);
+            Self::structural_energy_held(&self.organisms, &self.decomposing_bodies)
+                + Self::environmental_structural_energy_held(&self.environment);
     }
     /// Transfer a dead, fully disconnected organism into environmental material.
     ///
@@ -1631,6 +1662,24 @@ impl Simulation {
     ) -> f64 {
         crate::reproduction::total_structural_energy_held(organisms, decomposing_bodies)
     }
+
+    /// Signed potential stored in realized physical bonds owned by the field.
+    /// Old field bonds deserialize with zero energy rather than inventing a source.
+    fn environmental_structural_energy_held(environment: &Environment) -> f64 {
+        environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .map(|material| {
+                material
+                    .internal_connections
+                    .as_ref()
+                    .map(|bonds| bonds.iter().map(|bond| -bond.bond_energy).sum::<f64>())
+                    .unwrap_or(f64::NAN)
+            })
+            .sum()
+    }
     /// Independent test oracle: recompute current stores from their owning state,
     /// rather than trusting the production ledger's cached aggregate totals.
     /// Cumulative flows and tick-zero baselines still come from the ledger because
@@ -1650,10 +1699,11 @@ impl Simulation {
                     .resonant_energy
                     .total_energy()
                     .unwrap_or(f64::NAN);
-        let current_structural_energy = crate::reproduction::total_structural_energy_held(
-            &self.organisms,
-            &self.decomposing_bodies,
-        );
+        let current_structural_energy =
+            crate::reproduction::total_structural_energy_held(
+                &self.organisms,
+                &self.decomposing_bodies,
+            ) + Self::environmental_structural_energy_held(&self.environment);
 
         crate::energy_ledger::EnergyInventorySnapshot {
             initial_usable_energy: self.energy_ledger.initial_usable_energy_held,
