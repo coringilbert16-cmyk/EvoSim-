@@ -1371,10 +1371,7 @@ mod tests {
                     let (sin, cos) = angle.sin_cos();
                     let candidate = PhysicalMaterial::realized(
                         Material {
-                            parts: vec![
-                                (resource.name.clone(), 1.0),
-                                (resource.name.clone(), 1.0),
-                            ],
+                            parts: vec![(resource.name.clone(), 1.0), (resource.name.clone(), 1.0)],
                             internal_bonds: vec![InternalBond {
                                 part_a: 0,
                                 part_b: 1,
@@ -1475,12 +1472,7 @@ mod tests {
                     let mut cache = ConnectionCompatibilityCache::new();
                     let mut work = FIELD_COMPONENT_PAIR_LIMIT;
                     let Some(selected) = select_best_contact(
-                        &structure,
-                        &indices_a,
-                        &indices_b,
-                        &catalog,
-                        &mut cache,
-                        &mut work,
+                        &structure, &indices_a, &indices_b, &catalog, &mut cache, &mut work,
                     ) else {
                         continue;
                     };
