@@ -45,6 +45,9 @@ impl Velocity {
 }
 
 #[derive(Clone, Copy, Debug)]
+const FLOW_BIN_SIZE: f64 = 5.0;
+const MAX_OBSTACLE_INFLUENCES_PER_OBJECT: usize = 64;
+
 struct Obstacle {
     source_cell: usize,
     source_index: usize,
@@ -255,23 +258,39 @@ pub(crate) fn transport_field(
         .flat_map(|(cell_index, cell)| cell.physical_materials.iter().cloned().enumerate()
             .map(move |(material_index, material)| (cell_index, material_index, material)))
         .collect();
-    // Index obstacle influence into only the cells its bounded deflection and
-    // wake can affect. Avoid a global all-pairs scan in dense environments.
+    // Use finer bins than the material field: a dense local cloud may place
+    // thousands of objects in one field cell. Bound per-object obstacle work.
     let obstacles: Vec<Obstacle> = snapshot
         .iter()
-        .filter_map(|(cell, index, material)| obstacle_for(*cell, *index, material, catalog, height))
+        .filter_map(|(cell, index, material)| {
+            obstacle_for(*cell, *index, material, catalog, height)
+        })
         .collect();
-    let mut obstacle_bins = vec![Vec::<Obstacle>::new(); field.cells.len()];
+    let flow_cols = (width / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
+    let flow_rows = (height / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
+    let mut obstacle_bins = vec![Vec::<Obstacle>::new(); flow_cols * flow_rows];
     for obstacle in obstacles {
         let radius = obstacle.radius.max(0.5);
-        let affected_cells = field.cells_intersecting_bounds(
-            (obstacle.x - radius * 2.5).max(0.0),
-            (obstacle.x + radius * 6.0).min(width),
-            obstacle.y - radius * 2.5,
-            obstacle.y + radius * 2.5,
-        );
-        for cell in affected_cells {
-            obstacle_bins[cell].push(obstacle);
+        let min_col = ((obstacle.x - radius * 2.5).max(0.0) / FLOW_BIN_SIZE).floor() as usize;
+        let max_col = (((obstacle.x + radius * 6.0).min(width - 1e-6) / FLOW_BIN_SIZE).floor() as usize)
+            .min(flow_cols.saturating_sub(1));
+        if min_col > max_col {
+            continue;
+        }
+        let min_row = ((obstacle.y - radius * 2.5) / FLOW_BIN_SIZE).floor() as isize;
+        let max_row = ((obstacle.y + radius * 2.5) / FLOW_BIN_SIZE).floor() as isize;
+        let row_count = max_row.saturating_sub(min_row).saturating_add(1) as usize;
+        let rows = if row_count >= flow_rows {
+            (0..flow_rows).collect::<Vec<_>>()
+        } else {
+            (0..row_count)
+                .map(|offset| (min_row + offset as isize).rem_euclid(flow_rows as isize) as usize)
+                .collect::<Vec<_>>()
+        };
+        for row in rows {
+            for col in min_col..=max_col {
+                obstacle_bins[row * flow_cols + col].push(obstacle);
+            }
         }
     }
     let mut staged = Vec::new();
@@ -281,16 +300,24 @@ pub(crate) fn transport_field(
             continue;
         };
         let mass = material.material.mass(catalog);
-        let Some(center_cell) = field.index_for_position(x, y) else {
-            continue;
+        let flow_col = ((x / FLOW_BIN_SIZE).floor() as usize).min(flow_cols.saturating_sub(1));
+        let flow_row = ((y / FLOW_BIN_SIZE).floor() as usize).min(flow_rows.saturating_sub(1));
+        let nearby = &obstacle_bins[flow_row * flow_cols + flow_col];
+        let candidate_start = if nearby.is_empty() {
+            0
+        } else {
+            source_index.wrapping_mul(MAX_OBSTACLE_INFLUENCES_PER_OBJECT) % nearby.len()
         };
+        let limited_obstacles = (0..nearby.len().min(MAX_OBSTACLE_INFLUENCES_PER_OBJECT))
+            .map(|offset| nearby[(candidate_start + offset) % nearby.len()])
+            .collect::<Vec<_>>();
         let velocity = obstacle_adjusted_velocity(
             background_velocity(x, y, width, height),
             x,
             y,
             source_cell,
             source_index,
-            &obstacle_bins[center_cell],
+            &limited_obstacles,
             height,
         );
         let scale = mobility(mass) * 0.15;
