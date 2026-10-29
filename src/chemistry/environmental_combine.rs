@@ -375,6 +375,10 @@ pub(crate) fn accumulate_environmental(
                 break 'anchors;
             }
             anchor_work -= 1;
+            // Charge each anchor material inspection against the caller's
+            // shared per-tick budget. The local anchor cap alone is not enough:
+            // a small supplied budget must also bound work on empty/sparse fields.
+            *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
             let material_a = (material_start + material_offset) % material_count;
             let source_a = environment.field.cells[cell_a].physical_materials[material_a].clone();
             let Some((source_structure, indices_a)) = restored_source(&source_a, environment)
@@ -402,6 +406,9 @@ pub(crate) fn accumulate_environmental(
                 if *remaining_discovery_work == 0 {
                     break 'anchors;
                 }
+                // Cell inspections count even when a cell contains no material;
+                // otherwise sparse fields could scan many cells for free.
+                *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
                 let cell_b = target_cells[(target_start + target_offset) % target_cells.len()];
                 let target_count = environment.field.cells[cell_b].physical_materials.len();
                 if target_count == 0 {
