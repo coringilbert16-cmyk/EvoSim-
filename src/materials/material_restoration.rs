@@ -125,6 +125,16 @@ pub(crate) fn restore_material(
                 placement: trial.units[right_index].placement,
             };
             if crate::material_geometry::placed_forms_penetrate(&left_part, &right_part, 0.0) {
+                eprintln!(
+                    "restore_material penetration: parts=({}, {}), placements=({:?}, {:?}), forms=({:?}, {:?}), intrinsic_placements={:?}",
+                    left,
+                    right,
+                    left_part.placement,
+                    right_part.placement,
+                    left_part.form,
+                    right_part.form,
+                    relative
+                );
                 reject!();
             }
         }
