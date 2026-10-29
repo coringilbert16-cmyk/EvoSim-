@@ -546,7 +546,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            objects[0], &expected,
+            objects[0],
+            &expected,
             "transport must change only world-space placements, preserving the complete realized material"
         );
     }
