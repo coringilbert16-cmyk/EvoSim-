@@ -362,10 +362,29 @@ fn angular_displacement(
     } else {
         // A single constituent has no center-of-mass lever arm. Its shape's
         // anisotropy determines whether flow vorticity can turn its orientation.
-        let anisotropy = match resource_for_part(&material.material.parts[0].0, catalog)
-            .map(|resource| &resource.shape.form)
-        {
-            Some(Form::Circle { .. }) | Some(Form::Fluid { .. }) | None => 0.0,
+        let shape_form = material
+            .realized_shapes
+            .as_ref()
+            .and_then(|shapes| shapes.first())
+            .map(|shape| &shape.form)
+            .or_else(|| {
+                resource_for_part(&material.material.parts[0].0, catalog)
+                    .map(|resource| &resource.shape.form)
+            });
+        let anisotropy = match shape_form {
+            Some(Form::Circle { .. }) | None => 0.0,
+            Some(Form::Fluid {
+                boundary,
+                arc_boundary,
+                multi_contact_boundary,
+                ..
+            }) => {
+                if boundary.is_some() || arc_boundary.is_some() || multi_contact_boundary.is_some() {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
             Some(Form::Line { .. })
             | Some(Form::Rectangle { .. })
             | Some(Form::RegularPolygon { .. })
