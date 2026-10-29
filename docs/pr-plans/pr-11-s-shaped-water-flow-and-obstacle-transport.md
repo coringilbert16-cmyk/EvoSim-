@@ -18,10 +18,10 @@ Replace the old environment concept for the experiment with a continuous blue wa
 
 ## Rotation physics follow-up
 
-- The original PR #226 transport path translated realized objects while preserving orientation. The follow-up branch `pr226-angular-rotation-2026-10-29` adds deterministic flow-shear-driven angular response.
+- PR #226 now includes deterministic flow-shear-driven angular response alongside translation.
 - Compounds estimate torque from each constituent's mass and local velocity difference, then divide by the geometry-derived mass moment `sum(m * r^2)`. A single anisotropic resource responds to local flow vorticity; circular/isotropic shapes do not receive meaningless orientation changes.
 - Rotation transforms every constituent position about the object's center and updates each constituent orientation by the same angle. Material composition, internal bonds/connections, bond energy, and realized shapes remain unchanged. Horizontal bounds and vertical wrap remain enforced.
-- This is an overdamped angular response, not persistent angular momentum: no angular-velocity field is stored yet. It does not impose an arbitrary per-tick angle cap. A later inertia/momentum model should only be added if the simulation requires inertial spin rather than immediate shear response; collision/contact geometry must use the rotated placements.
+- This is an overdamped angular response, not persistent angular momentum: no angular-velocity field is stored yet. It does not impose an arbitrary per-tick angle cap. A later inertia/momentum model should only be added if the simulation requires inertial spin rather than immediate shear response; collision/contact geometry must use the rotated placements. New tests cover finite angular response and preservation of compound distances and bond state.
 
 ## Source trace so far
 
