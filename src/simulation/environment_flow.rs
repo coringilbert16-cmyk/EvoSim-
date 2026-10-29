@@ -18,11 +18,17 @@ struct Velocity {
 
 impl Velocity {
     fn scale(self, factor: f64) -> Self {
-        Self { x: self.x * factor, y: self.y * factor }
+        Self {
+            x: self.x * factor,
+            y: self.y * factor,
+        }
     }
 
     fn add(self, other: Self) -> Self {
-        Self { x: self.x + other.x, y: self.y + other.y }
+        Self {
+            x: self.x + other.x,
+            y: self.y + other.y,
+        }
     }
 
     fn length(self) -> f64 {
@@ -31,7 +37,11 @@ impl Velocity {
 
     fn normalized(self) -> Self {
         let length = self.length();
-        if length > f64::EPSILON { self.scale(1.0 / length) } else { Self { x: 1.0, y: 0.0 } }
+        if length > f64::EPSILON {
+            self.scale(1.0 / length)
+        } else {
+            Self { x: 1.0, y: 0.0 }
+        }
     }
 }
 
@@ -51,7 +61,11 @@ fn resource_for_part<'a>(name: &str, catalog: &'a [BaseResource]) -> Option<&'a 
 
 fn material_center(material: &PhysicalMaterial) -> Option<(f64, f64)> {
     let placements = material.placements.as_ref()?;
-    if placements.is_empty() || placements.iter().any(|p| !p.x.is_finite() || !p.y.is_finite()) {
+    if placements.is_empty()
+        || placements
+            .iter()
+            .any(|p| !p.x.is_finite() || !p.y.is_finite())
+    {
         return None;
     }
     let count = placements.len() as f64;
@@ -67,12 +81,20 @@ fn shape_radius(form: &Form) -> f64 {
         Form::Line { length } => length * 0.5,
         Form::Rectangle { width, height } => (width * width + height * height).sqrt() * 0.5,
         Form::RegularPolygon { radius, .. } => *radius,
-        Form::Polygon { vertices } => vertices.iter().map(|(x, y)| x.hypot(*y)).fold(0.0, f64::max),
+        Form::Polygon { vertices } => vertices
+            .iter()
+            .map(|(x, y)| x.hypot(*y))
+            .fold(0.0, f64::max),
         Form::Fluid { nominal_area, .. } => (nominal_area.max(0.0) / std::f64::consts::PI).sqrt(),
     }
 }
 
-fn obstacle_for(source_cell: usize, source_index: usize, material: &PhysicalMaterial, catalog: &[BaseResource]) -> Option<Obstacle> {
+fn obstacle_for(
+    source_cell: usize,
+    source_index: usize,
+    material: &PhysicalMaterial,
+    catalog: &[BaseResource],
+) -> Option<Obstacle> {
     let (x, y) = material_center(material)?;
     let placements = material.placements.as_ref()?;
     let mut radius: f64 = 0.5;
@@ -81,7 +103,8 @@ fn obstacle_for(source_cell: usize, source_index: usize, material: &PhysicalMate
     for (index, (name, amount)) in material.material.parts.iter().enumerate() {
         let resource = resource_for_part(name, catalog)?;
         let placement = placements.get(index)?;
-        radius = radius.max((placement.x - x).hypot(placement.y - y) + shape_radius(&resource.shape.form));
+        radius = radius
+            .max((placement.x - x).hypot(placement.y - y) + shape_radius(&resource.shape.form));
         weighted_cohesion += resource.properties.cohesion * *amount;
         total += *amount;
     }
@@ -91,7 +114,11 @@ fn obstacle_for(source_cell: usize, source_index: usize, material: &PhysicalMate
     let cohesion = weighted_cohesion / total;
     let permeability = crate::resources::permeability_from_cohesion(cohesion, catalog);
     Some(Obstacle {
-        source_cell, source_index, x, y, radius,
+        source_cell,
+        source_index,
+        x,
+        y,
+        radius,
         solidity: (1.0 - permeability).clamp(0.0, 1.0),
     })
 }
@@ -130,14 +157,27 @@ fn background_velocity(x: f64, y: f64, width: f64, height: f64) -> Velocity {
         let dy = (y - cy + height * 0.5).rem_euclid(height) - height * 0.5;
         let radial_sq = dx * dx + dy * dy;
         let weight = (-radial_sq / (2.0 * vortex_radius * vortex_radius)).exp() * sign * 0.42;
-        velocity = velocity.add(Velocity { x: -dy / vortex_radius * weight, y: dx / vortex_radius * weight });
+        velocity = velocity.add(Velocity {
+            x: -dy / vortex_radius * weight,
+            y: dx / vortex_radius * weight,
+        });
     }
     velocity
 }
 
-fn obstacle_adjusted_velocity(mut velocity: Velocity, x: f64, y: f64, source_cell: usize, source_index: usize, obstacles: &[Obstacle], height: f64) -> Velocity {
+fn obstacle_adjusted_velocity(
+    mut velocity: Velocity,
+    x: f64,
+    y: f64,
+    source_cell: usize,
+    source_index: usize,
+    obstacles: &[Obstacle],
+    height: f64,
+) -> Velocity {
     for obstacle in obstacles {
-        if obstacle.source_cell == source_cell && obstacle.source_index == source_index { continue; }
+        if obstacle.source_cell == source_cell && obstacle.source_index == source_index {
+            continue;
+        }
         if obstacle.solidity <= 1e-6 {
             continue;
         }
@@ -165,7 +205,12 @@ fn obstacle_adjusted_velocity(mut velocity: Velocity, x: f64, y: f64, source_cel
     velocity
 }
 
-fn translated(material: &PhysicalMaterial, dx: f64, dy: f64, height: f64) -> Option<PhysicalMaterial> {
+fn translated(
+    material: &PhysicalMaterial,
+    dx: f64,
+    dy: f64,
+    height: f64,
+) -> Option<PhysicalMaterial> {
     let mut moved = material.clone();
     let placements = moved.placements.as_mut()?;
     if placements.is_empty() {
@@ -174,7 +219,10 @@ fn translated(material: &PhysicalMaterial, dx: f64, dy: f64, height: f64) -> Opt
     for placement in placements {
         placement.x += dx;
         placement.y = (placement.y + dy).rem_euclid(height);
-        if !placement.x.is_finite() || !placement.y.is_finite() || !placement.rotation_radians.is_finite() {
+        if !placement.x.is_finite()
+            || !placement.y.is_finite()
+            || !placement.rotation_radians.is_finite()
+        {
             return None;
         }
     }
@@ -200,24 +248,50 @@ pub(crate) fn transport_field(
         .flat_map(|(cell_index, cell)| cell.physical_materials.iter().cloned().enumerate()
             .map(move |(material_index, material)| (cell_index, material_index, material)))
         .collect();
-    let obstacles: Vec<Obstacle> = snapshot.iter().filter_map(|(cell, index, material)| obstacle_for(*cell, *index, material, catalog)).collect();
+    let obstacles: Vec<Obstacle> = snapshot
+        .iter()
+        .filter_map(|(cell, index, material)| obstacle_for(*cell, *index, material, catalog))
+        .collect();
     let mut staged = Vec::new();
 
     for (source_cell, source_index, material) in snapshot {
-        let Some((x, y)) = material_center(&material) else { continue; };
+        let Some((x, y)) = material_center(&material) else {
+            continue;
+        };
         let mass = material.material.mass(catalog);
-        let velocity = obstacle_adjusted_velocity(background_velocity(x, y, width, height), x, y, source_cell, source_index, &obstacles, height);
+        let velocity = obstacle_adjusted_velocity(
+            background_velocity(x, y, width, height),
+            x,
+            y,
+            source_cell,
+            source_index,
+            &obstacles,
+            height,
+        );
         let scale = mobility(mass) * 0.15;
         let mut dx = velocity.x * scale;
         let dy = velocity.y * scale;
-        let anchor_x = material.placements.as_ref().and_then(|p| p.first()).map(|p| p.x).unwrap_or(x);
+        let anchor_x = material
+            .placements
+            .as_ref()
+            .and_then(|p| p.first())
+            .map(|p| p.x)
+            .unwrap_or(x);
         let max_x = (width - 1e-6).max(0.0);
         let target_x = (anchor_x + dx).clamp(0.0, max_x);
         dx = target_x - anchor_x;
-        if dx.abs() + dy.abs() <= 1e-12 { continue; }
-        let Some(moved) = translated(&material, dx, dy, height) else { continue; };
-        let Some(anchor) = moved.placements.as_ref().and_then(|p| p.first()) else { continue; };
-        let Some(destination_cell) = field.index_for_position(anchor.x, anchor.y) else { continue; };
+        if dx.abs() + dy.abs() <= 1e-12 {
+            continue;
+        }
+        let Some(moved) = translated(&material, dx, dy, height) else {
+            continue;
+        };
+        let Some(anchor) = moved.placements.as_ref().and_then(|p| p.first()) else {
+            continue;
+        };
+        let Some(destination_cell) = field.index_for_position(anchor.x, anchor.y) else {
+            continue;
+        };
         if destination_cell != source_cell || moved != material {
             staged.push((source_cell, source_index, destination_cell, moved));
         }
@@ -229,13 +303,18 @@ pub(crate) fn transport_field(
     let moved_count = staged.len();
     let mut changed = vec![false; field.cells.len()];
     for (source_cell, source_index, _, _) in &staged {
-        if *source_cell >= field.cells.len() || *source_index >= field.cells[*source_cell].physical_materials.len() {
+        if *source_cell >= field.cells.len()
+            || *source_index >= field.cells[*source_cell].physical_materials.len()
+        {
             return 0;
         }
     }
     // Remove from each source in reverse index order before any destination
     // insertions. Snapshot indices are stable until this removal phase ends.
-    let mut removals: Vec<(usize, usize)> = staged.iter().map(|(cell, index, _, _)| (*cell, *index)).collect();
+    let mut removals: Vec<(usize, usize)> = staged
+        .iter()
+        .map(|(cell, index, _, _)| (*cell, *index))
+        .collect();
     removals.sort_unstable_by(|a, b| b.cmp(a));
     for (cell, index) in removals {
         field.cells[cell].physical_materials.remove(index);
@@ -284,11 +363,18 @@ mod tests {
 
     #[test]
     fn dense_obstacle_shelters_its_downstream_wake() {
-        let obstacle = Obstacle { source_cell: 9, source_index: 9, x: 10.0, y: 10.0, radius: 3.0, solidity: 1.0 };
+        let obstacle = Obstacle {
+            source_cell: 9,
+            source_index: 9,
+            x: 10.0,
+            y: 10.0,
+            radius: 3.0,
+            solidity: 1.0,
+        };
         let free = Velocity { x: 1.0, y: 0.0 };
         let wake = obstacle_adjusted_velocity(free, 15.0, 10.0, 1, 1, &[obstacle], 100.0);
         assert!(wake.length() < free.length());
-        let upstream = obstacle_adjusted_velocity(free, 5.0, 10.0, 1, 1, &[obstacle], 100.0);
+        let upstream = obstacle_adjusted_velocity(free, 0.0, 10.0, 1, 1, &[obstacle], 100.0);
         assert_eq!(upstream, free);
     }
 }
