@@ -512,8 +512,7 @@ pub(crate) fn accumulate_environmental(
                         (*remaining_discovery_work).min(FIELD_COMPONENT_PAIR_LIMIT);
                     let component_work_initial = component_work;
                     let pair_count = indices_a.len().saturating_mul(indices_b.len());
-                    let pair_start =
-                        component_pair_start(tick, pair_count, component_work_initial);
+                    let pair_start = component_pair_start(tick, pair_count, component_work_initial);
                     let selected = select_best_contact_from_offset(
                         &trial_structure,
                         &indices_a,
@@ -2873,9 +2872,9 @@ mod tests {
                     rotation_radians: 0.0,
                 }
             };
-            indices_b.push(structure.add_unit(crate::structure::StructuralUnit::new(
-                "Carbon", placement,
-            )));
+            indices_b.push(
+                structure.add_unit(crate::structure::StructuralUnit::new("Carbon", placement)),
+            );
         }
 
         let pair_count = indices_a.len() * indices_b.len();
