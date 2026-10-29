@@ -788,8 +788,7 @@ mod tests {
         let expected =
             rotated(&translated_expected, angular_step, &catalog, 1000.0, 1000.0).unwrap();
         assert_eq!(
-            objects[0],
-            &expected,
+            objects[0], &expected,
             "transport may change only world placement and orientation"
         );
     }
