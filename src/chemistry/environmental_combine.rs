@@ -800,6 +800,178 @@ pub(crate) fn resolve_environmental_preserving_accumulation(
 mod tests {
     use super::*;
 
+    /// Controlled one-tick physical COMBINE diagnostic for all unordered base pairs.
+    ///
+    /// This deliberately does not force activation or alter chemistry thresholds.
+    /// It searches bounded poses for a valid contact, then lets the existing
+    /// environmental chemical step report whether reaction progress is made.
+    #[test]
+    fn controlled_physical_pair_matrix_classifies_all_base_resource_pairs() {
+        let mut simulation = crate::state::Simulation::new(23029, 10.0);
+        let catalog = simulation.environment.catalog.clone();
+        let mut pair_count = 0usize;
+        let mut contact_count = 0usize;
+
+        for i in 0..catalog.len() {
+            for j in i..catalog.len() {
+                let resource_a = &catalog[i];
+                let resource_b = &catalog[j];
+                let source_a = PhysicalMaterial::realized(
+                    Material::free_base(resource_a.name.clone(), 1.0),
+                    vec![Placement {
+                        x: 10.0,
+                        y: 10.0,
+                        rotation_radians: 0.0,
+                    }],
+                    &catalog,
+                )
+                .expect("each canonical resource must realize as a physical object");
+
+                let mut fixture = None;
+                'poses: for step in 1..=80 {
+                    let distance = step as f64 * 0.05;
+                    for rotation_step in 0..12 {
+                        let source_b = PhysicalMaterial::realized(
+                            Material::free_base(resource_b.name.clone(), 1.0),
+                            vec![Placement {
+                                x: 10.0 + distance,
+                                y: 10.0,
+                                rotation_radians: rotation_step as f64
+                                    * std::f64::consts::PI
+                                    / 6.0,
+                            }],
+                            &catalog,
+                        )
+                        .expect("each canonical resource pose must realize");
+                        let (Some((mut structure, indices_a)), Some(indices_b)) = (
+                            restored_source(&source_a, &simulation.environment),
+                            {
+                                let (mut structure, _) =
+                                    restored_source(&source_a, &simulation.environment)
+                                        .expect("source A must restore");
+                                crate::material_restoration::restore_material(
+                                    &mut structure,
+                                    &source_b,
+                                    origin(),
+                                    &catalog,
+                                )
+                                .map(|indices| (structure, indices))
+                            },
+                        ) else {
+                            continue;
+                        };
+                        if indices_b.iter().any(|index| {
+                            crate::construction_runtime::placed_unit_overlaps(
+                                &structure,
+                                &structure.units[*index],
+                                &indices_b,
+                                &catalog,
+                            )
+                        }) {
+                            continue;
+                        }
+                        let mut cache = ConnectionCompatibilityCache::new();
+                        let mut work = FIELD_COMPONENT_PAIR_LIMIT;
+                        let Some(selected) = select_best_contact(
+                            &structure,
+                            &indices_a,
+                            &indices_b,
+                            &catalog,
+                            &mut cache,
+                            &mut work,
+                        ) else {
+                            continue;
+                        };
+                        let name_a = structure.units[selected.unit_a]
+                            .material.parts.first().map(|part| part.0.as_str());
+                        let name_b = structure.units[selected.unit_b]
+                            .material.parts.first().map(|part| part.0.as_str());
+                        let interface = name_a.zip(name_b).and_then(|(a, b)| {
+                            crate::geometry_reference_library::resolve_live_contact_candidate(
+                                a,
+                                &structure.units[selected.unit_a],
+                                b,
+                                &structure.units[selected.unit_b],
+                                selected.candidate,
+                                &catalog,
+                            )
+                        });
+                        if interface.is_some() && selected.candidate.facing > 0.0 {
+                            fixture = Some((source_b, structure, indices_a, indices_b, selected));
+                            break 'poses;
+                        }
+                    }
+                }
+
+                let position_a = resource_a.properties.chemical_position;
+                let position_b = resource_b.properties.chemical_position;
+                let potential = position_a.zip(position_b).and_then(|(a, b)| {
+                    crate::chemistry::interaction_potential(
+                        a,
+                        b,
+                        crate::chemistry::CHEMICAL_K,
+                        crate::chemistry::CHEMICAL_D_MAX,
+                    )
+                });
+
+                if let Some((source_b, structure, indices_a, indices_b, selected)) = fixture {
+                    contact_count += 1;
+                    let mut accumulation = BTreeMap::new();
+                    let mut updated = BTreeSet::new();
+                    let mut operations = Vec::new();
+                    chemical_step(
+                        &simulation.environment,
+                        &mut simulation.chemistry_library,
+                        &structure,
+                        selected,
+                        &indices_a,
+                        &indices_b,
+                        &source_a,
+                        &source_b,
+                        0,
+                        0,
+                        0,
+                        1,
+                        &mut accumulation,
+                        &mut updated,
+                        &mut operations,
+                    );
+                    let outcome = if !operations.is_empty() {
+                        "activated"
+                    } else if !accumulation.is_empty() {
+                        "accumulating"
+                    } else {
+                        "contact_no_progress_or_rejected"
+                    };
+                    println!(
+                        "PHYSICAL_PAIR_MATRIX|{}|{}|potential={:.9}|contact=eligible|distance={:.6}|facing={:.6}|outcome={}",
+                        resource_a.name,
+                        resource_b.name,
+                        potential.unwrap_or(f64::NAN),
+                        selected.candidate.distance,
+                        selected.candidate.facing,
+                        outcome
+                    );
+                } else {
+                    println!(
+                        "PHYSICAL_PAIR_MATRIX|{}|{}|potential={:.9}|contact=no_eligible_pose|outcome=geometry_or_contact_gate",
+                        resource_a.name,
+                        resource_b.name,
+                        potential.unwrap_or(f64::NAN)
+                    );
+                }
+                pair_count += 1;
+            }
+        }
+
+        assert_eq!(pair_count, 28, "controlled matrix must classify all unordered pairs");
+        assert!(
+            contact_count > 0,
+            "the controlled pose search must exercise the physical contact path"
+        );
+    }
+
+
     #[test]
     fn environmental_pair_keys_include_instance_realization_and_endpoints() {
         let catalog = crate::resources::default_catalog();
