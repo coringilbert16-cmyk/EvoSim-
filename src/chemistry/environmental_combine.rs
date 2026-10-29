@@ -836,9 +836,7 @@ mod tests {
                             vec![Placement {
                                 x: 10.0 + distance,
                                 y: 10.0,
-                                rotation_radians: rotation_step as f64
-                                    * std::f64::consts::PI
-                                    / 6.0,
+                                rotation_radians: rotation_step as f64 * std::f64::consts::PI / 6.0,
                             }],
                             &catalog,
                         )
@@ -869,19 +867,20 @@ mod tests {
                         let mut cache = ConnectionCompatibilityCache::new();
                         let mut work = FIELD_COMPONENT_PAIR_LIMIT;
                         let Some(selected) = select_best_contact(
-                            &structure,
-                            &indices_a,
-                            &indices_b,
-                            &catalog,
-                            &mut cache,
-                            &mut work,
+                            &structure, &indices_a, &indices_b, &catalog, &mut cache, &mut work,
                         ) else {
                             continue;
                         };
                         let name_a = structure.units[selected.unit_a]
-                            .material.parts.first().map(|part| part.0.as_str());
+                            .material
+                            .parts
+                            .first()
+                            .map(|part| part.0.as_str());
                         let name_b = structure.units[selected.unit_b]
-                            .material.parts.first().map(|part| part.0.as_str());
+                            .material
+                            .parts
+                            .first()
+                            .map(|part| part.0.as_str());
                         let interface = name_a.zip(name_b).and_then(|(a, b)| {
                             crate::geometry_reference_library::resolve_live_contact_candidate(
                                 a,
@@ -960,7 +959,10 @@ mod tests {
             }
         }
 
-        assert_eq!(pair_count, 28, "controlled matrix must classify all unordered pairs");
+        assert_eq!(
+            pair_count, 28,
+            "controlled matrix must classify all unordered pairs"
+        );
         assert!(
             contact_count > 0,
             "the controlled pose search must exercise the physical contact path"
