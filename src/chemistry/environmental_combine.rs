@@ -2977,16 +2977,19 @@ mod tests {
                     else {
                         continue;
                     };
-                    if (first_potential - second_potential).abs() <= f64::EPSILON {
+                    if first_potential <= 0.0
+                        || second_potential <= 0.0
+                        || (first_potential - second_potential).abs() <= f64::EPSILON
+                    {
                         continue;
                     }
-                    selected_fixture = Some((structure, indices_a, selected));
+                    selected_fixture = Some((structure, indices_a, indices_b, base, selected));
                     break 'external;
                 }
             }
         }
 
-        let (structure, compound_indices, selected) = selected_fixture.expect(
+        let (structure, compound_indices, external_indices, external_material, selected) = selected_fixture.expect(
             "heterogeneous molecule must expose a physically eligible constituent interface",
         );
         assert!(compound_indices.contains(&selected.unit_a));
@@ -3050,6 +3053,88 @@ mod tests {
             interface_potentials[0], interface_potentials[1],
             "different constituent interfaces must produce distinct interaction potentials against the same external material"
         );
+
+        // Exercise the actual environmental chemistry path, not just the
+        // constituent lookup helper. Its persisted key must carry the exact
+        // contacting constituent positions and its accumulation must be live.
+        let temporary_store = std::env::temp_dir().join(format!(
+            "evosim-heterogeneous-interface-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock must be after the Unix epoch")
+                .as_nanos()
+        ));
+        let mut chemistry_library =
+            crate::chemistry_library::ChemistryLibrary::open(&temporary_store)
+                .expect("test chemistry library must open");
+        let mut accumulation = BTreeMap::new();
+        let mut updated_keys = BTreeSet::new();
+        let mut operations = Vec::new();
+        chemical_step(
+            &simulation.environment,
+            &mut chemistry_library,
+            &structure,
+            selected,
+            &compound_indices,
+            &external_indices,
+            &compound,
+            &external_material,
+            0,
+            0,
+            0,
+            1,
+            &mut accumulation,
+            &mut updated_keys,
+            &mut operations,
+        );
+        assert_eq!(
+            chemistry_library.len(),
+            1,
+            "the live chemistry step must cache the selected physical interface"
+        );
+        assert!(
+            !accumulation.is_empty() || !operations.is_empty(),
+            "a positive, eligible heterogeneous interface must advance chemistry or schedule its activated transaction"
+        );
+        let interface = crate::geometry_reference_library::resolve_live_contact_candidate(
+            selected_name,
+            selected_unit,
+            external_name,
+            &structure.units[selected.unit_b],
+            selected.candidate,
+            &catalog,
+        )
+        .expect("the selected live interface must remain resolvable");
+        let selected_position = constituent_chemical_position(selected_unit, &catalog)
+            .expect("selected constituent must retain its chemical position");
+        let external_position = constituent_chemical_position(
+            &structure.units[selected.unit_b],
+            &catalog,
+        )
+        .expect("external constituent must retain its chemical position");
+        let chemistry_key = crate::chemistry_library::ChemistryKey::from_live_geometry(
+            selected_name,
+            external_name,
+            &interface,
+            selected_position,
+            external_position,
+        );
+        let cached = chemistry_library
+            .get(&chemistry_key)
+            .expect("chemical step must key its record by the exact constituent interface");
+        let expected_potential = crate::chemistry::interaction_potential(
+            selected_position,
+            external_position,
+            crate::chemistry::CHEMICAL_K,
+            crate::chemistry::CHEMICAL_D_MAX,
+        )
+        .expect("catalog positions must produce a valid interaction potential");
+        assert!(
+            (cached.static_potential - expected_potential).abs() <= 1e-12,
+            "cached chemistry must use the contacting constituent's position, not an aggregate value"
+        );
+        let _ = std::fs::remove_dir_all(temporary_store);
     }
 
     #[test]
