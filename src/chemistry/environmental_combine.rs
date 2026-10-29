@@ -405,7 +405,9 @@ pub(crate) fn accumulate_environmental(
                 body.min_y - BOUNDS_PADDING,
                 body.max_y + BOUNDS_PADDING,
                 FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work),
-                (tick as usize).wrapping_add(cell_a).wrapping_add(material_a),
+                (tick as usize)
+                    .wrapping_add(cell_a)
+                    .wrapping_add(material_a),
             );
             for target_offset in 0..target_cells.len() {
                 if *remaining_discovery_work == 0 {
