@@ -37,6 +37,8 @@ jobs:
         run: timeout 5m cargo test --locked static_pair_matrix_characterizes_all_base_resource_pairs -- --nocapture
       - name: Controlled physical base-resource pair matrix
         run: timeout 5m cargo test --locked controlled_physical_pair_matrix_classifies_all_base_resource_pairs -- --nocapture
+      - name: Compound + base COMBINE transaction and energy conservation
+        run: timeout 5m cargo test --locked environmental_compound_base_combine_commits_three_part_product -- --nocapture
       - name: Environmental COMBINE and BREAK inventory round trip
         run: timeout 5m cargo test --locked environmental_pair_combine_commits_a_realized_product -- --nocapture
       - name: Environmental discovery and realization budgets
