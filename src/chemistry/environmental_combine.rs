@@ -394,25 +394,30 @@ pub(crate) fn accumulate_environmental(
             ) else {
                 continue;
             };
-            let target_cells = environment.field.cells_intersecting_bounds(
+            // Bound the spatial query itself, not just the subsequent loop:
+            // very large source bounds must not allocate or traverse an unbounded
+            // target-cell vector before the per-tick inspection budget applies.
+            // Advance by one inspection window per tick so cells beyond the first
+            // window remain eligible instead of being starved by large bounds.
+            let target_cells = environment.field.cells_intersecting_bounds_limited(
                 body.min_x - BOUNDS_PADDING,
                 body.max_x + BOUNDS_PADDING,
                 body.min_y - BOUNDS_PADDING,
                 body.max_y + BOUNDS_PADDING,
+                FIELD_TARGET_CELL_INSPECTION_LIMIT,
+                (tick as usize)
+                    .wrapping_mul(FIELD_TARGET_CELL_INSPECTION_LIMIT)
+                    .wrapping_add(cell_a)
+                    .wrapping_add(material_a),
             );
-            if target_cells.is_empty() {
-                continue;
-            }
-            let target_start = tick as usize % target_cells.len();
-            let target_cell_scan_count = target_cells.len().min(FIELD_TARGET_CELL_INSPECTION_LIMIT);
-            for target_offset in 0..target_cell_scan_count {
+            for target_offset in 0..target_cells.len() {
                 if *remaining_discovery_work == 0 {
                     break 'anchors;
                 }
                 // Cell inspections count even when a cell contains no material;
                 // otherwise sparse fields could scan many cells for free.
                 *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
-                let cell_b = target_cells[(target_start + target_offset) % target_cells.len()];
+                let cell_b = target_cells[target_offset];
                 let target_count = environment.field.cells[cell_b].physical_materials.len();
                 if target_count == 0 {
                     continue;
