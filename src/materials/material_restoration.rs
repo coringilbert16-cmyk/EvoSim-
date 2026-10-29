@@ -39,7 +39,12 @@ pub(crate) fn restore_material(
     origin: Placement,
     catalog: &[BaseResource],
 ) -> Option<Vec<usize>> {
-    macro_rules! reject { () => {{ eprintln!("restore_material rejected at line {}", line!()); return None; }}; }
+    macro_rules! reject {
+        () => {{
+            eprintln!("restore_material rejected at line {}", line!());
+            return None;
+        }};
+    }
     let relative = instance.placements.as_ref()?;
     let connections = instance.internal_connections.as_ref()?;
     let material = &instance.material;
@@ -144,7 +149,13 @@ pub(crate) fn restore_material(
             // Restoration is not a new reaction and therefore charges nothing.
             bond_energy: connection.bond_energy,
         };
-        if let Err(reason) = crate::contact::try_add_bond(&mut trial, bond, catalog) { eprintln!("restore_material bond insertion rejected at line {}: {reason}", line!()); return None; }
+        if let Err(reason) = crate::contact::try_add_bond(&mut trial, bond, catalog) {
+            eprintln!(
+                "restore_material bond insertion rejected at line {}: {reason}",
+                line!()
+            );
+            return None;
+        }
     }
 
     *structure = trial;
