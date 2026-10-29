@@ -176,6 +176,21 @@ fn select_best_contact(
     best
 }
 
+/// Resolve chemical identity from one realized physical constituent.
+/// Aggregate material properties intentionally have no single chemical position.
+fn constituent_chemical_position(
+    unit: &crate::structure::StructuralUnit,
+    catalog: &[BaseResource],
+) -> Option<f64> {
+    let [(material_name, _)] = unit.material.parts.as_slice() else {
+        return None;
+    };
+    catalog
+        .iter()
+        .find(|resource| resource.name == *material_name)
+        .and_then(|resource| resource.properties.chemical_position)
+}
+
 fn chemical_step(
     environment: &Environment,
     chemistry_library: &mut crate::chemistry_library::ChemistryLibrary,
@@ -198,18 +213,16 @@ fn chemical_step(
             return;
         };
     }
-    // A structural unit represents a physical constituent, so its chemical
-    // spectrum position comes from that constituent's catalog entry. The
-    // weighted property aggregate intentionally leaves chemical_position unset
-    // (mixtures have no single position); using it here also rejects every
-    // single-base unit before activation can accumulate.
+    // A structural unit is one physical constituent. Resolve its chemical
+    // position from that constituent's catalog identity; aggregate properties
+    // intentionally do not invent a molecule-wide chemical position.
     let Some(unit_a) = structure.units.get(selected.unit_a) else {
         reject_step!();
     };
-    let [(material_name_a, _)] = unit_a.material.parts.as_slice() else {
+    let Some(unit_b) = structure.units.get(selected.unit_b) else {
         reject_step!();
     };
-    let Some(unit_b) = structure.units.get(selected.unit_b) else {
+    let [(material_name_a, _)] = unit_a.material.parts.as_slice() else {
         reject_step!();
     };
     let [(material_name_b, _)] = unit_b.material.parts.as_slice() else {
@@ -221,20 +234,10 @@ fn chemical_step(
     let Some(b) = unit_b.properties(&environment.catalog) else {
         reject_step!();
     };
-    let Some(position_a) = environment
-        .catalog
-        .iter()
-        .find(|resource| resource.name == *material_name_a)
-        .and_then(|resource| resource.properties.chemical_position)
-    else {
+    let Some(position_a) = constituent_chemical_position(unit_a, &environment.catalog) else {
         reject_step!();
     };
-    let Some(position_b) = environment
-        .catalog
-        .iter()
-        .find(|resource| resource.name == *material_name_b)
-        .and_then(|resource| resource.properties.chemical_position)
-    else {
+    let Some(position_b) = constituent_chemical_position(unit_b, &environment.catalog) else {
         reject_step!();
     };
     let Some(interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
@@ -2795,6 +2798,257 @@ mod tests {
             after_break.is_balanced_without_creation(1e-6),
             "COMBINE followed by environmental BREAK must conserve the complete inventory; inventory={after_break:?}, residual={:?}",
             after_break.residual()
+        );
+    }
+
+    #[test]
+    fn heterogeneous_compound_contacts_retain_constituent_chemical_identity() {
+        let simulation = crate::state::Simulation::new(23729, 10.0);
+        let catalog = simulation.environment.catalog.clone();
+        let mut compound_fixture = None;
+
+        'constituents: for resource_a in &catalog {
+            if resource_a.physical_state == crate::resources::PhysicalState::Fluid {
+                continue;
+            }
+            for resource_b in &catalog {
+                if resource_b.physical_state == crate::resources::PhysicalState::Fluid
+                    || resource_a.name == resource_b.name
+                    || resource_a.properties.chemical_position
+                        == resource_b.properties.chemical_position
+                {
+                    continue;
+                }
+                for step in 1..=60 {
+                    let distance = step as f64 * 0.05;
+                    for rotation_step in 0..12 {
+                        let angle = rotation_step as f64 * std::f64::consts::PI / 6.0;
+                        let (sin, cos) = angle.sin_cos();
+                        let candidate = PhysicalMaterial::realized(
+                            Material {
+                                parts: vec![
+                                    (resource_a.name.clone(), 1.0),
+                                    (resource_b.name.clone(), 1.0),
+                                ],
+                                internal_bonds: vec![InternalBond {
+                                    part_a: 0,
+                                    part_b: 1,
+                                }],
+                            },
+                            vec![
+                                Placement {
+                                    x: 10.0,
+                                    y: 10.0,
+                                    rotation_radians: 0.0,
+                                },
+                                Placement {
+                                    x: 10.0 + distance * cos,
+                                    y: 10.0 + distance * sin,
+                                    rotation_radians: angle,
+                                },
+                            ],
+                            &catalog,
+                        );
+                        let Some(candidate) = candidate else {
+                            continue;
+                        };
+                        if let Some((structure, indices)) =
+                            restored_source(&candidate, &simulation.environment)
+                        {
+                            if indices.len() == 2 && structure.bonds.len() == 1 {
+                                compound_fixture = Some(candidate);
+                                break 'constituents;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let compound = compound_fixture
+            .expect("catalog must provide a physically realizable heterogeneous bonded pair");
+        assert_eq!(compound.material.parts.len(), 2);
+        assert_ne!(
+            compound.material.parts[0].0, compound.material.parts[1].0,
+            "the characterization fixture must contain two distinct resources"
+        );
+        assert_eq!(
+            compound
+                .material
+                .weighted_properties(&catalog)
+                .chemical_position,
+            None,
+            "a heterogeneous molecule must not have one averaged chemical position"
+        );
+
+        let (compound_structure, compound_indices) =
+            restored_source(&compound, &simulation.environment)
+                .expect("heterogeneous compound must restore as constituent units");
+        assert_eq!(compound_indices.len(), 2);
+        assert_eq!(compound_structure.bonds.len(), 1);
+
+        let mut selected_fixture = None;
+        'external: for resource in &catalog {
+            if resource.physical_state == crate::resources::PhysicalState::Fluid {
+                continue;
+            }
+            for step in 1..=80 {
+                let distance = step as f64 * 0.05;
+                for rotation_step in 0..12 {
+                    let angle = rotation_step as f64 * std::f64::consts::PI / 6.0;
+                    let base = PhysicalMaterial::realized(
+                        Material::free_base(resource.name.clone(), 1.0),
+                        vec![Placement {
+                            x: 10.0 + distance,
+                            y: 10.0,
+                            rotation_radians: angle,
+                        }],
+                        &catalog,
+                    );
+                    let Some(base) = base else {
+                        continue;
+                    };
+                    let (mut structure, indices_a) =
+                        restored_source(&compound, &simulation.environment)
+                            .expect("heterogeneous compound must restore for each contact pose");
+                    let Some(indices_b) = crate::material_restoration::restore_material(
+                        &mut structure,
+                        &base,
+                        origin(),
+                        &catalog,
+                    ) else {
+                        continue;
+                    };
+                    if indices_b.iter().any(|index| {
+                        crate::construction_runtime::placed_unit_overlaps(
+                            &structure,
+                            &structure.units[*index],
+                            &indices_b,
+                            &catalog,
+                        )
+                    }) {
+                        continue;
+                    }
+                    let mut cache = ConnectionCompatibilityCache::new();
+                    let mut work = FIELD_COMPONENT_PAIR_LIMIT;
+                    let Some(selected) = select_best_contact(
+                        &structure, &indices_a, &indices_b, &catalog, &mut cache, &mut work,
+                    ) else {
+                        continue;
+                    };
+                    let interface =
+                        crate::geometry_reference_library::resolve_live_contact_candidate(
+                            structure.units[selected.unit_a].material.parts[0]
+                                .0
+                                .as_str(),
+                            &structure.units[selected.unit_a],
+                            structure.units[selected.unit_b].material.parts[0]
+                                .0
+                                .as_str(),
+                            &structure.units[selected.unit_b],
+                            selected.candidate,
+                            &catalog,
+                        );
+                    if selected.candidate.distance > 0.25
+                        || selected.candidate.facing <= 0.5
+                        || interface.is_none()
+                    {
+                        continue;
+                    }
+                    let Some(external_position) = catalog
+                        .iter()
+                        .find(|candidate| candidate.name == resource.name)
+                        .and_then(|candidate| candidate.properties.chemical_position)
+                    else {
+                        continue;
+                    };
+                    let mut interface_potentials = indices_a.iter().filter_map(|index| {
+                        let position =
+                            constituent_chemical_position(&structure.units[*index], &catalog)?;
+                        crate::chemistry::interaction_potential(
+                            position,
+                            external_position,
+                            crate::chemistry::CHEMICAL_K,
+                            crate::chemistry::CHEMICAL_D_MAX,
+                        )
+                    });
+                    let (Some(first_potential), Some(second_potential)) =
+                        (interface_potentials.next(), interface_potentials.next())
+                    else {
+                        continue;
+                    };
+                    if (first_potential - second_potential).abs() <= f64::EPSILON {
+                        continue;
+                    }
+                    selected_fixture = Some((structure, indices_a, selected));
+                    break 'external;
+                }
+            }
+        }
+
+        let (structure, compound_indices, selected) = selected_fixture.expect(
+            "heterogeneous molecule must expose a physically eligible constituent interface",
+        );
+        assert!(compound_indices.contains(&selected.unit_a));
+        let [(selected_name, _)] = structure.units[selected.unit_a].material.parts.as_slice()
+        else {
+            panic!("selected molecule contact must resolve to one physical constituent");
+        };
+        assert!(
+            compound
+                .material
+                .parts
+                .iter()
+                .any(|(name, _)| name == selected_name),
+            "selected contact identity must be one of the molecule's original constituents"
+        );
+        let selected_resource = catalog
+            .iter()
+            .find(|resource| resource.name == *selected_name)
+            .expect("selected constituent must exist in the base catalog");
+        let selected_unit = &structure.units[selected.unit_a];
+        let selected_properties = selected_unit
+            .properties(&catalog)
+            .expect("selected constituent aggregate properties must remain available");
+        assert_eq!(
+            selected_properties.chemical_position, None,
+            "weighted properties must not manufacture a molecule-wide chemical position"
+        );
+        assert_eq!(
+            constituent_chemical_position(selected_unit, &catalog),
+            selected_resource.properties.chemical_position,
+            "the chemistry path must resolve the contacting constituent's catalog position"
+        );
+
+        let external_name = structure.units[selected.unit_b].material.parts[0]
+            .0
+            .as_str();
+        let external_position = catalog
+            .iter()
+            .find(|resource| resource.name == external_name)
+            .and_then(|resource| resource.properties.chemical_position)
+            .expect("external contact constituent must have a chemical position");
+        let interface_potentials: Vec<_> = compound_indices
+            .iter()
+            .filter_map(|index| {
+                let unit = &structure.units[*index];
+                let position = constituent_chemical_position(unit, &catalog)?;
+                crate::chemistry::interaction_potential(
+                    position,
+                    external_position,
+                    crate::chemistry::CHEMICAL_K,
+                    crate::chemistry::CHEMICAL_D_MAX,
+                )
+            })
+            .collect();
+        assert_eq!(
+            interface_potentials.len(),
+            2,
+            "both bonded constituents must independently expose chemistry identities"
+        );
+        assert_ne!(
+            interface_potentials[0], interface_potentials[1],
+            "different constituent interfaces must produce distinct interaction potentials against the same external material"
         );
     }
 
