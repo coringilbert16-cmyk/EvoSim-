@@ -1150,9 +1150,12 @@ mod tests {
                 break;
             }
         }
-        let operation = discovered_operation.expect(
-            "live environmental discovery must accumulate activation and schedule a contact pair",
-        );
+        let operation = discovered_operation.unwrap_or_else(|| {
+            panic!(
+                "live environmental discovery must accumulate activation and schedule a contact pair; accumulated values={:?}",
+                accumulation.values().copied().collect::<Vec<_>>()
+            )
+        });
         assert!(
             crate::chemistry::activated(
                 operation.accumulated_reaction,
