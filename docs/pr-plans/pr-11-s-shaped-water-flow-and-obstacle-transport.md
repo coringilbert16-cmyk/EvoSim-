@@ -47,6 +47,7 @@ Replace the old environment concept for the experiment with a continuous blue wa
 ## Implementation status (2026-10-29)
 
 - Added `src/simulation/environment_flow.rs` with a deterministic S-shaped velocity field, smooth outward speed falloff, two vector-field eddies, linear mass mobility with a positive floor, and cohesion-derived obstacle deflection/wakes.
+- Updated the World canvas to show a blue water field, the matching S-shaped spine, and bend eddies. This is a visual aid only; the Rust velocity field remains authoritative.
 - Added snapshot-based movement of complete `PhysicalMaterial` objects before environmental BREAK/COMBINE discovery. The commit removes source entries in reverse index order, inserts translated instances only after destinations are staged, and marks touched cell revisions. Constituent counts, internal bonds, bond energy, realized shapes, and rotations are retained; only world-space placements move.
 - The obstacle approximation uses 5-unit spatial bins and caps each object's obstacle influence sample at 64 candidates to prevent dense local clouds from creating an all-pairs scan. This cap and the movement cost must be checked against the repository's benchmark before the model is accepted.
 - Added focused tests for deterministic finite flow, core-to-edge speed gradient, positive-floor mass response, obstacle wake behavior, and physical-material inventory/revision preservation. CI is being used to compile and run the tests; passing status is not yet claimed.
