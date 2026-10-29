@@ -37,7 +37,9 @@ jobs:
         run: timeout 5m cargo test --locked environmental_compound_base_combine_commits_three_part_product -- --nocapture
       - name: Compound + compound constituent chemistry matrix
         run: timeout 5m cargo test --locked compound_compound_matrix_exercises_constituent_level_chemistry -- --nocapture
-      - name: Molecular composition and topology characterization\n        run: timeout 5m cargo test --locked molecular_characterization_ -- --nocapture\n      - name: Canonical base-resource pair matrix
+      - name: Molecular composition and topology characterization
+        run: timeout 5m cargo test --locked molecular_characterization_ -- --nocapture
+      - name: Canonical base-resource pair matrix
         run: timeout 5m cargo test --locked static_pair_matrix_characterizes_all_base_resource_pairs -- --nocapture
       - name: Controlled physical base-resource pair matrix
         run: timeout 5m cargo test --locked controlled_physical_pair_matrix_classifies_all_base_resource_pairs -- --nocapture
