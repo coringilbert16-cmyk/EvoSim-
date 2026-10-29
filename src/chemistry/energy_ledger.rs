@@ -231,7 +231,26 @@ impl EnergyTransaction {
         // A generic transaction has no named non-structural source owner to
         // debit. Bond energy must be represented by structural_delta; any
         // genuinely external input must use ExternalInputTransaction.
-        self.potential_released == 0.0 && self.allocation().balanced()
+        // Unlike an external-input allocation, a reaction's algebraic balance
+        // can round a few ULPs to either side of zero. Permit that signed
+        // construction error here; settle_transaction checks the represented
+        // holder/counter increments and rejects any actual energy creation.
+        let allocation = self.allocation();
+        let residual = allocation.source_energy
+            - allocation.usable_delta
+            - allocation.structural_delta
+            - allocation.work_expended
+            - allocation.heat_dissipated;
+        self.potential_released == 0.0
+            && allocation.source_energy.is_finite()
+            && allocation.usable_delta.is_finite()
+            && allocation.structural_delta.is_finite()
+            && allocation.work_expended.is_finite()
+            && allocation.work_expended >= 0.0
+            && allocation.heat_dissipated.is_finite()
+            && allocation.heat_dissipated >= 0.0
+            && residual.is_finite()
+            && residual.abs() <= EPSILON
     }
 }
 
@@ -613,25 +632,99 @@ impl EnergyLedgerAuthority for EnergyLedger {
 
     fn settle_transaction(&mut self, holder: &mut f64, transaction: EnergyTransaction) -> bool {
         if !holder.is_finite() || *holder < 0.0 || !transaction.balanced() {
+            #[cfg(test)]
+            eprintln!(
+                "[settle-reject:precondition] holder={:?} balanced={:?} allocation={:?}",
+                *holder,
+                transaction.balanced(),
+                transaction.allocation()
+            );
             return false;
         }
-        let next_holder = *holder + transaction.usable_delta;
+        let mut next_holder = *holder + transaction.usable_delta;
         if !next_holder.is_finite() || next_holder < 0.0 {
+            #[cfg(test)]
+            eprintln!(
+                "[settle-reject:holder] before={:?} usable_delta={:?} next={:?}",
+                *holder, transaction.usable_delta, next_holder
+            );
             return false;
         }
         let next_released = self.total_potential_energy_released + transaction.potential_released;
         let next_structural = self.total_structural_energy_delta + transaction.structural_delta;
-        let next_gained = self.total_usable_energy_gained + transaction.usable_delta.max(0.0);
         let next_work = self.total_work_expended + transaction.work_expended;
         let next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
         if !next_released.is_finite()
             || !next_structural.is_finite()
-            || !next_gained.is_finite()
             || !next_work.is_finite()
             || !next_heat.is_finite()
         {
+            #[cfg(test)]
+            eprintln!(
+                "[settle-reject:counters] next=(released={:?},structural={:?},work={:?},heat={:?})",
+                next_released, next_structural, next_work, next_heat
+            );
             return false;
         }
+
+        // A transaction can be balanced algebraically but become unbalanced
+        // after the holder and cumulative f64 counters round their increments.
+        // Use the increments those stores actually represent. If rounding would
+        // create energy, move the usable holder down by one representable step.
+        // Do not manufacture extra heat to hide an unrepresentable transaction:
+        // reject atomically if the resulting non-creating residual exceeds the
+        // existing tolerance.
+        let actual_work_delta = next_work - self.total_work_expended;
+        let actual_heat_delta = next_heat - self.total_heat_dissipated;
+        let residual_for = |candidate_holder: f64| {
+            let actual_usable_delta = candidate_holder - *holder;
+            actual_usable_delta
+                + transaction.structural_delta
+                + actual_work_delta
+                + actual_heat_delta
+        };
+        let mut residual = residual_for(next_holder);
+        let mut rounding_steps = 0;
+        while residual > 0.0 {
+            if next_holder <= 0.0 || rounding_steps >= 64 {
+                #[cfg(test)]
+                eprintln!(
+                    "[settle-reject:rounding-loop] before={:?} next={:?} transaction={:?} actual_work={:?} actual_heat={:?} residual={:?} steps={}",
+                    *holder,
+                    next_holder,
+                    transaction,
+                    actual_work_delta,
+                    actual_heat_delta,
+                    residual,
+                    rounding_steps
+                );
+                return false;
+            }
+            next_holder = f64::from_bits(next_holder.to_bits() - 1);
+            residual = residual_for(next_holder);
+            rounding_steps += 1;
+        }
+        if !residual.is_finite() || residual.abs() > EPSILON {
+            #[cfg(test)]
+            eprintln!(
+                "[settle-reject:residual] before={:?} next={:?} transaction={:?} actual_work={:?} actual_heat={:?} residual={:?} steps={}",
+                *holder,
+                next_holder,
+                transaction,
+                actual_work_delta,
+                actual_heat_delta,
+                residual,
+                rounding_steps
+            );
+            return false;
+        }
+
+        let actual_usable_delta = next_holder - *holder;
+        let next_gained = self.total_usable_energy_gained + actual_usable_delta.max(0.0);
+        if !next_gained.is_finite() {
+            return false;
+        }
+
         *holder = next_holder;
         self.total_potential_energy_released = next_released;
         self.total_structural_energy_delta = next_structural;
@@ -695,6 +788,80 @@ mod tests {
         assert!(!balance.can_commit_with(6.49));
         assert!(balance.can_commit_with(6.5));
         assert_eq!(balance.residual(6.5), Some(0.0));
+    }
+
+    #[test]
+    fn reaction_balance_accepts_tiny_negative_algebraic_rounding() {
+        let transaction = EnergyTransaction::reaction(
+            EnergyReason::Break,
+            12.98158853027627,
+            1.258588936436521,
+            0.21107516949790017,
+        )
+        .unwrap();
+        let allocation = transaction.allocation();
+        let residual = allocation.source_energy
+            - allocation.usable_delta
+            - allocation.structural_delta
+            - allocation.work_expended
+            - allocation.heat_dissipated;
+        assert!(residual < 0.0 && residual.abs() < EPSILON);
+        assert!(
+            transaction.balanced(),
+            "signed algebraic rounding within tolerance must reach represented-state settlement"
+        );
+
+        let mut ledger = EnergyLedger::default();
+        let mut usable = 1_000.0;
+        assert!(
+            ledger.settle_transaction(&mut usable, transaction),
+            "the represented transaction must settle without creating energy"
+        );
+    }
+
+    #[test]
+    fn reaction_settlement_corrects_tiny_rounding_without_inventing_heat() {
+        // At this holder magnitude, the nominal +0.07 increment rounds to a
+        // slightly larger represented delta. Correct only the holder by one
+        // ULP, leaving a tiny non-creating residual within the existing limit.
+        let transaction =
+            EnergyTransaction::reaction(EnergyReason::Combine, -0.1, 0.03, 0.0).unwrap();
+        let mut ledger = EnergyLedger::default();
+        let mut usable = 1_000.0;
+        let initial_usable = usable;
+
+        assert!(ledger.settle_transaction(&mut usable, transaction));
+
+        let actual_usable_delta = usable - initial_usable;
+        let residual = actual_usable_delta
+            + transaction.structural_delta
+            + ledger.total_work_expended
+            + ledger.total_heat_dissipated;
+        assert!(
+            residual <= 0.0 && residual.abs() <= EPSILON,
+            "rounded reaction settlement must not create energy: usable_delta={actual_usable_delta}, work={}, heat={}, residual={residual}",
+            ledger.total_work_expended,
+            ledger.total_heat_dissipated
+        );
+        assert_eq!(ledger.total_usable_energy_gained, actual_usable_delta);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+    }
+
+    #[test]
+    fn reaction_settlement_rejects_unrepresentable_rounding_atomically() {
+        // At this magnitude, adding +99 rounds to +100 and subtracting one ULP
+        // would overshoot by a full energy unit. Do not disguise that mismatch
+        // as heat; reject without changing the holder or ledger.
+        let transaction =
+            EnergyTransaction::reaction(EnergyReason::Combine, -100.0, 1.0, 0.0).unwrap();
+        let mut ledger = EnergyLedger::default();
+        let ledger_before = ledger;
+        let mut usable = 1.0e16;
+        let usable_before = usable;
+
+        assert!(!ledger.settle_transaction(&mut usable, transaction));
+        assert_eq!(usable, usable_before);
+        assert_eq!(ledger, ledger_before);
     }
 
     #[test]
