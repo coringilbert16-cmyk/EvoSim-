@@ -194,42 +194,46 @@ fn chemical_step(
     operations: &mut Vec<EnvironmentalCombineOperation>,
 ) {
     macro_rules! reject_step {
-        () => {{
-            #[cfg(test)]
-            eprintln!("chemical_step rejected at line {}", line!());
+        () => {
             return;
-        }};
+        };
     }
-    let Some(a) = structure
-        .units
-        .get(selected.unit_a)
-        .and_then(|unit| unit.properties(&environment.catalog))
+    // A structural unit represents a physical constituent, so its chemical
+    // spectrum position comes from that constituent's catalog entry. The
+    // weighted property aggregate intentionally leaves chemical_position unset
+    // (mixtures have no single position); using it here also rejects every
+    // single-base unit before activation can accumulate.
+    let Some(unit_a) = structure.units.get(selected.unit_a) else {
+        reject_step!();
+    };
+    let [(material_name_a, _)] = unit_a.material.parts.as_slice() else {
+        reject_step!();
+    };
+    let Some(unit_b) = structure.units.get(selected.unit_b) else {
+        reject_step!();
+    };
+    let [(material_name_b, _)] = unit_b.material.parts.as_slice() else {
+        reject_step!();
+    };
+    let Some(a) = unit_a.properties(&environment.catalog) else {
+        reject_step!();
+    };
+    let Some(b) = unit_b.properties(&environment.catalog) else {
+        reject_step!();
+    };
+    let Some(position_a) = environment
+        .catalog
+        .iter()
+        .find(|resource| resource.name == *material_name_a)
+        .and_then(|resource| resource.properties.chemical_position)
     else {
         reject_step!();
     };
-    let Some(b) = structure
-        .units
-        .get(selected.unit_b)
-        .and_then(|unit| unit.properties(&environment.catalog))
-    else {
-        reject_step!();
-    };
-    let (Some(position_a), Some(position_b)) = (a.chemical_position, b.chemical_position) else {
-        reject_step!();
-    };
-    let Some(material_name_a) = structure.units[selected.unit_a]
-        .material
-        .parts
-        .first()
-        .map(|part| part.0.as_str())
-    else {
-        reject_step!();
-    };
-    let Some(material_name_b) = structure.units[selected.unit_b]
-        .material
-        .parts
-        .first()
-        .map(|part| part.0.as_str())
+    let Some(position_b) = environment
+        .catalog
+        .iter()
+        .find(|resource| resource.name == *material_name_b)
+        .and_then(|resource| resource.properties.chemical_position)
     else {
         reject_step!();
     };
