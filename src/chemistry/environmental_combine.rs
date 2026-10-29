@@ -2866,8 +2866,7 @@ mod tests {
             .expect("catalog must provide a physically realizable heterogeneous bonded pair");
         assert_eq!(compound.material.parts.len(), 2);
         assert_ne!(
-            compound.material.parts[0].0,
-            compound.material.parts[1].0,
+            compound.material.parts[0].0, compound.material.parts[1].0,
             "the characterization fixture must contain two distinct resources"
         );
         assert_eq!(
@@ -2930,20 +2929,19 @@ mod tests {
                     let mut cache = ConnectionCompatibilityCache::new();
                     let mut work = FIELD_COMPONENT_PAIR_LIMIT;
                     let Some(selected) = select_best_contact(
-                        &structure,
-                        &indices_a,
-                        &indices_b,
-                        &catalog,
-                        &mut cache,
-                        &mut work,
+                        &structure, &indices_a, &indices_b, &catalog, &mut cache, &mut work,
                     ) else {
                         continue;
                     };
                     let interface =
                         crate::geometry_reference_library::resolve_live_contact_candidate(
-                            structure.units[selected.unit_a].material.parts[0].0.as_str(),
+                            structure.units[selected.unit_a].material.parts[0]
+                                .0
+                                .as_str(),
                             &structure.units[selected.unit_a],
-                            structure.units[selected.unit_b].material.parts[0].0.as_str(),
+                            structure.units[selected.unit_b].material.parts[0]
+                                .0
+                                .as_str(),
                             &structure.units[selected.unit_b],
                             selected.candidate,
                             &catalog,
@@ -2960,8 +2958,9 @@ mod tests {
             }
         }
 
-        let (structure, compound_indices, selected) = selected_fixture
-            .expect("heterogeneous molecule must expose a physically eligible constituent interface");
+        let (structure, compound_indices, selected) = selected_fixture.expect(
+            "heterogeneous molecule must expose a physically eligible constituent interface",
+        );
         assert!(compound_indices.contains(&selected.unit_a));
         let [(selected_name, _)] = structure.units[selected.unit_a].material.parts.as_slice()
         else {
@@ -2983,8 +2982,7 @@ mod tests {
             .properties(&catalog)
             .expect("selected constituent properties must remain available");
         assert_eq!(
-            selected_properties.chemical_position,
-            selected_resource.properties.chemical_position,
+            selected_properties.chemical_position, selected_resource.properties.chemical_position,
             "contact chemistry must use the contacting constituent's chemical position"
         );
     }
