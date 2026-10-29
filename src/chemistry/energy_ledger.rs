@@ -688,7 +688,16 @@ impl EnergyLedgerAuthority for EnergyLedger {
         while residual > 0.0 {
             if next_holder <= 0.0 || rounding_steps >= 64 {
                 #[cfg(test)]
-                eprintln!("[settle-reject:rounding-loop] before={:?} next={:?} transaction={:?} actual_work={:?} actual_heat={:?} residual={:?} steps={}", *holder, next_holder, transaction, actual_work_delta, actual_heat_delta, residual, rounding_steps);
+                eprintln!(
+                    "[settle-reject:rounding-loop] before={:?} next={:?} transaction={:?} actual_work={:?} actual_heat={:?} residual={:?} steps={}",
+                    *holder,
+                    next_holder,
+                    transaction,
+                    actual_work_delta,
+                    actual_heat_delta,
+                    residual,
+                    rounding_steps
+                );
                 return false;
             }
             next_holder = f64::from_bits(next_holder.to_bits() - 1);
@@ -697,7 +706,16 @@ impl EnergyLedgerAuthority for EnergyLedger {
         }
         if !residual.is_finite() || residual.abs() > EPSILON {
             #[cfg(test)]
-            eprintln!("[settle-reject:residual] before={:?} next={:?} transaction={:?} actual_work={:?} actual_heat={:?} residual={:?} steps={}", *holder, next_holder, transaction, actual_work_delta, actual_heat_delta, residual, rounding_steps);
+            eprintln!(
+                "[settle-reject:residual] before={:?} next={:?} transaction={:?} actual_work={:?} actual_heat={:?} residual={:?} steps={}",
+                *holder,
+                next_holder,
+                transaction,
+                actual_work_delta,
+                actual_heat_delta,
+                residual,
+                rounding_steps
+            );
             return false;
         }
 
