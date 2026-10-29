@@ -1000,73 +1000,80 @@ mod tests {
                 if resource_b.physical_state == crate::resources::PhysicalState::Fluid {
                     continue;
                 }
+                let chemistry_separation = match (
+                    resource_a.properties.chemical_position,
+                    resource_b.properties.chemical_position,
+                ) {
+                    (Some(a), Some(b)) => (a - b).abs(),
+                    _ => continue,
+                };
+                if chemistry_separation < 9.0 {
+                    continue;
+                }
                 for step in 1..=60 {
                     let distance = step as f64 * 0.05;
-                    let source_a = PhysicalMaterial::realized(
-                        Material::free_base(resource_a.name.clone(), 1.0),
-                        vec![Placement {
-                            x: 10.0,
-                            y: 10.0,
-                            rotation_radians: 0.0,
-                        }],
-                        &catalog,
-                    );
-                    let source_b = PhysicalMaterial::realized(
-                        Material::free_base(resource_b.name.clone(), 1.0),
-                        vec![Placement {
-                            x: 10.0 + distance,
-                            y: 10.0,
-                            rotation_radians: 0.0,
-                        }],
-                        &catalog,
-                    );
-                    let (Some(source_a), Some(source_b)) = (source_a, source_b) else {
-                        continue;
-                    };
-                    let Some((mut structure, indices_a)) =
-                        restored_source(&source_a, &simulation.environment)
-                    else {
-                        continue;
-                    };
-                    let Some(indices_b) = crate::material_restoration::restore_material(
-                        &mut structure,
-                        &source_b,
-                        origin(),
-                        &catalog,
-                    ) else {
-                        continue;
-                    };
-                    if indices_b.iter().any(|index| {
-                        crate::construction_runtime::placed_unit_overlaps(
+                    for rotation_step in 0..12 {
+                        let rotation = rotation_step as f64 * std::f64::consts::PI / 6.0;
+                        let source_a = PhysicalMaterial::realized(
+                            Material::free_base(resource_a.name.clone(), 1.0),
+                            vec![Placement {
+                                x: 10.0,
+                                y: 10.0,
+                                rotation_radians: 0.0,
+                            }],
+                            &catalog,
+                        );
+                        let source_b = PhysicalMaterial::realized(
+                            Material::free_base(resource_b.name.clone(), 1.0),
+                            vec![Placement {
+                                x: 10.0 + distance,
+                                y: 10.0,
+                                rotation_radians: rotation,
+                            }],
+                            &catalog,
+                        );
+                        let (Some(source_a), Some(source_b)) = (source_a, source_b) else {
+                            continue;
+                        };
+                        let Some((mut structure, indices_a)) =
+                            restored_source(&source_a, &simulation.environment)
+                        else {
+                            continue;
+                        };
+                        let Some(indices_b) = crate::material_restoration::restore_material(
+                            &mut structure,
+                            &source_b,
+                            origin(),
+                            &catalog,
+                        ) else {
+                            continue;
+                        };
+                        if indices_b.iter().any(|index| {
+                            crate::construction_runtime::placed_unit_overlaps(
+                                &structure,
+                                &structure.units[*index],
+                                &indices_b,
+                                &catalog,
+                            )
+                        }) {
+                            continue;
+                        }
+                        let mut cache = ConnectionCompatibilityCache::new();
+                        let mut work = FIELD_COMPONENT_PAIR_LIMIT;
+                        if let Some(selected) = select_best_contact(
                             &structure,
-                            &structure.units[*index],
+                            &indices_a,
                             &indices_b,
                             &catalog,
-                        )
-                    }) {
-                        continue;
-                    }
-                    let mut cache = ConnectionCompatibilityCache::new();
-                    let mut work = FIELD_COMPONENT_PAIR_LIMIT;
-                    if let Some(selected) = select_best_contact(
-                        &structure, &indices_a, &indices_b, &catalog, &mut cache, &mut work,
-                    ) {
-                        let chemistry_a = structure.units[selected.unit_a]
-                            .properties(&catalog)
-                            .and_then(|properties| properties.chemical_position);
-                        let chemistry_b = structure.units[selected.unit_b]
-                            .properties(&catalog)
-                            .and_then(|properties| properties.chemical_position);
-                        let has_chemical_separation = matches!(
-                            (chemistry_a, chemistry_b),
-                            (Some(a), Some(b)) if (a - b).abs() > 0.0
-                        );
-                        if has_chemical_separation
-                            && selected.candidate.distance < 1.0
-                            && selected.candidate.facing > 0.0
-                        {
-                            selected_pair = Some((source_a, source_b, selected));
-                            break 'search;
+                            &mut cache,
+                            &mut work,
+                        ) {
+                            if selected.candidate.distance <= 0.25
+                                && selected.candidate.facing > 0.5
+                            {
+                                selected_pair = Some((source_a, source_b, selected));
+                                break 'search;
+                            }
                         }
                     }
                 }
