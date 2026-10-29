@@ -862,13 +862,12 @@ mod tests {
             cell.physical_materials.clear();
         }
         let mut accumulation = BTreeMap::new();
-        let mut library = crate::chemistry_library::ChemistryLibrary::default();
         let mut budget = 1;
 
         let operations = accumulate_environmental(
             &simulation.environment,
             &mut accumulation,
-            &mut library,
+            &mut simulation.chemistry_library,
             0,
             &mut budget,
         );
@@ -884,13 +883,12 @@ mod tests {
     fn environmental_combine_discovery_does_no_work_with_zero_budget() {
         let mut simulation = crate::state::Simulation::new(939, 10.0);
         let mut accumulation = BTreeMap::new();
-        let mut library = crate::chemistry_library::ChemistryLibrary::default();
         let mut budget = 0;
 
         let operations = accumulate_environmental(
             &simulation.environment,
             &mut accumulation,
-            &mut library,
+            &mut simulation.chemistry_library,
             0,
             &mut budget,
         );
