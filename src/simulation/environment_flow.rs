@@ -292,7 +292,10 @@ fn angular_displacement(
         return 0.0;
     };
     let total_mass = material.material.mass(catalog);
-    if !total_mass.is_finite() || total_mass <= 0.0 || placements.len() != material.material.parts.len() {
+    if !total_mass.is_finite()
+        || total_mass <= 0.0
+        || placements.len() != material.material.parts.len()
+    {
         return 0.0;
     }
     let anchor_y = placements[0].y;
