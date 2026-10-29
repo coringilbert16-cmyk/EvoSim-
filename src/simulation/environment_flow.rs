@@ -274,8 +274,6 @@ fn translated(
 fn angular_displacement(
     material: &PhysicalMaterial,
     catalog: &[BaseResource],
-    center_x: f64,
-    center_y: f64,
     width: f64,
     height: f64,
     obstacles: &[Obstacle],
@@ -554,8 +552,6 @@ pub(crate) fn transport_field(
         let angular_step = angular_displacement(
             &material,
             catalog,
-            x,
-            y,
             width,
             height,
             nearby,
@@ -847,8 +843,6 @@ mod tests {
         let angle = angular_displacement(
             &resource,
             &catalog,
-            25.0,
-            40.0,
             100.0,
             80.0,
             &[],
@@ -883,8 +877,6 @@ mod tests {
         let angle = angular_displacement(
             &compound,
             &catalog,
-            25.5,
-            40.0,
             100.0,
             80.0,
             &[],
@@ -920,8 +912,14 @@ mod tests {
             &catalog,
         )
         .expect("compound should realize");
-        let rotated = rotated(&compound, std::f64::consts::FRAC_PI_2, &catalog, 100.0, 100.0)
-            .expect("finite rotation should succeed");
+        let rotated = rotated(
+            &compound,
+            std::f64::consts::FRAC_PI_2,
+            &catalog,
+            100.0,
+            100.0,
+        )
+        .expect("finite rotation should succeed");
         let before = compound.placements.as_ref().unwrap();
         let after = rotated.placements.as_ref().unwrap();
         let before_distance = (before[0].x - before[1].x).hypot(before[0].y - before[1].y);
