@@ -755,17 +755,21 @@ mod tests {
         let (center_x, center_y) = material_center(&original, 1000.0).unwrap();
         let velocity = background_velocity(center_x, center_y, 1000.0, 1000.0);
         let displacement_scale = mobility(original.material.mass(&catalog)) * 0.15;
-        let expected = translated(
+        let translated_expected = translated(
             &original,
             velocity.x * displacement_scale,
             velocity.y * displacement_scale,
             1000.0,
         )
         .unwrap();
+        let angular_step =
+            angular_displacement(&original, &catalog, 1000.0, 1000.0, &[], 0, 0);
+        let expected = rotated(&translated_expected, angular_step, &catalog, 1000.0, 1000.0)
+            .unwrap();
         assert_eq!(
             objects[0],
             &expected,
-            "transport must preserve the complete realized material"
+            "transport may change only world placement and orientation"
         );
     }
 
