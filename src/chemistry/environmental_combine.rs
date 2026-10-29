@@ -897,9 +897,9 @@ mod tests {
         assert_eq!(budget, 0);
     }
 
-
     #[test]
-    fn environmental_combine_realization_scheduler_respects_budget_and_preserves_deferred_progress() {
+    fn environmental_combine_realization_scheduler_respects_budget_and_preserves_deferred_progress()
+    {
         let catalog = crate::resources::default_catalog();
         let source = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
@@ -938,16 +938,36 @@ mod tests {
         let mut accumulation = BTreeMap::new();
         let mut remaining_work = 1;
 
-        let scheduled =
-            schedule_environmental_operations(operations, 0, &mut remaining_work, &mut accumulation);
+        let scheduled = schedule_environmental_operations(
+            operations,
+            0,
+            &mut remaining_work,
+            &mut accumulation,
+        );
 
-        assert_eq!(scheduled.len(), 1, "one unit of realization budget permits one operation");
-        assert_eq!(remaining_work, 0, "the scheduler must charge every realized operation");
-        assert_eq!(accumulation.len(), 1, "deferred activation progress must be retained");
-        assert!(
-            accumulation.get("environment|combine:b") == Some(&0.5)
-                || accumulation.get("environment|combine:a") == Some(&0.75),
-            "the unscheduled operation's accumulated chemistry must survive deferral"
+        assert_eq!(
+            scheduled.len(),
+            1,
+            "one unit of realization budget permits one operation"
+        );
+        assert_eq!(
+            remaining_work, 0,
+            "the scheduler must charge every realized operation"
+        );
+        assert_eq!(
+            accumulation.len(),
+            1,
+            "deferred activation progress must be retained"
+        );
+        assert_eq!(
+            scheduled[0].accumulation_key,
+            "environment|combine:a",
+            "stable ordering must schedule the first key at tick zero"
+        );
+        assert_eq!(
+            accumulation.get("environment|combine:b"),
+            Some(&0.5),
+            "the deferred operation's accumulated chemistry must survive"
         );
     }
 
