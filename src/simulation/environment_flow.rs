@@ -288,10 +288,34 @@ fn angular_displacement(
     if placements.is_empty() {
         return 0.0;
     }
+    let Some(placements) = material.placements.as_ref() else {
+        return 0.0;
+    };
     let total_mass = material.material.mass(catalog);
-    if !total_mass.is_finite() || total_mass <= 0.0 {
+    if !total_mass.is_finite() || total_mass <= 0.0 || placements.len() != material.material.parts.len() {
         return 0.0;
     }
+    let anchor_y = placements[0].y;
+    let mut weighted_x = 0.0;
+    let mut weighted_y = 0.0;
+    for (index, placement) in placements.iter().enumerate() {
+        let Some((name, amount)) = material.material.parts.get(index) else {
+            return 0.0;
+        };
+        let Some(resource) = resource_for_part(name, catalog) else {
+            return 0.0;
+        };
+        let part_mass = resource.properties.mass * *amount;
+        if !part_mass.is_finite() || part_mass <= 0.0 {
+            return 0.0;
+        }
+        weighted_x += placement.x * part_mass;
+        weighted_y += ((placement.y - anchor_y + height * 0.5).rem_euclid(height)
+            - height * 0.5)
+            * part_mass;
+    }
+    let center_x = weighted_x / total_mass;
+    let center_y = (anchor_y + weighted_y / total_mass).rem_euclid(height);
 
     let center_velocity = obstacle_adjusted_velocity(
         background_velocity(center_x, center_y, width, height),
