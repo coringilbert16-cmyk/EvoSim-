@@ -247,10 +247,25 @@ pub(crate) fn transport_field(
         .flat_map(|(cell_index, cell)| cell.physical_materials.iter().cloned().enumerate()
             .map(move |(material_index, material)| (cell_index, material_index, material)))
         .collect();
+    // Index obstacle influence into only the cells its bounded deflection and
+    // wake can affect. Avoid a global all-pairs scan in dense environments.
     let obstacles: Vec<Obstacle> = snapshot
         .iter()
         .filter_map(|(cell, index, material)| obstacle_for(*cell, *index, material, catalog))
         .collect();
+    let mut obstacle_bins = vec![Vec::<Obstacle>::new(); field.cells.len()];
+    for obstacle in obstacles {
+        let radius = obstacle.radius.max(0.5);
+        let affected_cells = field.cells_intersecting_bounds(
+            (obstacle.x - radius * 2.5).max(0.0),
+            (obstacle.x + radius * 6.0).min(width),
+            obstacle.y - radius * 2.5,
+            obstacle.y + radius * 2.5,
+        );
+        for cell in affected_cells {
+            obstacle_bins[cell].push(obstacle);
+        }
+    }
     let mut staged = Vec::new();
 
     for (source_cell, source_index, material) in snapshot {
@@ -258,13 +273,16 @@ pub(crate) fn transport_field(
             continue;
         };
         let mass = material.material.mass(catalog);
+        let Some(center_cell) = field.index_for_position(x, y) else {
+            continue;
+        };
         let velocity = obstacle_adjusted_velocity(
             background_velocity(x, y, width, height),
             x,
             y,
             source_cell,
             source_index,
-            &obstacles,
+            &obstacle_bins[center_cell],
             height,
         );
         let scale = mobility(mass) * 0.15;
