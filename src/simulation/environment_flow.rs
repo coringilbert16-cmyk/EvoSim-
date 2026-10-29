@@ -272,8 +272,9 @@ pub(crate) fn transport_field(
     for obstacle in obstacles {
         let radius = obstacle.radius.max(0.5);
         let min_col = ((obstacle.x - radius * 2.5).max(0.0) / FLOW_BIN_SIZE).floor() as usize;
-        let max_col = (((obstacle.x + radius * 6.0).min(width - 1e-6) / FLOW_BIN_SIZE).floor() as usize)
-            .min(flow_cols.saturating_sub(1));
+        let max_col = ((obstacle.x + radius * 6.0).min(width - 1e-6) / FLOW_BIN_SIZE)
+            .floor() as usize;
+        let max_col = max_col.min(flow_cols.saturating_sub(1));
         if min_col > max_col {
             continue;
         }
@@ -284,7 +285,9 @@ pub(crate) fn transport_field(
             (0..flow_rows).collect::<Vec<_>>()
         } else {
             (0..row_count)
-                .map(|offset| (min_row + offset as isize).rem_euclid(flow_rows as isize) as usize)
+                .map(|offset| {
+                    (min_row + offset as isize).rem_euclid(flow_rows as isize) as usize
+                })
                 .collect::<Vec<_>>()
         };
         for row in rows {
@@ -300,8 +303,10 @@ pub(crate) fn transport_field(
             continue;
         };
         let mass = material.material.mass(catalog);
-        let flow_col = ((x / FLOW_BIN_SIZE).floor() as usize).min(flow_cols.saturating_sub(1));
-        let flow_row = ((y / FLOW_BIN_SIZE).floor() as usize).min(flow_rows.saturating_sub(1));
+        let flow_col = ((x / FLOW_BIN_SIZE).floor() as usize)
+            .min(flow_cols.saturating_sub(1));
+        let flow_row = ((y / FLOW_BIN_SIZE).floor() as usize)
+            .min(flow_rows.saturating_sub(1));
         let nearby = &obstacle_bins[flow_row * flow_cols + flow_col];
         let candidate_start = if nearby.is_empty() {
             0
