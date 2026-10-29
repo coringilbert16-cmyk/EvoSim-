@@ -568,9 +568,8 @@ mod tests {
         let moved = translated(&material, dx, 0.0, 1000.0).unwrap();
         let placements = moved.placements.as_ref().unwrap();
         assert!(placements.iter().all(|p| p.x >= 0.0 && p.x < 1000.0));
-        assert_eq!(
-            placements[1].x - placements[0].x,
-            0.1,
+        assert!(
+            ((placements[1].x - placements[0].x) - 0.1).abs() < 1e-9,
             "boundary handling must preserve the object's internal geometry"
         );
     }
@@ -583,13 +582,13 @@ mod tests {
             crate::resources::Material::free_base("Carbon", 1.0),
             vec![crate::structure::Placement {
                 x: 0.1,
-                y: 999.95,
+                y: 999.99,
                 rotation_radians: 0.0,
             }],
             &catalog,
         )
         .expect("catalog carbon should realize");
-        assert!(field.deposit_physical(0.1, 999.95, material, &catalog));
+        assert!(field.deposit_physical(0.1, 999.99, material, &catalog));
         let before = field.total_material();
 
         assert_eq!(transport_field(&mut field, &catalog, 1000.0, 1000.0), 1);
