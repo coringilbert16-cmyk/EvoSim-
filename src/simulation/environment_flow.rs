@@ -436,7 +436,8 @@ fn rotated(
         let dy = (placement.y - center_y + height * 0.5).rem_euclid(height) - height * 0.5;
         placement.x = center_x + dx * cos - dy * sin;
         placement.y = (center_y + dx * sin + dy * cos).rem_euclid(height);
-        placement.rotation_radians = (placement.rotation_radians + angle).rem_euclid(std::f64::consts::TAU);
+        placement.rotation_radians =
+            (placement.rotation_radians + angle).rem_euclid(std::f64::consts::TAU);
         if !placement.x.is_finite()
             || !placement.y.is_finite()
             || !placement.rotation_radians.is_finite()
