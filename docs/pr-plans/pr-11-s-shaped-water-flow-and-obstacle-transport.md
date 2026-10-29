@@ -1,0 +1,86 @@
+# Environmental PR — S-shaped Water Flow and Obstacle-Aware Transport
+
+## Purpose
+
+Replace the old environment concept for the experiment with a continuous blue water field and a deterministic, spatially varying current. This PR owns environmental flow and physical transport only. It must not implement or refactor chemistry reactions; PR #225 remains responsible for proving the live COMBINE → BREAK cycle after this transport foundation is ready.
+
+## Approved environmental behavior (user approval, 2026-10-29)
+
+- The field is represented visually as blue water.
+- The dominant current travels left to right along a sideways S-shaped path.
+- Speed is highest along the S-shaped core and falls gradually as distance from the core increases.
+- The bends include small recirculating eddies that feed back toward the main current. These must be represented in the velocity field rather than implemented as arbitrary particle reversals.
+- Every resource and compound samples the same local flow field.
+- Mass modifies material response, not the environmental velocity itself. Flow-induced mobility decreases linearly with mass and has a strictly positive floor: increasing mass must never make an object immovable solely due to mass.
+- Large structures disturb the current. Dense obstacles divert flow and create a sheltered downstream wake. Porous structures permit some flow through them according to permeability.
+- Start with a deterministic, one-way geometry-aware approximation. Do not implement full Navier–Stokes, pressure solving, or detailed turbulence in this PR.
+- Recompute only affected flow regions when feasible after structure geometry/permeability changes. Do not recompute the entire field every tick without evidence it is necessary.
+
+## Source trace so far
+
+- 'src/simulation/environment.rs' defines 'ActiveMaterialField', its regular cell grid, wrapped vertical coordinates, bounded spatial queries, and 'FieldCell' holders ('materials' and 'physical_materials'). The cell grid is a spatial index; it is not itself a flow model.
+- 'FieldCell.physical_materials' contains realized objects with geometry and internal connections. Transport must preserve each complete 'PhysicalMaterial' as a unit; do not split constituents or sever internal bonds during ordinary field movement.
+- Environmental COMBINE and BREAK discovery currently operate on realized physical materials. Aggregate 'FieldCell.materials' is unstructured stock and must not be reinterpreted as a composite by this PR.
+- 'src/materials/environmental_materials.rs' currently seeds six spatial formations and a 5,000-particle local cloud from 12 precombined material recipes. These old seed helpers should not be silently rewritten as part of implementing flow. The new environment/preset must be explicitly selectable until the new model and the chemistry experiment are validated.
+- 'Simulation::step' runs world-tone sampling and environment-owned BREAK/COMBINE discovery/resolution, but the inspected excerpt does not establish a dedicated S-flow transport pass. Continue tracing for any existing material movement/transfer API before adding one; avoid a second competing movement path.
+- The field has cell revisions and bounded neighborhood queries that may support cache invalidation and local flow updates. Confirm their intended mutation semantics before relying on them.
+
+## Required implementation sequence
+
+1. **Finish transport-path trace**
+   - Find all existing field movement, physical-material transfer, boundary, and mutation/revision paths.
+   - Identify the authoritative position owner for each realized object and whether a transport system already exists elsewhere.
+   - Record the order in 'Simulation::step' where flow transport can safely run relative to chemistry, energy sampling, and structural mutations.
+   - Establish whether environment geometry can be queried efficiently enough for obstacle approximation and how porous structure/permeability can be represented without inventing an ungrounded field.
+
+2. **Define the deterministic flow field**
+   - Add one authoritative query returning local velocity (vector and/or speed/direction) at a world position.
+   - Encode the S-shaped high-speed spine, smooth outward falloff, and recirculating eddies.
+   - Validate finite output, stable boundary behavior, repeatability, and nonzero background motion where required by the selected profile.
+   - Keep visual blue-water presentation separate from the physical velocity calculation.
+
+3. **Add mass-dependent transport**
+   - Define and document the linear mobility mapping and strictly positive lower bound.
+   - Calibrate using catalog mass values; reject NaN/infinite/negative invalid inputs safely.
+   - Apply flow displacement to complete realized objects, preserving relative placements, constituent counts, internal connections, and associated bond/energy state.
+   - Ensure the field's horizontal boundary and vertical wrap semantics are respected and that objects do not disappear or duplicate at boundaries.
+   - Do not use flow as a source/sink of matter or energy.
+
+4. **Add obstacle disturbance**
+   - Begin with a bounded local approximation: dense geometry deflects/attenuates nearby flow and creates a downstream sheltered wake; porous geometry allows partial transmission.
+   - Define the obstruction input from existing authoritative physical geometry, not decorative labels or material names alone.
+   - Add tests for no obstacle, dense obstacle, porous obstacle, and downstream wake. Keep the approximation deterministic and bounded.
+   - Avoid full fluid simulation and avoid full-field recalculation each tick unless measurements demonstrate need.
+
+5. **Performance and caching**
+   - Establish baseline cost for flow queries and movement before optimization.
+   - Cache static/background field values where useful; invalidate obstacle-affected regions when authoritative geometry changes.
+   - Prove the cache cannot serve stale flow after relevant structure changes. Keep cache behavior observationally equivalent to uncached queries.
+
+6. **Acceptance tests**
+   - S-current: strongest velocity follows the S spine; speed decreases smoothly outward.
+   - Eddies: local velocity direction includes recirculation at both bends, not just a speed dip.
+   - Mass: equal-position/equal-time test objects show the intended linear trend, with a positive floor for the heaviest catalog mass.
+   - Conservation: material inventory is exactly unchanged by transport; internal bond/geometry identity is preserved.
+   - Obstacles: dense obstacles divert/attenuate flow and create a wake; porous obstacles transmit some flow.
+   - Boundaries: no material loss/duplication across horizontal limits or vertical wrap.
+   - Determinism: same initial field, geometry, and tick sequence yield identical positions.
+   - Bounded work and repeatable performance measurements; no unbounded geometry scans.
+   - Verify both an empty environment and a field containing structures.
+
+## Scope boundaries
+
+- No chemistry equation, activation, COMBINE, BREAK, or energy-accounting policy changes.
+- No organism behavior/roles and no organism-supplied environmental energy.
+- No arbitrary new material types and no fractional constituent splitting.
+- Do not silently replace the legacy default seed functions. Keep the new flow environment explicit until acceptance and user-approved rollout.
+- Do not implement full fluid dynamics, turbulence solvers, or pressure fields in the first pass.
+- Do not bundle PR #215's run/pause UI, structured reaction-event UI, or 24,000-tick benchmarks here.
+
+## Dependency relationship
+
+This environment PR is intended to land before PR #225's approved live chemistry fixture relies on flow-mediated transport. PR #225 should stay focused on discrete raw reactants, live-tick COMBINE → BREAK, independent material/energy conservation, rollback, determinism, and bounded chemistry work. It should not implement a second flow model.
+
+## Completion gate
+
+The PR is ready to merge when the deterministic S-shaped flow, mass-dependent movement, geometry-aware dense/porous obstacle response, conservation, cache invalidation, boundary behavior, and bounded performance are covered by tests; the existing suite is compared against the accepted baseline; and no chemistry semantics or default production seeding were changed as an accidental side effect.
