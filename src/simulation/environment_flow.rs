@@ -308,9 +308,8 @@ fn angular_displacement(
             return 0.0;
         }
         weighted_x += placement.x * part_mass;
-        weighted_y += ((placement.y - anchor_y + height * 0.5).rem_euclid(height)
-            - height * 0.5)
-            * part_mass;
+        weighted_y +=
+            ((placement.y - anchor_y + height * 0.5).rem_euclid(height) - height * 0.5) * part_mass;
     }
     let center_x = weighted_x / total_mass;
     let center_y = (anchor_y + weighted_y / total_mass).rem_euclid(height);
@@ -418,7 +417,11 @@ fn angular_displacement(
     };
 
     let angle = response * mobility(total_mass) * 0.15;
-    if angle.is_finite() { angle } else { 0.0 }
+    if angle.is_finite() {
+        angle
+    } else {
+        0.0
+    }
 }
 
 /// Rotate a complete realized object around its mass-center while preserving
@@ -453,9 +456,8 @@ fn rotated(
         }
         total_mass += mass;
         weighted_x += placement.x * mass;
-        weighted_y += ((placement.y - anchor_y + height * 0.5).rem_euclid(height)
-            - height * 0.5)
-            * mass;
+        weighted_y +=
+            ((placement.y - anchor_y + height * 0.5).rem_euclid(height) - height * 0.5) * mass;
     }
     if !total_mass.is_finite() || total_mass <= 0.0 {
         return None;
@@ -591,13 +593,8 @@ pub(crate) fn transport_field(
             source_cell,
             source_index,
         );
-        let Some(moved) = rotated(
-            &translated_material,
-            angular_step,
-            catalog,
-            width,
-            height,
-        ) else {
+        let Some(moved) = rotated(&translated_material, angular_step, catalog, width, height)
+        else {
             continue;
         };
         let Some(anchor) = moved.placements.as_ref().and_then(|p| p.first()) else {
@@ -977,8 +974,7 @@ mod tests {
         let after_distance = (after[0].x - after[1].x).hypot(after[0].y - after[1].y);
         assert!((before_distance - after_distance).abs() < 1e-9);
         assert!(
-            (after[0].rotation_radians - before[0].rotation_radians
-                - std::f64::consts::FRAC_PI_2)
+            (after[0].rotation_radians - before[0].rotation_radians - std::f64::consts::FRAC_PI_2)
                 .abs()
                 < 1e-12
         );
