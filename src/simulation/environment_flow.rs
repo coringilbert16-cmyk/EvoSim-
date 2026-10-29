@@ -107,10 +107,7 @@ fn intrinsic_moment_of_inertia(form: &Form, mass: f64) -> f64 {
         Form::Rectangle { width, height } => mass * (width * width + height * height) / 12.0,
         Form::RegularPolygon { radius, .. } => 0.5 * mass * radius * radius,
         Form::Polygon { vertices } => {
-            let mean_radius_sq = vertices
-                .iter()
-                .map(|(x, y)| x * x + y * y)
-                .sum::<f64>()
+            let mean_radius_sq = vertices.iter().map(|(x, y)| x * x + y * y).sum::<f64>()
                 / vertices.len().max(1) as f64;
             0.5 * mass * mean_radius_sq
         }
