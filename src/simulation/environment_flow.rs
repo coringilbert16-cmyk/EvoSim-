@@ -44,10 +44,10 @@ impl Velocity {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
 const FLOW_BIN_SIZE: f64 = 5.0;
 const MAX_OBSTACLE_INFLUENCES_PER_OBJECT: usize = 64;
 
+#[derive(Clone, Copy, Debug)]
 struct Obstacle {
     source_cell: usize,
     source_index: usize,
