@@ -379,7 +379,8 @@ fn angular_displacement(
                 multi_contact_boundary,
                 ..
             }) => {
-                if boundary.is_some() || arc_boundary.is_some() || multi_contact_boundary.is_some() {
+                if boundary.is_some() || arc_boundary.is_some() || multi_contact_boundary.is_some()
+                {
                     1.0
                 } else {
                     0.0
