@@ -1766,8 +1766,16 @@ mod tests {
         let mut expected_parts = compound_a.material.parts.clone();
         expected_parts.extend(compound_b.material.parts.clone());
         let mut actual_parts = split_parts;
-        actual_parts.sort();
-        expected_parts.sort();
+        actual_parts.sort_by(|left, right| {
+            left.0
+                .cmp(&right.0)
+                .then_with(|| left.1.total_cmp(&right.1))
+        });
+        expected_parts.sort_by(|left, right| {
+            left.0
+                .cmp(&right.0)
+                .then_with(|| left.1.total_cmp(&right.1))
+        });
         assert_eq!(
             actual_parts, expected_parts,
             "COMBINE followed by BREAK must preserve the exact constituent multiset"
