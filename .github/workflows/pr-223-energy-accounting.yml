@@ -33,6 +33,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Formatting
         run: cargo fmt --all -- --check
+      - name: Canonical base-resource pair matrix
+        run: timeout 5m cargo test --locked static_pair_matrix_characterizes_all_base_resource_pairs -- --nocapture
       - name: Environmental COMBINE and BREAK inventory round trip
         run: timeout 5m cargo test --locked environmental_pair_combine_commits_a_realized_product -- --nocapture
       - name: Environmental discovery and realization budgets
