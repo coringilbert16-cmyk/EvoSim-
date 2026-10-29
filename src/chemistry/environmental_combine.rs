@@ -1063,8 +1063,31 @@ mod tests {
                         if let Some(selected) = select_best_contact(
                             &structure, &indices_a, &indices_b, &catalog, &mut cache, &mut work,
                         ) {
+                            let material_name_a = structure.units[selected.unit_a]
+                                .material
+                                .parts
+                                .first()
+                                .map(|part| part.0.as_str());
+                            let material_name_b = structure.units[selected.unit_b]
+                                .material
+                                .parts
+                                .first()
+                                .map(|part| part.0.as_str());
+                            let live_interface = material_name_a.zip(material_name_b).and_then(
+                                |(name_a, name_b)| {
+                                    crate::geometry_reference_library::resolve_live_contact_candidate(
+                                        name_a,
+                                        &structure.units[selected.unit_a],
+                                        name_b,
+                                        &structure.units[selected.unit_b],
+                                        selected.candidate,
+                                        &catalog,
+                                    )
+                                },
+                            );
                             if selected.candidate.distance <= 0.25
                                 && selected.candidate.facing > 0.5
+                                && live_interface.is_some()
                             {
                                 selected_pair = Some((source_a, source_b, selected));
                                 break 'search;
