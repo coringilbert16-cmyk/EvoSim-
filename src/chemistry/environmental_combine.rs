@@ -1100,6 +1100,45 @@ mod tests {
 
         let (source_a, source_b, selected) =
             selected_pair.expect("catalog should contain a physically eligible material pair");
+
+        // Isolate chemical activation from spatial discovery. If this direct call
+        // cannot accumulate, the rejection is inside chemical_step rather than
+        // the field scan or per-tick budgets.
+        let (mut direct_structure, direct_indices_a) =
+            restored_source(&source_a, &simulation.environment)
+                .expect("selected source A must restore for diagnostic");
+        let direct_indices_b = crate::material_restoration::restore_material(
+            &mut direct_structure,
+            &source_b,
+            origin(),
+            &catalog,
+        )
+        .expect("selected source B must restore for diagnostic");
+        let mut direct_accumulation = BTreeMap::new();
+        let mut direct_updated = BTreeSet::new();
+        let mut direct_operations = Vec::new();
+        chemical_step(
+            &simulation.environment,
+            &mut simulation.chemistry_library,
+            &direct_structure,
+            selected,
+            &direct_indices_a,
+            &direct_indices_b,
+            &source_a,
+            &source_b,
+            cell,
+            0,
+            cell,
+            1,
+            &mut direct_accumulation,
+            &mut direct_updated,
+            &mut direct_operations,
+        );
+        assert!(
+            !direct_accumulation.is_empty() || !direct_operations.is_empty(),
+            "direct chemical_step rejected the fixture before accumulation; selected={selected:?}, updated={direct_updated:?}"
+        );
+
         assert!(simulation.environment.field.deposit_physical_at_index(
             cell,
             source_a.clone(),
