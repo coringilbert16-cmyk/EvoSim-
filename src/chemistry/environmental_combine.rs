@@ -1394,8 +1394,7 @@ mod tests {
                         vec![Placement {
                             x: 10.0 + distance,
                             y: 10.0,
-                            rotation_radians: rotation_step as f64 * std::f64::consts::PI
-                                / 6.0,
+                            rotation_radians: rotation_step as f64 * std::f64::consts::PI / 6.0,
                         }],
                         &catalog,
                     )
