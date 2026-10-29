@@ -1430,8 +1430,12 @@ mod tests {
                     ) else {
                         continue;
                     };
-                    let name_a = structure.units[selected.unit_a].material.parts[0].0.as_str();
-                    let name_b = structure.units[selected.unit_b].material.parts[0].0.as_str();
+                    let name_a = structure.units[selected.unit_a].material.parts[0]
+                        .0
+                        .as_str();
+                    let name_b = structure.units[selected.unit_b].material.parts[0]
+                        .0
+                        .as_str();
                     let interface =
                         crate::geometry_reference_library::resolve_live_contact_candidate(
                             name_a,
@@ -1513,7 +1517,11 @@ mod tests {
         );
 
         let product = &simulation.environment.field.cells[cell].physical_materials;
-        assert_eq!(product.len(), 1, "both reactants must be replaced by one product");
+        assert_eq!(
+            product.len(),
+            1,
+            "both reactants must be replaced by one product"
+        );
         let product = &product[0];
         assert_eq!(product.material.parts.len(), 3);
         assert_eq!(product.material.parts[0], ("Carbon".to_owned(), 1.0));
@@ -1522,8 +1530,7 @@ mod tests {
         assert_eq!(product.material.internal_bonds.len(), 2);
         assert!(
             product.material.internal_bonds.iter().any(|bond| {
-                (bond.part_a == 0 && bond.part_b == 1)
-                    || (bond.part_a == 1 && bond.part_b == 0)
+                (bond.part_a == 0 && bond.part_b == 1) || (bond.part_a == 1 && bond.part_b == 0)
             }),
             "the original carbon-carbon bond must remain intact"
         );
@@ -1545,8 +1552,7 @@ mod tests {
         assert_eq!(connections.len(), 2);
         assert!(
             connections.iter().any(|bond| {
-                ((bond.part_a == 0 && bond.part_b == 1)
-                    || (bond.part_a == 1 && bond.part_b == 0))
+                ((bond.part_a == 0 && bond.part_b == 1) || (bond.part_a == 1 && bond.part_b == 0))
                     && (bond.bond_energy - original_bond_energy).abs() <= 1e-9
             }),
             "original bond energy must be preserved exactly"
@@ -1555,12 +1561,15 @@ mod tests {
         let inventory = simulation.energy_inventory_snapshot();
         assert!(
             (simulation.energy_ledger.total_usable_energy_held - inventory.current_usable_energy)
-                .abs() <= 1e-6,
+                .abs()
+                <= 1e-6,
             "usable-energy ledger must match live holders"
         );
         assert!(
             (simulation.energy_ledger.total_structural_energy_held
-                - inventory.current_structural_energy).abs() <= 1e-6,
+                - inventory.current_structural_energy)
+                .abs()
+                <= 1e-6,
             "structural-energy ledger must match live bonds"
         );
         assert!(
