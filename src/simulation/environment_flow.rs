@@ -45,7 +45,6 @@ impl Velocity {
 }
 
 const FLOW_BIN_SIZE: f64 = 5.0;
-const MAX_OBSTACLE_INFLUENCES_PER_OBJECT: usize = 64;
 
 #[derive(Clone, Copy, Debug)]
 struct Obstacle {
@@ -266,8 +265,9 @@ pub(crate) fn transport_field(
                 .map(move |(material_index, material)| (cell_index, material_index, material))
         })
         .collect();
-    // Use finer bins than the material field: a dense local cloud may place
-    // thousands of objects in one field cell. Bound per-object obstacle work.
+    // Use finer bins than the material field. Spatial indexing narrows each
+    // query to the local region, but every obstacle in that region contributes;
+    // do not truncate physical influence with a per-object candidate cap.
     let obstacles: Vec<Obstacle> = snapshot
         .iter()
         .filter_map(|(cell, index, material)| {
@@ -312,21 +312,13 @@ pub(crate) fn transport_field(
         let flow_col = ((x / FLOW_BIN_SIZE).floor() as usize).min(flow_cols.saturating_sub(1));
         let flow_row = ((y / FLOW_BIN_SIZE).floor() as usize).min(flow_rows.saturating_sub(1));
         let nearby = &obstacle_bins[flow_row * flow_cols + flow_col];
-        let candidate_start = if nearby.is_empty() {
-            0
-        } else {
-            source_index.wrapping_mul(MAX_OBSTACLE_INFLUENCES_PER_OBJECT) % nearby.len()
-        };
-        let limited_obstacles = (0..nearby.len().min(MAX_OBSTACLE_INFLUENCES_PER_OBJECT))
-            .map(|offset| nearby[(candidate_start + offset) % nearby.len()])
-            .collect::<Vec<_>>();
         let velocity = obstacle_adjusted_velocity(
             background_velocity(x, y, width, height),
             x,
             y,
             source_cell,
             source_index,
-            &limited_obstacles,
+            nearby,
             height,
         );
         let scale = mobility(mass) * 0.15;
