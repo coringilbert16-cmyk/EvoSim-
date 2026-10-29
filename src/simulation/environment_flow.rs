@@ -445,12 +445,15 @@ mod tests {
         let revision_before = field.revision;
         let source_cell = field.index_for_position(24.99, 200.0).unwrap();
         let source_cell_revision = field.cell_revisions[source_cell];
+        let destination_cell = field.index_for_position(25.01, 200.0).unwrap();
+        let destination_cell_revision = field.cell_revisions[destination_cell];
 
         assert_eq!(transport_field(&mut field, &catalog, 1000.0, 1000.0), 1);
 
         assert_eq!(field.total_material(), inventory_before);
         assert!(field.revision > revision_before);
         assert!(field.cell_revisions[source_cell] > source_cell_revision);
+        assert!(field.cell_revisions[destination_cell] > destination_cell_revision);
         let objects: Vec<_> = field
             .cells
             .iter()
