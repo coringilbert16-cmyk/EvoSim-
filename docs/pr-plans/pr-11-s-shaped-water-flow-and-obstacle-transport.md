@@ -37,6 +37,12 @@ Replace the old environment concept for the experiment with a continuous blue wa
 - The default catalog's resource masses range from Hydrogen at 0.25 to Phosphorus at 1.75; Water is 1.00. These provide a concrete calibration range for linear mass-response tests. Compound mass should use the existing exact sum from `Material::mass(catalog)`.
 - Obstacle contact already derives permeability from cohesion in `environmental_penetration_allowed`; the helper uses a 24-step binary search to bound partial penetration. This is useful precedent for permeability semantics, but the flow model should compute local velocity perturbation and wake rather than copy organism collision/push behavior.
 
+### Critical integration risk found in `Simulation::step` and chemistry keys
+
+- The environment-owned BREAK and COMBINE passes run sequentially during `Simulation::step`, before organism-owned chemistry. To let flow create contacts for the same tick's discovery, the natural insertion point is before environmental chemistry discovery, after any earlier tick-start lifecycle work that may mutate the field. Confirm exact ordering against the complete step before coding.
+- Environmental reaction accumulation keys currently encode cell/material/bond indices and, for COMBINE, the source cell/material locations. Moving a physical object across cells can therefore change its key and discard or strand activation progress. This is a real integration risk: transport must not make natural chemistry effectively impossible by continually resetting activation.
+- Add a focused trace/test plan for activation across movement before implementation. Preferred resolution should preserve the chemistry's existing equations and activation rules: either stable physical identity for environmental reaction keys (likely chemistry-runtime scope coordinated with #225) or a documented transport/commit boundary that demonstrably preserves sufficient activation without coupling transport to reaction internals. Do not quietly pause flow around reacting materials or weaken activation thresholds to hide the issue.
+
 ## Required implementation sequence
 
 1. **Finish transport-path trace**
