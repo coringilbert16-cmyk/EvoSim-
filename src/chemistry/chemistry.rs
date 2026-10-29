@@ -224,22 +224,38 @@ mod tests {
             for j in i..catalog.len() {
                 let a = &catalog[i];
                 let b = &catalog[j];
-                let position_a = a.properties.chemical_position
+                let position_a = a
+                    .properties
+                    .chemical_position
                     .expect("every canonical base resource must have a chemical position");
-                let position_b = b.properties.chemical_position
+                let position_b = b
+                    .properties
+                    .chemical_position
                     .expect("every canonical base resource must have a chemical position");
                 let forward = interaction_potential(
-                    position_a, position_b, CHEMICAL_K, CHEMICAL_D_MAX
-                ).expect("canonical positions must produce a finite potential");
+                    position_a,
+                    position_b,
+                    CHEMICAL_K,
+                    CHEMICAL_D_MAX,
+                )
+                .expect("canonical positions must produce a finite potential");
                 let reverse = interaction_potential(
-                    position_b, position_a, CHEMICAL_K, CHEMICAL_D_MAX
-                ).expect("reversed canonical positions must produce a finite potential");
+                    position_b,
+                    position_a,
+                    CHEMICAL_K,
+                    CHEMICAL_D_MAX,
+                )
+                .expect("reversed canonical positions must produce a finite potential");
                 let separation = (position_a - position_b).abs();
 
                 assert!(forward.is_finite() && (0.0..=1.0).contains(&forward));
                 assert!((forward - reverse).abs() <= 1e-12);
                 if i == j {
-                    assert_eq!(forward, 0.0, "same-resource pair {}/{} has zero separation", a.name, b.name);
+                    assert_eq!(
+                        forward, 0.0,
+                        "same-resource pair {}/{} has zero separation",
+                        a.name, b.name
+                    );
                 }
 
                 println!(
@@ -261,7 +277,10 @@ mod tests {
                 pair_count += 1;
             }
         }
-        assert_eq!(pair_count, 28, "seven resources yield 28 unordered pairs including self-pairs");
+        assert_eq!(
+            pair_count, 28,
+            "seven resources yield 28 unordered pairs including self-pairs"
+        );
     }
 
     #[test]
