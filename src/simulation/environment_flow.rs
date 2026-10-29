@@ -1033,6 +1033,48 @@ mod tests {
     }
 
     #[test]
+    fn dense_obstacle_bin_transport_has_a_generous_runtime_ceiling() {
+        use std::time::{Duration, Instant};
+
+        let catalog = crate::resources::default_catalog();
+        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
+        // Keep all objects inside one fine flow bin so this exercises the
+        // intentionally uncapped dense-obstacle path, not the easy sparse case.
+        for index in 0..512 {
+            let x = 10.0 + (index % 32) as f64 * 0.1;
+            let y = 10.0 + (index / 32) as f64 * 0.1;
+            let material = PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("catalog carbon should realize");
+            assert!(field.deposit_physical(x, y, material, &catalog));
+        }
+
+        let before = field.total_material();
+        let started = Instant::now();
+        let moved = transport_field(&mut field, &catalog, 1000.0, 1000.0);
+        let elapsed = started.elapsed();
+
+        assert_eq!(field.total_material(), before, "dense transport must conserve inventory");
+        assert_eq!(
+            field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>(),
+            512,
+            "dense transport must retain every realized object"
+        );
+        assert!(moved > 0, "dense obstacles should not immobilize the entire field");
+        assert!(
+            elapsed < Duration::from_secs(10),
+            "512-object dense-bin transport took {elapsed:?}; investigate obstacle-query cost"
+        );
+    }
+
+    #[test]
     fn dense_obstacle_shelters_its_downstream_wake() {
         let obstacle = Obstacle {
             source_cell: 9,
