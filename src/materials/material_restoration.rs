@@ -39,6 +39,7 @@ pub(crate) fn restore_material(
     origin: Placement,
     catalog: &[BaseResource],
 ) -> Option<Vec<usize>> {
+    macro_rules! reject { () => {{ eprintln!("restore_material rejected at line {}", line!()); reject!(); }}; }
     let relative = instance.placements.as_ref()?;
     let connections = instance.internal_connections.as_ref()?;
     let material = &instance.material;
@@ -50,7 +51,7 @@ pub(crate) fn restore_material(
         || material.parts.is_empty()
         || relative.len() != material.parts.len()
     {
-        return None;
+        reject!();
     }
     if connections.len() != material.internal_bonds.len()
         || connections.iter().any(|connection| {
@@ -64,7 +65,7 @@ pub(crate) fn restore_material(
                     || (connection.part_a == bond.part_b && connection.part_b == bond.part_a))
             })
     {
-        return None;
+        reject!();
     }
 
     let mut trial = structure.clone();
@@ -80,23 +81,23 @@ pub(crate) fn restore_material(
                     || material.has_internal_structure()
                     || resource.physical_state != crate::resources::PhysicalState::Fluid))
         {
-            return None;
+            reject!();
         }
         let transformed = transform_relative(origin, *placement);
         if !is_finite_placement(transformed) {
-            return None;
+            reject!();
         }
         let mut unit = StructuralUnit::from_material(
             crate::resources::Material::free_base(name.clone(), *amount),
             transformed,
         )?;
         if !unit.realize_default_geometry(catalog) {
-            return None;
+            reject!();
         }
         let realized_shape = instance.realized_shape_for_part(part_index, catalog)?;
         if realized_shape != resource.shape && !unit.realize_fluid_geometry(realized_shape, catalog)
         {
-            return None;
+            reject!();
         }
         indices.push(trial.add_unit(unit));
     }
@@ -119,7 +120,7 @@ pub(crate) fn restore_material(
                 placement: trial.units[right_index].placement,
             };
             if crate::material_geometry::placed_forms_penetrate(&left_part, &right_part, 0.0) {
-                return None;
+                reject!();
             }
         }
     }
@@ -133,7 +134,7 @@ pub(crate) fn restore_material(
         let b = trial.units[unit_b].properties(catalog)?;
         let strength = crate::combine::bond_strength(a, b);
         if !strength.is_finite() {
-            return None;
+            reject!();
         }
         let bond = Bond {
             endpoint_a: BondEndpoint::new(id_a, connection.endpoint_a),
@@ -143,7 +144,7 @@ pub(crate) fn restore_material(
             // Restoration is not a new reaction and therefore charges nothing.
             bond_energy: connection.bond_energy,
         };
-        crate::contact::try_add_bond(&mut trial, bond, catalog).ok()?;
+        if let Err(reason) = crate::contact::try_add_bond(&mut trial, bond, catalog) { eprintln!("restore_material bond insertion rejected at line {}: {reason}", line!()); return None; }
     }
 
     *structure = trial;
