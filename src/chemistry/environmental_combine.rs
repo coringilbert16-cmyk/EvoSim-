@@ -1321,6 +1321,364 @@ mod tests {
         );
     }
 
+    /// Commit two already-bonded molecules into one four-constituent product.
+    /// Both original bond graphs must survive, one external bond must be added,
+    /// and the environmental energy inventory must remain balanced.
+    #[test]
+    fn environmental_compound_compound_combine_commits_four_part_product() {
+        let mut simulation = crate::state::Simulation::new(23430, 10.0);
+        let catalog = simulation.environment.catalog.clone();
+        simulation.environment.width = 30.0;
+        simulation.environment.height = 30.0;
+        simulation.environment.field =
+            crate::environment::ActiveMaterialField::new(30.0, 30.0, 10.0);
+        let cell = simulation
+            .environment
+            .field
+            .index_for_position(10.0, 10.0)
+            .expect("compound fixtures must lie in the field");
+
+        let compound_a = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0)],
+                internal_bonds: vec![InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                Placement {
+                    x: 10.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 11.5,
+                    y: 10.0 + 3.0_f64.sqrt() / 2.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("carbon dimer must be a valid bonded compound");
+        let original_a_energy = compound_a
+            .internal_connections
+            .as_ref()
+            .and_then(|bonds| bonds.first())
+            .map(|bond| bond.bond_energy)
+            .expect("first compound must retain its allocated bond energy");
+
+        let (structure_a, indices_a) = restored_source(&compound_a, &simulation.environment)
+            .expect("first compound must restore with its original bond");
+        assert_eq!(indices_a.len(), 2);
+        assert_eq!(structure_a.bonds.len(), 1);
+
+        let mut fixture = None;
+        'resources: for resource in &catalog {
+            if resource.physical_state == crate::resources::PhysicalState::Fluid {
+                continue;
+            }
+            let carbon_position = catalog
+                .iter()
+                .find(|entry| entry.name == "Carbon")
+                .and_then(|entry| entry.properties.chemical_position);
+            let separation = carbon_position
+                .zip(resource.properties.chemical_position)
+                .map(|(a, b)| (a - b).abs())
+                .unwrap_or(0.0);
+            if separation <= f64::EPSILON {
+                continue;
+            }
+
+            let mut compound_b = None;
+            'internal_pose: for step in 1..=60 {
+                let distance = step as f64 * 0.05;
+                for rotation_step in 0..12 {
+                    let angle = rotation_step as f64 * std::f64::consts::PI / 6.0;
+                    let (sin, cos) = angle.sin_cos();
+                    let candidate = PhysicalMaterial::realized(
+                        Material {
+                            parts: vec![
+                                (resource.name.clone(), 1.0),
+                                (resource.name.clone(), 1.0),
+                            ],
+                            internal_bonds: vec![InternalBond {
+                                part_a: 0,
+                                part_b: 1,
+                            }],
+                        },
+                        vec![
+                            Placement {
+                                x: 10.0,
+                                y: 10.0,
+                                rotation_radians: angle,
+                            },
+                            Placement {
+                                x: 10.0 + distance * cos,
+                                y: 10.0 + distance * sin,
+                                rotation_radians: angle,
+                            },
+                        ],
+                        &catalog,
+                    );
+                    let Some(candidate) = candidate else {
+                        continue;
+                    };
+                    if let Some((restored, indices)) =
+                        restored_source(&candidate, &simulation.environment)
+                    {
+                        if indices.len() == 2 && restored.bonds.len() == 1 {
+                            compound_b = Some(candidate);
+                            break 'internal_pose;
+                        }
+                    }
+                }
+            }
+            let Some(compound_b) = compound_b else {
+                continue;
+            };
+            let original_b_energy = compound_b
+                .internal_connections
+                .as_ref()
+                .and_then(|bonds| bonds.first())
+                .map(|bond| bond.bond_energy)
+                .expect("second compound must retain its allocated bond energy");
+            let relative = compound_b
+                .placements
+                .as_ref()
+                .expect("realized second compound must retain placements");
+            let first = relative[0];
+            let second = relative[1];
+            let local_x = second.x - first.x;
+            let local_y = second.y - first.y;
+
+            'external_pose: for step in 1..=80 {
+                let distance = step as f64 * 0.05;
+                for rotation_step in 0..12 {
+                    let angle = rotation_step as f64 * std::f64::consts::PI / 6.0;
+                    let (sin, cos) = angle.sin_cos();
+                    let rotated_x = local_x * cos - local_y * sin;
+                    let rotated_y = local_x * sin + local_y * cos;
+                    let base = PhysicalMaterial::realized(
+                        compound_b.material.clone(),
+                        vec![
+                            Placement {
+                                x: 10.0 + distance,
+                                y: 10.0,
+                                rotation_radians: first.rotation_radians + angle,
+                            },
+                            Placement {
+                                x: 10.0 + distance + rotated_x,
+                                y: 10.0 + rotated_y,
+                                rotation_radians: second.rotation_radians + angle,
+                            },
+                        ],
+                        &catalog,
+                    )
+                    .expect("translated second compound must retain its internal bond");
+
+                    let (mut structure, restored_a) =
+                        restored_source(&compound_a, &simulation.environment)
+                            .expect("first compound must restore for each external pose");
+                    let Some(restored_b) = crate::material_restoration::restore_material(
+                        &mut structure,
+                        &base,
+                        origin(),
+                        &catalog,
+                    ) else {
+                        continue;
+                    };
+                    let mut cache = ConnectionCompatibilityCache::new();
+                    let mut work = FIELD_COMPONENT_PAIR_LIMIT;
+                    let Some(selected) = select_best_contact(
+                        &structure,
+                        &restored_a,
+                        &restored_b,
+                        &catalog,
+                        &mut cache,
+                        &mut work,
+                    ) else {
+                        continue;
+                    };
+                    let name_a = structure.units[selected.unit_a].material.parts[0]
+                        .0
+                        .as_str();
+                    let name_b = structure.units[selected.unit_b].material.parts[0]
+                        .0
+                        .as_str();
+                    let interface =
+                        crate::geometry_reference_library::resolve_live_contact_candidate(
+                            name_a,
+                            &structure.units[selected.unit_a],
+                            name_b,
+                            &structure.units[selected.unit_b],
+                            selected.candidate,
+                            &catalog,
+                        );
+                    if selected.candidate.distance > 0.25
+                        || selected.candidate.facing <= 0.5
+                        || interface.is_none()
+                    {
+                        continue;
+                    }
+
+                    let mut accumulation = BTreeMap::new();
+                    let mut updated = BTreeSet::new();
+                    let mut operations = Vec::new();
+                    chemical_step(
+                        &simulation.environment,
+                        &mut simulation.chemistry_library,
+                        &structure,
+                        selected,
+                        &restored_a,
+                        &restored_b,
+                        &compound_a,
+                        &base,
+                        cell,
+                        0,
+                        cell,
+                        1,
+                        &mut accumulation,
+                        &mut updated,
+                        &mut operations,
+                    );
+                    if !accumulation.is_empty() || !operations.is_empty() {
+                        fixture = Some((base, resource.name.clone(), original_b_energy));
+                        break 'resources;
+                    }
+                }
+            }
+        }
+
+        let (compound_b, partner_name, original_b_energy) = fixture
+            .expect("two bonded compounds must expose a chemically progressing interface");
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            cell,
+            compound_a.clone(),
+            &catalog,
+        ));
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            cell,
+            compound_b.clone(),
+            &catalog,
+        ));
+        simulation.environment.chemistry_usable_energy = 1_000.0;
+        let baseline = simulation.energy_inventory_snapshot();
+        simulation.energy_ledger = crate::state::EnergyLedger::default();
+        simulation.energy_ledger.initial_usable_energy_held = baseline.current_usable_energy;
+        simulation.energy_ledger.total_usable_energy_held = baseline.current_usable_energy;
+        simulation.energy_ledger.initial_resonant_energy_held = baseline.current_resonant_energy;
+        simulation.energy_ledger.total_resonant_energy_held = baseline.current_resonant_energy;
+        simulation.energy_ledger.initial_structural_energy_held =
+            baseline.current_structural_energy;
+        simulation.energy_ledger.total_structural_energy_held = baseline.current_structural_energy;
+
+        let mut accumulation = BTreeMap::new();
+        let mut committed = false;
+        for tick in 0..2_000_u64 {
+            let mut discovery_work =
+                crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
+            let operations = accumulate_environmental(
+                &simulation.environment,
+                &mut accumulation,
+                &mut simulation.chemistry_library,
+                tick,
+                &mut discovery_work,
+            );
+            let mut realization_work =
+                crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
+            let scheduled = schedule_environmental_operations(
+                operations,
+                tick,
+                &mut realization_work,
+                &mut accumulation,
+            );
+            if let Some(operation) = scheduled.into_iter().next() {
+                committed = resolve_environmental(
+                    operation,
+                    &mut simulation.environment,
+                    &mut simulation.energy_ledger,
+                );
+                if committed {
+                    break;
+                }
+            }
+        }
+        assert!(
+            committed,
+            "live compound/compound discovery must settle a COMBINE transaction; partner={partner_name}, accumulated={:?}",
+            accumulation.values().copied().collect::<Vec<_>>()
+        );
+
+        let products = &simulation.environment.field.cells[cell].physical_materials;
+        assert_eq!(products.len(), 1, "both molecules must become one product");
+        let product = &products[0];
+        assert_eq!(product.material.parts.len(), 4);
+        assert_eq!(product.material.parts[0], ("Carbon".to_owned(), 1.0));
+        assert_eq!(product.material.parts[1], ("Carbon".to_owned(), 1.0));
+        assert_eq!(product.material.parts[2], (partner_name.clone(), 1.0));
+        assert_eq!(product.material.parts[3], (partner_name, 1.0));
+        assert_eq!(product.material.internal_bonds.len(), 3);
+        assert!(product.material.internal_bonds.iter().any(|bond| {
+            (bond.part_a == 0 && bond.part_b == 1) || (bond.part_a == 1 && bond.part_b == 0)
+        }), "first molecule's original bond must survive");
+        assert!(product.material.internal_bonds.iter().any(|bond| {
+            (bond.part_a == 2 && bond.part_b == 3) || (bond.part_a == 3 && bond.part_b == 2)
+        }), "second molecule's original bond must survive");
+        assert!(product.material.internal_bonds.iter().any(|bond| {
+            (bond.part_a < 2 && bond.part_b >= 2)
+                || (bond.part_b < 2 && bond.part_a >= 2)
+        }), "one new bond must connect the two original molecules");
+        assert_eq!(product.placements.as_ref().map(Vec::len), Some(4));
+        assert_eq!(product.realized_shapes.as_ref().map(Vec::len), Some(4));
+
+        let connections = product
+            .internal_connections
+            .as_ref()
+            .expect("four-part product must preserve its physical bond graph");
+        assert_eq!(connections.len(), 3);
+        assert!(connections.iter().any(|bond| {
+            ((bond.part_a == 0 && bond.part_b == 1)
+                || (bond.part_a == 1 && bond.part_b == 0))
+                && (bond.bond_energy - original_a_energy).abs() <= 1e-9
+        }), "first original bond energy must be preserved");
+        assert!(connections.iter().any(|bond| {
+            ((bond.part_a == 2 && bond.part_b == 3)
+                || (bond.part_a == 3 && bond.part_b == 2))
+                && (bond.bond_energy - original_b_energy).abs() <= 1e-9
+        }), "second original bond energy must be preserved");
+        assert!(connections.iter().any(|bond| {
+            ((bond.part_a < 2 && bond.part_b >= 2)
+                || (bond.part_b < 2 && bond.part_a >= 2))
+                && bond.bond_energy > 0.0
+        }), "new inter-molecule bond must receive allocated energy");
+
+        let expected_mass = compound_a.material.mass(&catalog) + compound_b.material.mass(&catalog);
+        assert!(
+            (product.material.mass(&catalog) - expected_mass).abs() <= 1e-9,
+            "four-part COMBINE must conserve total material mass"
+        );
+        let inventory = simulation.energy_inventory_snapshot();
+        assert!(
+            (simulation.energy_ledger.total_usable_energy_held - inventory.current_usable_energy)
+                .abs()
+                <= 1e-6,
+            "usable-energy ledger must match live holders"
+        );
+        assert!(
+            (simulation.energy_ledger.total_structural_energy_held
+                - inventory.current_structural_energy)
+                .abs()
+                <= 1e-6,
+            "structural-energy ledger must match live bonds"
+        );
+        assert!(
+            inventory.is_balanced_without_creation(1e-6),
+            "compound/compound COMBINE must conserve energy; residual={:?}",
+            inventory.residual()
+        );
+    }
+
     /// Diagnostic matrix for bonded compound + bonded compound encounters.
     /// Each side remains a physical constituent graph; chemistry is evaluated
     /// only at the selected constituent interface, never on averaged molecules.
