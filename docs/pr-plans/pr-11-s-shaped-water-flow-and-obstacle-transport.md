@@ -16,6 +16,11 @@ Replace the old environment concept for the experiment with a continuous blue wa
 - Start with a deterministic, one-way geometry-aware approximation. Do not implement full Navier–Stokes, pressure solving, or detailed turbulence in this PR.
 - Recompute only affected flow regions when feasible after structure geometry/permeability changes. Do not recompute the entire field every tick without evidence it is necessary.
 
+## Current scope boundary: rotation
+
+- PR #226 currently transports realized resources and compounds by translation only. It preserves each constituent's existing `rotation_radians`; it does not integrate angular velocity or apply flow-induced rotation.
+- This is a known physical-model gap, not a restriction imposed by mass. A follow-up should add deterministic angular response from local flow shear/torque, scaled by mass and geometry-derived moment of inertia, while preserving internal constituent offsets and bonds. Collision/contact changes must follow from the rotated geometry. Avoid arbitrary per-tick angle caps that would change reachable outcomes; keep numerical stability separate from behavioral limits.
+
 ## Source trace so far
 
 - 'src/simulation/environment.rs' defines 'ActiveMaterialField', its regular cell grid, wrapped vertical coordinates, bounded spatial queries, and 'FieldCell' holders ('materials' and 'physical_materials'). The cell grid is a spatial index; it is not itself a flow model.
