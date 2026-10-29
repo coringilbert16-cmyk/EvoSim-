@@ -129,14 +129,37 @@ fn select_best_contact(
     )
 }
 
-/// Rotate the bounded constituent-pair inspection window between ticks.
-/// Advancing by the previous window size prevents late graph constituents from
-/// being permanently starved by a fixed row-major prefix.
-fn component_pair_start(tick: u64, pair_count: usize, work_budget: usize) -> usize {
+/// Choose a near-budget stride that is coprime with the pair count. Every
+/// constituent pair therefore becomes the first inspected pair once per full
+/// cycle, even when the available per-tick work budget varies.
+fn component_pair_stride(pair_count: usize) -> usize {
+    if pair_count <= 1 {
+        return 1;
+    }
+    let mut stride = FIELD_COMPONENT_PAIR_LIMIT.min(pair_count - 1).max(1);
+    while greatest_common_divisor(stride, pair_count) != 1 {
+        stride += 1;
+        if stride >= pair_count {
+            stride = 1;
+        }
+    }
+    stride
+}
+
+fn greatest_common_divisor(mut left: usize, mut right: usize) -> usize {
+    while right != 0 {
+        let remainder = left % right;
+        left = right;
+        right = remainder;
+    }
+    left
+}
+
+fn component_pair_start(tick: u64, pair_count: usize) -> usize {
     if pair_count == 0 {
         0
     } else {
-        (tick as usize).wrapping_mul(work_budget.max(1)) % pair_count
+        (tick as usize).wrapping_mul(component_pair_stride(pair_count)) % pair_count
     }
 }
 
@@ -512,7 +535,7 @@ pub(crate) fn accumulate_environmental(
                         (*remaining_discovery_work).min(FIELD_COMPONENT_PAIR_LIMIT);
                     let component_work_initial = component_work;
                     let pair_count = indices_a.len().saturating_mul(indices_b.len());
-                    let pair_start = component_pair_start(tick, pair_count, component_work_initial);
+                    let pair_start = component_pair_start(tick, pair_count);
                     let selected = select_best_contact_from_offset(
                         &trial_structure,
                         &indices_a,
@@ -2908,7 +2931,7 @@ mod tests {
             &indices_b,
             &catalog,
             &mut cache,
-            component_pair_start(0, pair_count, FIELD_COMPONENT_PAIR_LIMIT),
+            component_pair_start(0, pair_count),
             &mut first_window_work,
         );
         assert!(
@@ -2924,13 +2947,23 @@ mod tests {
             &indices_b,
             &catalog,
             &mut cache,
-            component_pair_start(1, pair_count, FIELD_COMPONENT_PAIR_LIMIT),
+            component_pair_start(1, pair_count),
             &mut second_window_work,
         )
         .expect("the next tick's rotated window must reach the late physical contact");
         assert_eq!(second_window.unit_a, indices_a[12]);
         assert_eq!(second_window.unit_b, indices_b[12]);
         assert_eq!(second_window_work, 0);
+
+        let varied_budget_pair_count = 1_000;
+        let visited_starts: HashSet<_> = (0..varied_budget_pair_count)
+            .map(|tick| component_pair_start(tick as u64, varied_budget_pair_count))
+            .collect();
+        assert_eq!(
+            visited_starts.len(),
+            varied_budget_pair_count,
+            "the tick stride must visit every pair start even when the available work budget changes"
+        );
     }
 
     #[test]
