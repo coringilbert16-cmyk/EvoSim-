@@ -7,7 +7,7 @@
 
 use crate::environment::ActiveMaterialField;
 use crate::physical_material::PhysicalMaterial;
-use crate::resources::{BaseResource, Form, Material};
+use crate::resources::{BaseResource, Form};
 use crate::structure::Placement;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
