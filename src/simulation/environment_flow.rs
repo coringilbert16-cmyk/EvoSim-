@@ -1062,9 +1062,13 @@ mod tests {
         let elapsed = started.elapsed();
 
         assert_eq!(field.total_material(), before, "dense transport must conserve inventory");
+        let retained_objects = field
+            .cells
+            .iter()
+            .map(|cell| cell.physical_materials.len())
+            .sum::<usize>();
         assert_eq!(
-            field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>(),
-            512,
+            retained_objects, 512,
             "dense transport must retain every realized object"
         );
         assert!(moved > 0, "dense obstacles should not immobilize the entire field");
