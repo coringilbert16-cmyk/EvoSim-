@@ -288,9 +288,6 @@ fn angular_displacement(
     if placements.is_empty() {
         return 0.0;
     }
-    let Some(placements) = material.placements.as_ref() else {
-        return 0.0;
-    };
     let total_mass = material.material.mass(catalog);
     if !total_mass.is_finite()
         || total_mass <= 0.0
