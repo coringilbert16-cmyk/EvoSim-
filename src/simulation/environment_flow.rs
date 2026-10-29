@@ -663,24 +663,16 @@ mod tests {
         assert!(core > outer);
         let vortex = background_velocity(25.0, 40.0 + 80.0 * 0.23, 100.0, 80.0);
         assert!(vortex.x.is_finite() && vortex.y.is_finite());
-        let first_bend_counter_flow = background_velocity(
-            25.0,
-            40.0 + 80.0 * 0.23 + 1.5 * (80.0 * 0.13),
-            100.0,
-            80.0,
-        );
+        let first_bend_counter_flow =
+            background_velocity(25.0, 40.0 + 80.0 * 0.23 + 1.5 * (80.0 * 0.13), 100.0, 80.0);
         assert!(
             first_bend_counter_flow.x < 0.0,
             "the first bend must create a local counter-flow pocket"
         );
 
         let second_bend_center = 40.0 - 80.0 * 0.23;
-        let second_bend_counter_flow = background_velocity(
-            75.0,
-            second_bend_center - 1.5 * (80.0 * 0.13),
-            100.0,
-            80.0,
-        );
+        let second_bend_counter_flow =
+            background_velocity(75.0, second_bend_center - 1.5 * (80.0 * 0.13), 100.0, 80.0);
         assert!(
             second_bend_counter_flow.x < 0.0,
             "the second bend must create a local counter-flow pocket"
@@ -792,10 +784,9 @@ mod tests {
             1000.0,
         )
         .unwrap();
-        let angular_step =
-            angular_displacement(&original, &catalog, 1000.0, 1000.0, &[], 0, 0);
-        let expected = rotated(&translated_expected, angular_step, &catalog, 1000.0, 1000.0)
-            .unwrap();
+        let angular_step = angular_displacement(&original, &catalog, 1000.0, 1000.0, &[], 0, 0);
+        let expected =
+            rotated(&translated_expected, angular_step, &catalog, 1000.0, 1000.0).unwrap();
         assert_eq!(
             objects[0],
             &expected,
@@ -880,15 +871,7 @@ mod tests {
             &catalog,
         )
         .expect("catalog resource should realize");
-        let angle = angular_displacement(
-            &resource,
-            &catalog,
-            100.0,
-            80.0,
-            &[],
-            0,
-            0,
-        );
+        let angle = angular_displacement(&resource, &catalog, 100.0, 80.0, &[], 0, 0);
         assert!(angle.is_finite());
         assert!(
             angle.abs() > 1e-12,
@@ -918,15 +901,7 @@ mod tests {
             &catalog,
         )
         .expect("compound should realize");
-        let angle = angular_displacement(
-            &compound,
-            &catalog,
-            100.0,
-            80.0,
-            &[],
-            0,
-            1,
-        );
+        let angle = angular_displacement(&compound, &catalog, 100.0, 80.0, &[], 0, 1);
         assert!(angle.is_finite());
         assert!(
             angle.abs() > 1e-12,
