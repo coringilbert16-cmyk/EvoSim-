@@ -413,13 +413,12 @@ mod tests {
         assert!(core > outer);
         let vortex = background_velocity(25.0, 40.0 + 80.0 * 0.23, 100.0, 80.0);
         assert!(vortex.x.is_finite() && vortex.y.is_finite());
-        let counter_flow = background_velocity(
-            25.0,
-            40.0 + 80.0 * 0.23 + 1.5 * (80.0 * 0.13),
-            100.0,
-            80.0,
+        let counter_flow =
+            background_velocity(25.0, 40.0 + 80.0 * 0.23 + 1.5 * (80.0 * 0.13), 100.0, 80.0);
+        assert!(
+            counter_flow.x < 0.0,
+            "the eddy must create a local counter-flow pocket"
         );
-        assert!(counter_flow.x < 0.0, "the eddy must create a local counter-flow pocket");
     }
 
     #[test]
