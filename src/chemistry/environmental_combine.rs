@@ -34,7 +34,7 @@ pub(crate) struct EnvironmentalCombineOperation {
     pub(crate) accumulated_reaction: f64,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct SelectedContact {
     unit_a: usize,
     unit_b: usize,
