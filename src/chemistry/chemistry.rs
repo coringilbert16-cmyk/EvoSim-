@@ -232,20 +232,12 @@ mod tests {
                     .properties
                     .chemical_position
                     .expect("every canonical base resource must have a chemical position");
-                let forward = interaction_potential(
-                    position_a,
-                    position_b,
-                    CHEMICAL_K,
-                    CHEMICAL_D_MAX,
-                )
-                .expect("canonical positions must produce a finite potential");
-                let reverse = interaction_potential(
-                    position_b,
-                    position_a,
-                    CHEMICAL_K,
-                    CHEMICAL_D_MAX,
-                )
-                .expect("reversed canonical positions must produce a finite potential");
+                let forward =
+                    interaction_potential(position_a, position_b, CHEMICAL_K, CHEMICAL_D_MAX)
+                        .expect("canonical positions must produce a finite potential");
+                let reverse =
+                    interaction_potential(position_b, position_a, CHEMICAL_K, CHEMICAL_D_MAX)
+                        .expect("reversed canonical positions must produce a finite potential");
                 let separation = (position_a - position_b).abs();
 
                 assert!(forward.is_finite() && (0.0..=1.0).contains(&forward));
