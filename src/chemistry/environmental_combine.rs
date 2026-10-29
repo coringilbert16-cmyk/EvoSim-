@@ -981,6 +981,10 @@ mod tests {
         for cell in &mut simulation.environment.field.cells {
             cell.physical_materials.clear();
         }
+        simulation.environment.width = 30.0;
+        simulation.environment.height = 30.0;
+        simulation.environment.field =
+            crate::environment::ActiveMaterialField::new(30.0, 30.0, 10.0);
         let cell = simulation
             .environment
             .field
@@ -1057,7 +1061,10 @@ mod tests {
                             (chemistry_a, chemistry_b),
                             (Some(a), Some(b)) if (a - b).abs() > 0.0
                         );
-                        if has_chemical_separation {
+                        if has_chemical_separation
+                            && selected.candidate.distance < 1.0
+                            && selected.candidate.facing > 0.0
+                        {
                             selected_pair = Some((source_a, source_b, selected));
                             break 'search;
                         }
