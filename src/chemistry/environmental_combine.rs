@@ -2955,6 +2955,33 @@ mod tests {
                     {
                         continue;
                     }
+                    let Some(external_position) = catalog
+                        .iter()
+                        .find(|candidate| candidate.name == resource.name)
+                        .and_then(|candidate| candidate.properties.chemical_position)
+                    else {
+                        continue;
+                    };
+                    let mut interface_potentials = indices_a.iter().filter_map(|index| {
+                        let position = constituent_chemical_position(
+                            &structure.units[*index],
+                            &catalog,
+                        )?;
+                        crate::chemistry::interaction_potential(
+                            position,
+                            external_position,
+                            crate::chemistry::CHEMICAL_K,
+                            crate::chemistry::CHEMICAL_D_MAX,
+                        )
+                    });
+                    let (Some(first_potential), Some(second_potential)) =
+                        (interface_potentials.next(), interface_potentials.next())
+                    else {
+                        continue;
+                    };
+                    if (first_potential - second_potential).abs() <= f64::EPSILON {
+                        continue;
+                    }
                     selected_fixture = Some((structure, indices_a, selected));
                     break 'external;
                 }
