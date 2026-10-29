@@ -635,12 +635,6 @@ pub(crate) fn transport_field(
             continue;
         };
         dx = clamped_dx;
-        if dx.abs() + dy.abs() <= 1e-12 {
-            continue;
-        }
-        let Some(translated_material) = translated(&material, dx, dy, height) else {
-            continue;
-        };
         let angular_step = angular_displacement(
             &material,
             catalog,
@@ -650,6 +644,12 @@ pub(crate) fn transport_field(
             source_cell,
             source_index,
         );
+        if dx.abs() + dy.abs() <= 1e-12 && angular_step.abs() <= 1e-12 {
+            continue;
+        }
+        let Some(translated_material) = translated(&material, dx, dy, height) else {
+            continue;
+        };
         let Some(moved) = rotated(&translated_material, angular_step, catalog, width, height)
         else {
             continue;
