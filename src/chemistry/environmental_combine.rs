@@ -960,8 +960,7 @@ mod tests {
             "deferred activation progress must be retained"
         );
         assert_eq!(
-            scheduled[0].accumulation_key,
-            "environment|combine:a",
+            scheduled[0].accumulation_key, "environment|combine:a",
             "stable ordering must schedule the first key at tick zero"
         );
         assert_eq!(
