@@ -399,10 +399,14 @@ pub(crate) fn accumulate_environmental(
             else {
                 continue;
             };
-            let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
-                &source_structure,
-                &environment.catalog,
-            ) else {
+            // Environmental COMBINE must discover isolated physical objects too.
+            // from_structure intentionally excludes unbonded components, which are
+            // precisely the reactants this pass is responsible for finding.
+            let Some(body) =
+                crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(
+                    &source_structure,
+                )
+            else {
                 continue;
             };
             // Bound the spatial query itself, not just the subsequent loop:
@@ -1179,7 +1183,7 @@ mod tests {
         let mut discovered_operation = None;
         for tick in 0..500_u64 {
             let mut discovery_work =
-                crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
+                crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
             let operations = accumulate_environmental(
                 &simulation.environment,
                 &mut accumulation,
