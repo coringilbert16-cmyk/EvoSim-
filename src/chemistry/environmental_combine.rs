@@ -1047,8 +1047,23 @@ mod tests {
                     if let Some(selected) = select_best_contact(
                         &structure, &indices_a, &indices_b, &catalog, &mut cache, &mut work,
                     ) {
-                        selected_pair = Some((source_a, source_b, selected));
-                        break 'search;
+                        let chemistry_a = structure.units[selected.unit_a]
+                            .properties(&catalog)
+                            .and_then(|properties| properties.chemical_position);
+                        let chemistry_b = structure.units[selected.unit_b]
+                            .properties(&catalog)
+                            .and_then(|properties| properties.chemical_position);
+                        let has_chemical_separation = matches!(
+                            (chemistry_a, chemistry_b),
+                            (Some(a), Some(b)) if (a - b).abs() >= 1.0
+                        );
+                        if has_chemical_separation
+                            && selected.candidate.distance < 1.0
+                            && selected.candidate.facing > 0.5
+                        {
+                            selected_pair = Some((source_a, source_b, selected));
+                            break 'search;
+                        }
                     }
                 }
             }
@@ -1081,31 +1096,73 @@ mod tests {
         // actual COMBINE/BREAK bond mutations.
         simulation.energy_ledger.total_structural_energy_delta = -1.0e16;
 
-        let key = source_pair_key(
-            cell,
-            0,
-            &source_a,
-            cell,
-            1,
-            &source_b,
-            selected.unit_a,
-            selected.unit_b,
-            selected.candidate,
+        let mut accumulation = BTreeMap::new();
+        let mut discovered_operation = None;
+        for tick in 0..500_u64 {
+            let mut discovery_work =
+                crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
+            let operations = accumulate_environmental(
+                &simulation.environment,
+                &mut accumulation,
+                &mut simulation.chemistry_library,
+                tick,
+                &mut discovery_work,
+            );
+            let mut realization_work =
+                crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
+            let scheduled = schedule_environmental_operations(
+                operations,
+                tick,
+                &mut realization_work,
+                &mut accumulation,
+            );
+            if let Some(operation) = scheduled.into_iter().next() {
+                discovered_operation = Some(operation);
+                break;
+            }
+        }
+        let operation = discovered_operation.expect(
+            "live environmental discovery must accumulate activation and schedule a contact pair",
         );
-        let operation = EnvironmentalCombineOperation {
-            cell_a: cell,
-            material_a: 0,
-            source_a,
-            cell_b: cell,
-            material_b: 1,
-            source_b,
-            unit_a: selected.unit_a,
-            unit_b: selected.unit_b - 1,
-            candidate: selected.candidate,
-            investment: selected.investment,
-            accumulation_key: key,
-            accumulated_reaction: 1.0,
-        };
+        assert!(
+            crate::chemistry::activated(
+                operation.accumulated_reaction,
+                crate::chemistry::activation_barrier_from_bond_strength(
+                    crate::combine::bond_strength(
+                        &operation
+                            .source_a
+                            .material
+                            .parts
+                            .first()
+                            .and_then(|(name, _)| {
+                                simulation
+                                    .environment
+                                    .catalog
+                                    .iter()
+                                    .find(|resource| resource.name == *name)
+                            })
+                            .expect("discovered source A resource must exist")
+                            .properties,
+                        &operation
+                            .source_b
+                            .material
+                            .parts
+                            .first()
+                            .and_then(|(name, _)| {
+                                simulation
+                                    .environment
+                                    .catalog
+                                    .iter()
+                                    .find(|resource| resource.name == *name)
+                            })
+                            .expect("discovered source B resource must exist")
+                            .properties,
+                    ),
+                )
+                .expect("live bond strength must define an activation barrier"),
+            ),
+            "the discovery pipeline must schedule only after accumulated chemistry reaches activation"
+        );
         // The resolver is a transaction boundary, not merely a trusted
         // scheduler callback: an under-activated operation must leave the
         // source objects, usable holder, and ledger untouched.
