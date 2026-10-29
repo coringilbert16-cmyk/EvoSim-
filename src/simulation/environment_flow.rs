@@ -1061,7 +1061,11 @@ mod tests {
         let moved = transport_field(&mut field, &catalog, 1000.0, 1000.0);
         let elapsed = started.elapsed();
 
-        assert_eq!(field.total_material(), before, "dense transport must conserve inventory");
+        assert_eq!(
+            field.total_material(),
+            before,
+            "dense transport must conserve inventory"
+        );
         let retained_objects = field
             .cells
             .iter()
@@ -1071,7 +1075,10 @@ mod tests {
             retained_objects, 512,
             "dense transport must retain every realized object"
         );
-        assert!(moved > 0, "dense obstacles should not immobilize the entire field");
+        assert!(
+            moved > 0,
+            "dense obstacles should not immobilize the entire field"
+        );
         assert!(
             elapsed < Duration::from_secs(10),
             "512-object dense-bin transport took {elapsed:?}; investigate obstacle-query cost"
