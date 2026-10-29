@@ -33,12 +33,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Formatting
         run: cargo fmt --all -- --check
+      - name: Heterogeneous constituent reaction-key characterization
+        run: timeout 5m cargo test --locked heterogeneous_compound_contacts_retain_constituent_chemical_identity -- --nocapture
       - name: Compound + base COMBINE transaction and energy conservation
         run: timeout 5m cargo test --locked environmental_compound_base_combine_commits_three_part_product -- --nocapture
       - name: Compound + compound constituent chemistry matrix
         run: timeout 5m cargo test --locked compound_compound_matrix_exercises_constituent_level_chemistry -- --nocapture
-      - name: Heterogeneous constituent reaction-key characterization
-        run: timeout 5m cargo test --locked heterogeneous_compound_contacts_retain_constituent_chemical_identity -- --nocapture
       - name: Four-part compound COMBINE/BREAK round trip
         run: timeout 5m cargo test --locked environmental_compound_compound_combine_commits_four_part_product -- --nocapture
       - name: Molecular composition and topology characterization
