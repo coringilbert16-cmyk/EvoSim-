@@ -4,7 +4,7 @@ on:
   push:
     branches: [chemistry/environmental-combine-discovery]
   pull_request:
-    branches: [main, chemistry/reaction-energy-semantics]
+    branches: [main, chemistry/reaction-energy-semantics, chemistry-compound-base-matrix-2026-10-29]
     paths:
       - "src/chemistry/**"
       - "src/materials/**"
