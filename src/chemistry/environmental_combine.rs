@@ -1698,6 +1698,108 @@ mod tests {
             "compound/compound COMBINE must conserve energy; residual={:?}",
             inventory.residual()
         );
+
+        // Break the newly formed inter-molecule bond, not either original
+        // intramolecular bond. The two original compounds must be restored.
+        let combined = product.clone();
+        let connections = combined
+            .internal_connections
+            .as_ref()
+            .expect("combined molecule must retain its realized bonds");
+        let inter_molecule_bond_index = connections
+            .iter()
+            .position(|bond| {
+                (bond.part_a < 2 && bond.part_b >= 2) || (bond.part_b < 2 && bond.part_a >= 2)
+            })
+            .expect("four-part product must contain an inter-molecule bond");
+        let inter_molecule_bond = connections[inter_molecule_bond_index].clone();
+        let break_operation = crate::chemical_reaction::EnvironmentalChemicalBreakOperation {
+            cell_index: cell,
+            material_index: 0,
+            bond_index: inter_molecule_bond_index,
+            source_material: combined,
+            bond: inter_molecule_bond,
+            activation_signal: 1.0,
+            disruption_cost: 0.5,
+            reaction_frequency_hz: 440.0,
+            accumulation_key: "compound-compound-four-part-round-trip-break".into(),
+            accumulated_reaction: 1.0,
+        };
+        assert!(
+            crate::chemical_reaction::resolve_environmental(
+                break_operation,
+                &mut simulation.environment,
+                &mut simulation.energy_ledger,
+            ),
+            "BREAK must settle against the exact four-part COMBINE product"
+        );
+
+        let split = &simulation.environment.field.cells[cell].physical_materials;
+        assert_eq!(
+            split.len(),
+            2,
+            "BREAK must restore the two original molecules"
+        );
+        assert!(
+            split.iter().all(|piece| piece.material.parts.len() == 2),
+            "each restored molecule must retain its two original constituents"
+        );
+        assert!(
+            split
+                .iter()
+                .all(|piece| piece.material.internal_bonds.len() == 1),
+            "BREAK must preserve each molecule's original internal bond"
+        );
+        assert!(
+            split.iter().all(|piece| {
+                piece
+                    .internal_connections
+                    .as_ref()
+                    .is_some_and(|bonds| bonds.len() == 1)
+            }),
+            "each restored molecule must retain its original realized bond energy"
+        );
+        let split_parts: Vec<_> = split
+            .iter()
+            .flat_map(|piece| piece.material.parts.iter().cloned())
+            .collect();
+        let mut expected_parts = compound_a.material.parts.clone();
+        expected_parts.extend(compound_b.material.parts.clone());
+        let mut actual_parts = split_parts;
+        actual_parts.sort();
+        expected_parts.sort();
+        assert_eq!(
+            actual_parts, expected_parts,
+            "COMBINE followed by BREAK must preserve the exact constituent multiset"
+        );
+        let split_mass: f64 = split
+            .iter()
+            .map(|piece| piece.material.mass(&catalog))
+            .sum();
+        assert!(
+            (split_mass - expected_mass).abs() <= 1e-9,
+            "four-part BREAK must conserve total material mass"
+        );
+
+        let after_break = simulation.energy_inventory_snapshot();
+        assert!(
+            (simulation.energy_ledger.total_usable_energy_held - after_break.current_usable_energy)
+                .abs()
+                <= 1e-6,
+            "BREAK must keep the usable-energy ledger aligned with live holders"
+        );
+        assert!(
+            (simulation.energy_ledger.total_structural_energy_held
+                - after_break.current_structural_energy)
+                .abs()
+                <= 1e-6,
+            "BREAK must keep the structural-energy ledger aligned with live bonds"
+        );
+        assert!(
+            after_break.is_balanced_without_creation(1e-6),
+            "four-part COMBINE/BREAK round trip must conserve energy; residual={:?}",
+            after_break.residual()
+        );
     }
 
     /// Diagnostic matrix for bonded compound + bonded compound encounters.
