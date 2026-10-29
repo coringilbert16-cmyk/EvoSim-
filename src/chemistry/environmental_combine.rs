@@ -1061,12 +1061,7 @@ mod tests {
                         let mut cache = ConnectionCompatibilityCache::new();
                         let mut work = FIELD_COMPONENT_PAIR_LIMIT;
                         if let Some(selected) = select_best_contact(
-                            &structure,
-                            &indices_a,
-                            &indices_b,
-                            &catalog,
-                            &mut cache,
-                            &mut work,
+                            &structure, &indices_a, &indices_b, &catalog, &mut cache, &mut work,
                         ) {
                             if selected.candidate.distance <= 0.25
                                 && selected.candidate.facing > 0.5
