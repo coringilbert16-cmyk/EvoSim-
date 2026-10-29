@@ -1379,8 +1379,10 @@ mod tests {
                 .iter()
                 .find(|entry| entry.name == "Carbon")
                 .and_then(|entry| entry.properties.chemical_position);
-            let separation = position_carbon.zip(resource.properties.chemical_position)
-                .map(|(a, b)| (a - b).abs()).unwrap_or(0.0);
+            let separation = position_carbon
+                .zip(resource.properties.chemical_position)
+                .map(|(a, b)| (a - b).abs())
+                .unwrap_or(0.0);
             if separation < 9.0 {
                 continue;
             }
@@ -1392,7 +1394,8 @@ mod tests {
                         vec![Placement {
                             x: 10.0 + distance,
                             y: 10.0,
-                            rotation_radians: rotation_step as f64 * std::f64::consts::PI / 6.0,
+                            rotation_radians: rotation_step as f64 * std::f64::consts::PI
+                                / 6.0,
                         }],
                         &catalog,
                     )
@@ -1430,14 +1433,15 @@ mod tests {
                     };
                     let name_a = structure.units[selected.unit_a].material.parts[0].0.as_str();
                     let name_b = structure.units[selected.unit_b].material.parts[0].0.as_str();
-                    let interface = crate::geometry_reference_library::resolve_live_contact_candidate(
-                        name_a,
-                        &structure.units[selected.unit_a],
-                        name_b,
-                        &structure.units[selected.unit_b],
-                        selected.candidate,
-                        &catalog,
-                    );
+                    let interface =
+                        crate::geometry_reference_library::resolve_live_contact_candidate(
+                            name_a,
+                            &structure.units[selected.unit_a],
+                            name_b,
+                            &structure.units[selected.unit_b],
+                            selected.candidate,
+                            &catalog,
+                        );
                     if selected.candidate.distance <= 0.25
                         && selected.candidate.facing > 0.5
                         && interface.is_some()
@@ -1517,26 +1521,37 @@ mod tests {
         assert_eq!(product.material.parts[1], ("Carbon".to_owned(), 1.0));
         assert_eq!(product.material.parts[2], (partner_name, 1.0));
         assert_eq!(product.material.internal_bonds.len(), 2);
-        assert!(product.material.internal_bonds.iter().any(|bond| {
-            (bond.part_a == 0 && bond.part_b == 1)
-                || (bond.part_a == 1 && bond.part_b == 0)
-        }), "the original carbon-carbon bond must remain intact");
-        assert!(product.material.internal_bonds.iter().any(|bond| {
-            (bond.part_a == 0 && bond.part_b == 2)
-                || (bond.part_a == 2 && bond.part_b == 0)
-                || (bond.part_a == 1 && bond.part_b == 2)
-                || (bond.part_a == 2 && bond.part_b == 1)
-        }), "the new base constituent must be bonded to the original molecule");
+        assert!(
+            product.material.internal_bonds.iter().any(|bond| {
+                (bond.part_a == 0 && bond.part_b == 1)
+                    || (bond.part_a == 1 && bond.part_b == 0)
+            }),
+            "the original carbon-carbon bond must remain intact"
+        );
+        assert!(
+            product.material.internal_bonds.iter().any(|bond| {
+                (bond.part_a == 0 && bond.part_b == 2)
+                    || (bond.part_a == 2 && bond.part_b == 0)
+                    || (bond.part_a == 1 && bond.part_b == 2)
+                    || (bond.part_a == 2 && bond.part_b == 1)
+            }),
+            "the new base constituent must be bonded to the original molecule"
+        );
         assert_eq!(product.placements.as_ref().map(Vec::len), Some(3));
         assert_eq!(product.realized_shapes.as_ref().map(Vec::len), Some(3));
-        let connections = product.internal_connections.as_ref()
+        let connections = product
+            .internal_connections
+            .as_ref()
             .expect("product must preserve realized bond endpoints and energies");
         assert_eq!(connections.len(), 2);
-        assert!(connections.iter().any(|bond| {
-            ((bond.part_a == 0 && bond.part_b == 1)
-                || (bond.part_a == 1 && bond.part_b == 0))
-                && (bond.bond_energy - original_bond_energy).abs() <= 1e-9
-        }), "original bond energy must be preserved exactly");
+        assert!(
+            connections.iter().any(|bond| {
+                ((bond.part_a == 0 && bond.part_b == 1)
+                    || (bond.part_a == 1 && bond.part_b == 0))
+                    && (bond.bond_energy - original_bond_energy).abs() <= 1e-9
+            }),
+            "original bond energy must be preserved exactly"
+        );
 
         let inventory = simulation.energy_inventory_snapshot();
         assert!(
