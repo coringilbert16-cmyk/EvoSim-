@@ -61,13 +61,23 @@ fn source_pair_key(
     // Stable instance identity survives transport and cell/index reordering.
     if source_a.instance_id <= source_b.instance_id {
         format!(
-            "{ENVIRONMENT_PREFIX}{}:{unit_a}|{}:{unit_b}|{:?}|{:?}",
-            source_a.instance_id, source_b.instance_id, candidate.endpoint_a, candidate.endpoint_b,
+            "{ENVIRONMENT_PREFIX}{}:{}:{unit_a}|{}:{}:{unit_b}|{:?}|{:?}",
+            source_a.instance_id,
+            source_a.geometry_signature(),
+            source_b.instance_id,
+            source_b.geometry_signature(),
+            candidate.endpoint_a,
+            candidate.endpoint_b,
         )
     } else {
         format!(
-            "{ENVIRONMENT_PREFIX}{}:{unit_b}|{}:{unit_a}|{:?}|{:?}",
-            source_b.instance_id, source_a.instance_id, candidate.endpoint_b, candidate.endpoint_a,
+            "{ENVIRONMENT_PREFIX}{}:{}:{unit_b}|{}:{}:{unit_a}|{:?}|{:?}",
+            source_b.instance_id,
+            source_b.geometry_signature(),
+            source_a.instance_id,
+            source_a.geometry_signature(),
+            candidate.endpoint_b,
+            candidate.endpoint_a,
         )
     }
 }
@@ -1363,9 +1373,13 @@ mod tests {
                 ..candidate
             },
         );
+        let mut rotated_first = moved_first.clone();
+        rotated_first.placements.as_mut().unwrap()[0].rotation_radians += 0.1;
+        let rotated = source_pair_key(&rotated_first, &moved_second, 0, 0, candidate);
 
         assert_eq!(initial, moved);
         assert_eq!(moved, reversed);
+        assert_ne!(moved, rotated, "a changed constituent orientation starts a new encounter");
     }
 
     /// Controlled one-tick physical COMBINE diagnostic for all unordered base pairs.
