@@ -2,7 +2,7 @@ name: PR 223 energy accounting
 
 on:
   push:
-    branches: [chemistry/environmental-combine-discovery, chemistry-molecular-characterization-2026-10-29, chemistry-multimolecule-break-roundtrip-2026-10-29, chemistry-heterogeneous-molecule-interface-2026-10-29, chemistry-heterogeneous-reaction-interface-2026-10-29, chemistry-component-contact-round-robin-2026-10-29]
+    branches: [chemistry/environmental-combine-discovery, chemistry-molecular-characterization-2026-10-29, chemistry-multimolecule-break-roundtrip-2026-10-29, chemistry-heterogeneous-molecule-interface-2026-10-29, chemistry-heterogeneous-reaction-interface-2026-10-29, chemistry-component-contact-round-robin-2026-10-29, chemistry-molecular-layout-stability-2026-10-29]
   pull_request:
     branches: [main, chemistry/reaction-energy-semantics, chemistry-compound-compound-transaction-2026-10-29, chemistry-molecular-characterization-2026-10-29, chemistry-multimolecule-break-roundtrip-2026-10-29, chemistry-heterogeneous-molecule-interface-2026-10-29, chemistry-heterogeneous-reaction-interface-2026-10-29]
     paths:
