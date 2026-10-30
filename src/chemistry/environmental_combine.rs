@@ -343,7 +343,8 @@ fn advance_pair_approach(
     if !requested_step.is_finite() || requested_step <= 1e-9 {
         return false;
     }
-    let old_remaining = crate::combine::formation_work_cost(properties_a, properties_b, distance);
+    let old_remaining =
+        crate::combine::formation_work_cost(properties_a, properties_b, distance) * engagement;
     let compatible_available = environment
         .resonant_energy
         .compatible_energy(reaction_frequency);
@@ -377,7 +378,7 @@ fn advance_pair_approach(
             continue;
         };
         let new_remaining =
-            crate::combine::formation_work_cost(properties_a, properties_b, staged.1);
+            crate::combine::formation_work_cost(properties_a, properties_b, staged.1) * engagement;
         let work = old_remaining - new_remaining;
         if !new_remaining.is_finite() || !work.is_finite() || work < 0.0 {
             return false;
@@ -393,7 +394,7 @@ fn advance_pair_approach(
         return false;
     };
     let work = old_remaining
-        - crate::combine::formation_work_cost(properties_a, properties_b, new_distance);
+        - crate::combine::formation_work_cost(properties_a, properties_b, new_distance) * engagement;
     if !work.is_finite() || work <= 1e-12 {
         return false;
     }
