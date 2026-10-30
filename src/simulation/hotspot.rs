@@ -305,6 +305,16 @@ mod tests {
     }
 
     #[test]
+    fn hotspot_is_opt_in_and_does_not_change_the_default_world() {
+        let mut simulation = crate::state::Simulation::new(911, 1.0);
+        assert!(simulation.hotspot.is_none());
+        assert!(simulation.enable_chemistry_experiment_hotspot());
+        let hotspot = simulation.hotspot.expect("explicit experiment setup should enable the source");
+        assert!((hotspot.peak_energy_per_tick_per_area - 100.0).abs() < f64::EPSILON);
+        assert!((hotspot.center_x - 720.0).abs() < 1e-10);
+    }
+
+    #[test]
     fn hotspot_energy_is_captured_as_environmental_resonance_and_balances() {
         use crate::physical_material::PhysicalMaterial;
         use crate::resources::Material;
